@@ -21,6 +21,7 @@ export interface AuthContextType {
     isLoading: boolean;
 
     // Actions
-    login: (mode?: 'login' | 'signup') => void;
+    login: () => void;
+    signup: () => void;
     logout: () => void;
 }

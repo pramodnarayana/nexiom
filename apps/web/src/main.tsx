@@ -7,10 +7,11 @@ import App from './App.tsx'
 const oidcConfig = {
   authority: import.meta.env.VITE_ZITADEL_AUTHORITY || 'https://issuer.zitadel.ch',
   client_id: import.meta.env.VITE_ZITADEL_CLIENT_ID || 'your-client-id',
-  redirect_uri: 'http://localhost:5173',
+  redirect_uri: 'http://localhost:5173/',
+  scope: 'openid profile email urn:zitadel:iam:org:project:id:zitadel:aud',
   onSigninCallback: () => {
-      // Remove query string after login
-      window.history.replaceState({}, document.title, window.location.pathname);
+    // Remove query string after login
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
 
