@@ -1,4 +1,4 @@
-import { CreateUser } from '../users/users.schema';
+import { CreateUser } from './users/users.schema';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
@@ -13,5 +13,30 @@ export abstract class IdentityProvider {
      * @param user The user details to create.
      * @returns The created user object from the provider.
      */
-    abstract createHumanUser(user: CreateUser): Promise<any>;
+    abstract createUser(user: CreateUser): Promise<any>;
+
+    /**
+     * Authenticates a user and returns a session/token.
+     * @param email 
+     * @param password 
+     */
+    abstract login(email: string, password?: string): Promise<any>;
+
+    /**
+     * Validates a session ID.
+     * @param sessionId 
+     */
+    abstract validateSession(sessionId: string): Promise<any>;
+
+    /**
+     * Lists users from the external identity system.
+     * Lists all users in the Identity Provider for a specific tenant.
+     */
+    abstract listUsers(tenantId?: string): Promise<any[]>;
+
+    /**
+     * Retrieves a session and enriches it with extensive application data (e.g. Organization ID, Roles).
+     * This is used to guarantee that the session context is complete before processing requests.
+     */
+    abstract getEnrichedSession(sessionId: string): Promise<{ session: any; user: any } | null>;
 }

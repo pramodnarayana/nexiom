@@ -1,11 +1,20 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersModule } from './users/users.module';
-import { ZitadelModule } from './zitadel/zitadel.module';
+import { UsersModule } from './auth/users/users.module';
+import { AuthModule } from './auth/auth.module';
+import { EmailModule } from './shared/email/email.module';
 
 @Module({
-  imports: [ZitadelModule, UsersModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    AuthModule,
+    UsersModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

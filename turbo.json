@@ -16,6 +16,26 @@
                 "^lint"
             ]
         },
+        "test": {
+            "outputs": [],
+            "inputs": [
+                "src/**/*.tsx",
+                "src/**/*.ts",
+                "test/**/*.ts"
+            ],
+            "dependsOn": []
+        },
+        "test:cov": {
+            "outputs": [
+                "coverage/**"
+            ],
+            "inputs": [
+                "src/**/*.tsx",
+                "src/**/*.ts",
+                "test/**/*.ts"
+            ],
+            "dependsOn": []
+        },
         "dev": {
             "cache": false,
             "persistent": true

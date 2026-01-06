@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
-import { IdentityProvider } from '../auth/identity-provider.abstract';
+import { IdentityProvider } from '../identity-provider.abstract';
 
 describe('UsersService', () => {
     let service: UsersService;
     let identityProvider: IdentityProvider;
 
     const mockIdentityProvider = {
-        createHumanUser: jest.fn().mockResolvedValue({ userId: '123' }),
+        createUser: jest.fn().mockResolvedValue({ userId: '123' }),
+        listUsers: jest.fn().mockResolvedValue([{ id: '1', email: 'test@test.com' }]),
     };
 
     beforeEach(async () => {
@@ -30,7 +31,7 @@ describe('UsersService', () => {
         const createUser = { email: 'test@test.com', role: 'admin' as const };
         const result = await service.create(createUser);
 
-        expect(identityProvider.createHumanUser).toHaveBeenCalledWith(createUser);
+        expect(identityProvider.createUser).toHaveBeenCalledWith(createUser);
         expect(result.userId).toBe('123');
     });
 });

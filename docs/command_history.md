@@ -50,4 +50,24 @@ rm -rf backend
 # Setup Workspace
 touch pnpm-workspace.yaml
 pnpm add -D turbo -w
+
+## 7. Authentication Pivot (Zitadel -> Lucia)
+```bash
+# 1. Remove Zitadel
+pnpm --filter api remove @zitadel/node
+rm -rf apps/api/src/zitadel
+
+# 2. Install Drizzle & Lucia
+pnpm --filter api add drizzle-orm pg lucia @lucia-auth/adapter-drizzle oslo
+pnpm --filter api add -D drizzle-kit @types/pg
+
+# 3. Setup Database (Docker)
+docker-compose up -d
+pnpm --filter api exec drizzle-kit push
+
+# 4. Install Dev Dependencies
+pnpm --filter api add -D @types/pg
+
+# 5. Run Drizzle Studio (UI)
+pnpm --filter api db:studio
 ```

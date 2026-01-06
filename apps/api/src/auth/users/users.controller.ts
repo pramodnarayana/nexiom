@@ -1,12 +1,15 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUser } from './users.schema';
+import { AuthGuard } from '../auth.guard';
 
 /**
  * Controller for handling User Management HTTP requests.
  * Exposes endpoints for creating and listing users.
+ * Protected by AuthGuard to ensure only authenticated users can access.
  */
 @Controller('users')
+@UseGuards(AuthGuard)
 export class UsersController {
     constructor(private readonly usersService: UsersService) { }
 
@@ -28,8 +31,21 @@ export class UsersController {
      * @returns List of users.
      */
     @Get()
-    findAll() {
-        return this.usersService.findAll();
+    findAll(@Req() req: any) {
+        // AuthGuard guarantees session is valid and populates user info
+        // We use 'organizationId' (mapped in getSessionWithOrg)
+        const tenantId = req.user?.organizationId;
+
+        console.log(`[UsersController] Listing users for Tenant: ${tenantId}`);
+
+        if (!tenantId) {
+            // STRICT ISOLATION: Admin users must belong to an organization to see users.
+            // Returning empty list is safer than throwing error for UI handling, 
+            // but for security transparency, let's return empty.
+            return [];
+        }
+
+        return this.usersService.findAll(tenantId);
     }
 
     /**

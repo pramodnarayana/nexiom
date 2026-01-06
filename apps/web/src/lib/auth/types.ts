@@ -8,7 +8,9 @@ export interface AuthUser {
     email: string;
     name?: string;
     roles: string[];
-    // organizationId will be added when we handle Multi-Tenancy
+    organizationId?: string;
+    organizationName?: string;
+    hasTenant?: boolean;
 }
 
 /**
@@ -19,6 +21,7 @@ export interface AuthContextType {
     user: AuthUser | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    token?: string;
 
     // Actions
     login: () => void;
