@@ -62,3 +62,8 @@ export const member = pgTable("member", {
     role: text("role").notNull(),
     createdAt: timestamp("createdAt").notNull(),
 });
+
+export type User = typeof user.$inferSelect;
+export type Session = typeof session.$inferSelect;
+export type Organization = typeof organization.$inferSelect;
+export type Member = typeof member.$inferSelect;

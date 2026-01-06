@@ -9,11 +9,12 @@ import * as schema from '../schema/better-auth'; // Use Better Auth schema
 import { CreateUser } from './users/users.schema';
 import { organization } from "better-auth/plugins";
 import { EmailService } from '../shared/email/email.service.abstract';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 @Injectable()
 export class BetterAuthIdentityProvider implements IdentityProvider {
     private auth: ReturnType<typeof betterAuth>;
-    private db: any;
+    private db: NodePgDatabase<typeof schema>;
     private logger = new Logger(BetterAuthIdentityProvider.name);
 
     constructor(private readonly emailService: EmailService) {
@@ -116,14 +117,12 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
             const userData = user as unknown as Record<string, unknown>;
             if (typeof userData.companyName === 'string') {
                 await this.createOrganizationForUser(result.user.id, userData.companyName);
-            } else {
-                // Auto-provision for Email usage too if needed, but usually email signup enforces it.
-                // For now, we leave it optional here, but social login will force it.
             }
 
-            return result.user;
-        } catch (e: any) {
-            this.logger.error('Error creating user/org:', e.body || e);
+            return result.user as unknown as schema.User;
+        } catch (e: unknown) {
+            const err = e as { body?: unknown; message?: string };
+            this.logger.error('Error creating user/org:', err.body || err);
             throw e;
         }
     }
@@ -186,12 +185,11 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
             body: { email, password: password! },
             asResponse: false
         });
-        return result;
+        return result as unknown as { session: schema.Session; user: schema.User };
     }
 
     async validateSession(sessionId: string) {
         // Better Auth typically validates via Headers (Cookie or Bearer).
-        // If we are using Bearer tokens:
         const session = await this.auth.api.getSession({
             headers: new Headers({
                 'Authorization': `Bearer ${sessionId}`,
@@ -199,7 +197,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
             }),
             asResponse: false // Return data directly
         });
-        return session;
+        return session as unknown as { session: schema.Session; user: schema.User } | null;
     }
 
     /**
@@ -233,41 +231,38 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
                 hasTenant: !!membership,
                 organizationId: membership?.organizationId,
                 organizationName: membership?.organizationName,
-                role: membership?.role || 'user'
+                roles: [membership?.role || 'user']
             }
         };
     }
 
-    /**
-     * Exposes the underlying Better Auth handler for use in NestJS controllers.
-     * This is needed to support standard Better Auth routes like /sign-in/social.
-     */
     getHandler() {
         return this.auth.handler;
     }
 
     async listUsers(tenantId?: string) {
         if (!tenantId) {
-            // SAFE DEFAULT: Do not list all users unless explicitly handled/authorized for super-admin.
-            // For now, return empty to prevent leaks.
             this.logger.warn('[listUsers] No tenantId provided. Returning empty list.');
             return [];
         }
 
         // Filter users who are members of the given organization (tenant)
+        // Note: returning schema.User[]
         const usersInTenant = await this.db
             .select({
                 id: schema.user.id,
                 name: schema.user.name,
                 email: schema.user.email,
+                emailVerified: schema.user.emailVerified,
                 image: schema.user.image,
                 createdAt: schema.user.createdAt,
-                role: schema.member.role, // Include role from member table
+                updatedAt: schema.user.updatedAt,
+                // role: schema.member.role, // If we want role, we need to extend the type
             })
             .from(schema.user)
             .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
             .where(eq(schema.member.organizationId, tenantId));
 
-        return usersInTenant;
+        return usersInTenant as unknown as schema.User[];
     }
 }

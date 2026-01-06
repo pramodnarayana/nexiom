@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CreateUser } from './users.schema';
-import { User } from './entities/user.entity';
+import { User } from '../../schema/better-auth';
 import { IdentityProvider } from '../identity-provider.abstract';
 
 /**
@@ -12,12 +12,12 @@ export class UsersService {
     constructor(private readonly identityProvider: IdentityProvider) { }
 
     /**
-     * Creates a new user in the Identity Provider (e.g. Zitadel).
+     * Creates a new user in the Identity Provider.
      * 
      * @param createUser - The validated request object containing user details.
      * @returns The newly created User object from IDP.
      */
-    async create(createUser: CreateUser): Promise<any> {
+    async create(createUser: CreateUser): Promise<User> {
         // 1. Create in IDP (Abstracted)
         const idpUser = await this.identityProvider.createUser(createUser);
 

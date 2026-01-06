@@ -15,33 +15,22 @@ export class Login extends createZodDto(z.object({
 /**
  * Handles authentication-related operations such as user login.
  */
+import { User, Session } from '../schema/better-auth';
+
+// ... (imports)
+
 @Controller('auth')
 export class AuthController {
     constructor(private readonly authProvider: IdentityProvider) { }
 
-    /**
-     * Endpoint to handle user login.
-     * Delegates to the IdentityProvider to verify credentials and creates a session.
-     * 
-     * @param login - Contains email and password.
-     * @param res - Response object to potentially set cookies.
-     * @returns The session token and user details.
-     */
     @Post('login')
-    async login(@Body() login: Login, @Res({ passthrough: true }) _res: Response) {
+    async login(@Body() login: Login): Promise<{ session: Session; user: User }> {
         const result = await this.authProvider.login(login.email, login.password);
         return result;
     }
 
-    /**
-     * Endpoint for public user registration (Signup).
-     * Creates a new user with the default 'user' role.
-     * 
-     * @param body - Registration details (Email, First Name, Last Name).
-     * @returns The created user and session.
-     */
     @Post('signup')
-    async signup(@Body() body: Signup) {
+    async signup(@Body() body: Signup): Promise<User> {
         return this.authProvider.createUser(body);
     }
 
@@ -50,7 +39,7 @@ export class AuthController {
      * This is called by the frontend if the user is detected to have no organization.
      */
     @Post('provision-tenant')
-    async provisionTenant(@Req() req: Request) {
+    async provisionTenant(@Req() req: Request): Promise<unknown> {
         // Extract session from cookie or header (Better Auth middleware handles this ideally, 
         // but for now we trust the AuthGuard or just pass it if using custom logic)
         // Actually, AuthGuard should populate req.user (if we set it up that way).

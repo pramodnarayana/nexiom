@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUser } from './users.schema';
+import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 
 /**
@@ -31,7 +32,7 @@ export class UsersController {
      * @returns List of users.
      */
     @Get()
-    findAll(@Req() req: any) {
+    findAll(@Req() req: Request & { user: { organizationId?: string } }) {
         // AuthGuard guarantees session is valid and populates user info
         // We use 'organizationId' (mapped in getSessionWithOrg)
         const tenantId = req.user?.organizationId;

@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { IdentityProvider } from './identity-provider.abstract';
 
+import { Request } from 'express';
+
 @Injectable()
 export class AuthGuard implements CanActivate {
     constructor(private readonly authProvider: IdentityProvider) { }
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
-        const request = context.switchToHttp().getRequest();
+        const request = context.switchToHttp().getRequest<Request & { user: unknown; session: unknown }>();
 
         // 1. Extract session token (Prioritize Cookie, then Bearer)
         // Accessing cookies in NestJS requires 'cookie-parser' which we added to main.ts
