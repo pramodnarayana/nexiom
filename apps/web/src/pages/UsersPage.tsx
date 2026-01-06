@@ -7,7 +7,7 @@ interface User {
     email: string;
     role: string; // or more specific union type
     roleId?: string; // from member table
-    [key: string]: any;
+
 }
 
 export function UsersPage() {
@@ -40,8 +40,12 @@ export function UsersPage() {
             });
             setStatus('User added successfully!');
             setEmail('');
-        } catch (err: any) {
-            setStatus(`Error: ${err.message} `);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                setStatus(`Error: ${err.message} `);
+            } else {
+                setStatus(`Error: Unknown error`);
+            }
         } finally {
             setLoading(false);
         }

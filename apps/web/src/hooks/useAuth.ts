@@ -1,4 +1,4 @@
-import { useAuthContext } from "../lib/auth/AuthProvider";
+import { useAuthContext } from "../lib/auth/context";
 import type { AuthContextType } from "../lib/auth/types";
 
 export function useAuth(): AuthContextType {

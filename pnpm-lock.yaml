@@ -69,6 +69,9 @@ importers:
       '@eslint/js':
         specifier: ^9.18.0
         version: 9.39.2
+      '@golevelup/ts-jest':
+        specifier: ^1.2.0
+        version: 1.2.0
       '@nestjs/cli':
         specifier: ^11.0.0
         version: 11.0.14(@types/node@22.19.3)(esbuild@0.25.12)
@@ -1072,6 +1075,9 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@golevelup/ts-jest@1.2.0':
+    resolution: {integrity: sha512-plN26rWBmwOrtWBc46FKgTMWDlLK5F/vYP2i+0NXnoOLdcXrTNDftzW4dpa0fREqUdCRb3EJtuyr6g5AKNKTRA==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -5470,6 +5476,8 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@golevelup/ts-jest@1.2.0': {}
 
   '@humanfs/core@0.19.1': {}
 

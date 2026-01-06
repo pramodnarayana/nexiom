@@ -1,16 +1,8 @@
-import { createContext, useState, useEffect, useContext, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
+import { AuthContext } from './context';
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-/**
- * Context Provider for managing Authentication state.
- * Replaces the previous OIDC provider with a custom implementation
- * that corresponds to the internal Lucia Auth backend.
- * 
- * @param children - The child components that need access to auth context.
- */
 const API_URL = import.meta.env.VITE_API_URL;
 
 /**
@@ -33,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const { data } = await authClient.getSession();
 
                 if (data) {
-                    const sessionUser = data.user as any;
+                    const sessionUser = data.user as unknown as AuthUser;
 
                     // AUTO-PROVISION CHECK: If user has no tenant (or undefined), create one automatically
                     // Also check organizationId to be sure
@@ -52,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         });
 
                         if (!res.ok) {
+                            // If provision fails, we still log them in, but they might be restricted
                             console.error("Provisioning Failed!", res.status);
                         } else {
                             // FORCE REFRESH: Use RAW CUSTOM ENDPOINT (Bypasses library hooks)
@@ -85,13 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        const hydrateUser = (data: { user: any; session: { token: string } }) => {
+        const hydrateUser = (data: { user: unknown; session: { token: string } }) => {
+            const rawUser = data.user as Record<string, unknown>;
             const authUser: AuthUser = {
-                ...data.user,
-                name: data.user.name,
-                roles: ['admin'], // Defaulting to admin
-                organizationId: data.user.organizationId,
-                organizationName: data.user.organizationName
+                id: String(rawUser.id),
+                email: String(rawUser.email),
+                name: typeof rawUser.name === 'string' ? rawUser.name : undefined,
+                roles: Array.isArray(rawUser.roles) ? rawUser.roles as string[] : ['admin'],
+                organizationId: typeof rawUser.organizationId === 'string' ? rawUser.organizationId : undefined,
+                organizationName: typeof rawUser.organizationName === 'string' ? rawUser.organizationName : undefined,
+                hasTenant: !!rawUser.hasTenant
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -105,23 +101,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * 
      * @param data - The login response containing accessToken and user object.
      */
-    const login = (data: { accessToken: string; user: any }) => {
-        // data = { accessToken, user, ... }
+    const login = (data: { accessToken: string; user: unknown }) => {
+        const rawUser = data.user as Record<string, unknown>;
         setToken(data.accessToken);
 
-        // Handle name mapping safely
-        const fullName = data.user.name || `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim();
+        const fullName = typeof rawUser.name === 'string' ? rawUser.name :
+            `${rawUser.firstName || ''} ${rawUser.lastName || ''}`.trim();
+
+        const roleId = typeof rawUser.roleId === 'string' ? rawUser.roleId : 'user';
 
         setUser({
-            ...data.user,
+            id: String(rawUser.id),
+            email: String(rawUser.email),
             name: fullName,
-            roles: [data.user.roleId || 'user']
+            roles: [roleId],
+            organizationId: typeof rawUser.organizationId === 'string' ? rawUser.organizationId : undefined,
+            organizationName: typeof rawUser.organizationName === 'string' ? rawUser.organizationName : undefined,
+            hasTenant: !!rawUser.hasTenant
         });
     };
 
     /**
      * Clears the auth state.
-     * Redirects the user to the home page.
      */
     const logout = async () => {
         try {
@@ -143,20 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!user,
         isLoading,
-        login: async () => { }, // Not used directly by UI usually, UI calls API then local login
+        login: async () => { },
         signup: async () => { },
         logout,
-        // Helper to set state from outside
         setAuthState: login,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-/**
- * Hook to consume the AuthContext.
- * Use this to access the current user, token, and auth methods.
- */
-export function useAuthContext() {
-    return useContext(AuthContext);
 }

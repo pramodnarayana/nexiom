@@ -29,5 +29,5 @@ export interface AuthContextType {
     logout: () => void;
 
     // Helper to set state from outside
-    setAuthState: (data: any) => void;
+    setAuthState: (data: { accessToken: string; user: any }) => void;
 }
