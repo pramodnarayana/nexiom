@@ -14,7 +14,7 @@ export function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { setAuthState, user } = useAuth() as any; // Using the extended type
+    const { setAuthState, user } = useAuth(); // Type inference from useAuth
     const navigate = useNavigate();
 
     // Redirect if already logged in
@@ -34,7 +34,9 @@ export function LoginPage() {
         setLoading(true);
 
         try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            const API_URL = import.meta.env.VITE_API_URL;
+            if (!API_URL) throw new Error("VITE_API_URL is missing");
+
             const res = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -51,8 +53,12 @@ export function LoginPage() {
             setAuthState(data);
             navigate('/dashboard');
 
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError("An unknown error occurred");
+            }
         } finally {
             setLoading(false);
         }
@@ -89,12 +95,10 @@ export function LoginPage() {
                         type="button"
                         onClick={async () => {
                             try {
-                                // const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'; // Not needed with authClient
-
                                 await authClient.signIn.social({
                                     provider: "google",
-                                    callbackURL: "http://localhost:5173/dashboard",
-                                    // @ts-ignore - 'prompt' is a valid Google OAuth param but missing in better-auth types
+                                    callbackURL: `${window.location.origin}/dashboard`,
+                                    // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
                                     prompt: "select_account"
                                 });
                                 // The library handles the redirect automatically

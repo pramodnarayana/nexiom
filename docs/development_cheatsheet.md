@@ -1,40 +1,43 @@
-# Development Cheatsheet 📝
+# Development Cheatsheet & Workflow
 
-## 1. Credentials (Local Environment)
+## 1. The "Nexiom Flow" (Git Workflow)
 
-| Service | Host | Port | User | Password | Database |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Postgres (Docker)** | `localhost` | `5432` | `admin` | `password123` | `nexiom_master` |
-| **Backend API** | `localhost` | `3000` | - | - | - |
-| **Frontend** | `localhost` | `5173` | - | - | - |
+We follow a structured branching model to ensure stability.
 
-## 2. Environment Variables (.env)
+### The Branches
+*   **`master`**: Production-ready code. **Never push here directly.**
+*   **`development`**: The integration branch. All new features land here first.
+*   **`feat/name`**: Your working branch (e.g., `feat/auth-system`, `fix/login-bug`).
 
-> [!CAUTION]
-> **DO NOT COMMIT THIS FILE TO PUBLIC REPOS**
-> This file contains real credentials for convenience.
+### The Process
+1.  **Start Task**: Create a new branch.
+    ```bash
+    git checkout -b feat/invite-system
+    ```
+2.  **Work**: Code, commit, and test.
+    ```bash
+    git add .
+    git commit -m "feat: add invite email template"
+    ```
+3.  **Merge Request (PR)**: Open a PR from `feat/invite-system` -> `development`.
+    *   *CI runs Tests*.
+    *   *AI reviews Code*.
+4.  **Integration**: Merge into `development`.
+5.  **Release**: Periodically merge `development` -> `master` to ship to production.
 
-```env
-MAIL_MOCK=false
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=pramod.narayana@gmail.com
-SMTP_PASS=cjfj jklo ravy wazf
-SMTP_FROM="Nexiom <pramod.narayana@gmail.com>"
-```
+---
 
-## 2. Drizzle ORM (Database)
+## 2. Common Commands
 
-| Action | Command | Description |
-| :--- | :--- | :--- |
-| **Open Studio (UI)** | `pnpm --filter api db:studio` | Opens **https://local.drizzle.studio** to view/edit data. |
-| **Push Schema** | `pnpm --filter api db:push` | Applies schema changes from `schema.ts` to DB. |
-| **Seed Roles** | `pnpm --filter api db:seed` | Populates default roles (`admin`, `editor`, `viewer`, `user`). |
+### Database
+*   **Studio (UI)**: `pnpm --filter api db:studio`
+*   **Push Schema**: `pnpm --filter api db:push`
+*   **Migration**: `pnpm --filter api db:generate`
 
-## 3. Default Roles
+### Testing
+*   **Run All Tests**: `pnpm test`
+*   **Coverage Report**: `pnpm test:cov`
 
-*   `admin` - Full Access
-*   `editor` - Edit Access
-*   `viewer` - Read Only
-*   `user` - Standard User
+### Docker / Deployment
+*   **Build Images**: `docker compose build`
+*   **Run Locally**: `docker compose up`

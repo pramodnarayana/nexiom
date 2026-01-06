@@ -2,7 +2,7 @@ import { CreateUser } from './users/users.schema';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
- * This allows swapping Zitadel with Auth0/Keycloak without changing business logic.
+ * This allows swapping Better Auth with Auth0/Keycloak without changing business logic.
  * 
  * We use an abstract class instead of an interface so it can be used 
  * as a Dependency Injection token in NestJS.

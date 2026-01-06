@@ -6,7 +6,7 @@
 | :--- | :--- | :--- | :--- |
 | **Backend Runtime** | Node.js (TypeScript) | **Own Code** | Type-safety, huge ecosystem, shared types between FE/BE. |
 | **Frontend** | Next.js 14 (React) | **Own Code** | Best-in-class performance, SSR, easy Vercel/AWS deployment. |
-| **Auth** | **Better Auth (v1.1)** | **Own Code** | Type-safe, Drizzle-integrated, plugin-based auth. Replaces Lucia. |
+| **Auth** | **Better Auth (v1.1)** | **Own Code** | Type-safe, Drizzle-integrated, plugin-based auth. |
 | **Database (ORM)**| **Drizzle ORM** | **Own Code** | Lightweight, type-safe, SQL-like. Better than Prisma for complex diffing. |
 | **Database (OLTP)** | PostgreSQL 16+ | **Managed (AWS RDS)** | Do NOT host your own DB. Need Point-in-Time Recovery and HA. |
 | **Queue (Hot)** | Redis (BullMQ) | **Managed (ElastiCache)** | Low latency for rapid "Core Pipeline" events. |

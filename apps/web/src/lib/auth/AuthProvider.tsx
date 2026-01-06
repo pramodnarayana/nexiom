@@ -11,6 +11,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * 
  * @param children - The child components that need access to auth context.
  */
+const API_URL = import.meta.env.VITE_API_URL;
+
+/**
+ * Context Provider for managing Authentication state.
+ * Replaces the previous OIDC provider with a custom implementation
+ * that corresponds to the internal Better Auth backend.
+ * 
+ * @param children - The child components that need access to auth context.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | undefined>(undefined);
@@ -21,7 +30,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const initAuth = async () => {
             try {
                 // 1. Check Server Session (Cookies) - Source of Truth
-                // 1. Check Server Session (Cookies) - Source of Truth
                 const { data } = await authClient.getSession();
 
                 if (data) {
@@ -30,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     // AUTO-PROVISION CHECK: If user has no tenant (or undefined), create one automatically
                     // Also check organizationId to be sure
                     if (!sessionUser.hasTenant && !sessionUser.organizationId) {
-                        const API_URL = import.meta.env.VITE_API_URL;
                         if (!API_URL) {
                             console.error("VITE_API_URL is missing!");
                             return;
@@ -78,13 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        const hydrateUser = (data: any) => {
-            const authUser = {
+        const hydrateUser = (data: { user: any; session: { token: string } }) => {
+            const authUser: AuthUser = {
                 ...data.user,
                 name: data.user.name,
                 roles: ['admin'], // Defaulting to admin
-                organizationId: (data.user as any).organizationId,
-                organizationName: (data.user as any).organizationName
+                organizationId: data.user.organizationId,
+                organizationName: data.user.organizationName
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -98,13 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * 
      * @param data - The login response containing accessToken and user object.
      */
-    const login = (data: any) => {
+    const login = (data: { accessToken: string; user: any }) => {
         // data = { accessToken, user, ... }
         setToken(data.accessToken);
+
+        // Handle name mapping safely
+        const fullName = data.user.name || `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim();
+
         setUser({
             ...data.user,
-            name: `${data.user.firstName} ${data.user.lastName}`,
-            roles: [data.user.roleId]
+            name: fullName,
+            roles: [data.user.roleId || 'user']
         });
     };
 
@@ -137,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         // Helper to set state from outside
         setAuthState: login,
-    } as any;
+    };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

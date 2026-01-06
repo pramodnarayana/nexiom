@@ -1,7 +1,7 @@
 /**
  * Generic User Interface
  * This is what our application expects a User to look like.
- * It does NOT depend on Zitadel or Auth0.
+ * It relies on our internal auth system.
  */
 export interface AuthUser {
     id: string;
@@ -27,4 +27,7 @@ export interface AuthContextType {
     login: () => void;
     signup: () => void;
     logout: () => void;
+
+    // Helper to set state from outside
+    setAuthState: (data: any) => void;
 }
