@@ -25,10 +25,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const { data } = await authClient.getSession();
 
                 if (data) {
-                    const sessionUser = data.user as unknown as AuthUser;
+                    // Standard getSession returns basic info. We MUST fetch enriched info (Organization, etc.)
+                    // using our custom endpoint, as we removed customSession hook.
+                    let enrichedData = null;
+                    try {
+                        const sessionRes = await fetch(`${API_URL}/auth/refresh-session`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${data.session.token}`
+                            },
+                            credentials: 'include',
+                        });
+                        if (sessionRes.ok) {
+                            enrichedData = await sessionRes.json();
+                        }
+                    } catch (err) {
+                        console.error("Failed to fetch enriched session", err);
+                    }
 
-                    // AUTO-PROVISION CHECK: If user has no tenant (or undefined), create one automatically
-                    // Also check organizationId to be sure
+                    // Fallback to basic data if enriched fails (shouldn't happen if session is valid)
+                    const userToCheck = enrichedData ? enrichedData.user : data.user;
+                    const sessionUser = userToCheck as unknown as AuthUser;
+
+                    // AUTO-PROVISION CHECK
                     if (!sessionUser.hasTenant && !sessionUser.organizationId) {
                         if (!API_URL) {
                             console.error("VITE_API_URL is missing!");
@@ -44,27 +63,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         });
 
                         if (!res.ok) {
-                            // If provision fails, we still log them in, but they might be restricted
                             console.error("Provisioning Failed!", res.status);
+                            if (enrichedData) hydrateUser(enrichedData);
+                            else hydrateUser(data);
                         } else {
-                            // FORCE REFRESH: Use RAW CUSTOM ENDPOINT (Bypasses library hooks)
-                            const sessionRes = await fetch(`${API_URL}/auth/refresh-session`, {
+                            // Retry Enriched Fetch
+                            const retryRes = await fetch(`${API_URL}/auth/refresh-session`, {
                                 method: 'POST',
                                 headers: {
                                     'Authorization': `Bearer ${data.session.token}`
                                 },
-                                credentials: 'include'
+                                credentials: 'include',
                             });
-                            const refreshed = await sessionRes.json();
-
-                            if (refreshed && refreshed.user) {
-                                hydrateUser(refreshed);
-                            } else {
-                                hydrateUser(data);
-                            }
+                            const refreshed = await retryRes.json();
+                            hydrateUser(refreshed);
                         }
                     } else {
-                        hydrateUser(data);
+                        // Already has tenant
+                        if (enrichedData) hydrateUser(enrichedData);
+                        else hydrateUser(data);
                     }
                 } else {
                     // Server says "No Session". Trust it.

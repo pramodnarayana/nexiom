@@ -42,40 +42,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
             emailAndPassword: {
                 enabled: true
             },
-            customSession: async (session, user) => {
-                // Check if user belongs to any organization
-                const memberships = await this.db
-                    .select({
-                        role: schema.member.role,
-                        organizationId: schema.organization.id,
-                        organizationName: schema.organization.name
-                    })
-                    .from(schema.member)
-                    .innerJoin(schema.organization, eq(schema.member.organizationId, schema.organization.id))
-                    .where(eq(schema.member.userId, user.id))
-                    .limit(1);
-
-                this.logger.log(`[CustomSession] User ${user.id} memberships found: ${memberships.length}`);
-                if (memberships.length > 0) {
-                    this.logger.log(`[CustomSession] Org: ${memberships[0].organizationName} (${memberships[0].organizationId})`);
-                }
-
-                const membership = memberships[0];
-
-                return {
-                    user: {
-                        ...user,
-                        hasTenant: !!membership,
-                        organizationId: membership?.organizationId,
-                        organizationName: membership?.organizationName
-                    },
-                    session
-                }
-            },
             emailVerification: {
                 sendOnSignUp: true,
                 autoSignInAfterVerification: true,
-                sendVerificationEmail: async ({ user, url, token }) => {
+                sendVerificationEmail: async ({ user, url }: { user: any; url: string }) => {
                     await this.emailService.sendEmail({
                         to: user.email,
                         subject: 'Verify your email for Nexiom',

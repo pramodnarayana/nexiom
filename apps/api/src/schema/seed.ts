@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+// import { Pool } from 'pg'; // Logic removed
 
 const main = async () => {
     // Legacy seeding logic removed. 

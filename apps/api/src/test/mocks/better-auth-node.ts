@@ -1,3 +1,3 @@
-export const toNodeHandler = () => {
-    return (req, res) => { };
+export const toNodeHandler = (_handler: any) => {
+    return (_req: any, _res: any) => { };
 };

@@ -40,20 +40,17 @@ export class AuthController {
      */
     @Post('provision-tenant')
     async provisionTenant(@Req() req: Request): Promise<unknown> {
-        // Extract session from cookie or header (Better Auth middleware handles this ideally, 
-        // but for now we trust the AuthGuard or just pass it if using custom logic)
-        // Actually, AuthGuard should populate req.user (if we set it up that way).
-        // For this specific flow, we are relying on session validation.
-
+        // Extract session from cookie or header
         const betterAuth = this.authProvider as BetterAuthIdentityProvider;
 
         // PRIORITY FIX: Prefer the Cookie because it contains the Signature (signed token).
         // The Bearer token from frontend is often raw (unsigned), which fails cookie emulation.
         const authHeader = req.headers['authorization'] as string | undefined;
-        const token = req.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
+        const reqWithCookies = req as Request & { cookies: Record<string, string> };
+        const token = reqWithCookies.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
 
         console.log(`[ProvisionTenant] Headers Auth: ${req.headers['authorization']}`);
-        console.log(`[ProvisionTenant] Cookie Token: ${req.cookies?.['better-auth.session_token']}`);
+        console.log(`[ProvisionTenant] Cookie Token: ${reqWithCookies.cookies?.['better-auth.session_token']}`);
         console.log(`[ProvisionTenant] Using Token: ${token}`);
 
         const session = await betterAuth.validateSession(token);
@@ -74,7 +71,8 @@ export class AuthController {
     async refreshSession(@Req() req: Request) {
         // Extract Token (Prioritize Cookie)
         const authHeader = req.headers['authorization'] as string | undefined;
-        const token = req.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
+        const reqWithCookies = req as Request & { cookies: Record<string, string> };
+        const token = reqWithCookies.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
         if (!token) throw new UnauthorizedException('No token provided');
 
         // Use the standard interface method

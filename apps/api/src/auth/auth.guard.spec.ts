@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from './auth.guard';
 import { IdentityProvider } from './identity-provider.abstract';
 import { UnauthorizedException } from '@nestjs/common';
-import { createMock } from '@golevelup/ts-jest'; // Or just manual mock if library not present
 import { ExecutionContext } from '@nestjs/common';
 
 describe('AuthGuard', () => {

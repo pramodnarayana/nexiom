@@ -29,4 +29,7 @@ async function bootstrap() {
   app.use(cookieParser()); // Enable cookie parsing
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Error during bootstrap:', err);
+  process.exit(1);
+});
