@@ -28,7 +28,7 @@ export class AuthController {
      * @returns The session token and user details.
      */
     @Post('login')
-    async login(@Body() login: Login, @Res({ passthrough: true }) res: Response) {
+    async login(@Body() login: Login, @Res({ passthrough: true }) _res: Response) {
         const result = await this.authProvider.login(login.email, login.password);
         return result;
     }
@@ -56,21 +56,12 @@ export class AuthController {
         // Actually, AuthGuard should populate req.user (if we set it up that way).
         // For this specific flow, we are relying on session validation.
 
-        // Since we are in "@All" catch-all land usually, standard Nest routes need Guard.
-        // We will manually validate session here or assume Auth Guard is globally active?
-        // Let's assume passed via Guard in future refactor. 
-        // For now, we need to extract userId.
-
-        // Quick & Dirty: Use the provider's check or extract from Better Auth session
-        // But wait, this is a standard Nest controller method.
-        // We can use the Better Auth API to get session from req headers.
-
         const betterAuth = this.authProvider as BetterAuthIdentityProvider;
-        const handler = betterAuth.getHandler();
 
         // PRIORITY FIX: Prefer the Cookie because it contains the Signature (signed token).
         // The Bearer token from frontend is often raw (unsigned), which fails cookie emulation.
-        const token = req.cookies?.['better-auth.session_token'] || req.headers['authorization']?.split(' ')[1] || '';
+        const authHeader = req.headers['authorization'] as string | undefined;
+        const token = req.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
 
         console.log(`[ProvisionTenant] Headers Auth: ${req.headers['authorization']}`);
         console.log(`[ProvisionTenant] Cookie Token: ${req.cookies?.['better-auth.session_token']}`);
@@ -93,7 +84,8 @@ export class AuthController {
     @Post('refresh-session')
     async refreshSession(@Req() req: Request) {
         // Extract Token (Prioritize Cookie)
-        const token = req.cookies?.['better-auth.session_token'] || req.headers['authorization']?.split(' ')[1] || '';
+        const authHeader = req.headers['authorization'] as string | undefined;
+        const token = req.cookies?.['better-auth.session_token'] || authHeader?.split(' ')[1] || '';
         if (!token) throw new UnauthorizedException('No token provided');
 
         // Use the standard interface method

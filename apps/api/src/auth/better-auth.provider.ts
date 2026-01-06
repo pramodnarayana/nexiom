@@ -113,8 +113,9 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
             });
 
             // 2. Create Organization (Tenant) if companyName provided
-            if ((user as any).companyName) {
-                await this.createOrganizationForUser(result.user.id, (user as any).companyName);
+            const userData = user as unknown as Record<string, unknown>;
+            if (typeof userData.companyName === 'string') {
+                await this.createOrganizationForUser(result.user.id, userData.companyName);
             } else {
                 // Auto-provision for Email usage too if needed, but usually email signup enforces it.
                 // For now, we leave it optional here, but social login will force it.

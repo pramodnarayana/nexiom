@@ -15,7 +15,7 @@ export class AuthGuard implements CanActivate {
 
         // 1. Extract session token (Prioritize Cookie, then Bearer)
         // Accessing cookies in NestJS requires 'cookie-parser' which we added to main.ts
-        const token = request.cookies?.['better-auth.session_token'] || this.extractTokenFromHeader(request.headers.authorization);
+        const token = request.cookies?.['better-auth.session_token'] || this.extractTokenFromHeader(request.headers.authorization as string | undefined);
 
         if (!token) {
             throw new UnauthorizedException('No session token provided');

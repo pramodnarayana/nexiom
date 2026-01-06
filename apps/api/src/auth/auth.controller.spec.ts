@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { IdentityProvider } from './identity-provider.abstract';
 import { UnauthorizedException } from '@nestjs/common';
+import { Request } from 'express';
 
 describe('AuthController', () => {
     let controller: AuthController;
@@ -35,7 +36,7 @@ describe('AuthController', () => {
             const req = {
                 cookies: { 'better-auth.session_token': 'abc' },
                 headers: {},
-            } as any;
+            } as unknown as Request;
 
             mockIdentityProvider.getEnrichedSession.mockResolvedValue(mockSession);
 
@@ -49,7 +50,7 @@ describe('AuthController', () => {
             const req = {
                 cookies: {},
                 headers: {},
-            } as any;
+            } as unknown as Request;
 
             // The controller implementation wraps the logic.
             // Wait, looking at current implementation, does it throw?
@@ -62,7 +63,7 @@ describe('AuthController', () => {
             const req = {
                 cookies: { 'better-auth.session_token': 'bad-token' },
                 headers: {},
-            } as any;
+            } as unknown as Request;
 
             mockIdentityProvider.getEnrichedSession.mockResolvedValue(null);
 
