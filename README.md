@@ -73,7 +73,8 @@ pnpm dev
 We use **Trunk-Based Development** with short-lived feature branches.
 
 1.  Create branch: `git checkout -b feature/xyz`
-2.  Commit changes (Hooks will verify).
-3.  Open Pull Request.
-4.  **AI Review:** CodeRabbit will analyze your changes.
-5.  Merge to `master`.
+2.  Commit changes.
+3.  Open Pull Request -> `development`.
+4.  **AI Review:** CodeRabbit analyzes.
+5.  Merge to `development`.
+6.  Release: Merge `development` -> `master`.
