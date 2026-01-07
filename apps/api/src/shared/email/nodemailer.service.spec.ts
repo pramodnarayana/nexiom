@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NodemailerService } from './nodemailer.service';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { Logger } from '@nestjs/common';
 
 // Mock Nodemailer logic
 const mockSendMail = jest.fn();
@@ -42,6 +43,9 @@ describe('NodemailerService', () => {
     }).compile();
 
     service = module.get<NodemailerService>(NodemailerService);
+
+    // Silence expected error logs
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
   });
 
   it('should be defined', () => {

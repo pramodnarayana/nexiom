@@ -10,6 +10,7 @@ import { CreateUser } from './users/users.schema';
 import { organization } from 'better-auth/plugins';
 import { EmailService } from '../shared/email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class BetterAuthIdentityProvider implements IdentityProvider {
@@ -114,14 +115,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
    */
   private async createOrganizationForUser(userId: string, name: string) {
     this.logger.log(`Creating Organization ${name} for user ${userId}`);
-    const orgId = crypto.randomUUID();
+    const orgId = randomUUID();
     const slug =
       name
         .toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]/g, '') +
       '-' +
-      crypto.randomUUID().slice(0, 4);
+      randomUUID().slice(0, 4);
 
     // Insert into organization table directly
     await this.db.insert(schema.organization).values({
@@ -133,7 +134,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
     // Insert into member table (Owner/Admin)
     await this.db.insert(schema.member).values({
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       organizationId: orgId,
       userId: userId,
       role: 'admin',
@@ -160,7 +161,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       return { message: 'User already has a tenant' };
     }
 
-    const randomSuffix = crypto.randomUUID().slice(0, 8);
+    const randomSuffix = randomUUID().slice(0, 8);
     const name = `Organization ${randomSuffix}`;
     try {
       const result = await this.createOrganizationForUser(userId, name);
