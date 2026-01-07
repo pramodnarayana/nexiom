@@ -1,27 +1,79 @@
-# Nexiom Platform (Monorepo)
+# Nexiom Platform
 
-This project is a **Monorepo** managed by [Turborepo](https://turbo.build/).
+> **B2B Integration & Data Platform (iPaaS)**
+> *The Engine for Modern Business Connectivity*
 
-## Project Structure
+Nexiom separates the **Platform Infrastructure** (The Engine) from the **Integration Logic** (The Connectors), allowing for scalable, secure, and maintainable B2B integrations.
 
-*   **`apps/web`**: React + Vite (Frontend) - Port 5173
-*   **`apps/api`**: NestJS (Backend) - Port 3000
+---
 
-## Getting Started
+## 🏗️ Architecture
 
-### 1. Install Dependencies (Root)
+This project is a high-performance **Monorepo** managed by [Turborepo](https://turbo.build/).
+
+| Layer | Technology | Description |
+| :--- | :--- | :--- |
+| **Monorepo** | **Turborepo** | Build system & orchestrator |
+| **Frontend** | **React + Vite** | `apps/web` (Dashboard / Admin Desk) |
+| **Backend** | **NestJS** | `apps/api` (API Gateway / Control Plane) |
+| **Database** | **PostgreSQL** | Multi-tenant data storage (via Drizzle ORM) |
+| **Auth** | **Better-Auth** | Secure, self-hosted authentication |
+| **Email** | **Nodemailer** | Transactional email infrastructure |
+
+---
+
+## 🛡️ Production Standards
+
+We enforce strict quality gates to ensure reliability and maintainability.
+
+- **Linting:** Zero-tolerance policy. CI fails on any warning.
+- **Type Safety:** Strict TypeScript configuration. No `any` allowed.
+- **Testing:**
+    - Global Coverage Threshold: **60%** (Enforced)
+    - Unit Tests required for all Controllers & Services.
+- **Git Hooks:**
+    - `pre-commit`: Runs Lint & Test Coverage automatically.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js v18+
+- Docker (for Database)
+- pnpm
+
+### 2. Setup
 ```bash
+# Install dependencies
 pnpm install
+
+# Setup Environment
+cp .env.example .env
+
+# Start Database
+docker-compose up -d
+
+# Push Schema
+pnpm --filter api db:push
 ```
 
-### 2. Start Development (Everything)
-This will launch both `frontend` and `backend` in parallel.
+### 3. Development
+Launch the full stack in parallel:
 ```bash
 pnpm dev
 ```
+- **Web:** [http://localhost:5173](http://localhost:5173)
+- **API:** [http://localhost:3000](http://localhost:3000)
+- **DB Studio:** [https://local.drizzle.studio](https://local.drizzle.studio)
 
-## Workflows
+---
 
-*   **Add Package**: `pnpm add <pkg> --filter <workspace>`
-    *   Ex: `pnpm add axios --filter web`
-    *   Ex: `pnpm add @nestjs/config --filter api`
+## 🤝 Workflow
+We use **Trunk-Based Development** with short-lived feature branches.
+
+1.  Create branch: `git checkout -b feature/xyz`
+2.  Commit changes (Hooks will verify).
+3.  Open Pull Request.
+4.  **AI Review:** CodeRabbit will analyze your changes.
+5.  Merge to `master`.
