@@ -70,11 +70,12 @@ pnpm dev
 ---
 
 ## 🤝 Workflow
-We use **Trunk-Based Development** with short-lived feature branches.
+We use **Trunk-Based Development** with short-lived feature branches targeting `development`.
 
-1.  Create branch: `git checkout -b feature/xyz`
-2.  Commit changes.
-3.  Open Pull Request -> `development`.
-4.  **AI Review:** CodeRabbit analyzes.
-5.  Merge to `development`.
-6.  Release: Merge `development` -> `master`.
+1.  Start from Dev: `git checkout development && git pull`
+2.  Create branch: `git checkout -b feature/xyz`
+3.  Commit changes.
+4.  Open Pull Request -> `development`.
+5.  **AI Review:** CodeRabbit analyzes.
+6.  Merge to `development`.
+7.  Release: Merge `development` -> `master`.
