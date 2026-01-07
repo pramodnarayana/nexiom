@@ -7,16 +7,16 @@ import { AuthController } from './auth.controller';
 
 @Global()
 @Module({
-    imports: [EmailModule],
-    controllers: [AuthController],
-    providers: [
-        BetterAuthIdentityProvider,
-        {
-            provide: IdentityProvider, // The token expected by UsersService / Guard
-            useExisting: BetterAuthIdentityProvider,
-        },
-        AuthGuard,
-    ],
-    exports: [IdentityProvider, AuthGuard],
+  imports: [EmailModule],
+  controllers: [AuthController],
+  providers: [
+    BetterAuthIdentityProvider,
+    {
+      provide: IdentityProvider, // The token expected by UsersService / Guard
+      useExisting: BetterAuthIdentityProvider,
+    },
+    AuthGuard,
+  ],
+  exports: [IdentityProvider, AuthGuard],
 })
-export class AuthModule { }
+export class AuthModule {}

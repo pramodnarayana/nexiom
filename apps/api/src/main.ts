@@ -9,8 +9,12 @@ import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   console.log(`[Diagnostic] CWD: ${process.cwd()}`);
-  console.log(`[Diagnostic] .env exists? ${fs.existsSync(path.resolve(process.cwd(), '.env'))}`);
-  console.log(`[Diagnostic] apps/api/.env exists? ${fs.existsSync(path.resolve(process.cwd(), 'apps/api/.env'))}`);
+  console.log(
+    `[Diagnostic] .env exists? ${fs.existsSync(path.resolve(process.cwd(), '.env'))}`,
+  );
+  console.log(
+    `[Diagnostic] apps/api/.env exists? ${fs.existsSync(path.resolve(process.cwd(), 'apps/api/.env'))}`,
+  );
 
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');

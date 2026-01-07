@@ -7,10 +7,22 @@
 		"build": "turbo build",
 		"lint": "turbo lint",
 		"test": "turbo test",
-		"test:cov": "turbo test:cov"
+		"test:cov": "turbo test:cov",
+		"prepare": "husky"
 	},
 	"devDependencies": {
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
 		"turbo": "^2.7.2"
+	},
+	"lint-staged": {
+		"apps/api/**/*.{ts,tsx}": [
+			"pnpm --filter api lint --fix",
+			"pnpm --filter api test"
+		],
+		"apps/web/**/*.{ts,tsx}": [
+			"pnpm --filter web lint --fix"
+		]
 	},
 	"packageManager": "pnpm@10.27.0",
 	"engines": {
