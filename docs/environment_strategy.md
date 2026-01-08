@@ -114,7 +114,7 @@ The Browser **cannot** see your Server's Environment Variables.
 *   **Pros**: **Portable**. One Docker Image works everywhere (if using Nginx Proxy).
 *   **Cons**: Relies on the "Reverse Proxy" pattern.
 
-### Strategy 3: Runtime Injection (The "Enteprise" Way)
+### Strategy 3: Runtime Injection (The "Enterprise" Way)
 *   **How**:
     1.  Create an empty file `public/config.js`.
     2.  When Docker starts, a script **overwrites** this file: `window.ENV = { API_URL: "https://..." }`.

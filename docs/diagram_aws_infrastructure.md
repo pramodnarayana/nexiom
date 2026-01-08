@@ -1,5 +1,5 @@
 # AWS Infrastructure Diagram (Detailed)
-*Physical Resource Map based on System Architecture*
+## Physical Resource Map based on System Architecture
 
 ```mermaid
 graph LR

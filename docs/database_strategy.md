@@ -103,9 +103,9 @@ You asked: *"Are we connecting from our local Mac to the DB?"*
 
 ```mermaid
 graph LR
-    Mac[Your Mac (Terminal)] -->|"runs db:migrate"| Bridge[Port 5432]
-    Bridge -->|"forwards to"| Docker[Docker Container (Postgres)]
-    Docker -->|"writes to"| Volume[Docker Volume (Data)]
+  Mac[Your Mac (Terminal)] -->|"runs db:migrate"| Bridge[Port 5432]
+  Bridge -->|"forwards to"| Docker[Docker Container (Postgres)]
+  Docker -->|"writes to"| Volume[Docker Volume (Data)]
 ```
 
 *   **Source**: Your Mac has the SQL file (`0000_init.sql`).
