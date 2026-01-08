@@ -6,5 +6,7 @@ if (!apiURL) {
 }
 
 export const authClient = createAuthClient({
-    baseURL: apiURL + "/auth"
+    baseURL: apiURL.startsWith("/")
+        ? `${window.location.origin}${apiURL}/auth`
+        : `${apiURL}/auth`
 })

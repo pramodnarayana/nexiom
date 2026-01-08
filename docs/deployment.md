@@ -1,7 +1,63 @@
 # Deployment Strategy & AI-Native CI/CD
 
-This document outlines the **Modern, AI-Enhanced Deployment Pipeline** for Nexiom.
 We utilize a "Shift-Left" quality strategy where AI and Automated Tests intervene *before* code reaches the main branch.
+
+## 0. AWS Infrastructure Blueprint
+*Physical mapping of the Architecture to AWS Services.*
+
+```mermaid
+graph LR
+    %% --- Layer 1: Ingestion (Serverless) ---
+    subgraph L1["Layer 1: Gateway"]
+        API[API Gateway]
+        Lambda[Ingestion Lambda]
+        Q_Ingest[(SQS: Inbound_Gateway)]
+    end
+
+    %% --- Layer 2 & 3: Core Logic (Fargate Container) ---
+    subgraph Core["Core Worker (Fargate)"]
+        direction TB
+        W_Replica[Replica Logic]
+        W_Norm[Norm Logic]
+    end
+
+    %% --- Layer 4 & 5: Delivery (Fargate Container) ---
+    subgraph Delivery["Delivery Worker (Fargate)"]
+        direction TB
+        W_Out[Outbound Prep]
+        W_Exec[Executor]
+    end
+
+    %% --- Storage & Feedback ---
+    subgraph Data["Persistence"]
+        Q_Replica[(SQS: Source_Replica)]
+        Q_Norm[(SQS: Normalised)]
+        Q_FIFO[(SQS FIFO: Outbound)]
+        Q_Fetch[(SQS: Fetch_Request)]
+        DB[(Aurora Postgres)]
+    end
+
+    %% --- Main Pipeline Flow ---
+    API --> Lambda --> Q_Ingest
+    Q_Ingest --> W_Replica
+    W_Replica --> Q_Replica --> W_Norm
+    W_Norm --> Q_Norm --> W_Out
+    W_Out --> Q_FIFO --> W_Exec
+    W_Exec --> DB
+
+    %% --- Self Healing Loop ---
+    W_Norm -.->|"Missing Dep"| Q_Fetch
+    W_Exec -.->|"Stale Date"| Q_Fetch
+    Q_Fetch --> Lambda
+
+    %% Styling
+    classDef aws fill:#FF9900,stroke:#232F3E,color:white;
+    classDef container fill:#00A4A6,stroke:#232F3E,color:white;
+    classDef queue fill:#CC2264,stroke:#232F3E,color:white;
+    class API,Lambda aws;
+    class W_Replica,W_Norm,W_Out,W_Exec container;
+    class Q_Ingest,Q_Replica,Q_Norm,Q_FIFO,Q_Fetch queue;
+```
 
 ---
 
