@@ -9,7 +9,7 @@ describe('Better Auth Schema', () => {
     expect(member).toBeDefined();
   });
 
-  it('should have cascade delete configured on session', () => {
+  it('should have userId field defined on session', () => {
     // Basic structural check to ensure the definition exists
     // Deep introspection of Drizzle objects is complex, so we check existence
     expect(session.userId).toBeDefined();

@@ -41,7 +41,7 @@ This is how we handle the "Action" step in different situations.
 *   **Result**: DB history is synced. Data is safe. Future migrations (0001) will run normally.
 
 
-### Case B: Ongoing Development (e.g., Adding a Feature) 🚀
+### Case C: Ongoing Development (e.g., Adding a Feature) 🚀
 **Situation**: Prod has Users. You added a `phone_number` field locally.
 **Workflow**:
 1.  Local: You run `db:generate`. It creates `0002_add_phone.sql`.
@@ -51,7 +51,8 @@ This is how we handle the "Action" step in different situations.
 5.  **Action**: Runs `0002_add_phone.sql`.
 6.  **Result**: Users kept their data. New column added.
 
-### Case C: "I already have Prod Data, but no Migrations" (Baselining) ⚠️
+### Case D: Legacy Database Baselining (Alternative Scenario) ⚠️
+**Note**: This is similar to Case B but provides an alternative workflow.
 **Situation**: You hacked together a Prod DB using `db:push` or raw SQL, and now you want to switch to "Proper Migrations".
 **Problem**: If you run `0001_create_users.sql`, it will fail because "Table users already exists".
 **The Solution: Baselining**.
