@@ -1,17 +1,119 @@
 version: '3.8'
 
+x-common-env: &common-env
+  DATABASE_URL: postgres://user:password@postgres:5432/nexiom_local
+  REDIS_URL: redis://redis:6379
+  NODE_ENV: production
+
 services:
+  # --- Database ---
   postgres:
-    image: postgres:16-alpine
-    container_name: nexiom-master-db
-    ports:
-      - '5432:5432'
+    image: postgres:15-alpine
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: nexiom_master
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nexiom_local
+    ports:
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d nexiom_local" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nexiom-network
+
+  # --- Cache/Queue ---
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nexiom-network
+
+  # --- Backend ---
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runner
+    env_file:
+      - apps/api/.env
+    environment:
+      <<: *common-env
+      # Overrides for Docker Networking
+      BETTER_AUTH_URL: http://localhost:3001
+      ALLOWED_ORIGINS: http://localhost:8080,http://localhost:3001
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      migrator:
+        condition: service_completed_successfully
+    networks:
+      - nexiom-network
+
+  # --- Migrator (Ephemeral) ---
+  migrator:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    command: pnpm --filter api db:migrate
+    env_file:
+      - apps/api/.env
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
+  # --- ID Studio (DB GUI) ---
+  studio:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    # Bind to 0.0.0.0 so we can access it from the host
+    # Use direct 'exec' via filter to find the binary in apps/api
+    command: pnpm --filter api exec drizzle-kit studio --host 0.0.0.0 --port 4983
+    env_file:
+      - apps/api/.env
+    environment:
+      <<: *common-env
+    ports:
+      - "4983:4983"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
+  # --- Frontend ---
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - nexiom-network
+
+networks:
+  nexiom-network:
+    driver: bridge
 
 volumes:
-  db_data:
+  postgres_data:
+  redis_data:

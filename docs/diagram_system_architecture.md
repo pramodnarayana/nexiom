@@ -1,40 +1,5 @@
-# System Architecture Diagram
-
-## 1. High-Level Component View
-*The software components and their relationships.*
-
-```mermaid
-graph TD
-    User((User))
-    
-    subgraph Frontend["apps/web (React)"]
-        UI[Dashboard UI]
-        AuthLib[Auth Client]
-    end
-    
-    subgraph Backend["apps/api (NestJS)"]
-        API[API Gateway Module]
-        Workers[Background Workers]
-        BetterAuth[Auth Provider]
-    end
-    
-    subgraph Data["Storage"]
-        DB[(PostgreSQL)]
-        Redis[(Redis/Queue)]
-    end
-
-    User --> UI
-    UI -->|"HTTPS/REST"| API
-    UI -->|"Auth"| BetterAuth
-    API --> DB
-    BetterAuth --> DB
-    API -->|"Enqueues"| Redis
-    Redis -->|"Triggers"| Workers
-    Workers --> DB
-```
-
-## 2. Detailed Hybrid Architecture
-*Detailed interaction between Serverless, Containers, and Queues.*
+# System Architecture Diagram (Detailed)
+*Component View (Detailed Hybrid)*
 
 ```mermaid
 graph LR
@@ -75,7 +40,7 @@ graph LR
     subgraph Compute["Compute Layer"]
         
         %% SERVERLESS
-        subgraph Serverless["Serverless"]
+        subgraph Serverless["Serverless (Fast I/O)"]
             W_Ingest["W1: Ingestion Lambda"]
             W_Notify["W7: Notification Lambda"]
         end
@@ -92,7 +57,7 @@ graph LR
     %% --- DATA LAYER ---
     subgraph CustomerDB["Customer Database"]
         direction TB
-        AppConn[("App Connection")]
+        AppConn[("App Connection<br/>(Encrypted Creds)")]
         NotifConfig[("Notification Config")]
         NotifLog[("Notification Log")]
         RouteTable[("Integration Routes")]

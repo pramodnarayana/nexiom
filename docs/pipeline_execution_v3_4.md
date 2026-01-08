@@ -87,3 +87,31 @@
 ### Stale SyncToken (Destination)
 - **Context**: QuickBooks rejects update due to old token.
 - **Layer 5 Action**: Catch error -> Call `fetchLatestFromDest()` -> Update Map -> Retry.
+
+---
+
+## 4. Pipeline Diagram (Logical Flow)
+
+```mermaid
+graph LR
+    %% Data Flow
+    Source[Source App] -->|"Webhook"| L1
+    
+    subgraph Pipeline["Sync Pipeline"]
+        L1(Layer 1: Ingest)
+        L2(Layer 2: Replica)
+        L3(Layer 3: Norm)
+        L4(Layer 4: Outbound)
+        L5(Layer 5: Delivery)
+    end
+    
+    Dest[Dest App]
+    
+    L1 --> L2 --> L3 --> L4 --> L5
+    L5 -->|"API Call"| Dest
+    
+    %% Self Healing
+    L3 -.->|"Missing Dep"| L1
+    L5 -.->|"Stale Token"| L1
+```
+
