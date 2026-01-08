@@ -17,7 +17,9 @@
 	},
 	"lint-staged": {
 		"apps/api/**/*.{ts,tsx}": [
-			"pnpm --filter api lint --fix",
+			"pnpm --filter api lint --fix"
+		],
+		"apps/api/src/**/*.{ts,tsx}": [
 			"pnpm --filter api test"
 		],
 		"apps/web/**/*.{ts,tsx}": [
