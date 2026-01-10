@@ -15,6 +15,13 @@
       "when": 1767868333905,
       "tag": "0001_fluffy_taskmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767964717619,
+      "tag": "0002_futuristic_cammi",
+      "breakpoints": true
     }
   ]
 }

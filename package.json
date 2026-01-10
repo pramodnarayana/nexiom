@@ -11,23 +11,28 @@
 		"prepare": "husky"
 	},
 	"devDependencies": {
+		"@types/node": "^25.0.5",
+		"@vitest/coverage-v8": "^2.1.9",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.2.7",
-		"turbo": "^2.7.2"
+		"turbo": "^2.7.2",
+		"vitest": "^2.1.9"
 	},
 	"lint-staged": {
 		"apps/api/**/*.{ts,tsx}": [
-			"pnpm --filter api lint --fix"
-		],
-		"apps/api/src/**/*.{ts,tsx}": [
-			"pnpm --filter api test"
+			"pnpm -C apps/api exec eslint --fix"
 		],
 		"apps/web/**/*.{ts,tsx}": [
-			"pnpm --filter web lint --fix"
+			"pnpm -C apps/web exec eslint --fix"
 		]
 	},
 	"packageManager": "pnpm@10.27.0",
 	"engines": {
 		"node": ">=18"
+	},
+	"pnpm": {
+		"overrides": {
+			"axios": "1.13.2"
+		}
 	}
 }
