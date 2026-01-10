@@ -8,13 +8,15 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
     plugins: [react()],
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, './src'),
+        },
+    },
     test: {
         environment: 'happy-dom',
         globals: true,
         setupFiles: ['./src/test/setup.ts'],
-        alias: {
-            '@': path.resolve(__dirname, './src'),
-        },
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
