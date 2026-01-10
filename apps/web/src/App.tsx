@@ -45,7 +45,6 @@ function App() {
                 {
                   name: "users",
                   list: "/admin/users",
-                  create: "/admin/users/create",
                   edit: "/admin/users/edit/:id",
                   show: "/admin/users/show/:id",
                   meta: {

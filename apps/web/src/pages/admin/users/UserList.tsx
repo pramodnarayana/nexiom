@@ -52,7 +52,7 @@ export const UserList = () => {
                     </TableHeader>
                     <TableBody>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {data?.data.map((user: Record<string, any>) => (
+                        {data?.data?.map((user: Record<string, any>) => (
                             <TableRow key={user.id}>
                                 <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
                                 <TableCell>{user.email}</TableCell>

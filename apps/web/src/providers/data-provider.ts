@@ -1,6 +1,7 @@
 "use client";
 
 import dataProviderSimpleRest from "@refinedev/simple-rest";
+import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -8,13 +9,16 @@ if (!API_URL) {
     throw new Error("VITE_API_URL is not defined in the environment variables.");
 }
 
-import axios from "axios";
-
+/**
+ * Axios instance configured with credentials for cross-origin requests.
+ * This enables cookie-based authentication with the API.
+ */
 const axiosInstance = axios.create({
-    withCredentials: true
+    withCredentials: true,
 });
 
-// Refine's simple-rest provider usually accepts the axios instance as the second argument
-// or as part of the configuration if using the new standard.
-// For @refinedev/simple-rest specifically, the signature is (apiUrl, axiosInstance).
+/**
+ * Refine data provider using simple-rest with custom axios instance.
+ * Type compatibility is ensured via src/types/refine-simple-rest.d.ts
+ */
 export const dataProvider = dataProviderSimpleRest(API_URL, axiosInstance);

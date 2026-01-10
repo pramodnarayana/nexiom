@@ -65,7 +65,7 @@ export const UserShow = () => {
                                 {record?.emailVerified ? (
                                     <Badge variant="outline" className="text-green-600 bg-green-50">Verified</Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-yellow-600 bg-yellow-50">Unverified</Badge>
+                                    <Badge variant="outline" className="text-yellow-600 bg-yellow-50">Pending</Badge>
                                 )}
                             </div>
                         </div>

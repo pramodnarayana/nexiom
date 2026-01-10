@@ -147,7 +147,7 @@ export function AdminLayout() {
         return <div className="flex items-center justify-center h-screen bg-slate-50">Loading Admin Panel...</div>;
     }
 
-    if (!user || (user.roles && !user.roles.includes('admin'))) {
+    if (!user || !Array.isArray(user.roles) || !user.roles.includes('admin')) {
         return null; // Or unauthorized page
     }
 

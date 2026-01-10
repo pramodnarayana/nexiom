@@ -70,7 +70,7 @@ export const authProvider: AuthProvider = {
                 id: user.id,
                 name: user.name,
                 avatar: user.image,
-                roles: Array.isArray(user.roles) ? user.roles : [user.role],
+                roles: Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : []),
             };
         }
         return null;
