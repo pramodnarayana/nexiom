@@ -19,10 +19,10 @@
 	},
 	"lint-staged": {
 		"apps/api/**/*.{ts,tsx}": [
-			"pnpm --filter api exec eslint --fix"
+			"pnpm -C apps/api exec eslint --fix"
 		],
 		"apps/web/**/*.{ts,tsx}": [
-			"pnpm --filter web exec eslint --fix"
+			"pnpm -C apps/web exec eslint --fix"
 		]
 	},
 	"packageManager": "pnpm@10.27.0",
