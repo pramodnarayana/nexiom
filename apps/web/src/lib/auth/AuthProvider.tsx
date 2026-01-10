@@ -96,15 +96,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         const hydrateUser = (data: { user: unknown; session: { token: string } }) => {
-            const rawUser = data.user as Record<string, unknown>;
+            const apiUser = data.user as Record<string, unknown>;
+            console.log("AuthProvider Hydrate:", JSON.stringify(apiUser, null, 2));
+
+            // Better Auth returns 'roles' as an array. Trust it.
+            const finalRoles = Array.isArray(apiUser.roles) ? (apiUser.roles as string[]) : ['user'];
+
             const authUser: AuthUser = {
-                id: String(rawUser.id),
-                email: String(rawUser.email),
-                name: typeof rawUser.name === 'string' ? rawUser.name : undefined,
-                roles: Array.isArray(rawUser.roles) ? rawUser.roles as string[] : ['admin'],
-                organizationId: typeof rawUser.organizationId === 'string' ? rawUser.organizationId : undefined,
-                organizationName: typeof rawUser.organizationName === 'string' ? rawUser.organizationName : undefined,
-                hasTenant: !!rawUser.hasTenant
+                id: String(apiUser.id),
+                email: String(apiUser.email),
+                name: typeof apiUser.name === 'string' ? apiUser.name : undefined,
+                roles: finalRoles,
+                organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
+                organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
+                hasTenant: !!apiUser.hasTenant
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -119,22 +124,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * @param data - The login response containing accessToken and user object.
      */
     const login = (data: { accessToken: string; user: unknown }) => {
-        const rawUser = data.user as Record<string, unknown>;
+        const apiUser = data.user as Record<string, unknown>;
         setToken(data.accessToken);
 
-        const fullName = typeof rawUser.name === 'string' ? rawUser.name :
-            `${rawUser.firstName || ''} ${rawUser.lastName || ''}`.trim();
+        const fullName = typeof apiUser.name === 'string' ? apiUser.name :
+            `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
 
-        const roleId = typeof rawUser.roleId === 'string' ? rawUser.roleId : 'user';
+        // Handle both Singular ('role') and Plural ('roles') formats
+        let finalRoles: string[] = ['user'];
+
+        if (Array.isArray(apiUser.roles)) {
+            finalRoles = apiUser.roles as string[];
+        } else if (typeof apiUser.role === 'string') {
+            finalRoles = [apiUser.role];
+        }
 
         setUser({
-            id: String(rawUser.id),
-            email: String(rawUser.email),
+            id: String(apiUser.id),
+            email: String(apiUser.email),
             name: fullName,
-            roles: [roleId],
-            organizationId: typeof rawUser.organizationId === 'string' ? rawUser.organizationId : undefined,
-            organizationName: typeof rawUser.organizationName === 'string' ? rawUser.organizationName : undefined,
-            hasTenant: !!rawUser.hasTenant
+            roles: finalRoles,
+            organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
+            organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
+            hasTenant: !!apiUser.hasTenant
         });
     };
 

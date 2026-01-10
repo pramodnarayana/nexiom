@@ -1,1 +1,2 @@
+pnpm --filter api test
 pnpm lint-staged

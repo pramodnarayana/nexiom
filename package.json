@@ -11,19 +11,18 @@
 		"prepare": "husky"
 	},
 	"devDependencies": {
+		"@vitest/coverage-v8": "^4.0.16",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.2.7",
-		"turbo": "^2.7.2"
+		"turbo": "^2.7.2",
+		"vitest": "^4.0.16"
 	},
 	"lint-staged": {
 		"apps/api/**/*.{ts,tsx}": [
-			"pnpm --filter api lint --fix"
-		],
-		"apps/api/src/**/*.{ts,tsx}": [
-			"pnpm --filter api test"
+			"pnpm --filter api exec eslint --fix"
 		],
 		"apps/web/**/*.{ts,tsx}": [
-			"pnpm --filter web lint --fix"
+			"pnpm --filter web exec eslint --fix"
 		]
 	},
 	"packageManager": "pnpm@10.27.0",

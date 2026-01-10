@@ -1,10 +1,1 @@
-import { useAuthContext } from "../lib/auth/context";
-import type { AuthContextType } from "../lib/auth/types";
-
-export function useAuth(): AuthContextType {
-    const context = useAuthContext();
-    if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider");
-    }
-    return context;
-}
+export { useAuth } from "../lib/auth/context";

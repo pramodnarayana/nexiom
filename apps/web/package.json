@@ -7,9 +7,21 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@refinedev/core": "^4.58.0",
+    "@refinedev/react-router-v6": "^4.6.2",
+    "@refinedev/simple-rest": "^4.5.4",
+    "@tanstack/react-query": "^4.42.0",
+    "axios": "^0.26.1",
     "better-auth": "^1.4.10",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -17,16 +29,28 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.23",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "^27.4.0",
+    "lucide-react": "^0.562.0",
+    "postcss": "^8.5.6",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "3.4.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vite-plugin-checker": "^0.12.0",
+    "vitest": "^4.0.16"
   }
 }
