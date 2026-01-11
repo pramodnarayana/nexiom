@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../schema/better-auth'; // Use Better Auth schema
 import { CreateUser } from './users/users.schema';
-import { organization } from 'better-auth/plugins';
+import { organization, admin } from 'better-auth/plugins';
 import { EmailService } from '../shared/email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { randomUUID } from 'crypto';
@@ -62,7 +62,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           });
         },
       },
-      plugins: [organization()],
+      plugins: [organization(), admin()],
       socialProviders: {
         google: {
           clientId: process.env.GOOGLE_CLIENT_ID || '',

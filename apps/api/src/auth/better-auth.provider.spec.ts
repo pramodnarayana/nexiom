@@ -24,6 +24,7 @@ jest.mock('better-auth/adapters/drizzle', () => ({
 
 jest.mock('better-auth/plugins', () => ({
   organization: jest.fn(),
+  admin: jest.fn(),
 }));
 
 // Mock Drizzle

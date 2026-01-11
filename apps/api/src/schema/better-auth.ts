@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
+
+export const organizationStatusEnum = pgEnum('organization_status', [
+  'active',
+  'disabled',
+  'suspended',
+]);
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -58,6 +64,7 @@ export const organization = pgTable('organization', {
   logo: text('logo'),
   createdAt: timestamp('createdAt').notNull(),
   metadata: text('metadata'),
+  status: organizationStatusEnum('status').default('active').notNull(),
 });
 
 export const member = pgTable('member', {
