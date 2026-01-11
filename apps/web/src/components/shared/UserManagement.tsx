@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { type UserTableItem } from "@/types/user";
 
 interface UserManagementProps {
-    data: UserTableItem[];
+    data: UserTableItem[] | undefined;
     isLoading: boolean;
     basePath: string; // e.g. "/admin/users" or "/dashboard/members"
 }
@@ -62,12 +62,12 @@ export const UserManagement = ({ data, isLoading, basePath }: UserManagementProp
                             </TableCell>
                             <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                    <Button variant="ghost" size="icon" asChild>
+                                    <Button variant="ghost" size="icon" asChild aria-label={`View ${user.name || 'user'}`}>
                                         <Link to={`${basePath}/show/${user.id}`}>
                                             <Eye className="h-4 w-4" />
                                         </Link>
                                     </Button>
-                                    <Button variant="ghost" size="icon" asChild>
+                                    <Button variant="ghost" size="icon" asChild aria-label={`Edit ${user.name || 'user'}`}>
                                         <Link to={`${basePath}/edit/${user.id}`}>
                                             <Edit className="h-4 w-4" />
                                         </Link>

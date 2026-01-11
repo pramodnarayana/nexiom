@@ -260,7 +260,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         image: schema.user.image,
         createdAt: schema.user.createdAt,
         updatedAt: schema.user.updatedAt,
-        // role: schema.member.role, // If we want role, we need to extend the type
+        role: schema.member.role,
       })
       .from(schema.user)
       .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
