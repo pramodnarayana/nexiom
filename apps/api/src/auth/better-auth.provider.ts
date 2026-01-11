@@ -251,7 +251,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
     // Filter users who are members of the given organization (tenant)
     // Note: returning schema.User[]
-    const usersInTenant = await this.db
+    const users = await this.db
       .select({
         id: schema.user.id,
         name: schema.user.name,
@@ -266,6 +266,9 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
       .where(eq(schema.member.organizationId, tenantId));
 
-    return usersInTenant as unknown as schema.User[];
+    // Define the shape of the joined result
+    type UserWithRole = schema.User & { role: string | null };
+
+    return users as unknown as UserWithRole[];
   }
 }
