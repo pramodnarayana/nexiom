@@ -3,7 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 
 export const UpdateOrganizationStatusSchema = z.object({
   status: z.enum(['active', 'disabled', 'suspended'], {
-    message: 'Status must be active, disabled, or suspended',
+    error: 'Status must be active, disabled, or suspended',
   }),
 });
 
