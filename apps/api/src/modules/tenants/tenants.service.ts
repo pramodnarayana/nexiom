@@ -6,10 +6,10 @@ export class TenantsService {
   constructor(private readonly identityProvider: IdentityProvider) {}
 
   async findAll(search?: string) {
-    return this.identityProvider.listOrganizations(search);
+    return this.identityProvider.listTenants(search);
   }
 
   async updateStatus(id: string, status: 'active' | 'disabled' | 'suspended') {
-    return this.identityProvider.updateOrganizationStatus(id, status);
+    return this.identityProvider.updateTenantStatus(id, status);
   }
 }

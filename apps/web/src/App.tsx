@@ -41,7 +41,7 @@ function AdminSection() {
           }
         },
         {
-          name: "organizations",
+          name: "tenants",
           list: "/admin/tenants",
           show: "/admin/tenants/:id",
           meta: {
