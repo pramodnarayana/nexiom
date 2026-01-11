@@ -3,10 +3,10 @@ import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { Organization } from '../../schema/better-auth';
+import { UpdateOrganizationStatus } from './tenants.schema';
 
 describe('TenantsController', () => {
   let controller: TenantsController;
-  let service: TenantsService;
 
   const mockTenantsService = {
     findAll: jest.fn(),
@@ -32,7 +32,6 @@ describe('TenantsController', () => {
       .compile();
 
     controller = module.get<TenantsController>(TenantsController);
-    service = module.get<TenantsService>(TenantsService);
 
     jest.clearAllMocks();
   });
@@ -57,28 +56,28 @@ describe('TenantsController', () => {
       mockTenantsService.findAll.mockResolvedValue(result);
 
       expect(await controller.findAll()).toBe(result);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.findAll).toHaveBeenCalled();
+      expect(mockTenantsService.findAll).toHaveBeenCalled();
     });
 
     it('should verify search param is passed', async () => {
       const search = 'foo';
       await controller.findAll(search);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.findAll).toHaveBeenCalledWith(search);
+      expect(mockTenantsService.findAll).toHaveBeenCalledWith(search);
     });
   });
 
   describe('updateStatus', () => {
     it('should update status', async () => {
       const id = '1';
-      const status = 'disabled';
-      const result = { id, status };
+      const statusDto: UpdateOrganizationStatus = { status: 'disabled' };
+      const result = { id, status: statusDto.status };
       mockTenantsService.updateStatus.mockResolvedValue(result);
 
-      expect(await controller.updateStatus(id, status)).toBe(result);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.updateStatus).toHaveBeenCalledWith(id, status);
+      expect(await controller.updateStatus(id, statusDto)).toBe(result);
+      expect(mockTenantsService.updateStatus).toHaveBeenCalledWith(
+        id,
+        statusDto.status,
+      );
     });
   });
 });

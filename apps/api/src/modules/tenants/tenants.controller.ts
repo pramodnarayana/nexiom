@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { UpdateOrganizationStatus } from './tenants.schema';
 
 @Controller('organizations')
 @UseGuards(AuthGuard)
@@ -23,8 +24,8 @@ export class TenantsController {
   @Patch(':id')
   updateStatus(
     @Param('id') id: string,
-    @Body('status') status: 'active' | 'disabled' | 'suspended',
+    @Body() body: UpdateOrganizationStatus,
   ) {
-    return this.tenantsService.updateStatus(id, status);
+    return this.tenantsService.updateStatus(id, body.status);
   }
 }

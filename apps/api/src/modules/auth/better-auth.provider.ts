@@ -291,6 +291,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       .where(eq(schema.organization.id, id))
       .returning();
 
+    if (!result[0]) {
+      throw new Error(`Organization with id ${id} not found`);
+    }
+
     return result[0];
   }
 }
