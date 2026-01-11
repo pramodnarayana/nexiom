@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
+
+export const organizationStatusEnum = pgEnum('organization_status', [
+  'active',
+  'disabled',
+  'suspended',
+]);
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -9,6 +15,9 @@ export const user = pgTable('user', {
   createdAt: timestamp('createdAt').notNull(),
   updatedAt: timestamp('updatedAt').notNull(),
   role: text('role').default('user'), // 'user' | 'admin' | 'support'
+  banned: boolean('banned'),
+  banReason: text('banReason'),
+  banExpires: timestamp('banExpires'),
 });
 
 export const session = pgTable('session', {
@@ -22,6 +31,9 @@ export const session = pgTable('session', {
   userId: text('userId')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
+  impersonatedBy: text('impersonatedBy').references(() => user.id, {
+    onDelete: 'cascade',
+  }),
 });
 
 export const account = pgTable('account', {
@@ -58,6 +70,7 @@ export const organization = pgTable('organization', {
   logo: text('logo'),
   createdAt: timestamp('createdAt').notNull(),
   metadata: text('metadata'),
+  status: organizationStatusEnum('status').default('active').notNull(),
 });
 
 export const member = pgTable('member', {

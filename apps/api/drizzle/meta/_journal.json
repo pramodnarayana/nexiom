@@ -22,6 +22,27 @@
       "when": 1767964717619,
       "tag": "0002_futuristic_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768129026246,
+      "tag": "0003_ambitious_triathlon",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768130058955,
+      "tag": "0004_safe_tattoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768134003172,
+      "tag": "0005_skinny_the_anarchist",
+      "breakpoints": true
     }
   ]
 }
