@@ -1,7 +1,8 @@
 import { useTable } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { UserManagement, type UserTableItem } from "@/components/shared/UserManagement";
+import { UserManagement } from "@/components/shared/UserManagement";
+import { type UserTableItem } from "@/types/user";
 
 export const UserList = () => {
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting

@@ -10,14 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Edit, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-
-export interface UserTableItem {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    emailVerified: boolean;
-}
+import { type UserTableItem } from "@/types/user";
 
 interface UserManagementProps {
     data: UserTableItem[];
