@@ -99,8 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const apiUser = data.user as Record<string, unknown>;
             console.log("AuthProvider Hydrate:", JSON.stringify(apiUser, null, 2));
 
-            // Better Auth returns 'roles' as an array. Trust it.
-            const finalRoles = Array.isArray(apiUser.roles) ? (apiUser.roles as string[]) : ['user'];
+            // Better Auth returns 'roles' as an array OR 'role' as string. Normalize to array.
+            let finalRoles: string[] = ['user'];
+            if (Array.isArray(apiUser.roles)) {
+                finalRoles = apiUser.roles as string[];
+            } else if (typeof apiUser.role === 'string') {
+                finalRoles = [apiUser.role];
+            }
 
             const authUser: AuthUser = {
                 id: String(apiUser.id),
