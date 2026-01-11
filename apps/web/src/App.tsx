@@ -13,6 +13,7 @@ import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { UserList } from './pages/admin/users/UserList';
 import { UserShow } from './pages/admin/users/UserShow';
 import { UserEdit } from './pages/admin/users/UserEdit';
+import { TenantListPage } from './pages/admin/tenants/TenantListPage';
 
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
@@ -37,6 +38,14 @@ function AdminSection() {
           show: "/admin/users/show/:id",
           meta: {
             canDelete: true,
+          }
+        },
+        {
+          name: "organizations",
+          list: "/admin/tenants",
+          show: "/admin/tenants/:id",
+          meta: {
+            label: "Tenants",
           }
         }
       ]}
@@ -72,6 +81,7 @@ function App() {
             <Route path="users" element={<UserList />} />
             <Route path="users/show/:id" element={<UserShow />} />
             <Route path="users/edit/:id" element={<UserEdit />} />
+            <Route path="tenants" element={<TenantListPage />} />
             <Route path="settings" element={<div>Settings Placeholder</div>} />
           </Route>
         </Routes>
