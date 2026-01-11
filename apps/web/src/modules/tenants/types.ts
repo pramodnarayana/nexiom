@@ -8,7 +8,7 @@ export interface TenantTableItem {
     status: 'active' | 'disabled' | 'suspended';
 }
 
-export interface OrganizationApiResponse {
+export interface TenantApiResponse {
     id: string;
     name: string;
     slug: string | null;

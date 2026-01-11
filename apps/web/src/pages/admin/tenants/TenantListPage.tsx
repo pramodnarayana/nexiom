@@ -2,11 +2,11 @@ import { useTable } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TenantList } from "@/modules/tenants/TenantList";
-import { type TenantTableItem, type OrganizationApiResponse } from "@/modules/tenants/types";
+import { type TenantTableItem, type TenantApiResponse } from "@/modules/tenants/types";
 
 export const TenantListPage = () => {
     // RESOURCE: "organizations" -> GET /api/organizations
-    const table = useTable<OrganizationApiResponse>({
+    const table = useTable<TenantApiResponse>({
         resource: "organizations",
         syncWithLocation: true,
         // Optional: Add sorters/filters initial state if needed
@@ -17,19 +17,19 @@ export const TenantListPage = () => {
 
     // Transform API response to UI model
     // Assuming API returns standard Refine shape: { data: [...], total: N }
-    const tenants: TenantTableItem[] = data?.data?.map((org: OrganizationApiResponse) => ({
+    const tenants: TenantTableItem[] = data?.data?.map((org: TenantApiResponse) => ({
         id: org.id,
         name: org.name,
         slug: org.slug,
         logo: org.logo,
         createdAt: new Date(org.createdAt),
         metadata: org.metadata,
-        status: org.status || 'active', // Fallback if API hasn't updated yet
+        status: org.status,
     })) || [];
 
-    const handleStatusChange = (id: string, status: TenantTableItem['status']) => {
+    const handleStatusChange = () => {
         // TODO: Wire up to update hook
-        console.log("Updating status:", id, status);
+        // console.log("Updating status:", id, status);
     };
 
     return (
