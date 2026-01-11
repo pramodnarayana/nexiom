@@ -2,7 +2,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BetterAuthIdentityProvider } from './better-auth.provider';
-import { EmailService } from '../shared/email/email.service.abstract';
+import { EmailService } from '../email/email.service.abstract';
 
 // Mock Better Auth Library
 const mockBetterAuth = {

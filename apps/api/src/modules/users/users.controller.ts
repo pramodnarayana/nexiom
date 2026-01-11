@@ -10,7 +10,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUser } from './users.schema';
 import { Request } from 'express';
-import { AuthGuard } from '../auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 /**
  * Controller for handling User Management HTTP requests.

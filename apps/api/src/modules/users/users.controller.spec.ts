@@ -2,7 +2,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { AuthGuard } from '../auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.schema';
 import { Request } from 'express';
 
@@ -49,6 +49,7 @@ describe('UsersController', () => {
       mockUsersService.create.mockResolvedValue(result);
 
       expect(await controller.create(createUserDto)).toEqual(result);
+
       expect(usersService.create).toHaveBeenCalledWith(createUserDto);
     });
   });
@@ -61,6 +62,7 @@ describe('UsersController', () => {
 
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
+
       expect(usersService.findAll).not.toHaveBeenCalled();
     });
 
@@ -75,6 +77,7 @@ describe('UsersController', () => {
 
       const result = await controller.findAll(req);
       expect(result).toEqual(users);
+
       expect(usersService.findAll).toHaveBeenCalledWith(tenantId);
     });
   });
@@ -88,6 +91,7 @@ describe('UsersController', () => {
 
       const result = controller.findOne(id);
       expect(result).toEqual(user);
+
       expect(usersService.findOne).toHaveBeenCalledWith(id);
     });
   });
