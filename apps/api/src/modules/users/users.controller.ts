@@ -20,7 +20,7 @@ import { AuthGuard } from '../auth/auth.guard';
 @Controller('users')
 @UseGuards(AuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   /**
    * Endpoint to create a new user.

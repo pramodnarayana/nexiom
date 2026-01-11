@@ -9,7 +9,7 @@ import { IdentityProvider } from '../auth/identity-provider.abstract';
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly identityProvider: IdentityProvider) { }
+  constructor(private readonly identityProvider: IdentityProvider) {}
 
   /**
    * Creates a new user in the Identity Provider.

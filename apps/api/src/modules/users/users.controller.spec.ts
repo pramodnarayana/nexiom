@@ -49,7 +49,7 @@ describe('UsersController', () => {
       mockUsersService.create.mockResolvedValue(result);
 
       expect(await controller.create(createUserDto)).toEqual(result);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(usersService.create).toHaveBeenCalledWith(createUserDto);
     });
   });
@@ -62,7 +62,7 @@ describe('UsersController', () => {
 
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(usersService.findAll).not.toHaveBeenCalled();
     });
 
@@ -77,7 +77,7 @@ describe('UsersController', () => {
 
       const result = await controller.findAll(req);
       expect(result).toEqual(users);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(usersService.findAll).toHaveBeenCalledWith(tenantId);
     });
   });
@@ -91,7 +91,7 @@ describe('UsersController', () => {
 
       const result = controller.findOne(id);
       expect(result).toEqual(user);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(usersService.findOne).toHaveBeenCalledWith(id);
     });
   });

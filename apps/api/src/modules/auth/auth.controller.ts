@@ -20,7 +20,7 @@ export class Login extends createZodDto(
     email: z.string().email(),
     password: z.string(),
   }),
-) { }
+) {}
 
 /**
  * Handles authentication-related operations such as user login.
@@ -31,7 +31,7 @@ import { User, Session } from '../../schema/better-auth';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authProvider: IdentityProvider) { }
+  constructor(private readonly authProvider: IdentityProvider) {}
 
   @Post('login')
   async login(@Body() login: Login): Promise<{ session: Session; user: User }> {

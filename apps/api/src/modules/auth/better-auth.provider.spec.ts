@@ -11,7 +11,7 @@ const mockBetterAuth = {
     signInEmail: jest.fn(),
     getSession: jest.fn(),
   },
-  handler: (() => { }) as any,
+  handler: (() => {}) as any,
 };
 
 jest.mock('better-auth', () => ({

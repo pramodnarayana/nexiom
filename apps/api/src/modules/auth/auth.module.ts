@@ -19,4 +19,4 @@ import { AuthController } from './auth.controller';
   ],
   exports: [IdentityProvider, AuthGuard],
 })
-export class AuthModule { }
+export class AuthModule {}

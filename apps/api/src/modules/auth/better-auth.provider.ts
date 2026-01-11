@@ -281,8 +281,12 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     return await query.execute();
   }
 
-  async updateOrganizationStatus(id: string, status: 'active' | 'disabled' | 'suspended'): Promise<schema.Organization> {
-    const result = await this.db.update(schema.organization)
+  async updateOrganizationStatus(
+    id: string,
+    status: 'active' | 'disabled' | 'suspended',
+  ): Promise<schema.Organization> {
+    const result = await this.db
+      .update(schema.organization)
       .set({ status })
       .where(eq(schema.organization.id, id))
       .returning();
