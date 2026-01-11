@@ -1,13 +1,12 @@
 import { useTable } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { UserManagement } from "@/components/shared/UserManagement";
-import { type UserTableItem } from "@/types/user";
+import { Users } from "@/modules/users/Users";
+import { type UserTableItem } from "@/modules/users/types";
 
 export const UserList = () => {
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const table = useTable<any>({
+    const table = useTable<UserTableItem>({
         resource: "users",
         syncWithLocation: true,
     });
@@ -16,12 +15,11 @@ export const UserList = () => {
     const { data, isLoading } = tableQueryResult || {};
 
     // Transform data to match shared component interface
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const users: UserTableItem[] = data?.data?.map((user: any) => ({
+    const users: UserTableItem[] = data?.data?.map((user) => ({
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: user.role, // Now safely typed
         emailVerified: user.emailVerified
     })) || [];
 
@@ -37,7 +35,7 @@ export const UserList = () => {
                 </Button>
             </div>
 
-            <UserManagement
+            <Users
                 data={users}
                 isLoading={isLoading}
                 basePath="/admin/users"

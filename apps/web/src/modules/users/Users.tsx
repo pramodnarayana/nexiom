@@ -10,15 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Edit, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { type UserTableItem } from "@/types/user";
+import { type UserTableItem } from "./types";
 
-interface UserManagementProps {
+interface UsersProps {
     data: UserTableItem[] | undefined;
     isLoading: boolean;
     basePath: string; // e.g. "/admin/users" or "/dashboard/members"
 }
 
-export const UserManagement = ({ data, isLoading, basePath }: UserManagementProps) => {
+export const Users = ({ data, isLoading, basePath }: UsersProps) => {
     if (isLoading) {
         return <div className="p-4 text-sm text-muted-foreground">Loading users...</div>;
     }
