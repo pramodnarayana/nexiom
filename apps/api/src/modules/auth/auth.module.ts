@@ -2,7 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { BetterAuthIdentityProvider } from './better-auth.provider';
 import { IdentityProvider } from './identity-provider.abstract';
 import { AuthGuard } from './auth.guard';
-import { EmailModule } from '../shared/email/email.module';
+import { EmailModule } from '../email/email.module';
 import { AuthController } from './auth.controller';
 
 @Global()
@@ -19,4 +19,4 @@ import { AuthController } from './auth.controller';
   ],
   exports: [IdentityProvider, AuthGuard],
 })
-export class AuthModule {}
+export class AuthModule { }

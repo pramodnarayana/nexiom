@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateUser } from './users.schema';
 import { User } from '../../schema/better-auth';
-import { IdentityProvider } from '../identity-provider.abstract';
+import { IdentityProvider } from '../auth/identity-provider.abstract';
 
 /**
  * Service responsible for managing Users.
@@ -9,7 +9,7 @@ import { IdentityProvider } from '../identity-provider.abstract';
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly identityProvider: IdentityProvider) {}
+  constructor(private readonly identityProvider: IdentityProvider) { }
 
   /**
    * Creates a new user in the Identity Provider.

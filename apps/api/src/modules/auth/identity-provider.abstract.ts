@@ -1,4 +1,4 @@
-import { CreateUser } from './users/users.schema';
+import { CreateUser } from '../users/users.schema';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
@@ -7,7 +7,7 @@ import { CreateUser } from './users/users.schema';
  * We use an abstract class instead of an interface so it can be used
  * as a Dependency Injection token in NestJS.
  */
-import { User, Session } from '../schema/better-auth';
+import { User, Session, Organization } from '../../schema/better-auth';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
@@ -58,4 +58,17 @@ export abstract class IdentityProvider {
       roles?: string[];
     };
   } | null>;
+
+  /**
+   * Lists all organizations with optional search.
+   */
+  abstract listOrganizations(search?: string): Promise<Organization[]>;
+
+  /**
+   * Updates organization status.
+   */
+  abstract updateOrganizationStatus(
+    id: string,
+    status: 'active' | 'disabled' | 'suspended',
+  ): Promise<Organization>;
 }

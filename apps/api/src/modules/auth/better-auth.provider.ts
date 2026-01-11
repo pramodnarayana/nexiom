@@ -5,10 +5,10 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
-import * as schema from '../schema/better-auth'; // Use Better Auth schema
-import { CreateUser } from './users/users.schema';
+import * as schema from '../../schema/better-auth'; // Use Better Auth schema
+import { CreateUser } from '../users/users.schema';
 import { organization, admin } from 'better-auth/plugins';
-import { EmailService } from '../shared/email/email.service.abstract';
+import { EmailService } from '../email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { randomUUID } from 'crypto';
 
@@ -270,5 +270,23 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     type UserWithRole = schema.User & { role: string | null };
 
     return users as unknown as UserWithRole[];
+  }
+
+  async listOrganizations(_search?: string): Promise<schema.Organization[]> {
+    const query = this.db.select().from(schema.organization);
+
+    // TODO: Add search (ilike) logic if needed
+    // if (search) { ... }
+
+    return await query.execute();
+  }
+
+  async updateOrganizationStatus(id: string, status: 'active' | 'disabled' | 'suspended'): Promise<schema.Organization> {
+    const result = await this.db.update(schema.organization)
+      .set({ status })
+      .where(eq(schema.organization.id, id))
+      .returning();
+
+    return result[0];
   }
 }

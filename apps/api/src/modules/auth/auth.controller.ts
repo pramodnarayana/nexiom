@@ -11,7 +11,7 @@ import { IdentityProvider } from './identity-provider.abstract';
 import { BetterAuthIdentityProvider } from './better-auth.provider'; // Import concrete class for handler access
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { Signup } from './users/users.schema';
+import { Signup } from '../users/users.schema';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 
@@ -20,18 +20,18 @@ export class Login extends createZodDto(
     email: z.string().email(),
     password: z.string(),
   }),
-) {}
+) { }
 
 /**
  * Handles authentication-related operations such as user login.
  */
-import { User, Session } from '../schema/better-auth';
+import { User, Session } from '../../schema/better-auth';
 
 // ... (imports)
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(private readonly authProvider: IdentityProvider) { }
 
   @Post('login')
   async login(@Body() login: Login): Promise<{ session: Session; user: User }> {
