@@ -8,7 +8,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Eye } from "lucide-react";
+import { Edit, Eye, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 
@@ -32,10 +32,10 @@ export const UserList = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Users</h2>
-                    <p className="text-muted-foreground">Manage system users and their roles.</p>
                 </div>
                 <Button>
-                    Invite User
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add User
                 </Button>
             </div>
 
