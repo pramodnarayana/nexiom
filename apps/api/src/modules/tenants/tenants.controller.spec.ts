@@ -3,7 +3,7 @@ import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { Organization } from '../../schema/better-auth';
-import { UpdateOrganizationStatus } from './tenants.schema';
+import { UpdateTenantStatus } from './tenants.schema';
 
 describe('TenantsController', () => {
   let controller: TenantsController;
@@ -69,7 +69,7 @@ describe('TenantsController', () => {
   describe('updateStatus', () => {
     it('should update status', async () => {
       const id = '1';
-      const statusDto: UpdateOrganizationStatus = { status: 'disabled' };
+      const statusDto: UpdateTenantStatus = { status: 'disabled' };
       const result = { id, status: statusDto.status };
       mockTenantsService.updateStatus.mockResolvedValue(result);
 

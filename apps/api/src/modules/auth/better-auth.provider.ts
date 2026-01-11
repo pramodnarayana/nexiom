@@ -272,7 +272,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     return users as unknown as UserWithRole[];
   }
 
-  async listOrganizations(_search?: string): Promise<schema.Organization[]> {
+  async listTenants(_search?: string): Promise<schema.Organization[]> {
     const query = this.db.select().from(schema.organization);
 
     // TODO: Add search (ilike) logic if needed
@@ -281,7 +281,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     return await query.execute();
   }
 
-  async updateOrganizationStatus(
+  async updateTenantStatus(
     id: string,
     status: 'active' | 'disabled' | 'suspended',
   ): Promise<schema.Organization> {

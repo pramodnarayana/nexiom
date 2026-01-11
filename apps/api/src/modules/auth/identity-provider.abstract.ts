@@ -62,12 +62,12 @@ export abstract class IdentityProvider {
   /**
    * Lists all organizations with optional search.
    */
-  abstract listOrganizations(search?: string): Promise<Organization[]>;
+  abstract listTenants(search?: string): Promise<Organization[]>;
 
   /**
-   * Updates organization status.
+   * Updates tenant status.
    */
-  abstract updateOrganizationStatus(
+  abstract updateTenantStatus(
     id: string,
     status: 'active' | 'disabled' | 'suspended',
   ): Promise<Organization>;

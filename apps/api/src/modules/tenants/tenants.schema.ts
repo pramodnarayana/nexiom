@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
-export const UpdateOrganizationStatusSchema = z.object({
+export const UpdateTenantStatusSchema = z.object({
   status: z.enum(['active', 'disabled', 'suspended'], {
     error: 'Status must be active, disabled, or suspended',
   }),
 });
 
-export class UpdateOrganizationStatus extends createZodDto(
-  UpdateOrganizationStatusSchema,
+export class UpdateTenantStatus extends createZodDto(
+  UpdateTenantStatusSchema,
 ) {}

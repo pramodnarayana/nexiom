@@ -1,13 +1,13 @@
-import { useTable } from "@refinedev/core";
+import { useTable, useUpdate } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TenantList } from "@/modules/tenants/TenantList";
 import { type TenantTableItem, type TenantApiResponse } from "@/modules/tenants/types";
 
 export const TenantListPage = () => {
-    // RESOURCE: "organizations" -> GET /api/organizations
+    // RESOURCE: "tenants" -> GET /api/tenants
     const table = useTable<TenantApiResponse>({
-        resource: "organizations",
+        resource: "tenants",
         syncWithLocation: true,
         // Optional: Add sorters/filters initial state if needed
     });
@@ -27,9 +27,22 @@ export const TenantListPage = () => {
         status: org.status,
     })) || [];
 
-    const handleStatusChange = () => {
-        // TODO: Wire up to update hook
-        // console.log("Updating status:", id, status);
+    const { mutate } = useUpdate();
+
+    const handleStatusChange = (id: string, status: TenantTableItem['status']) => {
+        mutate({
+            resource: "tenants",
+            id,
+            values: { status },
+            successNotification: {
+                message: "Tenant status updated successfully",
+                type: "success",
+            },
+            errorNotification: {
+                message: "Error updating tenant status",
+                type: "error",
+            },
+        });
     };
 
     return (
