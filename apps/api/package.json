@@ -87,8 +87,12 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s",
       "!main.ts",
-      "!schema/**",
-      "!test/**"
+      "!**/*.module.ts",
+      "!**/*.abstract.ts",
+      "!test/**",
+      "!db/seed.ts",
+      "!db/truncate.ts",
+      "!db/verify.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { CreateUser } from './users.schema';
+import { CreateUser } from './users.validation';
 import { Request } from 'express';
 
 describe('UsersController', () => {

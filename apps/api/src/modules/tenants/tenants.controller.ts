@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { UpdateTenantStatus } from './tenants.schema';
+import { UpdateTenantStatus } from './tenants.validation';
 
 @Controller('tenants')
 @UseGuards(AuthGuard)

@@ -1,5 +1,18 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-pnpm --filter api test
-pnpm lint-staged --concurrent false
+echo "🔍 Running pre-commit checks..."
+
+# Run lint on staged files first (fast feedback)
+echo "📝 Linting staged files..."
+pnpm lint-staged --concurrent false || exit 1
+
+# Run full lint check
+echo "🔎 Running full lint check..."
+pnpm lint || exit 1
+
+# Run tests with coverage
+echo "🧪 Running tests with coverage..."
+pnpm test:cov || exit 1
+
+echo "✅ All pre-commit checks passed!"
