@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, pgEnum, unique } from 'drizzle-orm/pg-core';
-import { user } from '../auth/auth.schema';
+import { user } from '../users/user.schema';
 
 export const organizationStatusEnum = pgEnum('organization_status', [
   'active',
@@ -37,3 +37,20 @@ export const member = pgTable(
 
 export type Organization = typeof organization.$inferSelect;
 export type Member = typeof member.$inferSelect;
+
+import { relations } from 'drizzle-orm';
+
+export const organizationRelations = relations(organization, ({ many }) => ({
+  members: many(member),
+}));
+
+export const memberRelations = relations(member, ({ one }) => ({
+  organization: one(organization, {
+    fields: [member.organizationId],
+    references: [organization.id],
+  }),
+  user: one(user, {
+    fields: [member.userId],
+    references: [user.id],
+  }),
+}));

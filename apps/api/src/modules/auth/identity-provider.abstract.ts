@@ -7,8 +7,8 @@ import { CreateUser } from '../users/users.validation';
  * We use an abstract class instead of an interface so it can be used
  * as a Dependency Injection token in NestJS.
  */
-import { User, Session } from './auth.schema';
-import { Organization } from '../tenants/tenant.schema';
+import { User } from '../users/user.schema';
+import { Session } from './auth.schema';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
@@ -41,12 +41,6 @@ export abstract class IdentityProvider {
   ): Promise<{ session: Session; user: User } | null>;
 
   /**
-   * Lists users from the external identity system.
-   * Lists all users in the Identity Provider for a specific tenant.
-   */
-  abstract listUsers(tenantId?: string): Promise<User[]>;
-
-  /**
    * Retrieves a session and enriches it with extensive application data (e.g. Organization ID, Roles).
    * This is used to guarantee that the session context is complete before processing requests.
    */
@@ -61,15 +55,8 @@ export abstract class IdentityProvider {
   } | null>;
 
   /**
-   * Lists all organizations with optional search.
+   * Returns the underlying auth handler (e.g. Better Auth handler) for usage in catch-all routes.
+   * Returns any because the handler type depends on the implementation library.
    */
-  abstract listTenants(search?: string): Promise<Organization[]>;
-
-  /**
-   * Updates tenant status.
-   */
-  abstract updateTenantStatus(
-    id: string,
-    status: 'active' | 'disabled' | 'suspended',
-  ): Promise<Organization>;
+  abstract getHandler(): any;
 }

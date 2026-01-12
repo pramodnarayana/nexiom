@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BetterAuthIdentityProvider } from './better-auth.provider';
-import { EmailService } from '../email/email.service.abstract';
+import { EmailService } from '../../../email/email.service.abstract';
+import { TenantsService } from '../../../tenants/tenants.service';
+import { DRIZZLE_DB } from '../../../../db/db.provider';
 
 // Mock Better Auth Library
 const mockBetterAuth = {
@@ -32,10 +35,12 @@ const mockDb = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
-  from: jest.fn().mockReturnThis(),
-  innerJoin: jest.fn().mockReturnThis(),
-  where: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockReturnThis(),
+  from: jest.fn().mockReturnThis(), // Added from mock
+  query: {
+    member: {
+      findMany: jest.fn(),
+    },
+  },
 };
 
 jest.mock('drizzle-orm/node-postgres', () => ({
@@ -53,9 +58,14 @@ jest.mock('pg', () => {
 
 describe('BetterAuthIdentityProvider', () => {
   let provider: BetterAuthIdentityProvider;
+  let tenantsService: TenantsService;
 
   const mockEmailService = {
     sendEmail: jest.fn(),
+  };
+
+  const mockTenantsService = {
+    createTenant: jest.fn(),
   };
 
   beforeAll(() => {
@@ -69,12 +79,15 @@ describe('BetterAuthIdentityProvider', () => {
       providers: [
         BetterAuthIdentityProvider,
         { provide: EmailService, useValue: mockEmailService },
+        { provide: TenantsService, useValue: mockTenantsService },
+        { provide: DRIZZLE_DB, useValue: mockDb },
       ],
     }).compile();
 
     provider = module.get<BetterAuthIdentityProvider>(
       BetterAuthIdentityProvider,
     );
+    tenantsService = module.get<TenantsService>(TenantsService);
 
     jest.clearAllMocks();
   });
@@ -109,7 +122,7 @@ describe('BetterAuthIdentityProvider', () => {
       expect(result).toEqual(mockUser);
     });
 
-    it('should create organization if companyName provided', async () => {
+    it('should delegate organization creation to TenantsService', async () => {
       const userDto = {
         email: 'ceo@corp.com',
         password: 'password',
@@ -119,12 +132,12 @@ describe('BetterAuthIdentityProvider', () => {
       const mockUser = { id: 'ceo1' };
       mockBetterAuth.api.signUpEmail.mockResolvedValue({ user: mockUser });
 
-      // Mock DB calls for createOrganization
-      mockDb.insert.mockReturnThis();
-
       await provider.createUser(userDto);
 
-      expect(mockDb.insert).toHaveBeenCalledTimes(2); // Org + Member
+      expect(tenantsService.createTenant).toHaveBeenCalledWith(
+        'ceo1',
+        'Corp Inc',
+      );
     });
   });
 
@@ -152,13 +165,15 @@ describe('BetterAuthIdentityProvider', () => {
       };
       mockBetterAuth.api.getSession.mockResolvedValue(mockSessionData);
 
-      // Mock DB lookup
+      // Mock DB lookup via query builder
       const mockMembership = {
         organizationId: 'org1',
-        organizationName: 'Test Org',
+        organization: { name: 'Test Org' },
         role: 'admin',
       };
-      mockDb.limit.mockResolvedValue([mockMembership]);
+
+      // Need to cast to any because we are mocking the deep query object
+      mockDb.query.member.findMany.mockResolvedValue([mockMembership]);
 
       const result = await provider.getEnrichedSession('tok');
 
