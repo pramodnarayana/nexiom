@@ -12,7 +12,9 @@ export class InvitationsService {
     createInvitation: CreateInvitation,
     inviterId: string,
   ): Promise<unknown> {
-    this.logger.log(`Creating invitation for ${createInvitation.email}`);
+    this.logger.log(
+      `Creating invitation for organization ${createInvitation.organizationId || 'system'}`,
+    );
     return this.identityProvider.createInvitation({
       email: createInvitation.email,
       role: createInvitation.role,

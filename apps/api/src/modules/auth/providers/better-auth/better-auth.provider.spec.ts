@@ -101,8 +101,6 @@ describe('BetterAuthIdentityProvider', () => {
       BetterAuthIdentityProvider,
     );
     tenantsService = module.get<TenantsService>(TenantsService);
-
-    tenantsService = module.get<TenantsService>(TenantsService);
   });
 
   it('should be defined', () => {
