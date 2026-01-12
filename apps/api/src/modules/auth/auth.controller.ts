@@ -8,13 +8,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { IdentityProvider } from './identity-provider.abstract';
-import { BetterAuthIdentityProvider } from './better-auth.provider'; // Import concrete class for handler access
+import { TenantsService } from '../tenants/tenants.service';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import { Signup } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
-import { User, Session } from './auth.schema';
+import { User } from '../users/user.schema';
+import { Session } from './auth.schema';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -31,7 +32,10 @@ export class Login extends createZodDto(
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(
+    private readonly authProvider: IdentityProvider,
+    private readonly tenantsService: TenantsService,
+  ) {}
 
   @Post('login')
   async login(@Body() login: Login): Promise<{ session: Session; user: User }> {
@@ -51,8 +55,6 @@ export class AuthController {
   @Post('provision-tenant')
   async provisionTenant(@Req() req: Request): Promise<unknown> {
     // Extract session from cookie or header
-    const betterAuth = this.authProvider as BetterAuthIdentityProvider;
-
     // PRIORITY FIX: Prefer the Cookie because it contains the Signature (signed token).
     // The Bearer token from frontend is often raw (unsigned), which fails cookie emulation.
     const authHeader = req.headers['authorization'];
@@ -64,23 +66,14 @@ export class AuthController {
       authHeader?.split(' ')[1] ||
       '';
 
-    console.log(
-      `[ProvisionTenant] Headers Auth: ${req.headers['authorization']}`,
-    );
-    console.log(
-      `[ProvisionTenant] Cookie Token: ${reqWithCookies.cookies?.['better-auth.session_token']}`,
-    );
-    console.log(`[ProvisionTenant] Using Token: ${token}`);
-
     const session: { user: { id: string }; session: unknown } | null =
-      await betterAuth.validateSession(token);
-    console.log(`[ProvisionTenant] Session Valid? ${!!session}`);
+      await this.authProvider.validateSession(token);
 
     if (!session) {
       throw new UnauthorizedException('No Session Found');
     }
 
-    return betterAuth.provisionTenant(session.user.id);
+    return this.tenantsService.provisionTenantForUser(session.user.id);
   }
 
   /**
@@ -116,17 +109,11 @@ export class AuthController {
    */
   @All('*splat')
   async betterAuth(@Req() req: Request, @Res() res: Response) {
-    console.log('Better Auth Catch-All Hit:', {
-      method: req.method,
-      url: req.url,
-      originalUrl: req.originalUrl,
-      params: req.params,
-    });
-    const betterAuth = this.authProvider as BetterAuthIdentityProvider;
-    const handler = betterAuth.getHandler();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const handler = this.authProvider.getHandler();
 
     // Convert Better Auth's standard web handler to Node (Express) handler
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    return toNodeHandler(handler as any)(req, res);
+    return toNodeHandler(handler)(req, res);
   }
 }

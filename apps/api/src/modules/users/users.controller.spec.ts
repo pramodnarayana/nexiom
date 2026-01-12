@@ -41,16 +41,16 @@ describe('UsersController', () => {
 
   describe('create', () => {
     it('should call usersService.create with correct parameters', async () => {
-      const createUserDto: CreateUser = {
+      const createUser: CreateUser = {
         email: 'test@example.com',
         role: 'user',
       };
-      const result = { id: '1', ...createUserDto };
+      const result = { id: '1', ...createUser };
       mockUsersService.create.mockResolvedValue(result);
 
-      expect(await controller.create(createUserDto)).toEqual(result);
+      expect(await controller.create(createUser)).toEqual(result);
 
-      expect(usersService.create).toHaveBeenCalledWith(createUserDto);
+      expect(usersService.create).toHaveBeenCalledWith(createUser);
     });
   });
 

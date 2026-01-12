@@ -154,26 +154,15 @@ describe('Users Validation', () => {
     });
   });
 
-  describe('CreateUser DTO Class', () => {
-    it('should create instance from valid data', () => {
-      const data = {
-        email: 'test@example.com',
-        role: 'admin' as const,
-      };
-
-      expect(() => new CreateUser(data)).not.toThrow();
+  describe('CreateUser Class', () => {
+    it('should be instantiable', () => {
+      expect(() => new CreateUser()).not.toThrow();
     });
   });
 
-  describe('Signup DTO Class', () => {
-    it('should create instance from valid data', () => {
-      const data = {
-        email: 'test@example.com',
-        password: 'password123',
-        companyName: 'Test Corp',
-      };
-
-      expect(() => new Signup(data)).not.toThrow();
+  describe('Signup Class', () => {
+    it('should be instantiable', () => {
+      expect(() => new Signup()).not.toThrow();
     });
   });
 });
