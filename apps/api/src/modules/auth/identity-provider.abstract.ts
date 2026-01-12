@@ -55,6 +55,30 @@ export abstract class IdentityProvider {
   } | null>;
 
   /**
+   * Creates an invitation for a user to join an organization.
+   */
+  abstract createInvitation(payload: {
+    email: string;
+    role: string;
+    organizationId: string | null;
+    expiresIn?: number;
+    inviterId: string;
+  }): Promise<unknown>;
+
+  /**
+   * Retrieves an invitation by ID.
+   */
+  abstract getInvitation(id: string): Promise<unknown>;
+
+  /**
+   * Accepts an invitation, creating a link between the user and the organization.
+   */
+  abstract acceptInvitation(
+    invitationId: string,
+    inviterId: string,
+  ): Promise<unknown>;
+
+  /**
    * Returns the underlying auth handler (e.g. Better Auth handler) for usage in catch-all routes.
    * Returns any because the handler type depends on the implementation library.
    */

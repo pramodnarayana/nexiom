@@ -43,6 +43,13 @@
       "when": 1768134003172,
       "tag": "0005_skinny_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768219032473,
+      "tag": "0006_flat_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }

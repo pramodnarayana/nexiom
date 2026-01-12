@@ -28,6 +28,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       throw new Error('BETTER_AUTH_URL environment variable is not defined');
     }
 
+    const emailSvc = this.emailService;
     this.auth = betterAuth({
       trustedOrigins: process.env.ALLOWED_ORIGINS.split(','),
       baseURL: process.env.BETTER_AUTH_URL,
@@ -41,8 +42,9 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       emailVerification: {
         sendOnSignUp: true,
         autoSignInAfterVerification: true,
+
         sendVerificationEmail: async ({ user, url }) => {
-          await this.emailService.sendEmail({
+          await emailSvc.sendEmail({
             to: user.email,
             subject: 'Verify your email for Nexiom',
             text: `Please verify your email by clicking the following link: ${url}`,
@@ -50,7 +52,29 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           });
         },
       },
-      plugins: [organization(), admin()],
+      plugins: [
+        organization({
+          sendInvitationEmail: async (data) => {
+            // data contains: id, email, role, organization, invitation
+            // We need to construct the URL manually or use a frontend URL env var.
+            // Assuming localhost:3000 or whatever frontend is.
+            // Ideally we use process.env.NEXT_PUBLIC_APP_URL or similar.
+            // For now, let's derive it from BETTER_AUTH_URL or just use a placeholder we can config.
+
+            // NOTE: better-auth might not generate a full acceptance URL here, just the token logic.
+            // We usually direct them to our Frontend page: /accept-invite?id=...
+            const inviteUrl = `${process.env.BETTER_AUTH_URL}/invitations/accept?id=${data.invitation.id}`;
+
+            await emailSvc.sendEmail({
+              to: data.email,
+              subject: 'You have been invited to join an organization',
+              text: `You have been invited to join ${data.organization.name}. Click here to accept: ${inviteUrl}`,
+              html: `<p>You have been invited to join <strong>${data.organization.name}</strong>.</p><p><a href="${inviteUrl}">Click here to accept</a></p>`,
+            });
+          },
+        }),
+        admin(),
+      ],
       socialProviders: {
         google: {
           clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -155,6 +179,84 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         roles: [membership?.role || 'user'],
       },
     };
+  }
+
+  async createInvitation(payload: {
+    email: string;
+    role: string;
+    organizationId: string | null;
+    expiresIn?: number;
+    inviterId: string;
+  }) {
+    if (!payload.organizationId) {
+      // System Invite handling (Custom logic or specific Better Auth flow if supported)
+      // For now, we will throw if Better Auth requires orgId, or assume our schema allows it.
+      // Better Auth Organization plugin primarily works with Org ID.
+      // If Organization ID is null, we might be creating a "User" invite without org.
+      // Let's assume we can map this manually if needed, but for now try to pass it.
+      // Inspecting Better Auth Types would be ideal.
+      // For now, let's implement standard org invite.
+      throw new Error(
+        'System-level invites (no organization) not fully implemented in adapter yet.',
+      );
+    }
+
+    // Cast to any because the organization plugin methods are not being inferred correctly by TypeScript
+    // in this context, likely due to the complex type inference of better-auth plugins.
+    // Cast to explicit type to satisfy linter (unsafe-member-access, unsafe-call)
+    const api = this.auth.api as unknown as {
+      createInvitation: (opts: {
+        body: {
+          email: string;
+          role: string;
+          organizationId: string | null;
+          expiresIn?: number;
+        };
+        headers?: Headers;
+      }) => Promise<unknown>;
+    };
+
+    return await api.createInvitation({
+      body: {
+        email: payload.email,
+        role: payload.role,
+        organizationId: payload.organizationId,
+        expiresIn: payload.expiresIn,
+      },
+      headers: new Headers({
+        // TODO: ideally pass inviter context if possible
+        'x-inviter-id': payload.inviterId,
+      }),
+    });
+  }
+
+  async getInvitation(id: string) {
+    const api = this.auth.api as unknown as {
+      getInvitation: (opts: { query: { id: string } }) => Promise<unknown>;
+    };
+    return await api.getInvitation({
+      query: {
+        id,
+      },
+    });
+  }
+
+  async acceptInvitation(invitationId: string, inviterId: string) {
+    const api = this.auth.api as unknown as {
+      acceptInvitation: (opts: {
+        body: { invitationId: string };
+      }) => Promise<unknown>;
+    };
+    // We log the inviterId for audit or context, though better-auth handles the link
+    this.logger.log(
+      `Accepting invitation ${invitationId}, triggered by user context ${inviterId}`,
+    );
+
+    return await api.acceptInvitation({
+      body: {
+        invitationId,
+      },
+    });
   }
 
   getHandler() {

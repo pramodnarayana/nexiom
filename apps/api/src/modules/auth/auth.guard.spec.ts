@@ -7,10 +7,17 @@ import { ExecutionContext } from '@nestjs/common';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
-  let identityProvider: IdentityProvider;
+  let identityProvider: jest.Mocked<IdentityProvider>;
 
   const mockIdentityProvider = {
     getEnrichedSession: jest.fn(),
+    createUser: jest.fn(),
+    login: jest.fn(),
+    validateSession: jest.fn(),
+    createInvitation: jest.fn(),
+    getInvitation: jest.fn(),
+    acceptInvitation: jest.fn(),
+    getHandler: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -22,7 +29,7 @@ describe('AuthGuard', () => {
     }).compile();
 
     guard = module.get<AuthGuard>(AuthGuard);
-    identityProvider = module.get<IdentityProvider>(IdentityProvider);
+    identityProvider = module.get(IdentityProvider);
   });
 
   it('should be defined', () => {
@@ -110,6 +117,20 @@ describe('AuthGuard', () => {
         getRequest: () => ({
           headers: {},
           cookies: { 'better-auth.session_token': 'invalid-token' },
+        }),
+      }),
+    } as unknown as ExecutionContext;
+
+    await expect(guard.canActivate(mockContext)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+  it('should throw UnauthorizedException if Authorization header is not Bearer', async () => {
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          headers: { authorization: 'Basic some-token' },
+          cookies: {},
         }),
       }),
     } as unknown as ExecutionContext;

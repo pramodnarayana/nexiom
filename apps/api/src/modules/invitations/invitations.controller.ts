@@ -1,0 +1,45 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { InvitationsService } from './invitations.service';
+import { CreateInvitation, AcceptInvitation } from './invitations.validation';
+import { AuthGuard } from '../auth/auth.guard';
+import { Request } from 'express';
+
+@Controller('invitations')
+export class InvitationsController {
+  constructor(private readonly invitationsService: InvitationsService) {}
+
+  @Post()
+  @UseGuards(AuthGuard)
+  async create(
+    @Body() createInvitation: CreateInvitation,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.invitationsService.create(createInvitation, req.user.id);
+  }
+
+  @Get(':id')
+  // We should probably guard this or validate the ID format is safe/expected
+  async get(@Param('id') id: string) {
+    return this.invitationsService.get(id);
+  }
+
+  @Post('accept')
+  @UseGuards(AuthGuard)
+  async accept(
+    @Body() acceptInvitation: AcceptInvitation,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    return this.invitationsService.accept(
+      acceptInvitation.invitationId,
+      req.user.id,
+    );
+  }
+}

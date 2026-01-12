@@ -35,13 +35,28 @@ export const member = pgTable(
   ],
 );
 
+// Invitation Table
+export const invitation = pgTable('invitation', {
+  id: text('id').primaryKey(),
+  organizationId: text('organizationId').references(() => organization.id), // Nullable for System-level invites (Nexiom Users)
+  email: text('email').notNull(),
+  role: text('role'),
+  status: text('status').notNull(),
+  expiresAt: timestamp('expiresAt').notNull(),
+  inviterId: text('inviterId')
+    .notNull()
+    .references(() => user.id),
+});
+
 export type Organization = typeof organization.$inferSelect;
 export type Member = typeof member.$inferSelect;
+export type Invitation = typeof invitation.$inferSelect;
 
 import { relations } from 'drizzle-orm';
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
+  invitations: many(invitation),
 }));
 
 export const memberRelations = relations(member, ({ one }) => ({
@@ -51,6 +66,17 @@ export const memberRelations = relations(member, ({ one }) => ({
   }),
   user: one(user, {
     fields: [member.userId],
+    references: [user.id],
+  }),
+}));
+
+export const invitationRelations = relations(invitation, ({ one }) => ({
+  organization: one(organization, {
+    fields: [invitation.organizationId],
+    references: [organization.id],
+  }),
+  inviter: one(user, {
+    fields: [invitation.inviterId],
     references: [user.id],
   }),
 }));
