@@ -71,10 +71,7 @@ describe('InvitationsController', () => {
       const req = { user: { id: 'user-123' } } as unknown as Request & {
         user: { id: string };
       };
-      const dto = { invitationId: 'inv-123', token: 'token' }; // Added token if required by schema, though validation might be mocked or minimal here
-      // But looking at schema, token IS required in AcceptInvitationSchema in validation.ts?
-      // Wait, in previous step I saw validation.ts: token: z.string().min(1)
-      // So I must provide token.
+      const dto = { invitationId: 'inv-123', token: 'token' };
 
       await controller.accept(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
