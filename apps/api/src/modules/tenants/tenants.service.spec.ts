@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { IdentityProvider } from '../auth/identity-provider.abstract';

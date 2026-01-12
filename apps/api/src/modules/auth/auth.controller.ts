@@ -14,6 +14,11 @@ import { createZodDto } from 'nestjs-zod';
 import { Signup } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
+import { User, Session } from './auth.schema';
+
+/**
+ * Handles authentication-related operations such as user login.
+ */
 
 export class Login extends createZodDto(
   z.object({
@@ -21,11 +26,6 @@ export class Login extends createZodDto(
     password: z.string(),
   }),
 ) {}
-
-/**
- * Handles authentication-related operations such as user login.
- */
-import { User, Session } from './auth.schema';
 
 // ... (imports)
 
