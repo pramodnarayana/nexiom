@@ -5,8 +5,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import { Pool } from 'pg';
-import * as schema from '../../schema/better-auth'; // Use Better Auth schema
-import { CreateUser } from '../users/users.schema';
+import * as schema from '../../db/schema'; // Use centralized schema
+import { CreateUser } from '../users/users.validation';
 import { organization, admin } from 'better-auth/plugins';
 import { EmailService } from '../email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';

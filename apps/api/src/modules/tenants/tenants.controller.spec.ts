@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { Organization } from '../../schema/better-auth';
-import { UpdateTenantStatus } from './tenants.schema';
+import { Organization } from './schema';
+import { UpdateTenantStatus } from './tenants.validation';
 
 describe('TenantsController', () => {
   let controller: TenantsController;

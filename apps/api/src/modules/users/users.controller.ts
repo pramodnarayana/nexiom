@@ -8,7 +8,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUser } from './users.schema';
+import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 

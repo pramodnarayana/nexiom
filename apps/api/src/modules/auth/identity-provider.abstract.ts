@@ -1,4 +1,4 @@
-import { CreateUser } from '../users/users.schema';
+import { CreateUser } from '../users/users.validation';
 
 /**
  * Abstract Class defining the contract for Identity Providers.
@@ -7,7 +7,8 @@ import { CreateUser } from '../users/users.schema';
  * We use an abstract class instead of an interface so it can be used
  * as a Dependency Injection token in NestJS.
  */
-import { User, Session, Organization } from '../../schema/better-auth';
+import { User, Session } from './auth.schema';
+import { Organization } from '../tenants/tenant.schema';
 
 /**
  * Abstract Class defining the contract for Identity Providers.

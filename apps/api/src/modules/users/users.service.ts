@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateUser } from './users.schema';
-import { User } from '../../schema/better-auth';
+import { CreateUser } from './users.validation';
+import { User } from '../auth/auth.schema';
 import { IdentityProvider } from '../auth/identity-provider.abstract';
 
 /**

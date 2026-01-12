@@ -11,7 +11,7 @@ import { IdentityProvider } from './identity-provider.abstract';
 import { BetterAuthIdentityProvider } from './better-auth.provider'; // Import concrete class for handler access
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { Signup } from '../users/users.schema';
+import { Signup } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 
@@ -25,7 +25,7 @@ export class Login extends createZodDto(
 /**
  * Handles authentication-related operations such as user login.
  */
-import { User, Session } from '../../schema/better-auth';
+import { User, Session } from './auth.schema';
 
 // ... (imports)
 

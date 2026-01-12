@@ -1,10 +1,4 @@
-import { pgTable, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core';
-
-export const organizationStatusEnum = pgEnum('organization_status', [
-  'active',
-  'disabled',
-  'suspended',
-]);
+import { pgTable, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -63,29 +57,5 @@ export const verification = pgTable('verification', {
   updatedAt: timestamp('updatedAt'),
 });
 
-export const organization = pgTable('organization', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  slug: text('slug').unique(),
-  logo: text('logo'),
-  createdAt: timestamp('createdAt').notNull(),
-  metadata: text('metadata'),
-  status: organizationStatusEnum('status').default('active').notNull(),
-});
-
-export const member = pgTable('member', {
-  id: text('id').primaryKey(),
-  organizationId: text('organizationId')
-    .notNull()
-    .references(() => organization.id),
-  userId: text('userId')
-    .notNull()
-    .references(() => user.id, { onDelete: 'restrict' }),
-  role: text('role').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
-});
-
 export type User = typeof user.$inferSelect;
 export type Session = typeof session.$inferSelect;
-export type Organization = typeof organization.$inferSelect;
-export type Member = typeof member.$inferSelect;
