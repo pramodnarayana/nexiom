@@ -65,10 +65,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     this.logger.log(`Creating user ${user.email} in Better Auth...`);
     try {
       // 1. Create User via Better Auth API
+      if (!user.password) {
+        throw new Error('Password is required for email signup');
+      }
       const result = await this.auth.api.signUpEmail({
         body: {
           email: user.email,
-          password: user.password || 'temp1234',
+          password: user.password,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         },
         asResponse: false,
@@ -93,8 +96,11 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
   }
 
   async login(email: string, password?: string) {
+    if (!password) {
+      throw new Error('Password is required for email login');
+    }
     const result = await this.auth.api.signInEmail({
-      body: { email, password: password! },
+      body: { email, password },
       asResponse: false,
     });
     return result as unknown as { session: schema.Session; user: schema.User };

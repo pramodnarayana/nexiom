@@ -60,7 +60,6 @@ export class TenantsService {
       });
 
       return org;
-      return org;
     });
   }
 
