@@ -89,7 +89,6 @@
       "!main.ts",
       "!**/*.module.ts",
       "!**/*.abstract.ts",
-      "!schema/**",
       "!test/**",
       "!db/seed.ts",
       "!db/truncate.ts",
