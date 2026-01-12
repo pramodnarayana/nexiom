@@ -98,7 +98,7 @@ describe('BetterAuthIdentityProvider', () => {
 
   describe('createUser', () => {
     it('should sign up user via better-auth api', async () => {
-      const userDto = {
+      const user = {
         email: 'test@example.com',
         password: 'password',
         firstName: 'Test',
@@ -109,12 +109,12 @@ describe('BetterAuthIdentityProvider', () => {
 
       mockBetterAuth.api.signUpEmail.mockResolvedValue({ user: mockUser });
 
-      const result = await provider.createUser(userDto);
+      const result = await provider.createUser(user);
 
       expect(mockBetterAuth.api.signUpEmail).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            email: userDto.email,
+            email: user.email,
             name: 'Test User',
           }),
         }),
@@ -123,7 +123,7 @@ describe('BetterAuthIdentityProvider', () => {
     });
 
     it('should delegate organization creation to TenantsService', async () => {
-      const userDto = {
+      const user = {
         email: 'ceo@corp.com',
         password: 'password',
         companyName: 'Corp Inc',
@@ -132,7 +132,7 @@ describe('BetterAuthIdentityProvider', () => {
       const mockUser = { id: 'ceo1' };
       mockBetterAuth.api.signUpEmail.mockResolvedValue({ user: mockUser });
 
-      await provider.createUser(userDto);
+      await provider.createUser(user);
 
       expect(tenantsService.createTenant).toHaveBeenCalledWith(
         'ceo1',

@@ -49,15 +49,19 @@ describe('UsersService', () => {
 
   describe('create', () => {
     it('should call identityProvider.createUser', async () => {
-      const dto: CreateUser = {
+      const newUser: CreateUser = {
         email: 'test@example.com',
         password: 'password',
+        role: 'user',
       };
-      mockIdentityProvider.createUser.mockResolvedValue({ id: '1', ...dto });
+      mockIdentityProvider.createUser.mockResolvedValue({
+        id: '1',
+        ...newUser,
+      });
 
-      await service.create(dto);
+      await service.create(newUser);
 
-      expect(mockIdentityProvider.createUser).toHaveBeenCalledWith(dto);
+      expect(mockIdentityProvider.createUser).toHaveBeenCalledWith(newUser);
     });
   });
 

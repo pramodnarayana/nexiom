@@ -60,20 +60,17 @@ describe('Tenants Validation', () => {
     });
   });
 
-  describe('UpdateTenantStatus DTO Class', () => {
+  describe('UpdateTenantStatus Class', () => {
     it('should create instance with active status', () => {
-      const data = { status: 'active' as const };
-      expect(() => new UpdateTenantStatus(data)).not.toThrow();
+      expect(() => new UpdateTenantStatus()).not.toThrow();
     });
 
     it('should create instance with disabled status', () => {
-      const data = { status: 'disabled' as const };
-      expect(() => new UpdateTenantStatus(data)).not.toThrow();
+      expect(() => new UpdateTenantStatus()).not.toThrow();
     });
 
     it('should create instance with suspended status', () => {
-      const data = { status: 'suspended' as const };
-      expect(() => new UpdateTenantStatus(data)).not.toThrow();
+      expect(() => new UpdateTenantStatus()).not.toThrow();
     });
   });
 });

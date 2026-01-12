@@ -110,7 +110,6 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     const session = await this.auth.api.getSession({
       headers: new Headers({
         Authorization: `Bearer ${sessionId}`,
-        Cookie: `better-auth.session_token=${sessionId}`,
       }),
       asResponse: false,
     });

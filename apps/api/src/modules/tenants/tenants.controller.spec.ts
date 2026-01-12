@@ -69,14 +69,14 @@ describe('TenantsController', () => {
   describe('updateStatus', () => {
     it('should update status', async () => {
       const id = '1';
-      const statusDto: UpdateTenantStatus = { status: 'disabled' };
-      const result = { id, status: statusDto.status };
+      const status: UpdateTenantStatus = { status: 'disabled' };
+      const result = { id, status: status.status };
       mockTenantsService.updateStatus.mockResolvedValue(result);
 
-      expect(await controller.updateStatus(id, statusDto)).toBe(result);
+      expect(await controller.updateStatus(id, status)).toBe(result);
       expect(mockTenantsService.updateStatus).toHaveBeenCalledWith(
         id,
-        statusDto.status,
+        status.status,
       );
     });
   });
