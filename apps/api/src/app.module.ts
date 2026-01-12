@@ -6,6 +6,7 @@ import { UsersModule } from './modules/users/users.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DbModule } from './db/db.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DbModule } from './db/db.module';
     AuthModule,
     UsersModule,
     TenantsModule,
+    InvitationsModule,
     DbModule,
   ],
   controllers: [AppController],

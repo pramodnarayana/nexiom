@@ -41,12 +41,8 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid session'); // Or call validateSession fallback if needed, but getEnriched should wrap it.
     }
 
-    // Unwrap for attaching to request (keeping local vars consistent with previous structure for minimal diff)
+    // Unwrap for attaching to request
     const { user, session } = result;
-
-    if (!session || !user) {
-      throw new UnauthorizedException('Invalid session');
-    }
 
     // 3. Attach to request
     request.user = user;

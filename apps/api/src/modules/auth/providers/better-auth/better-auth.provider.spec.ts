@@ -1,11 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BetterAuthIdentityProvider } from './better-auth.provider';
 import { EmailService } from '../../../email/email.service.abstract';
 import { TenantsService } from '../../../tenants/tenants.service';
 import { DRIZZLE_DB } from '../../../../db/db.provider';
+import { organization } from 'better-auth/plugins';
 
 // Mock Better Auth Library
 const mockBetterAuth = {
@@ -13,12 +16,21 @@ const mockBetterAuth = {
     signUpEmail: jest.fn(),
     signInEmail: jest.fn(),
     getSession: jest.fn(),
+    createInvitation: jest.fn(),
+    getInvitation: jest.fn(),
+    acceptInvitation: jest.fn(),
   },
   handler: (() => {}) as any,
 };
 
+const mockBetterAuthFactory = jest.fn((config) => {
+  // Store config globally or on the mock so we can access it in tests
+  (mockBetterAuthFactory as any).lastConfig = config;
+  return mockBetterAuth;
+});
+
 jest.mock('better-auth', () => ({
-  betterAuth: jest.fn(() => mockBetterAuth),
+  betterAuth: (config: any) => mockBetterAuthFactory(config),
 }));
 
 jest.mock('better-auth/adapters/drizzle', () => ({
@@ -75,6 +87,7 @@ describe('BetterAuthIdentityProvider', () => {
   });
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BetterAuthIdentityProvider,
@@ -89,7 +102,7 @@ describe('BetterAuthIdentityProvider', () => {
     );
     tenantsService = module.get<TenantsService>(TenantsService);
 
-    jest.clearAllMocks();
+    tenantsService = module.get<TenantsService>(TenantsService);
   });
 
   it('should be defined', () => {
@@ -183,6 +196,140 @@ describe('BetterAuthIdentityProvider', () => {
           organizationName: 'Test Org',
           roles: ['admin'],
         }),
+      );
+    });
+  });
+  describe('createInvitation', () => {
+    it('should throw error if organizationId is missing', async () => {
+      await expect(
+        provider.createInvitation({
+          email: 'test@example.com',
+          role: 'user',
+          organizationId: null,
+          inviterId: 'inviter-123',
+        }),
+      ).rejects.toThrow('System-level invites');
+    });
+
+    it('should call createInvitation api with correct payload', async () => {
+      mockBetterAuth.api.createInvitation = jest.fn().mockResolvedValue({
+        invitation: { id: 'inv-123' },
+      });
+
+      const payload = {
+        email: 'test@example.com',
+        role: 'user',
+        organizationId: 'org-123',
+        inviterId: 'inviter-123',
+        expiresIn: 3600,
+      };
+
+      await provider.createInvitation(payload);
+
+      expect(mockBetterAuth.api.createInvitation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            email: payload.email,
+            role: payload.role,
+            organizationId: payload.organizationId,
+          }),
+          headers: expect.any(Headers),
+        }),
+      );
+    });
+  });
+
+  describe('getInvitation', () => {
+    it('should call getInvitation api', async () => {
+      mockBetterAuth.api.getInvitation = jest.fn().mockResolvedValue({});
+      await provider.getInvitation('inv-123');
+      expect(mockBetterAuth.api.getInvitation).toHaveBeenCalledWith({
+        query: { id: 'inv-123' },
+      });
+    });
+  });
+
+  describe('acceptInvitation', () => {
+    it('should call acceptInvitation api', async () => {
+      mockBetterAuth.api.acceptInvitation = jest.fn().mockResolvedValue({});
+      await provider.acceptInvitation('inv-123', 'user-123');
+      expect(mockBetterAuth.api.acceptInvitation).toHaveBeenCalledWith({
+        body: { invitationId: 'inv-123' },
+      });
+    });
+  });
+
+  describe('Email Callbacks', () => {
+    it('should send verification email', async () => {
+      // Access config inside the test to ensure it's captured from the current run
+      const capturedConfig = mockBetterAuthFactory.mock.calls[0]?.[0];
+
+      const sendVerificationEmail =
+        capturedConfig?.emailVerification?.sendVerificationEmail;
+      if (!sendVerificationEmail)
+        throw new Error('sendVerificationEmail callback not found');
+      const user = { email: 'test@example.com' };
+      const url = 'http://verify.com';
+
+      await sendVerificationEmail({ user, url });
+
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: user.email,
+          text: expect.stringContaining(url),
+        }),
+      );
+    });
+
+    it('should send invitation email', async () => {
+      // Find the organization plugin config
+      // The plugins array contains the result of organization(), which is an object.
+      // better-auth plugins usually return their config or a definition.
+      // Since we mocked organization() to return undefined/mock, we might need to adjust how we find it.
+      // Wait, in the provider we call `organization({...})`.
+      // We mocked `better-auth/plugins`, so `organization` is a jest.fn().
+      // We need to capture what `organization` was called with.
+
+      // Let's inspect the mock call to organization
+      const orgConfig = (organization as jest.Mock).mock.calls[0][0];
+
+      const sendInvitationEmail = orgConfig.sendInvitationEmail;
+
+      const data = {
+        email: 'invite@test.com',
+        organization: { name: 'Test Org' },
+        invitation: { id: 'inv-123' },
+      };
+
+      await sendInvitationEmail(data);
+
+      expect(mockEmailService.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: data.email,
+          subject: expect.stringContaining('invited'),
+          text: expect.stringContaining(
+            'http://localhost:3000/api/auth/invitations/accept?id=inv-123',
+          ),
+        }),
+      );
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should throw error if createUser fails', async () => {
+      mockBetterAuth.api.signUpEmail.mockRejectedValue(new Error('Auth Error'));
+      await expect(
+        provider.createUser({
+          email: 'bad@example.com',
+          password: 'pass',
+          role: 'user',
+        }),
+      ).rejects.toThrow('Auth Error');
+    });
+
+    it('should throw error if login fails (missing password)', async () => {
+      await expect(provider.login('email', undefined)).rejects.toThrow(
+        'Password is required',
       );
     });
   });
