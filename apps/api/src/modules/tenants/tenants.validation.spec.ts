@@ -61,15 +61,7 @@ describe('Tenants Validation', () => {
   });
 
   describe('UpdateTenantStatus Class', () => {
-    it('should create instance with active status', () => {
-      expect(() => new UpdateTenantStatus()).not.toThrow();
-    });
-
-    it('should create instance with disabled status', () => {
-      expect(() => new UpdateTenantStatus()).not.toThrow();
-    });
-
-    it('should create instance with suspended status', () => {
+    it('should be instantiable', () => {
       expect(() => new UpdateTenantStatus()).not.toThrow();
     });
   });

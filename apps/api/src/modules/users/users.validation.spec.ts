@@ -155,13 +155,13 @@ describe('Users Validation', () => {
   });
 
   describe('CreateUser Class', () => {
-    it('should create instance from valid data', () => {
+    it('should be instantiable', () => {
       expect(() => new CreateUser()).not.toThrow();
     });
   });
 
   describe('Signup Class', () => {
-    it('should create instance from valid data', () => {
+    it('should be instantiable', () => {
       expect(() => new Signup()).not.toThrow();
     });
   });

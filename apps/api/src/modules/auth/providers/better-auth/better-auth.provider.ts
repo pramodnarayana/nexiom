@@ -78,12 +78,11 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       });
 
       // 2. Delegate Tenant Creation to Domain Service
-      const userData = user as unknown as Record<string, unknown>;
-      if (typeof userData.companyName === 'string') {
+      if (user.companyName) {
         this.logger.log('Delegating Tenant Creation to TenantsService');
         await this.tenantsService.createTenant(
           result.user.id,
-          userData.companyName,
+          user.companyName,
         );
       }
 
@@ -110,6 +109,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     const session = await this.auth.api.getSession({
       headers: new Headers({
         Authorization: `Bearer ${sessionId}`,
+        Cookie: `better-auth.session_token=${sessionId}`,
       }),
       asResponse: false,
     });
