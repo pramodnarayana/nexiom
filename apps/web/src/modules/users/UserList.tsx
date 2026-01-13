@@ -1,10 +1,14 @@
 import { useTable } from "@refinedev/core";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { Users } from "@/modules/users/Users";
-import { type UserTableItem } from "@/modules/users/types";
 
-export const UserList = () => {
+import { Users } from "./Users";
+import { type UserTableItem } from "./types";
+import { InviteMemberDialog } from "../invitations/InviteMemberDialog";
+
+interface UserListProps {
+    basePath: string;
+}
+
+export const UserList = ({ basePath }: UserListProps) => {
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
     const table = useTable<UserTableItem>({
         resource: "users",
@@ -19,26 +23,20 @@ export const UserList = () => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role, // Now safely typed
+        role: user.role,
         emailVerified: user.emailVerified
     })) || [];
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Users</h2>
-                </div>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add User
-                </Button>
+            <div className="flex items-center justify-end">
+                <InviteMemberDialog />
             </div>
 
             <Users
                 data={users}
                 isLoading={isLoading}
-                basePath="/admin/users"
+                basePath={basePath}
             />
 
             <div className="flex items-center justify-end space-x-2 py-4">
