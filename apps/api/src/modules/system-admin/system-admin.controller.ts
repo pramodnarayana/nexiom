@@ -17,9 +17,13 @@ export class SystemAdminController {
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '10',
   ) {
+    const MAX_PAGE_SIZE = 100;
     // Basic pagination (Convert to Number safely)
     const p = Math.max(1, parseInt(page) || 1);
-    const limit = Math.max(1, parseInt(pageSize) || 10);
+    const limit = Math.max(
+      1,
+      Math.min(MAX_PAGE_SIZE, parseInt(pageSize) || 10),
+    );
     const offset = (p - 1) * limit;
 
     const users = await this.db.query.user.findMany({

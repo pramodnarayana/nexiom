@@ -103,4 +103,9 @@ export abstract class IdentityProvider {
    * critical for Invite based signups where possession of the link implies verification.
    */
   abstract forceVerifyEmail(userId: string): Promise<void>;
+
+  /**
+   * Deletes a user (Used for cleanup/rollback scenarios).
+   */
+  abstract deleteUser(userId: string): Promise<void>;
 }

@@ -17,6 +17,8 @@ import { toNodeHandler } from 'better-auth/node';
 import { User } from '../users/user.schema';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Session } from './auth.schema';
+import { toWebHeaders } from '../../shared/utils/headers.util';
+import { BadRequestException } from '@nestjs/common';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -72,7 +74,7 @@ export class AuthController {
   async provisionTenant(@Req() req: Request): Promise<unknown> {
     // FIX: use getSessionFromHeaders to handle signed cookies correctly
     const sessionData = await this.authProvider.getSessionFromHeaders(
-      req.headers as unknown as Headers,
+      toWebHeaders(req.headers),
     );
 
     if (!sessionData) {
@@ -87,19 +89,43 @@ export class AuthController {
     @Body() body: CompleteInvite,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // Race Condition Fix: Validate Invitation BEFORE creating user
+    const invitation = (await this.invitationsService.get(
+      body.invitationId,
+    )) as { status: string; expiresAt: Date } | null;
+
+    if (!invitation) {
+      throw new BadRequestException('Invalid Invitation ID');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new BadRequestException('Invitation is no longer pending/valid');
+    }
+
+    if (new Date(invitation.expiresAt) < new Date()) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
     // Step 1: Create User (Trusting the Invite -> Verify Email)
     const user = await this.authProvider.createUser({
       email: body.email,
       password: body.password,
       firstName: body.firstName,
       lastName: body.lastName,
-      // Fix TS Error: Role is required by CreateUser type (defaulted in schema but type might require it strict)
+      // Fix TS Error: Role is required by CreateUser type
       role: 'user',
-      // No companyName -> No new tenant
     });
 
-    // Step 2: Accept Invitation
-    await this.invitationsService.accept(body.invitationId, user.id);
+    // Step 2: Accept Invitation (Atomic-ish)
+    try {
+      await this.invitationsService.accept(body.invitationId, user.id);
+    } catch (_e) {
+      // Rollback: Delete the user if acceptance fails to prevent orphans
+      await this.authProvider.deleteUser(user.id);
+      throw new BadRequestException(
+        'Failed to accept invitation (User creation rolled back)',
+      );
+    }
 
     // Step 3: Force Verify Email
     await this.authProvider.forceVerifyEmail(user.id);
@@ -127,7 +153,7 @@ export class AuthController {
     // Delegate session extraction to the provider (handles signed cookies/headers)
     // We pass the native Headers object
     const sessionData = await this.authProvider.getSessionFromHeaders(
-      req.headers as unknown as Headers,
+      toWebHeaders(req.headers),
     );
 
     if (!sessionData) {

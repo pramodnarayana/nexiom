@@ -65,13 +65,33 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         organization({
           sendInvitationEmail: async (data) => {
             // data contains: id, email, role, organization, invitation
-            // We need to construct the URL manually or use a frontend URL env var.
-            // We direct them to our Frontend page: /invite/accept?id=...
-            // Use FRONTEND_URL if defined, otherwise fall back to the first Allowed Origin.
-            const baseUrl =
-              process.env.FRONTEND_URL ||
-              process.env.ALLOWED_ORIGINS?.split(',')[0] ||
-              'http://localhost:5173';
+
+            const trustedOrigins =
+              process.env.ALLOWED_ORIGINS?.split(',') || [];
+            const frontendUrl = process.env.FRONTEND_URL;
+            let baseUrl = frontendUrl;
+
+            // Security: Ensure the Base URL is trusted
+            if (frontendUrl && !trustedOrigins.includes(frontendUrl)) {
+              throw new Error(
+                `Configuration Error: FRONTEND_URL (${frontendUrl}) is not in ALLOWED_ORIGINS. Refusing to send invite.`,
+              );
+            }
+
+            if (!baseUrl) {
+              if (trustedOrigins.length === 0) {
+                throw new Error('ALLOWED_ORIGINS not defined');
+              }
+              baseUrl = trustedOrigins[0];
+            }
+
+            // Double check final resolution
+            if (!baseUrl || !trustedOrigins.includes(baseUrl)) {
+              throw new Error(
+                `Security Error: Resolved Base URL (${baseUrl}) is not in trusted origins.`,
+              );
+            }
+
             const inviteUrl = `${baseUrl}/invite/accept?id=${data.invitation.id}&email=${encodeURIComponent(data.email)}`;
 
             await emailSvc.sendEmail({
@@ -320,13 +340,6 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     headers?: Headers;
   }) {
     if (!payload.organizationId) {
-      // System Invite handling (Custom logic or specific Better Auth flow if supported)
-      // For now, we will throw if Better Auth requires orgId, or assume our schema allows it.
-      // Better Auth Organization plugin primarily works with Org ID.
-      // If Organization ID is null, we might be creating a "User" invite without org.
-      // Let's assume we can map this manually if needed, but for now try to pass it.
-      // Inspecting Better Auth Types would be ideal.
-      // For now, let's implement standard org invite.
       throw new Error(
         'System-level invites (no organization) not fully implemented in adapter yet.',
       );
@@ -342,6 +355,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           role: string;
           organizationId: string | null;
           expiresIn?: number;
+          inviterId?: string; // Add explicit inviterId support
         };
         headers?: Headers;
       }) => Promise<unknown>;
@@ -353,12 +367,9 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         role: payload.role,
         organizationId: payload.organizationId,
         expiresIn: payload.expiresIn,
+        inviterId: payload.inviterId, // Native Inviter Context
       },
-      headers:
-        payload.headers ||
-        new Headers({
-          'x-inviter-id': payload.inviterId,
-        }),
+      headers: payload.headers, // Remove custom x-inviter-id injection
     });
   }
 
@@ -421,5 +432,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       .where(eq(schema.user.id, userId));
 
     this.logger.log(`Forcibly verified email for user ${userId} (Invite Flow)`);
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await this.db.delete(schema.user).where(eq(schema.user.id, userId));
+    this.logger.warn(`User ${userId} deleted (Rollback/Cleanup)`);
   }
 }

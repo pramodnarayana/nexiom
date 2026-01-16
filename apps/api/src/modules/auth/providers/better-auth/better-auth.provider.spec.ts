@@ -187,6 +187,31 @@ describe('BetterAuthIdentityProvider', () => {
   });
 
   describe('getEnrichedSession', () => {
+    it('should return null if validateSession finds no session in DB', async () => {
+      // Mock DB query to return null
+      const findFirstSpy = jest
+        .spyOn(provider['db'].query.session, 'findFirst')
+        .mockResolvedValue(null as any);
+
+      const result = await provider.validateSession('invalid-token');
+      expect(result).toBeNull();
+      findFirstSpy.mockRestore();
+    });
+
+    it('should return null if validateSession finds expired session', async () => {
+      // Mock DB return with past expiresAt
+      const expiredSession = {
+        expiresAt: new Date(Date.now() - 10000), // Past
+      };
+      const findFirstSpy = jest
+        .spyOn(provider['db'].query.session, 'findFirst')
+        .mockResolvedValue(expiredSession as any);
+
+      const result = await provider.validateSession('expired-token');
+      expect(result).toBeNull();
+      findFirstSpy.mockRestore();
+    });
+
     it('should return null if validSession returns null', async () => {
       mockBetterAuth.api.getSession.mockResolvedValue(null);
       // Ensure DB also returns null for session
@@ -269,8 +294,8 @@ describe('BetterAuthIdentityProvider', () => {
             email: payload.email,
             role: payload.role,
             organizationId: payload.organizationId,
+            inviterId: payload.inviterId,
           }),
-          headers: expect.any(Headers),
         }),
       );
     });
