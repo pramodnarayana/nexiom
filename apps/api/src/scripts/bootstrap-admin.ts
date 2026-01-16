@@ -13,10 +13,20 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const API_URL = 'http://localhost:3000/api';
-const EMAIL = 'pramod.narayana@gmail.com';
-const PASSWORD = 'password123';
-const NAME = 'Pramod Admin';
+const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
+const EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL as string;
+const PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD as string;
+const NAME = process.env.BOOTSTRAP_ADMIN_NAME ?? 'Platform Admin';
+
+if (
+  !process.env.BOOTSTRAP_ADMIN_EMAIL ||
+  !process.env.BOOTSTRAP_ADMIN_PASSWORD
+) {
+  console.error(
+    'Error: BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set',
+  );
+  process.exit(1);
+}
 
 const dbUrl = process.env.DATABASE_URL;
 if (!dbUrl) {
@@ -96,7 +106,7 @@ async function bootstrap() {
   console.log('\n--------- CREDENTIALS ---------');
   console.log(`URL:      http://localhost:5173/login`);
   console.log(`Email:    ${EMAIL}`);
-  console.log(`Password: ${PASSWORD}`);
+  console.log(`Password: ********`);
   console.log('-------------------------------');
 
   await client.end();

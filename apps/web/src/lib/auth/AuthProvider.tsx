@@ -22,9 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const initAuth = async () => {
             try {
                 // 1. Check Server Session (Cookies) - Source of Truth
-                console.log("AuthProvider: Fetching Session...");
                 const { data, error } = await authClient.getSession();
-                console.log("AuthProvider: Session Result:", { data, error });
 
                 if (data) {
                     // Standard getSession returns basic info. We MUST fetch enriched info (Organization, etc.)

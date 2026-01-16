@@ -14,17 +14,17 @@ export function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { setAuthState, user } = useAuth(); // Type inference from useAuth
+    const { setAuthState, user, isLoading } = useAuth(); // Type inference from useAuth
     const navigate = useNavigate();
 
     // Production Grade: Smart Auto-Redirect
     // If the user visits /login but is already authenticated, send them to their portal.
     useEffect(() => {
-        if (user && !loading) {
+        if (user && !isLoading) {
             const target = user.systemRole === 'platform_admin' ? '/admin' : '/dashboard';
             navigate(target);
         }
-    }, [user, navigate, loading]);
+    }, [user, navigate, isLoading]);
 
     /**
      * Submit handler for the login form.
@@ -65,7 +65,10 @@ export function LoginPage() {
             const systemRole = (data.user as LoginUser).systemRole;
             const fallback = systemRole === 'platform_admin' ? '/admin' : '/dashboard';
 
-            const redirectUrl = searchParams.get('to') || fallback;
+            const toParam = searchParams.get('to');
+            // Only allow relative paths to prevent open redirect attacks
+            const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');
+            const redirectUrl = isValidRedirect ? toParam : fallback;
             navigate(redirectUrl);
 
         } catch (err: unknown) {

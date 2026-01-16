@@ -44,13 +44,16 @@ export class AuthController {
     @Body() login: Login,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ session: Session; user: User }> {
-    const result = await this.authProvider.login(login.email, login.password);
+    const { cookie: loginCookie, ...result } = await this.authProvider.login(
+      login.email,
+      login.password,
+    );
 
     // MANUAL COOKIE SETTING (Critical Fix - Using Library's Native Cookie)
     // We captured the exact Set-Cookie header from Better Auth.
     // This ensures signature, path, and attributes are exactly what the library expects.
-    if (result.cookie) {
-      res.setHeader('Set-Cookie', result.cookie);
+    if (loginCookie) {
+      res.setHeader('Set-Cookie', loginCookie);
     }
 
     return result;
@@ -102,11 +105,14 @@ export class AuthController {
     await this.authProvider.forceVerifyEmail(user.id);
 
     // Step 4: Login & Return Session
-    const session = await this.authProvider.login(body.email, body.password);
+    const { cookie: loginCookie, ...session } = await this.authProvider.login(
+      body.email,
+      body.password,
+    );
 
     // FIX: Forward the Set-Cookie header so the user stays logged in
-    if (session.cookie) {
-      res.setHeader('Set-Cookie', session.cookie);
+    if (loginCookie) {
+      res.setHeader('Set-Cookie', loginCookie);
     }
 
     return session;

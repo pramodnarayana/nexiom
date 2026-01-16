@@ -151,7 +151,11 @@ export function AdminLayout() {
     }
 
     if (!user || user.systemRole !== 'platform_admin') {
-        return null; // Or unauthorized page
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-600">
+                Access denied.
+            </div>
+        );
     }
 
     // Navigation Configuration

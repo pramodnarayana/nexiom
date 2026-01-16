@@ -17,8 +17,6 @@ export class SystemAdminController {
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '10',
   ) {
-    console.log('DEBUG DB:', this.db);
-    console.log('DEBUG QUERY:', this.db?.query);
     // Basic pagination (Convert to Number safely)
     const p = Math.max(1, parseInt(page) || 1);
     const limit = Math.max(1, parseInt(pageSize) || 10);

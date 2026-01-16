@@ -16,6 +16,20 @@ if (!dbUrl) {
   process.exit(1);
 }
 
+const nodeEnv = process.env.NODE_ENV;
+if (nodeEnv === 'production') {
+  console.error('❌ Cannot reset database in production environment!');
+  process.exit(1);
+}
+
+// Optional: require explicit confirmation via CLI arg
+if (!process.argv.includes('--confirm')) {
+  console.error(
+    '⚠️  This will delete all data. Run with --confirm to proceed.',
+  );
+  process.exit(1);
+}
+
 const client = new Client({ connectionString: dbUrl });
 
 async function resetDb() {
@@ -40,6 +54,7 @@ async function resetDb() {
     console.log('✅ Database Cleaned. Ready for Fresh Start.');
   } catch (err) {
     console.error('Error resetting DB:', err);
+    process.exitCode = 1;
   } finally {
     await client.end();
   }

@@ -86,7 +86,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       ],
       advanced: {
         defaultCookieAttributes: {
-          secure: false, // Force false for local dev debugging
+          secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           path: '/',
         },

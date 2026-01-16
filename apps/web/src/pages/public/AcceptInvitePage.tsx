@@ -7,13 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 export const AcceptInvitePage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, token } = useAuth();
     const [status, setStatus] = useState<"validating" | "valid" | "error">("validating");
 
     // We support both ?token= (legacy/secure) and ?id= (better-auth standard)
-    const token = searchParams.get("token");
+    const urlToken = searchParams.get("token");
     const id = searchParams.get("id");
-    const inviteId = id || token;
+    const inviteId = id || urlToken;
 
     // Derived State
 
@@ -38,14 +38,9 @@ export const AcceptInvitePage = () => {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            // Credentials included automatically by browser cookies (if used) or we need token
-                            // Our AuthProvider attaches token usually, but here we fetch directly.
-                            // We need to pass the access token if using Bearer.
-                            // Better Auth client handles this usually. Let's use authClient?
-                            // But authClient.invitation.acceptInvitaton might be different.
-                            // Let's rely on browser Cookies for now as per `authClient`. 
-                            // Or better: Use the global `authClient` if possible.
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
                         },
+                        credentials: 'include',
                         body: JSON.stringify({ invitationId: inviteId }),
                     });
                     // We intentionally ignore potential errors (e.g. "Already member")
@@ -64,10 +59,11 @@ export const AcceptInvitePage = () => {
 
         // 2. Not Logged In -> Direct Redirect to Signup (One-Click Join)
         // We pass the invite context via 'to' param so SignupPage can auto-accept.
-        const target = `/signup?to=${encodeURIComponent(`/invite/accept?id=${inviteId}`)}&email=${searchParams.get('email') || ''}`;
+        const email = searchParams.get('email') ?? '';
+        const target = `/signup?to=${encodeURIComponent(`/invite/accept?id=${inviteId}`)}&email=${encodeURIComponent(email)}`;
         navigate(target, { replace: true });
 
-    }, [inviteId, user, isLoading, navigate, searchParams]);
+    }, [inviteId, user, isLoading, navigate, searchParams, token]);
 
     // We no longer need handleAccept since we redirect immediately.
 
