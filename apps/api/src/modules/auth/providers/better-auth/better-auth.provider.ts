@@ -169,7 +169,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       throw new Error('Login failed (API Error): ' + apiResponse.statusText);
     }
 
-    const cookieHeader = apiResponse.headers.get('set-cookie');
+    // Capture all Set-Cookie headers using the standard Fetch API method
+    // headers.get('set-cookie') only returns the first one (or comma joined which breaks dates)
+    // headers.getSetCookie() returns all occurrences as an array.
+    const cookieHeader =
+      typeof apiResponse.headers.getSetCookie === 'function'
+        ? apiResponse.headers.getSetCookie()
+        : apiResponse.headers.get('set-cookie'); // Fallback for older node environs
     const result = (await apiResponse.json()) as {
       token: string;
       user: {
@@ -216,7 +222,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         ...result.user,
         systemRole: dbUser?.systemRole || 'user',
       } as unknown as schema.User,
-      cookie: cookieHeader || undefined, // Return the native cookie string
+      cookie: cookieHeader || undefined, // Return the native cookie string/array
     };
   }
 

@@ -92,7 +92,8 @@
       "!test/**",
       "!db/seed.ts",
       "!db/truncate.ts",
-      "!db/verify.ts"
+      "!db/verify.ts",
+      "!scripts/**"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

@@ -73,18 +73,96 @@ describe('SystemAdminController', () => {
   });
 
   describe('listTenants', () => {
-    it('should return tenants with user count', async () => {
-      const mockTenants = [
-        { id: 't1', name: 'Tenant 1', members: [{}, {}] }, // 2 members
-      ];
-      mockDb.query.organization.findMany.mockResolvedValue(mockTenants);
+    it('should return paginated tenants with aggregated user count', async () => {
+      // Mock db.select chain for tenants
+      const mockResult = [{ id: 't1', name: 'Tenant 1', userCount: 2 }];
 
-      const result = await controller.listTenants();
+      // We need to support two different select calls:
+      // 1. Tenants data (returns promise with array)
+      // 2. Count (returns promise with [{count: X}])
+      // Since select returns a chainable builder, we mock the final execution.
+      // However, `mockDb.select` is a global mock here.
+      // Easier way: mock implementation to inspect call args or return sequence.
+
+      mockDb.limit = jest.fn().mockReturnThis();
+      mockDb.offset = jest.fn().mockReturnThis();
+      mockDb.orderBy = jest.fn().mockReturnThis();
+      mockDb.groupBy = jest.fn().mockReturnThis();
+      mockDb.leftJoin = jest.fn().mockReturnThis();
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from = jest.fn().mockReturnValue({
+        leftJoin: mockDb.leftJoin, // Chain continuation
+        limit: mockDb.limit,
+        offset: mockDb.offset,
+        groupBy: mockDb.groupBy,
+        orderBy: mockDb.orderBy,
+        then: (resolve: any) => resolve(mockResult), // Final await
+      });
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      // The second call for total count also calls .from()
+      // This is complex to mock cleanly with a shared `mockDb` object without conditional logic.
+      // Let's rely on `mockReturnValueOnce`?
+
+      // Call 1: Data
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from.mockReturnValueOnce({
+        leftJoin: mockDb.leftJoin,
+        groupBy: mockDb.groupBy,
+        limit: mockDb.limit,
+        offset: mockDb.offset,
+        orderBy: mockDb.orderBy,
+        then: (resolve: any) => resolve(mockResult),
+      });
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+
+      // Call 2: Total Count
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 5 }]));
+
+      const result = await controller.listTenants('1', '10');
 
       expect(result).toEqual({
-        data: [{ ...mockTenants[0], userCount: 2 }],
-        total: 1,
+        data: [{ id: 't1', name: 'Tenant 1', userCount: 2 }],
+        total: 5,
       });
+    });
+    it('should clamp pagination parameters', async () => {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from.mockReturnValueOnce({
+        leftJoin: mockDb.leftJoin,
+        groupBy: mockDb.groupBy,
+        limit: mockDb.limit,
+        offset: mockDb.offset,
+        orderBy: mockDb.orderBy,
+        then: (resolve: any) => resolve([]),
+      });
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
+
+      // Request 1000 items (should clamp to 100)
+      await controller.listTenants('1', '1000');
+
+      expect(mockDb.limit).toHaveBeenCalledWith(100);
+      expect(mockDb.offset).toHaveBeenCalledWith(0);
+    });
+
+    it('should handle invalid/negative pagination inputs', async () => {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from.mockReturnValueOnce({
+        leftJoin: mockDb.leftJoin,
+        groupBy: mockDb.groupBy,
+        limit: mockDb.limit,
+        offset: mockDb.offset,
+        orderBy: mockDb.orderBy,
+        then: (resolve: any) => resolve([]),
+      });
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
+
+      // Request invalid strings
+      await controller.listTenants('invalid', '-5');
+
+      expect(mockDb.limit).toHaveBeenCalledWith(1); // Clamps to 1
+      expect(mockDb.offset).toHaveBeenCalledWith(0); // Default page 1 -> 0
     });
   });
 });

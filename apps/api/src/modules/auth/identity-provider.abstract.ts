@@ -30,7 +30,7 @@ export abstract class IdentityProvider {
   abstract login(
     email: string,
     password?: string,
-  ): Promise<{ session: Session; user: User; cookie?: string }>;
+  ): Promise<{ session: Session; user: User; cookie?: string | string[] }>;
 
   /**
    * Validates a session ID.

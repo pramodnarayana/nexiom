@@ -47,6 +47,8 @@ const mockDb = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
+  delete: jest.fn().mockReturnThis(),
+  where: jest.fn().mockReturnThis(),
   from: jest.fn().mockReturnThis(),
   query: {
     member: {
@@ -191,6 +193,7 @@ describe('BetterAuthIdentityProvider', () => {
       // Mock DB query to return null
       const findFirstSpy = jest
         .spyOn(provider['db'].query.session, 'findFirst')
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         .mockResolvedValue(null as any);
 
       const result = await provider.validateSession('invalid-token');
@@ -205,6 +208,7 @@ describe('BetterAuthIdentityProvider', () => {
       };
       const findFirstSpy = jest
         .spyOn(provider['db'].query.session, 'findFirst')
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         .mockResolvedValue(expiredSession as any);
 
       const result = await provider.validateSession('expired-token');
@@ -362,6 +366,14 @@ describe('BetterAuthIdentityProvider', () => {
           ),
         }),
       );
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('should delete user from database', async () => {
+      await provider.deleteUser('delete-me');
+      expect(mockDb.delete).toHaveBeenCalled();
+      expect(mockDb.where).toHaveBeenCalled();
     });
   });
 
