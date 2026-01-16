@@ -17,12 +17,14 @@ export function LoginPage() {
     const { setAuthState, user } = useAuth(); // Type inference from useAuth
     const navigate = useNavigate();
 
-    // Redirect if already logged in
+    // Production Grade: Smart Auto-Redirect
+    // If the user visits /login but is already authenticated, send them to their portal.
     useEffect(() => {
-        if (user) {
-            navigate('/dashboard');
+        if (user && !loading) {
+            const target = user.systemRole === 'platform_admin' ? '/admin' : '/dashboard';
+            navigate(target);
         }
-    }, [user, navigate]);
+    }, [user, navigate, loading]);
 
     /**
      * Submit handler for the login form.
@@ -51,7 +53,20 @@ export function LoginPage() {
             const data = await res.json();
             // Call AuthProvider to set state
             setAuthState(data);
-            navigate('/dashboard');
+
+            interface LoginUser {
+                id: string;
+                email: string;
+                systemRole?: string;
+            }
+
+            // Redirect logic: Respect ?to param, then Fallback to Role-Based Home
+            const searchParams = new URLSearchParams(window.location.search);
+            const systemRole = (data.user as LoginUser).systemRole;
+            const fallback = systemRole === 'platform_admin' ? '/admin' : '/dashboard';
+
+            const redirectUrl = searchParams.get('to') || fallback;
+            navigate(redirectUrl);
 
         } catch (err: unknown) {
             if (err instanceof Error) {

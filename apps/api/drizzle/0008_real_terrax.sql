@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "system_role" text DEFAULT 'user';

@@ -3,6 +3,7 @@ import { IdentityProvider } from '../../identity-provider.abstract';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import * as schema from '../../../../db/schema';
+import { eq } from 'drizzle-orm';
 import { CreateUser } from '../../../users/users.validation';
 import { organization, admin } from 'better-auth/plugins';
 import { EmailService } from '../../../email/email.service.abstract';
@@ -39,6 +40,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       emailAndPassword: {
         enabled: true,
       },
+      user: {
+        additionalFields: {
+          systemRole: {
+            type: 'string',
+            required: false, // It's nullable/default "user"
+          },
+        },
+      },
       emailVerification: {
         sendOnSignUp: true,
         autoSignInAfterVerification: true,
@@ -57,13 +66,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           sendInvitationEmail: async (data) => {
             // data contains: id, email, role, organization, invitation
             // We need to construct the URL manually or use a frontend URL env var.
-            // Assuming localhost:3000 or whatever frontend is.
-            // Ideally we use process.env.NEXT_PUBLIC_APP_URL or similar.
-            // For now, let's derive it from BETTER_AUTH_URL or just use a placeholder we can config.
-
-            // NOTE: better-auth might not generate a full acceptance URL here, just the token logic.
-            // We usually direct them to our Frontend page: /accept-invite?id=...
-            const inviteUrl = `${process.env.BETTER_AUTH_URL}/invitations/accept?id=${data.invitation.id}`;
+            // We direct them to our Frontend page: /invite/accept?id=...
+            // Use FRONTEND_URL if defined, otherwise fall back to the first Allowed Origin.
+            const baseUrl =
+              process.env.FRONTEND_URL ||
+              process.env.ALLOWED_ORIGINS?.split(',')[0] ||
+              'http://localhost:5173';
+            const inviteUrl = `${baseUrl}/invite/accept?id=${data.invitation.id}&email=${encodeURIComponent(data.email)}`;
 
             await emailSvc.sendEmail({
               to: data.email,
@@ -75,6 +84,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         }),
         admin(),
       ],
+      advanced: {
+        defaultCookieAttributes: {
+          secure: false, // Force false for local dev debugging
+          sameSite: 'lax',
+          path: '/',
+        },
+      },
       socialProviders: {
         google: {
           clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -122,25 +138,130 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     if (!password) {
       throw new Error('Password is required for email login');
     }
-    const result = await this.auth.api.signInEmail({
+    // Use asResponse: true to get the full response headers (including Set-Cookie)
+    // This allows us to forward the exact cookie Better Auth generates (signed/unsigned correctly)
+    const apiResponse = await this.auth.api.signInEmail({
       body: { email, password },
-      asResponse: false,
+      asResponse: true,
     });
-    return result as unknown as { session: schema.Session; user: schema.User };
+
+    if (!apiResponse.ok) {
+      throw new Error('Login failed (API Error): ' + apiResponse.statusText);
+    }
+
+    const cookieHeader = apiResponse.headers.get('set-cookie');
+    const result = (await apiResponse.json()) as {
+      token: string;
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        image?: string | null;
+        emailVerified: boolean;
+        createdAt: string;
+        updatedAt: string;
+      };
+    };
+
+    // BetterAuth returns { token, user } but not always the full session object
+    // We need the full session object to satisfy our Interface.
+    // Note: 'result.token' is the session token.
+    if (!result.token) {
+      throw new Error('Login failed: No token returned');
+    }
+
+    // Direct DB Query for Session (More reliable than self-referential API call)
+    const dbSession = await this.db.query.session.findFirst({
+      where: eq(schema.session.token, result.token),
+    });
+
+    if (!dbSession) {
+      // Fallback or retry? If BetterAuth just created it, it should be there.
+      // If not found, maybe result.token IS the session ID?
+      // BetterAuth usually uses token as the lookup.
+      throw new Error('Login succeeded but session record not found in DB');
+    }
+
+    // Enrich with System Role from DB (Explicit)
+    const dbUser = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, result.user.id),
+      columns: {
+        systemRole: true,
+      },
+    });
+
+    return {
+      session: dbSession,
+      user: {
+        ...result.user,
+        systemRole: dbUser?.systemRole || 'user',
+      } as unknown as schema.User,
+      cookie: cookieHeader || undefined, // Return the native cookie string
+    };
   }
 
   async validateSession(sessionId: string) {
-    const session = await this.auth.api.getSession({
-      headers: new Headers({
-        Authorization: `Bearer ${sessionId}`,
-        Cookie: `better-auth.session_token=${sessionId}`,
-      }),
-      asResponse: false,
+    // Direct DB Query for Session
+    const session = await this.db.query.session.findFirst({
+      where: eq(schema.session.token, sessionId),
     });
-    return session as unknown as {
-      session: schema.Session;
-      user: schema.User;
-    } | null;
+
+    if (!session) {
+      this.logger.warn(
+        `validateSession: Session not found in DB for token: ${sessionId.substring(0, 10)}...`,
+      );
+      return null;
+    }
+
+    // Check Expiry (if needed, though Drizzle might handle it if we used standard adapters, but manual query returns raw)
+    if (session.expiresAt < new Date()) {
+      this.logger.warn(
+        `validateSession: Session expired. ExpiresAt: ${session.expiresAt.toISOString()}, Now: ${new Date().toISOString()}`,
+      );
+      return null;
+    }
+
+    // Fetch User with System Role
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, session.userId),
+      columns: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerified: true,
+        image: true,
+        createdAt: true,
+        updatedAt: true,
+        role: true, // Tenant Role Default
+        systemRole: true, // Platform Role (Critical)
+        banned: true,
+        banReason: true,
+        banExpires: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      session: session as unknown as schema.Session,
+      user: user as unknown as schema.User,
+    };
+  }
+
+  async getSessionFromHeaders(headers: Headers) {
+    // Delegate to Better Auth to parse cookies (signed or not)
+    const result = await this.auth.api.getSession({
+      headers,
+    });
+
+    if (!result) return null;
+
+    return {
+      session: result.session as unknown as schema.Session,
+      user: result.user as unknown as schema.User,
+    };
   }
 
   async getEnrichedSession(token: string) {
@@ -167,6 +288,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       limit: 1,
     });
 
+    // Also fetch System Role fresh from DB
+    const dbUser = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, sessionData.user.id),
+      columns: {
+        systemRole: true,
+      },
+    });
+
     const membership = memberships[0];
 
     return {
@@ -177,6 +306,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         organizationId: membership?.organizationId,
         organizationName: membership?.organization?.name, // Adjusted for Relation
         roles: [membership?.role || 'user'],
+        systemRole: dbUser?.systemRole || 'user',
       },
     };
   }
@@ -187,6 +317,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     organizationId: string | null;
     expiresIn?: number;
     inviterId: string;
+    headers?: Headers;
   }) {
     if (!payload.organizationId) {
       // System Invite handling (Custom logic or specific Better Auth flow if supported)
@@ -223,10 +354,11 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         organizationId: payload.organizationId,
         expiresIn: payload.expiresIn,
       },
-      headers: new Headers({
-        // TODO: ideally pass inviter context if possible
-        'x-inviter-id': payload.inviterId,
-      }),
+      headers:
+        payload.headers ||
+        new Headers({
+          'x-inviter-id': payload.inviterId,
+        }),
     });
   }
 
@@ -259,20 +391,35 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     });
   }
 
+  async listInvitations(organizationId: string) {
+    // Direct DB Query for efficiency and access
+    // We assume 'invitation' table is what Better Auth uses.
+    // Better Auth schema is in 'schema' import.
+    // We need to check if 'invitation' is exported from schema or if we need to use query builder dynamically.
+    // Our schema.ts has 'invitation' table defined.
+
+    return await this.db.query.invitation.findMany({
+      where: (invitation, { eq, and }) =>
+        and(
+          eq(invitation.organizationId, organizationId),
+          eq(invitation.status, 'pending'), // Only show pending invites
+        ),
+      orderBy: (invitation, { desc }) => [desc(invitation.createdAt)],
+    });
+  }
+
   getHandler() {
     return this.auth.handler;
   }
 
-  // Removed listUsers and listTenants and updateTenantStatus
-  // because "IdentityProvider" interface still has them defined?
-  // We need to check the abstract class.
-  // If abstract class requires them, we must implement or remove them from abstract.
+  async forceVerifyEmail(userId: string): Promise<void> {
+    // Better Auth stores verification status in the 'user' table
+    // We perform a direct update since we own the DB connection.
+    await this.db
+      .update(schema.user)
+      .set({ emailVerified: true })
+      .where(eq(schema.user.id, userId));
 
-  // Checking abstract class...
-  // If we remove them from Abstract, we break Consumers who expect them on IdentityProvider.
-  // The Consumers (TenantsService) used to call them.
-  // But TenantsService IS the new owner. So TenantsService won't call IdentityProvider for this.
-  // So we can remove them from IdentityProvider Abstract Class!
-
-  // Implementation below assumes we update Abstract Class too.
+    this.logger.log(`Forcibly verified email for user ${userId} (Invite Flow)`);
+  }
 }

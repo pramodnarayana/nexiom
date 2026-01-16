@@ -7,6 +7,7 @@ import { TenantsModule } from './modules/tenants/tenants.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DbModule } from './db/db.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
+import { SystemAdminModule } from './modules/system-admin/system-admin.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
     TenantsModule,
     InvitationsModule,
     DbModule,
+    SystemAdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

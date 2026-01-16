@@ -9,6 +9,7 @@ export const user = pgTable('user', {
   createdAt: timestamp('createdAt').notNull(),
   updatedAt: timestamp('updatedAt').notNull(),
   role: text('role').default('user'), // 'user' | 'admin' | 'support'
+  systemRole: text('system_role').default('user'), // 'platform_admin' | 'user'
   banned: boolean('banned'),
   banReason: text('banReason'),
   banExpires: timestamp('banExpires'),

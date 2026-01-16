@@ -5,8 +5,9 @@ import {
   Patch,
   Body,
   UseGuards,
-  Query,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { UpdateTenantStatus } from './tenants.validation';
@@ -17,8 +18,8 @@ export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
   @Get()
-  findAll(@Query('search') search?: string) {
-    return this.tenantsService.findAll(search);
+  findAll(@Req() req: Request & { user: { id: string } }) {
+    return this.tenantsService.findAllForUser(req.user.id);
   }
 
   @Patch(':id')

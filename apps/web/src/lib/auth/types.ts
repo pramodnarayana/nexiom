@@ -11,6 +11,7 @@ export interface AuthUser {
     organizationId?: string;
     organizationName?: string;
     hasTenant?: boolean;
+    systemRole?: 'platform_admin' | 'user';
 }
 
 /**

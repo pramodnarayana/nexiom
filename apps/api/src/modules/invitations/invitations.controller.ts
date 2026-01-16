@@ -20,9 +20,19 @@ export class InvitationsController {
   @UseGuards(AuthGuard)
   async create(
     @Body() createInvitation: CreateInvitation,
-    @Req() req: Request & { user: { id: string } },
+    @Req() req: Request & { user: { id: string; organizationId?: string } },
   ) {
-    return this.invitationsService.create(createInvitation, req.user.id);
+    // Strict Enforcement: Invites are ALWAYS for the current user's organization.
+    // No explicit override allowed via API body.
+    createInvitation.organizationId = req.user.organizationId;
+
+    // Pass headers to propagate auth context to BetterAuth client
+    const headers = new Headers(req.headers as Record<string, string>);
+    return this.invitationsService.create(
+      createInvitation,
+      req.user.id,
+      headers,
+    );
   }
 
   @Get(':id')
@@ -41,5 +51,17 @@ export class InvitationsController {
       acceptInvitation.invitationId,
       req.user.id,
     );
+  }
+
+  @Get()
+  @UseGuards(AuthGuard)
+  async list(
+    @Req() req: Request & { user: { id: string; organizationId?: string } },
+  ) {
+    if (!req.user.organizationId) {
+      // If no org, return empty or throw. For now empty list.
+      return [];
+    }
+    return this.invitationsService.list(req.user.organizationId);
   }
 }

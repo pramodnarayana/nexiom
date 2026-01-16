@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Request } from 'express';
 import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
 import { AuthGuard } from '../auth/auth.guard';
@@ -9,7 +10,7 @@ describe('TenantsController', () => {
   let controller: TenantsController;
 
   const mockTenantsService = {
-    findAll: jest.fn(),
+    findAllForUser: jest.fn(),
     updateStatus: jest.fn(),
   };
 
@@ -41,7 +42,7 @@ describe('TenantsController', () => {
   });
 
   describe('findAll', () => {
-    it('should return an array of organizations', async () => {
+    it('should return an array of organizations for the user', async () => {
       const result: Organization[] = [
         {
           id: '1',
@@ -53,16 +54,13 @@ describe('TenantsController', () => {
           status: 'active',
         },
       ];
-      mockTenantsService.findAll.mockResolvedValue(result);
+      mockTenantsService.findAllForUser.mockResolvedValue(result);
 
-      expect(await controller.findAll()).toBe(result);
-      expect(mockTenantsService.findAll).toHaveBeenCalled();
-    });
-
-    it('should verify search param is passed', async () => {
-      const search = 'foo';
-      await controller.findAll(search);
-      expect(mockTenantsService.findAll).toHaveBeenCalledWith(search);
+      const req = { user: { id: 'user-1' } } as unknown as Request & {
+        user: { id: string };
+      };
+      expect(await controller.findAll(req)).toBe(result);
+      expect(mockTenantsService.findAllForUser).toHaveBeenCalledWith('user-1');
     });
   });
 

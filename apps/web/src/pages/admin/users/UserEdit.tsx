@@ -15,7 +15,7 @@ export const UserEdit = () => {
     // Using core useForm since we handle UI manually (headless)
     const form = useForm({
         redirect: 'list',
-        resource: 'users',
+        resource: 'admin/users',
         action: 'edit',
         id: id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 export const UserShow = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const start = useShow<any>({
-        resource: "users",
+        resource: "admin/users",
     });
 
     // Explicitly casting to avoid 'any' lint if possible, or using BaseRecord

@@ -22,7 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const initAuth = async () => {
             try {
                 // 1. Check Server Session (Cookies) - Source of Truth
-                const { data } = await authClient.getSession();
+                console.log("AuthProvider: Fetching Session...");
+                const { data, error } = await authClient.getSession();
+                console.log("AuthProvider: Session Result:", { data, error });
 
                 if (data) {
                     // Standard getSession returns basic info. We MUST fetch enriched info (Organization, etc.)
@@ -32,12 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const sessionRes = await fetch(`${API_URL}/auth/refresh-session`, {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer ${data.session.token}`
+                                'Authorization': `Bearer ${data.session.token}` // Ensure Token is explicit if cookie fails
                             },
                             credentials: 'include',
                         });
                         if (sessionRes.ok) {
                             enrichedData = await sessionRes.json();
+                        } else {
+                            console.warn("AuthProvider: Enriched fetch failed", sessionRes.status);
                         }
                     } catch (err) {
                         console.error("Failed to fetch enriched session", err);
@@ -85,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
                 } else {
                     // Server says "No Session". Trust it.
+                    console.warn("AuthProvider: No Session Found (data is null). Error:", error);
                     setToken(undefined);
                     setUser(null);
                 }
@@ -114,7 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 roles: finalRoles,
                 organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
                 organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
-                hasTenant: !!apiUser.hasTenant
+                hasTenant: !!apiUser.hasTenant,
+                systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'user') : undefined
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -151,7 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             roles: finalRoles,
             organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
             organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
-            hasTenant: !!apiUser.hasTenant
+            hasTenant: !!apiUser.hasTenant,
+            systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'user') : undefined
         });
     };
 

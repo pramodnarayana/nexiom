@@ -11,6 +11,7 @@ export class InvitationsService {
   async create(
     createInvitation: CreateInvitation,
     inviterId: string,
+    headers?: Headers,
   ): Promise<unknown> {
     this.logger.log(
       `Creating invitation for organization ${createInvitation.organizationId || 'system'}`,
@@ -20,6 +21,7 @@ export class InvitationsService {
       role: createInvitation.role,
       organizationId: createInvitation.organizationId || null,
       inviterId,
+      headers,
     });
   }
 
@@ -30,5 +32,9 @@ export class InvitationsService {
 
   async get(id: string): Promise<unknown> {
     return this.identityProvider.getInvitation(id);
+  }
+
+  async list(organizationId: string): Promise<unknown[]> {
+    return this.identityProvider.listInvitations(organizationId);
   }
 }

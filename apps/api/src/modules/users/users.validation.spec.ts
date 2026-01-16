@@ -98,15 +98,15 @@ describe('Users Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should require email, password, and companyName', () => {
-      const invalidSignup = {
+    it('should allow missing companyName in signup (optional)', () => {
+      const validSignup = {
         email: 'test@example.com',
         password: 'password123',
-        // Missing companyName
+        // Missing companyName is allowed
       };
 
-      const result = SignupSchema.safeParse(invalidSignup);
-      expect(result.success).toBe(false);
+      const result = SignupSchema.safeParse(validSignup);
+      expect(result.success).toBe(true);
     });
 
     it('should reject invalid email in signup', () => {

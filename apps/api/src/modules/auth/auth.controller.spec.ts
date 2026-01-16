@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { IdentityProvider } from './identity-provider.abstract';
 import { TenantsService } from '../tenants/tenants.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
 
 describe('AuthController', () => {
@@ -20,12 +21,17 @@ describe('AuthController', () => {
     login: jest.fn(),
     createUser: jest.fn(),
     validateSession: jest.fn(),
+    getSessionFromHeaders: jest.fn(),
     getEnrichedSession: jest.fn(),
     getHandler: jest.fn(() => () => {}),
   };
 
   const mockTenantsService = {
     provisionTenantForUser: jest.fn(),
+  };
+
+  const mockInvitationsService = {
+    accept: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -39,6 +45,10 @@ describe('AuthController', () => {
         {
           provide: TenantsService,
           useValue: mockTenantsService,
+        },
+        {
+          provide: InvitationsService,
+          useValue: mockInvitationsService,
         },
       ],
     }).compile();
@@ -66,7 +76,7 @@ describe('AuthController', () => {
         session: mockSession,
       };
 
-      mockBetterAuthIdentityProvider.validateSession.mockResolvedValue(
+      mockBetterAuthIdentityProvider.getSessionFromHeaders.mockResolvedValue(
         mockSessionData,
       );
       mockTenantsService.provisionTenantForUser.mockResolvedValue({

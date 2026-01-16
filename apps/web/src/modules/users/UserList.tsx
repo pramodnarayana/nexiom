@@ -1,4 +1,4 @@
-import { useTable } from "@refinedev/core";
+import { useTable, useList } from "@refinedev/core";
 
 import { Users } from "./Users";
 import { type UserTableItem } from "./types";
@@ -6,12 +6,18 @@ import { InviteMemberDialog } from "../invitations/InviteMemberDialog";
 
 interface UserListProps {
     basePath: string;
+    resource?: string;
+    inviteResource?: string;
 }
 
-export const UserList = ({ basePath }: UserListProps) => {
+export const UserList = ({
+    basePath,
+    resource = "users",
+    inviteResource = "invitations"
+}: UserListProps) => {
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
     const table = useTable<UserTableItem>({
-        resource: "users",
+        resource: resource,
         syncWithLocation: true,
     });
 
@@ -24,8 +30,30 @@ export const UserList = ({ basePath }: UserListProps) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        emailVerified: user.emailVerified
+        emailVerified: user.emailVerified,
+        status: "active"
     })) || [];
+
+    // Fetch Invitations with Refine's Data Hook (Conditional)
+    const { data: inviteData, isLoading: isLoadingInvites } = useList({
+        resource: inviteResource || "invitations", // Default to satisfy hook, but we'll gate usage
+        queryOptions: {
+            enabled: !!inviteResource, // Only fetch if resource provided
+        }
+    });
+
+    const invitations: UserTableItem[] = (inviteResource && inviteData?.data) ? inviteData.data.map((invite) => ({
+        id: String(invite.id),
+        name: "Invited Member",
+        email: invite.email,
+        role: invite.role,
+        status: "pending",
+        emailVerified: false
+    })) : [];
+
+    // Merge and Sort (Invitations First)
+    const combinedData = [...invitations, ...users];
+    const isLoadingCombined = isLoading || isLoadingInvites;
 
     return (
         <div className="space-y-4">
@@ -34,15 +62,15 @@ export const UserList = ({ basePath }: UserListProps) => {
             </div>
 
             <Users
-                data={users}
-                isLoading={isLoading}
+                data={combinedData}
+                isLoading={isLoadingCombined}
                 basePath={basePath}
             />
 
             <div className="flex items-center justify-end space-x-2 py-4">
                 {/* Pagination - to be implemented with table.getState().pagination */}
                 <div className="text-xs text-muted-foreground mr-4">
-                    Total: {data?.total || 0}
+                    Total Users: {data?.total || 0} | Pending Invites: {inviteData?.total || 0}
                 </div>
             </div>
         </div>

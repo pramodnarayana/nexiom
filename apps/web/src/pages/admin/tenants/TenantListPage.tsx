@@ -5,9 +5,9 @@ import { TenantList } from "@/modules/tenants/TenantList";
 import { type TenantTableItem, type TenantApiResponse } from "@/modules/tenants/types";
 
 export const TenantListPage = () => {
-    // RESOURCE: "tenants" -> GET /api/tenants
+    // RESOURCE: "admin/tenants" -> GET /api/admin/tenants
     const table = useTable<TenantApiResponse>({
-        resource: "tenants",
+        resource: "admin/tenants",
         syncWithLocation: true,
         // Optional: Add sorters/filters initial state if needed
     });
@@ -31,7 +31,7 @@ export const TenantListPage = () => {
 
     const handleStatusChange = (id: string, status: TenantTableItem['status']) => {
         mutate({
-            resource: "tenants",
+            resource: "admin/tenants",
             id,
             values: { status },
             successNotification: {

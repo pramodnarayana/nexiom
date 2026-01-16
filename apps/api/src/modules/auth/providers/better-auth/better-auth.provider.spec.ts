@@ -47,10 +47,16 @@ const mockDb = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
-  from: jest.fn().mockReturnThis(), // Added from mock
+  from: jest.fn().mockReturnThis(),
   query: {
     member: {
       findMany: jest.fn(),
+    },
+    session: {
+      findFirst: jest.fn(),
+    },
+    user: {
+      findFirst: jest.fn(),
     },
   },
 };
@@ -156,16 +162,35 @@ describe('BetterAuthIdentityProvider', () => {
     it('should call signInEmail', async () => {
       const email = 'test@example.com';
       const password = 'pass';
-      const result = { session: {}, user: {} };
-      mockBetterAuth.api.signInEmail.mockResolvedValue(result);
+      const mockResponse = {
+        token: 'token-123',
+        user: { id: 'u1' },
+      };
 
-      expect(await provider.login(email, password)).toEqual(result);
+      mockBetterAuth.api.signInEmail.mockResolvedValue({
+        ok: true,
+        headers: new Headers(),
+        json: () => Promise.resolve(mockResponse),
+      });
+
+      mockDb.query.session.findFirst.mockResolvedValue({ token: 'token-123' });
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        systemRole: 'user',
+      });
+
+      const result = await provider.login(email, password);
+
+      expect(result.session).toBeDefined();
+      expect(result.user).toBeDefined();
     });
   });
 
   describe('getEnrichedSession', () => {
     it('should return null if validSession returns null', async () => {
       mockBetterAuth.api.getSession.mockResolvedValue(null);
+      // Ensure DB also returns null for session
+      mockDb.query.session.findFirst.mockResolvedValue(null);
       expect(await provider.getEnrichedSession('bad')).toBeNull();
     });
 
@@ -176,15 +201,28 @@ describe('BetterAuthIdentityProvider', () => {
       };
       mockBetterAuth.api.getSession.mockResolvedValue(mockSessionData);
 
-      // Mock DB lookup via query builder
+      // Mock DB lookups
+      mockDb.query.session.findFirst.mockResolvedValue({
+        token: 'tok',
+        userId: 'user1',
+      });
+      mockDb.query.user.findFirst.mockResolvedValueOnce({
+        id: 'user1',
+        systemRole: 'user',
+      }); // For validateSession user fetch
+
       const mockMembership = {
         organizationId: 'org1',
         organization: { name: 'Test Org' },
         role: 'admin',
       };
 
-      // Need to cast to any because we are mocking the deep query object
       mockDb.query.member.findMany.mockResolvedValue([mockMembership]);
+      // Mock user again for getEnrichedSession's system role fetch
+      mockDb.query.user.findFirst.mockResolvedValueOnce({
+        id: 'user1',
+        systemRole: 'user',
+      });
 
       const result = await provider.getEnrichedSession('tok');
 
@@ -197,6 +235,7 @@ describe('BetterAuthIdentityProvider', () => {
       );
     });
   });
+
   describe('createInvitation', () => {
     it('should throw error if organizationId is missing', async () => {
       await expect(
@@ -259,9 +298,7 @@ describe('BetterAuthIdentityProvider', () => {
 
   describe('Email Callbacks', () => {
     it('should send verification email', async () => {
-      // Access config inside the test to ensure it's captured from the current run
       const capturedConfig = mockBetterAuthFactory.mock.calls[0]?.[0];
-
       const sendVerificationEmail =
         capturedConfig?.emailVerification?.sendVerificationEmail;
       if (!sendVerificationEmail)
@@ -280,17 +317,7 @@ describe('BetterAuthIdentityProvider', () => {
     });
 
     it('should send invitation email', async () => {
-      // Find the organization plugin config
-      // The plugins array contains the result of organization(), which is an object.
-      // better-auth plugins usually return their config or a definition.
-      // Since we mocked organization() to return undefined/mock, we might need to adjust how we find it.
-      // Wait, in the provider we call `organization({...})`.
-      // We mocked `better-auth/plugins`, so `organization` is a jest.fn().
-      // We need to capture what `organization` was called with.
-
-      // Let's inspect the mock call to organization
       const orgConfig = (organization as jest.Mock).mock.calls[0][0];
-
       const sendInvitationEmail = orgConfig.sendInvitationEmail;
 
       const data = {
@@ -306,7 +333,7 @@ describe('BetterAuthIdentityProvider', () => {
           to: data.email,
           subject: expect.stringContaining('invited'),
           text: expect.stringContaining(
-            'http://localhost:3000/api/auth/invitations/accept?id=inv-123',
+            '/invite/accept?id=inv-123', // Matches partial URL since env var is not set in test to frontend
           ),
         }),
       );
