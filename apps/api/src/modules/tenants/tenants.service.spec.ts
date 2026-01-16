@@ -38,6 +38,7 @@ interface MockDrizzle {
   transaction: jest.Mock;
   update: jest.Mock;
   set: jest.Mock;
+  innerJoin: jest.Mock;
 
   query: MockQuery;
 }
@@ -61,6 +62,7 @@ const mockDb: MockDrizzle = {
   transaction: jest.fn(), // Placeholder, implementation below to avoid circular ref
   update: jest.fn().mockReturnThis(),
   set: jest.fn().mockReturnThis(),
+  innerJoin: jest.fn().mockReturnThis(),
   query: {
     user: {
       findFirst: jest.fn(),
@@ -98,14 +100,17 @@ describe('TenantsService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('findAll', () => {
-    it('should return all tenants', async () => {
+  describe('findAllForUser', () => {
+    it('should return tenants for the user', async () => {
+      // Mock the join query chain
+      // db.select().from().innerJoin().where().execute()
       mockDb.execute.mockResolvedValue(mockOrganizations);
 
-      const result = await service.findAll();
+      const result = await service.findAllForUser('user-1');
 
       expect(result).toEqual(mockOrganizations);
-      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.innerJoin).toHaveBeenCalled();
+      expect(mockDb.where).toHaveBeenCalled();
     });
   });
 

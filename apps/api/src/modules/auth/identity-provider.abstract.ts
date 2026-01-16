@@ -30,7 +30,7 @@ export abstract class IdentityProvider {
   abstract login(
     email: string,
     password?: string,
-  ): Promise<{ session: Session; user: User }>;
+  ): Promise<{ session: Session; user: User; cookie?: string | string[] }>;
 
   /**
    * Validates a session ID.
@@ -38,6 +38,14 @@ export abstract class IdentityProvider {
    */
   abstract validateSession(
     sessionId: string,
+  ): Promise<{ session: Session; user: User } | null>;
+
+  /**
+   * Validates a session using the raw request headers (delegating to the library).
+   * This is preferred over validateSession(token) when dealing with signed cookies.
+   */
+  abstract getSessionFromHeaders(
+    headers: Headers,
   ): Promise<{ session: Session; user: User } | null>;
 
   /**
@@ -63,6 +71,7 @@ export abstract class IdentityProvider {
     organizationId: string | null;
     expiresIn?: number;
     inviterId: string;
+    headers?: Headers;
   }): Promise<unknown>;
 
   /**
@@ -79,8 +88,24 @@ export abstract class IdentityProvider {
   ): Promise<unknown>;
 
   /**
+   * List pending invitations for an organization
+   */
+  abstract listInvitations(organizationId: string): Promise<unknown[]>;
+
+  /**
    * Returns the underlying auth handler (e.g. Better Auth handler) for usage in catch-all routes.
    * Returns any because the handler type depends on the implementation library.
    */
   abstract getHandler(): any;
+
+  /**
+   * Forcibly marks a user's email as verified.
+   * critical for Invite based signups where possession of the link implies verification.
+   */
+  abstract forceVerifyEmail(userId: string): Promise<void>;
+
+  /**
+   * Deletes a user (Used for cleanup/rollback scenarios).
+   */
+  abstract deleteUser(userId: string): Promise<void>;
 }

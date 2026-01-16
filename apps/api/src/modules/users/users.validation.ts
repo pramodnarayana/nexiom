@@ -29,7 +29,10 @@ export const SignupSchema = CreateUserSchema.extend({
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters' }),
-  companyName: z.string().min(2, { message: 'Company name is required' }),
+  companyName: z
+    .string()
+    .min(2, { message: 'Company name is required' })
+    .optional(),
 });
 
 /**
@@ -38,3 +41,15 @@ export const SignupSchema = CreateUserSchema.extend({
  */
 export class CreateUser extends createZodDto(CreateUserSchema) {}
 export class Signup extends createZodDto(SignupSchema) {}
+
+export const CompleteInviteSchema = z.object({
+  email: z.string().email(),
+  password: z
+    .string()
+    .min(8, { message: 'Password must be at least 8 characters' }),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  invitationId: z.string().uuid(),
+});
+
+export class CompleteInvite extends createZodDto(CompleteInviteSchema) {}

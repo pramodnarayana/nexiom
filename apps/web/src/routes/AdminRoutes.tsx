@@ -19,7 +19,7 @@ export function AdminRoutes() {
             routerProvider={routerProvider}
             resources={[
                 {
-                    name: "users",
+                    name: "admin/users",
                     list: "/admin/users",
                     edit: "/admin/users/edit/:id",
                     show: "/admin/users/show/:id",
@@ -28,7 +28,7 @@ export function AdminRoutes() {
                     }
                 },
                 {
-                    name: "tenants",
+                    name: "admin/tenants",
                     list: "/admin/tenants",
                     show: "/admin/tenants/:id",
                     meta: {
@@ -44,7 +44,7 @@ export function AdminRoutes() {
             <Routes>
                 <Route element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
-                    <Route path="users" element={<UserList basePath="/admin/users" />} />
+                    <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" inviteResource="" />} />
                     <Route path="users/show/:id" element={<UserShow />} />
                     <Route path="users/edit/:id" element={<UserEdit />} />
                     <Route path="tenants" element={<TenantListPage />} />

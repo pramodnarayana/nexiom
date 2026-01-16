@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import { AuthProvider } from './lib/auth/AuthProvider';
 import './App.css';
 
@@ -18,6 +19,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/invite/accept" element={<AcceptInvitePage />} />
 
           {/* Tenant Routes */}
           <Route path="/dashboard/*" element={<TenantRoutes />} />

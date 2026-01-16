@@ -47,7 +47,7 @@ export function TenantRoutes() {
             <Routes>
                 <Route element={<TenantLayout navGroups={navGroups} />}>
                     <Route index element={<DashboardPage />} />
-                    <Route path="users" element={<UserList basePath="/dashboard/users" />} />
+                    <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" inviteResource="invitations" />} />
                     <Route path="settings" element={<div className="p-4">Settings coming soon</div>} />
                 </Route>
             </Routes>

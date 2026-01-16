@@ -11,11 +11,14 @@ import { IdentityProvider } from './identity-provider.abstract';
 import { TenantsService } from '../tenants/tenants.service';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { Signup } from '../users/users.validation';
+import { Signup, CompleteInvite } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { User } from '../users/user.schema';
+import { InvitationsService } from '../invitations/invitations.service';
 import { Session } from './auth.schema';
+import { toWebHeaders } from '../../shared/utils/headers.util';
+import { BadRequestException } from '@nestjs/common';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -35,11 +38,26 @@ export class AuthController {
   constructor(
     private readonly authProvider: IdentityProvider,
     private readonly tenantsService: TenantsService,
+    private readonly invitationsService: InvitationsService,
   ) {}
 
   @Post('login')
-  async login(@Body() login: Login): Promise<{ session: Session; user: User }> {
-    const result = await this.authProvider.login(login.email, login.password);
+  async login(
+    @Body() login: Login,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ session: Session; user: User }> {
+    const { cookie: loginCookie, ...result } = await this.authProvider.login(
+      login.email,
+      login.password,
+    );
+
+    // MANUAL COOKIE SETTING (Critical Fix - Using Library's Native Cookie)
+    // We captured the exact Set-Cookie header from Better Auth.
+    // This ensures signature, path, and attributes are exactly what the library expects.
+    if (loginCookie) {
+      res.setHeader('Set-Cookie', loginCookie);
+    }
+
     return result;
   }
 
@@ -54,26 +72,76 @@ export class AuthController {
    */
   @Post('provision-tenant')
   async provisionTenant(@Req() req: Request): Promise<unknown> {
-    // Extract session from cookie or header
-    // PRIORITY FIX: Prefer the Cookie because it contains the Signature (signed token).
-    // The Bearer token from frontend is often raw (unsigned), which fails cookie emulation.
-    const authHeader = req.headers['authorization'];
+    // FIX: use getSessionFromHeaders to handle signed cookies correctly
+    const sessionData = await this.authProvider.getSessionFromHeaders(
+      toWebHeaders(req.headers),
+    );
 
-    const reqWithCookies = req as Request & { cookies: Record<string, string> };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const token: string =
-      reqWithCookies.cookies?.['better-auth.session_token'] ||
-      authHeader?.split(' ')[1] ||
-      '';
-
-    const session: { user: { id: string }; session: unknown } | null =
-      await this.authProvider.validateSession(token);
-
-    if (!session) {
+    if (!sessionData) {
       throw new UnauthorizedException('No Session Found');
     }
 
-    return this.tenantsService.provisionTenantForUser(session.user.id);
+    return this.tenantsService.provisionTenantForUser(sessionData.user.id);
+  }
+
+  @Post('complete-invite')
+  async completeInvite(
+    @Body() body: CompleteInvite,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // Race Condition Fix: Validate Invitation BEFORE creating user
+    const invitation = (await this.invitationsService.get(
+      body.invitationId,
+    )) as { status: string; expiresAt: Date } | null;
+
+    if (!invitation) {
+      throw new BadRequestException('Invalid Invitation ID');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new BadRequestException('Invitation is no longer pending/valid');
+    }
+
+    if (new Date(invitation.expiresAt) < new Date()) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    // Step 1: Create User (Trusting the Invite -> Verify Email)
+    const user = await this.authProvider.createUser({
+      email: body.email,
+      password: body.password,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      // Fix TS Error: Role is required by CreateUser type
+      role: 'user',
+    });
+
+    // Step 2: Accept Invitation (Atomic-ish)
+    try {
+      await this.invitationsService.accept(body.invitationId, user.id);
+    } catch (_e) {
+      // Rollback: Delete the user if acceptance fails to prevent orphans
+      await this.authProvider.deleteUser(user.id);
+      throw new BadRequestException(
+        'Failed to accept invitation (User creation rolled back)',
+      );
+    }
+
+    // Step 3: Force Verify Email
+    await this.authProvider.forceVerifyEmail(user.id);
+
+    // Step 4: Login & Return Session
+    const { cookie: loginCookie, ...session } = await this.authProvider.login(
+      body.email,
+      body.password,
+    );
+
+    // FIX: Forward the Set-Cookie header so the user stays logged in
+    if (loginCookie) {
+      res.setHeader('Set-Cookie', loginCookie);
+    }
+
+    return session;
   }
 
   /**
@@ -82,24 +150,21 @@ export class AuthController {
    */
   @Post('refresh-session')
   async refreshSession(@Req() req: Request) {
-    // Extract Token (Prioritize Cookie)
-    const authHeader = req.headers['authorization'];
+    // Delegate session extraction to the provider (handles signed cookies/headers)
+    // We pass the native Headers object
+    const sessionData = await this.authProvider.getSessionFromHeaders(
+      toWebHeaders(req.headers),
+    );
 
-    const reqWithCookies = req as Request & { cookies: Record<string, string> };
+    if (!sessionData) {
+      throw new UnauthorizedException('Invalid Session');
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const token: string =
-      reqWithCookies.cookies?.['better-auth.session_token'] ||
-      authHeader?.split(' ')[1] ||
-      '';
-    if (!token) throw new UnauthorizedException('No token provided');
-
-    // Use the standard interface method
-
-    const session = await this.authProvider.getEnrichedSession(token);
-    if (!session) throw new UnauthorizedException('Invalid Session');
-
-    return session;
+    // Now Enrich it (we have the valid session object)
+    // We can use getEnrichedSession, but we already have the session object.
+    // Let's refactor getEnrichedSession to accept an OBJECT or ID?
+    // Or just call getEnrichedSession with the now-valid session ID.
+    return this.authProvider.getEnrichedSession(sessionData.session.token);
   }
 
   /**

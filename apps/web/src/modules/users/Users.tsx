@@ -39,6 +39,7 @@ export const Users = ({ data, isLoading, basePath }: UsersProps) => {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Verified</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -54,10 +55,21 @@ export const Users = ({ data, isLoading, basePath }: UsersProps) => {
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                {user.emailVerified ? (
-                                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Verified</Badge>
-                                ) : (
+                                {user.status === 'pending' ? (
                                     <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">Pending</Badge>
+                                ) : (
+                                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                {user.status === 'pending' ? (
+                                    <span className="text-muted-foreground text-xs">Waiting for acceptance</span>
+                                ) : (
+                                    user.emailVerified ? (
+                                        <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">Verified</Badge>
+                                    ) : (
+                                        <span className="text-muted-foreground text-xs">Unverified</span>
+                                    )
                                 )}
                             </TableCell>
                             <TableCell className="text-right">

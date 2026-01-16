@@ -124,7 +124,7 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
 export function AdminLayout() {
     // We cast to correct type, assuming auth provider returns this shape
     const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: { name?: string; email?: string; roles?: string[] } | null,
+        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'user' } | null,
         isAuthenticated: boolean,
         logout: () => void,
         isLoading: boolean
@@ -139,8 +139,9 @@ export function AdminLayout() {
             navigate('/login');
             return;
         }
-        if (user && !user.roles?.includes('admin')) {
-            console.warn("Access Denied: Admin Role Required. Current roles:", user.roles);
+        // Strict Platform Admin Check
+        if (user && user.systemRole !== 'platform_admin') {
+            console.warn("Access Denied: Platform Admin Required. Current role:", user.systemRole);
             navigate('/dashboard');
         }
     }, [isAuthenticated, user, navigate, isLoading]);
@@ -149,8 +150,12 @@ export function AdminLayout() {
         return <div className="flex items-center justify-center h-screen bg-slate-50">Loading Admin Panel...</div>;
     }
 
-    if (!user || (!user.roles?.includes('admin'))) {
-        return null; // Or unauthorized page
+    if (!user || user.systemRole !== 'platform_admin') {
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-600">
+                Access denied.
+            </div>
+        );
     }
 
     // Navigation Configuration

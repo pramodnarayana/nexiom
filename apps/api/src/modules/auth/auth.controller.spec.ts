@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { IdentityProvider } from './identity-provider.abstract';
 import { TenantsService } from '../tenants/tenants.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
 
 describe('AuthController', () => {
@@ -19,13 +20,21 @@ describe('AuthController', () => {
   const mockBetterAuthIdentityProvider = {
     login: jest.fn(),
     createUser: jest.fn(),
+    deleteUser: jest.fn(),
+    forceVerifyEmail: jest.fn(),
     validateSession: jest.fn(),
+    getSessionFromHeaders: jest.fn(),
     getEnrichedSession: jest.fn(),
     getHandler: jest.fn(() => () => {}),
   };
 
   const mockTenantsService = {
     provisionTenantForUser: jest.fn(),
+  };
+
+  const mockInvitationsService = {
+    accept: jest.fn(),
+    get: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -39,6 +48,10 @@ describe('AuthController', () => {
         {
           provide: TenantsService,
           useValue: mockTenantsService,
+        },
+        {
+          provide: InvitationsService,
+          useValue: mockInvitationsService,
         },
       ],
     }).compile();
@@ -66,7 +79,7 @@ describe('AuthController', () => {
         session: mockSession,
       };
 
-      mockBetterAuthIdentityProvider.validateSession.mockResolvedValue(
+      mockBetterAuthIdentityProvider.getSessionFromHeaders.mockResolvedValue(
         mockSessionData,
       );
       mockTenantsService.provisionTenantForUser.mockResolvedValue({
@@ -79,6 +92,73 @@ describe('AuthController', () => {
       expect(result).toBeDefined();
       expect(mockTenantsService.provisionTenantForUser).toHaveBeenCalledWith(
         'user-123',
+      );
+    });
+  });
+  describe('completeInvite', () => {
+    it('should complete invite successfully', async () => {
+      mockInvitationsService.get.mockResolvedValue({
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 10000),
+      });
+      mockBetterAuthIdentityProvider.deleteUser.mockResolvedValue(undefined);
+      mockInvitationsService.accept.mockResolvedValue('inv-123');
+      const mockUser = { id: 'user-new' };
+      mockBetterAuthIdentityProvider.createUser.mockResolvedValue(mockUser);
+      // Login mock return
+      mockBetterAuthIdentityProvider.login.mockResolvedValue({
+        session: { token: 'sess-123' },
+        user: mockUser,
+        cookie: 'session=123',
+      });
+
+      const body = {
+        invitationId: 'inv-123',
+        email: 'test@example.com',
+        password: 'pass',
+        firstName: 'Test',
+        lastName: 'User',
+      };
+
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      const res = { setHeader: jest.fn() } as any;
+
+      const result = await controller.completeInvite(body, res);
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+
+      expect(result).toBeDefined();
+    });
+
+    it('should rollback user creation if invite accept fails', async () => {
+      mockBetterAuthIdentityProvider.createUser.mockResolvedValue({
+        id: 'user-fail',
+      });
+      mockInvitationsService.get.mockResolvedValue({
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 10000),
+      });
+      mockInvitationsService.accept.mockRejectedValue(
+        new Error('Accept Failed'),
+      );
+      mockBetterAuthIdentityProvider.deleteUser.mockResolvedValue(undefined);
+
+      const body = {
+        invitationId: 'inv-fail',
+        email: 'test@example.com',
+        password: 'pass',
+        firstName: 'Test',
+        lastName: 'User',
+      };
+
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      const res = { setHeader: jest.fn() } as any;
+
+      await expect(controller.completeInvite(body, res)).rejects.toThrow(
+        'Failed to accept invitation',
+      );
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      expect(mockBetterAuthIdentityProvider.deleteUser).toHaveBeenCalledWith(
+        'user-fail',
       );
     });
   });

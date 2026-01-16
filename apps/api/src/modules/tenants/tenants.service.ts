@@ -11,9 +11,25 @@ export class TenantsService {
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
-  async findAll(_search?: string) {
-    const query = this.db.select().from(schema.organization);
-    // TODO: Add search logic (ilike) if needed
+  async findAllForUser(userId: string) {
+    const query = this.db
+      .select({
+        id: schema.organization.id,
+        name: schema.organization.name,
+        slug: schema.organization.slug,
+        logo: schema.organization.logo,
+        createdAt: schema.organization.createdAt,
+        metadata: schema.organization.metadata,
+        status: schema.organization.status,
+        memberRole: schema.member.role, // Optional: Return their role in that org
+      })
+      .from(schema.organization)
+      .innerJoin(
+        schema.member,
+        eq(schema.member.organizationId, schema.organization.id),
+      )
+      .where(eq(schema.member.userId, userId));
+
     return query.execute();
   }
 

@@ -17,44 +17,45 @@ export class AuthGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user: unknown; session: unknown }>();
 
-    // 1. Extract session token (Prioritize Cookie, then Bearer)
-    // Accessing cookies in NestJS requires 'cookie-parser' which we added to main.ts
+    // 1. Validate Session using robust enriched method via Headers (handles Signed Cookies)
+    // We convert Express headers to Web Standard Headers
+    const headers = new Headers(request.headers as Record<string, string>);
 
-    const reqWithCookies = request as Request & {
-      cookies: Record<string, string>;
-    };
-    const authHeader = request.headers['authorization'];
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const token: string | undefined =
-      reqWithCookies.cookies?.['better-auth.session_token'] ||
-      this.extractTokenFromHeader(authHeader);
+    // Use the new provider method that delegates to Better Auth
+    const result = await this.authProvider.getSessionFromHeaders(headers);
 
-    if (!token) {
-      throw new UnauthorizedException('No session token provided');
+    if (!result) {
+      throw new UnauthorizedException('Invalid or Expired Session');
     }
 
-    // 2. Validate Session using robust enriched method
-    const result: { session: unknown; user: unknown } | null =
-      await this.authProvider.getEnrichedSession(token);
+    // We still want to enrich it if getSessionFromHeaders uses basic validateSession?
+    // In BetterAuthIdentityProvider.getSessionFromHeaders, we return { session, user }.
+    // But getEnrichedSession ADDS tenant info (`hasTenant`, `organizationId`).
+    // getSessionFromHeaders (via BetterAuth API) returns standard session.
+    // We need to ENRICH it afterwards if the user is logged in.
 
-    if (!result || !result.session || !result.user) {
-      throw new UnauthorizedException('Invalid session'); // Or call validateSession fallback if needed, but getEnriched should wrap it.
+    // Wait. getSessionFromHeaders returns the BASIC session.
+    // AuthGuard usually provides tenant info.
+    // So we must call getEnrichedSession using the raw token we just got back from getSessionFromHeaders.
+
+    const enrichedResult = await this.authProvider.getEnrichedSession(
+      result.session.token,
+    );
+
+    if (!enrichedResult) {
+      throw new UnauthorizedException(
+        'Session extraction failed during enrichment',
+      );
     }
 
     // Unwrap for attaching to request
-    const { user, session } = result;
+    const { user, session } = enrichedResult;
 
     // 3. Attach to request
+    // We attach the ENRICHED user/session, not the basic one.
     request.user = user;
     request.session = session;
 
     return true;
-  }
-
-  private extractTokenFromHeader(
-    request: string | undefined,
-  ): string | undefined {
-    const [type, token] = request?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
   }
 }

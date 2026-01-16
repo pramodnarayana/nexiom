@@ -14,6 +14,7 @@ describe('AuthGuard', () => {
     createUser: jest.fn(),
     login: jest.fn(),
     validateSession: jest.fn(),
+    getSessionFromHeaders: jest.fn(),
     createInvitation: jest.fn(),
     getInvitation: jest.fn(),
     acceptInvitation: jest.fn(),
@@ -21,6 +22,7 @@ describe('AuthGuard', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthGuard,
@@ -37,11 +39,12 @@ describe('AuthGuard', () => {
   });
 
   it('should throw UnauthorizedException if no token is found', async () => {
+    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
           headers: {},
-          cookies: {},
         }),
       }),
     } as Partial<ExecutionContext>;
@@ -51,10 +54,17 @@ describe('AuthGuard', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should authenticate successfully with a valid cookie', async () => {
+  it('should authenticate successfully with a valid session', async () => {
     const mockUser = { id: 'user1', organizationId: 'org1' };
     const mockSession = { token: 'valid-token' };
 
+    // 1. Validate Session from Headers
+    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+      session: mockSession,
+      user: { id: 'user1' },
+    });
+
+    // 2. Enrich Session
     mockIdentityProvider.getEnrichedSession.mockResolvedValue({
       user: mockUser,
       session: mockSession,
@@ -62,8 +72,7 @@ describe('AuthGuard', () => {
 
     const mockRequest = {
       headers: {},
-      cookies: { 'better-auth.session_token': 'valid-token' },
-      user: undefined, // Initialize
+      user: undefined,
       session: undefined,
     };
 
@@ -76,6 +85,7 @@ describe('AuthGuard', () => {
     const result = await guard.canActivate(mockContext);
 
     expect(result).toBe(true);
+    expect(identityProvider.getSessionFromHeaders).toHaveBeenCalled();
     expect(identityProvider.getEnrichedSession).toHaveBeenCalledWith(
       'valid-token',
     );
@@ -83,40 +93,13 @@ describe('AuthGuard', () => {
     expect(mockRequest.session).toEqual(mockSession);
   });
 
-  it('should authenticate successfully with a valid Bearer token', async () => {
-    const mockUser = { id: 'user1', organizationId: 'org1' };
-    const mockSession = { token: 'bearer-token' };
-
-    mockIdentityProvider.getEnrichedSession.mockResolvedValue({
-      user: mockUser,
-      session: mockSession,
-    });
-
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: { authorization: 'Bearer bearer-token' },
-          cookies: {},
-        }),
-      }),
-    } as unknown as ExecutionContext;
-
-    const result = await guard.canActivate(mockContext);
-
-    expect(result).toBe(true);
-    expect(identityProvider.getEnrichedSession).toHaveBeenCalledWith(
-      'bearer-token',
-    );
-  });
-
-  it('should throw UnauthorizedException if session is invalid', async () => {
-    mockIdentityProvider.getEnrichedSession.mockResolvedValue(null);
+  it('should throw UnauthorizedException if session is invalid via headers', async () => {
+    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
           headers: {},
-          cookies: { 'better-auth.session_token': 'invalid-token' },
         }),
       }),
     } as unknown as ExecutionContext;
@@ -125,12 +108,19 @@ describe('AuthGuard', () => {
       UnauthorizedException,
     );
   });
-  it('should throw UnauthorizedException if Authorization header is not Bearer', async () => {
+
+  it('should throw UnauthorizedException if enrichment fails', async () => {
+    const mockSession = { token: 'valid-token' };
+    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+      session: mockSession,
+      user: { id: 'user1' },
+    });
+    mockIdentityProvider.getEnrichedSession.mockResolvedValue(null);
+
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => ({
-          headers: { authorization: 'Basic some-token' },
-          cookies: {},
+          headers: {},
         }),
       }),
     } as unknown as ExecutionContext;
