@@ -1,9 +1,27 @@
-import { Controller, Get, UseGuards, Inject, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Inject,
+  Query,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { DRIZZLE_DB } from '../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../../db/schema';
-import { desc, count, eq } from 'drizzle-orm';
+import { desc, count, eq, ne, and } from 'drizzle-orm';
+import {
+  CreateTenantValidation,
+  UpdateTenantValidation,
+} from './system-admin.validation';
+import { v4 as uuidv4 } from 'uuid';
 
 @Controller('admin')
 @UseGuards(SystemAdminGuard)
@@ -11,6 +29,108 @@ export class SystemAdminController {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
+
+  @Post('tenants')
+  async createTenant(@Body() input: CreateTenantValidation) {
+    // Check if slug exists
+    const existing = await this.db.query.organization.findFirst({
+      where: eq(schema.organization.slug, input.slug),
+    });
+
+    if (existing) {
+      throw new BadRequestException('Slug is already taken by another tenant');
+    }
+
+    const [tenant] = await this.db
+      .insert(schema.organization)
+      .values({
+        id: uuidv4(),
+        name: input.name,
+        slug: input.slug,
+        logo: input.logo,
+        createdAt: new Date(),
+        status: 'active',
+      })
+      .returning();
+
+    return tenant;
+  }
+
+  @Patch('tenants/:id')
+  async updateTenant(
+    @Param('id') id: string,
+    @Body() input: UpdateTenantValidation,
+  ) {
+    const tenant = await this.db.query.organization.findFirst({
+      where: eq(schema.organization.id, id),
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    // Check slug uniqueness if changing
+    if (input.slug && input.slug !== tenant.slug) {
+      const existing = await this.db.query.organization.findFirst({
+        where: and(
+          eq(schema.organization.slug, input.slug),
+          ne(schema.organization.id, id),
+        ),
+      });
+
+      if (existing) {
+        throw new BadRequestException(
+          'Slug is already taken by another tenant',
+        );
+      }
+    }
+
+    const updatePayload: Partial<typeof schema.organization.$inferInsert> = {};
+    if (input.name !== undefined) updatePayload.name = input.name;
+    if (input.slug !== undefined) updatePayload.slug = input.slug;
+    if (input.logo !== undefined) updatePayload.logo = input.logo;
+    if (input.status !== undefined) updatePayload.status = input.status;
+    if (input.metadata !== undefined)
+      updatePayload.metadata = JSON.stringify(input.metadata);
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
+
+    const [updated] = await this.db
+      .update(schema.organization)
+      .set(updatePayload)
+      .where(eq(schema.organization.id, id))
+      .returning();
+
+    return updated;
+  }
+
+  @Delete('tenants/:id')
+  async deleteTenant(@Param('id') id: string) {
+    const tenant = await this.db.query.organization.findFirst({
+      where: eq(schema.organization.id, id),
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    await this.db.transaction(async (tx) => {
+      // Hard delete dependent records and organization
+      await tx
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, id));
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.organizationId, id));
+      await tx
+        .delete(schema.organization)
+        .where(eq(schema.organization.id, id));
+    });
+
+    return { success: true };
+  }
 
   @Get('users')
   async listUsers(
@@ -38,20 +158,6 @@ export class SystemAdminController {
       .from(schema.user);
     const total = Number(totalResult[0]?.count || 0);
 
-    // Return in format Refine expects (or standard API)
-    // Refine simple-rest expects header x-total-count usually, OR a { data, total } envelope if customized.
-    // Our existing data-provider handles standard REST?
-    // Let's stick to simple REST array or envelope.
-    // Looking at UserList.tsx:22 `data?.data?.map`, it expects `{ data: [...], total: ... }` envelope from Refine's hook?
-    // Actually Refine's `simple-rest` generally expects just generic List.
-    // But `UserList.tsx` accesses `data.data`.
-    // Let's verify `dataProvider` source later, but Envelope is safest for custom controllers.
-    /* 
-      Refine's `useTable` returns { data: { data: [...], total: ... } } if the DataProvider returns { data: [...], total: ... }
-      Standard `simple-rest` expects array and `x-total-count` header.
-      BUT, we should match what the existing API does.
-      Let's assume the Envelope pattern for now as it's cleaner.
-    */
     return {
       // Envelope
       data: users,
@@ -72,32 +178,6 @@ export class SystemAdminController {
     );
     const offset = (p - 1) * limit;
 
-    // Fetch Tenants with Member Count Aggregation
-    // We can't easily do a subquery count in Drizzle Query Builder without 'extras' or raw SQL.
-    // For now, to avoid loading ALL members, we can fetch tenants first, then minimal counts or assume the user accepts loading member IDs.
-    // However, the cleanest Drizzle way (without complex raw SQL builder) to get 'userCount' without loading all objects
-    // is often `count(members.id)`.
-    // Since we are using `db.query.organization.findMany`, relations are loaded.
-    // Optimized approach: Fetch bare tenants, then count total separately.
-    // For 'userCount', if we want to avoid loading thousands of member objects, we should use a `groupBy` query or raw SQL.
-    // Given Drizzle's `db.query` helper is powerful but eager, let's stick to the prompt's request:
-    // "fetch only tenant fields... replace loading members with an aggregate count per organization".
-    // We will do a raw SQL-like approach or just simple Drizzle aggregation if possible.
-    // Drizzle `db.query` doesn't support aggregate count mapping easily.
-    // Let's use `db.select()...` for this to be efficient.
-
-    /*
-      SELECT o.*, COUNT(m.id) as userCount
-      FROM organization o
-      LEFT JOIN member m ON o.id = m.organizationId
-      GROUP BY o.id
-      LIMIT X OFFSET Y
-    */
-    // Importing sql and eq from drizzle-orm is needed.
-    // Let's assume we can fetch tenants via `db.query` for consistency (relations etc) but we want count.
-    // If we stick to `db.query` we MUST load members to count them in JS, which is what we want to avoid.
-    // So we switch to `db.select`.
-
     const tenantsData = await this.db
       .select({
         id: schema.organization.id,
@@ -106,6 +186,7 @@ export class SystemAdminController {
         createdAt: schema.organization.createdAt,
         logo: schema.organization.logo,
         metadata: schema.organization.metadata,
+        status: schema.organization.status, // Included status
         userCount: count(schema.member.id),
       })
       .from(schema.organization)
@@ -113,10 +194,11 @@ export class SystemAdminController {
         schema.member,
         eq(schema.organization.id, schema.member.organizationId),
       )
-      .groupBy(schema.organization.id) // Group by all selected fields or PK
+      .groupBy(schema.organization.id)
       .limit(limit)
       .offset(offset)
-      .orderBy(desc(schema.organization.createdAt));
+      .orderBy(desc(schema.organization.createdAt))
+      .execute();
 
     // Total count of tenants
     const totalResult = await this.db

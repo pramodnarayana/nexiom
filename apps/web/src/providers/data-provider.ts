@@ -21,4 +21,42 @@ const axiosInstance = axios.create({
  * Refine data provider using simple-rest with custom axios instance.
  * Type compatibility is ensured via src/types/refine-simple-rest.d.ts
  */
-export const dataProvider = dataProviderSimpleRest(API_URL, axiosInstance);
+const simpleRestProvider = dataProviderSimpleRest(API_URL, axiosInstance);
+
+export const dataProvider = {
+    ...simpleRestProvider,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    getList: async ({ resource, pagination, filters: _filters, sorters: _sorters }: any) => {
+        const { current = 1, pageSize = 10 } = pagination ?? {};
+
+        // TODO: Map filters and sorters to backend query params if needed
+        const queryFilters: Record<string, unknown> = {};
+
+        const url = `${API_URL}/${resource}`;
+
+        try {
+            const { data } = await axiosInstance.get(url, {
+                params: {
+                    page: current,
+                    pageSize: pageSize,
+                    ...queryFilters,
+                },
+            });
+
+            if (!data || !Array.isArray(data.data)) {
+                console.error(`[DataProvider] Invalid response from ${url}:`, data);
+                // Fallback or throw? Refine expects { data: [], total: 0 } on list
+                return { data: [], total: 0 };
+            }
+
+            return {
+                data: data.data,
+                total: typeof data.total === 'number' ? data.total : data.data.length,
+            };
+        } catch (error) {
+            console.error(`[DataProvider] Error fetching ${resource}:`, error);
+            // Re-throw so Refine can show notification
+            throw error;
+        }
+    },
+};
