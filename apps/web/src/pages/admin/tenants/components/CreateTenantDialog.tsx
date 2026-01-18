@@ -48,6 +48,9 @@ export const CreateTenantDialog = () => {
         },
     });
 
+    const [slugSuffix] = useState(() => crypto.randomUUID().slice(0, 4));
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
     const onSubmit = (values: CreateTenantFormValues) => {
         mutate(
             {
@@ -59,6 +62,7 @@ export const CreateTenantDialog = () => {
                 onSuccess: () => {
                     setOpen(false);
                     form.reset();
+                    setSlugManuallyEdited(false); // Reset state
                     toast({
                         title: "Success",
                         description: "Tenant created successfully.",
@@ -67,10 +71,6 @@ export const CreateTenantDialog = () => {
                 },
                 onError: (error: unknown) => {
                     const message = (error as Error)?.message || "Failed to create tenant.";
-                    // Check for common unique constraint error text or status if available
-                    // Assuming Refine/Axios error structure.
-                    // If backend returns specific message about slug, use it.
-                    // Otherwise hint at slug uniqueness.
                     toast({
                         title: "Error Creating Tenant",
                         description: message.includes("Unique constraint") || message.includes("already exists")
@@ -113,13 +113,12 @@ export const CreateTenantDialog = () => {
                                             onChange={(e) => {
                                                 const name = e.target.value;
                                                 field.onChange(e);
-                                                // Auto-generate slug from name with random suffix
-                                                if (name) {
+                                                // Auto-generate slug from name with fixed random suffix if not manually edited
+                                                if (name && !slugManuallyEdited) {
                                                     const cleanName = slugify(name, { lower: true, strict: true });
-                                                    const suffix = crypto.randomUUID().slice(0, 4);
-                                                    const generatedSlug = `${cleanName}-${suffix}`;
+                                                    const generatedSlug = `${cleanName}-${slugSuffix}`;
                                                     form.setValue("slug", generatedSlug, { shouldValidate: true });
-                                                } else {
+                                                } else if (!name && !slugManuallyEdited) {
                                                     form.setValue("slug", "", { shouldValidate: true });
                                                 }
                                             }}
@@ -136,7 +135,14 @@ export const CreateTenantDialog = () => {
                                 <FormItem>
                                     <FormLabel>Slug</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="acme-corp" {...field} />
+                                        <Input
+                                            placeholder="acme-corp"
+                                            {...field}
+                                            onChange={(e) => {
+                                                field.onChange(e);
+                                                setSlugManuallyEdited(true);
+                                            }}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

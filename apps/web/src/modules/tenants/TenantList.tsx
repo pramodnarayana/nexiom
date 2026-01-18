@@ -68,9 +68,19 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
         setExpandedTenantId(current => current === id ? null : id);
     };
 
-    const handleDashboardClick = (e: React.MouseEvent) => {
+    const handleDashboardClick = (e: React.MouseEvent | React.KeyboardEvent, tenantId: string) => {
         e.stopPropagation();
-        window.open(`/dashboard`, '_blank');
+        // Assuming the route is /tenants/:tenantId/dashboard as per request
+        const url = `/tenants/${tenantId}/dashboard`;
+        const w = window.open(url, '_blank');
+        if (w) w.opener = null;
+    };
+
+    const handleRowKeyDown = (e: React.KeyboardEvent, id: string) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleRowClick(id);
+        }
     };
 
     return (
@@ -114,6 +124,10 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                         key={tenant.id}
                                         className={cn("cursor-pointer hover:bg-muted/50", expandedTenantId === tenant.id && "bg-muted/50 border-b-0")}
                                         onClick={() => handleRowClick(tenant.id)}
+                                        onKeyDown={(e) => handleRowKeyDown(e, tenant.id)}
+                                        tabIndex={0}
+                                        role="button"
+                                        aria-expanded={expandedTenantId === tenant.id}
                                     >
                                         {/* Same Cells */}
                                         <TableCell className="font-medium">
@@ -157,7 +171,7 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                onClick={(e) => handleDashboardClick(e)}
+                                                onClick={(e) => handleDashboardClick(e, tenant.id)}
                                                 title="Open Dashboard"
                                             >
                                                 <ExternalLink className="h-4 w-4" />

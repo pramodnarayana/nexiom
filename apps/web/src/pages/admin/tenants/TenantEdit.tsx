@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const UpdateTenantSchema = z.object({
     name: z.string().min(1, "Name is required").optional(),
@@ -123,8 +124,45 @@ export const TenantEdit = ({ tenantId, onCancel }: TenantEditProps) => {
         );
     };
 
+    // ... existing code
+
     if (isLoadingTenant) {
-        return <div className="p-8">Loading...</div>; // Reverting to simple loading while I check/create Skeleton
+        return (
+            <div className="space-y-6 animate-pulse">
+                {!tenantId && (
+                    <div className="flex items-center space-x-4">
+                        <Skeleton className="h-10 w-10" />
+                        <Skeleton className="h-8 w-48" />
+                    </div>
+                )}
+                <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-col space-y-1.5 p-6">
+                        <Skeleton className="h-6 w-32" />
+                    </div>
+                    <div className="p-6 pt-0 space-y-4 max-w-2xl">
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                        <div className="flex justify-end pt-4">
+                            <Skeleton className="h-10 w-32" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (!tenant) {
