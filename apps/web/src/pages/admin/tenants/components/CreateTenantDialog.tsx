@@ -52,6 +52,7 @@ export const CreateTenantDialog = () => {
             {
                 resource: "admin/tenants",
                 values,
+                invalidates: ['all'],
             },
             {
                 onSuccess: () => {

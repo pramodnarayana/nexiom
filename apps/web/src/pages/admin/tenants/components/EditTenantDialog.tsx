@@ -31,10 +31,10 @@ import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const UpdateTenantSchema = z.object({
-    name: z.string().min(1, "Name is required"),
-    slug: z.string().min(3, "Slug must be at least 3 chars").regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
+    name: z.string().min(1, "Name is required").optional(),
+    slug: z.string().min(3, "Slug must be at least 3 chars").regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only").optional(),
     logo: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-    status: z.enum(["active", "disabled", "suspended"]),
+    status: z.enum(["active", "disabled", "suspended"]).optional(),
 });
 
 type UpdateTenantFormValues = z.infer<typeof UpdateTenantSchema>;
@@ -65,17 +65,19 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
         },
     });
 
+    const { reset } = form;
+
     // Reset form when tenant changes
     useEffect(() => {
         if (tenant) {
-            form.reset({
+            reset({
                 name: tenant.name,
                 slug: tenant.slug || "",
                 logo: tenant.logo || "",
                 status: tenant.status,
             });
         }
-    }, [tenant, form]);
+    }, [tenant, reset]);
 
     const onSubmit = (values: UpdateTenantFormValues) => {
         if (!tenant?.id) return;
@@ -162,7 +164,7 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Status</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select a status" />

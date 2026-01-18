@@ -85,11 +85,16 @@ export class SystemAdminController {
       }
     }
 
+    const updatePayload: Partial<typeof schema.organization.$inferInsert> = {};
+    if (input.name) updatePayload.name = input.name;
+    if (input.slug) updatePayload.slug = input.slug;
+    if (input.logo !== undefined) updatePayload.logo = input.logo;
+    if (input.status) updatePayload.status = input.status;
+    if (input.metadata) updatePayload.metadata = JSON.stringify(input.metadata);
+
     const [updated] = await this.db
       .update(schema.organization)
-      .set({
-        ...(input as any),
-      })
+      .set(updatePayload)
       .where(eq(schema.organization.id, id))
       .returning();
 
@@ -106,7 +111,29 @@ export class SystemAdminController {
       throw new NotFoundException('Tenant not found');
     }
 
-    // Hard Delete
+    // Check for dependent records (Members & Invitations)
+    // For a hard delete, we must clean these up to avoid FK constraints
+    const membersStart = await this.db.query.member.findFirst({
+      where: eq(schema.member.organizationId, id),
+    });
+
+    if (membersStart) {
+      await this.db
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, id));
+    }
+
+    const invitesStart = await this.db.query.invitation.findFirst({
+      where: eq(schema.invitation.organizationId, id),
+    });
+
+    if (invitesStart) {
+      await this.db
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.organizationId, id));
+    }
+
+    // Hard Delete Organization
     await this.db
       .delete(schema.organization)
       .where(eq(schema.organization.id, id));

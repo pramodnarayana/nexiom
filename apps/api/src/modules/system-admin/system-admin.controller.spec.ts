@@ -1,66 +1,64 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import { SystemAdminController } from './system-admin.controller';
 
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../../db/schema';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-// Define mock as ANY to allow jest methods (mockReturnValue, etc)
-// We only cast to NodePgDatabase when injecting into the controller.
-const mockDb: any = {
+interface MockDb {
   query: {
-    user: {
-      findMany: jest.fn(),
-    },
-    organization: {
-      findMany: jest.fn(),
-    },
-  },
-  select: jest.fn(),
-  from: jest.fn(),
-};
-
-// Chain mocks
-mockDb.select.mockReturnThis();
-mockDb.from.mockImplementation(() => Promise.resolve([{ count: 5 }]));
+    user: { findMany: jest.Mock };
+    organization: { findFirst: jest.Mock; findMany: jest.Mock };
+    member: { findFirst: jest.Mock };
+    invitation: { findFirst: jest.Mock };
+  };
+  select: jest.Mock;
+  from: jest.Mock;
+  insert: jest.Mock;
+  update: jest.Mock;
+  delete: jest.Mock;
+  // Chain helpers
+  limit: jest.Mock;
+  offset: jest.Mock;
+  orderBy: jest.Mock;
+  groupBy: jest.Mock;
+  leftJoin: jest.Mock;
+  set: jest.Mock;
+  where: jest.Mock;
+  values: jest.Mock;
+  returning: jest.Mock;
+}
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
+  let mockDb: MockDb;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Reset mocks with full structure
-    mockDb.query = {
-      user: {
-        findMany: jest.fn(),
+    mockDb = {
+      query: {
+        user: { findMany: jest.fn() },
+        organization: { findFirst: jest.fn(), findMany: jest.fn() },
+        member: { findFirst: jest.fn() },
+        invitation: { findFirst: jest.fn() },
       },
-      organization: {
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
-      },
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockImplementation(() => Promise.resolve([{ count: 5 }])),
+      insert: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      // Chain method definitions
+      limit: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+      returning: jest.fn(),
     };
-
-    mockDb.select = jest.fn().mockReturnThis();
-    mockDb.from = jest
-      .fn()
-      .mockImplementation(() => Promise.resolve([{ count: 5 }]));
-    mockDb.insert = jest.fn();
-    mockDb.update = jest.fn();
-    mockDb.delete = jest.fn();
-
-    // Define internal chain logic
-    mockDb.limit = jest.fn().mockReturnThis();
-    mockDb.offset = jest.fn().mockReturnThis();
-    mockDb.orderBy = jest.fn().mockReturnThis();
-    mockDb.groupBy = jest.fn().mockReturnThis();
-    mockDb.leftJoin = jest.fn().mockReturnThis();
-    mockDb.set = jest.fn().mockReturnThis();
-    mockDb.where = jest.fn().mockReturnThis();
-    mockDb.values = jest.fn().mockReturnThis();
-    mockDb.returning = jest.fn();
 
     // Chain wiring
     mockDb.insert.mockReturnValue(mockDb);
@@ -69,6 +67,7 @@ describe('SystemAdminController', () => {
     mockDb.values.mockReturnValue(mockDb);
     mockDb.set.mockReturnValue(mockDb);
     mockDb.where.mockReturnValue(mockDb);
+    mockDb.leftJoin.mockReturnValue(mockDb);
 
     controller = new SystemAdminController(
       mockDb as unknown as NodePgDatabase<typeof schema>,
@@ -107,47 +106,32 @@ describe('SystemAdminController', () => {
   });
 
   describe('listTenants', () => {
+    // Define strict interface for our chainable builder
+    interface MockQueryBuilder {
+      leftJoin: jest.Mock;
+      groupBy: jest.Mock;
+      limit: jest.Mock;
+      offset: jest.Mock;
+      orderBy: jest.Mock;
+      then: (resolve: (arg: unknown) => void) => void;
+    }
+
+    const createMockBuilder = (result: unknown): MockQueryBuilder => ({
+      leftJoin: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      then: (resolve: (arg: unknown) => void) => resolve(result),
+    });
+
     it('should return paginated tenants with aggregated user count', async () => {
       // Mock db.select chain for tenants
       const mockResult = [{ id: 't1', name: 'Tenant 1', userCount: 2 }];
 
-      // We need to support two different select calls:
-      // 1. Tenants data (returns promise with array)
-      // 2. Count (returns promise with [{count: X}])
-      // Since select returns a chainable builder, we mock the final execution.
-      // However, `mockDb.select` is a global mock here.
-      // Easier way: mock implementation to inspect call args or return sequence.
-
-      mockDb.limit = jest.fn().mockReturnThis();
-      mockDb.offset = jest.fn().mockReturnThis();
-      mockDb.orderBy = jest.fn().mockReturnThis();
-      mockDb.groupBy = jest.fn().mockReturnThis();
-      mockDb.leftJoin = jest.fn().mockReturnThis();
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-      mockDb.from = jest.fn().mockReturnValue({
-        leftJoin: mockDb.leftJoin, // Chain continuation
-        limit: mockDb.limit,
-        offset: mockDb.offset,
-        groupBy: mockDb.groupBy,
-        orderBy: mockDb.orderBy,
-        then: (resolve: any) => resolve(mockResult), // Final await
-      });
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-      // The second call for total count also calls .from()
-      // This is complex to mock cleanly with a shared `mockDb` object without conditional logic.
-      // Let's rely on `mockReturnValueOnce`?
-
       // Call 1: Data
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-      mockDb.from.mockReturnValueOnce({
-        leftJoin: mockDb.leftJoin,
-        groupBy: mockDb.groupBy,
-        limit: mockDb.limit,
-        offset: mockDb.offset,
-        orderBy: mockDb.orderBy,
-        then: (resolve: any) => resolve(mockResult),
-      });
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      const mockQueryBuilder = createMockBuilder(mockResult);
+      mockDb.from.mockReturnValueOnce(mockQueryBuilder);
 
       // Call 2: Total Count
       mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 5 }]));
@@ -158,45 +142,36 @@ describe('SystemAdminController', () => {
         data: [{ id: 't1', name: 'Tenant 1', userCount: 2 }],
         total: 5,
       });
+
+      // Verify specific builder usage
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(10);
+      expect(mockQueryBuilder.offset).toHaveBeenCalledWith(0);
     });
+
     it('should clamp pagination parameters', async () => {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-      mockDb.from.mockReturnValueOnce({
-        leftJoin: mockDb.leftJoin,
-        groupBy: mockDb.groupBy,
-        limit: mockDb.limit,
-        offset: mockDb.offset,
-        orderBy: mockDb.orderBy,
-        then: (resolve: any) => resolve([]),
-      });
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      const mockBuilder = createMockBuilder([]);
+
+      mockDb.from.mockReturnValueOnce(mockBuilder);
       mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
 
       // Request 1000 items (should clamp to 100)
       await controller.listTenants('1', '1000');
 
-      expect(mockDb.limit).toHaveBeenCalledWith(100);
-      expect(mockDb.offset).toHaveBeenCalledWith(0);
+      expect(mockBuilder.limit).toHaveBeenCalledWith(100);
+      expect(mockBuilder.offset).toHaveBeenCalledWith(0);
     });
 
     it('should handle invalid/negative pagination inputs', async () => {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-      mockDb.from.mockReturnValueOnce({
-        leftJoin: mockDb.leftJoin,
-        groupBy: mockDb.groupBy,
-        limit: mockDb.limit,
-        offset: mockDb.offset,
-        orderBy: mockDb.orderBy,
-        then: (resolve: any) => resolve([]),
-      });
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+      const mockBuilder = createMockBuilder([]);
+
+      mockDb.from.mockReturnValueOnce(mockBuilder);
       mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
 
       // Request invalid strings
       await controller.listTenants('invalid', '-5');
 
-      expect(mockDb.limit).toHaveBeenCalledWith(1); // Clamps to 1
-      expect(mockDb.offset).toHaveBeenCalledWith(0); // Default page 1 -> 0
+      expect(mockBuilder.limit).toHaveBeenCalledWith(1); // Clamps to 1
+      expect(mockBuilder.offset).toHaveBeenCalledWith(0); // Default page 1 -> 0
     });
   });
 
@@ -249,6 +224,33 @@ describe('SystemAdminController', () => {
         controller.updateTenant('t1', { slug: 'taken' }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should update tenant successfully', async () => {
+      // 1. Find existing
+      mockDb.query.organization.findFirst
+        .mockResolvedValueOnce({ id: 't1', slug: 'old' }) // Existing
+        .mockResolvedValueOnce(null); // Collision check (slug change)
+
+      // 2. Update
+      mockDb.update = jest.fn().mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest
+              .fn()
+              .mockResolvedValue([{ id: 't1', slug: 'new-slug', name: 'New' }]),
+          }),
+        }),
+      });
+
+      const result = await controller.updateTenant('t1', {
+        name: 'New',
+        slug: 'new-slug',
+      });
+
+      expect(result).toEqual({ id: 't1', slug: 'new-slug', name: 'New' });
+      // Verify update called with correct args
+      expect(mockDb.update).toHaveBeenCalled();
+    });
   });
 
   describe('deleteTenant', () => {
@@ -258,6 +260,26 @@ describe('SystemAdminController', () => {
       await expect(controller.deleteTenant('missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('should delete tenant successfully', async () => {
+      // 1. Find existing
+      mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
+      // 2. Check dependents (mock none for simple success path)
+      mockDb.query.member = { findFirst: jest.fn().mockResolvedValue(null) };
+      mockDb.query.invitation = {
+        findFirst: jest.fn().mockResolvedValue(null),
+      };
+
+      // 3. Delete
+      mockDb.delete = jest.fn().mockReturnValue({
+        where: jest.fn().mockResolvedValue({}),
+      });
+
+      const result = await controller.deleteTenant('t1');
+
+      expect(result).toEqual({ success: true });
+      expect(mockDb.delete).toHaveBeenCalled();
     });
   });
 });

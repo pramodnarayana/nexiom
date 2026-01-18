@@ -5,6 +5,15 @@ import { CreateTenantDialog } from "./components/CreateTenantDialog";
 import { EditTenantDialog } from "./components/EditTenantDialog";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export const TenantListPage = () => {
     // RESOURCE: "admin/tenants" -> GET /api/admin/tenants
@@ -20,6 +29,8 @@ export const TenantListPage = () => {
 
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [selectedTenant, setSelectedTenant] = useState<TenantTableItem | null>(null);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     // Transform API response to UI model
     const tenants: TenantTableItem[] = data?.data?.map((org: TenantApiResponse) => ({
@@ -38,26 +49,36 @@ export const TenantListPage = () => {
     };
 
     const handleDelete = (id: string) => {
-        if (confirm("Are you sure you want to delete this tenant? This action cannot be undone.")) {
-            deleteMutate({
-                resource: "admin/tenants",
-                id,
-            }, {
-                onSuccess: () => {
-                    toast({
-                        title: "Tenant deleted",
-                        description: "The tenant has been successfully removed.",
-                    });
-                },
-                onError: (error) => {
-                    toast({
-                        title: "Error",
-                        description: error?.message || "Failed to delete tenant.",
-                        variant: "destructive"
-                    });
-                }
-            });
-        }
+        setPendingDeleteId(id);
+        setConfirmOpen(true);
+    };
+
+    const onConfirmDelete = () => {
+        if (!pendingDeleteId) return;
+
+        deleteMutate({
+            resource: "admin/tenants",
+            id: pendingDeleteId,
+        }, {
+            onSuccess: () => {
+                setConfirmOpen(false);
+                setPendingDeleteId(null);
+                toast({
+                    title: "Tenant deleted",
+                    description: "The tenant has been successfully removed.",
+                });
+            },
+            onError: (error) => {
+                setConfirmOpen(false);
+                // Keep pending ID? No, probably reset to avoid stuck state
+                setPendingDeleteId(null);
+                toast({
+                    title: "Error",
+                    description: error?.message || "Failed to delete tenant.",
+                    variant: "destructive"
+                });
+            }
+        });
     };
 
     return (
@@ -87,6 +108,21 @@ export const TenantListPage = () => {
                     logo: selectedTenant.logo || undefined
                 } : null}
             />
+
+            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Tenant</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this tenant? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+                        <Button variant="destructive" onClick={onConfirmDelete}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="flex items-center justify-end space-x-2 py-4">
                 <div className="text-xs text-muted-foreground mr-4">
