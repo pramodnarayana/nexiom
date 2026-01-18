@@ -107,7 +107,7 @@ describe('SystemAdminController', () => {
       limit: jest.Mock;
       offset: jest.Mock;
       orderBy: jest.Mock;
-      then: (resolve: (arg: unknown) => void) => void;
+      execute: () => Promise<unknown>;
     }
 
     const createMockBuilder = (result: unknown): MockQueryBuilder => ({
@@ -116,7 +116,7 @@ describe('SystemAdminController', () => {
       limit: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      then: (resolve: (arg: unknown) => void) => resolve(result),
+      execute: jest.fn().mockResolvedValue(result),
     });
 
     it('should return paginated tenants with aggregated user count', async () => {
@@ -140,6 +140,7 @@ describe('SystemAdminController', () => {
       // Verify specific builder usage
       expect(mockQueryBuilder.limit).toHaveBeenCalledWith(10);
       expect(mockQueryBuilder.offset).toHaveBeenCalledWith(0);
+      expect(mockQueryBuilder.execute).toHaveBeenCalled();
     });
 
     it('should clamp pagination parameters', async () => {
@@ -153,6 +154,7 @@ describe('SystemAdminController', () => {
 
       expect(mockBuilder.limit).toHaveBeenCalledWith(100);
       expect(mockBuilder.offset).toHaveBeenCalledWith(0);
+      expect(mockBuilder.execute).toHaveBeenCalled();
     });
   });
 
@@ -255,23 +257,29 @@ describe('SystemAdminController', () => {
       // 1. Find existing
       mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
 
-      // 2. Check dependents (mock none for simple success path)
-      // Note: In transaction, 'cb(mockDb)' is called, so mockDb methods are used
-      mockDb.query.member = { findFirst: jest.fn().mockResolvedValue(null) };
-      mockDb.query.invitation = {
-        findFirst: jest.fn().mockResolvedValue(null),
-      };
-
-      // 3. Delete
+      // 2. Setup Deletes
+      // We expect 3 deletes: member, invitation, organization
+      // We'll mock the delete chain to return a 'where' mock
+      const mockWhere = jest.fn().mockResolvedValue({});
       mockDb.delete = jest.fn().mockReturnValue({
-        where: jest.fn().mockResolvedValue({}),
+        where: mockWhere,
       });
 
-      const result = await controller.deleteTenant('t1');
+      await controller.deleteTenant('t1');
 
-      expect(result).toEqual({ success: true });
       expect(mockDb.transaction).toHaveBeenCalled();
-      expect(mockDb.delete).toHaveBeenCalled(); // Called inside transaction
+
+      // Verify calls inside transaction
+      // Since it's inside transaction, we check the calls on mockDb (because our mock transaction calls cb(mockDb))
+      // Call 1: Member
+      expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.member);
+      // Call 2: Invitation
+      expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.invitation);
+      // Call 3: Organization
+      expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.organization);
+
+      // Verify 3 executions of 'where'
+      expect(mockWhere).toHaveBeenCalledTimes(3);
     });
   });
 });

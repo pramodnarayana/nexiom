@@ -86,11 +86,12 @@ export class SystemAdminController {
     }
 
     const updatePayload: Partial<typeof schema.organization.$inferInsert> = {};
-    if (input.name) updatePayload.name = input.name;
-    if (input.slug) updatePayload.slug = input.slug;
+    if (input.name !== undefined) updatePayload.name = input.name;
+    if (input.slug !== undefined) updatePayload.slug = input.slug;
     if (input.logo !== undefined) updatePayload.logo = input.logo;
-    if (input.status) updatePayload.status = input.status;
-    if (input.metadata) updatePayload.metadata = JSON.stringify(input.metadata);
+    if (input.status !== undefined) updatePayload.status = input.status;
+    if (input.metadata !== undefined)
+      updatePayload.metadata = JSON.stringify(input.metadata);
 
     if (Object.keys(updatePayload).length === 0) {
       throw new BadRequestException('No fields to update');
@@ -196,7 +197,8 @@ export class SystemAdminController {
       .groupBy(schema.organization.id)
       .limit(limit)
       .offset(offset)
-      .orderBy(desc(schema.organization.createdAt));
+      .orderBy(desc(schema.organization.createdAt))
+      .execute();
 
     // Total count of tenants
     const totalResult = await this.db

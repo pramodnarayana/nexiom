@@ -35,6 +35,16 @@ const UpdateTenantSchema = z.object({
     slug: z.string().min(3, "Slug must be at least 3 chars").regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only").optional(),
     logo: z.string().url("Must be a valid URL").optional().or(z.literal("")),
     status: z.enum(["active", "disabled", "suspended"]).optional(),
+}).refine((data) => {
+    return (
+        data.name !== undefined ||
+        data.slug !== undefined ||
+        data.status !== undefined ||
+        (data.logo !== undefined && data.logo !== "")
+    );
+}, {
+    message: "At least one field must be provided",
+    path: ["root"], // Attach error to the form root
 });
 
 type UpdateTenantFormValues = z.infer<typeof UpdateTenantSchema>;
