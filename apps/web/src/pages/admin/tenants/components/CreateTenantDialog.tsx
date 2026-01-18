@@ -24,6 +24,7 @@ import { useCreate } from "@refinedev/core";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import slugify from "slugify";
 
 const CreateTenantSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -87,7 +88,7 @@ export const CreateTenantDialog = () => {
                 <DialogHeader>
                     <DialogTitle>Create Tenant</DialogTitle>
                     <DialogDescription>
-                        Add a new organization to the platform.
+                        Add a new tenant to the platform.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -99,7 +100,17 @@ export const CreateTenantDialog = () => {
                                 <FormItem>
                                     <FormLabel>Name</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Acme Corp" {...field} />
+                                        <Input
+                                            placeholder="Acme Corp"
+                                            {...field}
+                                            onChange={(e) => {
+                                                const name = e.target.value;
+                                                field.onChange(e);
+                                                // Auto-generate slug from name
+                                                const generatedSlug = slugify(name, { lower: true, strict: true });
+                                                form.setValue("slug", generatedSlug, { shouldValidate: true });
+                                            }}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

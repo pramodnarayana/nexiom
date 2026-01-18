@@ -13,6 +13,10 @@ export const organization = pgTable('organization', {
   slug: text('slug').unique(),
   logo: text('logo'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt')
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
   metadata: text('metadata'),
   status: organizationStatusEnum('status').default('active').notNull(),
 });

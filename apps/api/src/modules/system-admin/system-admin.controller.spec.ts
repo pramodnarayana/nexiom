@@ -158,6 +158,48 @@ describe('SystemAdminController', () => {
     });
   });
 
+  describe('getTenant', () => {
+    const createMockBuilder = (result: unknown) => ({
+      leftJoin: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(), // Added where
+      execute: jest.fn().mockResolvedValue(result),
+    });
+
+    it('should return a single tenant', async () => {
+      const mockResult = [{ id: 't1', name: 'Tenant 1' }];
+      const mockQueryBuilder = createMockBuilder(mockResult);
+
+      // Mock select().from() chain
+      const mockSelect = {
+        from: jest.fn().mockReturnValue(mockQueryBuilder),
+      };
+      mockDb.select.mockReturnValueOnce(mockSelect);
+
+      const result = await controller.getTenant('t1');
+
+      expect(result).toEqual(mockResult[0]);
+      expect(mockSelect.from).toHaveBeenCalledWith(schema.organization);
+      expect(mockQueryBuilder.where).toHaveBeenCalled();
+      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if tenant not found', async () => {
+      const mockQueryBuilder = createMockBuilder([]);
+      const mockSelect = {
+        from: jest.fn().mockReturnValue(mockQueryBuilder),
+      };
+      mockDb.select.mockReturnValueOnce(mockSelect);
+
+      await expect(controller.getTenant('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('createTenant', () => {
     it('should throw BadRequestException if slug exists', async () => {
       mockDb.query.organization.findFirst.mockResolvedValue({ id: 'existing' });

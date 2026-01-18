@@ -165,7 +165,7 @@ export function AdminLayout() {
             items: [
                 { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
                 { label: 'Users', href: '/admin/users', icon: Users },
-                { label: 'Organizations', href: '/admin/tenants', icon: Shield },
+                { label: 'Tenants', href: '/admin/tenants', icon: Shield },
             ]
         },
         {

@@ -2,9 +2,9 @@ import { useTable, useDelete } from "@refinedev/core";
 import { TenantList } from "@/modules/tenants/TenantList";
 import { type TenantTableItem, type TenantApiResponse } from "@/modules/tenants/types";
 import { CreateTenantDialog } from "./components/CreateTenantDialog";
-import { EditTenantDialog } from "./components/EditTenantDialog";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
     Dialog,
     DialogContent,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 export const TenantListPage = () => {
+    const navigate = useNavigate();
     // RESOURCE: "admin/tenants" -> GET /api/admin/tenants
     const table = useTable<TenantApiResponse>({
         resource: "admin/tenants",
@@ -27,8 +28,7 @@ export const TenantListPage = () => {
     const { mutate: deleteMutate } = useDelete();
     const { toast } = useToast();
 
-    const [editDialogOpen, setEditDialogOpen] = useState(false);
-    const [selectedTenant, setSelectedTenant] = useState<TenantTableItem | null>(null);
+    // Delete dialog state
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -39,16 +39,17 @@ export const TenantListPage = () => {
         slug: org.slug,
         logo: org.logo,
         createdAt: new Date(org.createdAt),
+        updatedAt: new Date(org.updatedAt || org.createdAt), // Handle missing updatedAt if any
         metadata: org.metadata,
         status: org.status,
     })) || [];
 
     const handleEdit = (tenant: TenantTableItem) => {
-        setSelectedTenant(tenant);
-        setEditDialogOpen(true);
+        navigate(`/admin/tenants/${tenant.id}`);
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = (id: string, e?: React.MouseEvent) => {
+        e?.stopPropagation(); // Prevent row click
         setPendingDeleteId(id);
         setConfirmOpen(true);
     };
@@ -70,7 +71,6 @@ export const TenantListPage = () => {
             },
             onError: (error) => {
                 setConfirmOpen(false);
-                // Keep pending ID? No, probably reset to avoid stuck state
                 setPendingDeleteId(null);
                 toast({
                     title: "Error",
@@ -86,9 +86,6 @@ export const TenantListPage = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Tenants</h2>
-                    <p className="text-muted-foreground">
-                        Manage organizations and their statuses.
-                    </p>
                 </div>
                 <CreateTenantDialog />
             </div>
@@ -98,15 +95,6 @@ export const TenantListPage = () => {
                 isLoading={isLoading}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-            />
-
-            <EditTenantDialog
-                open={editDialogOpen}
-                onOpenChange={setEditDialogOpen}
-                tenant={selectedTenant ? {
-                    ...selectedTenant,
-                    logo: selectedTenant.logo || undefined
-                } : null}
             />
 
             <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

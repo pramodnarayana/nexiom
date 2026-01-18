@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
+
+import { cva } from "class-variance-authority"; // Added cva
 
 import {
     Table,
@@ -18,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { type TenantTableItem } from "./types";
 import { cn } from "@/lib/utils";
 
@@ -27,32 +29,53 @@ interface TenantListProps {
     isLoading: boolean;
     onStatusChange?: (id: string, status: TenantTableItem['status']) => void;
     onEdit?: (tenant: TenantTableItem) => void;
-    onDelete?: (id: string) => void;
+    onDelete?: (id: string, e: React.MouseEvent) => void;
 }
+
+// Defined variants using semantic tokens for Tweakcn compatibility
+const statusBadgeVariants = cva("h-6 gap-1 px-2 font-normal rounded-md border text-xs inline-flex items-center", {
+    variants: {
+        status: {
+            // active: "bg-green-50 text-green-700 border-green-200 hover:bg-green-100", // Legacy green
+            active: "bg-green-100 text-green-800 hover:bg-green-100/80 border-transparent",
+            disabled: "bg-slate-100 text-slate-600 hover:bg-slate-100/80 border-transparent",
+            suspended: "bg-red-100 text-red-800 hover:bg-red-100/80 border-transparent",
+        },
+    },
+    defaultVariants: {
+        status: "active",
+    },
+});
+
+import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
+
+// ... previous imports
 
 export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDelete }: TenantListProps) {
     const [search, setSearch] = useState("");
+    const [expandedTenantId, setExpandedTenantId] = useState<string | null>(null);
 
     const filteredData = data?.filter(tenant =>
         tenant.name.toLowerCase().includes(search.toLowerCase()) ||
         tenant.slug?.toLowerCase().includes(search.toLowerCase())
     ) || [];
 
-    const getStatusColor = (status: TenantTableItem['status']) => {
-        switch (status) {
-            case 'active': return "bg-green-100 text-green-800 hover:bg-green-100";
-            case 'disabled': return "bg-gray-100 text-gray-800 hover:bg-gray-100";
-            case 'suspended': return "bg-red-100 text-red-800 hover:bg-red-100";
-            default: return "bg-gray-100 text-gray-800";
-        }
-    };
-
     if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Loading tenants...</div>;
     }
 
+    const handleRowClick = (id: string) => {
+        setExpandedTenantId(current => current === id ? null : id);
+    };
+
+    const handleDashboardClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        window.open(`/dashboard`, '_blank');
+    };
+
     return (
         <div className="space-y-4">
+            {/* Search Input (same) */}
             <div className="flex items-center gap-2 max-w-sm">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -67,79 +90,118 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            {/* Same Headers */}
                             <TableHead>Tenant</TableHead>
                             <TableHead>Slug</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Last Updated</TableHead>
                             <TableHead>Created At</TableHead>
-                            <TableHead className="w-[100px] text-right">Actions</TableHead>
+                            <TableHead className="w-[50px]">Link</TableHead>
+                            <TableHead className="w-[80px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredData.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-24 text-center">
+                                <TableCell colSpan={7} className="h-24 text-center">
                                     No tenants found.
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredData.map((tenant) => (
-                                <TableRow key={tenant.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
-                                                <Building2 className="h-4 w-4" />
+                                <Fragment key={tenant.id}>
+                                    <TableRow
+                                        key={tenant.id}
+                                        className={cn("cursor-pointer hover:bg-muted/50", expandedTenantId === tenant.id && "bg-muted/50 border-b-0")}
+                                        onClick={() => handleRowClick(tenant.id)}
+                                    >
+                                        {/* Same Cells */}
+                                        <TableCell className="font-medium">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
+                                                    <Building2 className="h-4 w-4" />
+                                                </div>
+                                                {tenant.name}
                                             </div>
-                                            {tenant.name}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="sm" className={cn("h-6 gap-1 px-2 font-normal", getStatusColor(tenant.status))}>
-                                                    {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="start">
-                                                <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'active')}>
-                                                    Active
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'suspended')}>
-                                                    Suspended
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'disabled')}>
-                                                    Disabled
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                    <TableCell>
-                                        {new Date(tenant.createdAt).toLocaleDateString()}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => onEdit?.(tenant)}>
-                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                    Edit Details
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-red-600" onClick={() => onDelete?.(tenant.id)}>
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete Tenant
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                                        <TableCell>
+                                            <div onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className={cn(statusBadgeVariants({ status: tenant.status }))}>
+                                                            {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
+                                                            <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    {/* Dropdown Content Same */}
+                                                    <DropdownMenuContent align="start">
+                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'active')}>Active</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'suspended')}>Suspended</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'disabled')}>Disabled</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {tenant.updatedAt ? new Date(tenant.updatedAt).toLocaleDateString() : '-'}
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(tenant.createdAt).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                onClick={(e) => handleDashboardClick(e)}
+                                                title="Open Dashboard"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                        {/* We can still keep 'Edit' in menu as well, but maybe rename it 'Full Page Edit' or just same action */}
+                                                        <DropdownMenuItem onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onEdit?.(tenant);
+                                                        }}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit Details
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-red-600" onClick={(e) => onDelete?.(tenant.id, e)}>
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete Tenant
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    {expandedTenantId === tenant.id && (
+                                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                            <TableCell colSpan={7} className="p-0 border-t-0">
+                                                <div className="p-4 border-b">
+                                                    <TenantEdit
+                                                        tenantId={tenant.id}
+                                                        onCancel={() => setExpandedTenantId(null)}
+                                                    />
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </Fragment>
                             ))
                         )}
                     </TableBody>
