@@ -68,7 +68,124 @@ describe('SystemAdminController', () => {
     );
   });
 
-  // ... (previous tests match until updateTenant)
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('listUsers', () => {
+    it('should return paginated users and total count', async () => {
+      const mockUsers = [{ id: '1', name: 'User 1' }];
+      mockDb.query.user.findMany.mockResolvedValue(mockUsers);
+
+      const result = await controller.listUsers('1', '10');
+
+      expect(result).toEqual({
+        data: mockUsers,
+        total: 5,
+      });
+      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 10, offset: 0 }),
+      );
+    });
+
+    it('should handle invalid pagination params', async () => {
+      mockDb.query.user.findMany.mockResolvedValue([]);
+
+      await controller.listUsers('bad', 'bad');
+
+      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 10, offset: 0 }),
+      );
+    });
+  });
+
+  describe('listTenants', () => {
+    // Define strict interface for our chainable builder
+    interface MockQueryBuilder {
+      leftJoin: jest.Mock;
+      groupBy: jest.Mock;
+      limit: jest.Mock;
+      offset: jest.Mock;
+      orderBy: jest.Mock;
+      then: (resolve: (arg: unknown) => void) => void;
+    }
+
+    const createMockBuilder = (result: unknown): MockQueryBuilder => ({
+      leftJoin: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      offset: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      then: (resolve: (arg: unknown) => void) => resolve(result),
+    });
+
+    it('should return paginated tenants with aggregated user count', async () => {
+      // Mock db.select chain for tenants
+      const mockResult = [{ id: 't1', name: 'Tenant 1', userCount: 2 }];
+
+      // Call 1: Data
+      const mockQueryBuilder = createMockBuilder(mockResult);
+      mockDb.from.mockReturnValueOnce(mockQueryBuilder);
+
+      // Call 2: Total Count
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 5 }]));
+
+      const result = await controller.listTenants('1', '10');
+
+      expect(result).toEqual({
+        data: [{ id: 't1', name: 'Tenant 1', userCount: 2 }],
+        total: 5,
+      });
+
+      // Verify specific builder usage
+      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(10);
+      expect(mockQueryBuilder.offset).toHaveBeenCalledWith(0);
+    });
+
+    it('should clamp pagination parameters', async () => {
+      const mockBuilder = createMockBuilder([]);
+
+      mockDb.from.mockReturnValueOnce(mockBuilder);
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
+
+      // Request 1000 items (should clamp to 100)
+      await controller.listTenants('1', '1000');
+
+      expect(mockBuilder.limit).toHaveBeenCalledWith(100);
+      expect(mockBuilder.offset).toHaveBeenCalledWith(0);
+    });
+  });
+
+  describe('createTenant', () => {
+    it('should throw BadRequestException if slug exists', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue({ id: 'existing' });
+
+      await expect(
+        controller.createTenant({
+          name: 'Test',
+          slug: 'test',
+          logo: '',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should create tenant if slug is unique', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue(null);
+      mockDb.insert = jest.fn().mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([{ id: 'new', slug: 'test' }]),
+        }),
+      });
+
+      const result = await controller.createTenant({
+        name: 'Test',
+        slug: 'test',
+        logo: '',
+      });
+
+      expect(result).toEqual({ id: 'new', slug: 'test' });
+    });
+  });
 
   describe('updateTenant', () => {
     it('should throw NotFoundException if tenant not found', async () => {

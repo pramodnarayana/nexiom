@@ -67,7 +67,6 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
 
     const { reset } = form;
 
-    // Reset form when tenant changes
     // Reset form when tenant changes or dialog opens
     useEffect(() => {
         if (tenant && open) {

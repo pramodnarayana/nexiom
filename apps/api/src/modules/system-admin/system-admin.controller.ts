@@ -116,29 +116,13 @@ export class SystemAdminController {
     }
 
     await this.db.transaction(async (tx) => {
-      // Check for dependent records (Members & Invitations)
-      // For a hard delete, we must clean these up to avoid FK constraints
-      const membersStart = await tx.query.member.findFirst({
-        where: eq(schema.member.organizationId, id),
-      });
-
-      if (membersStart) {
-        await tx
-          .delete(schema.member)
-          .where(eq(schema.member.organizationId, id));
-      }
-
-      const invitesStart = await tx.query.invitation.findFirst({
-        where: eq(schema.invitation.organizationId, id),
-      });
-
-      if (invitesStart) {
-        await tx
-          .delete(schema.invitation)
-          .where(eq(schema.invitation.organizationId, id));
-      }
-
-      // Hard Delete Organization
+      // Hard delete dependent records and organization
+      await tx
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, id));
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.organizationId, id));
       await tx
         .delete(schema.organization)
         .where(eq(schema.organization.id, id));
