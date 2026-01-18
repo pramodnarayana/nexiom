@@ -190,6 +190,11 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
                                 </FormItem>
                             )}
                         />
+                        {form.formState.errors.root && (
+                            <p className="text-sm font-medium text-destructive">
+                                {form.formState.errors.root.message}
+                            </p>
+                        )}
                         <DialogFooter>
                             <Button type="submit" disabled={isLoading}>
                                 {isLoading ? "Saving..." : "Save Changes"}
