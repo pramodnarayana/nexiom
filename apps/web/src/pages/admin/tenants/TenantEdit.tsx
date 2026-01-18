@@ -35,7 +35,7 @@ const UpdateTenantSchema = z.object({
         data.name !== undefined ||
         data.slug !== undefined ||
         data.status !== undefined ||
-        (data.logo !== undefined && data.logo !== "")
+        (data.logo !== undefined)
     );
 }, {
     message: "At least one field must be provided",

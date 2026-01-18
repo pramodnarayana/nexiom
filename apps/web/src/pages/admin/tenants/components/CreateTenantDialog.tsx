@@ -65,10 +65,17 @@ export const CreateTenantDialog = () => {
                         variant: "default",
                     });
                 },
-                onError: (error) => {
+                onError: (error: unknown) => {
+                    const message = (error as Error)?.message || "Failed to create tenant.";
+                    // Check for common unique constraint error text or status if available
+                    // Assuming Refine/Axios error structure.
+                    // If backend returns specific message about slug, use it.
+                    // Otherwise hint at slug uniqueness.
                     toast({
-                        title: "Error",
-                        description: error?.message || "Failed to create tenant.",
+                        title: "Error Creating Tenant",
+                        description: message.includes("Unique constraint") || message.includes("already exists")
+                            ? "A tenant with this slug may already exist. Please modify the slug."
+                            : message,
                         variant: "destructive",
                     });
                 },
@@ -106,9 +113,15 @@ export const CreateTenantDialog = () => {
                                             onChange={(e) => {
                                                 const name = e.target.value;
                                                 field.onChange(e);
-                                                // Auto-generate slug from name
-                                                const generatedSlug = slugify(name, { lower: true, strict: true });
-                                                form.setValue("slug", generatedSlug, { shouldValidate: true });
+                                                // Auto-generate slug from name with random suffix
+                                                if (name) {
+                                                    const cleanName = slugify(name, { lower: true, strict: true });
+                                                    const suffix = crypto.randomUUID().slice(0, 4);
+                                                    const generatedSlug = `${cleanName}-${suffix}`;
+                                                    form.setValue("slug", generatedSlug, { shouldValidate: true });
+                                                } else {
+                                                    form.setValue("slug", "", { shouldValidate: true });
+                                                }
                                             }}
                                         />
                                     </FormControl>

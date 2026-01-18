@@ -126,22 +126,25 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
                                         <TableCell>
-                                            <div onClick={(e) => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="sm" className={cn(statusBadgeVariants({ status: tenant.status }))}>
-                                                            {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                            <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    {/* Dropdown Content Same */}
-                                                    <DropdownMenuContent align="start">
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'active')}>Active</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'suspended')}>Suspended</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'disabled')}>Disabled</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className={cn(statusBadgeVariants({ status: tenant.status }))}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
+                                                        <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                {/* Dropdown Content Same */}
+                                                <DropdownMenuContent align="start">
+                                                    <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'active')}>Active</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'suspended')}>Suspended</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'disabled')}>Disabled</DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                         <TableCell>
                                             {tenant.updatedAt ? new Date(tenant.updatedAt).toLocaleDateString() : '-'}
@@ -161,32 +164,34 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                             </Button>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div onClick={(e) => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0">
-                                                            <span className="sr-only">Open menu</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        {/* We can still keep 'Edit' in menu as well, but maybe rename it 'Full Page Edit' or just same action */}
-                                                        <DropdownMenuItem onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onEdit?.(tenant);
-                                                        }}>
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            Edit Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem className="text-red-600" onClick={(e) => onDelete?.(tenant.id, e)}>
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete Tenant
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        className="h-8 w-8 p-0"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    {/* We can still keep 'Edit' in menu as well, but maybe rename it 'Full Page Edit' or just same action */}
+                                                    <DropdownMenuItem onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onEdit?.(tenant);
+                                                    }}>
+                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                        Edit Details
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem className="text-red-600" onClick={(e) => onDelete?.(tenant.id, e)}>
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete Tenant
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                     {expandedTenantId === tenant.id && (
