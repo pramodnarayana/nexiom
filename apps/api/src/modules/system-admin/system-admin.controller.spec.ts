@@ -2,8 +2,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import { SystemAdminController } from './system-admin.controller';
+
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../../db/schema';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 // Define mock as ANY to allow jest methods (mockReturnValue, etc)
 // We only cast to NodePgDatabase when injecting into the controller.
@@ -30,12 +32,44 @@ describe('SystemAdminController', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Reset mocks
-    mockDb.select.mockReturnThis();
-    mockDb.from.mockImplementation(() => Promise.resolve([{ count: 5 }]));
+    // Reset mocks with full structure
+    mockDb.query = {
+      user: {
+        findMany: jest.fn(),
+      },
+      organization: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
+    };
 
-    // Pure Unit Test
-    // Cast here to satisfy dependency injection signature
+    mockDb.select = jest.fn().mockReturnThis();
+    mockDb.from = jest
+      .fn()
+      .mockImplementation(() => Promise.resolve([{ count: 5 }]));
+    mockDb.insert = jest.fn();
+    mockDb.update = jest.fn();
+    mockDb.delete = jest.fn();
+
+    // Define internal chain logic
+    mockDb.limit = jest.fn().mockReturnThis();
+    mockDb.offset = jest.fn().mockReturnThis();
+    mockDb.orderBy = jest.fn().mockReturnThis();
+    mockDb.groupBy = jest.fn().mockReturnThis();
+    mockDb.leftJoin = jest.fn().mockReturnThis();
+    mockDb.set = jest.fn().mockReturnThis();
+    mockDb.where = jest.fn().mockReturnThis();
+    mockDb.values = jest.fn().mockReturnThis();
+    mockDb.returning = jest.fn();
+
+    // Chain wiring
+    mockDb.insert.mockReturnValue(mockDb);
+    mockDb.update.mockReturnValue(mockDb);
+    mockDb.delete.mockReturnValue(mockDb);
+    mockDb.values.mockReturnValue(mockDb);
+    mockDb.set.mockReturnValue(mockDb);
+    mockDb.where.mockReturnValue(mockDb);
+
     controller = new SystemAdminController(
       mockDb as unknown as NodePgDatabase<typeof schema>,
     );
@@ -163,6 +197,67 @@ describe('SystemAdminController', () => {
 
       expect(mockDb.limit).toHaveBeenCalledWith(1); // Clamps to 1
       expect(mockDb.offset).toHaveBeenCalledWith(0); // Default page 1 -> 0
+    });
+  });
+
+  describe('createTenant', () => {
+    it('should throw BadRequestException if slug exists', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue({ id: 'existing' });
+
+      await expect(
+        controller.createTenant({
+          name: 'Test',
+          slug: 'test',
+          logo: '',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should create tenant if slug is unique', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue(null);
+      mockDb.insert = jest.fn().mockReturnValue({
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([{ id: 'new', slug: 'test' }]),
+        }),
+      });
+
+      const result = await controller.createTenant({
+        name: 'Test',
+        slug: 'test',
+        logo: '',
+      });
+
+      expect(result).toEqual({ id: 'new', slug: 'test' });
+    });
+  });
+
+  describe('updateTenant', () => {
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue(null);
+
+      await expect(
+        controller.updateTenant('missing', { name: 'New' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if new slug overlaps', async () => {
+      mockDb.query.organization.findFirst
+        .mockResolvedValueOnce({ id: 't1', slug: 'old' }) // Existing target
+        .mockResolvedValueOnce({ id: 't2', slug: 'taken' }); // Collision check
+
+      await expect(
+        controller.updateTenant('t1', { slug: 'taken' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('deleteTenant', () => {
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue(null);
+
+      await expect(controller.deleteTenant('missing')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

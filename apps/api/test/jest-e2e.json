@@ -1,9 +1,20 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(better-auth|better-call|uuid)/)"
+  ],
+  "moduleNameMapper": {
+    "^better-auth$": "<rootDir>/../src/test/mocks/better-auth.mock.ts",
+    "^better-auth/(.*)$": "<rootDir>/../src/test/mocks/better-auth.mock.ts"
   }
 }

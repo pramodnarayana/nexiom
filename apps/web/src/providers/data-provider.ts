@@ -21,4 +21,29 @@ const axiosInstance = axios.create({
  * Refine data provider using simple-rest with custom axios instance.
  * Type compatibility is ensured via src/types/refine-simple-rest.d.ts
  */
-export const dataProvider = dataProviderSimpleRest(API_URL, axiosInstance);
+const simpleRestProvider = dataProviderSimpleRest(API_URL, axiosInstance);
+
+export const dataProvider = {
+    ...simpleRestProvider,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getList: async ({ resource, pagination }: any) => {
+        const { current = 1, pageSize = 10 } = pagination ?? {};
+        const queryFilters = {}; // TODO: Implement filter mapping if needed
+
+        const url = `${API_URL}/${resource}`;
+
+        const { data } = await axiosInstance.get(url, {
+            params: {
+                page: current,
+                pageSize: pageSize,
+                ...queryFilters,
+            },
+        });
+
+        // NestJS API returns { data: [...], total: N }
+        return {
+            data: data.data,
+            total: data.total,
+        };
+    },
+};
