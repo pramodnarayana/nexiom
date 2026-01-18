@@ -92,6 +92,10 @@ export class SystemAdminController {
     if (input.status) updatePayload.status = input.status;
     if (input.metadata) updatePayload.metadata = JSON.stringify(input.metadata);
 
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
+
     const [updated] = await this.db
       .update(schema.organization)
       .set(updatePayload)
@@ -111,32 +115,34 @@ export class SystemAdminController {
       throw new NotFoundException('Tenant not found');
     }
 
-    // Check for dependent records (Members & Invitations)
-    // For a hard delete, we must clean these up to avoid FK constraints
-    const membersStart = await this.db.query.member.findFirst({
-      where: eq(schema.member.organizationId, id),
+    await this.db.transaction(async (tx) => {
+      // Check for dependent records (Members & Invitations)
+      // For a hard delete, we must clean these up to avoid FK constraints
+      const membersStart = await tx.query.member.findFirst({
+        where: eq(schema.member.organizationId, id),
+      });
+
+      if (membersStart) {
+        await tx
+          .delete(schema.member)
+          .where(eq(schema.member.organizationId, id));
+      }
+
+      const invitesStart = await tx.query.invitation.findFirst({
+        where: eq(schema.invitation.organizationId, id),
+      });
+
+      if (invitesStart) {
+        await tx
+          .delete(schema.invitation)
+          .where(eq(schema.invitation.organizationId, id));
+      }
+
+      // Hard Delete Organization
+      await tx
+        .delete(schema.organization)
+        .where(eq(schema.organization.id, id));
     });
-
-    if (membersStart) {
-      await this.db
-        .delete(schema.member)
-        .where(eq(schema.member.organizationId, id));
-    }
-
-    const invitesStart = await this.db.query.invitation.findFirst({
-      where: eq(schema.invitation.organizationId, id),
-    });
-
-    if (invitesStart) {
-      await this.db
-        .delete(schema.invitation)
-        .where(eq(schema.invitation.organizationId, id));
-    }
-
-    // Hard Delete Organization
-    await this.db
-      .delete(schema.organization)
-      .where(eq(schema.organization.id, id));
 
     return { success: true };
   }

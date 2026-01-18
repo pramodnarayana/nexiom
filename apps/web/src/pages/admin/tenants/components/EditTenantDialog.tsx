@@ -68,8 +68,9 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
     const { reset } = form;
 
     // Reset form when tenant changes
+    // Reset form when tenant changes or dialog opens
     useEffect(() => {
-        if (tenant) {
+        if (tenant && open) {
             reset({
                 name: tenant.name,
                 slug: tenant.slug || "",
@@ -77,7 +78,7 @@ export const EditTenantDialog = ({ open, onOpenChange, tenant }: EditTenantDialo
                 status: tenant.status,
             });
         }
-    }, [tenant, reset]);
+    }, [tenant, reset, open]);
 
     const onSubmit = (values: UpdateTenantFormValues) => {
         if (!tenant?.id) return;
