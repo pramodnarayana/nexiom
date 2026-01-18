@@ -24,6 +24,7 @@ import { useCreate } from "@refinedev/core";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import slugify from "slugify";
 
 const CreateTenantSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -47,6 +48,9 @@ export const CreateTenantDialog = () => {
         },
     });
 
+    const [slugSuffix] = useState(() => crypto.randomUUID().slice(0, 4));
+    const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
     const onSubmit = (values: CreateTenantFormValues) => {
         mutate(
             {
@@ -58,16 +62,20 @@ export const CreateTenantDialog = () => {
                 onSuccess: () => {
                     setOpen(false);
                     form.reset();
+                    setSlugManuallyEdited(false); // Reset state
                     toast({
                         title: "Success",
                         description: "Tenant created successfully.",
                         variant: "default",
                     });
                 },
-                onError: (error) => {
+                onError: (error: unknown) => {
+                    const message = (error as Error)?.message || "Failed to create tenant.";
                     toast({
-                        title: "Error",
-                        description: error?.message || "Failed to create tenant.",
+                        title: "Error Creating Tenant",
+                        description: message.includes("Unique constraint") || message.includes("already exists")
+                            ? "A tenant with this slug may already exist. Please modify the slug."
+                            : message,
                         variant: "destructive",
                     });
                 },
@@ -87,7 +95,7 @@ export const CreateTenantDialog = () => {
                 <DialogHeader>
                     <DialogTitle>Create Tenant</DialogTitle>
                     <DialogDescription>
-                        Add a new organization to the platform.
+                        Add a new tenant to the platform.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
@@ -99,7 +107,22 @@ export const CreateTenantDialog = () => {
                                 <FormItem>
                                     <FormLabel>Name</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Acme Corp" {...field} />
+                                        <Input
+                                            placeholder="Acme Corp"
+                                            {...field}
+                                            onChange={(e) => {
+                                                const name = e.target.value;
+                                                field.onChange(e);
+                                                // Auto-generate slug from name with fixed random suffix if not manually edited
+                                                if (name && !slugManuallyEdited) {
+                                                    const cleanName = slugify(name, { lower: true, strict: true });
+                                                    const generatedSlug = `${cleanName}-${slugSuffix}`;
+                                                    form.setValue("slug", generatedSlug, { shouldValidate: true });
+                                                } else if (!name && !slugManuallyEdited) {
+                                                    form.setValue("slug", "", { shouldValidate: true });
+                                                }
+                                            }}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -112,7 +135,14 @@ export const CreateTenantDialog = () => {
                                 <FormItem>
                                     <FormLabel>Slug</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="acme-corp" {...field} />
+                                        <Input
+                                            placeholder="acme-corp"
+                                            {...field}
+                                            onChange={(e) => {
+                                                field.onChange(e);
+                                                setSlugManuallyEdited(true);
+                                            }}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

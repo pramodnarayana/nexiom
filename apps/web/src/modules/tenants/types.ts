@@ -4,6 +4,7 @@ export interface TenantTableItem {
     slug: string | null;
     logo: string | null;
     createdAt: Date;
+    updatedAt: Date;
     metadata: string | null;
     status: 'active' | 'disabled' | 'suspended';
 }
@@ -14,6 +15,7 @@ export interface TenantApiResponse {
     slug: string | null;
     logo: string | null;
     createdAt: string;
+    updatedAt: string;
     metadata: string | null;
     status: 'active' | 'disabled' | 'suspended';
 }

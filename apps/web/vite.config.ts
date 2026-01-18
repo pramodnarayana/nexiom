@@ -28,5 +28,8 @@ export default defineConfig({
         secure: false,
       }
     }
+  },
+  optimizeDeps: {
+    include: ['slugify']
   }
 })

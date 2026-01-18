@@ -13,7 +13,7 @@ import {
 export function AdminDashboardPage() {
     const stats = [
         {
-            label: 'Total Organizations',
+            label: 'Total Tenants',
             value: '142',
             icon: Building2,
             color: 'text-blue-600',
@@ -54,7 +54,7 @@ export function AdminDashboardPage() {
         { id: 1, time: '10 mins ago', org: 'Envoy Logistics', action: 'Updated QuickBooks Connection credentials', type: 'info' },
         { id: 2, time: '2 hours ago', org: 'Acme Freight', action: 'Provisioned new tenant environment', type: 'success' },
         { id: 3, time: '5 hours ago', org: 'Zippy Transport', action: 'Failed sync attempt (Retry scheduled)', type: 'error' },
-        { id: 4, time: '1 day ago', org: 'Global Shipping', action: 'User "Sarah" added to organization', type: 'info' },
+        { id: 4, time: '1 day ago', org: 'Global Shipping', action: 'User "Sarah" added to tenant', type: 'info' },
     ];
 
     return (

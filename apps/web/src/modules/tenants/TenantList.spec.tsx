@@ -26,7 +26,8 @@ describe('TenantList Component', () => {
             logo: null,
             status: 'active',
             createdAt: new Date('2023-01-01'),
-            metadata: null
+            metadata: null,
+            updatedAt: new Date(),
         },
         {
             id: '2',
@@ -35,7 +36,8 @@ describe('TenantList Component', () => {
             logo: null,
             status: 'suspended',
             createdAt: new Date('2023-02-01'),
-            metadata: null
+            metadata: null,
+            updatedAt: new Date(),
         }
     ];
 

@@ -50,6 +50,7 @@ describe('TenantsController', () => {
           slug: 'test-org',
           logo: null,
           createdAt: new Date(),
+          updatedAt: new Date(),
           metadata: null,
           status: 'active',
         },

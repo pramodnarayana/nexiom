@@ -186,6 +186,7 @@ export class SystemAdminController {
         createdAt: schema.organization.createdAt,
         logo: schema.organization.logo,
         metadata: schema.organization.metadata,
+        updatedAt: schema.organization.updatedAt,
         status: schema.organization.status, // Included status
         userCount: count(schema.member.id),
       })
@@ -213,5 +214,30 @@ export class SystemAdminController {
       })),
       total,
     };
+  }
+
+  @Get('tenants/:id')
+  async getTenant(@Param('id') id: string) {
+    const [tenant] = await this.db
+      .select({
+        id: schema.organization.id,
+        name: schema.organization.name,
+        slug: schema.organization.slug,
+        createdAt: schema.organization.createdAt,
+        logo: schema.organization.logo,
+        metadata: schema.organization.metadata,
+        updatedAt: schema.organization.updatedAt,
+        status: schema.organization.status,
+      })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, id))
+      .limit(1)
+      .execute();
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return tenant;
   }
 }
