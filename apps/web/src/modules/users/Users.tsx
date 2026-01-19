@@ -91,11 +91,19 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    {user.status === 'pending' ? (
-                                        <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">Pending</Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Active</Badge>
-                                    )}
+                                    {(() => {
+                                        switch (user.status) {
+                                            case 'pending':
+                                                return <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">Pending</Badge>;
+                                            case 'disabled':
+                                                return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">Disabled</Badge>;
+                                            case 'suspended':
+                                                return <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">Suspended</Badge>;
+                                            case 'active':
+                                            default:
+                                                return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Active</Badge>;
+                                        }
+                                    })()}
                                 </TableCell>
                                 <TableCell>
                                     {user.status === 'pending' ? (

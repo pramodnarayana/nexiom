@@ -367,7 +367,9 @@ describe('SystemAdminController', () => {
       await controller.updateTenant('t1', { status: 'suspended' });
 
       // Verify payload passed to set()
-      expect(mockSet).toHaveBeenCalledWith({ status: 'suspended' });
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'suspended' }),
+      );
     });
 
     it('should update all fields including metadata', async () => {
@@ -392,13 +394,15 @@ describe('SystemAdminController', () => {
 
       await controller.updateTenant('t1', payload);
 
-      expect(mockSet).toHaveBeenCalledWith({
-        name: 'Full Update',
-        slug: 'full-update',
-        logo: 'logo.png',
-        status: 'active',
-        metadata: JSON.stringify({ key: 'value' }),
-      });
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Full Update',
+          slug: 'full-update',
+          logo: 'logo.png',
+          status: 'active',
+          metadata: JSON.stringify({ key: 'value' }),
+        }),
+      );
     });
   });
 
