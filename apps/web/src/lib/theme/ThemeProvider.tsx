@@ -14,10 +14,19 @@ export function ThemeProvider({
     storageKey = "vite-ui-theme-preset",
     ...props
 }: ThemeProviderProps) {
-    const [theme, setTheme] = useState<string>(
+    // Helper to get a valid theme key
+    const getValidTheme = useCallback((key: string | undefined | null) => {
+        if (key && themes[key]) {
+            return key;
+        }
+        return defaultTheme;
+    }, [defaultTheme]);
+
+    const [theme, setThemeState] = useState<string>(
         () => {
             try {
-                return localStorage.getItem(storageKey) || defaultTheme;
+                const stored = localStorage.getItem(storageKey);
+                return getValidTheme(stored);
             } catch {
                 return defaultTheme;
             }
@@ -26,10 +35,11 @@ export function ThemeProvider({
 
     const applyTheme = useCallback((currentThemeKey: string) => {
         const root = window.document.documentElement;
-        // SAFEGUARD: Ensure theme exists, or fallback to default
-        const currentTheme = themes[currentThemeKey] || themes[defaultTheme] || Object.values(themes)[0];
+        // Strict Validation: Ensure theme exists in map
+        const validKey = getValidTheme(currentThemeKey);
+        const currentTheme = themes[validKey];
 
-        if (!currentTheme) return;
+        if (!currentTheme) return; // Should technically never happen due to getValidTheme
 
         const isDark = root.classList.contains("dark");
         const cssVars = isDark ? currentTheme.cssVars.dark : currentTheme.cssVars.light;
@@ -37,7 +47,12 @@ export function ThemeProvider({
         Object.entries(cssVars).forEach(([property, value]) => {
             root.style.setProperty(property, value);
         });
-    }, [defaultTheme]);
+    }, [getValidTheme]);
+
+    const setTheme = useCallback((newTheme: string) => {
+        const validTheme = getValidTheme(newTheme);
+        setThemeState(validTheme);
+    }, [getValidTheme]);
 
     useEffect(() => {
         applyTheme(theme);
@@ -71,9 +86,7 @@ export function ThemeProvider({
 
     const value = {
         theme,
-        setTheme: (theme: string) => {
-            setTheme(theme);
-        },
+        setTheme,
         availableThemes: Object.values(themes),
     };
 

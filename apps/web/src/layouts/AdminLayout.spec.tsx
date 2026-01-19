@@ -52,7 +52,7 @@ describe('AdminLayout', () => {
         });
 
         render(
-            <ThemeProvider defaultTheme="light" storageKey="test-theme">
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
                 <AdminLayout />
             </ThemeProvider>
         );
@@ -102,7 +102,7 @@ describe('AdminLayout', () => {
         });
 
         render(
-            <ThemeProvider defaultTheme="light" storageKey="test-theme">
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
                 <AdminLayout />
             </ThemeProvider>
         );
