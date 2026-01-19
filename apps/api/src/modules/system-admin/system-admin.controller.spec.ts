@@ -500,6 +500,43 @@ describe('SystemAdminController', () => {
 
       expect(mockSet).toHaveBeenCalledWith({ emailVerified: true });
     });
+
+    it('should throw BadRequestException if email already taken (pre-check)', async () => {
+      // 1. Return payload user first
+      mockDb.query.user.findFirst
+        .mockResolvedValueOnce({ id: 'u1', email: 'old@example.com' })
+        // 2. Return collision user next
+        .mockResolvedValueOnce({ id: 'u2', email: 'taken@example.com' });
+
+      await expect(
+        controller.updateUser('u1', { email: 'taken@example.com' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException on race condition (duplicate key)', async () => {
+      // 1. Return payload user
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        email: 'old@example.com',
+      });
+
+      // 2. Mock db update to throw unique constraint error
+      mockDb.update = jest.fn().mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest
+              .fn()
+              .mockRejectedValue(
+                new Error('duplicate key value violates unique constraint'),
+              ),
+          }),
+        }),
+      });
+
+      await expect(
+        controller.updateUser('u1', { email: 'race@example.com' }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('getUser', () => {
