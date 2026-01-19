@@ -36,11 +36,10 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                     message: "User deleted successfully",
                     type: "success",
                 },
-                errorNotification: {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    message: ((error: any) => `Failed to delete ${name}: ${error?.message || "unknown error"}`) as any,
+                errorNotification: (error) => ({
+                    message: `Failed to delete ${name}: ${error?.message || "unknown error"}`,
                     type: "error",
-                },
+                }),
             });
         }
     };

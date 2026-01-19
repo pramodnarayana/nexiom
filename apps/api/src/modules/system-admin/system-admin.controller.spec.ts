@@ -514,13 +514,16 @@ describe('SystemAdminController', () => {
     });
 
     it('should throw BadRequestException on race condition (duplicate key)', async () => {
-      // 1. Return payload user
-      mockDb.query.user.findFirst.mockResolvedValue({
+      // 1. Return payload user (user exists)
+      mockDb.query.user.findFirst.mockResolvedValueOnce({
         id: 'u1',
         email: 'old@example.com',
       });
 
-      // 2. Mock db update to throw unique constraint error
+      // 2. Return null for uniqueness check (simulate pre-check pass)
+      mockDb.query.user.findFirst.mockResolvedValueOnce(null);
+
+      // 3. Mock db update to throw unique constraint error (race condition hit)
       mockDb.update = jest.fn().mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
