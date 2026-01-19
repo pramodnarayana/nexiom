@@ -3,6 +3,7 @@ export interface UserTableItem {
     name: string;
     email: string;
     role?: string; // Optional as not all lists might have it joined
+    systemRole?: string; // For platform admins
     emailVerified: boolean;
     status?: "active" | "pending" | "disabled" | "suspended";
 }

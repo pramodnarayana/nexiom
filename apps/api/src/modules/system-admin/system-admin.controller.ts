@@ -20,6 +20,8 @@ import { desc, count, eq, ne, and } from 'drizzle-orm';
 import {
   CreateTenantValidation,
   UpdateTenantValidation,
+  UpdateUserValidation,
+  CreateUserValidation,
 } from './system-admin.validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -54,6 +56,33 @@ export class SystemAdminController {
       .returning();
 
     return tenant;
+  }
+
+  @Post('users')
+  async createUser(@Body() input: CreateUserValidation) {
+    // Check if email already exists
+    const existing = await this.db.query.user.findFirst({
+      where: eq(schema.user.email, input.email),
+    });
+
+    if (existing) {
+      throw new BadRequestException('User with this email already exists');
+    }
+
+    const [user] = await this.db
+      .insert(schema.user)
+      .values({
+        id: uuidv4(),
+        name: input.name,
+        email: input.email,
+        systemRole: input.systemRole || 'user',
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return user;
   }
 
   @Patch('tenants/:id')
@@ -163,6 +192,134 @@ export class SystemAdminController {
       data: users,
       total,
     };
+  }
+
+  @Patch('users/:id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() input: UpdateUserValidation,
+  ) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check email uniqueness if changing
+    if (input.email && input.email !== user.email) {
+      const existing = await this.db.query.user.findFirst({
+        where: and(eq(schema.user.email, input.email), ne(schema.user.id, id)),
+      });
+
+      if (existing) {
+        throw new BadRequestException('Email already in use');
+      }
+    }
+
+    const updatePayload: Partial<typeof schema.user.$inferInsert> = {};
+    if (input.name !== undefined) updatePayload.name = input.name;
+    if (input.systemRole !== undefined)
+      updatePayload.systemRole = input.systemRole;
+    if (input.email !== undefined) updatePayload.email = input.email;
+    if (input.emailVerified !== undefined)
+      updatePayload.emailVerified = input.emailVerified;
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
+
+    try {
+      const [updated] = await this.db
+        .update(schema.user)
+        .set(updatePayload)
+        .where(eq(schema.user.id, id))
+        .returning();
+
+      return updated;
+    } catch (error) {
+      // Catch race conditions for unique constraints
+      if (
+        error instanceof Error &&
+        (error.message.includes('unique') ||
+          error.message.includes('duplicate'))
+      ) {
+        throw new BadRequestException('Email already in use');
+      }
+      throw error;
+    }
+  }
+
+  @Get('users/:id')
+  async getUser(@Param('id') id: string) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  @Delete('users/:id')
+  async deleteUser(@Param('id') id: string) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Safety: Prevent deleting the last platform admin
+    if (user.systemRole === 'platform_admin') {
+      const adminCountResult = await this.db
+        .select({ count: count() })
+        .from(schema.user)
+        .where(
+          and(
+            eq(schema.user.systemRole, 'platform_admin'),
+            ne(schema.user.id, id),
+          ),
+        );
+
+      const otherAdmins = Number(adminCountResult[0]?.count || 0);
+      if (otherAdmins === 0) {
+        throw new BadRequestException(
+          'Cannot delete the last Platform Administrator',
+        );
+      }
+    }
+
+    // Transactional cleanup
+    await this.db.transaction(async (tx) => {
+      // 1. Delete memberships
+      await tx.delete(schema.member).where(eq(schema.member.userId, id));
+
+      // 2. Delete invitations
+      // - Created by this user (Inviter)
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.inviterId, id));
+
+      // - Sent TO this user's email (Recipient)
+      // Note: We use user.email here, which we fetched above.
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.email, user.email));
+
+      // 3. Delete session/account/etc (BetterAuth handles this typically if cascading, but we do manual for safety)
+      await tx.delete(schema.session).where(eq(schema.session.userId, id));
+      await tx.delete(schema.account).where(eq(schema.account.userId, id));
+
+      // 4. Delete user
+      await tx.delete(schema.user).where(eq(schema.user.id, id));
+    });
+
+    return { success: true };
   }
 
   @Get('tenants')
