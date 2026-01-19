@@ -27,6 +27,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
     navGroups: { title: string, items: { label: string, href: string, icon: React.ElementType }[] }[],
@@ -35,23 +36,23 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
     navigate: NavigateFunction,
     logout: () => void
 }) => (
-    <div className="flex flex-col h-full bg-white/80 backdrop-blur-md border-r border-slate-200">
+    <div className="flex flex-col h-full bg-background/80 backdrop-blur-md border-r border-border">
         {/* Header */}
         <div className="p-6">
             <div className="flex items-center gap-2 mb-1">
-                <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-blue-200">
+                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
                     N
                 </div>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">Nexiom</span>
+                <span className="text-xl font-bold text-foreground tracking-tight">Nexiom</span>
             </div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider ml-1">Admin Console</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider ml-1">Admin Console</p>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar">
             {navGroups.map((group) => (
                 <div key={group.title}>
-                    <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {group.title}
                     </h3>
                     <div className="space-y-1">
@@ -62,11 +63,11 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
                                     <Button
                                         variant="ghost"
                                         className={`w-full justify-start transition-all duration-200 font-medium ${isActive
-                                            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 border-l-4 border-blue-600 rounded-l-none'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                                            ? 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary border-l-4 border-primary rounded-l-none'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                             }`}
                                     >
-                                        <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                        <item.icon className={`mr-3 h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                                         {item.label}
                                     </Button>
                                 </Link>
@@ -78,26 +79,29 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
         </nav>
 
         {/* Footer / User Profile */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
+        <div className="p-4 border-t border-border bg-muted/20 space-y-4">
+            <div className="px-2">
+                <ThemeSwitcher />
+            </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-start px-2 py-6 hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 transition-all group">
+                    <Button variant="ghost" className="w-full justify-start px-2 py-6 hover:bg-background hover:shadow-sm border border-transparent hover:border-border transition-all group">
                         <div className="flex items-center gap-3 w-full">
-                            <Avatar className="h-9 w-9 border border-slate-200">
+                            <Avatar className="h-9 w-9 border border-border">
                                 <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.name}`} />
-                                <AvatarFallback className="bg-blue-100 text-blue-600 font-medium">
+                                <AvatarFallback className="bg-primary/10 text-primary font-medium">
                                     {user?.name?.charAt(0) || 'A'}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 text-left overflow-hidden">
-                                <p className="text-sm font-semibold text-slate-700 truncate group-hover:text-slate-900 transition-colors">
+                                <p className="text-sm font-semibold text-foreground truncate group-hover:text-foreground transition-colors">
                                     {user?.name}
                                 </p>
-                                <p className="text-xs text-slate-500 truncate">
+                                <p className="text-xs text-muted-foreground truncate">
                                     {user?.email}
                                 </p>
                             </div>
-                            <Settings className="h-4 w-4 text-slate-400 group-hover:text-slate-600 ml-auto" />
+                            <Settings className="h-4 w-4 text-muted-foreground group-hover:text-foreground ml-auto" />
                         </div>
                     </Button>
                 </DropdownMenuTrigger>
@@ -111,7 +115,7 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
                         Profile Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-500 focus:text-red-500" onClick={logout}>
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={logout}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Log out
                     </DropdownMenuItem>
@@ -147,12 +151,12 @@ export function AdminLayout() {
     }, [isAuthenticated, user, navigate, isLoading]);
 
     if (isLoading) {
-        return <div className="flex items-center justify-center h-screen bg-slate-50">Loading Admin Panel...</div>;
+        return <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">Loading Admin Panel...</div>;
     }
 
     if (!user || user.systemRole !== 'platform_admin') {
         return (
-            <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-600">
+            <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">
                 Access denied.
             </div>
         );
@@ -179,10 +183,10 @@ export function AdminLayout() {
     ];
 
     return (
-        <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 font-sans">
+        <div className="flex min-h-screen bg-muted/10 dark:bg-background font-sans">
             {/* Desktop Sidebar */}
             <aside className="hidden md:block fixed inset-y-0 z-50 transition-all duration-300">
-                <div className="h-full w-64 shadow-xl shadow-slate-200/50">
+                <div className="h-full w-64 shadow-xl shadow-muted/20">
                     <SidebarContent
                         navGroups={navGroups}
                         location={location}
@@ -197,7 +201,7 @@ export function AdminLayout() {
             <div className="md:hidden absolute top-4 left-4 z-50">
                 <Sheet>
                     <SheetTrigger asChild>
-                        <Button variant="outline" size="icon" className="bg-white text-slate-800 border-slate-200 shadow-sm">
+                        <Button variant="outline" size="icon" className="bg-background text-foreground border-border shadow-sm">
                             <Menu className="h-4 w-4" />
                         </Button>
                     </SheetTrigger>
@@ -216,11 +220,11 @@ export function AdminLayout() {
             {/* Main Content Area */}
             <main className="flex-1 md:ml-64 min-h-screen transition-all duration-300 ease-in-out">
                 {/* Topbar (optional, can add breadcrumbs here) */}
-                <div className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-sm px-8 flex items-center justify-between sticky top-0 z-40">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <span className="font-semibold text-slate-800">Admin</span>
+                <div className="h-16 border-b border-border bg-background/80 backdrop-blur-sm px-8 flex items-center justify-between sticky top-0 z-40">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span className="font-semibold text-foreground">Admin</span>
                         <span>/</span>
-                        <span className="text-slate-600 font-medium">
+                        <span className="text-muted-foreground font-medium">
                             {navGroups.flatMap(g => g.items).find(i => i.href === location.pathname)?.label || 'Dashboard'}
                         </span>
                     </div>
