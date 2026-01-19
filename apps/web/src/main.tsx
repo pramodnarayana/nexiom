@@ -8,7 +8,7 @@ import App from './App.tsx'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <ThemeProvider defaultTheme="bold-tech" storageKey="vite-ui-theme-preset">
+      <ThemeProvider defaultTheme="violet-bloom" storageKey="vite-ui-theme-preset">
         <App />
       </ThemeProvider>
     </AuthProvider>

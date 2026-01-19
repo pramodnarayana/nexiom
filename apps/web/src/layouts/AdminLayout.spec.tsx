@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { AdminLayout } from './AdminLayout';
 import { useAuth } from '../lib/auth/context';
 import { useNavigate, useLocation } from 'react-router-dom';
-
+import { ThemeProvider } from "../lib/theme/ThemeProvider";
 // Mock Dependencies
 vi.mock('../lib/auth/context', () => ({
     useAuth: vi.fn(),
@@ -51,7 +51,11 @@ describe('AdminLayout', () => {
             logout: mockLogout
         });
 
-        render(<AdminLayout />);
+        render(
+            <ThemeProvider defaultTheme="light" storageKey="test-theme">
+                <AdminLayout />
+            </ThemeProvider>
+        );
         expect(screen.getByText('Loading Admin Panel...')).toBeInTheDocument();
     });
 
@@ -97,7 +101,11 @@ describe('AdminLayout', () => {
             logout: mockLogout
         });
 
-        render(<AdminLayout />);
+        render(
+            <ThemeProvider defaultTheme="light" storageKey="test-theme">
+                <AdminLayout />
+            </ThemeProvider>
+        );
 
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
         // It renders twice (Desktop + Mobile sidebars)

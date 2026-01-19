@@ -7,10 +7,4 @@ export type ThemeProviderState = {
     availableThemes: Theme[];
 };
 
-export const initialState: ThemeProviderState = {
-    theme: "bold-tech",
-    setTheme: () => null,
-    availableThemes: [],
-};
-
-export const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+export const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undefined);
