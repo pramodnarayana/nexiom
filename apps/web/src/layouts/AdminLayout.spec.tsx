@@ -67,9 +67,12 @@ describe('AdminLayout', () => {
             logout: mockLogout
         });
 
-        render(<AdminLayout />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <AdminLayout />
+            </ThemeProvider>
+        );
 
-        // Wait for useEffect
         await waitFor(() => {
             expect(mockNavigate).toHaveBeenCalledWith('/login');
         });
@@ -83,7 +86,11 @@ describe('AdminLayout', () => {
             logout: mockLogout
         });
 
-        render(<AdminLayout />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <AdminLayout />
+            </ThemeProvider>
+        );
 
         await waitFor(() => {
             expect(mockNavigate).toHaveBeenCalledWith('/dashboard');

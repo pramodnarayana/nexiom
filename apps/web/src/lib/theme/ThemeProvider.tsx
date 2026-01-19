@@ -19,7 +19,10 @@ export function ThemeProvider({
         if (key && themes[key]) {
             return key;
         }
-        return defaultTheme;
+        if (defaultTheme && themes[defaultTheme]) {
+            return defaultTheme;
+        }
+        return Object.keys(themes)[0];
     }, [defaultTheme]);
 
     const [theme, setThemeState] = useState<string>(
