@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { z } from "zod";
 import {
     Dialog,
     DialogContent,
@@ -36,7 +35,7 @@ import { useCreate } from "@refinedev/core";
 const createUserSchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email address"),
-    systemRole: z.enum(["user", "platform_admin"]).default("user"),
+    systemRole: z.enum(["user", "platform_admin"]),
 });
 
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
@@ -47,8 +46,7 @@ export function CreateUserDialog() {
     const { mutate: create, isLoading } = useCreate();
 
     const form = useForm<CreateUserFormValues>({
-         
-        resolver: zodResolver(createUserSchema) as any,
+        resolver: zodResolver(createUserSchema),
         defaultValues: {
             name: "",
             email: "",
@@ -73,10 +71,24 @@ export function CreateUserDialog() {
                         description: `${data.name} has been added successfully.`,
                     });
                 },
-                 
-                onError: (error: any) => {
+                onError: (error: unknown) => {
                     console.error(error);
-                    const message = error?.response?.data?.message || error.message || "An unknown error occurred";
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const responseData = (error as any)?.response?.data;
+                    let message = "An unknown error occurred";
+
+                    if (responseData?.message) {
+                        if (Array.isArray(responseData.message)) {
+                            message = responseData.message.join(", ");
+                        } else if (typeof responseData.message === "object") {
+                            message = JSON.stringify(responseData.message);
+                        } else {
+                            message = String(responseData.message);
+                        }
+                    } else if (error instanceof Error) {
+                        message = error.message;
+                    }
+
                     toast({
                         variant: "destructive",
                         title: "Failed to create user",
@@ -100,9 +112,9 @@ export function CreateUserDialog() {
                     <DialogTitle>Create New User</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <FormField
-                            control={form.control as any}
+                            control={form.control}
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
@@ -115,7 +127,7 @@ export function CreateUserDialog() {
                             )}
                         />
                         <FormField
-                            control={form.control as any}
+                            control={form.control}
                             name="email"
                             render={({ field }) => (
                                 <FormItem>
@@ -128,7 +140,7 @@ export function CreateUserDialog() {
                             )}
                         />
                         <FormField
-                            control={form.control as any}
+                            control={form.control}
                             name="systemRole"
                             render={({ field }) => (
                                 <FormItem>

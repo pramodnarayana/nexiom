@@ -99,5 +99,19 @@ describe('SystemAdminValidation', () => {
       });
       expect(result.success).toBe(true);
     });
+
+    it('should fail with invalid email', () => {
+      const result = UpdateUserSchema.safeParse({
+        email: 'not-an-email',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should pass with valid email', () => {
+      const result = UpdateUserSchema.safeParse({
+        email: 'valid@example.com',
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });

@@ -97,6 +97,17 @@ describe('SystemAdminController', () => {
         expect.objectContaining({ limit: 10, offset: 0 }),
       );
     });
+
+    it('should use default pagination parameters', async () => {
+      mockDb.query.user.findMany.mockResolvedValue([]);
+
+      // Testing default params
+      await controller.listUsers(undefined, undefined);
+
+      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 10, offset: 0 }),
+      );
+    });
   });
 
   describe('listTenants', () => {
@@ -153,6 +164,19 @@ describe('SystemAdminController', () => {
       await controller.listTenants('1', '1000');
 
       expect(mockBuilder.limit).toHaveBeenCalledWith(100);
+      expect(mockBuilder.offset).toHaveBeenCalledWith(0);
+      expect(mockBuilder.execute).toHaveBeenCalled();
+    });
+
+    it('should use default pagination parameters', async () => {
+      const mockBuilder = createMockBuilder([]);
+      mockDb.from.mockReturnValueOnce(mockBuilder);
+      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
+
+      // Testing default params
+      await controller.listTenants(undefined, undefined);
+
+      expect(mockBuilder.limit).toHaveBeenCalledWith(10);
       expect(mockBuilder.offset).toHaveBeenCalledWith(0);
       expect(mockBuilder.execute).toHaveBeenCalled();
     });
@@ -328,6 +352,54 @@ describe('SystemAdminController', () => {
       // Verify update called with correct args
       expect(mockDb.update).toHaveBeenCalled();
     });
+
+    it('should update specific fields (status only)', async () => {
+      mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
+
+      const mockReturning = jest
+        .fn()
+        .mockResolvedValue([{ id: 't1', status: 'suspended' }]);
+      const mockSet = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({ returning: mockReturning }),
+      });
+      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
+
+      await controller.updateTenant('t1', { status: 'suspended' });
+
+      // Verify payload passed to set()
+      expect(mockSet).toHaveBeenCalledWith({ status: 'suspended' });
+    });
+
+    it('should update all fields including metadata', async () => {
+      mockDb.query.organization.findFirst
+        .mockResolvedValueOnce({ id: 't1', slug: 'old' })
+        .mockResolvedValueOnce(null);
+
+      const mockSet = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([{ id: 't1' }]),
+        }),
+      });
+      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
+
+      const payload = {
+        name: 'Full Update',
+        slug: 'full-update',
+        logo: 'logo.png',
+        status: 'active' as const,
+        metadata: { key: 'value' },
+      };
+
+      await controller.updateTenant('t1', payload);
+
+      expect(mockSet).toHaveBeenCalledWith({
+        name: 'Full Update',
+        slug: 'full-update',
+        logo: 'logo.png',
+        status: 'active',
+        metadata: JSON.stringify({ key: 'value' }),
+      });
+    });
   });
 
   describe('deleteTenant', () => {
@@ -413,6 +485,21 @@ describe('SystemAdminController', () => {
       });
       expect(mockDb.update).toHaveBeenCalledWith(schema.user);
     });
+
+    it('should update user specific fields (emailVerified)', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
+
+      const mockSet = jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([{ id: 'u1' }]),
+        }),
+      });
+      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
+
+      await controller.updateUser('u1', { emailVerified: true });
+
+      expect(mockSet).toHaveBeenCalledWith({ emailVerified: true });
+    });
   });
 
   describe('getUser', () => {
@@ -448,7 +535,10 @@ describe('SystemAdminController', () => {
     });
 
     it('should delete user and dependencies transactionally', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        systemRole: 'user',
+      }); // Normal user
 
       const mockWhere = jest.fn().mockResolvedValue({});
 
@@ -463,16 +553,56 @@ describe('SystemAdminController', () => {
       // Verify deletion order inside transaction
       // 1. Memberships
       expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.member);
-      // 2. Invitations
+      // 2. Invitations (Inviter)
       expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.invitation);
-      // 3. Sessions
-      expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.session);
-      // 4. Accounts
-      expect(mockDb.delete).toHaveBeenNthCalledWith(4, schema.account);
-      // 5. User
-      expect(mockDb.delete).toHaveBeenNthCalledWith(5, schema.user);
+      // 3. Invitations (Recipient)
+      expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.invitation);
+      // 4. Sessions
+      expect(mockDb.delete).toHaveBeenNthCalledWith(4, schema.session);
+      // 5. Accounts
+      expect(mockDb.delete).toHaveBeenNthCalledWith(5, schema.account);
+      // 6. User
+      expect(mockDb.delete).toHaveBeenNthCalledWith(6, schema.user);
 
-      expect(mockWhere).toHaveBeenCalledTimes(5);
+      expect(mockWhere).toHaveBeenCalledTimes(6);
+    });
+
+    it('should prevent deleting the last platform admin', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'admin1',
+        systemRole: 'platform_admin',
+      });
+
+      // Mock db.select().from().where()
+      const mockBuilder = {
+        where: jest.fn().mockResolvedValue([{ count: 0 }]),
+      };
+      // mockDb.from returns the builder (because db.select() returns 'this', and 'this.from' is called)
+      mockDb.from.mockReturnValueOnce(mockBuilder);
+
+      await expect(controller.deleteUser('admin1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should allow deleting platform admin if others exist', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'admin1',
+        systemRole: 'platform_admin',
+      });
+
+      // Mock db.select().from().where()
+      const mockBuilder = {
+        where: jest.fn().mockResolvedValue([{ count: 1 }]),
+      };
+      mockDb.from.mockReturnValueOnce(mockBuilder);
+
+      const mockWhere = jest.fn().mockResolvedValue({});
+      mockDb.delete = jest.fn().mockReturnValue({ where: mockWhere });
+
+      await controller.deleteUser('admin1');
+
+      expect(mockDb.transaction).toHaveBeenCalled();
     });
   });
 });
