@@ -53,6 +53,7 @@ export const UserList = ({
                 data={users}
                 isLoading={isLoading}
                 basePath={basePath}
+                resource={resource}
             />
 
             <div className="flex items-center justify-end space-x-2 py-4">

@@ -24,7 +24,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
-    const deleteResource = resource ?? basePath.replace(/^\/+|\/+$/g, '');
+    const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
 
     const handleDelete = (id: string, name: string) => {
         if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {

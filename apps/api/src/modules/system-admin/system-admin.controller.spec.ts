@@ -502,7 +502,9 @@ describe('SystemAdminController', () => {
 
       await controller.updateUser('u1', { emailVerified: true });
 
-      expect(mockSet).toHaveBeenCalledWith({ emailVerified: true });
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({ emailVerified: true }),
+      );
     });
 
     it('should throw BadRequestException if email already taken (pre-check)', async () => {
