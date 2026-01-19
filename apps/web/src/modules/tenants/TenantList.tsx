@@ -36,10 +36,9 @@ interface TenantListProps {
 const statusBadgeVariants = cva("h-6 gap-1 px-2 font-normal rounded-md border text-xs inline-flex items-center", {
     variants: {
         status: {
-            // active: "bg-green-50 text-green-700 border-green-200 hover:bg-green-100", // Legacy green
-            active: "bg-green-100 text-green-800 hover:bg-green-100/80 border-transparent",
-            disabled: "bg-slate-100 text-slate-600 hover:bg-slate-100/80 border-transparent",
-            suspended: "bg-red-100 text-red-800 hover:bg-red-100/80 border-transparent",
+            active: "bg-primary/10 text-primary border-primary/20",
+            disabled: "bg-muted text-muted-foreground border-transparent",
+            suspended: "bg-destructive/10 text-destructive border-destructive/20",
         },
     },
     defaultVariants: {
