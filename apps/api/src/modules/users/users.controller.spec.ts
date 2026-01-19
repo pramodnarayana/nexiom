@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
 
@@ -16,21 +14,9 @@ describe('UsersController', () => {
     findOne: jest.fn(),
   };
 
-  const mockAuthGuard = {
-    canActivate: jest.fn().mockImplementation(() => true),
-  };
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: mockUsersService }],
-    })
-      .overrideGuard(AuthGuard)
-      .useValue(mockAuthGuard)
-      .compile();
-
-    controller = module.get<UsersController>(UsersController);
-    usersService = module.get<UsersService>(UsersService);
+  beforeEach(() => {
+    usersService = mockUsersService as unknown as UsersService;
+    controller = new UsersController(usersService);
 
     jest.clearAllMocks();
   });
@@ -59,6 +45,17 @@ describe('UsersController', () => {
       const req = {
         user: {},
       } as unknown as Request & { user: { organizationId?: string } };
+
+      const result = await controller.findAll(req);
+      expect(result).toEqual([]);
+
+      expect(usersService.findAll).not.toHaveBeenCalled();
+    });
+
+    it('should return empty list if user is undefined', async () => {
+      const req = {} as unknown as Request & {
+        user: { organizationId?: string };
+      };
 
       const result = await controller.findAll(req);
       expect(result).toEqual([]);

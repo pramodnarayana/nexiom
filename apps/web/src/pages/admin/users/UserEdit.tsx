@@ -38,7 +38,7 @@ export const UserEdit = () => {
         const formData = new FormData(e.currentTarget);
         const values = {
             name: formData.get("name"),
-            role: formData.get("role"),
+            systemRole: formData.get("systemRole"),
         };
         await onFinish(values);
     };
@@ -78,21 +78,20 @@ export const UserEdit = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label htmlFor="role" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Role</label>
+                            <label htmlFor="systemRole" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">System Role</label>
                             <div className="relative">
                                 <select
-                                    id="role"
-                                    name="role"
-                                    defaultValue={record?.role || 'user'}
+                                    id="systemRole"
+                                    name="systemRole"
+                                    defaultValue={record?.systemRole || 'user'}
                                     className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     <option value="user">User</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="support">Support</option>
+                                    <option value="platform_admin">Platform Admin</option>
                                 </select>
                             </div>
                             <p className="text-[0.8rem] text-muted-foreground">
-                                Changing role to 'admin' grants full access to this panel.
+                                <strong>Platform Admin:</strong> Full access to Tenant & User Management.
                             </p>
                         </div>
 

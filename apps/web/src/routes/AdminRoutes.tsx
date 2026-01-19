@@ -46,7 +46,7 @@ export function AdminRoutes() {
             <Routes>
                 <Route element={<AdminLayout />}>
                     <Route index element={<AdminDashboardPage />} />
-                    <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" inviteResource="" />} />
+                    <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" />} />
                     <Route path="users/show/:id" element={<UserShow />} />
                     <Route path="users/edit/:id" element={<UserEdit />} />
                     <Route path="tenants" element={<TenantListPage />} />

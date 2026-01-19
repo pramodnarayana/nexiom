@@ -20,6 +20,8 @@ import { desc, count, eq, ne, and } from 'drizzle-orm';
 import {
   CreateTenantValidation,
   UpdateTenantValidation,
+  UpdateUserValidation,
+  CreateUserValidation,
 } from './system-admin.validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -54,6 +56,33 @@ export class SystemAdminController {
       .returning();
 
     return tenant;
+  }
+
+  @Post('users')
+  async createUser(@Body() input: CreateUserValidation) {
+    // Check if email already exists
+    const existing = await this.db.query.user.findFirst({
+      where: eq(schema.user.email, input.email),
+    });
+
+    if (existing) {
+      throw new BadRequestException('User with this email already exists');
+    }
+
+    const [user] = await this.db
+      .insert(schema.user)
+      .values({
+        id: uuidv4(),
+        name: input.name,
+        email: input.email,
+        systemRole: input.systemRole || 'user',
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return user;
   }
 
   @Patch('tenants/:id')
@@ -163,6 +192,87 @@ export class SystemAdminController {
       data: users,
       total,
     };
+  }
+
+  @Patch('users/:id')
+  async updateUser(
+    @Param('id') id: string,
+    @Body() input: UpdateUserValidation,
+  ) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const updatePayload: Partial<typeof schema.user.$inferInsert> = {};
+    if (input.name !== undefined) updatePayload.name = input.name;
+    if (input.systemRole !== undefined)
+      updatePayload.systemRole = input.systemRole;
+    if (input.email !== undefined) updatePayload.email = input.email;
+    if (input.emailVerified !== undefined)
+      updatePayload.emailVerified = input.emailVerified;
+
+    // Safety: Prevent removing last admin? Typically handled by a specific check, keeping it simple for now.
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No fields to update');
+    }
+
+    const [updated] = await this.db
+      .update(schema.user)
+      .set(updatePayload)
+      .where(eq(schema.user.id, id))
+      .returning();
+
+    return updated;
+  }
+
+  @Get('users/:id')
+  async getUser(@Param('id') id: string) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  @Delete('users/:id')
+  async deleteUser(@Param('id') id: string) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Transactional cleanup
+    await this.db.transaction(async (tx) => {
+      // 1. Delete memberships
+      await tx.delete(schema.member).where(eq(schema.member.userId, id));
+
+      // 2. Delete invitations created by this user? Or assigned to this user?
+      // - Inviter:
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.inviterId, id));
+
+      // 3. Delete session/account/etc (BetterAuth handles this typically if cascading, but we do manual for safety)
+      await tx.delete(schema.session).where(eq(schema.session.userId, id));
+      await tx.delete(schema.account).where(eq(schema.account.userId, id));
+
+      // 4. Delete user
+      await tx.delete(schema.user).where(eq(schema.user.id, id));
+    });
+
+    return { success: true };
   }
 
   @Get('tenants')

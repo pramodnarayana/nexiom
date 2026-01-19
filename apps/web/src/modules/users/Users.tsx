@@ -1,3 +1,6 @@
+import { useDelete } from "@refinedev/core";
+import { Trash2, Edit, Eye } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
     Table,
     TableBody,
@@ -7,8 +10,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Eye } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { type UserTableItem } from "./types";
 
@@ -19,6 +20,22 @@ interface UsersProps {
 }
 
 export const Users = ({ data, isLoading, basePath }: UsersProps) => {
+    const { mutate: deleteUser } = useDelete();
+
+    const handleDelete = (id: string, name: string) => {
+        if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+            deleteUser({
+                resource: "admin/users",
+                id: id,
+                mutationMode: "optimistic",
+                successNotification: {
+                    message: "User deleted successfully",
+                    type: "success",
+                },
+            });
+        }
+    };
+
     if (isLoading) {
         return <div className="p-4 text-sm text-muted-foreground">Loading users...</div>;
     }
@@ -50,15 +67,24 @@ export const Users = ({ data, isLoading, basePath }: UsersProps) => {
                             <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
                             <TableCell>{user.email}</TableCell>
                             <TableCell>
-                                <Badge variant={user.role === 'admin' || user.role === 'owner' ? 'default' : 'secondary'}>
-                                    {user.role}
-                                </Badge>
+                                <div className="flex flex-col gap-1">
+                                    {user.systemRole && (
+                                        <Badge variant={user.systemRole === 'platform_admin' ? 'default' : 'outline'}>
+                                            {user.systemRole === 'platform_admin' ? 'Platform Admin' : 'User'}
+                                        </Badge>
+                                    )}
+                                    {user.role && user.role !== 'user' && (
+                                        <Badge variant="secondary" className="text-xs w-fit">
+                                            Global: {user.role}
+                                        </Badge>
+                                    )}
+                                </div>
                             </TableCell>
                             <TableCell>
                                 {user.status === 'pending' ? (
-                                    <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">Pending</Badge>
+                                    <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">Pending</Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>
+                                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Active</Badge>
                                 )}
                             </TableCell>
                             <TableCell>
@@ -66,7 +92,7 @@ export const Users = ({ data, isLoading, basePath }: UsersProps) => {
                                     <span className="text-muted-foreground text-xs">Waiting for acceptance</span>
                                 ) : (
                                     user.emailVerified ? (
-                                        <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">Verified</Badge>
+                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Verified</Badge>
                                     ) : (
                                         <span className="text-muted-foreground text-xs">Unverified</span>
                                     )
@@ -83,6 +109,15 @@ export const Users = ({ data, isLoading, basePath }: UsersProps) => {
                                         <Link to={`${basePath}/edit/${user.id}`}>
                                             <Edit className="h-4 w-4" />
                                         </Link>
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => handleDelete(user.id, user.name)}
+                                        aria-label={`Delete ${user.name || 'user'}`}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </TableCell>

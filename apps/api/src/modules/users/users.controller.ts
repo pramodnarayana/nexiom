@@ -45,7 +45,7 @@ export class UsersController {
     // We use 'organizationId' (mapped in getSessionWithOrg)
     const tenantId = req.user?.organizationId;
 
-    console.log(`[UsersController] Listing users for Tenant: ${tenantId}`);
+    // console.log(`[UsersController] Listing users for Tenant: ${tenantId}`);
 
     if (!tenantId) {
       // STRICT ISOLATION: Admin users must belong to an organization to see users.

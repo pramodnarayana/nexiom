@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,39 +30,36 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useCustomMutation } from "@refinedev/core";
+import { useCreate } from "@refinedev/core";
 
-// Schema matching Backend DTO
-const inviteSchema = z.object({
+// Schema matching Backend CreateUserValidation
+const createUserSchema = z.object({
+    name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email address"),
-    role: z.string().min(1, "Role is required"),
+    systemRole: z.enum(["user", "platform_admin"]).default("user"),
 });
 
-type InviteFormValues = z.infer<typeof inviteSchema>;
+type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
-type InvitationResponse = {
-    id: string;
-    [key: string]: unknown;
-};
-
-export function InviteMemberDialog() {
+export function CreateUserDialog() {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
-    const { mutate, isLoading } = useCustomMutation<InvitationResponse>();
+    const { mutate: create, isLoading } = useCreate();
 
-    const form = useForm<InviteFormValues>({
-        resolver: zodResolver(inviteSchema),
+    const form = useForm<CreateUserFormValues>({
+         
+        resolver: zodResolver(createUserSchema) as any,
         defaultValues: {
+            name: "",
             email: "",
-            role: "member", // Default role
+            systemRole: "user",
         },
     });
 
-    const onSubmit = (data: InviteFormValues) => {
-        mutate(
+    const onSubmit = (data: CreateUserFormValues) => {
+        create(
             {
-                url: `${import.meta.env.VITE_API_URL}/invitations`,
-                method: "post",
+                resource: "admin/users",
                 values: data,
                 successNotification: false,
                 errorNotification: false,
@@ -71,16 +69,18 @@ export function InviteMemberDialog() {
                     setOpen(false);
                     form.reset();
                     toast({
-                        title: "Invitation Sent",
-                        description: `Invitation sent to ${data.email}`,
+                        title: "User Created",
+                        description: `${data.name} has been added successfully.`,
                     });
                 },
-                onError: (error: { response?: { data?: { message?: string } }; message?: string }) => {
+                 
+                onError: (error: any) => {
                     console.error(error);
+                    const message = error?.response?.data?.message || error.message || "An unknown error occurred";
                     toast({
                         variant: "destructive",
-                        title: "Failed to send invitation",
-                        description: error?.response?.data?.message || error.message || "An unknown error occurred",
+                        title: "Failed to create user",
+                        description: message,
                     });
                 },
             }
@@ -90,19 +90,32 @@ export function InviteMemberDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-indigo-200 transition-all duration-200">
+                <Button>
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Users
+                    Create User
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Add New User</DialogTitle>
+                    <DialogTitle>Create New User</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
+                            name="name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Full Name</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="John Doe" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control as any}
                             name="email"
                             render={({ field }) => (
                                 <FormItem>
@@ -115,11 +128,11 @@ export function InviteMemberDialog() {
                             )}
                         />
                         <FormField
-                            control={form.control}
-                            name="role"
+                            control={form.control as any}
+                            name="systemRole"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Role</FormLabel>
+                                    <FormLabel>System Role</FormLabel>
                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                                         <FormControl>
                                             <SelectTrigger>
@@ -127,8 +140,8 @@ export function InviteMemberDialog() {
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="member">Member</SelectItem>
-                                            <SelectItem value="admin">Admin</SelectItem>
+                                            <SelectItem value="user">User</SelectItem>
+                                            <SelectItem value="platform_admin">Platform Admin</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -139,10 +152,10 @@ export function InviteMemberDialog() {
                             <Button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-indigo-200 transition-all duration-200"
+                                className="w-full sm:w-auto"
                             >
                                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Send Invitation
+                                Create User
                             </Button>
                         </DialogFooter>
                     </form>
