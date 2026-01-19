@@ -39,6 +39,7 @@ describe('AdminLayout', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        localStorage.clear();
         (useNavigate as unknown as Mock).mockReturnValue(mockNavigate);
         (useLocation as unknown as Mock).mockReturnValue({ pathname: '/admin' });
     });

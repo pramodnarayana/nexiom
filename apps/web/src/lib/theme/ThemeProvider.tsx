@@ -87,11 +87,11 @@ export function ThemeProvider({
         return () => observer.disconnect();
     }, [theme, applyTheme]);
 
-    const value = {
+    const value = React.useMemo(() => ({
         theme,
         setTheme,
         availableThemes: Object.values(themes),
-    };
+    }), [theme, setTheme]);
 
     return (
         <ThemeProviderContext.Provider {...props} value={value}>
