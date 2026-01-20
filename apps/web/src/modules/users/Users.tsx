@@ -1,5 +1,6 @@
-import { useDelete } from "@refinedev/core";
-import { Trash2, Edit, Eye } from "lucide-react";
+import * as React from "react";
+import { useDelete, useCustomMutation } from "@refinedev/core";
+import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
     Table,
@@ -22,6 +23,7 @@ interface UsersProps {
 
 export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
+    const { mutate: sendInvite } = useCustomMutation();
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
@@ -42,6 +44,42 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                 }),
             });
         }
+    };
+
+    const [invitingIds, setInvitingIds] = React.useState<Set<string>>(new Set());
+
+    const handleInvite = (id: string, name: string) => {
+        if (invitingIds.has(id)) return;
+
+        setInvitingIds((prev) => new Set(prev).add(id));
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+        // Derive endpoint from resource prop or default to admin/users
+        // Ensure we don't duplicate slashes if resource has them
+        const resourcePath = (resource || "admin/users").replace(/^\/+|\/+$/g, "");
+        const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;
+
+        sendInvite({
+            url: inviteUrl,
+            method: "post",
+            values: {},
+            successNotification: {
+                message: `Invitation sent to ${name}`,
+                type: "success",
+            },
+            errorNotification: (error) => ({
+                message: `Failed to send invite: ${error?.message || "unknown error"}`,
+                type: "error",
+            }),
+        }, {
+            onSettled: () => {
+                setInvitingIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }
+        });
     };
 
     if (isLoading) {
@@ -72,6 +110,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                 <TableBody>
                     {data.map((user) => {
                         const displayName = user.name || 'user';
+                        const isInviting = invitingIds.has(user.id);
                         return (
                             <TableRow key={user.id}>
                                 <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
@@ -118,6 +157,21 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
+                                        {!user.emailVerified && user.status !== 'pending' && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleInvite(user.id, displayName)}
+                                                disabled={isInviting}
+                                                title="Send Invitation"
+                                            >
+                                                {isInviting ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Send className="h-4 w-4" />
+                                                )}
+                                            </Button>
+                                        )}
                                         <Button variant="ghost" size="icon" asChild aria-label={`View ${displayName}`}>
                                             <Link to={`${basePath}/show/${user.id}`}>
                                                 <Eye className="h-4 w-4" />

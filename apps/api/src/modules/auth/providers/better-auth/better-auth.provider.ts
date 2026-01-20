@@ -3,13 +3,16 @@ import { IdentityProvider } from '../../identity-provider.abstract';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import * as schema from '../../../../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { CreateUser } from '../../../users/users.validation';
 import { organization, admin } from 'better-auth/plugins';
 import { EmailService } from '../../../email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE_DB } from '../../../../db/db.provider';
 import { TenantsService } from '../../../tenants/tenants.service';
+import { v4 as uuidv4 } from 'uuid';
+import { User } from '../../../users/user.schema';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class BetterAuthIdentityProvider implements IdentityProvider {
@@ -39,6 +42,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       }),
       emailAndPassword: {
         enabled: true,
+        password: {
+          hash: async (password: string) => {
+            return await bcrypt.hash(password, 10);
+          },
+          verify: async ({ password, hash }) => {
+            return await bcrypt.compare(password, hash);
+          },
+        },
       },
       user: {
         additionalFields: {
@@ -346,14 +357,11 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     headers?: Headers;
   }) {
     if (!payload.organizationId) {
-      throw new Error(
-        'System-level invites (no organization) not fully implemented in adapter yet.',
-      );
+      // System-level invite (No organization) -> Use manual flow
+      return this.createSystemInvitation(payload);
     }
 
     // Cast to any because the organization plugin methods are not being inferred correctly by TypeScript
-    // in this context, likely due to the complex type inference of better-auth plugins.
-    // Cast to explicit type to satisfy linter (unsafe-member-access, unsafe-call)
     const api = this.auth.api as unknown as {
       createInvitation: (opts: {
         body: {
@@ -361,7 +369,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           role: string;
           organizationId: string | null;
           expiresIn?: number;
-          inviterId?: string; // Add explicit inviterId support
+          inviterId?: string;
         };
         headers?: Headers;
       }) => Promise<unknown>;
@@ -373,10 +381,68 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         role: payload.role,
         organizationId: payload.organizationId,
         expiresIn: payload.expiresIn,
-        inviterId: payload.inviterId, // Native Inviter Context
+        inviterId: payload.inviterId,
       },
-      headers: payload.headers, // Remove custom x-inviter-id injection
+      headers: payload.headers,
     });
+  }
+
+  private async createSystemInvitation(payload: {
+    email: string;
+    role: string;
+    expiresIn?: number;
+    inviterId: string;
+  }) {
+    const id = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(
+      expiresAt.getHours() +
+        (payload.expiresIn ? payload.expiresIn / 3600 : 48),
+    ); // Default 48h
+
+    // Insert into DB
+    const [invitation] = await this.db
+      .insert(schema.invitation)
+      .values({
+        id,
+        email: payload.email,
+        role: payload.role,
+        organizationId: null, // System-level
+        inviterId: payload.inviterId,
+        status: 'pending',
+        expiresAt,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    // Send Email
+    const trustedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+    const frontendUrl = process.env.FRONTEND_URL;
+    let baseUrl = frontendUrl;
+
+    if (!baseUrl && trustedOrigins.length > 0) {
+      baseUrl = trustedOrigins[0];
+    }
+
+    if (!baseUrl || !trustedOrigins.includes(baseUrl)) {
+      this.logger.error(
+        `Critical: Cannot send invite. Resolved Base URL (${baseUrl}) is not in trusted origins.`,
+      );
+      throw new Error(
+        `Configuration Error: Resolved Base URL (${baseUrl}) is not in trusted origins.`,
+      );
+    }
+
+    const inviteUrl = `${baseUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
+
+    await this.emailService.sendEmail({
+      to: payload.email,
+      subject: 'You have been invited to join Nexiom',
+      text: `You have been invited to join Nexiom. Click here to accept: ${inviteUrl}`,
+      html: `<p>You have been invited to join <strong>Nexiom</strong>.</p><p><a href="${inviteUrl}">Click here to accept</a></p>`,
+    });
+
+    return invitation;
   }
 
   async getInvitation(id: string) {
@@ -443,5 +509,90 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
   async deleteUser(userId: string): Promise<void> {
     await this.db.delete(schema.user).where(eq(schema.user.id, userId));
     this.logger.warn(`User ${userId} deleted (Rollback/Cleanup)`);
+  }
+
+  async updateUser(userId: string, data: Partial<User>): Promise<User> {
+    return await this.db.transaction(async (tx) => {
+      // Check if email is being updated, we need to sync 'account' table for 'credential' provider
+      if (data.email) {
+        const currentUser = await tx.query.user.findFirst({
+          where: eq(schema.user.id, userId),
+        });
+
+        if (currentUser && currentUser.email !== data.email) {
+          // Update Account ID (which is the email for credentials)
+          await tx
+            .update(schema.account)
+            .set({ accountId: data.email, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.account.userId, userId),
+                eq(schema.account.providerId, 'credential'),
+              ),
+            );
+        }
+      }
+
+      await tx
+        .update(schema.user)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.user.id, userId));
+
+      const updated = await tx.query.user.findFirst({
+        where: eq(schema.user.id, userId),
+      });
+
+      if (!updated) throw new Error('Failed to update user');
+
+      return updated as any as User;
+    });
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.email, email),
+    });
+    return (user as any as User) || null;
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const existingAccount = await this.db.query.account.findFirst({
+      where: and(
+        eq(schema.account.userId, userId),
+        eq(schema.account.providerId, 'credential'),
+      ),
+    });
+
+    if (existingAccount) {
+      await this.db
+        .update(schema.account)
+        .set({ password: hashedPassword, updatedAt: new Date() })
+        .where(eq(schema.account.id, existingAccount.id));
+    } else {
+      // Fetch user to get current email for accountId
+      const user = await this.db.query.user.findFirst({
+        where: eq(schema.user.id, userId),
+      });
+
+      if (!user) {
+        throw new Error('User not found when creating credential account');
+      }
+
+      // Create new account
+      await this.db.insert(schema.account).values({
+        id: uuidv4(),
+        userId: userId,
+        accountId: user.email, // Use email as accountId for credentials
+        providerId: 'credential',
+        password: hashedPassword,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
   }
 }

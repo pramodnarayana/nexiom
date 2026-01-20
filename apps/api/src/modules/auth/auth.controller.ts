@@ -106,15 +106,30 @@ export class AuthController {
       throw new BadRequestException('Invitation has expired');
     }
 
-    // Step 1: Create User (Trusting the Invite -> Verify Email)
-    const user = await this.authProvider.createUser({
-      email: body.email,
-      password: body.password,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      // Fix TS Error: Role is required by CreateUser type
-      role: 'user',
-    });
+    // Step 1: Check if user exists (Provisioned vs New)
+    let user = await this.authProvider.getUserByEmail(body.email);
+
+    if (user) {
+      if (user.emailVerified) {
+        throw new BadRequestException(
+          'User is already registered. Please log in.',
+        );
+      }
+      // Update existing provisioned user
+      user = await this.authProvider.updateUser(user.id, {
+        name: `${body.firstName} ${body.lastName}`,
+      });
+      await this.authProvider.setPassword(user.id, body.password);
+    } else {
+      // Create new user (standard flow)
+      user = await this.authProvider.createUser({
+        email: body.email,
+        password: body.password,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        role: 'user',
+      });
+    }
 
     // Step 2: Accept Invitation (Atomic-ish)
     try {

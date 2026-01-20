@@ -4,6 +4,7 @@ import routerProvider from "@refinedev/react-router";
 
 import { dataProvider } from "../providers/data-provider";
 import { authProvider } from "../providers/auth-provider";
+import { notificationProvider } from "../providers/notification-provider";
 import { AdminLayout } from '../layouts/AdminLayout';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { UserList } from '../modules/users/UserList';
@@ -42,6 +43,7 @@ export function AdminRoutes() {
                 syncWithLocation: true,
                 warnWhenUnsavedChanges: true,
             }}
+            notificationProvider={notificationProvider}
         >
             <Routes>
                 <Route element={<AdminLayout />}>

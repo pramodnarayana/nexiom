@@ -11,7 +11,9 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
+  Headers as RequestHeaders,
 } from '@nestjs/common';
+import { IdentityProvider } from '../auth/identity-provider.abstract';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { DRIZZLE_DB } from '../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -30,7 +32,52 @@ import { v4 as uuidv4 } from 'uuid';
 export class SystemAdminController {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly identityProvider: IdentityProvider,
   ) {}
+
+  @Post('users/:id/invite')
+  async inviteUser(
+    @Param('id') id: string,
+    @RequestHeaders() headers: Record<string, string>,
+  ) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const webHeaders = this.toWebHeaders(headers);
+
+    // Get current admin ID from session (via Headers -> BetterAuth)
+    const session =
+      await this.identityProvider.getSessionFromHeaders(webHeaders);
+    if (!session || !session.user) {
+      throw new BadRequestException('Unauthorized');
+    }
+
+    // Create System Invitation (OrgId = null)
+    await this.identityProvider.createInvitation({
+      email: user.email,
+      role: user.systemRole || 'user',
+      organizationId: null, // System Invite
+      inviterId: session.user.id,
+      headers: webHeaders,
+    });
+
+    return { success: true };
+  }
+
+  private toWebHeaders(headers: Record<string, string>): Headers {
+    const webHeaders = new Headers();
+    Object.entries(headers).forEach(([key, value]) => {
+      if (value) {
+        webHeaders.append(key, value);
+      }
+    });
+    return webHeaders;
+  }
 
   @Post('tenants')
   async createTenant(@Body() input: CreateTenantValidation) {
@@ -178,7 +225,7 @@ export class SystemAdminController {
     const users = await this.db.query.user.findMany({
       limit,
       offset,
-      orderBy: [desc(schema.user.createdAt)],
+      orderBy: (users, { desc }) => [desc(users.createdAt)],
     });
 
     // Total count for pagination
