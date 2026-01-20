@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
-import { Trash2, Edit, Eye, Send } from "lucide-react";
+import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
     Table,
@@ -54,10 +54,10 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
         setInvitingIds((prev) => new Set(prev).add(id));
         const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-        // Construct URL based on resource or default to admin/users.
-        // Assuming this component is mostly used in Admin context for now.
-        // The endpoint is /admin/users/:id/invite.
-        const inviteUrl = `${API_URL}/admin/users/${id}/invite`;
+        // Derive endpoint from resource prop or default to admin/users
+        // Ensure we don't duplicate slashes if resource has them
+        const resourcePath = (resource || "admin/users").replace(/^\/+|\/+$/g, "");
+        const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;
 
         sendInvite({
             url: inviteUrl,
@@ -165,7 +165,11 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                                 disabled={isInviting}
                                                 title="Send Invitation"
                                             >
-                                                <Send className={`h-4 w-4 ${isInviting ? 'animate-spin' : ''}`} />
+                                                {isInviting ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Send className="h-4 w-4" />
+                                                )}
                                             </Button>
                                         )}
                                         <Button variant="ghost" size="icon" asChild aria-label={`View ${displayName}`}>

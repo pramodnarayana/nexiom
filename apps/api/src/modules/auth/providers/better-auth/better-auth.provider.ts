@@ -12,6 +12,7 @@ import { DRIZZLE_DB } from '../../../../db/db.provider';
 import { TenantsService } from '../../../tenants/tenants.service';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../../../users/user.schema';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class BetterAuthIdentityProvider implements IdentityProvider {
@@ -41,6 +42,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       }),
       emailAndPassword: {
         enabled: true,
+        password: {
+          hash: async (password: string) => {
+            return await bcrypt.hash(password, 10);
+          },
+          verify: async ({ password, hash }) => {
+            return await bcrypt.compare(password, hash);
+          },
+        },
       },
       user: {
         additionalFields: {
@@ -550,14 +559,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
   }
 
   async setPassword(userId: string, password: string): Promise<void> {
-    const library = await import('better-auth');
-    // @ts-expect-error - hashPassword is not exposed in the main type definition but available at runtime
-    const hashPassword = library.hashPassword as (p: string) => Promise<string>;
-
-    // Note: If using custom hasher, we should ensure better-auth config matches.
-    // Assuming default configuration for now which usually matches library default.
-
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const existingAccount = await this.db.query.account.findFirst({
       where: and(
