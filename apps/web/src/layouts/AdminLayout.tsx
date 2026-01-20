@@ -26,7 +26,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
@@ -79,33 +79,33 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
         </nav>
 
         {/* Footer / User Profile */}
-        <div className="p-4 border-t border-border bg-muted/20 space-y-4">
-            <div className="px-2">
-                <ThemeSwitcher />
+        <div className="p-4 border-t border-border mt-auto space-y-2">
+            <div className="flex items-center justify-between px-2 gap-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider shrink-0">Theme</span>
+                <ThemeSwitcher className="w-full min-w-[120px]" />
             </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-start px-2 py-6 hover:bg-background hover:shadow-sm border border-transparent hover:border-border transition-all group">
+                    <Button variant="ghost" className="w-full justify-start h-auto px-2 py-3 hover:bg-accent hover:text-accent-foreground">
                         <div className="flex items-center gap-3 w-full">
-                            <Avatar className="h-9 w-9 border border-border">
-                                <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.name}`} />
-                                <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                            <Avatar className="h-8 w-8 rounded-lg border border-border">
+                                <AvatarFallback className="rounded-lg bg-primary text-primary-foreground font-bold">
                                     {user?.name?.charAt(0) || 'A'}
                                 </AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 text-left overflow-hidden">
-                                <p className="text-sm font-semibold text-foreground truncate group-hover:text-foreground transition-colors">
+                            <div className="flex-1 text-left overflow-hidden grid gap-0.5">
+                                <p className="text-sm font-semibold text-foreground truncate">
                                     {user?.name}
                                 </p>
                                 <p className="text-xs text-muted-foreground truncate">
                                     {user?.email}
                                 </p>
                             </div>
-                            <Settings className="h-4 w-4 text-muted-foreground group-hover:text-foreground ml-auto" />
+                            <Settings className="h-4 w-4 text-muted-foreground ml-auto opacity-50" />
                         </div>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-56" align="end" side="right" sideOffset={8}>
                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/dashboard')}>
@@ -115,7 +115,7 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
                         Profile Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={logout}>
+                    <DropdownMenuItem className="focus:text-destructive focus:bg-destructive/10" onClick={logout}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Log out
                     </DropdownMenuItem>

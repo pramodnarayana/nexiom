@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { authorizedFetch } from '../lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
 
 interface User {
     id: string;
@@ -52,50 +57,71 @@ export function UsersPage() {
     }
 
     return (
-        <div style={{ padding: '20px' }}>
-            <h2>User Management</h2>
+        <div className="container mx-auto p-6 space-y-6">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">User Management</h2>
 
-            <div className="card" style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc' }}>
-                <h3>Add User</h3>
-                <form onSubmit={handleAddUser} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <input
-                        type="email"
-                        placeholder="user@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        style={{ padding: '8px' }}
-                    />
-                    <select
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
-                        style={{ padding: '8px' }}
-                    >
-                        <option value="viewer">Viewer</option>
-                        <option value="editor">Editor</option>
-                        <option value="admin">Admin</option>
-                    </select>
-                    <button type="submit" disabled={loading} style={{ padding: '8px 16px' }}>
-                        {loading ? 'Adding...' : 'Add User'}
-                    </button>
-                </form>
-                {status && <p style={{ marginTop: '10px', color: status.startsWith('Error') ? 'red' : 'green' }}>{status}</p>}
-            </div>
+            <Card className="border-border">
+                <CardHeader>
+                    <CardTitle>Add User</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleAddUser} className="flex gap-4 items-end">
+                        <div className="grid gap-2 flex-1">
+                            <Input
+                                type="email"
+                                placeholder="user@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="w-[180px]">
+                            <select
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={role}
+                                onChange={(e) => setRole(e.target.value)}
+                            >
+                                <option value="viewer">Viewer</option>
+                                <option value="editor">Editor</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <Button type="submit" disabled={loading}>
+                            {loading ? 'Adding...' : 'Add User'}
+                        </Button>
+                    </form>
+                    {status && (
+                        <p className={`mt-2 text-sm font-medium ${status.startsWith('Error') ? 'text-destructive' : 'text-success'}`}>
+                            {status}
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
 
-            <div className="card">
-                <h3>All Users</h3>
-                {users.length === 0 ? (
-                    <p>No users found (or loading...)</p>
-                ) : (
-                    <ul style={{ listStyle: 'none', padding: 0 }}>
-                        {users.map((u) => (
-                            <li key={u.id} style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
-                                <strong>{u.email}</strong> - {u.role || u.roleId} (ID: {u.id})
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+            <Card className="border-border">
+                <CardHeader>
+                    <CardTitle>All Users</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {users.length === 0 ? (
+                        <p className="text-muted-foreground">No users found (or loading...)</p>
+                    ) : (
+                        <div className="rounded-md border border-border">
+                            <div className="p-4 grid gap-4">
+                                {users.map((u) => (
+                                    <div key={u.id} className="flex items-center justify-between p-2 border-b border-border last:border-0">
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-foreground">{u.email}</span>
+                                            <span className="text-xs text-muted-foreground">ID: {u.id}</span>
+                                        </div>
+                                        <Badge variant="outline">{u.role || u.roleId}</Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }

@@ -69,11 +69,11 @@ export const AcceptInvitePage = () => {
 
     if (!inviteId || status === "error") {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <Card className="w-[400px]">
+            <div className="flex items-center justify-center min-h-screen bg-background p-4">
+                <Card className="w-full max-w-md border-destructive/50">
                     <CardHeader>
-                        <CardTitle className="text-red-600 flex items-center">
-                            <XCircle className="mr-2" /> Invalid Link
+                        <CardTitle className="text-destructive flex items-center gap-2">
+                            <XCircle className="h-5 w-5" /> Invalid Link
                         </CardTitle>
                         <CardDescription>
                             This invitation link is missing required parameters or is invalid.
@@ -86,8 +86,8 @@ export const AcceptInvitePage = () => {
 
     // Loader while redirecting
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-50">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <div className="flex items-center justify-center min-h-screen bg-background">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
     );
 };
