@@ -5,7 +5,8 @@ import {
     Activity,
     CreditCard,
     TrendingUp,
-    Shield
+    Shield,
+    TrendingDown
 } from 'lucide-react';
 
 export function DashboardPage() {
@@ -73,8 +74,8 @@ export function DashboardPage() {
                                         {stat.trend}
                                     </Badge>
                                 ) : (
-                                    <span className={`flex items-center font-medium ${stat.trendUp ? 'text-success' : 'text-warning'}`}>
-                                        <TrendingUp className="h-3 w-3 mr-1" />
+                                    <span className={`text-xs ml-2 flex items-center ${stat.trendUp ? 'text-success' : 'text-warning'}`}>
+                                        {stat.trendUp ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
                                         {stat.trend}
                                     </span>
                                 )}
