@@ -11,7 +11,9 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
+  Headers,
 } from '@nestjs/common';
+import { IdentityProvider } from '../auth/identity-provider.abstract';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { DRIZZLE_DB } from '../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -30,7 +32,39 @@ import { v4 as uuidv4 } from 'uuid';
 export class SystemAdminController {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly identityProvider: IdentityProvider,
   ) {}
+
+  @Post('users/:id/invite')
+  async inviteUser(@Param('id') id: string, @Headers() headers: Headers) {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get current admin ID from session (via Headers -> BetterAuth)
+    const session = await this.identityProvider.getSessionFromHeaders(headers);
+    if (!session || !session.user) {
+      throw new BadRequestException('Unauthorized');
+    }
+
+    // Check if pending invitation exists? BetterAuth handles this or duplicates are okay?
+    // We'll let createInvitation handle it.
+
+    // Create System Invitation (OrgId = null)
+    await this.identityProvider.createInvitation({
+      email: user.email,
+      role: user.systemRole || 'user',
+      organizationId: null, // System Invite
+      inviterId: session.user.id,
+      headers,
+    });
+
+    return { success: true };
+  }
 
   @Post('tenants')
   async createTenant(@Body() input: CreateTenantValidation) {
@@ -178,7 +212,7 @@ export class SystemAdminController {
     const users = await this.db.query.user.findMany({
       limit,
       offset,
-      orderBy: [desc(schema.user.createdAt)],
+      orderBy: (users, { desc }) => [desc(users.createdAt)],
     });
 
     // Total count for pagination

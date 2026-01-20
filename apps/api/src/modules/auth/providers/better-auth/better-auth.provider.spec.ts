@@ -46,6 +46,9 @@ jest.mock('better-auth/plugins', () => ({
 const mockDb = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
+  returning: jest
+    .fn()
+    .mockReturnValue([{ id: 'inv-123', email: 'test@example.com' }]),
   select: jest.fn().mockReturnThis(),
   delete: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
@@ -266,7 +269,7 @@ describe('BetterAuthIdentityProvider', () => {
   });
 
   describe('createInvitation', () => {
-    it('should throw error if organizationId is missing', async () => {
+    it('should create system invitation if organizationId is missing', async () => {
       await expect(
         provider.createInvitation({
           email: 'test@example.com',
@@ -274,7 +277,12 @@ describe('BetterAuthIdentityProvider', () => {
           organizationId: null,
           inviterId: 'inviter-123',
         }),
-      ).rejects.toThrow('System-level invites');
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'inv-123',
+          email: 'test@example.com',
+        }),
+      );
     });
 
     it('should call createInvitation api with correct payload', async () => {

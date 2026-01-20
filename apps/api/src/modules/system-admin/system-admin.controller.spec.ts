@@ -29,12 +29,23 @@ interface MockDb {
   returning: jest.Mock;
 }
 
+import { IdentityProvider } from '../auth/identity-provider.abstract';
+
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
   let mockDb: MockDb;
+  let mockIdentityProvider: {
+    getSessionFromHeaders: jest.Mock;
+    createInvitation: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    mockIdentityProvider = {
+      getSessionFromHeaders: jest.fn(),
+      createInvitation: jest.fn(),
+    };
 
     // Reset mocks with full structure
     mockDb = {
@@ -65,6 +76,7 @@ describe('SystemAdminController', () => {
 
     controller = new SystemAdminController(
       mockDb as unknown as NodePgDatabase<typeof schema>,
+      mockIdentityProvider as unknown as IdentityProvider,
     );
   });
 
@@ -649,6 +661,51 @@ describe('SystemAdminController', () => {
       await controller.deleteUser('admin1');
 
       expect(mockDb.transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('inviteUser', () => {
+    const mockHeaders = new Headers();
+
+    it('should throw NotFoundException if user not found', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        controller.inviteUser('missing', mockHeaders as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if unauthorized (no session)', async () => {
+      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
+      mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+
+      await expect(
+        controller.inviteUser('u1', mockHeaders as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should create system invitation successfully', async () => {
+      const mockUser = {
+        id: 'u1',
+        email: 'test@example.com',
+        systemRole: 'platform_admin',
+      };
+      const mockSession = { user: { id: 'admin1' } };
+
+      mockDb.query.user.findFirst.mockResolvedValue(mockUser);
+      mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(mockSession);
+      mockIdentityProvider.createInvitation.mockResolvedValue({ id: 'inv1' });
+
+      const result = await controller.inviteUser('u1', mockHeaders as any);
+
+      expect(result).toEqual({ success: true });
+      expect(mockIdentityProvider.createInvitation).toHaveBeenCalledWith({
+        email: mockUser.email,
+        role: mockUser.systemRole,
+        organizationId: null,
+        inviterId: 'admin1',
+        headers: mockHeaders,
+      });
     });
   });
 });

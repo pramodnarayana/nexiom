@@ -108,4 +108,19 @@ export abstract class IdentityProvider {
    * Deletes a user (Used for cleanup/rollback scenarios).
    */
   abstract deleteUser(userId: string): Promise<void>;
+
+  /**
+   * Updates a user's profile data.
+   */
+  abstract updateUser(userId: string, data: Partial<User>): Promise<User>;
+
+  /**
+   * Retrieves a user by their email address.
+   */
+  abstract getUserByEmail(email: string): Promise<User | null>;
+
+  /**
+   * Sets the password for a user (admin override / invite completion).
+   */
+  abstract setPassword(userId: string, password: string): Promise<void>;
 }

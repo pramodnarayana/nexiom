@@ -1,4 +1,4 @@
-import { useShow } from "@refinedev/core";
+import { useShow, useCustomMutation } from "@refinedev/core";
 import {
     Card,
     CardContent,
@@ -6,7 +6,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit } from "lucide-react";
+import { ArrowLeft, Edit, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,6 +21,27 @@ export const UserShow = () => {
 
     const { data, isLoading } = queryResult;
     const record = data?.data;
+
+    const { mutate: sendInvite, isLoading: inviteLoading } = useCustomMutation();
+
+    const handleInvite = () => {
+        if (!record?.id) return;
+
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        sendInvite({
+            url: `${API_URL}/admin/users/${record.id}/invite`,
+            method: "post",
+            values: {},
+            successNotification: {
+                message: `Invitation sent to ${record.email}`,
+                type: "success",
+            },
+            errorNotification: (error) => ({
+                message: `Failed to send invite: ${error?.message || "unknown error"}`,
+                type: "error",
+            }),
+        });
+    };
 
     if (isLoading) {
         return <div className="p-4">Loading User Details...</div>;
@@ -40,12 +61,24 @@ export const UserShow = () => {
                         <p className="text-muted-foreground">View user information and metadata.</p>
                     </div>
                 </div>
-                <Button asChild>
-                    <Link to={`/admin/users/edit/${record?.id}`}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit User
-                    </Link>
-                </Button>
+                <div className="flex gap-2">
+                    {!record?.emailVerified && (
+                        <Button
+                            variant="success"
+                            onClick={handleInvite}
+                            disabled={inviteLoading}
+                        >
+                            <Send className={`mr-2 h-4 w-4 ${inviteLoading ? 'animate-spin' : ''}`} />
+                            {inviteLoading ? 'Sending...' : 'Send Invite'}
+                        </Button>
+                    )}
+                    <Button asChild>
+                        <Link to={`/admin/users/edit/${record?.id}`}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit User
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <Card>
@@ -63,9 +96,9 @@ export const UserShow = () => {
                             <div className="flex items-center gap-2">
                                 <p>{record?.email}</p>
                                 {record?.emailVerified ? (
-                                    <Badge variant="outline" className="text-green-600 bg-green-50">Verified</Badge>
+                                    <Badge variant="outline" className="text-success-foreground bg-success hover:bg-success/80 border-transparent">Verified</Badge>
                                 ) : (
-                                    <Badge variant="outline" className="text-yellow-600 bg-yellow-50">Pending</Badge>
+                                    <Badge variant="outline" className="text-warning-foreground bg-warning hover:bg-warning/80 border-transparent">Pending</Badge>
                                 )}
                             </div>
                         </div>

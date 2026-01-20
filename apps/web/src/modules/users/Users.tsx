@@ -1,5 +1,5 @@
-import { useDelete } from "@refinedev/core";
-import { Trash2, Edit, Eye } from "lucide-react";
+import { useDelete, useCustomMutation } from "@refinedev/core";
+import { Trash2, Edit, Eye, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
     Table,
@@ -22,6 +22,7 @@ interface UsersProps {
 
 export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
+    const { mutate: sendInvite } = useCustomMutation();
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
@@ -42,6 +43,22 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                 }),
             });
         }
+    };
+
+    const handleInvite = (id: string, name: string) => {
+        sendInvite({
+            url: `${basePath}/${id}/invite`,
+            method: "post",
+            values: {},
+            successNotification: {
+                message: `Invitation sent to ${name}`,
+                type: "success",
+            },
+            errorNotification: (error) => ({
+                message: `Failed to send invite: ${error?.message || "unknown error"}`,
+                type: "error",
+            }),
+        });
     };
 
     if (isLoading) {
@@ -118,6 +135,16 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
+                                        {!user.emailVerified && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleInvite(user.id, displayName)}
+                                                title="Send Invitation"
+                                            >
+                                                <Send className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                         <Button variant="ghost" size="icon" asChild aria-label={`View ${displayName}`}>
                                             <Link to={`${basePath}/show/${user.id}`}>
                                                 <Eye className="h-4 w-4" />

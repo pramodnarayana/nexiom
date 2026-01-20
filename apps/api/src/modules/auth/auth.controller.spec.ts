@@ -25,6 +25,7 @@ describe('AuthController', () => {
     validateSession: jest.fn(),
     getSessionFromHeaders: jest.fn(),
     getEnrichedSession: jest.fn(),
+    getUserByEmail: jest.fn(),
     getHandler: jest.fn(() => () => {}),
   };
 
