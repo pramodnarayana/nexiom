@@ -53,10 +53,14 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --success: 142 76% 36%;
-    --success-foreground: 355.7 100% 97.3%;
-    --warning: 48 96% 53%;
-    --warning-foreground: 210 40% 98%;
+    --success: 142 70% 25%;
+    /* Darker, saturated Green */
+    --success-foreground: 142 80% 95%;
+    /* High contrast light green */
+    --warning: 48 90% 40%;
+    /* Darker, saturated Yellow/Orange */
+    --warning-foreground: 48 100% 95%;
+    /* High contrast light yellow */
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 217.2 91.2% 59.8%;

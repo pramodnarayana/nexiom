@@ -62,7 +62,7 @@ export const UserShow = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    {!record?.emailVerified && (
+                    {record?.emailVerified === false && (
                         <Button
                             variant="success"
                             onClick={handleInvite}
@@ -72,12 +72,14 @@ export const UserShow = () => {
                             {inviteLoading ? 'Sending...' : 'Send Invite'}
                         </Button>
                     )}
-                    <Button asChild>
-                        <Link to={`/admin/users/edit/${record?.id}`}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit User
-                        </Link>
-                    </Button>
+                    {record?.id && (
+                        <Button asChild>
+                            <Link to={`/admin/users/edit/${record.id}`}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit User
+                            </Link>
+                        </Button>
+                    )}
                 </div>
             </div>
 

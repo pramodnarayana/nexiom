@@ -11,7 +11,7 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
-  Headers,
+  Headers as RequestHeaders,
 } from '@nestjs/common';
 import { IdentityProvider } from '../auth/identity-provider.abstract';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
@@ -36,7 +36,10 @@ export class SystemAdminController {
   ) {}
 
   @Post('users/:id/invite')
-  async inviteUser(@Param('id') id: string, @Headers() headers: Headers) {
+  async inviteUser(
+    @Param('id') id: string,
+    @RequestHeaders() headers: Record<string, string>,
+  ) {
     const user = await this.db.query.user.findFirst({
       where: eq(schema.user.id, id),
     });
@@ -45,14 +48,14 @@ export class SystemAdminController {
       throw new NotFoundException('User not found');
     }
 
+    const webHeaders = this.toWebHeaders(headers);
+
     // Get current admin ID from session (via Headers -> BetterAuth)
-    const session = await this.identityProvider.getSessionFromHeaders(headers);
+    const session =
+      await this.identityProvider.getSessionFromHeaders(webHeaders);
     if (!session || !session.user) {
       throw new BadRequestException('Unauthorized');
     }
-
-    // Check if pending invitation exists? BetterAuth handles this or duplicates are okay?
-    // We'll let createInvitation handle it.
 
     // Create System Invitation (OrgId = null)
     await this.identityProvider.createInvitation({
@@ -60,10 +63,20 @@ export class SystemAdminController {
       role: user.systemRole || 'user',
       organizationId: null, // System Invite
       inviterId: session.user.id,
-      headers,
+      headers: webHeaders,
     });
 
     return { success: true };
+  }
+
+  private toWebHeaders(headers: Record<string, string>): Headers {
+    const webHeaders = new Headers();
+    Object.entries(headers).forEach(([key, value]) => {
+      if (value) {
+        webHeaders.append(key, value);
+      }
+    });
+    return webHeaders;
   }
 
   @Post('tenants')

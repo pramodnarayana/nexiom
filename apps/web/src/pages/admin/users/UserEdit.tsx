@@ -81,8 +81,8 @@ export const UserEdit = () => {
                         <div className="flex items-center gap-2">
                             <p className="text-muted-foreground">{record?.email}</p>
                             {/* Status Badge */}
-                            {!record?.emailVerified && (
-                                <Badge variant="outline" className="border-orange-200 text-orange-600 bg-orange-50 text-[10px] h-5 px-1.5">
+                            {record?.emailVerified === false && (
+                                <Badge variant="outline" className="text-warning-foreground bg-warning hover:bg-warning/80 border-transparent text-[10px] h-5 px-1.5">
                                     Unverified
                                 </Badge>
                             )}
@@ -92,7 +92,7 @@ export const UserEdit = () => {
 
                 {/* Header Actions */}
                 <div className="flex items-center gap-2">
-                    {!record?.emailVerified && (
+                    {record?.emailVerified === false && (
                         <Button
                             variant="success"
                             size="sm"

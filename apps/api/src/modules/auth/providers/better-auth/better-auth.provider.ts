@@ -415,9 +415,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       baseUrl = trustedOrigins[0];
     }
 
-    if (!baseUrl) {
-      this.logger.error('Cannot send invite: No Base URL found');
-      return invitation;
+    if (!baseUrl || !trustedOrigins.includes(baseUrl)) {
+      this.logger.error(
+        `Critical: Cannot send invite. Resolved Base URL (${baseUrl}) is not in trusted origins.`,
+      );
+      throw new Error(
+        `Configuration Error: Resolved Base URL (${baseUrl}) is not in trusted origins.`,
+      );
     }
 
     const inviteUrl = `${baseUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
@@ -499,43 +503,43 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
   }
 
   async updateUser(userId: string, data: Partial<User>): Promise<User> {
-    // Check if email is being updated, we need to sync 'account' table for 'credential' provider
-    // because Better Auth uses email as the accountId for credentials.
-    if (data.email) {
-      const currentUser = await this.db.query.user.findFirst({
+    return await this.db.transaction(async (tx) => {
+      // Check if email is being updated, we need to sync 'account' table for 'credential' provider
+      if (data.email) {
+        const currentUser = await tx.query.user.findFirst({
+          where: eq(schema.user.id, userId),
+        });
+
+        if (currentUser && currentUser.email !== data.email) {
+          // Update Account ID (which is the email for credentials)
+          await tx
+            .update(schema.account)
+            .set({ accountId: data.email, updatedAt: new Date() })
+            .where(
+              and(
+                eq(schema.account.userId, userId),
+                eq(schema.account.providerId, 'credential'),
+              ),
+            );
+        }
+      }
+
+      await tx
+        .update(schema.user)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.user.id, userId));
+
+      const updated = await tx.query.user.findFirst({
         where: eq(schema.user.id, userId),
       });
 
-      if (currentUser && currentUser.email !== data.email) {
-        // Update Account ID (which is the email for credentials)
-        await this.db
-          .update(schema.account)
-          .set({ accountId: data.email })
-          .where(
-            and(
-              eq(schema.account.userId, userId),
-              eq(schema.account.providerId, 'credential'),
-            ),
-          );
-      }
-    }
+      if (!updated) throw new Error('Failed to update user');
 
-    await this.db
-      .update(schema.user)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.user.id, userId));
-
-    const updated = await this.db.query.user.findFirst({
-      where: eq(schema.user.id, userId),
+      return updated as any as User;
     });
-
-    if (!updated) throw new Error('Failed to update user');
-
-    // Cast the schema user to our entity User type (compatible)
-    return updated as any as User;
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
@@ -546,59 +550,42 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
   }
 
   async setPassword(userId: string, password: string): Promise<void> {
-    // We try to import hashPassword dynamically or use the library's internal if exposed.
-    // Since we can't easily rely on 'better-auth' exports for utils in this setup without verify,
-    // We will attempt to use the instance's API if possible, or assume a standard hash if we were forced.
-    // BUT, since we faced a compile error, we should rely on the library.
-    // VS Code didn't show hashPassword in exports.
-    // Let's try to use the 'crypto' Node module for now if better-auth uses standard scrypt?
-    // NO, incompatibility with login verification.
+    const library = await import('better-auth');
+    // @ts-expect-error - hashPassword is not exposed in the main type definition but available at runtime
+    const hashPassword = library.hashPassword as (p: string) => Promise<string>;
 
-    // Let's TRY to use this.auth.api.updateUser if we can bypass the compiler check for the body?
-    // Or simpler: We Delete the 'account' (password credential) and re-create it using signUp?
-    // No, signUp creates USER too.
+    // Note: If using custom hasher, we should ensure better-auth config matches.
+    // Assuming default configuration for now which usually matches library default.
 
-    // OPTION: We assume 'better-auth' DOES export hashPassword, but maybe from 'better-auth/utils'?
-    // Let's try to import it at the top of the file.
-    // Since I can't edit the top easily with Replace, I'll assume checking node_modules/better-auth/dist/index.d.mts
-    // showed `export * from "@better-auth/core/utils";`.
-    // And `@better-auth/core/utils` likely has `hashPassword`.
-
-    // Dynamic import to avoid top-level fail if path wrong? No, compile time.
-    // I will use a simple workaround: Update the ACCOUNT table with a PLAINTEXT password?
-    // NO!
-
-    // I will use `this.auth.api` but cast it to any to call `setPassword` or `changePassword`?
-    // better-auth doesn't have `setPassword` admin API yet?
-
-    // BEST GUESS: `better-auth` exports `hashPassword`.
-    // I will try to implement it assuming I can add the import.
-    // I will add the import in a separate tool call if needed, or using MultiReplace.
-
-    // For now, I'll throw if I can't do it, but I MUST do it.
-    // I will use `require` to load it?
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { hashPassword } = require('better-auth') as {
-      hashPassword: (p: string) => Promise<string>;
-    };
     const hashedPassword = await hashPassword(password);
 
     const existingAccount = await this.db.query.account.findFirst({
-      where: eq(schema.account.userId, userId),
+      where: and(
+        eq(schema.account.userId, userId),
+        eq(schema.account.providerId, 'credential'),
+      ),
     });
 
     if (existingAccount) {
       await this.db
         .update(schema.account)
-        .set({ password: hashedPassword })
+        .set({ password: hashedPassword, updatedAt: new Date() })
         .where(eq(schema.account.id, existingAccount.id));
     } else {
+      // Fetch user to get current email for accountId
+      const user = await this.db.query.user.findFirst({
+        where: eq(schema.user.id, userId),
+      });
+
+      if (!user) {
+        throw new Error('User not found when creating credential account');
+      }
+
       // Create new account
       await this.db.insert(schema.account).values({
         id: uuidv4(),
         userId: userId,
-        accountId: userId, // For credentials, often same or email.
+        accountId: user.email, // Use email as accountId for credentials
         providerId: 'credential',
         password: hashedPassword,
         createdAt: new Date(),

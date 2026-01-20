@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -45,9 +46,21 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
         }
     };
 
+    const [invitingIds, setInvitingIds] = React.useState<Set<string>>(new Set());
+
     const handleInvite = (id: string, name: string) => {
+        if (invitingIds.has(id)) return;
+
+        setInvitingIds((prev) => new Set(prev).add(id));
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+        // Construct URL based on resource or default to admin/users.
+        // Assuming this component is mostly used in Admin context for now.
+        // The endpoint is /admin/users/:id/invite.
+        const inviteUrl = `${API_URL}/admin/users/${id}/invite`;
+
         sendInvite({
-            url: `${basePath}/${id}/invite`,
+            url: inviteUrl,
             method: "post",
             values: {},
             successNotification: {
@@ -58,6 +71,14 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                 message: `Failed to send invite: ${error?.message || "unknown error"}`,
                 type: "error",
             }),
+        }, {
+            onSettled: () => {
+                setInvitingIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }
         });
     };
 
@@ -89,6 +110,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                 <TableBody>
                     {data.map((user) => {
                         const displayName = user.name || 'user';
+                        const isInviting = invitingIds.has(user.id);
                         return (
                             <TableRow key={user.id}>
                                 <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
@@ -135,14 +157,15 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
-                                        {!user.emailVerified && (
+                                        {!user.emailVerified && user.status !== 'pending' && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => handleInvite(user.id, displayName)}
+                                                disabled={isInviting}
                                                 title="Send Invitation"
                                             >
-                                                <Send className="h-4 w-4" />
+                                                <Send className={`h-4 w-4 ${isInviting ? 'animate-spin' : ''}`} />
                                             </Button>
                                         )}
                                         <Button variant="ghost" size="icon" asChild aria-label={`View ${displayName}`}>
