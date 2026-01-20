@@ -20,7 +20,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface NavGroup {
     title: string;
@@ -180,8 +180,7 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                                     <Avatar className="h-9 w-9 border border-border shadow-sm transition-shadow hover:shadow-md">
-                                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user?.name}`} />
-                                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                                        <AvatarFallback className="bg-primary text-primary-foreground font-bold">
                                             {user?.name?.charAt(0) || 'A'}
                                         </AvatarFallback>
                                     </Avatar>
@@ -212,7 +211,7 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
                                     Profile Settings
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={logout}>
+                                <DropdownMenuItem className="focus:text-destructive focus:bg-destructive/10" onClick={logout}>
                                     <LogOut className="mr-2 h-4 w-4" />
                                     Sign out
                                 </DropdownMenuItem>

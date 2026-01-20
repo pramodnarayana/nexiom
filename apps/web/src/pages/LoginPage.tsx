@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { authClient } from '../lib/auth-client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 /**
  * Component for the Login Page.
@@ -83,60 +86,77 @@ export function LoginPage() {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
-            <div className="card" style={{ width: '300px', padding: '20px' }}>
-                <h2>Login</h2>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        required
-                        style={{ padding: '8px' }}
-                    />
-                    {/* Password is currently ignored by backend logic but good to have in UI */}
-                    <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        style={{ padding: '8px' }}
-                    />
-                    <button type="submit" disabled={loading} style={{ padding: '10px' }}>
-                        {loading ? 'Logging in...' : 'Login'}
-                    </button>
+        <div className="flex justify-center items-center min-h-[80vh] bg-background">
+            <Card className="w-[350px]">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-2xl">Login</CardTitle>
+                    <CardDescription>Enter your credentials to access your account</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <Input
+                            type="email"
+                            placeholder="Email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            required
+                        />
+                        {/* Password is currently ignored by backend logic but good to have in UI */}
+                        <Input
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                        />
 
-                    <div style={{ textAlign: 'center', margin: '10px 0' }}>OR</div>
+                        <Button type="submit" disabled={loading} className="w-full">
+                            {loading ? 'Logging in...' : 'Login'}
+                        </Button>
 
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            try {
-                                await authClient.signIn.social({
-                                    provider: "google",
-                                    callbackURL: `${window.location.origin}/dashboard`,
-                                    // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
-                                    prompt: "select_account"
-                                });
-                                // The library handles the redirect automatically
-                            } catch (error) {
-                                console.error('Social login error', error);
-                                setError('Failed to initiate Google login');
-                            }
-                        }}
-                        style={{ padding: '10px', backgroundColor: '#db4437', color: 'white', border: 'none', cursor: 'pointer' }}
-                    >
-                        Sign in with Google
-                    </button>
-                </form>
-                {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-border" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">Or</span>
+                            </div>
+                        </div>
 
-                <p style={{ marginTop: '20px', fontSize: '0.9em' }}>
-                    Tip: Use any email you added to the User List. <br />
-                    (e.g. <code>test@nexiom.com</code>)
-                </p>
-            </div>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            className="w-full"
+                            onClick={async () => {
+                                try {
+                                    await authClient.signIn.social({
+                                        provider: "google",
+                                        callbackURL: `${window.location.origin}/dashboard`,
+                                        // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
+                                        prompt: "select_account"
+                                    });
+                                    // The library handles the redirect automatically
+                                } catch (error) {
+                                    console.error('Social login error', error);
+                                    setError('Failed to initiate Google login');
+                                }
+                            }}
+                        >
+                            Sign in with Google
+                        </Button>
+                    </form>
+
+                    {error && (
+                        <p className="mt-4 text-sm text-center text-destructive font-medium">
+                            {error}
+                        </p>
+                    )}
+
+                    <div className="mt-6 text-center text-xs text-muted-foreground p-3 bg-muted/50 rounded-md border border-border">
+                        Tip: Use any email you added to the User List. <br />
+                        (e.g. <code className="bg-muted px-1 rounded text-foreground">test@nexiom.com</code>)
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

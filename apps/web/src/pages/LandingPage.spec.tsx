@@ -41,7 +41,7 @@ describe('LandingPage', () => {
         });
         render(<LandingPage />);
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
-        expect(screen.getByText('Redirecting to Dashboard...')).toBeInTheDocument();
+        expect(screen.getByText('Redirecting to your dashboard...')).toBeInTheDocument();
     });
 
     it('triggers login and signup', () => {
