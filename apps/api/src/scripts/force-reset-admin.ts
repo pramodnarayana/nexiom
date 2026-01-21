@@ -17,6 +17,7 @@ const requiredEnv = [
   'ADMIN_LAST_NAME',
   'ADMIN_COMPANY_NAME',
   'ADMIN_ROLE',
+  'DATABASE_URL',
 ];
 
 const missingEnv = requiredEnv.filter((key) => !process.env[key]);
@@ -36,11 +37,6 @@ const FIRST_NAME = process.env.ADMIN_FIRST_NAME as string;
 const LAST_NAME = process.env.ADMIN_LAST_NAME as string;
 const COMPANY_NAME = process.env.ADMIN_COMPANY_NAME as string;
 const ROLE = process.env.ADMIN_ROLE as string;
-
-if (!dbUrl) {
-  console.error('❌ DATABASE_URL not found! Check your .env files.');
-  process.exit(1);
-}
 
 const client = new Client({ connectionString: dbUrl });
 
@@ -79,6 +75,13 @@ async function reset() {
         await db
           .delete(schema.invitation)
           .where(eq(schema.invitation.inviterId, userId));
+
+        // Use email from existing[0] instead of EMAIL constant to be safe, though they should match
+        const userEmail = existing[0].email;
+        // Also delete invitations where this user is the RECIPIENT
+        await db
+          .delete(schema.invitation)
+          .where(eq(schema.invitation.email, userEmail));
 
         await db.delete(schema.user).where(eq(schema.user.id, userId));
         console.log('   ✅ User and related data deleted.');

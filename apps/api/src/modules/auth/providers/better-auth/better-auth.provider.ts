@@ -680,14 +680,37 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
   async deleteUser(userId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // 1. Fetch User to get Email (for invitation cleanup)
+      const user = await tx.query.user.findFirst({
+        where: eq(schema.user.id, userId),
+        columns: { email: true },
+      });
+
+      if (user) {
+        // 2. Delete/Cancel Pending Invitations sent TO this user
+        // This prevents stale invites if the user is re-created later.
+        await tx
+          .delete(schema.invitation)
+          .where(
+            and(
+              eq(schema.invitation.email, user.email),
+              eq(schema.invitation.status, 'pending'),
+            ),
+          );
+      }
+
+      // 3. Delete User Resources
       await tx.delete(schema.session).where(eq(schema.session.userId, userId));
       await tx.delete(schema.account).where(eq(schema.account.userId, userId));
       await tx.delete(schema.member).where(eq(schema.member.userId, userId));
+
       // Note: We do NOT delete invitations sent BY this user (inviterId) here automatically
       // because that might break history. But for rollback of a NEW user, they shouldn't have sent any.
       await tx.delete(schema.user).where(eq(schema.user.id, userId));
     });
-    this.logger.warn(`User ${userId} deleted (Rollback/Cleanup)`);
+    this.logger.warn(
+      `User ${userId} deleted (Rollback/Cleanup) - Invitations cleaned.`,
+    );
   }
 
   async updateUser(userId: string, data: Partial<User>): Promise<User> {

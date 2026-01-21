@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { AuthContext } from './context';
@@ -83,8 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                 });
 
                                 if (retryRes.ok) {
-                                    const refreshed = await retryRes.json();
-                                    hydrateUser(refreshed);
+                                    try {
+                                        const refreshed = await retryRes.json();
+                                        hydrateUser(refreshed);
+                                    } catch (err) {
+                                        console.warn("Retry refresh-session JSON parse failed:", err);
+                                        hydrateUser(enrichedData);
+                                    }
                                 } else {
                                     console.warn("Retrying Enriched Fetch failed:", retryRes.status);
                                     // Fallback to initial enrichedData (which lacks tenant but is better than nothing)
@@ -150,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * 
      * @param data - The login response containing accessToken and user object.
      */
-    const login = (data: { accessToken: string; user: unknown }) => {
+    const login = useCallback((data: { accessToken: string; user: unknown }) => {
         const apiUser = data.user as Record<string, unknown>;
         setToken(data.accessToken);
 
@@ -176,12 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             hasTenant: !!apiUser.hasTenant,
             systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'platform_user') : undefined
         });
-    };
+    }, []);
 
-    /**
-     * Clears the auth state.
-     */
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             console.log("Initiating logout...");
             await authClient.signOut();
@@ -193,10 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(undefined);
         setUser(null);
         window.location.href = '/';
-    };
+    }, []);
 
-    // Adapter matching AuthContextType
-    const value: AuthContextType = {
+    const value: AuthContextType = useMemo(() => ({
         user,
         token,
         isAuthenticated: !!user,
@@ -205,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup: async () => { },
         logout,
         setAuthState: login,
-    };
+    }), [user, token, isLoading, logout, login]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
