@@ -80,7 +80,7 @@ describe('SystemAdminValidation', () => {
         name: 'Standard User',
         email: 'user@nexiom.com',
       });
-      expect(result.systemRole).toBe('user');
+      expect(result.systemRole).toBe('platform_user');
     });
 
     it('should fail with invalid email', () => {

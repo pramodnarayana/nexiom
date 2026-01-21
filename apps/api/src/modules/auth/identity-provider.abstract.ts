@@ -20,7 +20,10 @@ export abstract class IdentityProvider {
    * @param user The user details to create.
    * @returns The created user object from the provider.
    */
-  abstract createUser(user: CreateUser): Promise<User>;
+  abstract createUser(
+    user: CreateUser,
+    headers?: Headers | Record<string, any>,
+  ): Promise<User>;
 
   /**
    * Authenticates a user and returns a session/token.
@@ -45,7 +48,7 @@ export abstract class IdentityProvider {
    * This is preferred over validateSession(token) when dealing with signed cookies.
    */
   abstract getSessionFromHeaders(
-    headers: Headers,
+    headers: Headers | Record<string, any>,
   ): Promise<{ session: Session; user: User } | null>;
 
   /**
@@ -71,13 +74,16 @@ export abstract class IdentityProvider {
     organizationId: string | null;
     expiresIn?: number;
     inviterId: string;
-    headers?: Headers;
+    headers?: Headers | Record<string, any>;
   }): Promise<unknown>;
 
   /**
    * Retrieves an invitation by ID.
    */
-  abstract getInvitation(id: string): Promise<unknown>;
+  abstract getInvitation(
+    id: string,
+    headers?: Headers | Record<string, any>,
+  ): Promise<unknown>;
 
   /**
    * Accepts an invitation, creating a link between the user and the organization.
@@ -85,6 +91,7 @@ export abstract class IdentityProvider {
   abstract acceptInvitation(
     invitationId: string,
     inviterId: string,
+    headers?: Headers | Record<string, any>,
   ): Promise<unknown>;
 
   /**

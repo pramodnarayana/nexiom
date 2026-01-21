@@ -45,8 +45,8 @@ describe('AcceptInvitePage', () => {
         (useSearchParams as unknown as Mock).mockReturnValue([new URLSearchParams('')]);
 
         render(<AcceptInvitePage />);
-        expect(screen.getByText('Invalid Link')).toBeInTheDocument();
-        expect(screen.getByText(/missing required parameters/)).toBeInTheDocument();
+        expect(screen.getByText('Invalid or Expired Link')).toBeInTheDocument();
+        expect(screen.getByText(/This invitation link is invalid/)).toBeInTheDocument();
     });
 
     it('redirects to signup when user is not logged in', () => {

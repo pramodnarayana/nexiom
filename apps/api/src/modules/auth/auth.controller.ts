@@ -88,10 +88,12 @@ export class AuthController {
   async completeInvite(
     @Body() body: CompleteInvite,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
   ) {
     // Race Condition Fix: Validate Invitation BEFORE creating user
     const invitation = (await this.invitationsService.get(
       body.invitationId,
+      req.headers,
     )) as { status: string; expiresAt: Date } | null;
 
     if (!invitation) {
@@ -107,6 +109,7 @@ export class AuthController {
     }
 
     // Step 1: Check if user exists (Provisioned vs New)
+    // console.log('[DEBUG] completeInvite: Headers received:', Object.keys(req.headers));
     let user = await this.authProvider.getUserByEmail(body.email);
 
     if (user) {
@@ -122,18 +125,25 @@ export class AuthController {
       await this.authProvider.setPassword(user.id, body.password);
     } else {
       // Create new user (standard flow)
-      user = await this.authProvider.createUser({
-        email: body.email,
-        password: body.password,
-        firstName: body.firstName,
-        lastName: body.lastName,
-        role: 'user',
-      });
+      user = await this.authProvider.createUser(
+        {
+          email: body.email,
+          password: body.password,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          role: 'user',
+        },
+        req.headers,
+      );
     }
 
     // Step 2: Accept Invitation (Atomic-ish)
     try {
-      await this.invitationsService.accept(body.invitationId, user.id);
+      await this.invitationsService.accept(
+        body.invitationId,
+        user.id,
+        req.headers,
+      );
     } catch (_e) {
       // Rollback: Delete the user if acceptance fails to prevent orphans
       await this.authProvider.deleteUser(user.id);

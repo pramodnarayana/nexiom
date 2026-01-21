@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, XCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -67,27 +67,35 @@ export const AcceptInvitePage = () => {
 
     // We no longer need handleAccept since we redirect immediately.
 
-    if (!inviteId || status === "error") {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-background p-4">
-                <Card className="w-full max-w-md border-destructive/50">
-                    <CardHeader>
-                        <CardTitle className="text-destructive flex items-center gap-2">
-                            <XCircle className="h-5 w-5" /> Invalid Link
-                        </CardTitle>
-                        <CardDescription>
-                            This invitation link is missing required parameters or is invalid.
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
-            </div>
-        );
-    }
-
-    // Loader while redirecting
+    // Polished UI matching LoginPage
     return (
-        <div className="flex items-center justify-center min-h-screen bg-background">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex justify-center items-center min-h-[80vh] bg-background">
+            <Card className="w-[350px]">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-2xl">Join Organization</CardTitle>
+                    <CardDescription>
+                        Validating your invitation...
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center justify-center py-6 gap-4">
+                    {status === 'error' || !inviteId ? (
+                        <div className="text-center space-y-2">
+                            <div className="flex justify-center text-destructive mb-2">
+                                <XCircle className="h-10 w-10" />
+                            </div>
+                            <p className="text-sm font-medium text-destructive">Invalid or Expired Link</p>
+                            <p className="text-xs text-muted-foreground">
+                                This invitation link is invalid. Please ask your administrator for a new one.
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <p className="text-sm text-muted-foreground">Please wait while we set up your access.</p>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 };

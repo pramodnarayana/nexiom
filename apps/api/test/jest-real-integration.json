@@ -1,0 +1,27 @@
+{
+    "moduleFileExtensions": [
+        "js",
+        "json",
+        "ts",
+        "mjs"
+    ],
+    "rootDir": "..",
+    "testEnvironment": "node",
+    "testRegex": ".e2e-spec.ts$",
+    "transform": {
+        "^.+\\.(t|j)s$": [
+            "ts-jest",
+            {
+                "useESM": true
+            }
+        ],
+        "^.+\\.mjs$": "ts-jest"
+    },
+    "extensionsToTreatAsEsm": [
+        ".ts"
+    ],
+    "transformIgnorePatterns": [
+        "node_modules/(?!(better-auth|better-call|uuid)/)"
+    ],
+    "moduleNameMapper": {}
+}

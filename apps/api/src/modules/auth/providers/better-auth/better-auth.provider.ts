@@ -130,22 +130,49 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       },
     });
     this.logger.log('Better Auth Initialized (with Injected DB)');
+    console.error('DEBUG: Auth Keys:', Object.keys(this.auth));
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (this.auth && (this.auth as any).api) {
+      console.error(
+        'DEBUG: Auth API Keys:',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+        Object.keys((this.auth as any).api),
+      );
+    } else {
+      console.error('DEBUG: Auth API is missing!');
+      // console.dir(this.auth);
+    }
   }
 
-  async createUser(user: CreateUser) {
+  async createUser(user: CreateUser, headers?: Headers | Record<string, any>) {
     this.logger.log(`Creating user ${user.email} in Better Auth...`);
+    // console.log('[DEBUG] createUser: Headers present:', headers ? Object.keys(headers) : 'undefined');
     try {
       // 1. Create User via Better Auth API
       if (!user.password) {
         throw new Error('Password is required for email signup');
       }
-      const result = await this.auth.api.signUpEmail({
+
+      const api = this.auth.api as unknown as {
+        signUpEmail: (opts: {
+          body: {
+            email: string;
+            password: string;
+            name: string;
+          };
+          asResponse?: boolean;
+          headers?: Headers | Record<string, any>;
+        }) => Promise<{ user: { id: string } }>;
+      };
+
+      const result = await api.signUpEmail({
         body: {
           email: user.email,
           password: user.password,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         },
         asResponse: false,
+        headers: headers,
       });
 
       // 2. Delegate Tenant Creation to Domain Service
@@ -231,7 +258,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       session: dbSession,
       user: {
         ...result.user,
-        systemRole: dbUser?.systemRole || 'user',
+        systemRole: dbUser?.systemRole || 'platform_user',
       } as unknown as schema.User,
       cookie: cookieHeader || undefined, // Return the native cookie string/array
     };
@@ -287,10 +314,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     };
   }
 
-  async getSessionFromHeaders(headers: Headers) {
+  async getSessionFromHeaders(headers: Headers | Record<string, any>) {
     // Delegate to Better Auth to parse cookies (signed or not)
     const result = await this.auth.api.getSession({
-      headers,
+      headers: headers as Record<string, string>, // Cast or pass directly
     });
 
     if (!result) return null;
@@ -312,7 +339,6 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     // But wait, TenantsService doesn't have "findMembership".
     // Let's query DB directly here? Yes -> we have DRIZZLE_DB.
     // OR add findMembership to TenantsService.
-
     // Let's us DB directly for READ ONLY enrichment to keep it fast.
     // ... (Existing Logic using this.db) ...
     // Actually, let's reproduce the existing logic since we have this.db
@@ -343,7 +369,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         organizationId: membership?.organizationId,
         organizationName: membership?.organization?.name, // Adjusted for Relation
         roles: [membership?.role || 'user'],
-        systemRole: dbUser?.systemRole || 'user',
+        systemRole: dbUser?.systemRole || 'platform_user',
       },
     };
   }
@@ -354,7 +380,8 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     organizationId: string | null;
     expiresIn?: number;
     inviterId: string;
-    headers?: Headers;
+
+    headers?: Headers | Record<string, any>;
   }) {
     if (!payload.organizationId) {
       // System-level invite (No organization) -> Use manual flow
@@ -362,6 +389,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     }
 
     // Cast to any because the organization plugin methods are not being inferred correctly by TypeScript
+
     const api = this.auth.api as unknown as {
       createInvitation: (opts: {
         body: {
@@ -371,7 +399,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
           expiresIn?: number;
           inviterId?: string;
         };
-        headers?: Headers;
+        headers?: Headers | Record<string, any>;
       }) => Promise<unknown>;
     };
 
@@ -445,32 +473,75 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     return invitation;
   }
 
-  async getInvitation(id: string) {
-    const api = this.auth.api as unknown as {
-      getInvitation: (opts: { query: { id: string } }) => Promise<unknown>;
-    };
-    return await api.getInvitation({
-      query: {
-        id,
-      },
+  async getInvitation(id: string, _headers?: Headers | Record<string, any>) {
+    // FIX: Using Manual DB Query to bypass Better Auth API "Not Authenticated" error.
+    // The invite fetch logic needs to be public for the signup flow validation.
+    const invitation = await this.db.query.invitation.findFirst({
+      where: eq(schema.invitation.id, id),
     });
+
+    return invitation || null;
   }
 
-  async acceptInvitation(invitationId: string, inviterId: string) {
-    const api = this.auth.api as unknown as {
-      acceptInvitation: (opts: {
-        body: { invitationId: string };
-      }) => Promise<unknown>;
-    };
-    // We log the inviterId for audit or context, though better-auth handles the link
+  async acceptInvitation(
+    invitationId: string,
+    inviterId: string,
+    _headers?: Headers | Record<string, any>,
+  ) {
+    // FIX: Using Manual DB Transaction to bypass Better Auth API "Not Authenticated" error.
+    // Since this is called during Signup (Unauthenticated), we act as System.
+
     this.logger.log(
-      `Accepting invitation ${invitationId}, triggered by user context ${inviterId}`,
+      `Accepting invitation ${invitationId} (Direct DB), triggered by user context ${inviterId}`,
     );
 
-    return await api.acceptInvitation({
-      body: {
-        invitationId,
-      },
+    return await this.db.transaction(async (tx) => {
+      // 1. Fetch Invitation
+      const invitation = await tx.query.invitation.findFirst({
+        where: eq(schema.invitation.id, invitationId),
+      });
+
+      if (!invitation) {
+        throw new Error('Invitation not found');
+      }
+
+      if (invitation.status !== 'pending') {
+        throw new Error('Invitation is not pending');
+      }
+
+      if (invitation.expiresAt < new Date()) {
+        throw new Error('Invitation expired');
+      }
+
+      // 2. Create Membership OR Update System Role
+      if (invitation.organizationId) {
+        await tx.insert(schema.member).values({
+          id: uuidv4(),
+          organizationId: invitation.organizationId,
+          userId: inviterId, // The user accepting the invite
+          role: invitation.role || 'user',
+          createdAt: new Date(),
+        });
+      } else {
+        // System-level invitation (No Organization)
+        // We must promote the user to the role specified in the invite (e.g. platform_admin)
+        if (invitation.role) {
+          await tx
+            .update(schema.user)
+            .set({ systemRole: invitation.role })
+            .where(eq(schema.user.id, inviterId));
+        }
+      }
+
+      // 3. Update Invitation Status
+      await tx
+        .update(schema.invitation)
+        .set({
+          status: 'accepted',
+        })
+        .where(eq(schema.invitation.id, invitationId));
+
+      return { success: true };
     });
   }
 

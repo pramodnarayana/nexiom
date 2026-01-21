@@ -27,7 +27,7 @@ export class InvitationsController {
     createInvitation.organizationId = req.user.organizationId;
 
     // Pass headers to propagate auth context to BetterAuth client
-    const headers = new Headers(req.headers as Record<string, string>);
+    const headers = req.headers;
     return this.invitationsService.create(
       createInvitation,
       req.user.id,
@@ -50,6 +50,7 @@ export class InvitationsController {
     return this.invitationsService.accept(
       acceptInvitation.invitationId,
       req.user.id,
+      req.headers,
     );
   }
 

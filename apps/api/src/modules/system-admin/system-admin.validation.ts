@@ -31,7 +31,7 @@ export class UpdateTenantValidation extends createZodDto(UpdateTenantSchema) {}
 
 export const UpdateUserSchema = z.object({
   name: z.string().min(1).optional(),
-  systemRole: z.enum(['user', 'platform_admin']).optional(),
+  systemRole: z.enum(['platform_user', 'platform_admin']).optional(),
   email: z.string().email().optional(), // In case we want to allow email updates, though risky
   emailVerified: z.boolean().optional(),
 });
@@ -41,7 +41,9 @@ export class UpdateUserValidation extends createZodDto(UpdateUserSchema) {}
 export const CreateUserSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address'),
-  systemRole: z.enum(['user', 'platform_admin']).default('user'),
+  systemRole: z
+    .enum(['platform_user', 'platform_admin'])
+    .default('platform_user'),
 });
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}

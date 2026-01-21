@@ -4,7 +4,7 @@
     "json",
     "ts"
   ],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
@@ -14,7 +14,9 @@
     "/node_modules/(?!(better-auth|better-call|uuid)/)"
   ],
   "moduleNameMapper": {
-    "^better-auth$": "<rootDir>/../src/test/mocks/better-auth.mock.ts",
-    "^better-auth/(.*)$": "<rootDir>/../src/test/mocks/better-auth.mock.ts"
+    "^better-auth$": "<rootDir>/src/test/mocks/better-auth.mock.ts",
+    "^better-auth/adapters/drizzle$": "<rootDir>/src/test/mocks/better-auth.mock.ts",
+    "^better-auth/plugins$": "<rootDir>/src/test/mocks/better-auth.mock.ts",
+    "^better-auth/node$": "<rootDir>/src/test/mocks/better-auth.mock.ts"
   }
 }

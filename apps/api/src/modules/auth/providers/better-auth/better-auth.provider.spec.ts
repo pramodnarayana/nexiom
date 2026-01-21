@@ -1,7 +1,9 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+
+/* eslint-disable @typescript-eslint/unbound-method */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { BetterAuthIdentityProvider } from './better-auth.provider';
@@ -43,7 +45,7 @@ jest.mock('better-auth/plugins', () => ({
 }));
 
 // Mock Drizzle
-const mockDb = {
+const mockDb: any = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
   returning: jest
@@ -63,8 +65,20 @@ const mockDb = {
     user: {
       findFirst: jest.fn(),
     },
+    invitation: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    account: {
+      findFirst: jest.fn(),
+    },
   },
+  update: jest.fn().mockReturnThis(),
+  set: jest.fn().mockReturnThis(),
 };
+
+// Add transaction after declaration to avoid circular reference
+mockDb.transaction = jest.fn((cb) => cb(mockDb));
 
 jest.mock('drizzle-orm/node-postgres', () => ({
   drizzle: jest.fn(() => mockDb),
@@ -196,7 +210,7 @@ describe('BetterAuthIdentityProvider', () => {
       // Mock DB query to return null
       const findFirstSpy = jest
         .spyOn(provider['db'].query.session, 'findFirst')
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
         .mockResolvedValue(null as any);
 
       const result = await provider.validateSession('invalid-token');
@@ -211,7 +225,7 @@ describe('BetterAuthIdentityProvider', () => {
       };
       const findFirstSpy = jest
         .spyOn(provider['db'].query.session, 'findFirst')
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
         .mockResolvedValue(expiredSession as any);
 
       const result = await provider.validateSession('expired-token');
@@ -314,22 +328,53 @@ describe('BetterAuthIdentityProvider', () => {
   });
 
   describe('getInvitation', () => {
-    it('should call getInvitation api', async () => {
-      mockBetterAuth.api.getInvitation = jest.fn().mockResolvedValue({});
+    it('should query DB for invitation', async () => {
+      mockDb.query.invitation.findFirst.mockResolvedValue({ id: 'inv-123' });
       await provider.getInvitation('inv-123');
-      expect(mockBetterAuth.api.getInvitation).toHaveBeenCalledWith({
-        query: { id: 'inv-123' },
-      });
+      expect(mockDb.query.invitation.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.anything() }),
+      );
+      expect(mockBetterAuth.api.getInvitation).not.toHaveBeenCalled();
     });
   });
 
   describe('acceptInvitation', () => {
-    it('should call acceptInvitation api', async () => {
-      mockBetterAuth.api.acceptInvitation = jest.fn().mockResolvedValue({});
-      await provider.acceptInvitation('inv-123', 'user-123');
-      expect(mockBetterAuth.api.acceptInvitation).toHaveBeenCalledWith({
-        body: { invitationId: 'inv-123' },
+    it('should accept organization invitation via DB transaction', async () => {
+      // Mock Invitation finding
+      mockDb.query.invitation.findFirst.mockResolvedValue({
+        id: 'inv-123',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 10000),
+        organizationId: 'org-123',
+        role: 'user',
       });
+
+      await provider.acceptInvitation('inv-123', 'user-123');
+
+      expect(mockDb.transaction).toHaveBeenCalled();
+      expect(mockDb.insert).toHaveBeenCalled(); // Insert Member
+      expect(mockDb.update).toHaveBeenCalled(); // Update Invitation Status
+    });
+
+    it('should accept system invitation and update systemRole', async () => {
+      // Mock Invitation finding
+      mockDb.query.invitation.findFirst.mockResolvedValue({
+        id: 'inv-sys',
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 10000),
+        organizationId: null, // System Invite
+        role: 'platform_user',
+      });
+
+      await provider.acceptInvitation('inv-sys', 'user-123');
+
+      expect(mockDb.transaction).toHaveBeenCalled();
+      // Should NOT insert member
+      expect(mockDb.insert).not.toHaveBeenCalled();
+      // Should update User systemRole
+      expect(mockDb.update).toHaveBeenCalled();
+      // We can't easily inspect the chained calls of mockDb.update().set().where() with this simple mock,
+      // but we verified the path execution.
     });
   });
 

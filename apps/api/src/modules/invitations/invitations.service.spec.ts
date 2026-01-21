@@ -57,6 +57,7 @@ describe('InvitationsService', () => {
       expect(identityProvider.acceptInvitation).toHaveBeenCalledWith(
         'inv-123',
         'user-123',
+        undefined,
       );
     });
   });
@@ -65,7 +66,10 @@ describe('InvitationsService', () => {
     it('should call identityProvider.getInvitation', async () => {
       await service.get('inv-123');
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(identityProvider.getInvitation).toHaveBeenCalledWith('inv-123');
+      expect(identityProvider.getInvitation).toHaveBeenCalledWith(
+        'inv-123',
+        undefined,
+      );
     });
   });
 });

@@ -128,7 +128,7 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
 export function AdminLayout() {
     // We cast to correct type, assuming auth provider returns this shape
     const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'user' } | null,
+        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'platform_user' | 'user' } | null,
         isAuthenticated: boolean,
         logout: () => void,
         isLoading: boolean
@@ -144,7 +144,7 @@ export function AdminLayout() {
             return;
         }
         // Strict Platform Admin Check
-        if (user && user.systemRole !== 'platform_admin') {
+        if (user && user.systemRole !== 'platform_admin' && user.systemRole !== 'platform_user') {
             console.warn("Access Denied: Platform Admin Required. Current role:", user.systemRole);
             navigate('/dashboard');
         }
@@ -154,7 +154,7 @@ export function AdminLayout() {
         return <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">Loading Admin Panel...</div>;
     }
 
-    if (!user || user.systemRole !== 'platform_admin') {
+    if (!user || (user.systemRole !== 'platform_admin' && user.systemRole !== 'platform_user')) {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">
                 Access denied.

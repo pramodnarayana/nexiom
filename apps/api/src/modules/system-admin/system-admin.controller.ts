@@ -69,6 +69,31 @@ export class SystemAdminController {
     return { success: true };
   }
 
+  @Post('invitations')
+  async createSystemInvitation(
+    @Body() body: { email: string; role: string },
+    @RequestHeaders() headers: Record<string, string>,
+  ) {
+    const webHeaders = this.toWebHeaders(headers);
+
+    // Get current admin ID from session
+    const session =
+      await this.identityProvider.getSessionFromHeaders(webHeaders);
+    if (!session || !session.user) {
+      throw new BadRequestException('Unauthorized');
+    }
+
+    const invitation = await this.identityProvider.createInvitation({
+      email: body.email,
+      role: body.role || 'user',
+      organizationId: null, // System invitation
+      inviterId: session.user.id,
+      headers: webHeaders,
+    });
+
+    return invitation;
+  }
+
   private toWebHeaders(headers: Record<string, string>): Headers {
     const webHeaders = new Headers();
     Object.entries(headers).forEach(([key, value]) => {

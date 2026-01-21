@@ -119,7 +119,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                     <div className="flex flex-col gap-1">
                                         {user.systemRole && (
                                             <Badge variant={user.systemRole === 'platform_admin' ? 'default' : 'outline'}>
-                                                {user.systemRole === 'platform_admin' ? 'Platform Admin' : 'User'}
+                                                {user.systemRole === 'platform_admin' ? 'Platform Admin' : 'Platform User'}
                                             </Badge>
                                         )}
                                         {user.role && user.role !== 'user' && (
