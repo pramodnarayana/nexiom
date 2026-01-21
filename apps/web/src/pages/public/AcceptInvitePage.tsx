@@ -74,7 +74,9 @@ export const AcceptInvitePage = () => {
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">Join Organization</CardTitle>
                     <CardDescription>
-                        Validating your invitation...
+                        {(status === 'error' || !inviteId)
+                            ? "Action Required"
+                            : "Validating your invitation..."}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center py-6 gap-4">
@@ -83,9 +85,13 @@ export const AcceptInvitePage = () => {
                             <div className="flex justify-center text-destructive mb-2">
                                 <XCircle className="h-10 w-10" />
                             </div>
-                            <p className="text-sm font-medium text-destructive">Invalid or Expired Link</p>
+                            <p className="text-sm font-medium text-destructive">
+                                {inviteId ? "Invitation Invalid" : "Invitation Missing"}
+                            </p>
                             <p className="text-xs text-muted-foreground">
-                                This invitation link is invalid. Please ask your administrator for a new one.
+                                {inviteId
+                                    ? "This invitation link is invalid or has expired."
+                                    : "No invitation ID found. Please check your link."}
                             </p>
                         </div>
                     ) : (

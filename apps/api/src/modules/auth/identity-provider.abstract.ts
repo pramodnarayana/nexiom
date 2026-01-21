@@ -14,6 +14,17 @@ import { Session } from './auth.schema';
  * Abstract Class defining the contract for Identity Providers.
  * ...
  */
+import { Invitation } from '../invitations/invitation.interface';
+
+/**
+ * Abstract Class defining the contract for Identity Providers.
+ * ...
+ */
+
+/**
+ * Abstract Class defining the contract for Identity Providers.
+ * ...
+ */
 export abstract class IdentityProvider {
   /**
    * Creates a user in the external identity system.
@@ -83,14 +94,14 @@ export abstract class IdentityProvider {
   abstract getInvitation(
     id: string,
     headers?: Headers | Record<string, any>,
-  ): Promise<unknown>;
+  ): Promise<Invitation | null>;
 
   /**
    * Accepts an invitation, creating a link between the user and the organization.
    */
   abstract acceptInvitation(
     invitationId: string,
-    inviterId: string,
+    userId: string,
     headers?: Headers | Record<string, any>,
   ): Promise<unknown>;
 

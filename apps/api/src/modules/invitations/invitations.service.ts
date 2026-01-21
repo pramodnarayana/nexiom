@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IdentityProvider } from '../auth/identity-provider.abstract';
+import { Invitation } from './invitation.interface';
 import { CreateInvitation } from './invitations.validation';
 
 @Injectable()
@@ -38,7 +39,10 @@ export class InvitationsService {
     );
   }
 
-  async get(id: string, headers?: Record<string, any>): Promise<unknown> {
+  async get(
+    id: string,
+    headers?: Record<string, any>,
+  ): Promise<Invitation | null> {
     return this.identityProvider.getInvitation(id, headers);
   }
 

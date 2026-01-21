@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -32,9 +32,11 @@ export function SignupPage() {
     const isInviteFlow = !!redirectUrl; // If we have a redirect, we assume it's an invite (User Only)
 
     // Pre-fill email if provided
-    if (emailParam && !email) {
-        setEmail(emailParam);
-    }
+    useEffect(() => {
+        if (emailParam && !email) {
+            setEmail(emailParam);
+        }
+    }, [emailParam, email]);
 
     // We need useAuth to update global state if we auto-login
     const { setAuthState } = useAuth();

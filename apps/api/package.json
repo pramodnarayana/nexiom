@@ -54,7 +54,6 @@
     "@nestjs/testing": "^11.0.1",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
-    "@types/dotenv": "^8.2.3",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",

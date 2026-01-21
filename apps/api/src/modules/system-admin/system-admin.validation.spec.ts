@@ -75,7 +75,7 @@ describe('SystemAdminValidation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should default systemRole to user', () => {
+    it('should default systemRole to platform_user', () => {
       const result = CreateUserSchema.parse({
         name: 'Standard User',
         email: 'user@nexiom.com',

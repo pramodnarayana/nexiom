@@ -47,3 +47,12 @@ export const CreateUserSchema = z.object({
 });
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
+
+export const CreateSystemInvitationSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['platform_admin', 'platform_user']).default('platform_user'),
+});
+
+export class CreateSystemInvitationValidation extends createZodDto(
+  CreateSystemInvitationSchema,
+) {}

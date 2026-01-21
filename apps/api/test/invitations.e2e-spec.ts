@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -7,19 +6,24 @@ import { AppModule } from './../src/app.module';
 import { SystemAdminGuard } from './../src/modules/auth/system-admin.guard';
 import { EmailService } from './../src/modules/email/email.service.abstract';
 import { eq } from 'drizzle-orm';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+
+import * as schema from './../src/db/schema';
 
 describe('Invitation Flow (e2e)', () => {
   let app: INestApplication;
-  let lastEmail: any = null;
+  let lastEmail: Record<string, unknown> | null = null;
   let invitationId: string;
   const testEmail = `invite-test-${Date.now()}@example.com`;
 
   // Mock Email Service to intercept the invite link
   const mockEmailService = {
-    sendEmail: jest.fn().mockImplementation(async (payload) => {
-      lastEmail = payload;
-      return Promise.resolve();
-    }),
+    sendEmail: jest
+      .fn()
+      .mockImplementation(async (payload: Record<string, unknown>) => {
+        lastEmail = payload;
+        return Promise.resolve();
+      }),
   };
 
   beforeAll(async () => {
@@ -44,10 +48,7 @@ describe('Invitation Flow (e2e)', () => {
     // Seed the DB with the 'mock-user-id' that the Mock Identity Provider returns
     // This is necessary because 'createSystemInvitation' inserts into the REAL DB using this ID,
     // so the Foreign Key constraint on 'inviterId' must be satisfied.
-    const db = app.get('DRIZZLE_DB');
-    // We import schema dynamically or use raw query if schema import is tricky in E2E
-    // But we can try using the schema from the source
-    const schema = require('./../src/db/schema');
+    const db = app.get<NodePgDatabase<typeof schema>>('DRIZZLE_DB');
 
     // Cleanup dependencies first to avoid foreign key constraints
     await db
@@ -78,8 +79,24 @@ describe('Invitation Flow (e2e)', () => {
   });
 
   afterAll(async () => {
-    // Ideally clean up the user created
-    await app.close();
+    try {
+      // Clean up the user and invitation created during the test
+      const db = app.get<NodePgDatabase<typeof schema>>('DRIZZLE_DB');
+
+      // Delete the test user (which cascades to session, account, member)
+      await db.delete(schema.user).where(eq(schema.user.email, testEmail));
+
+      // Delete the invitation if it still exists (though usually consumed)
+      if (invitationId) {
+        await db
+          .delete(schema.invitation)
+          .where(eq(schema.invitation.id, invitationId));
+      }
+    } catch (e) {
+      console.warn('E2E Cleanup: Failed to delete test resources', e);
+    } finally {
+      await app.close();
+    }
   });
 
   it('should create a system invitation', async () => {
@@ -87,18 +104,20 @@ describe('Invitation Flow (e2e)', () => {
       .post('/admin/invitations')
       .send({
         email: testEmail,
-        role: 'admin',
+        role: 'platform_admin',
       })
       .expect(201);
 
-    expect(response.body).toHaveProperty('id');
-    expect(response.body.email).toBe(testEmail);
-    invitationId = response.body.id;
+    const body = response.body as { id: string; email: string };
+    expect(body).toHaveProperty('id');
+    expect(body.email).toBe(testEmail);
+    invitationId = body.id;
 
     // Verify email was "sent"
     expect(mockEmailService.sendEmail).toHaveBeenCalled();
-    expect(lastEmail.to).toBe(testEmail);
-    expect(lastEmail.text).toContain('/invite/accept?id=');
+    expect(lastEmail).not.toBeNull();
+    expect(lastEmail!.to).toBe(testEmail);
+    expect(lastEmail!.text).toContain('/invite/accept?id=');
   });
 
   it('should allow a new user to sign up via the invitation', async () => {
@@ -119,10 +138,14 @@ describe('Invitation Flow (e2e)', () => {
       .expect(201);
 
     // Expect a session and user object
-    expect(response.body).toHaveProperty('session');
-    expect(response.body).toHaveProperty('user');
-    expect(response.body.user.email).toBe(testEmail);
-    expect(response.body.user.emailVerified).toBe(true); // Should be auto-verified
+    const body = response.body as {
+      user: { email: string; emailVerified: boolean };
+      session: unknown;
+    };
+    expect(body).toHaveProperty('session');
+    expect(body).toHaveProperty('user');
+    expect(body.user.email).toBe(testEmail);
+    expect(body.user.emailVerified).toBe(true); // Should be auto-verified
   });
 
   it('should allow the invited user to login subsequently', async () => {
@@ -136,7 +159,12 @@ describe('Invitation Flow (e2e)', () => {
       .send(loginPayload)
       .expect(201);
 
-    expect(response.body).toHaveProperty('token'); // Session Token
-    expect(response.body.user.email).toBe(testEmail);
+    const body = response.body as {
+      session: { token: string };
+      user: { email: string };
+    };
+    expect(body).toHaveProperty('session');
+    expect(body.session).toHaveProperty('token'); // Session Token
+    expect(body.user.email).toBe(testEmail);
   });
 });

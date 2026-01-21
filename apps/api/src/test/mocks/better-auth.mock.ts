@@ -1,18 +1,29 @@
-/* eslint-disable */
 // Basic mock to prevent crashes
 export const toNodeHandler = (_handler: unknown) => {
-  return (_req: unknown, _res: unknown) => { };
+  return (_req: unknown, _res: unknown) => {};
 };
+
+interface MockOptions {
+  body: {
+    email: string;
+    name?: string;
+    role?: string;
+    organizationId?: string | null;
+    [key: string]: unknown;
+  };
+  query?: Record<string, string>;
+}
 
 // Mock betterAuth to return an object with 'api'
 export const betterAuth = (_options: unknown) => {
   return {
     api: {
-      signUpEmail: async (opts: any) => {
+      signUpEmail: async (opts: MockOptions) => {
         // Mock response mirroring what BetterAuth returns
-        return {
+        const id = 'user-' + Math.random().toString(36).substring(2, 9);
+        return await Promise.resolve({
           user: {
-            id: 'mock-user-id',
+            id,
             email: opts.body.email,
             name: opts.body.name,
             emailVerified: true,
@@ -25,9 +36,9 @@ export const betterAuth = (_options: unknown) => {
             // expires in future
             expiresAt: new Date(Date.now() + 1000 * 60 * 60),
           },
-        };
+        });
       },
-      signInEmail: async (opts: any) => {
+      signInEmail: async (opts: MockOptions) => {
         const userStub = {
           id: 'mock-user-id',
           email: opts.body.email,
@@ -42,7 +53,7 @@ export const betterAuth = (_options: unknown) => {
           expiresAt: new Date(Date.now() + 1000 * 60 * 60),
         };
 
-        return {
+        return await Promise.resolve({
           ok: true,
           statusText: 'OK',
           headers: {
@@ -50,40 +61,41 @@ export const betterAuth = (_options: unknown) => {
               key.toLowerCase() === 'set-cookie' ? 'mock-cookie=123' : null,
             getSetCookie: () => ['mock-cookie=123'],
           },
-          json: async () => ({
-            token: sessionStub.token,
-            user: userStub,
-            session: sessionStub,
-          }),
-        };
+          json: async () =>
+            await Promise.resolve({
+              token: sessionStub.token,
+              user: userStub,
+              session: sessionStub,
+            }),
+        });
       },
-      createInvitation: async (opts: any) => {
-        return {
+      createInvitation: async (opts: MockOptions) => {
+        return await Promise.resolve({
           id: 'mock-invitation-id',
           email: opts.body.email,
           role: opts.body.role,
           status: 'pending',
           expiresAt: new Date(Date.now() + 1000 * 60 * 48), // 48h
           organizationId: opts.body.organizationId,
-        };
+        });
       },
-      getInvitation: async (opts: any) => {
-        return {
-          id: opts.query.id,
+      getInvitation: async (opts: MockOptions) => {
+        return await Promise.resolve({
+          id: opts.query?.id,
           email: 'test@example.com', // fallback
           role: 'user',
           status: 'pending',
           organizationId: 'mock-org-id',
-        };
+        });
       },
-      acceptInvitation: async (_opts: any) => {
-        return {
+      acceptInvitation: async (_opts: unknown) => {
+        return await Promise.resolve({
           invitation: { status: 'accepted' },
           member: { userId: 'mock-user-id', organizationId: 'mock-org-id' },
-        };
+        });
       },
-      getSession: async (_opts: any) => {
-        return {
+      getSession: async (_opts: unknown) => {
+        return await Promise.resolve({
           session: {
             token: 'mock-session-token',
             userId: 'mock-user-id',
@@ -95,10 +107,10 @@ export const betterAuth = (_options: unknown) => {
             name: 'Admin User',
             role: 'admin',
           },
-        };
+        });
       },
     },
-    handler: (_req: any, _res: any) => { },
+    handler: (_req: unknown, _res: unknown) => {},
   };
 };
 

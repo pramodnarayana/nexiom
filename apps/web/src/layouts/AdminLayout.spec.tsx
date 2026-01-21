@@ -79,11 +79,11 @@ describe('AdminLayout', () => {
         });
     });
 
-    it('redirects to dashboard if user is not platform_admin', async () => {
+    it('redirects to dashboard if user has invalid role', async () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: false,
             isAuthenticated: true,
-            user: { name: 'User', systemRole: 'user' }, // Wrong role
+            user: { name: 'User', systemRole: 'invalid_role' }, // Explicitly invalid
             logout: mockLogout
         });
 
@@ -97,8 +97,25 @@ describe('AdminLayout', () => {
             expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
         });
 
-        // Access denied message might behave briefly
         expect(screen.getByText('Access denied.')).toBeInTheDocument();
+    });
+
+    it('renders content when user is platform_user', () => {
+        (useAuth as unknown as Mock).mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            user: { name: 'Staff', systemRole: 'platform_user' },
+            logout: mockLogout
+        });
+
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <AdminLayout />
+            </ThemeProvider>
+        );
+
+        expect(screen.getByTestId('outlet')).toBeInTheDocument();
+        expect(screen.getAllByText('Admin Console')).toHaveLength(2);
     });
 
     it('renders content when user is platform_admin', () => {

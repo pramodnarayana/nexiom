@@ -10,13 +10,19 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const API_URL = 'http://localhost:3000/api';
-const EMAIL = 'pramod.narayana@gmail.com';
-const PASSWORD = 'password123';
+const EMAIL = process.env.ADMIN_EMAIL || 'pramod.narayana@gmail.com';
+const PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
 const dbUrl = process.env.DATABASE_URL;
 
 if (!dbUrl) {
   console.error('❌ DATABASE_URL not found! Check your .env files.');
   process.exit(1);
+}
+
+if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+  console.warn(
+    '⚠️  ADMIN_EMAIL/ADMIN_PASSWORD not set. Using hardcoded defaults (NOT RECOMMENDED).',
+  );
 }
 
 const client = new Client({ connectionString: dbUrl });
@@ -43,22 +49,13 @@ async function reset() {
     if (existing.length > 0) {
       const userId = existing[0].id;
       // Delete dependencies manually to be safe (matching bootstrap-admin logic/e2e tests)
-      // We need to import tables properly. Assuming schema has them.
-      if (schema.session)
-        await db
-          .delete(schema.session)
-          .where(eq(schema.session.userId, userId));
-      if (schema.account)
-        await db
-          .delete(schema.account)
-          .where(eq(schema.account.userId, userId));
-      if (schema.member)
-        await db.delete(schema.member).where(eq(schema.member.userId, userId));
+      await db.delete(schema.session).where(eq(schema.session.userId, userId));
+      await db.delete(schema.account).where(eq(schema.account.userId, userId));
+      await db.delete(schema.member).where(eq(schema.member.userId, userId));
       // Deleting invitations sent by this user
-      if (schema.invitation)
-        await db
-          .delete(schema.invitation)
-          .where(eq(schema.invitation.inviterId, userId));
+      await db
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.inviterId, userId));
 
       await db.delete(schema.user).where(eq(schema.user.id, userId));
       console.log('   ✅ User and related data deleted.');
@@ -89,6 +86,7 @@ async function reset() {
       const text = await res.text();
       console.error(`❌ API Signup Failed: ${res.status}`);
       console.error(text);
+      await client.end();
       process.exit(1);
     }
     console.log('   ✅ User Re-created successfully via API.');
@@ -97,6 +95,7 @@ async function reset() {
       '❌ Failed to contact API. Is the server running on localhost:3000?',
       e,
     );
+    await client.end();
     process.exit(1);
   }
 
@@ -117,7 +116,9 @@ async function reset() {
     console.log('\n🎉 SUCCESS! You can now login.');
     console.log(`   URL:      http://localhost:5173/login`);
     console.log(`   Email:    ${EMAIL}`);
-    console.log(`   Password: ${PASSWORD}`);
+    console.log(
+      `   Password: ${PASSWORD.substring(0, 2)}***${PASSWORD.substring(PASSWORD.length - 2)}`,
+    );
   } else {
     console.error(
       '❌ CRITICAL: User not found in DB after creation! Something is wrong.',

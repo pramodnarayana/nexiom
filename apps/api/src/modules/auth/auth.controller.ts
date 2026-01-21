@@ -91,10 +91,10 @@ export class AuthController {
     @Req() req: Request,
   ) {
     // Race Condition Fix: Validate Invitation BEFORE creating user
-    const invitation = (await this.invitationsService.get(
+    const invitation = await this.invitationsService.get(
       body.invitationId,
       req.headers,
-    )) as { status: string; expiresAt: Date } | null;
+    );
 
     if (!invitation) {
       throw new BadRequestException('Invalid Invitation ID');
@@ -139,13 +139,20 @@ export class AuthController {
 
     // Step 2: Accept Invitation (Atomic-ish)
     try {
+      console.log(
+        'DEBUG: completeInvite - accepting invitation for user:',
+        user.id,
+        user.email,
+      );
       await this.invitationsService.accept(
         body.invitationId,
         user.id,
         req.headers,
       );
-    } catch (_e) {
+    } catch (e) {
+      console.error('DEBUG: acceptInvitation failed:', e);
       // Rollback: Delete the user if acceptance fails to prevent orphans
+      console.log('DEBUG: Rolling back user creation:', user.id);
       await this.authProvider.deleteUser(user.id);
       throw new BadRequestException(
         'Failed to accept invitation (User creation rolled back)',

@@ -208,14 +208,10 @@ describe('BetterAuthIdentityProvider', () => {
   describe('getEnrichedSession', () => {
     it('should return null if validateSession finds no session in DB', async () => {
       // Mock DB query to return null
-      const findFirstSpy = jest
-        .spyOn(provider['db'].query.session, 'findFirst')
-
-        .mockResolvedValue(null as any);
+      mockDb.query.session.findFirst.mockResolvedValueOnce(null);
 
       const result = await provider.validateSession('invalid-token');
       expect(result).toBeNull();
-      findFirstSpy.mockRestore();
     });
 
     it('should return null if validateSession finds expired session', async () => {
@@ -223,14 +219,10 @@ describe('BetterAuthIdentityProvider', () => {
       const expiredSession = {
         expiresAt: new Date(Date.now() - 10000), // Past
       };
-      const findFirstSpy = jest
-        .spyOn(provider['db'].query.session, 'findFirst')
-
-        .mockResolvedValue(expiredSession as any);
+      mockDb.query.session.findFirst.mockResolvedValueOnce(expiredSession);
 
       const result = await provider.validateSession('expired-token');
       expect(result).toBeNull();
-      findFirstSpy.mockRestore();
     });
 
     it('should return null if validSession returns null', async () => {
@@ -347,6 +339,13 @@ describe('BetterAuthIdentityProvider', () => {
         expiresAt: new Date(Date.now() + 10000),
         organizationId: 'org-123',
         role: 'user',
+        email: 'user@example.com',
+      });
+
+      // Mock User finding for security check
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'user-123',
+        email: 'user@example.com',
       });
 
       await provider.acceptInvitation('inv-123', 'user-123');
@@ -364,6 +363,13 @@ describe('BetterAuthIdentityProvider', () => {
         expiresAt: new Date(Date.now() + 10000),
         organizationId: null, // System Invite
         role: 'platform_user',
+        email: 'admin@example.com',
+      });
+
+      // Mock User finding for security check
+      mockDb.query.user.findFirst.mockResolvedValue({
+        id: 'user-123',
+        email: 'admin@example.com',
       });
 
       await provider.acceptInvitation('inv-sys', 'user-123');

@@ -72,6 +72,25 @@ describe('SystemAdminGuard', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('should throw ForbiddenException if user is platform_user (insufficient privileges)', async () => {
+    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+      session: { token: 'valid' },
+      user: { id: 'u2', systemRole: 'platform_user' },
+    });
+
+    const mockContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          headers: {},
+        }),
+      }),
+    } as Partial<ExecutionContext>;
+
+    await expect(
+      guard.canActivate(mockContext as ExecutionContext),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
   it('should allow access if user is a platform_admin', async () => {
     const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
     mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({

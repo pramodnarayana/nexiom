@@ -128,7 +128,7 @@ const SidebarContent = ({ navGroups, location, user, navigate, logout }: {
 export function AdminLayout() {
     // We cast to correct type, assuming auth provider returns this shape
     const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'platform_user' | 'user' } | null,
+        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'platform_user' } | null,
         isAuthenticated: boolean,
         logout: () => void,
         isLoading: boolean
