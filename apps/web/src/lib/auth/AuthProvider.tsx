@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
                 organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
                 hasTenant: !!apiUser.hasTenant,
-                systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'platform_user') : undefined
+                systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
             organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
             hasTenant: !!apiUser.hasTenant,
-            systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'platform_user') : undefined
+            systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
         });
     }, []);
 

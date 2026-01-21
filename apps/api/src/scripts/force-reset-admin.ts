@@ -142,10 +142,7 @@ async function reset() {
       console.log(`   Email:    ${EMAIL}`);
       console.log(`   Password: ********`); // Fully Masked
     } else {
-      console.error(
-        '❌ CRITICAL: User not found in DB after creation! Something is wrong.',
-      );
-      process.exit(1); // Non-zero exit code
+      throw new Error('User not found in DB after creation');
     }
   } finally {
     await client.end();

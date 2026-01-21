@@ -48,6 +48,7 @@ jest.mock('better-auth/plugins', () => ({
 const mockDb: any = {
   insert: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
+  onConflictDoNothing: jest.fn().mockReturnThis(),
   returning: jest
     .fn()
     .mockReturnValue([{ id: 'inv-123', email: 'test@example.com' }]),

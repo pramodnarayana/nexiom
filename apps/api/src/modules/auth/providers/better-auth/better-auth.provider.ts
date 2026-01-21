@@ -195,15 +195,18 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         this.logger.warn(
           `User ${result.user.id} returned by BetterAuth but not found in DB. Syncing...`,
         );
-        await this.db.insert(schema.user).values({
-          id: result.user.id,
-          email: result.user.email,
-          name: result.user.name || '',
-          emailVerified: result.user.emailVerified,
-          createdAt: new Date(result.user.createdAt),
-          updatedAt: new Date(result.user.updatedAt),
-          systemRole: 'platform_user', // Default
-        });
+        await this.db
+          .insert(schema.user)
+          .values({
+            id: result.user.id,
+            email: result.user.email,
+            name: result.user.name || '',
+            emailVerified: result.user.emailVerified,
+            createdAt: new Date(result.user.createdAt),
+            updatedAt: new Date(result.user.updatedAt),
+            systemRole: 'platform_user', // Default
+          })
+          .onConflictDoNothing();
       }
 
       // 2. Delegate Tenant Creation to Domain Service
@@ -627,6 +630,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         // System-level invitation (No Organization)
         // We must promote the user to the role specified in the invite (e.g. platform_admin)
         if (invitation.role) {
+          const allowedSystemRoles = new Set([
+            'platform_user',
+            'platform_admin',
+          ]);
+          if (!allowedSystemRoles.has(invitation.role)) {
+            throw new Error('Invalid system role in invitation');
+          }
           await tx
             .update(schema.user)
             .set({ systemRole: invitation.role })
