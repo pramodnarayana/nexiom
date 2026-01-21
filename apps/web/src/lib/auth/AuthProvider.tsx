@@ -81,8 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     },
                                     credentials: 'include',
                                 });
-                                const refreshed = await retryRes.json();
-                                hydrateUser(refreshed);
+
+                                if (retryRes.ok) {
+                                    const refreshed = await retryRes.json();
+                                    hydrateUser(refreshed);
+                                } else {
+                                    console.warn("Retrying Enriched Fetch failed:", retryRes.status);
+                                    // Fallback to initial enrichedData (which lacks tenant but is better than nothing)
+                                    // or just data if enriched was null (though we are inside enrichedData check here)
+                                    hydrateUser(enrichedData);
+                                }
                             }
                         } else {
                             // Already has tenant

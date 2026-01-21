@@ -3,24 +3,39 @@ import { Client } from 'pg';
 import * as schema from '../db/schema';
 import { eq } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Fix path resolution for env files - go up from src/scripts
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 // Check env vars first
-if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+const requiredEnv = [
+  'ADMIN_EMAIL',
+  'ADMIN_PASSWORD',
+  'ADMIN_FIRST_NAME',
+  'ADMIN_LAST_NAME',
+  'ADMIN_COMPANY_NAME',
+  'ADMIN_ROLE',
+];
+
+const missingEnv = requiredEnv.filter((key) => !process.env[key]);
+
+if (missingEnv.length > 0) {
   console.error(
-    '❌ Error: ADMIN_EMAIL and ADMIN_PASSWORD environment variables are required.',
+    `❌ Error: The following environment variables are required: ${missingEnv.join(', ')}`,
   );
   process.exit(1);
 }
 
 const API_URL = 'http://localhost:3000/api';
-const EMAIL = process.env.ADMIN_EMAIL;
-const PASSWORD = process.env.ADMIN_PASSWORD;
-const dbUrl = process.env.DATABASE_URL;
+const EMAIL = process.env.ADMIN_EMAIL as string;
+const PASSWORD = process.env.ADMIN_PASSWORD as string;
+const dbUrl = process.env.DATABASE_URL as string;
+const FIRST_NAME = process.env.ADMIN_FIRST_NAME as string;
+const LAST_NAME = process.env.ADMIN_LAST_NAME as string;
+const COMPANY_NAME = process.env.ADMIN_COMPANY_NAME as string;
+const ROLE = process.env.ADMIN_ROLE as string;
 
 if (!dbUrl) {
   console.error('❌ DATABASE_URL not found! Check your .env files.');
@@ -31,7 +46,8 @@ const client = new Client({ connectionString: dbUrl });
 
 async function reset() {
   console.log(`🚀 Force Resetting Admin User: ${EMAIL}`);
-  console.log(`   Target DB: ${dbUrl}`);
+  // Redacted DB URL for security
+  console.log(`   Target DB: [REDACTED]`);
 
   try {
     await client.connect();
@@ -82,10 +98,10 @@ async function reset() {
         body: JSON.stringify({
           email: EMAIL,
           password: PASSWORD,
-          firstName: 'Pramod',
-          lastName: 'Narayana',
-          companyName: 'Nexiom Admin',
-          role: 'admin',
+          firstName: FIRST_NAME,
+          lastName: LAST_NAME,
+          companyName: COMPANY_NAME,
+          role: ROLE,
         }),
       });
 
@@ -121,13 +137,12 @@ async function reset() {
       console.log('\n🎉 SUCCESS! You can now login.');
       console.log(`   URL:      http://localhost:5173/login`);
       console.log(`   Email:    ${EMAIL}`);
-      console.log(
-        `   Password: ${PASSWORD.substring(0, 2)}***${PASSWORD.substring(PASSWORD.length - 2)}`,
-      );
+      console.log(`   Password: ********`); // Fully Masked
     } else {
       console.error(
         '❌ CRITICAL: User not found in DB after creation! Something is wrong.',
       );
+      process.exit(1); // Non-zero exit code
     }
   } finally {
     await client.end();

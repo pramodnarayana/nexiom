@@ -551,10 +551,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     // The invite fetch logic needs to be public for the signup flow validation.
     // We strictly filter for valid (pending and not expired) invitations.
     const invitation = await this.db.query.invitation.findFirst({
-      where: (inv, { eq, and, gt, ne }) =>
+      where: (inv, { eq, and, gt }) =>
         and(
           eq(inv.id, id),
-          ne(inv.status, 'accepted'), // Not already accepted
+          eq(inv.status, 'pending'), // Strictly enforce pending status
           gt(inv.expiresAt, new Date()), // Not expired
         ),
     });
