@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { AuthContext } from './context';
@@ -45,45 +45,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         console.error("Failed to fetch enriched session", err);
                     }
 
-                    // Fallback to basic data if enriched fails (shouldn't happen if session is valid)
-                    const userToCheck = enrichedData ? enrichedData.user : data.user;
-                    const sessionUser = userToCheck as unknown as AuthUser;
+                    // Fallback to basic data if enriched fails, but DO NOT auto-provision based on incomplete data.
+                    if (enrichedData) {
+                        const sessionUser = enrichedData.user as unknown as AuthUser;
 
-                    // AUTO-PROVISION CHECK
-                    if (!sessionUser.hasTenant && !sessionUser.organizationId) {
-                        if (!API_URL) {
-                            console.error("VITE_API_URL is missing!");
-                            return;
-                        }
-                        const res = await fetch(`${API_URL}/auth/provision-tenant`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${data.session.token}`
-                            },
-                            credentials: 'include',
-                        });
+                        // AUTO-PROVISION CHECK
+                        // FIX: Do not auto-provision if the user is a Platform Admin/User (they don't need a default tenant)
+                        const isPlatformUser =
+                            sessionUser.systemRole === 'platform_admin' ||
+                            sessionUser.systemRole === 'platform_user';
 
-                        if (!res.ok) {
-                            console.error("Provisioning Failed!", res.status);
-                            if (enrichedData) hydrateUser(enrichedData);
-                            else hydrateUser(data);
-                        } else {
-                            // Retry Enriched Fetch
-                            const retryRes = await fetch(`${API_URL}/auth/refresh-session`, {
+                        if (!sessionUser.hasTenant && !sessionUser.organizationId && !isPlatformUser) {
+                            if (!API_URL) {
+                                console.error("VITE_API_URL is missing!");
+                                return;
+                            }
+                            const res = await fetch(`${API_URL}/auth/provision-tenant`, {
                                 method: 'POST',
                                 headers: {
+                                    'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${data.session.token}`
                                 },
                                 credentials: 'include',
                             });
-                            const refreshed = await retryRes.json();
-                            hydrateUser(refreshed);
+
+                            if (!res.ok) {
+                                console.error("Provisioning Failed!", res.status);
+                                hydrateUser(enrichedData);
+                            } else {
+                                // Retry Enriched Fetch
+                                const retryRes = await fetch(`${API_URL}/auth/refresh-session`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Authorization': `Bearer ${data.session.token}`
+                                    },
+                                    credentials: 'include',
+                                });
+
+                                if (retryRes.ok) {
+                                    try {
+                                        const refreshed = await retryRes.json();
+                                        hydrateUser(refreshed);
+                                    } catch (err) {
+                                        console.warn("Retry refresh-session JSON parse failed:", err);
+                                        hydrateUser(enrichedData);
+                                    }
+                                } else {
+                                    console.warn("Retrying Enriched Fetch failed:", retryRes.status);
+                                    // Fallback to initial enrichedData (which lacks tenant but is better than nothing)
+                                    // or just data if enriched was null (though we are inside enrichedData check here)
+                                    hydrateUser(enrichedData);
+                                }
+                            }
+                        } else {
+                            // Already has tenant
+                            hydrateUser(enrichedData);
                         }
                     } else {
-                        // Already has tenant
-                        if (enrichedData) hydrateUser(enrichedData);
-                        else hydrateUser(data);
+                        // Enriched fetch failed (e.g. network error, 401).
+                        // Fallback to basic session data but SKIP auto-provisioning to avoid creating duplicate tenants.
+                        // The user might see a degraded UI (no org context), but that's better than corrupting state.
+                        console.warn("AuthProvider: Skipping auto-provisioning due to missing enriched data.");
+                        hydrateUser(data);
                     }
                 } else {
                     // Server says "No Session". Trust it.
@@ -118,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
                 organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
                 hasTenant: !!apiUser.hasTenant,
-                systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'user') : undefined
+                systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -132,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * 
      * @param data - The login response containing accessToken and user object.
      */
-    const login = (data: { accessToken: string; user: unknown }) => {
+    const login = useCallback((data: { accessToken: string; user: unknown }) => {
         const apiUser = data.user as Record<string, unknown>;
         setToken(data.accessToken);
 
@@ -156,14 +179,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
             organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
             hasTenant: !!apiUser.hasTenant,
-            systemRole: typeof apiUser.systemRole === 'string' ? (apiUser.systemRole as 'platform_admin' | 'user') : undefined
+            systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
         });
-    };
+    }, []);
 
-    /**
-     * Clears the auth state.
-     */
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             console.log("Initiating logout...");
             await authClient.signOut();
@@ -175,10 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(undefined);
         setUser(null);
         window.location.href = '/';
-    };
+    }, []);
 
-    // Adapter matching AuthContextType
-    const value: AuthContextType = {
+    const value: AuthContextType = useMemo(() => ({
         user,
         token,
         isAuthenticated: !!user,
@@ -187,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup: async () => { },
         logout,
         setAuthState: login,
-    };
+    }), [user, token, isLoading, logout, login]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

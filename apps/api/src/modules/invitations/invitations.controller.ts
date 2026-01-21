@@ -27,16 +27,15 @@ export class InvitationsController {
     createInvitation.organizationId = req.user.organizationId;
 
     // Pass headers to propagate auth context to BetterAuth client
-    const headers = new Headers(req.headers as Record<string, string>);
     return this.invitationsService.create(
       createInvitation,
       req.user.id,
-      headers,
+      req.headers,
     );
   }
 
   @Get(':id')
-  // We should probably guard this or validate the ID format is safe/expected
+  // Public endpoint: Returns limited invitation details for the accept page context.
   async get(@Param('id') id: string) {
     return this.invitationsService.get(id);
   }
@@ -50,6 +49,7 @@ export class InvitationsController {
     return this.invitationsService.accept(
       acceptInvitation.invitationId,
       req.user.id,
+      req.headers,
     );
   }
 

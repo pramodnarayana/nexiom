@@ -48,17 +48,18 @@ describe('InvitationsController', () => {
         role: 'user',
         organizationId: 'org-123',
       };
-      const req = { user: { id: 'user-123' } } as unknown as Request & {
+      const req = {
+        user: { id: 'user-123' },
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request & {
         user: { id: string };
       };
 
       await controller.create(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.create).toHaveBeenCalledWith(
-        dto,
-        'user-123',
-        expect.anything(),
-      );
+      expect(service.create).toHaveBeenCalledWith(dto, 'user-123', {
+        'user-agent': 'jest',
+      });
     });
   });
 
@@ -72,14 +73,19 @@ describe('InvitationsController', () => {
 
   describe('accept', () => {
     it('should call service.accept', async () => {
-      const req = { user: { id: 'user-123' } } as unknown as Request & {
+      const req = {
+        user: { id: 'user-123' },
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request & {
         user: { id: string };
       };
       const dto = { invitationId: 'inv-123', token: 'token' };
 
       await controller.accept(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123');
+      expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123', {
+        'user-agent': 'jest',
+      });
     });
   });
 });

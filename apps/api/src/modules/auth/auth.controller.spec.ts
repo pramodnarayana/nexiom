@@ -124,7 +124,8 @@ describe('AuthController', () => {
       /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
       const res = { setHeader: jest.fn() } as any;
 
-      const result = await controller.completeInvite(body, res);
+      const mockRequest = { headers: {} } as unknown as Request;
+      const result = await controller.completeInvite(body, res, mockRequest);
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
 
       expect(result).toBeDefined();
@@ -154,9 +155,10 @@ describe('AuthController', () => {
       /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
       const res = { setHeader: jest.fn() } as any;
 
-      await expect(controller.completeInvite(body, res)).rejects.toThrow(
-        'Failed to accept invitation',
-      );
+      const mockRequest = { headers: {} } as unknown as Request;
+      await expect(
+        controller.completeInvite(body, res, mockRequest),
+      ).rejects.toThrow('Failed to accept invitation');
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
       expect(mockBetterAuthIdentityProvider.deleteUser).toHaveBeenCalledWith(
         'user-fail',

@@ -24,6 +24,7 @@ import {
   UpdateTenantValidation,
   UpdateUserValidation,
   CreateUserValidation,
+  CreateSystemInvitationValidation,
 } from './system-admin.validation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -60,13 +61,38 @@ export class SystemAdminController {
     // Create System Invitation (OrgId = null)
     await this.identityProvider.createInvitation({
       email: user.email,
-      role: user.systemRole || 'user',
+      role: user.systemRole || 'platform_user',
       organizationId: null, // System Invite
       inviterId: session.user.id,
       headers: webHeaders,
     });
 
     return { success: true };
+  }
+
+  @Post('invitations')
+  async createSystemInvitation(
+    @Body() body: CreateSystemInvitationValidation,
+    @RequestHeaders() headers: Record<string, string>,
+  ) {
+    const webHeaders = this.toWebHeaders(headers);
+
+    // Get current admin ID from session
+    const session =
+      await this.identityProvider.getSessionFromHeaders(webHeaders);
+    if (!session || !session.user) {
+      throw new BadRequestException('Unauthorized');
+    }
+
+    const invitation = await this.identityProvider.createInvitation({
+      email: body.email,
+      role: body.role, // Zod handles default
+      organizationId: null, // System invitation
+      inviterId: session.user.id,
+      headers: webHeaders,
+    });
+
+    return invitation;
   }
 
   private toWebHeaders(headers: Record<string, string>): Headers {
@@ -122,7 +148,7 @@ export class SystemAdminController {
         id: uuidv4(),
         name: input.name,
         email: input.email,
-        systemRole: input.systemRole || 'user',
+        systemRole: input.systemRole || 'platform_user',
         emailVerified: false,
         createdAt: new Date(),
         updatedAt: new Date(),

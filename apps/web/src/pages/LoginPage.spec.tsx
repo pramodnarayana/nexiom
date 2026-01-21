@@ -45,7 +45,7 @@ describe('LoginPage', () => {
         // Default fetch mock to success
         (global.fetch as Mock).mockResolvedValue({
             ok: true,
-            json: async () => ({ user: { id: '1', email: 'test@example.com', systemRole: 'user' }, session: {} }),
+            json: async () => ({ user: { id: '1', email: 'test@example.com', systemRole: 'platform_user' }, session: {} }),
         });
 
         // Mock window.location

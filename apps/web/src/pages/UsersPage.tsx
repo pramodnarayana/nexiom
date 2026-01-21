@@ -18,7 +18,7 @@ interface User {
 export function UsersPage() {
     const { token } = useAuth();
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState('viewer');
+    const [role, setRole] = useState('user');
     const [status, setStatus] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [users, setUsers] = useState<User[]>([]);
@@ -81,8 +81,7 @@ export function UsersPage() {
                                 value={role}
                                 onChange={(e) => setRole(e.target.value)}
                             >
-                                <option value="viewer">Viewer</option>
-                                <option value="editor">Editor</option>
+                                <option value="user">User</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>

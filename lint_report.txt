@@ -1,0 +1,128 @@
+
+> nexiom-monorepo@1.0.0 lint /Users/apple/engineering/nexiom
+> turbo lint
+
+• turbo 2.7.3
+• Packages in scope: api, web
+• Running lint in 2 packages
+• Remote caching disabled
+web:lint: cache hit, replaying logs f6282acfd46fc52f
+web:lint: 
+web:lint: 
+web:lint: > web@0.0.0 lint /Users/apple/engineering/nexiom/apps/web
+web:lint: > eslint .
+web:lint: 
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/block-navigation.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/prettify.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/sorter.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[33m[1m✖ 3 problems (0 errors, 3 warnings)[22m[39m[0m
+web:lint: [0m[33m[1m[22m[39m[33m[1m  0 errors and 3 warnings potentially fixable with the `--fix` option.[22m[39m[0m
+web:lint: [0m[33m[1m[22m[39m[0m
+api:lint: cache miss, executing 55629436f4bcc3fb
+api:lint: 
+api:lint: > api@0.0.1 lint /Users/apple/engineering/nexiom/apps/api
+api:lint: > eslint "{src,apps,libs,test}/**/*.ts" --fix
+api:lint: 
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/modules/auth/providers/better-auth/better-auth.provider.ts
+api:lint:   134:41  error    Unsafe member access .api on an `any` value                         @typescript-eslint/no-unsafe-member-access
+api:lint:   137:21  warning  Unsafe argument of type `any` assigned to a parameter of type `{}`  @typescript-eslint/no-unsafe-argument
+api:lint:   137:40  error    Unsafe member access .api on an `any` value                         @typescript-eslint/no-unsafe-member-access
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/modules/system-admin/system-admin.controller.spec.ts
+api:lint:   674:42  warning  Unsafe argument of type `any` assigned to a parameter of type `Record<string, string>`  @typescript-eslint/no-unsafe-argument
+api:lint:   683:37  warning  Unsafe argument of type `any` assigned to a parameter of type `Record<string, string>`  @typescript-eslint/no-unsafe-argument
+api:lint:   699:56  warning  Unsafe argument of type `any` assigned to a parameter of type `Record<string, string>`  @typescript-eslint/no-unsafe-argument
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/test/mocks/better-auth.mock.ts
+api:lint:   10:7   error  Async method 'signUpEmail' has no 'await' expression       @typescript-eslint/require-await
+api:lint:   15:13  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   15:25  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   16:13  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   16:24  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   29:7   error  Async method 'signInEmail' has no 'await' expression       @typescript-eslint/require-await
+api:lint:   32:11  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   32:23  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   52:11  error  Async method 'json' has no 'await' expression              @typescript-eslint/require-await
+api:lint:   59:7   error  Async method 'createInvitation' has no 'await' expression  @typescript-eslint/require-await
+api:lint:   62:11  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   62:23  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   63:11  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   63:22  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   66:11  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   66:32  error  Unsafe member access .body on an `any` value               @typescript-eslint/no-unsafe-member-access
+api:lint:   69:7   error  Async method 'getInvitation' has no 'await' expression     @typescript-eslint/require-await
+api:lint:   71:11  error  Unsafe assignment of an `any` value                        @typescript-eslint/no-unsafe-assignment
+api:lint:   71:20  error  Unsafe member access .query on an `any` value              @typescript-eslint/no-unsafe-member-access
+api:lint:   78:7   error  Async method 'acceptInvitation' has no 'await' expression  @typescript-eslint/require-await
+api:lint:   84:7   error  Async method 'getSession' has no 'await' expression        @typescript-eslint/require-await
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/test/invitations.e2e-spec.ts
+api:lint:    19:7   error  Unsafe assignment of an `any` value                 @typescript-eslint/no-unsafe-assignment
+api:lint:    46:11  error  Unsafe assignment of an `any` value                 @typescript-eslint/no-unsafe-assignment
+api:lint:    49:11  error  Unsafe assignment of an `any` value                 @typescript-eslint/no-unsafe-assignment
+api:lint:    49:20  error  A `require()` style import is forbidden             @typescript-eslint/no-require-imports
+api:lint:    52:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    52:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    53:8   error  Unsafe member access .delete on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    53:22  error  Unsafe member access .invitation on an `any` value  @typescript-eslint/no-unsafe-member-access
+api:lint:    54:8   error  Unsafe member access .where on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    54:24  error  Unsafe member access .invitation on an `any` value  @typescript-eslint/no-unsafe-member-access
+api:lint:    55:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    55:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    56:8   error  Unsafe member access .delete on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    56:22  error  Unsafe member access .session on an `any` value     @typescript-eslint/no-unsafe-member-access
+api:lint:    57:8   error  Unsafe member access .where on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    57:24  error  Unsafe member access .session on an `any` value     @typescript-eslint/no-unsafe-member-access
+api:lint:    58:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    58:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    59:8   error  Unsafe member access .delete on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    59:22  error  Unsafe member access .account on an `any` value     @typescript-eslint/no-unsafe-member-access
+api:lint:    60:8   error  Unsafe member access .where on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    60:24  error  Unsafe member access .account on an `any` value     @typescript-eslint/no-unsafe-member-access
+api:lint:    61:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    61:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    62:8   error  Unsafe member access .delete on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    62:22  error  Unsafe member access .member on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    63:8   error  Unsafe member access .where on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    63:24  error  Unsafe member access .member on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    66:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    66:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    66:14  error  Unsafe member access .delete on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    66:28  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:    66:34  error  Unsafe member access .where on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    66:50  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:    68:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    68:11  error  Unsafe call of a(n) `any` typed value               @typescript-eslint/no-unsafe-call
+api:lint:    68:14  error  Unsafe member access .insert on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    68:28  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:    68:34  error  Unsafe member access .values on an `any` value      @typescript-eslint/no-unsafe-member-access
+api:lint:    94:26  error  Unsafe member access .email on an `any` value       @typescript-eslint/no-unsafe-member-access
+api:lint:    95:5   error  Unsafe assignment of an `any` value                 @typescript-eslint/no-unsafe-assignment
+api:lint:    95:34  error  Unsafe member access .id on an `any` value          @typescript-eslint/no-unsafe-member-access
+api:lint:    99:22  error  Unsafe member access .to on an `any` value          @typescript-eslint/no-unsafe-member-access
+api:lint:   100:22  error  Unsafe member access .text on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:   123:26  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:   124:26  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint:   139:26  error  Unsafe member access .user on an `any` value        @typescript-eslint/no-unsafe-member-access
+api:lint: 
+api:lint: ✖ 74 problems (70 errors, 4 warnings)
+api:lint: 
+api:lint:  ELIFECYCLE  Command failed with exit code 1.
+api:lint: ERROR: command finished with error: command (/Users/apple/engineering/nexiom/apps/api) /usr/local/bin/pnpm run lint exited (1)
+api#lint: command (/Users/apple/engineering/nexiom/apps/api) /usr/local/bin/pnpm run lint exited (1)
+
+ Tasks:    1 successful, 2 total
+Cached:    1 cached, 2 total
+  Time:    7.538s 
+Failed:    api#lint
+
+ ERROR  run failed: command  exited (1)
+ ELIFECYCLE  Command failed with exit code 1.

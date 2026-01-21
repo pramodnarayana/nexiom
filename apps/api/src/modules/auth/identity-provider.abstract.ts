@@ -9,18 +9,18 @@ import { CreateUser } from '../users/users.validation';
  */
 import { User } from '../users/user.schema';
 import { Session } from './auth.schema';
+import { Invitation } from '../invitations/invitation.interface';
 
-/**
- * Abstract Class defining the contract for Identity Providers.
- * ...
- */
 export abstract class IdentityProvider {
   /**
    * Creates a user in the external identity system.
    * @param user The user details to create.
    * @returns The created user object from the provider.
    */
-  abstract createUser(user: CreateUser): Promise<User>;
+  abstract createUser(
+    user: CreateUser,
+    headers?: Headers | Record<string, any>,
+  ): Promise<User>;
 
   /**
    * Authenticates a user and returns a session/token.
@@ -45,7 +45,7 @@ export abstract class IdentityProvider {
    * This is preferred over validateSession(token) when dealing with signed cookies.
    */
   abstract getSessionFromHeaders(
-    headers: Headers,
+    headers: Headers | Record<string, any>,
   ): Promise<{ session: Session; user: User } | null>;
 
   /**
@@ -71,20 +71,24 @@ export abstract class IdentityProvider {
     organizationId: string | null;
     expiresIn?: number;
     inviterId: string;
-    headers?: Headers;
+    headers?: Headers | Record<string, any>;
   }): Promise<unknown>;
 
   /**
    * Retrieves an invitation by ID.
    */
-  abstract getInvitation(id: string): Promise<unknown>;
+  abstract getInvitation(
+    id: string,
+    headers?: Headers | Record<string, any>,
+  ): Promise<Invitation | null>;
 
   /**
    * Accepts an invitation, creating a link between the user and the organization.
    */
   abstract acceptInvitation(
     invitationId: string,
-    inviterId: string,
+    userId: string,
+    headers?: Headers | Record<string, any>,
   ): Promise<unknown>;
 
   /**

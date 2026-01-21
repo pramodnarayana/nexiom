@@ -29,6 +29,7 @@ export class SystemAdminGuard implements CanActivate {
     // We cast to a minimal interface that includes systemRole
     const user = sessionData.user as { systemRole?: string };
 
+    // Only allow platform_admin. platform_user is not sufficient for System Admin actions.
     if (user.systemRole !== 'platform_admin') {
       throw new ForbiddenException('Requires Platform Admin Privileges');
     }

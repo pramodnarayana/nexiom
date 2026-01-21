@@ -142,10 +142,10 @@ export const UserEdit = () => {
                                 <select
                                     id="systemRole"
                                     name="systemRole"
-                                    defaultValue={record?.systemRole || 'user'}
+                                    defaultValue={record?.systemRole || 'platform_user'}
                                     className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    <option value="user">User</option>
+                                    <option value="platform_user">Platform User</option>
                                     <option value="platform_admin">Platform Admin</option>
                                 </select>
                             </div>

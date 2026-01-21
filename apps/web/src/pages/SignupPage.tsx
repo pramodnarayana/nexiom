@@ -1,9 +1,14 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
 if (!API_URL) throw new Error("VITE_API_URL is missing");
+
 /**
  * Component for the Signup Page.
  * Handles user registration and auto-login logic.
@@ -27,9 +32,11 @@ export function SignupPage() {
     const isInviteFlow = !!redirectUrl; // If we have a redirect, we assume it's an invite (User Only)
 
     // Pre-fill email if provided
-    if (emailParam && !email) {
-        setEmail(emailParam);
-    }
+    useEffect(() => {
+        if (emailParam && !email) {
+            setEmail(emailParam);
+        }
+    }, [emailParam, email]);
 
     // We need useAuth to update global state if we auto-login
     const { setAuthState } = useAuth();
@@ -59,7 +66,7 @@ export function SignupPage() {
                     password,
                     invitationId: inviteIdParam
                 };
-                console.log("Submitting Payload:", payload); // DEBUGGING
+                // console.log("Submitting Payload:", payload); // DEBUGGING
 
                 const res = await fetch(`${API_URL}/auth/complete-invite`, {
                     method: 'POST',
@@ -80,8 +87,19 @@ export function SignupPage() {
                         user: sessionData.user,
                         accessToken: sessionData.session.token // Using 'token' from session
                     });
-                    // BOOM 💥 Dashboard
-                    navigate('/dashboard');
+
+                    // --- ROLE BASED REDIRECT ---
+                    // Fix: Redirect System Admins to Admin Dashboard
+                    // We must cast sessionData.user because it might be untyped coming from the API
+                    const user = sessionData.user as { systemRole?: string };
+                    // console.log('[DEBUG] Signup Redirect: user object:', user);
+                    // console.log('[DEBUG] Signup Redirect: systemRole:', user.systemRole);
+
+                    if (user.systemRole === 'platform_admin' || user.systemRole === 'platform_user') {
+                        navigate('/admin');
+                    } else {
+                        navigate('/dashboard');
+                    }
                 } else {
                     // Fallback (Should not happen with new endpoint)
                     alert("Account created, but auto-login failed. Please log in.");
@@ -127,72 +145,102 @@ export function SignupPage() {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
-            <div className="card" style={{ width: '350px', padding: '20px' }}>
-                <h2>{isInviteFlow ? 'Join Organization' : 'Sign Up'}</h2>
-                {isInviteFlow && (
-                    <div style={{ marginBottom: '10px', fontSize: '0.9em', color: '#666' }}>
-                        Create an account to accept your invitation.
-                    </div>
-                )}
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <input
-                            type="text"
-                            placeholder="First Name"
-                            value={firstName}
-                            onChange={e => setFirstName(e.target.value)}
-                            style={{ padding: '8px', flex: 1 }}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Last Name"
-                            value={lastName}
-                            onChange={e => setLastName(e.target.value)}
-                            style={{ padding: '8px', flex: 1 }}
-                        />
-                    </div>
-                    <input
-                        type="email"
-                        placeholder="Work Email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        required
-                        disabled={!!emailParam} // Lock email if provided by invite
-                        style={{ padding: '8px', backgroundColor: emailParam ? '#f0f0f0' : 'white' }}
-                    />
+        <div className="flex justify-center items-center min-h-[80vh] bg-background">
+            <Card className="w-[400px]">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-2xl">
+                        {isInviteFlow ? 'Join Organization' : 'Create Account'}
+                    </CardTitle>
+                    <CardDescription>
+                        {isInviteFlow
+                            ? 'Create your account to accept the invitation.'
+                            : 'Get started with your new organization.'}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <div className="flex gap-4">
+                            <div className="grid gap-2 flex-1">
+                                <Input
+                                    id="firstName"
+                                    type="text"
+                                    placeholder="First Name"
+                                    value={firstName}
+                                    onChange={e => setFirstName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="grid gap-2 flex-1">
+                                <Input
+                                    id="lastName"
+                                    type="text"
+                                    placeholder="Last Name"
+                                    value={lastName}
+                                    onChange={e => setLastName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
 
-                    {!isInviteFlow && (
-                        <input
-                            type="text"
-                            placeholder="Company Name"
-                            value={companyName}
-                            onChange={e => setCompanyName(e.target.value)}
-                            required
-                            minLength={2}
-                            style={{ padding: '8px' }}
-                        />
+                        {!isInviteFlow && (
+                            <div className="grid gap-2">
+                                <Input
+                                    type="text"
+                                    placeholder="Company Name"
+                                    value={companyName}
+                                    onChange={e => setCompanyName(e.target.value)}
+                                    required
+                                    minLength={2}
+                                />
+                            </div>
+                        )}
+
+                        <div className="grid gap-2">
+                            <Input
+                                type="email"
+                                placeholder="Work Email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                required
+                                disabled={!!emailParam}
+                                className={emailParam ? "bg-muted text-muted-foreground" : ""}
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Input
+                                type="password"
+                                placeholder="Password (min 8 chars)"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                required
+                                minLength={8}
+                            />
+                        </div>
+
+                        <Button type="submit" disabled={loading} className="w-full mt-2">
+                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {loading ? 'Creating Account...' : (isInviteFlow ? 'Join & Accept' : 'Sign Up')}
+                        </Button>
+                    </form>
+
+                    {error && (
+                        <p className="mt-4 text-sm text-center text-destructive font-medium">
+                            {error}
+                        </p>
                     )}
 
-                    <input
-                        type="password"
-                        placeholder="Password (min 8 chars)"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                        minLength={8}
-                        style={{ padding: '8px' }}
-                    />
-                    <button type="submit" disabled={loading} style={{ padding: '10px' }}>
-                        {loading ? 'Creating Account...' : (isInviteFlow ? 'Join & Accept' : 'Sign Up')}
-                    </button>
-                </form>
-                {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
-
-                <p style={{ marginTop: '20px', fontSize: '0.9em' }}>
-                    Already have an account? <a href={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl!)}` : "/login"}>Log in</a>
-                </p>
-            </div>
+                    <div className="mt-6 text-center text-sm text-muted-foreground">
+                        Already have an account?{' '}
+                        <Link
+                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl!)}` : "/login"}
+                            className="underline underline-offset-4 hover:text-primary"
+                        >
+                            Log in
+                        </Link>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }
