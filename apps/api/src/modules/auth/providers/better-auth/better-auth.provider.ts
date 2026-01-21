@@ -392,8 +392,13 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
   async getSessionFromHeaders(headers: Headers | Record<string, any>) {
     // Delegate to Better Auth to parse cookies (signed or not)
+    // Convert Headers object to plain object if needed
+    const headerObj =
+      headers instanceof Headers
+        ? Object.fromEntries(headers.entries())
+        : headers;
     const result = await this.auth.api.getSession({
-      headers: headers as Record<string, string>, // Cast or pass directly
+      headers: headerObj as Record<string, string>,
     });
 
     if (!result) return null;
@@ -479,6 +484,12 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       }) => Promise<unknown>;
     };
 
+    // Convert Headers object to plain object if needed
+    const headerObj =
+      payload.headers instanceof Headers
+        ? Object.fromEntries(payload.headers.entries())
+        : payload.headers;
+
     return await api.createInvitation({
       body: {
         email: payload.email,
@@ -487,7 +498,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
         expiresIn: payload.expiresIn,
         inviterId: payload.inviterId,
       },
-      headers: payload.headers,
+      headers: headerObj,
     });
   }
 

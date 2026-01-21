@@ -133,9 +133,9 @@ async function reset() {
     if (users.length) {
       await db
         .update(schema.user)
-        .set({ systemRole: 'platform_admin', emailVerified: true })
+        .set({ systemRole: ROLE, emailVerified: true })
         .where(eq(schema.user.id, users[0].id));
-      console.log('   ✅ Role updated to platform_admin.');
+      console.log(`   ✅ Role updated to ${ROLE}.`);
 
       console.log('\n🎉 SUCCESS! You can now login.');
       console.log(`   URL:      http://localhost:5173/login`);
