@@ -15,11 +15,12 @@ import { TenantsService } from '../../../tenants/tenants.service';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../../../users/user.schema';
 import * as bcrypt from 'bcryptjs';
+import { IncomingHttpHeaders } from 'node:http';
 
 @Injectable()
 export class BetterAuthIdentityProvider implements IdentityProvider {
-  private auth: ReturnType<typeof betterAuth>;
-  private logger = new Logger(BetterAuthIdentityProvider.name);
+  private readonly auth: ReturnType<typeof betterAuth>;
+  private readonly logger = new Logger(BetterAuthIdentityProvider.name);
 
   constructor(
     private readonly emailService: EmailService,
@@ -150,7 +151,7 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
   async createUser(user: CreateUser, headers?: Headers | Record<string, any>) {
     this.logger.log(`Creating user ${user.email} in Better Auth...`);
-    // console.log('[DEBUG] createUser: Headers present:', headers ? Object.keys(headers) : 'undefined');
+
     try {
       // 1. Create User via Better Auth API
       if (!user.password) {
@@ -393,13 +394,15 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
   async getSessionFromHeaders(headers: Headers | Record<string, any>) {
     // Delegate to Better Auth to parse cookies (signed or not)
-    // Convert Headers to plain object first, then use Better Auth's helper
+    // Use Better Auth's helper for proper header conversion in both branches
     const headerObj =
       headers instanceof Headers
-        ? fromNodeHeaders(Object.fromEntries(headers.entries()) as any)
-        : headers;
+        ? fromNodeHeaders(
+            Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
+          )
+        : fromNodeHeaders(headers as IncomingHttpHeaders);
     const result = await this.auth.api.getSession({
-      headers: headerObj as Record<string, string>,
+      headers: headerObj,
     });
 
     if (!result) return null;
@@ -485,10 +488,14 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       }) => Promise<unknown>;
     };
 
-    // Convert Headers to plain object first, then use Better Auth's helper
+    // Use Better Auth's helper for Headers objects, pass plain objects directly
     const headerObj =
       payload.headers instanceof Headers
-        ? fromNodeHeaders(Object.fromEntries(payload.headers.entries()) as any)
+        ? fromNodeHeaders(
+            Object.fromEntries(
+              payload.headers.entries(),
+            ) as IncomingHttpHeaders,
+          )
         : payload.headers;
 
     return await api.createInvitation({
