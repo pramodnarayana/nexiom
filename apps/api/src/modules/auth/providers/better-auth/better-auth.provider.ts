@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { IdentityProvider } from '../../identity-provider.abstract';
 import { Invitation } from '../../../invitations/invitation.interface';
 import { betterAuth } from 'better-auth';
+import { fromNodeHeaders } from 'better-auth/node';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import * as schema from '../../../../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -392,10 +393,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
 
   async getSessionFromHeaders(headers: Headers | Record<string, any>) {
     // Delegate to Better Auth to parse cookies (signed or not)
-    // Convert Headers object to plain object if needed
+    // Convert Headers to plain object first, then use Better Auth's helper
     const headerObj =
       headers instanceof Headers
-        ? Object.fromEntries(headers.entries())
+        ? fromNodeHeaders(Object.fromEntries(headers.entries()) as any)
         : headers;
     const result = await this.auth.api.getSession({
       headers: headerObj as Record<string, string>,
@@ -484,10 +485,10 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       }) => Promise<unknown>;
     };
 
-    // Convert Headers object to plain object if needed
+    // Convert Headers to plain object first, then use Better Auth's helper
     const headerObj =
       payload.headers instanceof Headers
-        ? Object.fromEntries(payload.headers.entries())
+        ? fromNodeHeaders(Object.fromEntries(payload.headers.entries()) as any)
         : payload.headers;
 
     return await api.createInvitation({
