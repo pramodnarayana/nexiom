@@ -4,6 +4,9 @@ import request from 'supertest';
 import { Server } from 'http';
 import { AppModule } from './../src/app.module';
 import { SystemAdminGuard } from './../src/modules/auth/system-admin.guard';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './../src/db/schema';
+import { eq } from 'drizzle-orm';
 
 interface TenantResponse {
   id: string;
@@ -23,6 +26,7 @@ describe('SystemAdminController (e2e)', () => {
   const createdTenantIds: string[] = [];
 
   beforeAll(async () => {
+    // ... Module compilation
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -32,14 +36,39 @@ describe('SystemAdminController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+
+    // Preemptive Cleanup: Ensure no E2E test tenants exist from a previous crash
+    const db = app.get<NodePgDatabase<typeof schema>>('DRIZZLE_DB');
+    const staleTenants = await db.query.organization.findMany({
+      where: (org, { like }) => like(org.slug, 'e2e-%'),
+    });
+
+    for (const tenant of staleTenants) {
+      await db
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, tenant.id));
+      await db
+        .delete(schema.organization)
+        .where(eq(schema.organization.id, tenant.id));
+    }
   });
 
   afterAll(async () => {
-    // Cleanup any lingering tenants
+    // Cleanup any lingering tenants via Direct DB access (More reliable than API)
+    const db = app.get<NodePgDatabase<typeof schema>>('DRIZZLE_DB');
+
+    // 1. Delete associated members first (FK constraint)
     for (const id of createdTenantIds) {
-      await request(app.getHttpServer() as Server).delete(
-        `/admin/tenants/${id}`,
-      );
+      await db
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, id));
+    }
+
+    // 2. Delete organizations
+    for (const id of createdTenantIds) {
+      await db
+        .delete(schema.organization)
+        .where(eq(schema.organization.id, id));
     }
     await app.close();
   });

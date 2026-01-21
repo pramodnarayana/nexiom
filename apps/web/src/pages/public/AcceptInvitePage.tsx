@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, XCircle } from "lucide-react";
@@ -8,7 +8,6 @@ export const AcceptInvitePage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { user, isLoading, token } = useAuth();
-    const [status, setStatus] = useState<"validating" | "valid" | "error">("validating");
 
     // We support both ?token= (legacy/secure) and ?id= (better-auth standard)
     const urlToken = searchParams.get("token");
@@ -20,7 +19,7 @@ export const AcceptInvitePage = () => {
     // Auto-validate/redirection logic
     useEffect(() => {
         if (!inviteId) {
-            setStatus("error");
+            // Error state handled by render
             return;
         }
 
@@ -65,8 +64,6 @@ export const AcceptInvitePage = () => {
 
     }, [inviteId, user, isLoading, navigate, searchParams, token]);
 
-    // We no longer need handleAccept since we redirect immediately.
-
     // Polished UI matching LoginPage
     return (
         <div className="flex justify-center items-center min-h-[80vh] bg-background">
@@ -74,24 +71,22 @@ export const AcceptInvitePage = () => {
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl">Join Organization</CardTitle>
                     <CardDescription>
-                        {(status === 'error' || !inviteId)
+                        {!inviteId
                             ? "Action Required"
                             : "Validating your invitation..."}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center py-6 gap-4">
-                    {status === 'error' || !inviteId ? (
+                    {!inviteId ? (
                         <div className="text-center space-y-2">
                             <div className="flex justify-center text-destructive mb-2">
                                 <XCircle className="h-10 w-10" />
                             </div>
                             <p className="text-sm font-medium text-destructive">
-                                {inviteId ? "Invitation Invalid" : "Invitation Missing"}
+                                Invitation Missing
                             </p>
                             <p className="text-xs text-muted-foreground">
-                                {inviteId
-                                    ? "This invitation link is invalid or has expired."
-                                    : "No invitation ID found. Please check your link."}
+                                No invitation ID found. Please check your link.
                             </p>
                         </div>
                     ) : (

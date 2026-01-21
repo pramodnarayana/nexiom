@@ -148,7 +148,7 @@ export class SystemAdminController {
         id: uuidv4(),
         name: input.name,
         email: input.email,
-        systemRole: input.systemRole || 'user',
+        systemRole: input.systemRole || 'platform_user',
         emailVerified: false,
         createdAt: new Date(),
         updatedAt: new Date(),

@@ -56,7 +56,7 @@ describe('SystemAdminGuard', () => {
   it('should throw ForbiddenException if user is not a platform_admin', async () => {
     mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
       session: { token: 'valid' },
-      user: { id: 'u1', systemRole: 'user' },
+      user: { id: 'u1', systemRole: 'platform_user' },
     });
 
     const mockContext = {

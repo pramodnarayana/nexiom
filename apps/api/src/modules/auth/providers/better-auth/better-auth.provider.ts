@@ -131,7 +131,6 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
       },
     });
     this.logger.log('Better Auth Initialized (with Injected DB)');
-    this.logger.log('Better Auth Initialized (with Injected DB)');
     if (process.env.NODE_ENV !== 'production') {
       this.logger.debug(
         `DEBUG: Auth Keys: ${JSON.stringify(Object.keys(this.auth))}`,
@@ -280,8 +279,22 @@ export class BetterAuthIdentityProvider implements IdentityProvider {
     });
 
     if (!dbSession) {
+      // Critical: In production, relying on sync mask logic could hide replication lag or consistency bugs.
+      // We only allow this "Self-Healing" in Test/Dev environments where mocks might desync.
+      if (
+        process.env.NODE_ENV !== 'test' &&
+        process.env.NODE_ENV !== 'development'
+      ) {
+        this.logger.error(
+          `Session Sync Error: Token ${result.token.substring(0, 10)}... valid in BetterAuth but missing in DB. UserId: ${result.user.id}. Refusing to synthetic sync in non-test env.`,
+        );
+        throw new Error(
+          'Session consistency error: Valid token not found in database',
+        );
+      }
+
       this.logger.warn(
-        `Session for token ${result.token.substring(0, 10)}... not found in DB. Syncing...`,
+        `Session for token ${result.token.substring(0, 10)}... not found in DB. Syncing (Test/Dev Only)...`,
       );
 
       // Force Sync Session (Critical for E2E mocks)

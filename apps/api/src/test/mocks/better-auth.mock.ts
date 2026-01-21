@@ -32,7 +32,7 @@ export const betterAuth = (_options: unknown) => {
           },
           session: {
             token: 'mock-session-token',
-            userId: 'mock-user-id',
+            userId: id,
             // expires in future
             expiresAt: new Date(Date.now() + 1000 * 60 * 60),
           },
@@ -83,7 +83,7 @@ export const betterAuth = (_options: unknown) => {
         return await Promise.resolve({
           id: opts.query?.id,
           email: 'test@example.com', // fallback
-          role: 'user',
+          role: 'platform_user',
           status: 'pending',
           organizationId: 'mock-org-id',
         });

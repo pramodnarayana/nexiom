@@ -275,7 +275,7 @@ describe('SystemAdminController', () => {
         controller.createUser({
           name: 'Test',
           email: 'test@example.com',
-          systemRole: 'user',
+          systemRole: 'platform_user',
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -289,7 +289,7 @@ describe('SystemAdminController', () => {
               id: 'new',
               email: 'test@example.com',
               name: 'Test',
-              systemRole: 'user',
+              systemRole: 'platform_user',
             },
           ]),
         }),
@@ -298,14 +298,14 @@ describe('SystemAdminController', () => {
       const result = await controller.createUser({
         name: 'Test',
         email: 'test@example.com',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       });
 
       expect(result).toEqual({
         id: 'new',
         email: 'test@example.com',
         name: 'Test',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       });
       expect(mockDb.insert).toHaveBeenCalledWith(schema.user);
     });
@@ -595,7 +595,7 @@ describe('SystemAdminController', () => {
     it('should delete user and dependencies transactionally', async () => {
       mockDb.query.user.findFirst.mockResolvedValue({
         id: 'u1',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       }); // Normal user
 
       const mockWhere = jest.fn().mockResolvedValue({});

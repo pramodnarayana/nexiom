@@ -195,7 +195,7 @@ describe('BetterAuthIdentityProvider', () => {
       mockDb.query.session.findFirst.mockResolvedValue({ token: 'token-123' });
       mockDb.query.user.findFirst.mockResolvedValue({
         id: 'u1',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       });
 
       const result = await provider.login(email, password);
@@ -246,7 +246,7 @@ describe('BetterAuthIdentityProvider', () => {
       });
       mockDb.query.user.findFirst.mockResolvedValueOnce({
         id: 'user1',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       }); // For validateSession user fetch
 
       const mockMembership = {
@@ -259,7 +259,7 @@ describe('BetterAuthIdentityProvider', () => {
       // Mock user again for getEnrichedSession's system role fetch
       mockDb.query.user.findFirst.mockResolvedValueOnce({
         id: 'user1',
-        systemRole: 'user',
+        systemRole: 'platform_user',
       });
 
       const result = await provider.getEnrichedSession('tok');

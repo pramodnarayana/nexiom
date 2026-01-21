@@ -109,8 +109,8 @@ export class AuthController {
     }
 
     // Step 1: Check if user exists (Provisioned vs New)
-    // console.log('[DEBUG] completeInvite: Headers received:', Object.keys(req.headers));
     let user = await this.authProvider.getUserByEmail(body.email);
+    let isNewUser = false;
 
     if (user) {
       if (user.emailVerified) {
@@ -125,6 +125,7 @@ export class AuthController {
       await this.authProvider.setPassword(user.id, body.password);
     } else {
       // Create new user (standard flow)
+      isNewUser = true;
       user = await this.authProvider.createUser(
         {
           email: body.email,
@@ -142,20 +143,22 @@ export class AuthController {
       console.log(
         'DEBUG: completeInvite - accepting invitation for user:',
         user.id,
-        user.email,
       );
       await this.invitationsService.accept(
         body.invitationId,
         user.id,
         req.headers,
       );
-    } catch (e) {
-      console.error('DEBUG: acceptInvitation failed:', e);
-      // Rollback: Delete the user if acceptance fails to prevent orphans
-      console.log('DEBUG: Rolling back user creation:', user.id);
-      await this.authProvider.deleteUser(user.id);
+    } catch (_e) {
+      console.error('DEBUG: acceptInvitation failed');
+      // Rollback: Only delete if WE created the user in this transaction
+      if (isNewUser) {
+        console.log('DEBUG: Rolling back new user creation:', user.id);
+        await this.authProvider.deleteUser(user.id);
+      }
       throw new BadRequestException(
-        'Failed to accept invitation (User creation rolled back)',
+        'Failed to accept invitation' +
+          (isNewUser ? ' (User creation rolled back)' : ''),
       );
     }
 
