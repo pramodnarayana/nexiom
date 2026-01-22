@@ -117,8 +117,10 @@ describe('TenantList Component', () => {
         );
 
         // Platform admin should see status as dropdown button
-        const statusButtons = screen.getAllByRole('button', { name: /active|suspended/i });
-        expect(statusButtons.length).toBeGreaterThan(0);
+        const activeStatus = screen.getByText('Active');
+        const suspendedStatus = screen.getByText('Suspended');
+        expect(activeStatus.closest('button')).not.toBeNull();
+        expect(suspendedStatus.closest('button')).not.toBeNull();
     });
 
     it('shows read-only status badge for platform_user', () => {
@@ -187,7 +189,7 @@ describe('TenantList Component', () => {
         );
 
         // Platform user should not see action menu buttons (Edit/Delete)
-        const actionButtons = screen.queryAllByRole('button', { name: /more/i });
+        const actionButtons = screen.queryAllByRole('button', { name: /open menu/i });
         expect(actionButtons.length).toBe(0);
     });
 
