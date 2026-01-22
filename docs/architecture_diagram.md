@@ -1,6 +1,7 @@
 # System Architecture Diagram
 
 ## 1. High-Level Component View
+
 *The software components and their relationships.*
 
 ```mermaid
@@ -34,6 +35,7 @@ graph TD
 ```
 
 ## 2. Detailed Hybrid Architecture
+
 *Detailed interaction between Serverless, Containers, and Queues.*
 
 ```mermaid

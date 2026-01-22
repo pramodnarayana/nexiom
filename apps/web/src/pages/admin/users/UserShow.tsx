@@ -1,4 +1,5 @@
 import { useShow, useCustomMutation } from "@refinedev/core";
+import { useAuth } from "@/lib/auth/context";
 import {
     Card,
     CardContent,
@@ -6,7 +7,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Send } from "lucide-react";
+import { ArrowLeft, Edit, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 
@@ -21,6 +22,9 @@ export const UserShow = () => {
 
     const { data, isLoading } = queryResult;
     const record = data?.data;
+
+    const { user } = useAuth();
+    const isPlatformAdmin = user?.systemRole === 'platform_admin';
 
     const { mutate: sendInvite, isLoading: inviteLoading } = useCustomMutation();
 
@@ -61,26 +65,32 @@ export const UserShow = () => {
                         <p className="text-muted-foreground">View user information and metadata.</p>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    {record?.emailVerified === false && (
-                        <Button
-                            variant="success"
-                            onClick={handleInvite}
-                            disabled={inviteLoading}
-                        >
-                            <Send className={`mr-2 h-4 w-4 ${inviteLoading ? 'animate-spin' : ''}`} />
-                            {inviteLoading ? 'Sending...' : 'Send Invite'}
-                        </Button>
-                    )}
-                    {record?.id && (
-                        <Button asChild>
-                            <Link to={`/admin/users/edit/${record.id}`}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit User
-                            </Link>
-                        </Button>
-                    )}
-                </div>
+                {isPlatformAdmin && (
+                    <div className="flex gap-2">
+                        {record?.emailVerified === false && (
+                            <Button
+                                variant="success"
+                                onClick={handleInvite}
+                                disabled={inviteLoading}
+                            >
+                                {inviteLoading ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="mr-2 h-4 w-4" />
+                                )}
+                                {inviteLoading ? 'Sending...' : 'Send Invite'}
+                            </Button>
+                        )}
+                        {record?.id && (
+                            <Button asChild>
+                                <Link to={`/admin/users/edit/${record.id}`}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit User
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
+                )}
             </div>
 
             <Card>

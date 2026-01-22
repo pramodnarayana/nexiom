@@ -2,6 +2,7 @@ import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/lib/auth/context";
 import {
     Table,
     TableBody,
@@ -24,12 +25,16 @@ interface UsersProps {
 export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
     const { mutate: sendInvite } = useCustomMutation();
+    const { user } = useAuth();
+
+    // Check if user is platform_admin (can perform write operations)
+    const isPlatformAdmin = user?.systemRole === 'platform_admin';
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
 
     const handleDelete = (id: string, name: string) => {
-        if (window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+        if (globalThis.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
             deleteUser({
                 resource: deleteResource,
                 id: id,
@@ -157,7 +162,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
-                                        {!user.emailVerified && user.status !== 'pending' && (
+                                        {!user.emailVerified && user.status !== 'pending' && isPlatformAdmin && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -177,20 +182,24 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                                 <Eye className="h-4 w-4" />
                                             </Link>
                                         </Button>
-                                        <Button variant="ghost" size="icon" asChild aria-label={`Edit ${displayName}`}>
-                                            <Link to={`${basePath}/edit/${user.id}`}>
-                                                <Edit className="h-4 w-4" />
-                                            </Link>
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                            onClick={() => handleDelete(user.id, displayName)}
-                                            aria-label={`Delete ${displayName}`}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {isPlatformAdmin && (
+                                            <>
+                                                <Button variant="ghost" size="icon" asChild aria-label={`Edit ${displayName}`}>
+                                                    <Link to={`${basePath}/edit/${user.id}`}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleDelete(user.id, displayName)}
+                                                    aria-label={`Delete ${displayName}`}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </>
+                                        )}
                                     </div>
                                 </TableCell>
                             </TableRow>
