@@ -158,9 +158,9 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'active')}>Active</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'suspended')}>Suspended</DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => onStatusChange?.(tenant.id, 'disabled')}>Disabled</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange?.(tenant.id, 'active'); }}>Active</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange?.(tenant.id, 'suspended'); }}>Suspended</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange?.(tenant.id, 'disabled'); }}>Disabled</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             ) : (

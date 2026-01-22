@@ -15,6 +15,8 @@ describe('PlatformGuard', () => {
   let mockAuthProvider: jest.Mocked<IdentityProvider>;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     mockAuthProvider = {
       getSessionFromHeaders: jest.fn(),
     } as unknown as jest.Mocked<IdentityProvider>;

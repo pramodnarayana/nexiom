@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { IdentityProvider } from './identity-provider.abstract';
 import { Request } from 'express';
+import { toWebHeaders } from '../../shared/utils/headers.util';
 
 /**
  * PlatformGuard
@@ -24,7 +25,7 @@ export class PlatformGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
 
     // Validate Session via Headers (Correctly handles Signed Cookies)
-    const headers = new Headers(req.headers as Record<string, string>);
+    const headers = toWebHeaders(req.headers);
     const sessionData = await this.authProvider.getSessionFromHeaders(headers);
 
     if (!sessionData) {

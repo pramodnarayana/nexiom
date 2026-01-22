@@ -7,7 +7,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit, Send } from "lucide-react";
+import { ArrowLeft, Edit, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 
@@ -73,7 +73,11 @@ export const UserShow = () => {
                                 onClick={handleInvite}
                                 disabled={inviteLoading}
                             >
-                                <Send className={`mr-2 h-4 w-4 ${inviteLoading ? 'animate-spin' : ''}`} />
+                                {inviteLoading ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="mr-2 h-4 w-4" />
+                                )}
                                 {inviteLoading ? 'Sending...' : 'Send Invite'}
                             </Button>
                         )}
