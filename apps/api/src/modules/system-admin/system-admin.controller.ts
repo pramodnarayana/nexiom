@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { IdentityProvider } from '../auth/identity-provider.abstract';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
+import { PlatformGuard } from '../auth/platform.guard';
 import { DRIZZLE_DB } from '../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../../db/schema';
@@ -29,7 +30,6 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 
 @Controller('admin')
-@UseGuards(SystemAdminGuard)
 export class SystemAdminController {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
@@ -37,6 +37,7 @@ export class SystemAdminController {
   ) {}
 
   @Post('users/:id/invite')
+  @UseGuards(SystemAdminGuard)
   async inviteUser(
     @Param('id') id: string,
     @RequestHeaders() headers: Record<string, string>,
@@ -71,6 +72,7 @@ export class SystemAdminController {
   }
 
   @Post('invitations')
+  @UseGuards(SystemAdminGuard)
   async createSystemInvitation(
     @Body() body: CreateSystemInvitationValidation,
     @RequestHeaders() headers: Record<string, string>,
@@ -106,6 +108,7 @@ export class SystemAdminController {
   }
 
   @Post('tenants')
+  @UseGuards(SystemAdminGuard)
   async createTenant(@Body() input: CreateTenantValidation) {
     // Check if slug exists
     const existing = await this.db.query.organization.findFirst({
@@ -132,6 +135,7 @@ export class SystemAdminController {
   }
 
   @Post('users')
+  @UseGuards(SystemAdminGuard)
   async createUser(@Body() input: CreateUserValidation) {
     // Check if email already exists
     const existing = await this.db.query.user.findFirst({
@@ -159,6 +163,7 @@ export class SystemAdminController {
   }
 
   @Patch('tenants/:id')
+  @UseGuards(SystemAdminGuard)
   async updateTenant(
     @Param('id') id: string,
     @Body() input: UpdateTenantValidation,
@@ -209,6 +214,7 @@ export class SystemAdminController {
   }
 
   @Delete('tenants/:id')
+  @UseGuards(SystemAdminGuard)
   async deleteTenant(@Param('id') id: string) {
     const tenant = await this.db.query.organization.findFirst({
       where: eq(schema.organization.id, id),
@@ -235,6 +241,7 @@ export class SystemAdminController {
   }
 
   @Get('users')
+  @UseGuards(PlatformGuard)
   async listUsers(
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '10',
@@ -268,6 +275,7 @@ export class SystemAdminController {
   }
 
   @Patch('users/:id')
+  @UseGuards(SystemAdminGuard)
   async updateUser(
     @Param('id') id: string,
     @Body() input: UpdateUserValidation,
@@ -325,6 +333,7 @@ export class SystemAdminController {
   }
 
   @Get('users/:id')
+  @UseGuards(PlatformGuard)
   async getUser(@Param('id') id: string) {
     const user = await this.db.query.user.findFirst({
       where: eq(schema.user.id, id),
@@ -338,6 +347,7 @@ export class SystemAdminController {
   }
 
   @Delete('users/:id')
+  @UseGuards(SystemAdminGuard)
   async deleteUser(@Param('id') id: string) {
     const user = await this.db.query.user.findFirst({
       where: eq(schema.user.id, id),
@@ -396,6 +406,7 @@ export class SystemAdminController {
   }
 
   @Get('tenants')
+  @UseGuards(PlatformGuard)
   async listTenants(
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '10',
@@ -447,6 +458,7 @@ export class SystemAdminController {
   }
 
   @Get('tenants/:id')
+  @UseGuards(PlatformGuard)
   async getTenant(@Param('id') id: string) {
     const [tenant] = await this.db
       .select({

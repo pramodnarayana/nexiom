@@ -1,4 +1,5 @@
 import { useTable } from "@refinedev/core";
+import { useAuth } from "@/lib/auth/context";
 
 import { Users } from "./Users";
 import { type UserTableItem } from "./types";
@@ -13,6 +14,9 @@ export const UserList = ({
     basePath,
     resource = "users",
 }: UserListProps) => {
+    const { user } = useAuth();
+    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
     const table = useTable<UserTableItem>({
         resource: resource,
@@ -45,9 +49,11 @@ export const UserList = ({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-end">
-                <CreateUserDialog />
-            </div>
+            {isPlatformAdmin && (
+                <div className="flex items-center justify-end">
+                    <CreateUserDialog />
+                </div>
+            )}
 
             <Users
                 data={users}

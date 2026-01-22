@@ -4,17 +4,18 @@ import { BrowserRouter } from 'react-router-dom';
 import { TenantList } from './TenantList';
 import { type TenantTableItem } from './types';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { AuthProvider } from '@/lib/auth/AuthProvider';
 
 // Mock ResizeObserver and scrollIntoView for Radix UI
 beforeAll(() => {
-    window.ResizeObserver = vi.fn().mockImplementation(() => ({
+    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
         observe: vi.fn(),
         unobserve: vi.fn(),
         disconnect: vi.fn(),
     }));
-    window.HTMLElement.prototype.scrollIntoView = vi.fn();
-    window.HTMLElement.prototype.hasPointerCapture = vi.fn();
-    window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+    globalThis.HTMLElement.prototype.scrollIntoView = vi.fn();
+    globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn();
+    globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn();
 });
 
 describe('TenantList Component', () => {
@@ -44,11 +45,13 @@ describe('TenantList Component', () => {
     const renderComponent = (props: Partial<React.ComponentProps<typeof TenantList>> = {}) => {
         return render(
             <BrowserRouter>
-                <TenantList
-                    data={mockData}
-                    isLoading={false}
-                    {...props}
-                />
+                <AuthProvider>
+                    <TenantList
+                        data={mockData}
+                        isLoading={false}
+                        {...props}
+                    />
+                </AuthProvider>
             </BrowserRouter>
         );
     };
