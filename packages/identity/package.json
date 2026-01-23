@@ -4,20 +4,26 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
     "build": "tsc",
     "test": "jest",
     "lint": "eslint \"src/**/*.ts\" --fix"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/core": "^11.0.1",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",
     "drizzle-orm": "^0.45.1",
-    "rxjs": "^7.8.1",
     "uuid": "^13.0.0"
   },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
+    "rxjs": "^7.8.1"
+  },
   "devDependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
     "@eslint/js": "^9.18.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/jest": "^30.0.0",
@@ -45,7 +51,9 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.spec.ts",
+      "!**/jest.setup.ts"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

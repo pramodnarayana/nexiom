@@ -4,6 +4,11 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 export default tseslint.config(
     {
         ignores: ['eslint.config.mjs', 'dist/**'],
@@ -20,7 +25,7 @@ export default tseslint.config(
             sourceType: 'commonjs',
             parserOptions: {
                 projectService: true,
-                tsconfigRootDir: import.meta.dirname,
+                tsconfigRootDir: __dirname,
             },
         },
     },

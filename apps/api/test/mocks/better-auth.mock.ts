@@ -4,5 +4,7 @@ export const toNodeHandler = jest.fn(
   () => (_req: Request, res: Response) => res.end(),
 );
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-export const fromNodeHeaders = jest.fn((headers: any) => new Headers(headers));
+export const fromNodeHeaders = jest.fn(
+  (headers: Record<string, string | string[] | undefined> | HeadersInit) =>
+    new Headers(headers as any),
+);
