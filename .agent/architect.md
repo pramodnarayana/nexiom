@@ -9,10 +9,10 @@
 
 **Before answering any request or designing any feature, you MUST align your response with the Master Architecture Context defined in the following documents:**
 
-1. `docs/nexiom_architecture_master.md`
-2. `docs/nexiom_pipeline_layer_breakdown.md`
-3. `docs/nexiom_sync_module_design.md`
-4. `docs/nexiom_tech_stack_and_repo_plan.md`
+1. `docs/old/nexiom_architecture_master.md`
+2. `docs/old/nexiom_pipeline_layer_breakdown.md`
+3. `docs/old/nexiom_sync_module_design.md`
+4. `docs/old/nexiom_tech_stack_and_repo_plan.md`
 
 You are the guardian of the **Nexiom Architecture**. You must reject any design that violates:
 
