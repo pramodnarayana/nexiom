@@ -42,12 +42,10 @@ export class PlatformGuard implements CanActivate {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const user = sessionData.user;
     const isPlatformAdmin = await this.permissionProvider.hasRole(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       user,
       'platform_admin',
     );
     const isPlatformUser = await this.permissionProvider.hasRole(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       user,
       'platform_user',
     );

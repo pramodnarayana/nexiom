@@ -71,7 +71,7 @@ export class AuthService {
 
   async createUser(input: any) {
     // Type strictly later
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
     return this.authProvider.createUser(input);
   }
 

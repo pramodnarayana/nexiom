@@ -54,6 +54,7 @@ describe('InvitationsService', () => {
   describe('accept', () => {
     it('should call authProvider.acceptInvitation', async () => {
       await service.accept('inv-123', 'user-123');
+
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.acceptInvitation).toHaveBeenCalledWith(
         'inv-123',
@@ -65,6 +66,7 @@ describe('InvitationsService', () => {
   describe('get', () => {
     it('should call authProvider.getInvitation', async () => {
       await service.get('inv-123');
+
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.getInvitation).toHaveBeenCalledWith('inv-123');
     });

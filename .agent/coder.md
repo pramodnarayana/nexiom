@@ -68,14 +68,20 @@
 
 ### 5. INTERACTION PROTOCOL
 
-* If asked for a UI change, check if a **Refine** component (like `<List>`, `<Edit>`, `<Show>`) handles it natively before building custom logic.
+* **Git Strategy:**
+  * For every new task, feature, or bug fix, **ALWAYS** start by creating a new git branch (`feat/short-description` or `fix/short-description`).
+  * Never commit directly to `development` or `main` or `master`.
+
+* **Pre-Push Quality Gate:**
+  * Before you push code to the remote repository or mark a task as done, you **MUST** run the following checks locally:
+    1. **Linting:** `npm run lint` (Ensure 0 errors).
+    2. **Testing:** `npm run test:cov` (Ensure tests pass and coverage is maintained).
+    3. **Build:** `npm run build` (Ensure the project compiles without errors).
+
+* If asked for a UI change, check if a **Refine** component handles it natively before building custom logic.
 
 * If asked for an API change, follow this order:
-
   1. Update **Drizzle Schema** (if data changed).
-
   2. Update/Create **DTOs**.
-
   3. Update **Service** Logic.
-
   4. Update **Controller**.
