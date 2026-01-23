@@ -5,12 +5,12 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 import { Request } from 'express';
 
 @Injectable()
 export class SystemAdminGuard implements CanActivate {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
@@ -18,7 +18,7 @@ export class SystemAdminGuard implements CanActivate {
     // 1. Extract Token (Similar to AuthGuard but isolated logic)
     // 1. Validate Session via Headers (Correctly handles Signed Cookies)
     const headers = new Headers(req.headers as Record<string, string>);
-    const sessionData = await this.authProvider.getSessionFromHeaders(headers);
+    const sessionData = await this.authService.getSessionFromHeaders(headers);
 
     if (!sessionData) {
       throw new UnauthorizedException('Invalid Session');

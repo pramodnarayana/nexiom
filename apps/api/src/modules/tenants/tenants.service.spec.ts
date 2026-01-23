@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DRIZZLE_DB } from '../../db/db.provider';
-import { Organization } from './tenant.schema';
+import { Organization } from '../../db/schema';
 
 const mockOrganizations: Organization[] = [
   {
@@ -116,6 +116,7 @@ describe('TenantsService', () => {
 
   describe('updateStatus', () => {
     it('should update tenant status', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const updatedOrg = { ...mockOrganizations[0], status: 'disabled' };
       mockDb.returning.mockResolvedValue([updatedOrg]);
 
@@ -134,6 +135,7 @@ describe('TenantsService', () => {
 
   describe('createTenant', () => {
     it('should create organization and member transactionally', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const newOrg = { ...mockOrganizations[0] };
       // specialized mocks for tx
       mockDb.returning.mockResolvedValueOnce([newOrg]); // for org insert
@@ -151,6 +153,7 @@ describe('TenantsService', () => {
   describe('provisionTenantForUser', () => {
     it('should provision a tenant with generated name', async () => {
       const mockUser = { id: 'user-1', email: 'test@example.com' };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const newOrg = { ...mockOrganizations[0], name: 'Organization X' };
 
       // Mock user lookup

@@ -57,9 +57,7 @@ describe('InvitationsController', () => {
 
       await controller.create(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.create).toHaveBeenCalledWith(dto, 'user-123', {
-        'user-agent': 'jest',
-      });
+      expect(service.create).toHaveBeenCalledWith(dto, 'user-123');
     });
   });
 
@@ -83,9 +81,7 @@ describe('InvitationsController', () => {
 
       await controller.accept(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123', {
-        'user-agent': 'jest',
-      });
+      expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123');
     });
   });
 });

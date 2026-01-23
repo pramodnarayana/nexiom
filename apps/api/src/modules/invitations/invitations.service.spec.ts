@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service';
-import { IdentityProvider } from '../auth/identity-provider.abstract';
+import { AUTH_PROVIDER, IAuthProvider } from '@nexiom/identity';
 
 describe('InvitationsService', () => {
   let service: InvitationsService;
-  let identityProvider: IdentityProvider;
+  let authProvider: IAuthProvider;
 
-  const mockIdentityProvider = {
+  const mockAuthProvider = {
     createInvitation: jest.fn(),
     acceptInvitation: jest.fn(),
     getInvitation: jest.fn(),
@@ -17,14 +17,14 @@ describe('InvitationsService', () => {
       providers: [
         InvitationsService,
         {
-          provide: IdentityProvider,
-          useValue: mockIdentityProvider,
+          provide: AUTH_PROVIDER,
+          useValue: mockAuthProvider,
         },
       ],
     }).compile();
 
     service = module.get<InvitationsService>(InvitationsService);
-    identityProvider = module.get<IdentityProvider>(IdentityProvider);
+    authProvider = module.get<IAuthProvider>(AUTH_PROVIDER);
   });
 
   it('should be defined', () => {
@@ -32,7 +32,7 @@ describe('InvitationsService', () => {
   });
 
   describe('create', () => {
-    it('should call identityProvider.createInvitation', async () => {
+    it('should call authProvider.createInvitation', async () => {
       const dto = {
         email: 'test@example.com',
         role: 'user',
@@ -41,35 +41,32 @@ describe('InvitationsService', () => {
       await service.create(dto, 'user-123');
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(identityProvider.createInvitation).toHaveBeenCalledWith({
+      expect(authProvider.createInvitation).toHaveBeenCalledWith({
         email: dto.email,
         role: dto.role,
         organizationId: dto.organizationId,
         inviterId: 'user-123',
+        expiresIn: 172800, // 48 hours
       });
     });
   });
 
   describe('accept', () => {
-    it('should call identityProvider.acceptInvitation', async () => {
+    it('should call authProvider.acceptInvitation', async () => {
       await service.accept('inv-123', 'user-123');
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(identityProvider.acceptInvitation).toHaveBeenCalledWith(
+      expect(authProvider.acceptInvitation).toHaveBeenCalledWith(
         'inv-123',
         'user-123',
-        undefined,
       );
     });
   });
 
   describe('get', () => {
-    it('should call identityProvider.getInvitation', async () => {
+    it('should call authProvider.getInvitation', async () => {
       await service.get('inv-123');
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(identityProvider.getInvitation).toHaveBeenCalledWith(
-        'inv-123',
-        undefined,
-      );
+      expect(authProvider.getInvitation).toHaveBeenCalledWith('inv-123');
     });
   });
 });

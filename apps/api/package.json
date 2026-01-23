@@ -31,6 +31,7 @@
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@nexiom/identity": "workspace:*",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",
     "class-transformer": "^0.5.1",
@@ -84,7 +85,10 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
+    "roots": [
+      "<rootDir>/src"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -100,13 +104,14 @@
       "!db/verify.ts",
       "!scripts/**"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "transformIgnorePatterns": [
       "/node_modules/(?!(better-auth|better-call|uuid)/)"
     ],
     "moduleNameMapper": {
-      "^better-auth/node$": "<rootDir>/test/mocks/better-auth.mock.ts"
+      "^better-auth/node$": "<rootDir>/test/mocks/better-auth.mock.ts",
+      "^@nexiom/identity$": "<rootDir>/test/mocks/identity.mock.ts"
     },
     "coverageThreshold": {
       "global": {

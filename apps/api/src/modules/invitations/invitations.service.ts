@@ -1,52 +1,41 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { IdentityProvider } from '../auth/identity-provider.abstract';
-import { Invitation } from './invitation.interface';
+import { Injectable, Logger, Inject } from '@nestjs/common';
+import { AUTH_PROVIDER, IAuthProvider, Invitation } from '@nexiom/identity';
 import { CreateInvitation } from './invitations.validation';
 
 @Injectable()
 export class InvitationsService {
   private readonly logger = new Logger(InvitationsService.name);
 
-  constructor(private readonly identityProvider: IdentityProvider) {}
+  constructor(
+    @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
+  ) {}
 
   async create(
     createInvitation: CreateInvitation,
     inviterId: string,
-    headers?: Record<string, any>,
   ): Promise<unknown> {
     this.logger.log(
       `Creating invitation for organization ${createInvitation.organizationId || 'system'}`,
     );
-    return this.identityProvider.createInvitation({
+    return this.authProvider.createInvitation({
       email: createInvitation.email,
       role: createInvitation.role,
       organizationId: createInvitation.organizationId || null,
       inviterId,
-      headers,
+      expiresIn: 48 * 3600,
     });
   }
 
-  async accept(
-    invitationId: string,
-    userId: string,
-    headers?: Record<string, any>,
-  ): Promise<unknown> {
+  async accept(invitationId: string, userId: string): Promise<unknown> {
     this.logger.log(`Accepting invitation ${invitationId} for user ${userId}`);
-    return this.identityProvider.acceptInvitation(
-      invitationId,
-      userId,
-      headers,
-    );
+    return this.authProvider.acceptInvitation(invitationId, userId);
   }
 
-  async get(
-    id: string,
-    headers?: Record<string, any>,
-  ): Promise<Invitation | null> {
-    return this.identityProvider.getInvitation(id, headers);
+  async get(id: string): Promise<Invitation | null> {
+    return this.authProvider.getInvitation(id);
   }
 
-  async list(organizationId: string): Promise<unknown[]> {
-    return this.identityProvider.listInvitations(organizationId);
+  async list(organizationId: string): Promise<Invitation[]> {
+    return this.authProvider.listInvitations(organizationId);
   }
 }

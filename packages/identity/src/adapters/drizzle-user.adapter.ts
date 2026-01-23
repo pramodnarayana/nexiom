@@ -1,0 +1,118 @@
+import { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { eq } from "drizzle-orm";
+import {
+  IUserProvider,
+  CreateUserInput,
+  UpdateUserInput,
+  User as UserInterface,
+  IAuthProvider,
+} from "../interfaces";
+import * as schema from "../schema";
+
+export class DrizzleUserAdapter implements IUserProvider {
+  constructor(
+    private readonly db: NodePgDatabase<typeof schema>,
+    private readonly authProvider: IAuthProvider,
+  ) {}
+
+  async create(input: CreateUserInput): Promise<UserInterface> {
+    // Delegate to AuthProvider to handle account creation (and password hashing)
+    return await this.authProvider.createUser(input);
+  }
+
+  async update(id: string, input: UpdateUserInput): Promise<UserInterface> {
+    // If password is being updated, handle it via AuthProvider
+    if (input.password && this.authProvider.setPassword) {
+      await this.authProvider.setPassword(id, input.password);
+    }
+
+    // Update user fields
+    if (Object.keys(input).length > 0) {
+      const { password: _, ...updates } = input; // Exclude password from User table update
+
+      if (Object.keys(updates).length > 0) {
+        await this.db
+          .update(schema.user)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.user.id, id));
+      }
+    }
+
+    const updated = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+
+    if (!updated) throw new Error("User not found after update");
+
+    return this.mapUser(updated);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      // Cleanup logic could be extensive, but cascading deletes in schema might handle most.
+      // However, we should ensure session/account cleanup.
+      await tx.delete(schema.session).where(eq(schema.session.userId, id));
+      await tx.delete(schema.account).where(eq(schema.account.userId, id));
+      await tx.delete(schema.user).where(eq(schema.user.id, id));
+    });
+  }
+
+  async findById(id: string): Promise<UserInterface | null> {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, id),
+    });
+    return user ? this.mapUser(user) : null;
+  }
+
+  async findByEmail(email: string): Promise<UserInterface | null> {
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.email, email),
+    });
+    return user ? this.mapUser(user) : null;
+  }
+
+  async findAll(tenantId?: string): Promise<UserInterface[]> {
+    if (tenantId) {
+      const users = await this.db
+        .select({
+          user: schema.user,
+        })
+        .from(schema.user)
+        .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
+        .where(eq(schema.member.organizationId, tenantId));
+
+      return users.map((u) => this.mapUser(u.user));
+    }
+
+    // Global list (careful with this in prod)
+    const users = await this.db.select().from(schema.user).limit(100);
+    return users.map((u) => this.mapUser(u));
+  }
+
+  async forceVerifyEmail(userId: string): Promise<void> {
+    await this.db
+      .update(schema.user)
+      .set({ emailVerified: true })
+      .where(eq(schema.user.id, userId));
+  }
+
+  private mapUser(dbUser: schema.User): UserInterface {
+    return {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      emailVerified: dbUser.emailVerified,
+      image: dbUser.image,
+      createdAt: dbUser.createdAt,
+      updatedAt: dbUser.updatedAt,
+      role: dbUser.role,
+      systemRole: dbUser.systemRole || null,
+      banned: dbUser.banned || false,
+      banReason: dbUser.banReason || null,
+      banExpires: dbUser.banExpires || null,
+    };
+  }
+}

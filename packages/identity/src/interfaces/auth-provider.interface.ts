@@ -1,4 +1,5 @@
-import { AuthResult, Invitation, Session } from "./types";
+import { AuthResult, Invitation, Session, User } from "./types";
+import { CreateUserInput } from "./user-provider.interface";
 
 export interface LoginCredentials {
   email: string;
@@ -16,6 +17,9 @@ export interface CreateInvitationInput {
 export interface IAuthProvider {
   login(credentials: LoginCredentials): Promise<AuthResult>;
 
+  // Added createUser to support Signup flow via Auth Provider
+  createUser(input: CreateUserInput): Promise<User>;
+
   validateSession(
     token: string,
   ): Promise<{ session: Session; user: any } | null>;
@@ -24,7 +28,7 @@ export interface IAuthProvider {
     headers: any,
   ): Promise<{ session: Session; user: any } | null>;
 
-  createInvitation(input: CreateInvitationInput): Promise<any>; // abstract return type as it might depend on implementation
+  createInvitation(input: CreateInvitationInput): Promise<any>;
 
   getInvitation(id: string): Promise<Invitation | null>;
 
@@ -32,6 +36,5 @@ export interface IAuthProvider {
 
   listInvitations(organizationId: string): Promise<Invitation[]>;
 
-  // Optional: Password management if handled by provider
   setPassword?(userId: string, password: string): Promise<void>;
 }

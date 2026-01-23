@@ -4,13 +4,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 
 import { Request } from 'express';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -22,24 +22,22 @@ export class AuthGuard implements CanActivate {
     const headers = new Headers(request.headers as Record<string, string>);
 
     // Use the new provider method that delegates to Better Auth
-    const result = await this.authProvider.getSessionFromHeaders(headers);
 
-    if (!result) {
+    // Auth Guard uses Enriched Session directly now
+    // Step 1: Get Token from Headers (via AuthService logic if needed, or direct)
+    // Wait, AuthService.getEnrichedSession takes a TOKEN, not headers?
+    // Let's check AuthService implementation.
+    // getEnrichedSession(token: string).
+    // getSessionFromHeaders(headers) -> { session, user }.
+
+    const sessionData = await this.authService.getSessionFromHeaders(headers);
+
+    if (!sessionData) {
       throw new UnauthorizedException('Invalid or Expired Session');
     }
 
-    // We still want to enrich it if getSessionFromHeaders uses basic validateSession?
-    // In BetterAuthIdentityProvider.getSessionFromHeaders, we return { session, user }.
-    // But getEnrichedSession ADDS tenant info (`hasTenant`, `organizationId`).
-    // getSessionFromHeaders (via BetterAuth API) returns standard session.
-    // We need to ENRICH it afterwards if the user is logged in.
-
-    // Wait. getSessionFromHeaders returns the BASIC session.
-    // AuthGuard usually provides tenant info.
-    // So we must call getEnrichedSession using the raw token we just got back from getSessionFromHeaders.
-
-    const enrichedResult = await this.authProvider.getEnrichedSession(
-      result.session.token,
+    const enrichedResult = await this.authService.getEnrichedSession(
+      sessionData.session.token,
     );
 
     if (!enrichedResult) {
@@ -49,6 +47,7 @@ export class AuthGuard implements CanActivate {
     }
 
     // Unwrap for attaching to request
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { user, session } = enrichedResult;
 
     // 3. Attach to request

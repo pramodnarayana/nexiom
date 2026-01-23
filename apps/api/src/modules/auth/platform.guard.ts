@@ -4,10 +4,12 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 import { Request } from 'express';
 import { toWebHeaders } from '../../shared/utils/headers.util';
+import { PERMISSION_PROVIDER, IPermissionProvider } from '@nexiom/identity';
 
 /**
  * PlatformGuard
@@ -19,26 +21,38 @@ import { toWebHeaders } from '../../shared/utils/headers.util';
  */
 @Injectable()
 export class PlatformGuard implements CanActivate {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(
+    private readonly authService: AuthService,
+    @Inject(PERMISSION_PROVIDER)
+    private readonly permissionProvider: IPermissionProvider,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
 
     // Validate Session via Headers (Correctly handles Signed Cookies)
     const headers = toWebHeaders(req.headers);
-    const sessionData = await this.authProvider.getSessionFromHeaders(headers);
+    const sessionData = await this.authService.getSessionFromHeaders(headers);
 
     if (!sessionData) {
       throw new UnauthorizedException('Invalid Session');
     }
 
     // Check System Role - Allow both platform_admin and platform_user
-    const user = sessionData.user as { systemRole?: string };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const user = sessionData.user;
+    const isPlatformAdmin = await this.permissionProvider.hasRole(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      user,
+      'platform_admin',
+    );
+    const isPlatformUser = await this.permissionProvider.hasRole(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      user,
+      'platform_user',
+    );
 
-    if (
-      user.systemRole !== 'platform_admin' &&
-      user.systemRole !== 'platform_user'
-    ) {
+    if (!isPlatformAdmin && !isPlatformUser) {
       throw new ForbiddenException('Requires Platform Access');
     }
 

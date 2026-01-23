@@ -6,7 +6,11 @@ export interface User {
   image?: string | null;
   createdAt: Date;
   updatedAt: Date;
-  systemRole?: string;
+  role: string | null;
+  systemRole?: string | null;
+  banned?: boolean | null;
+  banReason?: string | null;
+  banExpires?: Date | null;
 }
 
 export interface Tenant {
@@ -26,8 +30,9 @@ export interface Session {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  ipAddress?: string;
-  userAgent?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  impersonatedBy?: string | null;
 }
 
 export interface Invitation {

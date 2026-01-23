@@ -3,7 +3,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PlatformGuard } from './platform.guard';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 import {
   ExecutionContext,
   UnauthorizedException,
@@ -12,21 +12,30 @@ import {
 
 describe('PlatformGuard', () => {
   let guard: PlatformGuard;
-  let mockAuthProvider: jest.Mocked<IdentityProvider>;
+  let module: TestingModule;
+  let mockAuthService: {
+    getSessionFromHeaders: jest.Mock;
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    mockAuthProvider = {
+    mockAuthService = {
       getSessionFromHeaders: jest.fn(),
-    } as unknown as jest.Mocked<IdentityProvider>;
+    };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         PlatformGuard,
         {
-          provide: IdentityProvider,
-          useValue: mockAuthProvider,
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
+        {
+          provide: 'PERMISSION_PROVIDER', // Using string token as exported from package
+          useValue: {
+            hasRole: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -39,7 +48,7 @@ describe('PlatformGuard', () => {
   });
 
   it('should throw UnauthorizedException if session is invalid', async () => {
-    mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
+    mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -55,7 +64,7 @@ describe('PlatformGuard', () => {
   });
 
   it('should throw ForbiddenException if user has no platform role', async () => {
-    mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
       user: { id: 'u1', systemRole: 'tenant_user' } as any,
     });
@@ -75,10 +84,15 @@ describe('PlatformGuard', () => {
 
   it('should allow access if user is platform_admin', async () => {
     const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
-    mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
       user: mockUser as any,
     });
+    // Mock Permission Provider Success
+
+    const permissionProvider: any = module.get('PERMISSION_PROVIDER');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    permissionProvider.hasRole.mockResolvedValue(true);
 
     const mockRequest = { headers: {} };
     const mockContext = {
@@ -95,10 +109,15 @@ describe('PlatformGuard', () => {
 
   it('should allow access if user is platform_user', async () => {
     const mockUser = { id: 'user1', systemRole: 'platform_user' };
-    mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
       user: mockUser as any,
     });
+    // Mock Permission Provider Success
+
+    const permissionProvider: any = module.get('PERMISSION_PROVIDER');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    permissionProvider.hasRole.mockResolvedValue(true);
 
     const mockRequest = { headers: {} };
     const mockContext = {
@@ -114,7 +133,7 @@ describe('PlatformGuard', () => {
   });
 
   it('should throw ForbiddenException if user has undefined systemRole', async () => {
-    mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
       user: { id: 'u3' } as any,
     });

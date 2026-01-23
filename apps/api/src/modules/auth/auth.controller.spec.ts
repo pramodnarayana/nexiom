@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
+import { USER_PROVIDER } from '@nexiom/identity';
 import { TenantsService } from '../tenants/tenants.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
 
 describe('AuthController', () => {
   let controller: AuthController;
+  let module: TestingModule;
 
   const mockSession = {
     id: 'session-123',
@@ -17,16 +19,21 @@ describe('AuthController', () => {
     userAgent: null,
   };
 
-  const mockBetterAuthIdentityProvider = {
+  const mockAuthService = {
     login: jest.fn(),
     createUser: jest.fn(),
-    deleteUser: jest.fn(),
-    forceVerifyEmail: jest.fn(),
-    validateSession: jest.fn(),
     getSessionFromHeaders: jest.fn(),
-    getEnrichedSession: jest.fn(),
-    getUserByEmail: jest.fn(),
     getHandler: jest.fn(() => () => {}),
+    setPassword: jest.fn(),
+    getEnrichedSession: jest.fn(),
+  };
+
+  const mockUserProvider = {
+    create: jest.fn(),
+    findByEmail: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    forceVerifyEmail: jest.fn(),
   };
 
   const mockTenantsService = {
@@ -39,12 +46,16 @@ describe('AuthController', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         {
-          provide: IdentityProvider,
-          useValue: mockBetterAuthIdentityProvider,
+          provide: AuthService,
+          useValue: mockAuthService,
+        },
+        {
+          provide: USER_PROVIDER,
+          useValue: mockUserProvider,
         },
         {
           provide: TenantsService,
@@ -58,6 +69,10 @@ describe('AuthController', () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
+    // Ensure we are spying on the correct instance
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const userProvider = module.get(USER_PROVIDER);
+    Object.assign(mockUserProvider, userProvider);
 
     jest.clearAllMocks();
   });
@@ -80,9 +95,7 @@ describe('AuthController', () => {
         session: mockSession,
       };
 
-      mockBetterAuthIdentityProvider.getSessionFromHeaders.mockResolvedValue(
-        mockSessionData,
-      );
+      mockAuthService.getSessionFromHeaders.mockResolvedValue(mockSessionData);
       mockTenantsService.provisionTenantForUser.mockResolvedValue({
         id: 'org-123',
         name: 'New Org',
@@ -102,12 +115,11 @@ describe('AuthController', () => {
         status: 'pending',
         expiresAt: new Date(Date.now() + 10000),
       });
-      mockBetterAuthIdentityProvider.deleteUser.mockResolvedValue(undefined);
       mockInvitationsService.accept.mockResolvedValue('inv-123');
       const mockUser = { id: 'user-new' };
-      mockBetterAuthIdentityProvider.createUser.mockResolvedValue(mockUser);
+      mockAuthService.createUser.mockResolvedValue(mockUser);
       // Login mock return
-      mockBetterAuthIdentityProvider.login.mockResolvedValue({
+      mockAuthService.login.mockResolvedValue({
         session: { token: 'sess-123' },
         user: mockUser,
         cookie: 'session=123',
@@ -131,8 +143,56 @@ describe('AuthController', () => {
       expect(result).toBeDefined();
     });
 
+    it('should complete invite for existing unverified user', async () => {
+      mockInvitationsService.get.mockResolvedValue({
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 10000),
+      });
+      mockInvitationsService.accept.mockResolvedValue('inv-123');
+      const mockExistingUser = {
+        id: 'user-existing',
+        emailVerified: false,
+        email: 'test@example.com',
+      };
+      mockUserProvider.findByEmail.mockResolvedValue(mockExistingUser);
+      mockUserProvider.update.mockResolvedValue({
+        ...mockExistingUser,
+        name: 'Test User',
+      });
+      mockAuthService.setPassword.mockResolvedValue(undefined); // void
+
+      mockAuthService.login.mockResolvedValue({
+        session: { token: 'sess-123' },
+        user: mockExistingUser,
+        cookie: 'session=123',
+      });
+
+      const body = {
+        invitationId: 'inv-123',
+        email: 'test@example.com',
+        password: 'pass',
+        firstName: 'Test',
+        lastName: 'User',
+      };
+
+      const res = { setHeader: jest.fn() } as unknown as Response;
+      const mockRequest = { headers: {} } as unknown as Request;
+
+      const result = await controller.completeInvite(body, res, mockRequest);
+
+      expect(result).toBeDefined();
+      expect(mockUserProvider.update).toHaveBeenCalledWith('user-existing', {
+        name: 'Test User',
+      });
+      expect(mockAuthService.setPassword).toHaveBeenCalledWith(
+        'user-existing',
+        'pass',
+      );
+    });
+
     it('should rollback user creation if invite accept fails', async () => {
-      mockBetterAuthIdentityProvider.createUser.mockResolvedValue({
+      mockUserProvider.findByEmail.mockResolvedValue(null);
+      mockAuthService.createUser.mockResolvedValue({
         id: 'user-fail',
       });
       mockInvitationsService.get.mockResolvedValue({
@@ -142,7 +202,6 @@ describe('AuthController', () => {
       mockInvitationsService.accept.mockRejectedValue(
         new Error('Accept Failed'),
       );
-      mockBetterAuthIdentityProvider.deleteUser.mockResolvedValue(undefined);
 
       const body = {
         invitationId: 'inv-fail',
@@ -160,9 +219,54 @@ describe('AuthController', () => {
         controller.completeInvite(body, res, mockRequest),
       ).rejects.toThrow('Failed to accept invitation');
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
-      expect(mockBetterAuthIdentityProvider.deleteUser).toHaveBeenCalledWith(
-        'user-fail',
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const provider = module.get(USER_PROVIDER);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(provider.delete).toHaveBeenCalledWith('user-fail');
+    });
+  });
+  describe('betterAuth', () => {
+    it('should delegate to authService.getHandler', async () => {
+      const mockHandler = jest.fn();
+      mockAuthService.getHandler.mockReturnValue(mockHandler);
+      const mockRequest = {} as unknown as Request;
+      const mockResponse = {
+        end: jest.fn(),
+        setHeader: jest.fn(),
+      } as unknown as Response;
+
+      await controller.betterAuth(mockRequest, mockResponse);
+
+      expect(mockAuthService.getHandler).toHaveBeenCalled();
+    });
+  });
+
+  describe('refreshSession', () => {
+    it('should return enriched session', async () => {
+      const mockSessionData = {
+        session: { token: 'tok-123' },
+        user: { id: 'u1' },
+      };
+      mockAuthService.getSessionFromHeaders.mockResolvedValue(mockSessionData);
+
+      const enriched = { user: { id: 'u1', hasTenant: true } };
+      mockAuthService.getEnrichedSession.mockResolvedValue(enriched);
+
+      const req = { headers: {} } as Request;
+      const result = await controller.refreshSession(req);
+
+      expect(mockAuthService.getSessionFromHeaders).toHaveBeenCalled();
+      expect(mockAuthService.getEnrichedSession).toHaveBeenCalledWith(
+        'tok-123',
       );
+      expect(result).toEqual(enriched);
+    });
+
+    it('should throw UnauthorizedException if no session', async () => {
+      mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
+      const req = { headers: {} } as Request;
+      await expect(controller.refreshSession(req)).rejects.toThrow();
     });
   });
 });
