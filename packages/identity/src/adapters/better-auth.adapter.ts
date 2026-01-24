@@ -177,6 +177,22 @@ export class BetterAuthAdapter implements IAuthProvider {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const result = await apiResponse.json();
 
+    // Validate Response Shape
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (result.twoFactorRedirect) {
+      throw new Error("2FA required (not supported via this adapter yet)");
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (!result.token || typeof result.token !== "string") {
+      throw new Error("Login failed (No token returned)");
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (!result.user?.id) {
+      throw new Error("Login failed (No user returned)");
+    }
+
     // Resolve Session from DB for consistency
     const dbSession = await this.db.query.session.findFirst({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -231,17 +247,16 @@ export class BetterAuthAdapter implements IAuthProvider {
           )
         : fromNodeHeaders(headers as IncomingHttpHeaders);
 
-    const result = await this.auth.api.getSession({
+    const result = (await this.auth.api.getSession({
       headers: headerObj,
-    });
+    })) as any;
 
-    if (!result) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (!result?.session?.token) return null;
 
-    return {
-      session: this.mapSession(result.session as any),
-
-      user: this.mapUser(result.user as any),
-    };
+    // Rehydrate and validate from DB to ensure consistent object shape (dates etc)
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+    return this.validateSession(result.session.token);
   }
 
   async createInvitation(input: CreateInvitationInput): Promise<any> {
@@ -313,7 +328,10 @@ export class BetterAuthAdapter implements IAuthProvider {
       const inv = await tx.query.invitation.findFirst({
         where: eq(schema.invitation.id, invitationId),
       });
-      if (inv?.status !== "pending" || inv.expiresAt < new Date()) {
+      if (!inv) {
+        throw new Error("Invalid or expired invitation");
+      }
+      if (inv.status !== "pending" || inv.expiresAt < new Date()) {
         throw new Error("Invalid or expired invitation");
       }
 
