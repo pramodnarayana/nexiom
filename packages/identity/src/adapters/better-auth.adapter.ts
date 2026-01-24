@@ -297,18 +297,54 @@ export class BetterAuthAdapter implements IAuthProvider {
       },
     });
 
-    // We need to map the result to our Invitation interface
-    // Better Auth returns { invitation: ..., ... } usually depending on plugin
-    if (!result) throw new Error("Failed to create invitation");
-
-    // Assuming result.invitation holds the data, or result itself IS the invitation (check Better Auth docs or assumed shape in adapter)
-    // If we look at existing usage, we usually map DB objects.
-    // For safety, let's fetch it from DB or map optimistic result if structure matches.
-    // However, since we are inside adapter, let's assume we can map the result if it mimics schema.
-    // If not, we might need to fetch by ID.
-    // Let's assume result IS the invitation object for now based on typical BA patterns, or result.invitation.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const invData = result.invitation || result;
+    const invData = result.invitation ?? result;
+
+    // Validate that invData is an object
+
+    if (!invData || typeof invData !== "object") {
+      throw new Error(
+        "Invalid response from createInvitation: Missing invitation data",
+      );
+    }
+
+    // List of required fields to check
+    const requiredFields = [
+      "id",
+      "email",
+      "role",
+      "organizationId",
+      "inviterId",
+      "status",
+      "expiresAt",
+      "createdAt",
+    ];
+
+    for (const field of requiredFields) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (!invData[field]) {
+        throw new Error(
+          `Invalid response from createInvitation: Missing field "${field}"`,
+        );
+      }
+    }
+
+    // Validate Date fields
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const expiresAt = new Date(invData.expiresAt);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const createdAt = new Date(invData.createdAt);
+
+    if (isNaN(expiresAt.getTime())) {
+      throw new Error(
+        "Invalid response from createInvitation: Invalid expiresAt date",
+      );
+    }
+    if (isNaN(createdAt.getTime())) {
+      throw new Error(
+        "Invalid response from createInvitation: Invalid createdAt date",
+      );
+    }
 
     return {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -323,10 +359,8 @@ export class BetterAuthAdapter implements IAuthProvider {
       inviterId: invData.inviterId,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       status: invData.status,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      expiresAt: new Date(invData.expiresAt),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      createdAt: new Date(invData.createdAt),
+      expiresAt: expiresAt,
+      createdAt: createdAt,
     };
   }
 
