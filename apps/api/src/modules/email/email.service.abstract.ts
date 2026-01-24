@@ -1,9 +1,5 @@
-export interface SendEmailOptions {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}
+import type { SendEmailOptions } from '@nexiom/identity';
+export type { SendEmailOptions };
 
 export abstract class EmailService {
   abstract sendEmail(options: SendEmailOptions): Promise<void>;

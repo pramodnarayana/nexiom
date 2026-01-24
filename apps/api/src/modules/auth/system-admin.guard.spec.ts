@@ -1,36 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SystemAdminGuard } from './system-admin.guard';
-import { IdentityProvider } from './identity-provider.abstract';
-import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { ExecutionContext } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import {
+  UnauthorizedException,
+  ForbiddenException,
+  ExecutionContext,
+} from '@nestjs/common';
 
 describe('SystemAdminGuard', () => {
   let guard: SystemAdminGuard;
-  // identityProvider = module.get(IdentityProvider);
 
-  const mockIdentityProvider = {
-    getSessionFromHeaders: jest.fn(),
-    getEnrichedSession: jest.fn(),
-    login: jest.fn(),
-    createUser: jest.fn(),
-    validateSession: jest.fn(),
-    createInvitation: jest.fn(),
-    getInvitation: jest.fn(),
-    acceptInvitation: jest.fn(),
-    getHandler: jest.fn(),
+  let mockAuthService: {
+    getSessionFromHeaders: jest.Mock;
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    mockAuthService = {
+      getSessionFromHeaders: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SystemAdminGuard,
-        { provide: IdentityProvider, useValue: mockIdentityProvider },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
     guard = module.get<SystemAdminGuard>(SystemAdminGuard);
-    // identityProvider = module.get(IdentityProvider);
   });
 
   it('should be defined', () => {
@@ -38,7 +36,7 @@ describe('SystemAdminGuard', () => {
   });
 
   it('should throw UnauthorizedException if session matches no user', async () => {
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+    mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -54,7 +52,7 @@ describe('SystemAdminGuard', () => {
   });
 
   it('should throw ForbiddenException if user is not a platform_admin', async () => {
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: { token: 'valid' },
       user: { id: 'u1', systemRole: 'platform_user' },
     });
@@ -73,7 +71,7 @@ describe('SystemAdminGuard', () => {
   });
 
   it('should throw ForbiddenException if user is platform_user (insufficient privileges)', async () => {
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: { token: 'valid' },
       user: { id: 'u2', systemRole: 'platform_user' },
     });
@@ -93,7 +91,7 @@ describe('SystemAdminGuard', () => {
 
   it('should allow access if user is a platform_admin', async () => {
     const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: { token: 'valid' },
       user: mockUser,
     });

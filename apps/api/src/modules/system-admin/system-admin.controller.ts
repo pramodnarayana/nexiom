@@ -13,7 +13,7 @@ import {
   NotFoundException,
   Headers as RequestHeaders,
 } from '@nestjs/common';
-import { IdentityProvider } from '../auth/identity-provider.abstract';
+import { AUTH_PROVIDER, IAuthProvider } from '@nexiom/identity';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { PlatformGuard } from '../auth/platform.guard';
 import { DRIZZLE_DB } from '../../db/db.provider';
@@ -33,7 +33,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class SystemAdminController {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: NodePgDatabase<typeof schema>,
-    private readonly identityProvider: IdentityProvider,
+    @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
   ) {}
 
   @Post('users/:id/invite')
@@ -53,19 +53,19 @@ export class SystemAdminController {
     const webHeaders = this.toWebHeaders(headers);
 
     // Get current admin ID from session (via Headers -> BetterAuth)
-    const session =
-      await this.identityProvider.getSessionFromHeaders(webHeaders);
+    const session = await this.authProvider.getSessionFromHeaders(webHeaders);
+
     if (!session || !session.user) {
       throw new BadRequestException('Unauthorized');
     }
 
     // Create System Invitation (OrgId = null)
-    await this.identityProvider.createInvitation({
+    await this.authProvider.createInvitation({
       email: user.email,
       role: user.systemRole || 'platform_user',
       organizationId: null, // System Invite
+
       inviterId: session.user.id,
-      headers: webHeaders,
     });
 
     return { success: true };
@@ -80,18 +80,18 @@ export class SystemAdminController {
     const webHeaders = this.toWebHeaders(headers);
 
     // Get current admin ID from session
-    const session =
-      await this.identityProvider.getSessionFromHeaders(webHeaders);
+    const session = await this.authProvider.getSessionFromHeaders(webHeaders);
+
     if (!session || !session.user) {
       throw new BadRequestException('Unauthorized');
     }
 
-    const invitation = await this.identityProvider.createInvitation({
+    const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
       organizationId: null, // System invitation
+
       inviterId: session.user.id,
-      headers: webHeaders,
     });
 
     return invitation;

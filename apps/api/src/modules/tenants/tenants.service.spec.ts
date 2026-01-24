@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
 import { DRIZZLE_DB } from '../../db/db.provider';
-import { Organization } from './tenant.schema';
+import { DbOrganization as Organization } from '../../db/schema';
 
 const mockOrganizations: Organization[] = [
   {
@@ -10,8 +10,10 @@ const mockOrganizations: Organization[] = [
     slug: 'test-org-1',
     logo: null,
     createdAt: new Date(),
+    updatedAt: new Date(),
     metadata: null,
     status: 'active',
+    deletedAt: null,
   },
   {
     id: '2',
@@ -19,8 +21,10 @@ const mockOrganizations: Organization[] = [
     slug: 'test-org-2',
     logo: null,
     createdAt: new Date(),
+    updatedAt: new Date(),
     metadata: null,
     status: 'disabled',
+    deletedAt: null,
   },
 ];
 
@@ -116,7 +120,10 @@ describe('TenantsService', () => {
 
   describe('updateStatus', () => {
     it('should update tenant status', async () => {
-      const updatedOrg = { ...mockOrganizations[0], status: 'disabled' };
+      const updatedOrg: Organization = {
+        ...mockOrganizations[0],
+        status: 'disabled',
+      };
       mockDb.returning.mockResolvedValue([updatedOrg]);
 
       const result = await service.updateStatus('1', 'disabled');
@@ -134,7 +141,7 @@ describe('TenantsService', () => {
 
   describe('createTenant', () => {
     it('should create organization and member transactionally', async () => {
-      const newOrg = { ...mockOrganizations[0] };
+      const newOrg: Organization = { ...mockOrganizations[0] };
       // specialized mocks for tx
       mockDb.returning.mockResolvedValueOnce([newOrg]); // for org insert
       // member insert doesn't return anything we check explicitly here,
@@ -151,7 +158,10 @@ describe('TenantsService', () => {
   describe('provisionTenantForUser', () => {
     it('should provision a tenant with generated name', async () => {
       const mockUser = { id: 'user-1', email: 'test@example.com' };
-      const newOrg = { ...mockOrganizations[0], name: 'Organization X' };
+      const newOrg: Organization = {
+        ...mockOrganizations[0],
+        name: 'Organization X',
+      };
 
       // Mock user lookup
       mockDb.query.user.findFirst.mockResolvedValueOnce(mockUser);

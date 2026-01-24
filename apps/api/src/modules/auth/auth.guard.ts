@@ -4,13 +4,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 
 import { Request } from 'express';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly authProvider: IdentityProvider) {}
+  constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -21,25 +21,15 @@ export class AuthGuard implements CanActivate {
     // We convert Express headers to Web Standard Headers
     const headers = new Headers(request.headers as Record<string, string>);
 
-    // Use the new provider method that delegates to Better Auth
-    const result = await this.authProvider.getSessionFromHeaders(headers);
+    // 2. Validate Token logic
+    const sessionData = await this.authService.getSessionFromHeaders(headers);
 
-    if (!result) {
+    if (!sessionData || typeof sessionData.session?.token !== 'string') {
       throw new UnauthorizedException('Invalid or Expired Session');
     }
 
-    // We still want to enrich it if getSessionFromHeaders uses basic validateSession?
-    // In BetterAuthIdentityProvider.getSessionFromHeaders, we return { session, user }.
-    // But getEnrichedSession ADDS tenant info (`hasTenant`, `organizationId`).
-    // getSessionFromHeaders (via BetterAuth API) returns standard session.
-    // We need to ENRICH it afterwards if the user is logged in.
-
-    // Wait. getSessionFromHeaders returns the BASIC session.
-    // AuthGuard usually provides tenant info.
-    // So we must call getEnrichedSession using the raw token we just got back from getSessionFromHeaders.
-
-    const enrichedResult = await this.authProvider.getEnrichedSession(
-      result.session.token,
+    const enrichedResult = await this.authService.getEnrichedSession(
+      sessionData.session.token,
     );
 
     if (!enrichedResult) {

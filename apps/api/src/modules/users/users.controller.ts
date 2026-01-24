@@ -4,10 +4,11 @@ import {
   Post,
   Body,
   Param,
-  UseGuards,
   Req,
+  Inject,
+  UseGuards,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { USER_PROVIDER, IUserProvider } from '@nexiom/identity';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
@@ -20,7 +21,9 @@ import { AuthGuard } from '../auth/auth.guard';
 @Controller('users')
 @UseGuards(AuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
+  ) {}
 
   /**
    * Endpoint to create a new user.
@@ -31,7 +34,7 @@ export class UsersController {
    */
   @Post()
   create(@Body() createUser: CreateUser) {
-    return this.usersService.create(createUser);
+    return this.userProvider.create(createUser);
   }
 
   /**
@@ -52,7 +55,7 @@ export class UsersController {
       return [];
     }
 
-    return this.usersService.findAll(tenantId);
+    return this.userProvider.findAll(tenantId);
   }
 
   /**
@@ -63,6 +66,6 @@ export class UsersController {
    */
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+    return this.userProvider.findById(id);
   }
 }

@@ -29,7 +29,7 @@ interface MockDb {
   returning: jest.Mock;
 }
 
-import { IdentityProvider } from '../auth/identity-provider.abstract';
+import { IAuthProvider } from '@nexiom/identity';
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
@@ -76,7 +76,7 @@ describe('SystemAdminController', () => {
 
     controller = new SystemAdminController(
       mockDb as unknown as NodePgDatabase<typeof schema>,
-      mockIdentityProvider as unknown as IdentityProvider,
+      mockIdentityProvider as unknown as IAuthProvider,
     );
   });
 
@@ -114,7 +114,7 @@ describe('SystemAdminController', () => {
       mockDb.query.user.findMany.mockResolvedValue([]);
 
       // Testing default params
-      await controller.listUsers(undefined, undefined);
+      await controller.listUsers();
 
       expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 10, offset: 0 }),
@@ -186,7 +186,7 @@ describe('SystemAdminController', () => {
       mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
 
       // Testing default params
-      await controller.listTenants(undefined, undefined);
+      await controller.listTenants();
 
       expect(mockBuilder.limit).toHaveBeenCalledWith(10);
       expect(mockBuilder.offset).toHaveBeenCalledWith(0);
@@ -665,13 +665,13 @@ describe('SystemAdminController', () => {
   });
 
   describe('inviteUser', () => {
-    const mockHeaders = new Headers();
+    const mockHeaders = {};
 
     it('should throw NotFoundException if user not found', async () => {
       mockDb.query.user.findFirst.mockResolvedValue(null);
 
       await expect(
-        controller.inviteUser('missing', mockHeaders as any),
+        controller.inviteUser('missing', mockHeaders as Record<string, string>),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -680,7 +680,7 @@ describe('SystemAdminController', () => {
       mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
 
       await expect(
-        controller.inviteUser('u1', mockHeaders as any),
+        controller.inviteUser('u1', mockHeaders as Record<string, string>),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -696,7 +696,10 @@ describe('SystemAdminController', () => {
       mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(mockSession);
       mockIdentityProvider.createInvitation.mockResolvedValue({ id: 'inv1' });
 
-      const result = await controller.inviteUser('u1', mockHeaders as any);
+      const result = await controller.inviteUser(
+        'u1',
+        mockHeaders as Record<string, string>,
+      );
 
       expect(result).toEqual({ success: true });
       expect(mockIdentityProvider.createInvitation).toHaveBeenCalledWith({
@@ -704,7 +707,6 @@ describe('SystemAdminController', () => {
         role: mockUser.systemRole,
         organizationId: null,
         inviterId: 'admin1',
-        headers: mockHeaders,
       });
     });
   });

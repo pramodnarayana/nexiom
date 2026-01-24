@@ -1,37 +1,31 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from './auth.guard';
-import { IdentityProvider } from './identity-provider.abstract';
-import { UnauthorizedException } from '@nestjs/common';
-import { ExecutionContext } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { UnauthorizedException, ExecutionContext } from '@nestjs/common';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
-  let identityProvider: jest.Mocked<IdentityProvider>;
-
-  const mockIdentityProvider = {
-    getEnrichedSession: jest.fn(),
-    createUser: jest.fn(),
-    login: jest.fn(),
-    validateSession: jest.fn(),
-    getSessionFromHeaders: jest.fn(),
-    createInvitation: jest.fn(),
-    getInvitation: jest.fn(),
-    acceptInvitation: jest.fn(),
-    getHandler: jest.fn(),
+  let mockAuthService: {
+    getEnrichedSession: jest.Mock;
+    getSessionFromHeaders: jest.Mock;
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    mockAuthService = {
+      getEnrichedSession: jest.fn(),
+      getSessionFromHeaders: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthGuard,
-        { provide: IdentityProvider, useValue: mockIdentityProvider },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
     guard = module.get<AuthGuard>(AuthGuard);
-    identityProvider = module.get(IdentityProvider);
   });
 
   it('should be defined', () => {
@@ -39,7 +33,7 @@ describe('AuthGuard', () => {
   });
 
   it('should throw UnauthorizedException if no token is found', async () => {
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+    mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -59,13 +53,13 @@ describe('AuthGuard', () => {
     const mockSession = { token: 'valid-token' };
 
     // 1. Validate Session from Headers
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: mockSession,
       user: { id: 'user1' },
     });
 
     // 2. Enrich Session
-    mockIdentityProvider.getEnrichedSession.mockResolvedValue({
+    mockAuthService.getEnrichedSession.mockResolvedValue({
       user: mockUser,
       session: mockSession,
     });
@@ -85,8 +79,8 @@ describe('AuthGuard', () => {
     const result = await guard.canActivate(mockContext);
 
     expect(result).toBe(true);
-    expect(identityProvider.getSessionFromHeaders).toHaveBeenCalled();
-    expect(identityProvider.getEnrichedSession).toHaveBeenCalledWith(
+    expect(mockAuthService.getSessionFromHeaders).toHaveBeenCalled();
+    expect(mockAuthService.getEnrichedSession).toHaveBeenCalledWith(
       'valid-token',
     );
     expect(mockRequest.user).toEqual(mockUser);
@@ -94,7 +88,7 @@ describe('AuthGuard', () => {
   });
 
   it('should throw UnauthorizedException if session is invalid via headers', async () => {
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+    mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -111,11 +105,11 @@ describe('AuthGuard', () => {
 
   it('should throw UnauthorizedException if enrichment fails', async () => {
     const mockSession = { token: 'valid-token' };
-    mockIdentityProvider.getSessionFromHeaders.mockResolvedValue({
+    mockAuthService.getSessionFromHeaders.mockResolvedValue({
       session: mockSession,
       user: { id: 'user1' },
     });
-    mockIdentityProvider.getEnrichedSession.mockResolvedValue(null);
+    mockAuthService.getEnrichedSession.mockResolvedValue(null);
 
     const mockContext = {
       switchToHttp: () => ({

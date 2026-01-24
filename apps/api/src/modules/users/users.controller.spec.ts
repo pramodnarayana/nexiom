@@ -1,23 +1,47 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
-import { CreateUser } from './users.validation';
+import { USER_PROVIDER } from '@nexiom/identity';
 import { Request } from 'express';
+import { AuthGuard } from '../auth/auth.guard';
+import { CreateUser } from './users.validation';
 
 describe('UsersController', () => {
   let controller: UsersController;
-  let usersService: UsersService;
-
-  const mockUsersService = {
-    create: jest.fn(),
-    findAll: jest.fn(),
-    findOne: jest.fn(),
+  let mockUserProvider: {
+    create: jest.Mock;
+    findAll: jest.Mock;
+    findById: jest.Mock;
+    findByEmail: jest.Mock;
+    update: jest.Mock;
+    delete: jest.Mock;
+    forceVerifyEmail: jest.Mock;
   };
 
-  beforeEach(() => {
-    usersService = mockUsersService as unknown as UsersService;
-    controller = new UsersController(usersService);
+  beforeEach(async () => {
+    mockUserProvider = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByEmail: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      forceVerifyEmail: jest.fn(),
+    };
 
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [
+        {
+          provide: USER_PROVIDER,
+          useValue: mockUserProvider,
+        },
+      ],
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    controller = module.get<UsersController>(UsersController);
     jest.clearAllMocks();
   });
 
@@ -26,17 +50,17 @@ describe('UsersController', () => {
   });
 
   describe('create', () => {
-    it('should call usersService.create with correct parameters', async () => {
+    it('should call userProvider.create with correct parameters', async () => {
       const createUser: CreateUser = {
         email: 'test@example.com',
         role: 'user',
       };
       const result = { id: '1', ...createUser };
-      mockUsersService.create.mockResolvedValue(result);
+      mockUserProvider.create.mockResolvedValue(result);
 
       expect(await controller.create(createUser)).toEqual(result);
 
-      expect(usersService.create).toHaveBeenCalledWith(createUser);
+      expect(mockUserProvider.create).toHaveBeenCalledWith(createUser);
     });
   });
 
@@ -49,7 +73,7 @@ describe('UsersController', () => {
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
 
-      expect(usersService.findAll).not.toHaveBeenCalled();
+      expect(mockUserProvider.findAll).not.toHaveBeenCalled();
     });
 
     it('should return empty list if user is undefined', async () => {
@@ -60,36 +84,35 @@ describe('UsersController', () => {
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
 
-      expect(usersService.findAll).not.toHaveBeenCalled();
+      expect(mockUserProvider.findAll).not.toHaveBeenCalled();
     });
 
-    it('should call usersService.findAll with tenantId if present', async () => {
+    it('should call userProvider.findAll with tenantId if present', async () => {
       const tenantId = 'org-123';
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
       const users = [{ id: '1' }];
 
-      mockUsersService.findAll.mockResolvedValue(users);
+      mockUserProvider.findAll.mockResolvedValue(users);
 
       const result = await controller.findAll(req);
       expect(result).toEqual(users);
 
-      expect(usersService.findAll).toHaveBeenCalledWith(tenantId);
+      expect(mockUserProvider.findAll).toHaveBeenCalledWith(tenantId);
     });
   });
 
   describe('findOne', () => {
-    it('should call usersService.findOne with correct id', () => {
+    it('should call userProvider.findById with correct id', async () => {
       const id = '1';
       const user = { id: '1', email: 'test@example.com' };
-      // Service returns object synchronously in current impl
-      mockUsersService.findOne.mockReturnValue(user);
+      mockUserProvider.findById.mockResolvedValue(user);
 
-      const result = controller.findOne(id);
+      const result = await controller.findOne(id);
       expect(result).toEqual(user);
 
-      expect(usersService.findOne).toHaveBeenCalledWith(id);
+      expect(mockUserProvider.findById).toHaveBeenCalledWith(id);
     });
   });
 });

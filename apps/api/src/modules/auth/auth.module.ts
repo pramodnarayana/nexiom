@@ -1,6 +1,5 @@
 import { forwardRef, Module, Global } from '@nestjs/common';
-import { BetterAuthIdentityProvider } from './providers/better-auth/better-auth.provider';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { SystemAdminGuard } from './system-admin.guard';
 import { PlatformGuard } from './platform.guard';
@@ -19,16 +18,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
     forwardRef(() => InvitationsModule),
   ],
   controllers: [AuthController],
-  providers: [
-    BetterAuthIdentityProvider,
-    {
-      provide: IdentityProvider, // The token expected by UsersService / Guard
-      useExisting: BetterAuthIdentityProvider,
-    },
-    AuthGuard,
-    SystemAdminGuard,
-    PlatformGuard,
-  ],
-  exports: [IdentityProvider, AuthGuard, SystemAdminGuard, PlatformGuard],
+  providers: [AuthService, AuthGuard, SystemAdminGuard, PlatformGuard],
+  exports: [AuthService, AuthGuard, SystemAdminGuard, PlatformGuard],
 })
 export class AuthModule {}

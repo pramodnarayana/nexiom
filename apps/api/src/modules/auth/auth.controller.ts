@@ -6,17 +6,18 @@ import {
   All,
   Req,
   UnauthorizedException,
+  Inject,
+  Logger,
 } from '@nestjs/common';
-import { IdentityProvider } from './identity-provider.abstract';
+import { AuthService } from './auth.service';
+import { USER_PROVIDER, IUserProvider, Session, User } from '@nexiom/identity';
 import { TenantsService } from '../tenants/tenants.service';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import { Signup, CompleteInvite } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
-import { User } from '../users/user.schema';
 import { InvitationsService } from '../invitations/invitations.service';
-import { Session } from './auth.schema';
 import { toWebHeaders } from '../../shared/utils/headers.util';
 import { BadRequestException } from '@nestjs/common';
 
@@ -36,20 +37,21 @@ export class Login extends createZodDto(
 @Controller('auth')
 export class AuthController {
   constructor(
-    private readonly authProvider: IdentityProvider,
+    private readonly authService: AuthService,
+    @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
     private readonly tenantsService: TenantsService,
     private readonly invitationsService: InvitationsService,
   ) {}
+
+  private readonly logger = new Logger(AuthController.name);
 
   @Post('login')
   async login(
     @Body() login: Login,
     @Res({ passthrough: true }) res: Response,
   ): Promise<{ session: Session; user: User }> {
-    const { cookie: loginCookie, ...result } = await this.authProvider.login(
-      login.email,
-      login.password,
-    );
+    const { cookie: loginCookie, ...result } =
+      await this.authService.login(login);
 
     // MANUAL COOKIE SETTING (Critical Fix - Using Library's Native Cookie)
     // We captured the exact Set-Cookie header from Better Auth.
@@ -63,7 +65,7 @@ export class AuthController {
 
   @Post('signup')
   async signup(@Body() body: Signup): Promise<User> {
-    return this.authProvider.createUser(body);
+    return this.authService.createUser(body);
   }
 
   /**
@@ -73,7 +75,7 @@ export class AuthController {
   @Post('provision-tenant')
   async provisionTenant(@Req() req: Request): Promise<unknown> {
     // FIX: use getSessionFromHeaders to handle signed cookies correctly
-    const sessionData = await this.authProvider.getSessionFromHeaders(
+    const sessionData = await this.authService.getSessionFromHeaders(
       toWebHeaders(req.headers),
     );
 
@@ -84,22 +86,22 @@ export class AuthController {
     return this.tenantsService.provisionTenantForUser(sessionData.user.id);
   }
 
+  /**
+   * Completes an invitation by creating a user (if needed), accepting the invite,
+   * verifying email, and logging the user in.
+   */
   @Post('complete-invite')
   async completeInvite(
     @Body() body: CompleteInvite,
     @Res({ passthrough: true }) res: Response,
-    @Req() req: Request,
   ) {
     // Race Condition Fix: Validate Invitation BEFORE creating user
-    const invitation = await this.invitationsService.get(
-      body.invitationId,
-      req.headers,
-    );
+    const invitation = await this.invitationsService.get(body.invitationId);
 
     if (!invitation) {
       throw new BadRequestException('Invalid Invitation ID');
     }
-
+    // ...
     if (invitation.status !== 'pending') {
       throw new BadRequestException('Invitation is no longer pending/valid');
     }
@@ -109,7 +111,7 @@ export class AuthController {
     }
 
     // Step 1: Check if user exists (Provisioned vs New)
-    let user = await this.authProvider.getUserByEmail(body.email);
+    let user = await this.userProvider.findByEmail(body.email);
     let isNewUser = false;
 
     if (user) {
@@ -119,57 +121,45 @@ export class AuthController {
         );
       }
       // Update existing provisioned user
-      user = await this.authProvider.updateUser(user.id, {
+      user = await this.userProvider.update(user.id, {
         name: `${body.firstName} ${body.lastName}`,
       });
-      await this.authProvider.setPassword(user.id, body.password);
+      await this.authService.setPassword(user.id, body.password);
     } else {
       // Create new user (standard flow)
       isNewUser = true;
-      user = await this.authProvider.createUser(
-        {
-          email: body.email,
-          password: body.password,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          role: 'user',
-        },
-        req.headers,
-      );
+      user = await this.authService.createUser({
+        email: body.email,
+        password: body.password,
+        firstName: body.firstName,
+        lastName: body.lastName,
+        role: 'user',
+      });
     }
 
     // Step 2: Accept Invitation (Atomic-ish)
     try {
-      console.log(
-        'DEBUG: completeInvite - accepting invitation for user:',
-        user.id,
-      );
-      await this.invitationsService.accept(
-        body.invitationId,
-        user.id,
-        req.headers,
-      );
-    } catch (_e) {
-      console.error('DEBUG: acceptInvitation failed');
-      // Rollback: Only delete if WE created the user in this transaction
+      await this.invitationsService.accept(body.invitationId, user.id);
+    } catch (error) {
+      this.logger.error(`Failed to accept invitation: ${String(error)}`);
       if (isNewUser) {
-        console.log('DEBUG: Rolling back new user creation:', user.id);
-        await this.authProvider.deleteUser(user.id);
+        if (user?.id) await this.userProvider.delete(user.id);
       }
       throw new BadRequestException(
         'Failed to accept invitation' +
           (isNewUser ? ' (User creation rolled back)' : ''),
+        { cause: error },
       );
     }
 
     // Step 3: Force Verify Email
-    await this.authProvider.forceVerifyEmail(user.id);
+    await this.userProvider.forceVerifyEmail(user.id);
 
     // Step 4: Login & Return Session
-    const { cookie: loginCookie, ...session } = await this.authProvider.login(
-      body.email,
-      body.password,
-    );
+    const { cookie: loginCookie, ...session } = await this.authService.login({
+      email: body.email,
+      password: body.password,
+    });
 
     // FIX: Forward the Set-Cookie header so the user stays logged in
     if (loginCookie) {
@@ -187,7 +177,7 @@ export class AuthController {
   async refreshSession(@Req() req: Request) {
     // Delegate session extraction to the provider (handles signed cookies/headers)
     // We pass the native Headers object
-    const sessionData = await this.authProvider.getSessionFromHeaders(
+    const sessionData = await this.authService.getSessionFromHeaders(
       toWebHeaders(req.headers),
     );
 
@@ -199,7 +189,7 @@ export class AuthController {
     // We can use getEnrichedSession, but we already have the session object.
     // Let's refactor getEnrichedSession to accept an OBJECT or ID?
     // Or just call getEnrichedSession with the now-valid session ID.
-    return this.authProvider.getEnrichedSession(sessionData.session.token);
+    return this.authService.getEnrichedSession(sessionData.session.token);
   }
 
   /**
@@ -210,7 +200,7 @@ export class AuthController {
   @All('*splat')
   async betterAuth(@Req() req: Request, @Res() res: Response) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const handler = this.authProvider.getHandler();
+    const handler = this.authService.getHandler();
 
     // Convert Better Auth's standard web handler to Node (Express) handler
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument

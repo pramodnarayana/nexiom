@@ -27,11 +27,7 @@ export class InvitationsController {
     createInvitation.organizationId = req.user.organizationId;
 
     // Pass headers to propagate auth context to BetterAuth client
-    return this.invitationsService.create(
-      createInvitation,
-      req.user.id,
-      req.headers,
-    );
+    return this.invitationsService.create(createInvitation, req.user.id);
   }
 
   @Get(':id')
@@ -49,7 +45,6 @@ export class InvitationsController {
     return this.invitationsService.accept(
       acceptInvitation.invitationId,
       req.user.id,
-      req.headers,
     );
   }
 
