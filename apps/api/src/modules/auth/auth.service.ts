@@ -73,7 +73,6 @@ export class AuthService {
 
   // Delegated methods
 
-  // Delegated methods
   async createUser(input: CreateUserInput) {
     return this.authProvider.createUser(input);
   }

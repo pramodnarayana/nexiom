@@ -22,7 +22,12 @@ export class DrizzleUserAdapter implements IUserProvider {
 
   async update(id: string, input: UpdateUserInput): Promise<UserInterface> {
     // If password is being updated, handle it via AuthProvider
-    if (input.password && this.authProvider.setPassword) {
+    if (input.password) {
+      if (!this.authProvider.setPassword) {
+        throw new Error(
+          "Password updates are not supported by this auth provider",
+        );
+      }
       await this.authProvider.setPassword(id, input.password);
     }
 
@@ -52,8 +57,13 @@ export class DrizzleUserAdapter implements IUserProvider {
 
   async delete(id: string): Promise<void> {
     await this.db.transaction(async (tx) => {
-      // Cleanup logic could be extensive, but cascading deletes in schema might handle most.
-      // However, we should ensure session/account cleanup.
+      // Manually delete tables restricting deletion (Member, Invitation)
+      await tx.delete(schema.member).where(eq(schema.member.userId, id));
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.inviterId, id));
+
+      // Cascade other tables (redundant if schema handles it, but safe)
       await tx.delete(schema.session).where(eq(schema.session.userId, id));
       await tx.delete(schema.account).where(eq(schema.account.userId, id));
       await tx.delete(schema.user).where(eq(schema.user.id, id));
@@ -88,14 +98,18 @@ export class DrizzleUserAdapter implements IUserProvider {
     }
 
     // Global list (careful with this in prod)
-    const users = await this.db.select().from(schema.user).limit(100);
+    const users = await this.db
+      .select()
+      .from(schema.user)
+      .limit(100)
+      .orderBy(schema.user.createdAt);
     return users.map((u) => this.mapUser(u));
   }
 
   async forceVerifyEmail(userId: string): Promise<void> {
     await this.db
       .update(schema.user)
-      .set({ emailVerified: true })
+      .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(schema.user.id, userId));
   }
 
@@ -103,9 +117,9 @@ export class DrizzleUserAdapter implements IUserProvider {
     return {
       id: dbUser.id,
       email: dbUser.email,
-      name: dbUser.name,
+      name: dbUser.name || undefined,
       emailVerified: dbUser.emailVerified,
-      image: dbUser.image,
+      image: dbUser.image || undefined,
       createdAt: dbUser.createdAt,
       updatedAt: dbUser.updatedAt,
       role: dbUser.role,

@@ -1,7 +1,7 @@
 export interface User {
   id: string;
   email: string;
-  name?: string;
+  name?: string | null;
   emailVerified: boolean;
   image?: string | null;
   createdAt: Date;
@@ -16,10 +16,11 @@ export interface User {
 export interface Tenant {
   id: string;
   name: string;
-  slug: string;
+  slug?: string | null;
   logo?: string | null;
   status: "active" | "disabled" | "suspended";
   createdAt: Date;
+  updatedAt?: Date; // Optional as not critical for all projections
   metadata?: Record<string, any>;
 }
 
@@ -38,7 +39,7 @@ export interface Session {
 export interface Invitation {
   id: string;
   email: string;
-  role: string;
+  role: string | null;
   organizationId?: string | null;
   inviterId: string;
   status: "pending" | "accepted" | "rejected" | "canceled";

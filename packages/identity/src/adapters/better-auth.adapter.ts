@@ -379,9 +379,9 @@ export class BetterAuthAdapter implements IAuthProvider {
     return {
       id: dbUser.id,
       email: dbUser.email,
-      name: dbUser.name,
+      name: dbUser.name || undefined,
       emailVerified: dbUser.emailVerified,
-      image: dbUser.image,
+      image: dbUser.image || undefined,
       createdAt: dbUser.createdAt,
       updatedAt: dbUser.updatedAt,
       role: dbUser.role,
