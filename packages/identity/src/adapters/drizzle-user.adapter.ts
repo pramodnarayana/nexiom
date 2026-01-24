@@ -13,7 +13,7 @@ export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
     private readonly authProvider: IAuthProvider,
-  ) { }
+  ) {}
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
@@ -170,9 +170,7 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ count: count(schema.user.id) })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(
-          whereConditions.length ? and(...whereConditions) : undefined,
-        );
+        .where(whereConditions.length ? and(...whereConditions) : undefined);
       return Number(result?.count || 0);
     }
 

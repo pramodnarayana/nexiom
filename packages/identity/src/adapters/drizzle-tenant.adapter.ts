@@ -9,7 +9,7 @@ import {
 import * as schema from "../schema";
 
 export class DrizzleTenantAdapter implements ITenantProvider {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) { }
+  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   async create(userId: string, name: string): Promise<TenantInterface> {
     const orgId = uuidv4();
