@@ -9,7 +9,7 @@ import {
 import * as schema from "../schema";
 
 export class DrizzleTenantAdapter implements ITenantProvider {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  constructor(private readonly db: NodePgDatabase<typeof schema>) { }
 
   async create(userId: string, name: string): Promise<TenantInterface> {
     const orgId = uuidv4();
@@ -92,14 +92,22 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     if (input.metadata !== undefined)
       updatePayload.metadata = JSON.stringify(input.metadata);
 
-    const [updated] = await this.db
-      .update(schema.organization)
-      .set({ ...updatePayload, updatedAt: new Date() })
-      .where(eq(schema.organization.id, id))
-      .returning();
+    try {
+      const [updated] = await this.db
+        .update(schema.organization)
+        .set({ ...updatePayload, updatedAt: new Date() })
+        .where(eq(schema.organization.id, id))
+        .returning();
 
-    if (!updated) throw new Error("Tenant not found");
-    return this.mapTenant(updated);
+      if (!updated) throw new Error("Tenant not found");
+      return this.mapTenant(updated);
+    } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      if (error.code === "23505" && error.detail?.includes("slug")) {
+        throw new Error("Tenant slug already exists");
+      }
+      throw error;
+    }
   }
 
   async delete(id: string): Promise<void> {

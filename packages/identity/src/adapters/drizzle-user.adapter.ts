@@ -13,7 +13,7 @@ export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
     private readonly authProvider: IAuthProvider,
-  ) {}
+  ) { }
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
@@ -110,7 +110,7 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ user: schema.user })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(and(...filters))
+        .where(filters.length ? and(...filters) : undefined)
         .limit(limit)
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
@@ -119,7 +119,7 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ count: count(schema.user.id) })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(and(...filters));
+        .where(filters.length ? and(...filters) : undefined);
 
       const users = await dataQuery;
       return {
@@ -131,7 +131,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const dataQuery = this.db
         .select()
         .from(schema.user)
-        .where(and(...filters))
+        .where(filters.length ? and(...filters) : undefined)
         .limit(limit)
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
@@ -139,7 +139,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const [countResult] = await this.db
         .select({ count: count(schema.user.id) })
         .from(schema.user)
-        .where(and(...filters));
+        .where(filters.length ? and(...filters) : undefined);
 
       const users = await dataQuery;
       return {
@@ -170,14 +170,16 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ count: count(schema.user.id) })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(and(...whereConditions));
+        .where(
+          whereConditions.length ? and(...whereConditions) : undefined,
+        );
       return Number(result?.count || 0);
     }
 
     const [result] = await this.db
       .select({ count: count(schema.user.id) })
       .from(schema.user)
-      .where(and(...whereConditions));
+      .where(whereConditions.length ? and(...whereConditions) : undefined);
 
     return Number(result?.count || 0);
   }
