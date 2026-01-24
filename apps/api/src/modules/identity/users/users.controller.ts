@@ -56,7 +56,7 @@ export class UsersController {
     }
 
     const result = await this.userProvider.findAll({ tenantId });
-    return result.data;
+    return result;
   }
 
   /**

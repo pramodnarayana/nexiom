@@ -9,7 +9,7 @@ import {
 import * as schema from "../schema";
 
 export class DrizzleTenantAdapter implements ITenantProvider {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  constructor(private readonly db: NodePgDatabase<typeof schema>) { }
 
   async create(userId: string, name: string): Promise<TenantInterface> {
     const orgId = uuidv4();
@@ -61,18 +61,26 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     slug: string;
     logo?: string | null;
   }): Promise<TenantInterface> {
-    const [org] = await this.db
-      .insert(schema.organization)
-      .values({
-        id: uuidv4(),
-        name: input.name,
-        slug: input.slug,
-        logo: input.logo,
-        createdAt: new Date(),
-        status: "active",
-      })
-      .returning();
-    return this.mapTenant(org);
+    try {
+      const [org] = await this.db
+        .insert(schema.organization)
+        .values({
+          id: uuidv4(),
+          name: input.name,
+          slug: input.slug,
+          logo: input.logo,
+          createdAt: new Date(),
+          status: "active",
+        })
+        .returning();
+      return this.mapTenant(org);
+    } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      if (error.code === "23505" && error.detail?.includes("slug")) {
+        throw new Error("Tenant slug already exists");
+      }
+      throw error;
+    }
   }
 
   async update(id: string, input: UpdateTenantInput): Promise<TenantInterface> {
@@ -96,6 +104,17 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
   async delete(id: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // 1. Check existence first
+      const [existing] = await tx
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, id));
+
+      if (!existing) {
+        throw new Error("Tenant not found");
+      }
+
+      // 2. Proceed with deletes
       await tx
         .delete(schema.member)
         .where(eq(schema.member.organizationId, id));

@@ -13,7 +13,7 @@ export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
     private readonly authProvider: IAuthProvider,
-  ) {}
+  ) { }
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
@@ -95,9 +95,6 @@ export class DrizzleUserAdapter implements IUserProvider {
     const offset = (page - 1) * limit;
 
     const filters = [];
-    if (options?.tenantId) {
-      filters.push(eq(schema.member.organizationId, options.tenantId));
-    }
     if (options?.search) {
       filters.push(
         ilike(schema.user.email, `%${options.search}%`),
@@ -105,13 +102,11 @@ export class DrizzleUserAdapter implements IUserProvider {
       );
     }
 
-    // Base query logic
-    // If tenantId is present, we must join with member
-    let dataQuery;
-
     if (options?.tenantId) {
-      // Tenant-scoped
-      dataQuery = this.db
+      // Tenant-scoped (requires Join)
+      filters.push(eq(schema.member.organizationId, options.tenantId));
+
+      const dataQuery = this.db
         .select({ user: schema.user })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
@@ -120,7 +115,6 @@ export class DrizzleUserAdapter implements IUserProvider {
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
 
-      // Optimized count for tenant scope
       const [countResult] = await this.db
         .select({ count: count(schema.user.id) })
         .from(schema.user)
@@ -134,15 +128,10 @@ export class DrizzleUserAdapter implements IUserProvider {
       };
     } else {
       // Global list (Admin)
-      const globalFilters = [];
-      if (options?.search) {
-        globalFilters.push(ilike(schema.user.email, `%${options.search}%`));
-      }
-
-      dataQuery = this.db
+      const dataQuery = this.db
         .select()
         .from(schema.user)
-        .where(and(...globalFilters))
+        .where(and(...filters))
         .limit(limit)
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
@@ -150,7 +139,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const [countResult] = await this.db
         .select({ count: count(schema.user.id) })
         .from(schema.user)
-        .where(and(...globalFilters));
+        .where(and(...filters));
 
       const users = await dataQuery;
       return {

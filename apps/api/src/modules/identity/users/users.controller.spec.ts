@@ -97,7 +97,7 @@ describe('UsersController', () => {
       mockUserProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
       const result = await controller.findAll(req);
-      expect(result).toEqual(users);
+      expect(result).toEqual({ data: users, total: 1 });
 
       expect(mockUserProvider.findAll).toHaveBeenCalledWith({ tenantId });
     });

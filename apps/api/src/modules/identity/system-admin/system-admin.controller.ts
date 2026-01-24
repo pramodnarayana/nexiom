@@ -56,7 +56,7 @@ export class SystemAdminController {
     // Get current admin ID from session (via Headers -> BetterAuth)
     const session = await this.authProvider.getSessionFromHeaders(webHeaders);
 
-    if (!session || !session.user) {
+    if (!session?.user) {
       throw new BadRequestException('Unauthorized');
     }
 
@@ -82,7 +82,7 @@ export class SystemAdminController {
     // Get current admin ID from session
     const session = await this.authProvider.getSessionFromHeaders(webHeaders);
 
-    if (!session || !session.user) {
+    if (!session?.user) {
       throw new BadRequestException('Unauthorized');
     }
 
@@ -135,22 +135,11 @@ export class SystemAdminController {
       throw new BadRequestException('User with this email already exists');
     }
 
-    // Adapt input to provider requirement (provider handles ID generation and timestamps)
+    // TODO: Add systemRole to CreateUserInput and Adapter so we can do this in one step
     const user = await this.userProvider.create({
       ...input,
-      // Default systemRole handled by provider or we pass explicitly?
-      // create signature: (input: CreateUserInput) -> email, password?, firstName?, lastName?, role?
-      // Does CreateUserInput support systemRole?
-      // Let's check CreateUserInput interface.
-      // It supports role, but not systemRole explicitly in interface file I saw?
-      // Wait, let's verify CreateUserInput.
     });
-    // Ah, DrizzleUserAdapter delegates to authProvider which delegates to BetterAuth.
-    // BetterAuth input usually has role.
-    // If 'systemRole' is not in CreateUserInput, we might need to update user AFTER create
-    // OR update CreateUserInput.
-    // For now, assume provider handles it or update immediately.
-    // Let's assume we update immediately if provider doesn't support generic fields in create.
+
     if (input.systemRole) {
       await this.userProvider.update(user.id, { systemRole: input.systemRole });
       return this.userProvider.findById(user.id);
@@ -212,10 +201,10 @@ export class SystemAdminController {
   ) {
     const MAX_PAGE_SIZE = 100;
     // Basic pagination (Convert to Number safely)
-    const p = Math.max(1, parseInt(page) || 1);
+    const p = Math.max(1, Number.parseInt(page) || 1);
     const limit = Math.max(
       1,
-      Math.min(MAX_PAGE_SIZE, parseInt(pageSize) || 10),
+      Math.min(MAX_PAGE_SIZE, Number.parseInt(pageSize) || 10),
     );
 
     const result = await this.userProvider.findAll({
@@ -282,11 +271,9 @@ export class SystemAdminController {
         systemRole: 'platform_admin',
       });
 
-      // If this user is an admin, and count is 1, they are the last one.
-      // However, count() includes this user.
-      // Original logic: count where role=admin AND id != target.
-      // Provider logic: count where role=admin.
-      // So if count <= 1, we prevent delete.
+      // The count includes the current target user.
+      // A count of 1 means this is the LAST admin left.
+      // Therefore, we must prevent deletion if count <= 1.
       if (adminCount <= 1) {
         throw new BadRequestException(
           'Cannot delete the last Platform Administrator',
@@ -306,10 +293,10 @@ export class SystemAdminController {
     @Query('pageSize') pageSize = '10',
   ) {
     const MAX_PAGE_SIZE = 100;
-    const p = Math.max(1, parseInt(page) || 1);
+    const p = Math.max(1, Number.parseInt(page) || 1);
     const limit = Math.max(
       1,
-      Math.min(MAX_PAGE_SIZE, parseInt(pageSize) || 10),
+      Math.min(MAX_PAGE_SIZE, Number.parseInt(pageSize) || 10),
     );
 
     const result = await this.tenantProvider.findAll({

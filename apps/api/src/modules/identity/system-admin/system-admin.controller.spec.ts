@@ -87,6 +87,42 @@ describe('SystemAdminController', () => {
     });
   });
 
+  describe('createSystemInvitation', () => {
+    it('should throw BadRequestException if unauthorized', async () => {
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
+
+      await expect(
+        controller.createSystemInvitation(
+          { email: 'test@example.com', role: 'platform_admin' },
+          mockHeaders,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAuthProvider.createInvitation).not.toHaveBeenCalled();
+    });
+
+    it('should create system invitation', async () => {
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+        user: { id: 'admin1' },
+      });
+      const mockInvitation = { id: 'inv1', email: 'test@example.com' };
+      mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
+
+      const result = await controller.createSystemInvitation(
+        { email: 'test@example.com', role: 'platform_admin' },
+        mockHeaders,
+      );
+
+      expect(result).toEqual(mockInvitation);
+      expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
+      expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        role: 'platform_admin',
+        organizationId: null,
+        inviterId: 'admin1',
+      });
+    });
+  });
+
   describe('listTenants', () => {
     it('should return paginated tenants', async () => {
       const mockResult = { data: [{ id: 't1', name: 'Tenant 1' }], total: 1 };
