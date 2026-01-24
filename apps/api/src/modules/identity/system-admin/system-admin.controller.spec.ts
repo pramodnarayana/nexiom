@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { SystemAdminController } from './system-admin.controller';
 
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -49,6 +48,7 @@ describe('SystemAdminController', () => {
     };
 
     // Reset mocks with full structure
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
     mockDb = {
       query: {
         user: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -569,6 +569,7 @@ describe('SystemAdminController', () => {
       const result = await controller.getUser('u1');
 
       expect(result).toEqual(mockUser);
+
       expect(mockDb.query.user.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.anything() }),
       );
