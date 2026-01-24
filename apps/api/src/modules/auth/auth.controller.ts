@@ -7,6 +7,7 @@ import {
   Req,
   UnauthorizedException,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { USER_PROVIDER, IUserProvider, Session, User } from '@nexiom/identity';
@@ -41,6 +42,8 @@ export class AuthController {
     private readonly tenantsService: TenantsService,
     private readonly invitationsService: InvitationsService,
   ) {}
+
+  private readonly logger = new Logger(AuthController.name);
 
   @Post('login')
   async login(
@@ -83,6 +86,10 @@ export class AuthController {
     return this.tenantsService.provisionTenantForUser(sessionData.user.id);
   }
 
+  /**
+   * Completes an invitation by creating a user (if needed), accepting the invite,
+   * verifying email, and logging the user in.
+   */
   @Post('complete-invite')
   async completeInvite(
     @Body() body: CompleteInvite,
@@ -133,13 +140,15 @@ export class AuthController {
     // Step 2: Accept Invitation (Atomic-ish)
     try {
       await this.invitationsService.accept(body.invitationId, user.id);
-    } catch (_e) {
+    } catch (error) {
+      this.logger.error(`Failed to accept invitation: ${String(error)}`);
       if (isNewUser) {
         if (user?.id) await this.userProvider.delete(user.id);
       }
       throw new BadRequestException(
         'Failed to accept invitation' +
           (isNewUser ? ' (User creation rolled back)' : ''),
+        { cause: error },
       );
     }
 

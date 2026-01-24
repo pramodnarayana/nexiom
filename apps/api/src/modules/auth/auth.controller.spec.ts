@@ -69,11 +69,6 @@ describe('AuthController', () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    // Ensure we are spying on the correct instance
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const userProvider = module.get(USER_PROVIDER);
-    Object.assign(mockUserProvider, userProvider);
-
     jest.clearAllMocks();
   });
 
@@ -213,10 +208,7 @@ describe('AuthController', () => {
         'Failed to accept invitation',
       );
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const provider = module.get(USER_PROVIDER);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      expect(provider.delete).toHaveBeenCalledWith('user-fail');
+      expect(mockUserProvider.delete).toHaveBeenCalledWith('user-fail');
     });
   });
   describe('betterAuth', () => {

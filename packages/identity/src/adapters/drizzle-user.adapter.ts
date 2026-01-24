@@ -117,7 +117,7 @@ export class DrizzleUserAdapter implements IUserProvider {
     return {
       id: dbUser.id,
       email: dbUser.email,
-      name: dbUser.name || undefined,
+      name: dbUser.name ?? null,
       emailVerified: dbUser.emailVerified,
       image: dbUser.image || undefined,
       createdAt: dbUser.createdAt,

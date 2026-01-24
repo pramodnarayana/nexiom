@@ -14,7 +14,7 @@ export class InvitationsService {
   async create(
     createInvitation: CreateInvitation,
     inviterId: string,
-  ): Promise<unknown> {
+  ): Promise<Invitation> {
     this.logger.log(
       `Creating invitation for organization ${createInvitation.organizationId || 'system'}`,
     );
@@ -27,7 +27,7 @@ export class InvitationsService {
     });
   }
 
-  async accept(invitationId: string, userId: string): Promise<unknown> {
+  async accept(invitationId: string, userId: string): Promise<void> {
     this.logger.log(`Accepting invitation ${invitationId} for user ${userId}`);
     return this.authProvider.acceptInvitation(invitationId, userId);
   }

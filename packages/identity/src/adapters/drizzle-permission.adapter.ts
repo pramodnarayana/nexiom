@@ -25,12 +25,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     // 2. Tenant Level Checks
     if (tenantId) {
       // We need to fetch the member role
-      const member = await this.db.query.member.findFirst({
-        where: and(
-          eq(schema.member.userId, user.id),
-          eq(schema.member.organizationId, tenantId),
-        ),
-      });
+      const member = await this.findMember(user.id, tenantId);
 
       if (!member) return false;
 
@@ -59,14 +54,10 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
   async hasRole(user: User, role: string, tenantId?: string): Promise<boolean> {
     if (tenantId) {
-      const member = await this.db.query.member.findFirst({
-        where: and(
-          eq(schema.member.userId, user.id),
-          eq(schema.member.organizationId, tenantId),
-        ),
-      });
+      const member = await this.findMember(user.id, tenantId);
       return member?.role === role;
     }
+    if (!user.systemRole) return false;
     return user.systemRole === role;
   }
 
@@ -78,12 +69,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     }
 
     if (tenantId) {
-      const member = await this.db.query.member.findFirst({
-        where: and(
-          eq(schema.member.userId, user.id),
-          eq(schema.member.organizationId, tenantId),
-        ),
-      });
+      const member = await this.findMember(user.id, tenantId);
       if (member) {
         perms.push(`role:${member.role}`);
         if (member.role === "admin") perms.push("manage:tenant");
@@ -91,5 +77,14 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     }
 
     return perms;
+  }
+
+  private async findMember(userId: string, tenantId: string) {
+    return this.db.query.member.findFirst({
+      where: and(
+        eq(schema.member.userId, userId),
+        eq(schema.member.organizationId, tenantId),
+      ),
+    });
   }
 }

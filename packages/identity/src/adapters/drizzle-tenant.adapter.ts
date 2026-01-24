@@ -9,32 +9,60 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
   async create(userId: string, name: string): Promise<TenantInterface> {
     const orgId = uuidv4();
-    const slug = this.generateSlug(name);
+    let slug = this.generateSlug(name);
+    let retries = 3;
 
-    return await this.db.transaction(async (tx) => {
-      // 1. Create Organization
-      const [org] = await tx
-        .insert(schema.organization)
-        .values({
-          id: orgId,
-          name: name,
-          slug: slug,
-          createdAt: new Date(),
-          status: "active",
-        })
-        .returning();
+    while (retries > 0) {
+      try {
+        return await this.db.transaction(async (tx) => {
+          // 1. Create Organization
+          const [org] = await tx
+            .insert(schema.organization)
+            .values({
+              id: orgId,
+              name: name,
+              slug: slug,
+              createdAt: new Date(),
+              status: "active",
+            })
+            .returning();
 
-      // 2. Add Member (Admin)
-      await tx.insert(schema.member).values({
-        id: uuidv4(),
-        organizationId: orgId,
-        userId: userId,
-        role: "admin",
-        createdAt: new Date(),
-      });
+          // 2. Add Member (Admin)
+          await tx.insert(schema.member).values({
+            id: uuidv4(),
+            organizationId: orgId,
+            userId: userId,
+            role: "admin",
+            createdAt: new Date(),
+          });
 
-      return this.mapTenant(org);
-    });
+          return this.mapTenant(org);
+        });
+      } catch (error: any) {
+        // Check for unique constraint violation on slug
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+        if (error.code === "23505" && error.detail?.includes("slug")) {
+          retries--;
+          slug = this.generateSlug(name); // Regenerate with new random suffix
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("Failed to generate unique slug for tenant");
+  }
+
+  // ...
+
+  private generateSlug(name: string): string {
+    return (
+      name
+        .toLowerCase()
+        .replaceAll(/\s+/g, "-")
+        .replaceAll(/[^a-z0-9-]/g, "") +
+      "-" +
+      uuidv4().split("-")[0] // Use first 8 chars of UUID for better uniqueness
+    );
   }
 
   async findAllForUser(
@@ -88,17 +116,6 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const companyName = `Organization ${randomSuffix}`;
 
     return this.create(userId, companyName);
-  }
-
-  private generateSlug(name: string): string {
-    return (
-      name
-        .toLowerCase()
-        .replaceAll(/\s+/g, "-")
-        .replaceAll(/[^a-z0-9-]/g, "") +
-      "-" +
-      uuidv4().slice(0, 4)
-    );
   }
 
   private mapTenant(dbOrg: schema.Organization): TenantInterface {

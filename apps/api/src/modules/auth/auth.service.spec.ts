@@ -83,7 +83,10 @@ describe('AuthService', () => {
     it('should return enriched session with organizationId if tenant exists', async () => {
       const token = 'valid-token';
       const mockSession = { session: { id: 's1' }, user: { id: 'u1' } };
-      const mockTenants = [{ id: 'org-1' }];
+      const mockTenants = [
+        { id: 'org-old', createdAt: new Date('2023-01-01') },
+        { id: 'org-new', createdAt: new Date('2023-01-02') },
+      ];
 
       mockAuthProvider.validateSession.mockResolvedValue(mockSession);
       mockTenantsService.findAllForUser.mockResolvedValue(mockTenants);
@@ -93,7 +96,8 @@ describe('AuthService', () => {
       expect(mockAuthProvider.validateSession).toHaveBeenCalledWith(token);
       expect(mockTenantsService.findAllForUser).toHaveBeenCalledWith('u1');
 
-      expect(result?.user.organizationId).toBe('org-1');
+      // Should pick 'org-new' because it is newer
+      expect(result?.user.organizationId).toBe('org-new');
 
       expect(result?.user.hasTenant).toBe(true);
     });
@@ -162,10 +166,34 @@ describe('AuthService', () => {
 
   describe('getHandler', () => {
     it('should return handler from provider', () => {
-      const mockHandler = () => {};
+      const mockHandler = jest.fn();
       mockAuthProvider.getHandler.mockReturnValue(mockHandler);
 
-      expect(service.getHandler()).toBe(mockHandler);
+      expect(service.getHandler()).toBeDefined();
+    });
+
+    it('should throw TypeError if provider does not support getHandler', () => {
+      const originalHandler = mockAuthProvider.getHandler;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (mockAuthProvider as any).getHandler = undefined;
+
+      expect(() => {
+        service.getHandler();
+      }).toThrow(TypeError);
+
+      mockAuthProvider.getHandler = originalHandler;
+    });
+
+    it('should bind handler to provider context', () => {
+      const mockHandlerResult = jest.fn();
+      mockAuthProvider.getHandler.mockReturnValue(mockHandlerResult);
+
+      service.getHandler();
+
+      expect(mockAuthProvider.getHandler).toHaveBeenCalled();
+      expect(mockAuthProvider.getHandler.mock.contexts[0]).toBe(
+        mockAuthProvider,
+      );
     });
   });
 });

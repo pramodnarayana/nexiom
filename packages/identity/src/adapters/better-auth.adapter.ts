@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization, admin } from "better-auth/plugins";
@@ -111,11 +107,15 @@ export class BetterAuthAdapter implements IAuthProvider {
         },
       },
       socialProviders: {
-        google: {
-          clientId: config.googleClientId || "",
-          clientSecret: config.googleClientSecret || "",
-          enabled: !!(config.googleClientId && config.googleClientSecret),
-        },
+        ...(config.googleClientId && config.googleClientSecret
+          ? {
+              google: {
+                clientId: config.googleClientId,
+                clientSecret: config.googleClientSecret,
+                enabled: true,
+              },
+            }
+          : {}),
       },
     });
   }
@@ -131,6 +131,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     const api = this.auth.api as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const result = await api.signUpEmail({
       body: {
         email: input.email,
@@ -140,6 +141,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       asResponse: false,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
     return this.mapUser(result.user);
   }
 
@@ -150,30 +152,41 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     // Using Better Auth API
 
-    const apiResponse = await (this.auth.api as any).signInEmail({
+    const api = this.auth.api as any;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    const apiResponse = await api.signInEmail({
       body: { email: credentials.email, password: credentials.password },
       asResponse: true,
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!apiResponse.ok) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       throw new Error("Login failed (API Error): " + apiResponse.statusText);
     }
 
     const cookieHeader =
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       typeof apiResponse.headers.getSetCookie === "function"
-        ? apiResponse.headers.getSetCookie()
-        : apiResponse.headers.get("set-cookie");
+        ? // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+          apiResponse.headers.getSetCookie()
+        : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+          apiResponse.headers.get("set-cookie");
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     const result = await apiResponse.json();
 
     // Resolve Session from DB for consistency
     const dbSession = await this.db.query.session.findFirst({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       where: eq(schema.session.token, result.token),
     });
 
     if (!dbSession) throw new Error("Session not found after login");
 
     const dbUser = await this.db.query.user.findFirst({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       where: eq(schema.user.id, result.user.id),
     });
 
@@ -241,6 +254,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     const api = this.auth.api as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
     return await api.createInvitation({
       body: {
         email: input.email,
@@ -255,6 +269,7 @@ export class BetterAuthAdapter implements IAuthProvider {
   private async createSystemInvitation(input: CreateInvitationInput) {
     const id = uuidv4();
     const expiresAt = new Date();
+    // Convert expiresIn (seconds) to hours - default 48h
     expiresAt.setHours(
       expiresAt.getHours() + (input.expiresIn ? input.expiresIn / 3600 : 48),
     );
@@ -406,14 +421,32 @@ export class BetterAuthAdapter implements IAuthProvider {
   }
 
   private mapInvitation(dbInv: schema.Invitation): Invitation {
+    const rawStatus = dbInv.status;
+    let status: "pending" | "accepted" | "rejected" | "canceled" = "pending";
+
+    if (
+      rawStatus === "pending" ||
+      rawStatus === "accepted" ||
+      rawStatus === "rejected" ||
+      rawStatus === "canceled"
+    ) {
+      status = rawStatus;
+    } else {
+      // Log warning or throw, for now fallback to pending or error??
+      // Given DB strict schema usually prevents this, this is a TS guard.
+      // If we fall here, it means DB has a value TS doesn't know.
+      // We will fallback to pending or better: keep strict.
+      // Schema uses text column but we should trust it slightly better if we had ENUM.
+      // Here we map safely.
+    }
+
     return {
       id: dbInv.id,
       email: dbInv.email,
       role: dbInv.role || "user",
       organizationId: dbInv.organizationId,
       inviterId: dbInv.inviterId,
-
-      status: dbInv.status as any,
+      status: status,
       expiresAt: dbInv.expiresAt,
       createdAt: dbInv.createdAt,
     };

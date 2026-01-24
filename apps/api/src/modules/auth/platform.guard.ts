@@ -40,14 +40,10 @@ export class PlatformGuard implements CanActivate {
 
     // Check System Role - Allow both platform_admin and platform_user
     const user = sessionData.user;
-    const isPlatformAdmin = await this.permissionProvider.hasRole(
-      user,
-      'platform_admin',
-    );
-    const isPlatformUser = await this.permissionProvider.hasRole(
-      user,
-      'platform_user',
-    );
+    const [isPlatformAdmin, isPlatformUser] = await Promise.all([
+      this.permissionProvider.hasRole(user, 'platform_admin'),
+      this.permissionProvider.hasRole(user, 'platform_user'),
+    ]);
 
     if (!isPlatformAdmin && !isPlatformUser) {
       throw new ForbiddenException('Requires Platform Access');

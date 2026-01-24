@@ -11,7 +11,10 @@ export interface CreateInvitationInput {
   role: string;
   organizationId?: string | null;
   inviterId: string;
-  expiresIn?: number; // seconds
+  /**
+   * Expiration duration in seconds.
+   */
+  expiresIn?: number;
 }
 
 export interface IAuthProvider {
