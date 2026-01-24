@@ -13,7 +13,7 @@ export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
     private readonly authProvider: IAuthProvider,
-  ) { }
+  ) {}
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
