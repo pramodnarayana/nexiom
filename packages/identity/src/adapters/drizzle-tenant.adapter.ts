@@ -94,8 +94,8 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     return (
       name
         .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "") +
+        .replaceAll(/\s+/g, "-")
+        .replaceAll(/[^a-z0-9-]/g, "") +
       "-" +
       uuidv4().slice(0, 4)
     );
@@ -109,9 +109,14 @@ export class DrizzleTenantAdapter implements ITenantProvider {
       logo: dbOrg.logo,
       status: dbOrg.status,
       createdAt: dbOrg.createdAt,
-      metadata: dbOrg.metadata
-        ? (JSON.parse(dbOrg.metadata) as Record<string, any>)
-        : undefined, // Basic handling
+      metadata: (() => {
+        if (!dbOrg.metadata) return undefined;
+        try {
+          return JSON.parse(dbOrg.metadata) as Record<string, any>;
+        } catch {
+          return undefined;
+        }
+      })(),
     };
   }
 }

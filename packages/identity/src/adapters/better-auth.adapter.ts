@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
+
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -177,7 +177,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       where: eq(schema.user.id, result.user.id),
     });
 
-    if (!dbUser) throw new Error('User not found after login');
+    if (!dbUser) throw new Error("User not found after login");
 
     return {
       session: this.mapSession(dbSession),
@@ -214,8 +214,8 @@ export class BetterAuthAdapter implements IAuthProvider {
     const headerObj =
       headers instanceof Headers
         ? fromNodeHeaders(
-          Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
-        )
+            Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
+          )
         : fromNodeHeaders(headers as IncomingHttpHeaders);
 
     const result = await this.auth.api.getSession({

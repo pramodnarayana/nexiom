@@ -69,5 +69,5 @@ export const verification = {
 };
 
 export const organizationStatusEnum = {
-  enumValues: ['active', 'inactive'],
+  enumValues: ['active', 'disabled', 'suspended'],
 };

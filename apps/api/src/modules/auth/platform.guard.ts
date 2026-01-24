@@ -34,7 +34,7 @@ export class PlatformGuard implements CanActivate {
     const headers = toWebHeaders(req.headers);
     const sessionData = await this.authService.getSessionFromHeaders(headers);
 
-    if (!sessionData) {
+    if (!sessionData?.user) {
       throw new UnauthorizedException('Invalid Session');
     }
 

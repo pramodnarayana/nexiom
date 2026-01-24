@@ -5,6 +5,7 @@ import { CreateInvitation } from './invitations.validation';
 @Injectable()
 export class InvitationsService {
   private readonly logger = new Logger(InvitationsService.name);
+  private static readonly INVITATION_EXPIRES_IN_SECONDS = 48 * 3600;
 
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
@@ -22,7 +23,7 @@ export class InvitationsService {
       role: createInvitation.role,
       organizationId: createInvitation.organizationId || null,
       inviterId,
-      expiresIn: 48 * 3600,
+      expiresIn: InvitationsService.INVITATION_EXPIRES_IN_SECONDS,
     });
   }
 

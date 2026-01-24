@@ -32,16 +32,16 @@ jest.mock("better-auth/node", () => ({
 }));
 
 jest.mock("./adapters/better-auth.adapter", () => ({
-  BetterAuthAdapter: class { },
+  BetterAuthAdapter: class {},
 }));
 jest.mock("./adapters/drizzle-user.adapter", () => ({
-  DrizzleUserAdapter: class { },
+  DrizzleUserAdapter: class {},
 }));
 jest.mock("./adapters/drizzle-tenant.adapter", () => ({
-  DrizzleTenantAdapter: class { },
+  DrizzleTenantAdapter: class {},
 }));
 jest.mock("./adapters/drizzle-permission.adapter", () => ({
-  DrizzlePermissionAdapter: class { },
+  DrizzlePermissionAdapter: class {},
 }));
 
 describe("Identity Package", () => {

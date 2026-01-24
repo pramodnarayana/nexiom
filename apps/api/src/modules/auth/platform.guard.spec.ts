@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
+import { PERMISSION_PROVIDER } from '@nexiom/identity';
 
 describe('PlatformGuard', () => {
   let guard: PlatformGuard;
@@ -32,7 +33,7 @@ describe('PlatformGuard', () => {
           useValue: mockAuthService,
         },
         {
-          provide: 'PERMISSION_PROVIDER', // Using string token as exported from package
+          provide: PERMISSION_PROVIDER,
           useValue: {
             hasRole: jest.fn(),
           },
@@ -90,7 +91,7 @@ describe('PlatformGuard', () => {
     });
     // Mock Permission Provider Success
 
-    const permissionProvider: any = module.get('PERMISSION_PROVIDER');
+    const permissionProvider: any = module.get(PERMISSION_PROVIDER);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     permissionProvider.hasRole.mockResolvedValue(true);
 
@@ -115,7 +116,7 @@ describe('PlatformGuard', () => {
     });
     // Mock Permission Provider Success
 
-    const permissionProvider: any = module.get('PERMISSION_PROVIDER');
+    const permissionProvider: any = module.get(PERMISSION_PROVIDER);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     permissionProvider.hasRole.mockResolvedValue(true);
 

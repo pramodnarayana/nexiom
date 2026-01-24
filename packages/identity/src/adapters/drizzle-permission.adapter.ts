@@ -50,11 +50,8 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
     // 3. User Level (Self)
     if (resource === "user" && action === "update") {
-      // Can usually update self?
-      // Need ID check, but resource here is string 'user'.
-      // This is where "Instance" checks would be needed (passed as context or specialized resource ID).
-      // For now, generic resource check:
-      return true;
+      // Deny until instance-level checks (e.g., targetUserId) are supported.
+      return false;
     }
 
     return false;
