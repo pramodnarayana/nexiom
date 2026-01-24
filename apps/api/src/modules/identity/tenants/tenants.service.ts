@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { DRIZZLE_DB } from '../../db/db.provider';
+import { DRIZZLE_DB } from '../../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema';
+import * as schema from '../../../db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 

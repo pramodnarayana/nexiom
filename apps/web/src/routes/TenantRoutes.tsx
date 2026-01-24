@@ -7,7 +7,7 @@ import { dataProvider } from "../providers/data-provider";
 import { tenantAuthProvider } from "../providers/tenant-auth-provider";
 import { TenantLayout } from '../layouts/TenantLayout';
 import { DashboardPage } from '../pages/DashboardPage';
-import { UserList } from '../modules/users/UserList';
+import { UserList } from '../modules/identity/users/UserList';
 
 export function TenantRoutes() {
     const navGroups = [

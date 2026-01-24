@@ -1,7 +1,7 @@
 import { SystemAdminController } from './system-admin.controller';
 
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema';
+import * as schema from '../../../db/schema';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 interface MockDb {
@@ -48,6 +48,7 @@ describe('SystemAdminController', () => {
     };
 
     // Reset mocks with full structure
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
     mockDb = {
       query: {
         user: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -60,7 +61,7 @@ describe('SystemAdminController', () => {
       insert: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+
       transaction: jest.fn((cb) => cb(mockDb)), // Mock transaction execution
       // Chain method definitions
       limit: jest.fn().mockReturnThis(),
@@ -568,8 +569,8 @@ describe('SystemAdminController', () => {
       const result = await controller.getUser('u1');
 
       expect(result).toEqual(mockUser);
+
       expect(mockDb.query.user.findFirst).toHaveBeenCalledWith(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         expect.objectContaining({ where: expect.anything() }),
       );
     });

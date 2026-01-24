@@ -7,7 +7,7 @@ import { authProvider } from "../providers/auth-provider";
 import { notificationProvider } from "../providers/notification-provider";
 import { AdminLayout } from '../layouts/AdminLayout';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
-import { UserList } from '../modules/users/UserList';
+import { UserList } from '../modules/identity/users/UserList';
 import { UserShow } from '../pages/admin/users/UserShow';
 import { UserEdit } from '../pages/admin/users/UserEdit';
 import { TenantListPage } from '../pages/admin/tenants/TenantListPage';

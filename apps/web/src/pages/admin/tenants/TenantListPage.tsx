@@ -1,7 +1,7 @@
 import { useTable, useDelete } from "@refinedev/core";
 import { useAuth } from "@/lib/auth/context";
-import { TenantList } from "@/modules/tenants/TenantList";
-import { type TenantTableItem, type TenantApiResponse } from "@/modules/tenants/types";
+import { TenantList } from "@/modules/identity/tenants/TenantList";
+import { type TenantTableItem, type TenantApiResponse } from "@/modules/identity/tenants/types";
 import { CreateTenantDialog } from "./components/CreateTenantDialog";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";

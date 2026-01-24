@@ -16,9 +16,9 @@ import {
 import { AUTH_PROVIDER, IAuthProvider } from '@nexiom/identity';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { PlatformGuard } from '../auth/platform.guard';
-import { DRIZZLE_DB } from '../../db/db.provider';
+import { DRIZZLE_DB } from '../../../db/db.provider';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema';
+import * as schema from '../../../db/schema';
 import { desc, count, eq, ne, and } from 'drizzle-orm';
 import {
   CreateTenantValidation,

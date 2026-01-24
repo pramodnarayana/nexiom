@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersModule } from './modules/users/users.module';
-import { TenantsModule } from './modules/tenants/tenants.module';
-import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/identity/users/users.module';
+import { TenantsModule } from './modules/identity/tenants/tenants.module';
+import { AuthModule } from './modules/identity/auth/auth.module';
 import { DbModule } from './db/db.module';
-import { InvitationsModule } from './modules/invitations/invitations.module';
-import { SystemAdminModule } from './modules/system-admin/system-admin.module';
+import { InvitationsModule } from './modules/identity/invitations/invitations.module';
+import { SystemAdminModule } from './modules/identity/system-admin/system-admin.module';
 import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from './modules/email/email.service.abstract';
 

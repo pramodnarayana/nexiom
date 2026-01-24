@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LoginPage } from './LoginPage';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { authClient } from '../lib/auth-client';
+import { authClient } from '../../lib/auth-client';
 
 // Mock Dependencies
-vi.mock('../hooks/useAuth', () => ({
+vi.mock('../../hooks/useAuth', () => ({
     useAuth: vi.fn(),
 }));
 
@@ -14,7 +14,7 @@ vi.mock('react-router-dom', () => ({
     useNavigate: vi.fn(),
 }));
 
-vi.mock('../lib/auth-client', () => ({
+vi.mock('../../lib/auth-client', () => ({
     authClient: {
         signIn: {
             social: vi.fn(),
