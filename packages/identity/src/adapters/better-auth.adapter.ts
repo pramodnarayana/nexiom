@@ -158,8 +158,18 @@ export class BetterAuthAdapter implements IAuthProvider {
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
-    return this.mapUser(result.user);
+    // Rehydrate from DB to ensure consistent Date objects
+
+    const dbUser = await this.db.query.user.findFirst({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      where: eq(schema.user.id, result.user.id),
+    });
+
+    if (!dbUser) {
+      throw new Error("User created but not found in database");
+    }
+
+    return this.mapUser(dbUser);
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
@@ -322,10 +332,26 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     for (const field of requiredFields) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      if (!invData[field]) {
-        throw new Error(
-          `Invalid response from createInvitation: Missing field "${field}"`,
-        );
+      const value = invData[field];
+
+      if (field === "role") {
+        // Role is nullable/optional in some contexts, but if it exists it must be valid.
+        // If invData has the key, we check if it is explicitly undefined (missing).
+        // If the key is present but null, that's allowed by schema if nullable.
+        // However, schema says role: text("role"), which defaults to nullable in drizzle-pg unless .notNull()
+        // Wait, schema.invitation has role: text("role"), so it IS nullable.
+        if (value === undefined) {
+          throw new Error(
+            `Invalid response from createInvitation: Missing field "${field}"`,
+          );
+        }
+      } else {
+        // Non-nullable fields
+        if (value === undefined || value === null || value === "") {
+          throw new Error(
+            `Invalid response from createInvitation: Missing field "${field}"`,
+          );
+        }
       }
     }
 

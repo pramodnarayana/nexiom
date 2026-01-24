@@ -75,6 +75,10 @@ export const account = pgTable(
   },
   (table) => [
     unique("account_user_provider_unique").on(table.userId, table.providerId),
+    unique("account_provider_account_unique").on(
+      table.providerId,
+      table.accountId,
+    ),
   ],
 );
 
