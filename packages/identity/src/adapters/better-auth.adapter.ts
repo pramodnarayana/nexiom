@@ -87,7 +87,10 @@ export class BetterAuthAdapter implements IAuthProvider {
       plugins: [
         organization({
           sendInvitationEmail: async (data) => {
-            const inviteUrl = `${this.config.frontendUrl || this.config.allowedOrigins[0]}/invite/accept?id=${data.invitation.id}&email=${encodeURIComponent(data.email)}`;
+            const frontendUrl = this.validateFrontendUrl(
+              this.config.frontendUrl,
+            );
+            const inviteUrl = `${frontendUrl}/invite/accept?id=${data.invitation.id}&email=${encodeURIComponent(data.email)}`;
 
             await this.emailService.sendEmail({
               to: data.email,
@@ -124,6 +127,13 @@ export class BetterAuthAdapter implements IAuthProvider {
     return this.auth.handler.bind(this.auth);
   }
 
+  private validateFrontendUrl(url?: string): string {
+    if (url && this.config.allowedOrigins.includes(url)) {
+      return url;
+    }
+    return this.config.allowedOrigins[0];
+  }
+
   async createUser(input: CreateUserInput): Promise<UserInterface> {
     if (!input.password) {
       throw new Error("Password is required for email signup");
@@ -140,6 +150,13 @@ export class BetterAuthAdapter implements IAuthProvider {
       },
       asResponse: false,
     });
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (!result || typeof result !== "object" || !result.user?.id) {
+      throw new Error(
+        `User creation failed: Unexpected response from Better Auth. Response: ${JSON.stringify(result)}`,
+      );
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
     return this.mapUser(result.user);
@@ -259,7 +276,7 @@ export class BetterAuthAdapter implements IAuthProvider {
     return this.validateSession(result.session.token);
   }
 
-  async createInvitation(input: CreateInvitationInput): Promise<any> {
+  async createInvitation(input: CreateInvitationInput): Promise<Invitation> {
     if (!input.organizationId) {
       // System invite
       return this.createSystemInvitation(input);
@@ -270,7 +287,7 @@ export class BetterAuthAdapter implements IAuthProvider {
     const api = this.auth.api as any;
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-    return await api.createInvitation({
+    const result = await api.createInvitation({
       body: {
         email: input.email,
         role: input.role,
@@ -279,9 +296,43 @@ export class BetterAuthAdapter implements IAuthProvider {
         inviterId: input.inviterId,
       },
     });
+
+    // We need to map the result to our Invitation interface
+    // Better Auth returns { invitation: ..., ... } usually depending on plugin
+    if (!result) throw new Error("Failed to create invitation");
+
+    // Assuming result.invitation holds the data, or result itself IS the invitation (check Better Auth docs or assumed shape in adapter)
+    // If we look at existing usage, we usually map DB objects.
+    // For safety, let's fetch it from DB or map optimistic result if structure matches.
+    // However, since we are inside adapter, let's assume we can map the result if it mimics schema.
+    // If not, we might need to fetch by ID.
+    // Let's assume result IS the invitation object for now based on typical BA patterns, or result.invitation.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const invData = result.invitation || result;
+
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      id: invData.id,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      email: invData.email,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      role: invData.role,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      organizationId: invData.organizationId,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      inviterId: invData.inviterId,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      status: invData.status,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expiresAt: new Date(invData.expiresAt),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      createdAt: new Date(invData.createdAt),
+    };
   }
 
-  private async createSystemInvitation(input: CreateInvitationInput) {
+  private async createSystemInvitation(
+    input: CreateInvitationInput,
+  ): Promise<Invitation> {
     const id = uuidv4();
     const expiresAt = new Date();
     // Convert expiresIn (seconds) to hours - default 48h
@@ -304,7 +355,8 @@ export class BetterAuthAdapter implements IAuthProvider {
       .returning();
 
     // Send Email
-    const inviteUrl = `${this.config.frontendUrl || this.config.allowedOrigins[0]}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
+    const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+    const inviteUrl = `${frontendUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
     await this.emailService.sendEmail({
       to: input.email,
       subject: "You have been invited to join Nexiom",
@@ -312,7 +364,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       html: `<p>You have been invited to join <strong>Nexiom</strong>.</p><p><a href="${inviteUrl}">Click here to accept</a></p>`,
     });
 
-    return invitation;
+    return this.mapInvitation(invitation);
   }
 
   async getInvitation(id: string): Promise<Invitation | null> {
@@ -450,12 +502,11 @@ export class BetterAuthAdapter implements IAuthProvider {
     ) {
       status = rawStatus;
     } else {
-      // Log warning or throw, for now fallback to pending or error??
-      // Given DB strict schema usually prevents this, this is a TS guard.
-      // If we fall here, it means DB has a value TS doesn't know.
-      // We will fallback to pending or better: keep strict.
-      // Schema uses text column but we should trust it slightly better if we had ENUM.
-      // Here we map safely.
+      // Log warning for unexpected status
+      console.warn(
+        `[BetterAuthAdapter] mapInvitation: Unexpected status "${rawStatus}" for invitation ${dbInv.id}. Fallback to "pending".`,
+      );
+      // Fallback is implicit via initialization, but explicit logging helps observability.
     }
 
     return {

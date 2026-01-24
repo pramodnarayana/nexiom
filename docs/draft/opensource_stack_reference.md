@@ -65,11 +65,19 @@ This document lists all the open-source libraries, frameworks, and infrastructur
 | **MSW** | **API Mocking.** Mock Service Worker. Intercepts network requests to mock QuickBooks/Salesforce during tests. | [mswjs/msw](https://github.com/mswjs/msw) |
 | **Act** | **CI Simulation.** Run GitHub Actions workflows locally. | [nektos/act](https://github.com/nektos/act) |
 
-## 8. UI Components
+## 8. AI & Test Generation Tools (New)
+
+| Tool | Role in Nexiom | GitHub Repository / Link |
+ | ----- | ----- | ----- |
+| **CodiumAI** | **Unit/Logic Test Generation.** IDE extension that analyzes code behavior and generates edge-case tests (Jest/Vitest) automatically. | [CodiumAI (Free Tier)](https://www.codium.ai/) |
+| **Playwright Codegen** | **E2E Test Recording.** Built-in CLI tool to record browser interactions and generate TypeScript test code instantly. | [microsoft/playwright](https://playwright.dev/docs/codegen) |
+| **Keploy** | **API Regression Testing.** "No-Code" testing platform that records API traffic and converts it into test cases and mocks. | [keploy/keploy](https://github.com/keploy/keploy) |
+
+## 9. UI Components
 
 | Tool | Role in Nexiom | GitHub Repository |
  | ----- | ----- | ----- |
 | **shadcn/ui** | **Component Library.** Copy-paste accessible components based on Radix UI. | [shadcn-ui/ui](https://github.com/shadcn-ui/ui) |
-| **tweakcn** | **Theming Engine.** Utility for managing and customizing Tailwind themes dynamically. | [tweakcn](https://tweakcn.com/) |
+| **tweakcn** | **Theming Engine.** Utility for managing and customizing Tailwind themes dynamically. | [tweakcn](https://tweakcn.com) |
 | **Lucide React** | **Icons.** Beautiful, consistent icon set. | [lucide-icons/lucide](https://github.com/lucide-icons/lucide) |
 | **Tailwind CSS** | **Styling.** Utility-first CSS framework. | [tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) |
