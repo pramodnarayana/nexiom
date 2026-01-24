@@ -335,13 +335,13 @@ export class BetterAuthAdapter implements IAuthProvider {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const createdAt = new Date(invData.createdAt);
 
-    if (isNaN(expiresAt.getTime())) {
-      throw new Error(
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw new TypeError(
         "Invalid response from createInvitation: Invalid expiresAt date",
       );
     }
-    if (isNaN(createdAt.getTime())) {
-      throw new Error(
+    if (Number.isNaN(createdAt.getTime())) {
+      throw new TypeError(
         "Invalid response from createInvitation: Invalid createdAt date",
       );
     }
