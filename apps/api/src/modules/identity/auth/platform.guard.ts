@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
-import { toWebHeaders } from '../../shared/utils/headers.util';
+import { toWebHeaders } from '../../../shared/utils/headers.util';
 import { PERMISSION_PROVIDER, IPermissionProvider } from '@nexiom/identity';
 
 /**

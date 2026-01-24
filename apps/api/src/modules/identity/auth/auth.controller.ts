@@ -18,7 +18,7 @@ import { Signup, CompleteInvite } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { InvitationsService } from '../invitations/invitations.service';
-import { toWebHeaders } from '../../shared/utils/headers.util';
+import { toWebHeaders } from '../../../shared/utils/headers.util';
 import { BadRequestException } from '@nestjs/common';
 
 /**

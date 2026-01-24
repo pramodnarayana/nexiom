@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantsService } from './tenants.service';
-import { DRIZZLE_DB } from '../../db/db.provider';
-import { DbOrganization as Organization } from '../../db/schema';
+import { DRIZZLE_DB } from '../../../db/db.provider';
+import { DbOrganization as Organization } from '../../../db/schema';
 
 const mockOrganizations: Organization[] = [
   {
