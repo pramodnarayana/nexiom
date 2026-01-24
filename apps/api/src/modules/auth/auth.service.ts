@@ -4,10 +4,11 @@ import {
   IAuthProvider,
   LoginCredentials,
   AuthResult,
-  // Removed unused imports
+  Session,
+  User,
+  CreateUserInput,
 } from '@nexiom/identity';
 import { TenantsService } from '../tenants/tenants.service';
-// Removed unused CreateUser import
 
 @Injectable()
 export class AuthService {
@@ -25,35 +26,33 @@ export class AuthService {
     if (!result) return null;
     return {
       session: result.session,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      user: result.user, // Cast to any then User in consumers or improving interface later
+      user: result.user,
     };
   }
 
   async getEnrichedSession(token: string): Promise<{
-    session: any; // Ideally stricter Session type
-    user: any; // Ideally stricter User type
+    session: Session;
+    user: User & { organizationId?: string; hasTenant: boolean };
   } | null> {
     const validSession = await this.authProvider.validateSession(token);
     if (!validSession) return null;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { session, user } = validSession;
 
     // Enrichment: Check if user has a tenant
-    const tenants = await this.tenantsService.findAllForUser(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
-      user.id,
-    );
-    const hasTenant = tenants.length > 0;
-    const organizationId = hasTenant ? tenants[0].id : undefined;
+    const tenants = await this.tenantsService.findAllForUser(user.id);
+    // Deterministic selection: Sort by creation date (newest first)
+    // using slice() to avoid mutating the original array
+    const sortedTenants = tenants
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const hasTenant = sortedTenants.length > 0;
+    const organizationId = hasTenant ? sortedTenants[0].id : undefined;
 
     return {
       session: {
         ...session,
-        // Add enriched properties if needed by Guards/Decorators
       },
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       user: {
         ...user,
         organizationId,
@@ -63,15 +62,19 @@ export class AuthService {
   }
 
   getHandler() {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+    const handler = (this.authProvider as any).getHandler;
+    if (typeof handler !== 'function') {
+      throw new TypeError('Auth Provider does not support getHandler');
+    }
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    return (this.authProvider as any).getHandler();
+    return handler.call(this.authProvider);
   }
 
   // Delegated methods
 
-  async createUser(input: any) {
-    // Type strictly later
-
+  // Delegated methods
+  async createUser(input: CreateUserInput) {
     return this.authProvider.createUser(input);
   }
 

@@ -64,7 +64,7 @@ export class SystemAdminController {
       email: user.email,
       role: user.systemRole || 'platform_user',
       organizationId: null, // System Invite
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+
       inviterId: session.user.id,
     });
 
@@ -86,16 +86,14 @@ export class SystemAdminController {
       throw new BadRequestException('Unauthorized');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
       organizationId: null, // System invitation
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+
       inviterId: session.user.id,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return invitation;
   }
 

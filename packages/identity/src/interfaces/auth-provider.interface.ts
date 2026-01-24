@@ -22,13 +22,13 @@ export interface IAuthProvider {
 
   validateSession(
     token: string,
-  ): Promise<{ session: Session; user: any } | null>;
+  ): Promise<{ session: Session; user: User } | null>;
 
   getSessionFromHeaders(
-    headers: any,
-  ): Promise<{ session: Session; user: any } | null>;
+    headers: Headers | Record<string, string | string[] | undefined>,
+  ): Promise<{ session: Session; user: User } | null>;
 
-  createInvitation(input: CreateInvitationInput): Promise<any>;
+  createInvitation(input: CreateInvitationInput): Promise<Invitation>;
 
   getInvitation(id: string): Promise<Invitation | null>;
 

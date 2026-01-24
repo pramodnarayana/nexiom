@@ -80,10 +80,7 @@ export class AuthController {
       throw new UnauthorizedException('No Session Found');
     }
 
-    return this.tenantsService.provisionTenantForUser(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
-      sessionData.user.id,
-    );
+    return this.tenantsService.provisionTenantForUser(sessionData.user.id);
   }
 
   @Post('complete-invite')

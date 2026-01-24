@@ -4,7 +4,7 @@ import { AuthService } from './auth.service';
 import { USER_PROVIDER } from '@nexiom/identity';
 import { TenantsService } from '../tenants/tenants.service';
 import { InvitationsService } from '../invitations/invitations.service';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -133,12 +133,9 @@ describe('AuthController', () => {
         lastName: 'User',
       };
 
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
-      const res = { setHeader: jest.fn() } as any;
+      const res = { setHeader: jest.fn() } as unknown as Response;
 
-      const mockRequest = { headers: {} } as unknown as Request;
-      const result = await controller.completeInvite(body, res, mockRequest);
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      const result = await controller.completeInvite(body, res);
 
       expect(result).toBeDefined();
     });
@@ -176,9 +173,8 @@ describe('AuthController', () => {
       };
 
       const res = { setHeader: jest.fn() } as unknown as Response;
-      const mockRequest = { headers: {} } as unknown as Request;
 
-      const result = await controller.completeInvite(body, res, mockRequest);
+      const result = await controller.completeInvite(body, res);
 
       expect(result).toBeDefined();
       expect(mockUserProvider.update).toHaveBeenCalledWith('user-existing', {
@@ -211,14 +207,11 @@ describe('AuthController', () => {
         lastName: 'User',
       };
 
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
-      const res = { setHeader: jest.fn() } as any;
+      const res = { setHeader: jest.fn() } as unknown as Response;
 
-      const mockRequest = { headers: {} } as unknown as Request;
-      await expect(
-        controller.completeInvite(body, res, mockRequest),
-      ).rejects.toThrow('Failed to accept invitation');
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+      await expect(controller.completeInvite(body, res)).rejects.toThrow(
+        'Failed to accept invitation',
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const provider = module.get(USER_PROVIDER);
@@ -230,13 +223,13 @@ describe('AuthController', () => {
     it('should delegate to authService.getHandler', async () => {
       const mockHandler = jest.fn();
       mockAuthService.getHandler.mockReturnValue(mockHandler);
-      const mockRequest = {} as unknown as Request;
+
       const mockResponse = {
         end: jest.fn(),
         setHeader: jest.fn(),
       } as unknown as Response;
 
-      await controller.betterAuth(mockRequest, mockResponse);
+      await controller.betterAuth({} as unknown as Request, mockResponse);
 
       expect(mockAuthService.getHandler).toHaveBeenCalled();
     });

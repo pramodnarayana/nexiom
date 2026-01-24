@@ -32,20 +32,20 @@ jest.mock("better-auth/node", () => ({
 }));
 
 jest.mock("./adapters/better-auth.adapter", () => ({
-  BetterAuthAdapter: class {},
+  BetterAuthAdapter: class { },
 }));
 jest.mock("./adapters/drizzle-user.adapter", () => ({
-  DrizzleUserAdapter: class {},
+  DrizzleUserAdapter: class { },
 }));
 jest.mock("./adapters/drizzle-tenant.adapter", () => ({
-  DrizzleTenantAdapter: class {},
+  DrizzleTenantAdapter: class { },
 }));
 jest.mock("./adapters/drizzle-permission.adapter", () => ({
-  DrizzlePermissionAdapter: class {},
+  DrizzlePermissionAdapter: class { },
 }));
 
 describe("Identity Package", () => {
-  it("should export interfaces", () => {
+  it("should export adapters", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
     const IdentityPackage = require("./index");
 
@@ -54,5 +54,9 @@ describe("Identity Package", () => {
     expect(IdentityPackage.BetterAuthAdapter).toBeDefined();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(IdentityPackage.DrizzleUserAdapter).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(IdentityPackage.DrizzleTenantAdapter).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    expect(IdentityPackage.DrizzlePermissionAdapter).toBeDefined();
   });
 });

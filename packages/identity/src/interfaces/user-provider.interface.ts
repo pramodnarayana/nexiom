@@ -5,6 +5,7 @@ export interface CreateUserInput {
   password?: string;
   firstName?: string;
   lastName?: string;
+  role?: string;
   companyName?: string; // Optional: for auto-provisioning
 }
 

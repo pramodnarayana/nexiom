@@ -177,6 +177,8 @@ export class BetterAuthAdapter implements IAuthProvider {
       where: eq(schema.user.id, result.user.id),
     });
 
+    if (!dbUser) throw new Error('User not found after login');
+
     return {
       session: this.mapSession(dbSession),
       user: this.mapUser(dbUser),
@@ -207,13 +209,13 @@ export class BetterAuthAdapter implements IAuthProvider {
   }
 
   async getSessionFromHeaders(
-    headers: any,
+    headers: Headers | Record<string, string | string[] | undefined>,
   ): Promise<{ session: Session; user: UserInterface } | null> {
     const headerObj =
       headers instanceof Headers
         ? fromNodeHeaders(
-            Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
-          )
+          Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
+        )
         : fromNodeHeaders(headers as IncomingHttpHeaders);
 
     const result = await this.auth.api.getSession({

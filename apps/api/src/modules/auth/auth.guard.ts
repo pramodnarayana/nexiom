@@ -21,18 +21,10 @@ export class AuthGuard implements CanActivate {
     // We convert Express headers to Web Standard Headers
     const headers = new Headers(request.headers as Record<string, string>);
 
-    // Use the new provider method that delegates to Better Auth
-
-    // Auth Guard uses Enriched Session directly now
-    // Step 1: Get Token from Headers (via AuthService logic if needed, or direct)
-    // Wait, AuthService.getEnrichedSession takes a TOKEN, not headers?
-    // Let's check AuthService implementation.
-    // getEnrichedSession(token: string).
-    // getSessionFromHeaders(headers) -> { session, user }.
-
+    // 2. Validate Token logic
     const sessionData = await this.authService.getSessionFromHeaders(headers);
 
-    if (!sessionData) {
+    if (!sessionData || typeof sessionData.session?.token !== 'string') {
       throw new UnauthorizedException('Invalid or Expired Session');
     }
 
@@ -47,7 +39,6 @@ export class AuthGuard implements CanActivate {
     }
 
     // Unwrap for attaching to request
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { user, session } = enrichedResult;
 
     // 3. Attach to request

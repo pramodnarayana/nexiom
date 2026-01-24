@@ -39,7 +39,6 @@ export class PlatformGuard implements CanActivate {
     }
 
     // Check System Role - Allow both platform_admin and platform_user
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const user = sessionData.user;
     const isPlatformAdmin = await this.permissionProvider.hasRole(
       user,

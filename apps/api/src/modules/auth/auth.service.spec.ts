@@ -92,9 +92,9 @@ describe('AuthService', () => {
 
       expect(mockAuthProvider.validateSession).toHaveBeenCalledWith(token);
       expect(mockTenantsService.findAllForUser).toHaveBeenCalledWith('u1');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
       expect(result?.user.organizationId).toBe('org-1');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
       expect(result?.user.hasTenant).toBe(true);
     });
 
@@ -107,9 +107,8 @@ describe('AuthService', () => {
 
       const result = await service.getEnrichedSession(token);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(result?.user.organizationId).toBeUndefined();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
       expect(result?.user.hasTenant).toBe(false);
     });
 
