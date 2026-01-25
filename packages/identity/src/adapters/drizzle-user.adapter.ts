@@ -25,8 +25,12 @@ export class DrizzleUserAdapter implements IUserProvider {
       try {
         return await this.update(user.id, { systemRole: input.systemRole });
       } catch (error) {
-        // Compensating transaction: delete user if role update fails to maintain consistency
-        await this.delete(user.id);
+        // Compensating transaction: best‑effort cleanup without masking the root cause
+        try {
+          await this.delete(user.id);
+        } catch (cleanupError) {
+          void cleanupError; // optional: log cleanupError
+        }
         throw error;
       }
     }
@@ -106,7 +110,11 @@ export class DrizzleUserAdapter implements IUserProvider {
     systemRole?: string;
   }): Promise<{ data: UserInterface[]; total: number }> {
     const page = Math.max(1, Math.floor(Number(options?.page) || 1));
-    const limit = Math.max(1, Math.floor(Number(options?.limit) || 10));
+    const MAX_LIMIT = 100;
+    const limit = Math.min(
+      MAX_LIMIT,
+      Math.max(1, Math.floor(Number(options?.limit) || 10)),
+    );
     const offset = (page - 1) * limit;
 
     const filters = this.buildUserFilters(options);

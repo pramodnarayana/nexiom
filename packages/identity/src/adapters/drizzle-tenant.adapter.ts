@@ -61,77 +61,78 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     slug: string;
     logo?: string | null;
   }): Promise<TenantInterface> {
+    const slug = input.slug.trim();
+    if (!slug) {
+      throw new Error("Tenant slug is required");
+    }
+
     try {
       const [org] = await this.db
         .insert(schema.organization)
         .values({
           id: uuidv4(),
           name: input.name,
-          slug: input.slug,
+          slug,
           logo: input.logo,
           createdAt: new Date(),
           status: "active",
         })
         .returning();
+
       return this.mapTenant(org);
     } catch (error: any) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-      if (error.code === "23505" && error.detail?.includes("slug")) {
-        throw new Error("Tenant slug already exists");
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (error.code === "23505") {
+        throw new Error("Tenant with this slug already exists");
       }
       throw error;
     }
   }
 
   async update(id: string, input: UpdateTenantInput): Promise<TenantInterface> {
-    const updatePayload: Partial<typeof schema.organization.$inferInsert> = {};
-    if (input.name !== undefined) updatePayload.name = input.name;
-    if (input.slug !== undefined) updatePayload.slug = input.slug;
-    if (input.logo !== undefined) updatePayload.logo = input.logo;
-    if (input.status !== undefined) updatePayload.status = input.status;
-    if (input.metadata !== undefined)
-      updatePayload.metadata = JSON.stringify(input.metadata);
-
-    try {
-      const [updated] = await this.db
-        .update(schema.organization)
-        .set({ ...updatePayload, updatedAt: new Date() })
-        .where(eq(schema.organization.id, id))
-        .returning();
-
-      if (!updated) throw new Error("Tenant not found");
-      return this.mapTenant(updated);
-    } catch (error: any) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-      if (error.code === "23505" && error.detail?.includes("slug")) {
-        throw new Error("Tenant slug already exists");
+    // If slug is updated, check uniqueness
+    if (input.slug) {
+      const existing = await this.findBySlug(input.slug);
+      if (existing && existing.id !== id) {
+        throw new Error("Tenant with this slug already exists");
       }
-      throw error;
     }
+
+    const { metadata, ...rest } = input;
+
+    const [updated] = await this.db
+      .update(schema.organization)
+      .set({
+        ...rest,
+        ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.organization.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Tenant not found");
+    }
+
+    return this.mapTenant(updated);
   }
 
   async delete(id: string): Promise<void> {
     await this.db.transaction(async (tx) => {
-      // 1. Check existence first
-      const [existing] = await tx
-        .select({ id: schema.organization.id })
-        .from(schema.organization)
-        .where(eq(schema.organization.id, id));
-
-      if (!existing) {
-        throw new Error("Tenant not found");
-      }
-
-      // 2. Proceed with deletes
       await tx
         .delete(schema.member)
         .where(eq(schema.member.organizationId, id));
       await tx
         .delete(schema.invitation)
         .where(eq(schema.invitation.organizationId, id));
-      await tx
+      const [deleted] = await tx
         .delete(schema.organization)
-        .where(eq(schema.organization.id, id));
+        .where(eq(schema.organization.id, id))
+        .returning({ id: schema.organization.id });
+
+      if (!deleted) {
+        throw new Error("Tenant not found");
+      }
     });
   }
 
@@ -183,21 +184,26 @@ export class DrizzleTenantAdapter implements ITenantProvider {
       filters.push(ilike(schema.organization.name, `%${options.search}%`));
     }
 
-    const data = await this.db
+    const dataQuery = this.db
       .select()
       .from(schema.organization)
       .where(filters.length ? and(...filters) : undefined)
       .limit(limit)
       .offset(offset)
-      .orderBy(desc(schema.organization.createdAt));
+      .orderBy(
+        desc(schema.organization.createdAt),
+        desc(schema.organization.id),
+      );
 
     const [countResult] = await this.db
       .select({ count: count(schema.organization.id) })
       .from(schema.organization)
       .where(filters.length ? and(...filters) : undefined);
 
+    const tenants = await dataQuery;
+
     return {
-      data: data.map((d) => this.mapTenant(d)),
+      data: tenants.map((t) => this.mapTenant(t)),
       total: Number(countResult?.count || 0),
     };
   }
