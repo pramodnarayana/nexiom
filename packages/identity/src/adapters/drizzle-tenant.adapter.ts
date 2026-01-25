@@ -90,31 +90,40 @@ export class DrizzleTenantAdapter implements ITenantProvider {
   }
 
   async update(id: string, input: UpdateTenantInput): Promise<TenantInterface> {
-    // If slug is updated, check uniqueness
-    if (input.slug) {
-      const existing = await this.findBySlug(input.slug);
-      if (existing && existing.id !== id) {
-        throw new Error("Tenant with this slug already exists");
+    // Validate slug if provided
+    if (input.slug !== undefined) {
+      const trimmedSlug = input.slug.trim();
+      if (!trimmedSlug) {
+        throw new Error("Tenant slug cannot be empty");
       }
+      input = { ...input, slug: trimmedSlug };
     }
 
     const { metadata, ...rest } = input;
 
-    const [updated] = await this.db
-      .update(schema.organization)
-      .set({
-        ...rest,
-        ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.organization.id, id))
-      .returning();
+    try {
+      const [updated] = await this.db
+        .update(schema.organization)
+        .set({
+          ...rest,
+          ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.organization.id, id))
+        .returning();
 
-    if (!updated) {
-      throw new Error("Tenant not found");
+      if (!updated) {
+        throw new Error("Tenant not found");
+      }
+
+      return this.mapTenant(updated);
+    } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      if (error.code === "23505" && error.detail?.includes("slug")) {
+        throw new Error("Tenant with this slug already exists");
+      }
+      throw error;
     }
-
-    return this.mapTenant(updated);
   }
 
   async delete(id: string): Promise<void> {
