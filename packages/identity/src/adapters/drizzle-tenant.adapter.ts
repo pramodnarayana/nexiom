@@ -1,7 +1,11 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { ITenantProvider, Tenant as TenantInterface } from "../interfaces";
+import {
+  ITenantProvider,
+  Tenant as TenantInterface,
+  UpdateTenantInput,
+} from "../interfaces";
 import * as schema from "../schema";
 
 export class DrizzleTenantAdapter implements ITenantProvider {
@@ -52,6 +56,95 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     throw new Error("Failed to generate unique slug for tenant");
   }
 
+  async createTenant(input: {
+    name: string;
+    slug: string;
+    logo?: string | null;
+  }): Promise<TenantInterface> {
+    const slug = input.slug.trim();
+    if (!slug) {
+      throw new Error("Tenant slug is required");
+    }
+
+    try {
+      const [org] = await this.db
+        .insert(schema.organization)
+        .values({
+          id: uuidv4(),
+          name: input.name,
+          slug,
+          logo: input.logo,
+          createdAt: new Date(),
+          status: "active",
+        })
+        .returning();
+
+      return this.mapTenant(org);
+    } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      if (error.code === "23505") {
+        throw new Error("Tenant with this slug already exists");
+      }
+      throw error;
+    }
+  }
+
+  async update(id: string, input: UpdateTenantInput): Promise<TenantInterface> {
+    // Validate slug if provided
+    if (input.slug !== undefined) {
+      const trimmedSlug = input.slug.trim();
+      if (!trimmedSlug) {
+        throw new Error("Tenant slug cannot be empty");
+      }
+      input = { ...input, slug: trimmedSlug };
+    }
+
+    const { metadata, ...rest } = input;
+
+    try {
+      const [updated] = await this.db
+        .update(schema.organization)
+        .set({
+          ...rest,
+          ...(metadata ? { metadata: JSON.stringify(metadata) } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.organization.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new Error("Tenant not found");
+      }
+
+      return this.mapTenant(updated);
+    } catch (error: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+      if (error.code === "23505" && error.detail?.includes("slug")) {
+        throw new Error("Tenant with this slug already exists");
+      }
+      throw error;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(schema.member)
+        .where(eq(schema.member.organizationId, id));
+      await tx
+        .delete(schema.invitation)
+        .where(eq(schema.invitation.organizationId, id));
+      const [deleted] = await tx
+        .delete(schema.organization)
+        .where(eq(schema.organization.id, id))
+        .returning({ id: schema.organization.id });
+
+      if (!deleted) {
+        throw new Error("Tenant not found");
+      }
+    });
+  }
+
   // ...
 
   private generateSlug(name: string): string {
@@ -86,9 +179,54 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     }));
   }
 
+  async findAll(options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: TenantInterface[]; total: number }> {
+    const page = Math.max(1, Math.floor(Number(options?.page) || 1));
+    const limit = Math.max(1, Math.floor(Number(options?.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const filters = [];
+    if (options?.search) {
+      filters.push(ilike(schema.organization.name, `%${options.search}%`));
+    }
+
+    const dataQuery = this.db
+      .select()
+      .from(schema.organization)
+      .where(filters.length ? and(...filters) : undefined)
+      .limit(limit)
+      .offset(offset)
+      .orderBy(
+        desc(schema.organization.createdAt),
+        desc(schema.organization.id),
+      );
+
+    const [countResult] = await this.db
+      .select({ count: count(schema.organization.id) })
+      .from(schema.organization)
+      .where(filters.length ? and(...filters) : undefined);
+
+    const tenants = await dataQuery;
+
+    return {
+      data: tenants.map((t) => this.mapTenant(t)),
+      total: Number(countResult?.count || 0),
+    };
+  }
+
   async findById(id: string): Promise<TenantInterface | null> {
     const org = await this.db.query.organization.findFirst({
       where: eq(schema.organization.id, id),
+    });
+    return org ? this.mapTenant(org) : null;
+  }
+
+  async findBySlug(slug: string): Promise<TenantInterface | null> {
+    const org = await this.db.query.organization.findFirst({
+      where: eq(schema.organization.slug, slug),
     });
     return org ? this.mapTenant(org) : null;
   }

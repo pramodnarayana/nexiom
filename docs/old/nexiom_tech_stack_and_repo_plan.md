@@ -38,6 +38,7 @@ The repository follows a standard **Turborepo** layout. We strictly separate **S
 │       │   │   │   ├── auth.controller.ts    # Login / Session Endpoints
 │       │   │   │   ├── user.controller.ts    # Profile / Invites Endpoints
 │       │   │   │   └── tenant.controller.ts  # Org / Schema Endpoints
+│       │   │   ├── /notification             # Notification Controller
 │       │   │   ├── /billing                  # Billing Controller
 │       │   │   └── /engine                   # ⚙️ Integration API
 │       │   │       ├── /webhooks             # Ingestion Endpoint

@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { AUTH_PROVIDER } from '@nexiom/identity';
-import { TenantsService } from '../tenants/tenants.service';
+import { AUTH_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -15,7 +14,7 @@ describe('AuthService', () => {
     getHandler: jest.fn(),
   };
 
-  const mockTenantsService = {
+  const mockTenantProvider = {
     findAllForUser: jest.fn(),
   };
 
@@ -28,8 +27,8 @@ describe('AuthService', () => {
           useValue: mockAuthProvider,
         },
         {
-          provide: TenantsService,
-          useValue: mockTenantsService,
+          provide: TENANT_PROVIDER,
+          useValue: mockTenantProvider,
         },
       ],
     }).compile();
@@ -89,12 +88,12 @@ describe('AuthService', () => {
       ];
 
       mockAuthProvider.validateSession.mockResolvedValue(mockSession);
-      mockTenantsService.findAllForUser.mockResolvedValue(mockTenants);
+      mockTenantProvider.findAllForUser.mockResolvedValue(mockTenants);
 
       const result = await service.getEnrichedSession(token);
 
       expect(mockAuthProvider.validateSession).toHaveBeenCalledWith(token);
-      expect(mockTenantsService.findAllForUser).toHaveBeenCalledWith('u1');
+      expect(mockTenantProvider.findAllForUser).toHaveBeenCalledWith('u1');
 
       // Should pick 'org-new' because it is newer
       expect(result?.user.organizationId).toBe('org-new');
@@ -105,7 +104,7 @@ describe('AuthService', () => {
     it('should return enriched session without organizationId if no tenant', async () => {
       const token = 'valid-token';
       const mockSession = { session: { id: 's1' }, user: { id: 'u1' } };
-      mockTenantsService.findAllForUser.mockResolvedValue([]);
+      mockTenantProvider.findAllForUser.mockResolvedValue([]);
 
       mockAuthProvider.validateSession.mockResolvedValue(mockSession);
 
@@ -153,7 +152,7 @@ describe('AuthService', () => {
         providers: [
           AuthService,
           { provide: AUTH_PROVIDER, useValue: providerWithoutSetPassword },
-          { provide: TenantsService, useValue: mockTenantsService },
+          { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
         ],
       }).compile();
       const localService = module.get<AuthService>(AuthService);

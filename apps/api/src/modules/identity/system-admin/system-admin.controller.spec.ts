@@ -1,84 +1,60 @@
+import { Test, TestingModule } from '@nestjs/testing';
 import { SystemAdminController } from './system-admin.controller';
-
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../../../db/schema';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-
-interface MockDb {
-  query: {
-    user: { findMany: jest.Mock; findFirst: jest.Mock };
-    organization: { findFirst: jest.Mock; findMany: jest.Mock };
-    member: { findFirst: jest.Mock };
-    invitation: { findFirst: jest.Mock };
-  };
-  select: jest.Mock;
-  from: jest.Mock;
-  insert: jest.Mock;
-  update: jest.Mock;
-  delete: jest.Mock;
-  transaction: jest.Mock;
-  // Chain helpers
-  limit: jest.Mock;
-  offset: jest.Mock;
-  orderBy: jest.Mock;
-  groupBy: jest.Mock;
-  leftJoin: jest.Mock;
-  set: jest.Mock;
-  where: jest.Mock;
-  values: jest.Mock;
-  returning: jest.Mock;
-}
-
-import { IAuthProvider } from '@nexiom/identity';
+import {
+  AUTH_PROVIDER,
+  USER_PROVIDER,
+  TENANT_PROVIDER,
+} from '@nexiom/identity';
+import { SystemAdminGuard } from '../auth/system-admin.guard';
+import { PlatformGuard } from '../auth/platform.guard';
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
-  let mockDb: MockDb;
-  let mockIdentityProvider: {
-    getSessionFromHeaders: jest.Mock;
-    createInvitation: jest.Mock;
+  const mockHeaders: Record<string, string> = {};
+
+  const mockAuthProvider = {
+    getSessionFromHeaders: jest.fn(),
+    createInvitation: jest.fn(),
   };
 
-  beforeEach(() => {
+  const mockUserProvider = {
+    findById: jest.fn(),
+    findByEmail: jest.fn(),
+    findAll: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    count: jest.fn(),
+  };
+
+  const mockTenantProvider = {
+    findById: jest.fn(),
+    findBySlug: jest.fn(),
+    findAll: jest.fn(),
+    createTenant: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  beforeEach(async () => {
     jest.clearAllMocks();
 
-    mockIdentityProvider = {
-      getSessionFromHeaders: jest.fn(),
-      createInvitation: jest.fn(),
-    };
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [SystemAdminController],
+      providers: [
+        { provide: AUTH_PROVIDER, useValue: mockAuthProvider },
+        { provide: USER_PROVIDER, useValue: mockUserProvider },
+        { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
+      ],
+    })
+      .overrideGuard(SystemAdminGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(PlatformGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
 
-    // Reset mocks with full structure
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
-    mockDb = {
-      query: {
-        user: { findMany: jest.fn(), findFirst: jest.fn() },
-        organization: { findFirst: jest.fn(), findMany: jest.fn() },
-        member: { findFirst: jest.fn() },
-        invitation: { findFirst: jest.fn() },
-      },
-      select: jest.fn().mockReturnThis(),
-      from: jest.fn().mockImplementation(() => Promise.resolve([{ count: 5 }])),
-      insert: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-
-      transaction: jest.fn((cb) => cb(mockDb)), // Mock transaction execution
-      // Chain method definitions
-      limit: jest.fn().mockReturnThis(),
-      offset: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      groupBy: jest.fn().mockReturnThis(),
-      leftJoin: jest.fn().mockReturnThis(),
-      set: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      returning: jest.fn(),
-    };
-
-    controller = new SystemAdminController(
-      mockDb as unknown as NodePgDatabase<typeof schema>,
-      mockIdentityProvider as unknown as IAuthProvider,
-    );
+    controller = module.get<SystemAdminController>(SystemAdminController);
   });
 
   it('should be defined', () => {
@@ -87,149 +63,94 @@ describe('SystemAdminController', () => {
 
   describe('listUsers', () => {
     it('should return paginated users and total count', async () => {
-      const mockUsers = [{ id: '1', name: 'User 1' }];
-      mockDb.query.user.findMany.mockResolvedValue(mockUsers);
+      const mockResult = { data: [{ id: '1', name: 'User 1' }], total: 1 };
+      mockUserProvider.findAll.mockResolvedValue(mockResult);
 
       const result = await controller.listUsers('1', '10');
 
-      expect(result).toEqual({
-        data: mockUsers,
-        total: 5,
+      expect(result).toEqual(mockResult);
+      expect(mockUserProvider.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
       });
-      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10, offset: 0 }),
-      );
-    });
-
-    it('should handle invalid pagination params', async () => {
-      mockDb.query.user.findMany.mockResolvedValue([]);
-
-      await controller.listUsers('bad', 'bad');
-
-      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10, offset: 0 }),
-      );
     });
 
     it('should use default pagination parameters', async () => {
-      mockDb.query.user.findMany.mockResolvedValue([]);
+      mockUserProvider.findAll.mockResolvedValue({ data: [], total: 0 });
 
-      // Testing default params
-      await controller.listUsers();
+      await controller.listUsers(); // Defaults
 
-      expect(mockDb.query.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10, offset: 0 }),
+      expect(mockUserProvider.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+      });
+    });
+  });
+
+  describe('createSystemInvitation', () => {
+    it('should throw BadRequestException if unauthorized', async () => {
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
+
+      await expect(
+        controller.createSystemInvitation(
+          { email: 'test@example.com', role: 'platform_admin' },
+          mockHeaders,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAuthProvider.createInvitation).not.toHaveBeenCalled();
+    });
+
+    it('should create system invitation', async () => {
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+        user: { id: 'admin1' },
+      });
+      const mockInvitation = { id: 'inv1', email: 'test@example.com' };
+      mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
+
+      const result = await controller.createSystemInvitation(
+        { email: 'test@example.com', role: 'platform_admin' },
+        mockHeaders,
       );
+
+      expect(result).toEqual(mockInvitation);
+      expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
+      expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        role: 'platform_admin',
+        organizationId: null,
+        inviterId: 'admin1',
+      });
     });
   });
 
   describe('listTenants', () => {
-    // Define strict interface for our chainable builder
-    interface MockQueryBuilder {
-      leftJoin: jest.Mock;
-      groupBy: jest.Mock;
-      limit: jest.Mock;
-      offset: jest.Mock;
-      orderBy: jest.Mock;
-      execute: () => Promise<unknown>;
-    }
-
-    const createMockBuilder = (result: unknown): MockQueryBuilder => ({
-      leftJoin: jest.fn().mockReturnThis(),
-      groupBy: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      offset: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue(result),
-    });
-
-    it('should return paginated tenants with aggregated user count', async () => {
-      // Mock db.select chain for tenants
-      const mockResult = [{ id: 't1', name: 'Tenant 1', userCount: 2 }];
-
-      // Call 1: Data
-      const mockQueryBuilder = createMockBuilder(mockResult);
-      mockDb.from.mockReturnValueOnce(mockQueryBuilder);
-
-      // Call 2: Total Count
-      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 5 }]));
+    it('should return paginated tenants', async () => {
+      const mockResult = { data: [{ id: 't1', name: 'Tenant 1' }], total: 1 };
+      mockTenantProvider.findAll.mockResolvedValue(mockResult);
 
       const result = await controller.listTenants('1', '10');
 
-      expect(result).toEqual({
-        data: [{ id: 't1', name: 'Tenant 1', userCount: 2 }],
-        total: 5,
+      expect(result).toEqual(mockResult);
+      expect(mockTenantProvider.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
       });
-
-      // Verify specific builder usage
-      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(10);
-      expect(mockQueryBuilder.offset).toHaveBeenCalledWith(0);
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
-    });
-
-    it('should clamp pagination parameters', async () => {
-      const mockBuilder = createMockBuilder([]);
-
-      mockDb.from.mockReturnValueOnce(mockBuilder);
-      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
-
-      // Request 1000 items (should clamp to 100)
-      await controller.listTenants('1', '1000');
-
-      expect(mockBuilder.limit).toHaveBeenCalledWith(100);
-      expect(mockBuilder.offset).toHaveBeenCalledWith(0);
-      expect(mockBuilder.execute).toHaveBeenCalled();
-    });
-
-    it('should use default pagination parameters', async () => {
-      const mockBuilder = createMockBuilder([]);
-      mockDb.from.mockReturnValueOnce(mockBuilder);
-      mockDb.from.mockReturnValueOnce(Promise.resolve([{ count: 0 }]));
-
-      // Testing default params
-      await controller.listTenants();
-
-      expect(mockBuilder.limit).toHaveBeenCalledWith(10);
-      expect(mockBuilder.offset).toHaveBeenCalledWith(0);
-      expect(mockBuilder.execute).toHaveBeenCalled();
     });
   });
 
   describe('getTenant', () => {
-    const createMockBuilder = (result: unknown) => ({
-      leftJoin: jest.fn().mockReturnThis(),
-      groupBy: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      offset: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(), // Added where
-      execute: jest.fn().mockResolvedValue(result),
-    });
-
-    it('should return a single tenant', async () => {
-      const mockResult = [{ id: 't1', name: 'Tenant 1' }];
-      const mockQueryBuilder = createMockBuilder(mockResult);
-
-      // Mock select().from() chain
-      const mockSelect = {
-        from: jest.fn().mockReturnValue(mockQueryBuilder),
-      };
-      mockDb.select.mockReturnValueOnce(mockSelect);
+    it('should return a tenant by ID', async () => {
+      const mockTenant = { id: 't1', name: 'Tenant 1' };
+      mockTenantProvider.findById.mockResolvedValue(mockTenant);
 
       const result = await controller.getTenant('t1');
 
-      expect(result).toEqual(mockResult[0]);
-      expect(mockSelect.from).toHaveBeenCalledWith(schema.organization);
-      expect(mockQueryBuilder.where).toHaveBeenCalled();
-      expect(mockQueryBuilder.execute).toHaveBeenCalled();
+      expect(result).toEqual(mockTenant);
+      expect(mockTenantProvider.findById).toHaveBeenCalledWith('t1');
     });
 
     it('should throw NotFoundException if tenant not found', async () => {
-      const mockQueryBuilder = createMockBuilder([]);
-      const mockSelect = {
-        from: jest.fn().mockReturnValue(mockQueryBuilder),
-      };
-      mockDb.select.mockReturnValueOnce(mockSelect);
+      mockTenantProvider.findById.mockResolvedValue(null);
 
       await expect(controller.getTenant('missing')).rejects.toThrow(
         NotFoundException,
@@ -239,7 +160,7 @@ describe('SystemAdminController', () => {
 
   describe('createTenant', () => {
     it('should throw BadRequestException if slug exists', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue({ id: 'existing' });
+      mockTenantProvider.findBySlug.mockResolvedValue({ id: 'existing' });
 
       await expect(
         controller.createTenant({
@@ -250,13 +171,10 @@ describe('SystemAdminController', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should create tenant if slug is unique', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue(null);
-      mockDb.insert = jest.fn().mockReturnValue({
-        values: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue([{ id: 'new', slug: 'test' }]),
-        }),
-      });
+    it('should create tenant via provider if slug is unique', async () => {
+      mockTenantProvider.findBySlug.mockResolvedValue(null);
+      const mockCreated = { id: 'new', slug: 'test' };
+      mockTenantProvider.createTenant.mockResolvedValue(mockCreated);
 
       const result = await controller.createTenant({
         name: 'Test',
@@ -264,319 +182,160 @@ describe('SystemAdminController', () => {
         logo: '',
       });
 
-      expect(result).toEqual({ id: 'new', slug: 'test' });
+      expect(result).toEqual(mockCreated);
+      expect(mockTenantProvider.createTenant).toHaveBeenCalledWith({
+        name: 'Test',
+        slug: 'test',
+        logo: '',
+      });
     });
   });
 
   describe('createUser', () => {
     it('should throw BadRequestException if email exists', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'existing' });
+      mockUserProvider.findByEmail.mockResolvedValue({ id: 'existing' });
 
       await expect(
         controller.createUser({
           name: 'Test',
-          email: 'test@example.com',
+          email: 'taken@example.com',
           systemRole: 'platform_user',
         }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should create user if email is unique', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue(null);
-      mockDb.insert = jest.fn().mockReturnValue({
-        values: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue([
-            {
-              id: 'new',
-              email: 'test@example.com',
-              name: 'Test',
-              systemRole: 'platform_user',
-            },
-          ]),
-        }),
-      });
+    it('should create user via provider', async () => {
+      mockUserProvider.findByEmail.mockResolvedValue(null);
+      const mockUser = {
+        id: 'u1',
+        email: 'new@example.com',
+        systemRole: 'platform_user',
+      };
+      mockUserProvider.create.mockResolvedValue(mockUser);
 
       const result = await controller.createUser({
         name: 'Test',
-        email: 'test@example.com',
+        email: 'new@example.com',
         systemRole: 'platform_user',
       });
 
-      expect(result).toEqual({
-        id: 'new',
-        email: 'test@example.com',
+      expect(result).toEqual(mockUser);
+      expect(mockUserProvider.create).toHaveBeenCalledWith({
         name: 'Test',
+        email: 'new@example.com',
         systemRole: 'platform_user',
       });
-      expect(mockDb.insert).toHaveBeenCalledWith(schema.user);
+      expect(mockUserProvider.update).not.toHaveBeenCalled();
     });
   });
 
   describe('updateTenant', () => {
     it('should throw NotFoundException if tenant not found', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue(null);
+      mockTenantProvider.findById.mockResolvedValue(null);
 
       await expect(
         controller.updateTenant('missing', { name: 'New' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if new slug overlaps', async () => {
-      mockDb.query.organization.findFirst
-        .mockResolvedValueOnce({ id: 't1', slug: 'old' }) // Existing target
-        .mockResolvedValueOnce({ id: 't2', slug: 'taken' }); // Collision check
+    it('should throw BadRequestException if slug overlaps', async () => {
+      mockTenantProvider.findById.mockResolvedValue({
+        id: 't1',
+        slug: 'old-slug',
+      });
+      mockTenantProvider.findBySlug.mockResolvedValue({
+        id: 't2', // diff ID
+        slug: 'taken',
+      });
 
       await expect(
         controller.updateTenant('t1', { slug: 'taken' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if payload is empty', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
-      // Valid tenant, but empty update
-      await expect(controller.updateTenant('t1', {})).rejects.toThrow(
-        BadRequestException,
-      );
-    });
+    it('should update tenant via provider', async () => {
+      mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
+      // Slug check: returns null or same ID
+      mockTenantProvider.findBySlug.mockResolvedValue(null);
+      const mockUpdated = { id: 't1', name: 'New' };
+      mockTenantProvider.update.mockResolvedValue(mockUpdated);
 
-    it('should update tenant successfully', async () => {
-      // 1. Find existing
-      mockDb.query.organization.findFirst
-        .mockResolvedValueOnce({ id: 't1', slug: 'old' }) // Existing
-        .mockResolvedValueOnce(null); // Collision check (slug change)
+      const result = await controller.updateTenant('t1', { name: 'New' });
 
-      // 2. Update
-      mockDb.update = jest.fn().mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest
-              .fn()
-              .mockResolvedValue([{ id: 't1', slug: 'new-slug', name: 'New' }]),
-          }),
-        }),
-      });
-
-      const result = await controller.updateTenant('t1', {
+      expect(result).toEqual(mockUpdated);
+      expect(mockTenantProvider.update).toHaveBeenCalledWith('t1', {
         name: 'New',
-        slug: 'new-slug',
       });
-
-      expect(result).toEqual({ id: 't1', slug: 'new-slug', name: 'New' });
-      // Verify update called with correct args
-      expect(mockDb.update).toHaveBeenCalled();
-    });
-
-    it('should update specific fields (status only)', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
-
-      const mockReturning = jest
-        .fn()
-        .mockResolvedValue([{ id: 't1', status: 'suspended' }]);
-      const mockSet = jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnValue({ returning: mockReturning }),
-      });
-      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
-
-      await controller.updateTenant('t1', { status: 'suspended' });
-
-      // Verify payload passed to set()
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'suspended' }),
-      );
-    });
-
-    it('should update all fields including metadata', async () => {
-      mockDb.query.organization.findFirst
-        .mockResolvedValueOnce({ id: 't1', slug: 'old' })
-        .mockResolvedValueOnce(null);
-
-      const mockSet = jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue([{ id: 't1' }]),
-        }),
-      });
-      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
-
-      const payload = {
-        name: 'Full Update',
-        slug: 'full-update',
-        logo: 'logo.png',
-        status: 'active' as const,
-        metadata: { key: 'value' },
-      };
-
-      await controller.updateTenant('t1', payload);
-
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'Full Update',
-          slug: 'full-update',
-          logo: 'logo.png',
-          status: 'active',
-          metadata: JSON.stringify({ key: 'value' }),
-        }),
-      );
     });
   });
 
   describe('deleteTenant', () => {
     it('should throw NotFoundException if tenant not found', async () => {
-      mockDb.query.organization.findFirst.mockResolvedValue(null);
+      mockTenantProvider.findById.mockResolvedValue(null);
 
       await expect(controller.deleteTenant('missing')).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('should delete tenant successfully inside transaction', async () => {
-      // 1. Find existing
-      mockDb.query.organization.findFirst.mockResolvedValue({ id: 't1' });
-
-      // 2. Setup Deletes
-      // We expect 3 deletes: member, invitation, organization
-      // We'll mock the delete chain to return a 'where' mock
-      const mockWhere = jest.fn().mockResolvedValue({});
-      mockDb.delete = jest.fn().mockReturnValue({
-        where: mockWhere,
-      });
+    it('should delete tenant via provider', async () => {
+      mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
 
       await controller.deleteTenant('t1');
 
-      expect(mockDb.transaction).toHaveBeenCalled();
-
-      // Verify calls inside transaction
-      // Since it's inside transaction, we check the calls on mockDb (because our mock transaction calls cb(mockDb))
-      // Call 1: Member
-      expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.member);
-      // Call 2: Invitation
-      expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.invitation);
-      // Call 3: Organization
-      expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.organization);
-
-      // Verify 3 executions of 'where'
-      expect(mockWhere).toHaveBeenCalledTimes(3);
+      expect(mockTenantProvider.delete).toHaveBeenCalledWith('t1');
     });
   });
 
   describe('updateUser', () => {
     it('should throw NotFoundException if user not found', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue(null);
+      mockUserProvider.findById.mockResolvedValue(null);
 
       await expect(
         controller.updateUser('missing', { name: 'New' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if payload is empty', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
-
-      await expect(controller.updateUser('u1', {})).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should update user successfully', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
-
-      mockDb.update = jest.fn().mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest
-              .fn()
-              .mockResolvedValue([
-                { id: 'u1', name: 'New Name', systemRole: 'platform_admin' },
-              ]),
-          }),
-        }),
-      });
-
-      const result = await controller.updateUser('u1', {
-        name: 'New Name',
-        systemRole: 'platform_admin',
-      });
-
-      expect(result).toEqual({
+    it('should throw BadRequestException if email overlaps', async () => {
+      mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
-        name: 'New Name',
-        systemRole: 'platform_admin',
+        email: 'old@example.com',
       });
-      expect(mockDb.update).toHaveBeenCalledWith(schema.user);
-    });
-
-    it('should update user specific fields (emailVerified)', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
-
-      const mockSet = jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnValue({
-          returning: jest.fn().mockResolvedValue([{ id: 'u1' }]),
-        }),
+      mockUserProvider.findByEmail.mockResolvedValue({
+        id: 'u2', // Diff ID
+        email: 'taken@example.com',
       });
-      mockDb.update = jest.fn().mockReturnValue({ set: mockSet });
-
-      await controller.updateUser('u1', { emailVerified: true });
-
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({ emailVerified: true }),
-      );
-    });
-
-    it('should throw BadRequestException if email already taken (pre-check)', async () => {
-      // 1. Return payload user first
-      mockDb.query.user.findFirst
-        .mockResolvedValueOnce({ id: 'u1', email: 'old@example.com' })
-        // 2. Return collision user next
-        .mockResolvedValueOnce({ id: 'u2', email: 'taken@example.com' });
 
       await expect(
         controller.updateUser('u1', { email: 'taken@example.com' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException on race condition (duplicate key)', async () => {
-      // 1. Return payload user (user exists)
-      mockDb.query.user.findFirst.mockResolvedValueOnce({
-        id: 'u1',
-        email: 'old@example.com',
+    it('should update user via provider', async () => {
+      mockUserProvider.findById.mockResolvedValue({ id: 'u1' });
+      mockUserProvider.update.mockResolvedValue({ id: 'u1', name: 'New' });
+
+      const result = await controller.updateUser('u1', { name: 'New' });
+
+      expect(result).toEqual({ id: 'u1', name: 'New' });
+      expect(mockUserProvider.update).toHaveBeenCalledWith('u1', {
+        name: 'New',
       });
-
-      // 2. Return null for uniqueness check (simulate pre-check pass)
-      mockDb.query.user.findFirst.mockResolvedValueOnce(null);
-
-      // 3. Mock db update to throw unique constraint error (race condition hit)
-      mockDb.update = jest.fn().mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest
-              .fn()
-              .mockRejectedValue(
-                new Error('duplicate key value violates unique constraint'),
-              ),
-          }),
-        }),
-      });
-
-      await expect(
-        controller.updateUser('u1', { email: 'race@example.com' }),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('getUser', () => {
-    it('should return a single user', async () => {
-      const mockUser = { id: 'u1', name: 'User 1' };
-      mockDb.query.user.findFirst.mockResolvedValue(mockUser);
+    it('should return user by ID', async () => {
+      const mockUser = { id: 'u1' };
+      mockUserProvider.findById.mockResolvedValue(mockUser);
 
       const result = await controller.getUser('u1');
 
       expect(result).toEqual(mockUser);
-
-      expect(mockDb.query.user.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.anything() }),
-      );
     });
 
     it('should throw NotFoundException if user not found', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue(null);
+      mockUserProvider.findById.mockResolvedValue(null);
 
       await expect(controller.getUser('missing')).rejects.toThrow(
         NotFoundException,
@@ -586,127 +345,90 @@ describe('SystemAdminController', () => {
 
   describe('deleteUser', () => {
     it('should throw NotFoundException if user not found', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue(null);
+      mockUserProvider.findById.mockResolvedValue(null);
 
       await expect(controller.deleteUser('missing')).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('should delete user and dependencies transactionally', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({
-        id: 'u1',
-        systemRole: 'platform_user',
-      }); // Normal user
-
-      const mockWhere = jest.fn().mockResolvedValue({});
-
-      mockDb.delete = jest.fn().mockReturnValue({
-        where: mockWhere,
-      });
-
-      await controller.deleteUser('u1');
-
-      expect(mockDb.transaction).toHaveBeenCalled();
-
-      // Verify deletion order inside transaction
-      // 1. Memberships
-      expect(mockDb.delete).toHaveBeenNthCalledWith(1, schema.member);
-      // 2. Invitations (Inviter)
-      expect(mockDb.delete).toHaveBeenNthCalledWith(2, schema.invitation);
-      // 3. Invitations (Recipient)
-      expect(mockDb.delete).toHaveBeenNthCalledWith(3, schema.invitation);
-      // 4. Sessions
-      expect(mockDb.delete).toHaveBeenNthCalledWith(4, schema.session);
-      // 5. Accounts
-      expect(mockDb.delete).toHaveBeenNthCalledWith(5, schema.account);
-      // 6. User
-      expect(mockDb.delete).toHaveBeenNthCalledWith(6, schema.user);
-
-      expect(mockWhere).toHaveBeenCalledTimes(6);
-    });
-
     it('should prevent deleting the last platform admin', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({
+      mockUserProvider.findById.mockResolvedValue({
         id: 'admin1',
         systemRole: 'platform_admin',
       });
-
-      // Mock db.select().from().where()
-      const mockBuilder = {
-        where: jest.fn().mockResolvedValue([{ count: 0 }]),
-      };
-      // mockDb.from returns the builder (because db.select() returns 'this', and 'this.from' is called)
-      mockDb.from.mockReturnValueOnce(mockBuilder);
+      // count returns 1 (only this user left)
+      mockUserProvider.count.mockResolvedValue(1);
 
       await expect(controller.deleteUser('admin1')).rejects.toThrow(
         BadRequestException,
       );
+      expect(mockUserProvider.count).toHaveBeenCalledWith({
+        systemRole: 'platform_admin',
+      });
     });
 
     it('should allow deleting platform admin if others exist', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({
+      mockUserProvider.findById.mockResolvedValue({
         id: 'admin1',
         systemRole: 'platform_admin',
       });
-
-      // Mock db.select().from().where()
-      const mockBuilder = {
-        where: jest.fn().mockResolvedValue([{ count: 1 }]),
-      };
-      mockDb.from.mockReturnValueOnce(mockBuilder);
-
-      const mockWhere = jest.fn().mockResolvedValue({});
-      mockDb.delete = jest.fn().mockReturnValue({ where: mockWhere });
+      // count returns 2
+      mockUserProvider.count.mockResolvedValue(2);
 
       await controller.deleteUser('admin1');
 
-      expect(mockDb.transaction).toHaveBeenCalled();
+      expect(mockUserProvider.delete).toHaveBeenCalledWith('admin1');
+    });
+
+    it('should delete normal user', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+        systemRole: 'platform_user',
+      });
+
+      await controller.deleteUser('u1');
+
+      expect(mockUserProvider.delete).toHaveBeenCalledWith('u1');
+      // Should not check admin count for normal user
+      expect(mockUserProvider.count).not.toHaveBeenCalled();
     });
   });
 
   describe('inviteUser', () => {
-    const mockHeaders = {};
-
     it('should throw NotFoundException if user not found', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue(null);
+      mockUserProvider.findById.mockResolvedValue(null);
 
       await expect(
-        controller.inviteUser('missing', mockHeaders as Record<string, string>),
+        controller.inviteUser('missing', mockHeaders),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if unauthorized (no session)', async () => {
-      mockDb.query.user.findFirst.mockResolvedValue({ id: 'u1' });
-      mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(null);
+    it('should throw BadRequestException if unauthorized', async () => {
+      mockUserProvider.findById.mockResolvedValue({ id: 'u1' });
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
 
-      await expect(
-        controller.inviteUser('u1', mockHeaders as Record<string, string>),
-      ).rejects.toThrow(BadRequestException);
+      await expect(controller.inviteUser('u1', mockHeaders)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
-    it('should create system invitation successfully', async () => {
-      const mockUser = {
+    it('should create system invite', async () => {
+      mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
         email: 'test@example.com',
         systemRole: 'platform_admin',
-      };
-      const mockSession = { user: { id: 'admin1' } };
+      });
+      mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
+        user: { id: 'admin1' },
+      });
 
-      mockDb.query.user.findFirst.mockResolvedValue(mockUser);
-      mockIdentityProvider.getSessionFromHeaders.mockResolvedValue(mockSession);
-      mockIdentityProvider.createInvitation.mockResolvedValue({ id: 'inv1' });
+      await controller.inviteUser('u1', mockHeaders);
 
-      const result = await controller.inviteUser(
-        'u1',
-        mockHeaders as Record<string, string>,
-      );
-
-      expect(result).toEqual({ success: true });
-      expect(mockIdentityProvider.createInvitation).toHaveBeenCalledWith({
-        email: mockUser.email,
-        role: mockUser.systemRole,
-        organizationId: null,
+      expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        role: 'platform_admin',
+        organizationId: null, // System invite
         inviterId: 'admin1',
       });
     });

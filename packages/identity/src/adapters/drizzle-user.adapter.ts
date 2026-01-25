@@ -1,5 +1,5 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, and, ilike, count, desc } from "drizzle-orm";
 import {
   IUserProvider,
   CreateUserInput,
@@ -17,7 +17,25 @@ export class DrizzleUserAdapter implements IUserProvider {
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
-    return await this.authProvider.createUser(input);
+    const user = await this.authProvider.createUser(input);
+
+    // If systemRole is provided, we need to update the user record immediately
+    // because the Auth Provider might not support custom fields during creation
+    if (input.systemRole) {
+      try {
+        return await this.update(user.id, { systemRole: input.systemRole });
+      } catch (error) {
+        // Compensating transaction: best‑effort cleanup without masking the root cause
+        try {
+          await this.delete(user.id);
+        } catch (cleanupError) {
+          void cleanupError; // optional: log cleanupError
+        }
+        throw error;
+      }
+    }
+
+    return user;
   }
 
   async update(id: string, input: UpdateUserInput): Promise<UserInterface> {
@@ -84,26 +102,112 @@ export class DrizzleUserAdapter implements IUserProvider {
     return user ? this.mapUser(user) : null;
   }
 
-  async findAll(tenantId?: string): Promise<UserInterface[]> {
-    if (tenantId) {
-      const users = await this.db
-        .select({
-          user: schema.user,
-        })
+  async findAll(options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    tenantId?: string;
+    systemRole?: string;
+  }): Promise<{ data: UserInterface[]; total: number }> {
+    const page = Math.max(1, Math.floor(Number(options?.page) || 1));
+    const MAX_LIMIT = 100;
+    const limit = Math.min(
+      MAX_LIMIT,
+      Math.max(1, Math.floor(Number(options?.limit) || 10)),
+    );
+    const offset = (page - 1) * limit;
+
+    const filters = this.buildUserFilters(options);
+
+    if (options?.tenantId) {
+      // Tenant-scoped (requires Join)
+      const dataQuery = this.db
+        .select({ user: schema.user })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(eq(schema.member.organizationId, tenantId));
+        .where(filters.length ? and(...filters) : undefined)
+        .limit(limit)
+        .offset(offset)
+        .orderBy(desc(schema.user.createdAt));
 
-      return users.map((u) => this.mapUser(u.user));
+      const [countResult] = await this.db
+        .select({ count: count(schema.user.id) })
+        .from(schema.user)
+        .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
+        .where(filters.length ? and(...filters) : undefined);
+
+      const users = await dataQuery;
+      return {
+        data: users.map((u) => this.mapUser(u.user)),
+        total: Number(countResult?.count || 0),
+      };
+    } else {
+      // Global list (Admin)
+      const dataQuery = this.db
+        .select()
+        .from(schema.user)
+        .where(filters.length ? and(...filters) : undefined)
+        .limit(limit)
+        .offset(offset)
+        .orderBy(desc(schema.user.createdAt));
+
+      const [countResult] = await this.db
+        .select({ count: count(schema.user.id) })
+        .from(schema.user)
+        .where(filters.length ? and(...filters) : undefined);
+
+      const users = await dataQuery;
+      return {
+        data: users.map((u) => this.mapUser(u)),
+        total: Number(countResult?.count || 0),
+      };
+    }
+  }
+
+  async count(filters?: {
+    tenantId?: string;
+    search?: string;
+    systemRole?: string;
+  }): Promise<number> {
+    const whereConditions = this.buildUserFilters(filters);
+
+    if (filters?.tenantId) {
+      const [result] = await this.db
+        .select({ count: count(schema.user.id) })
+        .from(schema.user)
+        .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
+        .where(whereConditions.length ? and(...whereConditions) : undefined);
+      return Number(result?.count || 0);
     }
 
-    // Global list (careful with this in prod)
-    const users = await this.db
-      .select()
+    const [result] = await this.db
+      .select({ count: count(schema.user.id) })
       .from(schema.user)
-      .limit(100)
-      .orderBy(schema.user.createdAt);
-    return users.map((u) => this.mapUser(u));
+      .where(whereConditions.length ? and(...whereConditions) : undefined);
+
+    return Number(result?.count || 0);
+  }
+
+  private buildUserFilters(filters?: {
+    tenantId?: string;
+    search?: string;
+    systemRole?: string;
+  }) {
+    const whereConditions = [];
+
+    if (filters?.search) {
+      whereConditions.push(ilike(schema.user.email, `%${filters.search}%`));
+    }
+
+    if (filters?.systemRole) {
+      whereConditions.push(eq(schema.user.systemRole, filters.systemRole));
+    }
+
+    if (filters?.tenantId) {
+      whereConditions.push(eq(schema.member.organizationId, filters.tenantId));
+    }
+
+    return whereConditions;
   }
 
   async forceVerifyEmail(userId: string): Promise<void> {

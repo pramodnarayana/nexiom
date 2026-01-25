@@ -43,7 +43,7 @@ export class UsersController {
    * @returns List of users.
    */
   @Get()
-  findAll(@Req() req: Request & { user: { organizationId?: string } }) {
+  async findAll(@Req() req: Request & { user: { organizationId?: string } }) {
     // AuthGuard guarantees session is valid and populates user info
     // We use 'organizationId' (mapped in getSessionWithOrg)
     const tenantId = req.user?.organizationId;
@@ -55,7 +55,8 @@ export class UsersController {
       return [];
     }
 
-    return this.userProvider.findAll(tenantId);
+    const result = await this.userProvider.findAll({ tenantId });
+    return result;
   }
 
   /**

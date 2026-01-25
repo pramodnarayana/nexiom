@@ -94,12 +94,12 @@ describe('UsersController', () => {
       } as unknown as Request & { user: { organizationId?: string } };
       const users = [{ id: '1' }];
 
-      mockUserProvider.findAll.mockResolvedValue(users);
+      mockUserProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
       const result = await controller.findAll(req);
-      expect(result).toEqual(users);
+      expect(result).toEqual({ data: users, total: 1 });
 
-      expect(mockUserProvider.findAll).toHaveBeenCalledWith(tenantId);
+      expect(mockUserProvider.findAll).toHaveBeenCalledWith({ tenantId });
     });
   });
 
