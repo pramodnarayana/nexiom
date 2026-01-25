@@ -8,10 +8,17 @@ import {
   UnauthorizedException,
   Inject,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { USER_PROVIDER, IUserProvider, Session, User } from '@nexiom/identity';
-import { TenantsService } from '../tenants/tenants.service';
+import {
+  USER_PROVIDER,
+  IUserProvider,
+  Session,
+  User,
+  TENANT_PROVIDER,
+  ITenantProvider,
+} from '@nexiom/identity';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import { Signup, CompleteInvite } from '../users/users.validation';
@@ -19,7 +26,6 @@ import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { InvitationsService } from '../invitations/invitations.service';
 import { toWebHeaders } from '../../../shared/utils/headers.util';
-import { BadRequestException } from '@nestjs/common';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -39,7 +45,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
-    private readonly tenantsService: TenantsService,
+    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
     private readonly invitationsService: InvitationsService,
   ) {}
 
@@ -83,7 +89,7 @@ export class AuthController {
       throw new UnauthorizedException('No Session Found');
     }
 
-    return this.tenantsService.provisionTenantForUser(sessionData.user.id);
+    return this.tenantProvider.provisionTenantForUser(sessionData.user.id);
   }
 
   /**

@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { USER_PROVIDER } from '@nexiom/identity';
-import { TenantsService } from '../tenants/tenants.service';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Request, Response } from 'express';
 
@@ -36,7 +35,7 @@ describe('AuthController', () => {
     forceVerifyEmail: jest.fn(),
   };
 
-  const mockTenantsService = {
+  const mockTenantProvider = {
     provisionTenantForUser: jest.fn(),
   };
 
@@ -58,8 +57,8 @@ describe('AuthController', () => {
           useValue: mockUserProvider,
         },
         {
-          provide: TenantsService,
-          useValue: mockTenantsService,
+          provide: TENANT_PROVIDER,
+          useValue: mockTenantProvider,
         },
         {
           provide: InvitationsService,
@@ -91,7 +90,7 @@ describe('AuthController', () => {
       };
 
       mockAuthService.getSessionFromHeaders.mockResolvedValue(mockSessionData);
-      mockTenantsService.provisionTenantForUser.mockResolvedValue({
+      mockTenantProvider.provisionTenantForUser.mockResolvedValue({
         id: 'org-123',
         name: 'New Org',
       });
@@ -99,7 +98,7 @@ describe('AuthController', () => {
       const result = await controller.provisionTenant(mockRequest);
 
       expect(result).toBeDefined();
-      expect(mockTenantsService.provisionTenantForUser).toHaveBeenCalledWith(
+      expect(mockTenantProvider.provisionTenantForUser).toHaveBeenCalledWith(
         'user-123',
       );
     });

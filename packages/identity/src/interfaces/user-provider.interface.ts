@@ -6,6 +6,7 @@ export interface CreateUserInput {
   firstName?: string;
   lastName?: string;
   role?: string;
+  systemRole?: string;
   companyName?: string; // Optional: for auto-provisioning
 }
 

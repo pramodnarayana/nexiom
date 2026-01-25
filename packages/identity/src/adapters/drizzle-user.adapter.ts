@@ -17,7 +17,17 @@ export class DrizzleUserAdapter implements IUserProvider {
 
   async create(input: CreateUserInput): Promise<UserInterface> {
     // Delegate to AuthProvider to handle account creation (and password hashing)
-    return await this.authProvider.createUser(input);
+    const user = await this.authProvider.createUser(input);
+
+    // If systemRole is provided, we need to update the user record immediately
+    // because the Auth Provider might not support custom fields during creation
+    if (input.systemRole) {
+      await this.update(user.id, { systemRole: input.systemRole });
+      const updated = await this.findById(user.id);
+      if (updated) return updated;
+    }
+
+    return user;
   }
 
   async update(id: string, input: UpdateUserInput): Promise<UserInterface> {
@@ -90,8 +100,8 @@ export class DrizzleUserAdapter implements IUserProvider {
     search?: string;
     tenantId?: string;
   }): Promise<{ data: UserInterface[]; total: number }> {
-    const page = options?.page || 1;
-    const limit = options?.limit || 10;
+    const page = Math.max(1, Number(options?.page) || 1);
+    const limit = Math.max(1, Number(options?.limit) || 10);
     const offset = (page - 1) * limit;
 
     const filters = [];

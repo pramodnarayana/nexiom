@@ -7,14 +7,15 @@ import {
   Session,
   User,
   CreateUserInput,
+  TENANT_PROVIDER,
+  ITenantProvider,
 } from '@nexiom/identity';
-import { TenantsService } from '../tenants/tenants.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
-    private readonly tenantsService: TenantsService,
+    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
   ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
@@ -40,7 +41,7 @@ export class AuthService {
     const { session, user } = validSession;
 
     // Enrichment: Check if user has a tenant
-    const tenants = await this.tenantsService.findAllForUser(user.id);
+    const tenants = await this.tenantProvider.findAllForUser(user.id);
     // Deterministic selection: Sort by creation date (newest first)
     // using slice() to avoid mutating the original array
     const sortedTenants = tenants

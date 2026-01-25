@@ -206,13 +206,12 @@ describe('SystemAdminController', () => {
 
     it('should create user via provider', async () => {
       mockUserProvider.findByEmail.mockResolvedValue(null);
-      const mockUser = { id: 'u1', email: 'new@example.com' }; // Initial return
-      mockUserProvider.create.mockResolvedValue(mockUser);
-      // Simulate subsequent fetch for systemRole update if needed
-      mockUserProvider.findById.mockResolvedValue({
-        ...mockUser,
+      const mockUser = {
+        id: 'u1',
+        email: 'new@example.com',
         systemRole: 'platform_user',
-      });
+      };
+      mockUserProvider.create.mockResolvedValue(mockUser);
 
       const result = await controller.createUser({
         name: 'Test',
@@ -220,12 +219,13 @@ describe('SystemAdminController', () => {
         systemRole: 'platform_user',
       });
 
-      // Matches controller logic: if systemRole, fetches updated
-      expect(result).toEqual({ ...mockUser, systemRole: 'platform_user' });
-      expect(mockUserProvider.create).toHaveBeenCalled();
-      expect(mockUserProvider.update).toHaveBeenCalledWith('u1', {
+      expect(result).toEqual(mockUser);
+      expect(mockUserProvider.create).toHaveBeenCalledWith({
+        name: 'Test',
+        email: 'new@example.com',
         systemRole: 'platform_user',
       });
+      expect(mockUserProvider.update).not.toHaveBeenCalled();
     });
   });
 

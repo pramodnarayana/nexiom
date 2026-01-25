@@ -135,15 +135,10 @@ export class SystemAdminController {
       throw new BadRequestException('User with this email already exists');
     }
 
-    // TODO: Add systemRole to CreateUserInput and Adapter so we can do this in one step
+    // Now uses single-step creation via Adapter logic
     const user = await this.userProvider.create({
       ...input,
     });
-
-    if (input.systemRole) {
-      await this.userProvider.update(user.id, { systemRole: input.systemRole });
-      return this.userProvider.findById(user.id);
-    }
 
     return user;
   }

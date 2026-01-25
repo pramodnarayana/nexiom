@@ -186,7 +186,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const data = await this.db
       .select()
       .from(schema.organization)
-      .where(and(...filters))
+      .where(filters.length ? and(...filters) : undefined)
       .limit(limit)
       .offset(offset)
       .orderBy(desc(schema.organization.createdAt));
@@ -194,7 +194,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const [countResult] = await this.db
       .select({ count: count(schema.organization.id) })
       .from(schema.organization)
-      .where(and(...filters));
+      .where(filters.length ? and(...filters) : undefined);
 
     return {
       data: data.map((d) => this.mapTenant(d)),
