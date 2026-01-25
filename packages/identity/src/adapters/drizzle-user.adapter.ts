@@ -22,7 +22,13 @@ export class DrizzleUserAdapter implements IUserProvider {
     // If systemRole is provided, we need to update the user record immediately
     // because the Auth Provider might not support custom fields during creation
     if (input.systemRole) {
-      return this.update(user.id, { systemRole: input.systemRole });
+      try {
+        return await this.update(user.id, { systemRole: input.systemRole });
+      } catch (error) {
+        // Compensating transaction: delete user if role update fails to maintain consistency
+        await this.delete(user.id);
+        throw error;
+      }
     }
 
     return user;
@@ -99,8 +105,8 @@ export class DrizzleUserAdapter implements IUserProvider {
     tenantId?: string;
     systemRole?: string;
   }): Promise<{ data: UserInterface[]; total: number }> {
-    const page = Math.max(1, Number(options?.page) || 1);
-    const limit = Math.max(1, Number(options?.limit) || 10);
+    const page = Math.max(1, Math.floor(Number(options?.page) || 1));
+    const limit = Math.max(1, Math.floor(Number(options?.limit) || 10));
     const offset = (page - 1) * limit;
 
     const filters = this.buildUserFilters(options);
