@@ -105,22 +105,10 @@ export class DrizzleUserAdapter implements IUserProvider {
     const limit = Math.max(1, Number(options?.limit) || 10);
     const offset = (page - 1) * limit;
 
-    const filters = [];
-    if (options?.search) {
-      filters.push(
-        ilike(schema.user.email, `%${options.search}%`),
-        // OR name search if needed, but keeping simple for now
-      );
-    }
-
-    if (options?.systemRole) {
-      filters.push(eq(schema.user.systemRole, options.systemRole));
-    }
+    const filters = this.buildUserFilters(options);
 
     if (options?.tenantId) {
       // Tenant-scoped (requires Join)
-      filters.push(eq(schema.member.organizationId, options.tenantId));
-
       const dataQuery = this.db
         .select({ user: schema.user })
         .from(schema.user)
@@ -169,18 +157,9 @@ export class DrizzleUserAdapter implements IUserProvider {
     search?: string;
     systemRole?: string;
   }): Promise<number> {
-    const whereConditions = [];
-
-    if (filters?.search) {
-      whereConditions.push(ilike(schema.user.email, `%${filters.search}%`));
-    }
-
-    if (filters?.systemRole) {
-      whereConditions.push(eq(schema.user.systemRole, filters.systemRole));
-    }
+    const whereConditions = this.buildUserFilters(filters);
 
     if (filters?.tenantId) {
-      whereConditions.push(eq(schema.member.organizationId, filters.tenantId));
       const [result] = await this.db
         .select({ count: count(schema.user.id) })
         .from(schema.user)
@@ -195,6 +174,28 @@ export class DrizzleUserAdapter implements IUserProvider {
       .where(whereConditions.length ? and(...whereConditions) : undefined);
 
     return Number(result?.count || 0);
+  }
+
+  private buildUserFilters(filters?: {
+    tenantId?: string;
+    search?: string;
+    systemRole?: string;
+  }) {
+    const whereConditions = [];
+
+    if (filters?.search) {
+      whereConditions.push(ilike(schema.user.email, `%${filters.search}%`));
+    }
+
+    if (filters?.systemRole) {
+      whereConditions.push(eq(schema.user.systemRole, filters.systemRole));
+    }
+
+    if (filters?.tenantId) {
+      whereConditions.push(eq(schema.member.organizationId, filters.tenantId));
+    }
+
+    return whereConditions;
   }
 
   async forceVerifyEmail(userId: string): Promise<void> {
