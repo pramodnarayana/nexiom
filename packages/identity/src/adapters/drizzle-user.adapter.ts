@@ -99,6 +99,7 @@ export class DrizzleUserAdapter implements IUserProvider {
     limit?: number;
     search?: string;
     tenantId?: string;
+    systemRole?: string;
   }): Promise<{ data: UserInterface[]; total: number }> {
     const page = Math.max(1, Number(options?.page) || 1);
     const limit = Math.max(1, Number(options?.limit) || 10);
@@ -110,6 +111,10 @@ export class DrizzleUserAdapter implements IUserProvider {
         ilike(schema.user.email, `%${options.search}%`),
         // OR name search if needed, but keeping simple for now
       );
+    }
+
+    if (options?.systemRole) {
+      filters.push(eq(schema.user.systemRole, options.systemRole));
     }
 
     if (options?.tenantId) {

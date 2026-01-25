@@ -30,6 +30,7 @@ export interface IUserProvider {
     limit?: number;
     search?: string;
     tenantId?: string;
+    systemRole?: string;
   }): Promise<{ data: User[]; total: number }>;
 
   // Kept for backward compatibility if needed, but the above covers it

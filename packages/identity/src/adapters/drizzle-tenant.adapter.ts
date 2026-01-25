@@ -174,8 +174,8 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     limit?: number;
     search?: string;
   }): Promise<{ data: TenantInterface[]; total: number }> {
-    const page = options?.page || 1;
-    const limit = options?.limit || 10;
+    const page = Math.max(1, Number(options?.page) || 1);
+    const limit = Math.max(1, Number(options?.limit) || 10);
     const offset = (page - 1) * limit;
 
     const filters = [];
