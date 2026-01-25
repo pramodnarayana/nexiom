@@ -22,9 +22,7 @@ export class DrizzleUserAdapter implements IUserProvider {
     // If systemRole is provided, we need to update the user record immediately
     // because the Auth Provider might not support custom fields during creation
     if (input.systemRole) {
-      await this.update(user.id, { systemRole: input.systemRole });
-      const updated = await this.findById(user.id);
-      if (updated) return updated;
+      return this.update(user.id, { systemRole: input.systemRole });
     }
 
     return user;
