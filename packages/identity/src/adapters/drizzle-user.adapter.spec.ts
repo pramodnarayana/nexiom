@@ -136,8 +136,18 @@ describe("DrizzleUserAdapter", () => {
 
     // With systemRole, update throws -> triggers delete compensation
     const failing = new DrizzleUserAdapter(db, auth);
+
+    // Ensure we get a known ID "u2" for this specific call to verify compensation targets correct ID
+    auth.createUser = vi.fn((input: CreateUserInput) =>
+      Promise.resolve({
+        ...mkUser({ id: "u2", email: input.email }),
+        systemRole: null, // Auth provider creates user without system role initially
+      }),
+    );
+
     db.query.user.findFirst.mockRejectedValueOnce(new Error("update failed"));
     const spyDelete = vi.spyOn(failing, "delete").mockResolvedValue();
+
     await expect(
       failing.create({
         email: "x@y.com",
@@ -145,7 +155,7 @@ describe("DrizzleUserAdapter", () => {
         systemRole: "admin",
       } as CreateUserInput),
     ).rejects.toThrow("update failed");
-    expect(spyDelete).toHaveBeenCalled();
+    expect(spyDelete).toHaveBeenCalledWith("u2");
   });
 
   it("update handles password via auth provider; updates fields; throws if missing user after update", async () => {
