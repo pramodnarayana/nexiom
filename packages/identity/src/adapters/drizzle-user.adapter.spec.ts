@@ -36,6 +36,25 @@ interface MockDb {
   offset: MockFunc;
   orderBy: MockFunc;
 }
+const mockChainedQuery = (result: unknown) => {
+  const chain: Record<string, any> = {
+    then: (onfulfilled: (value: unknown) => unknown) =>
+      Promise.resolve(result).then(onfulfilled),
+  };
+  const methods = [
+    "from",
+    "innerJoin",
+    "where",
+    "limit",
+    "offset",
+    "orderBy",
+    "select",
+  ];
+  methods.forEach((m) => {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  });
+  return chain;
+};
 
 const mkDb = () => {
   const q = {
@@ -243,25 +262,12 @@ describe("DrizzleUserAdapter", () => {
     const users = [mkUser({ id: "u1" }), mkUser({ id: "u2" })];
 
     // tenant-scoped path (innerJoin)
-    db.select.mockReturnValueOnce({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: () => ({
-              offset: () => ({
-                orderBy: () =>
-                  Promise.resolve([{ user: users[0] }, { user: users[1] }]),
-              }),
-            }),
-          }),
-        }),
-      }),
-    });
-    db.select.mockReturnValueOnce({
-      from: () => ({
-        innerJoin: () => ({ where: () => Promise.resolve([{ count: 2 }]) }),
-      }),
-    });
+    // tenant-scoped path (innerJoin)
+    db.select
+      .mockReturnValueOnce(
+        mockChainedQuery([{ user: users[0] }, { user: users[1] }]),
+      )
+      .mockReturnValueOnce(mockChainedQuery([{ count: 2 }]));
 
     const scoped = await adapter.findAll({
       tenantId: "o1",
@@ -273,18 +279,10 @@ describe("DrizzleUserAdapter", () => {
     expect(scoped.total).toBe(2);
 
     // global path
-    db.select.mockReturnValueOnce({
-      from: () => ({
-        where: () => ({
-          limit: () => ({
-            offset: () => ({ orderBy: () => Promise.resolve(users) }),
-          }),
-        }),
-      }),
-    });
-    db.select.mockReturnValueOnce({
-      from: () => ({ where: () => Promise.resolve([{ count: 2 }]) }),
-    });
+    // global path
+    db.select
+      .mockReturnValueOnce(mockChainedQuery(users))
+      .mockReturnValueOnce(mockChainedQuery([{ count: 2 }]));
 
     const global = await adapter.findAll({
       page: 1,
@@ -301,19 +299,15 @@ describe("DrizzleUserAdapter", () => {
     const adapter = new DrizzleUserAdapter(db, auth);
 
     // tenant path
-    db.select.mockReturnValueOnce({
-      from: () => ({
-        innerJoin: () => ({ where: () => Promise.resolve([{ count: 5 }]) }),
-      }),
-    });
+    // tenant path
+    db.select.mockReturnValueOnce(mockChainedQuery([{ count: 5 }]));
     expect(
       await adapter.count({ tenantId: "o1", search: "a", systemRole: "admin" }),
     ).toBe(5);
 
     // global path
-    db.select.mockReturnValueOnce({
-      from: () => ({ where: () => Promise.resolve([{ count: 3 }]) }),
-    });
+    // global path
+    db.select.mockReturnValueOnce(mockChainedQuery([{ count: 3 }]));
     expect(await adapter.count({ search: "a", systemRole: "admin" })).toBe(3);
   });
 

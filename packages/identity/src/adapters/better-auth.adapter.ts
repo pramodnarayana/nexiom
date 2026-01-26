@@ -162,7 +162,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     const dbUser = await this.db.query.user.findFirst({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.user.id, result.user.id),
+      where: eq(schema.user.id, result.user.id as string),
     });
 
     if (!dbUser) {
@@ -223,14 +223,14 @@ export class BetterAuthAdapter implements IAuthProvider {
     // Resolve Session from DB for consistency
     const dbSession = await this.db.query.session.findFirst({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.session.token, result.token),
+      where: eq(schema.session.token, result.token as string),
     });
 
     if (!dbSession) throw new Error("Session not found after login");
 
     const dbUser = await this.db.query.user.findFirst({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.user.id, result.user.id),
+      where: eq(schema.user.id, result.user.id as string),
     });
 
     if (!dbUser) throw new Error("User not found after login");
@@ -357,9 +357,9 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     // Validate Date fields
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const expiresAt = new Date(invData.expiresAt);
+    const expiresAt = new Date(invData.expiresAt as string);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const createdAt = new Date(invData.createdAt);
+    const createdAt = new Date(invData.createdAt as string);
 
     if (Number.isNaN(expiresAt.getTime())) {
       throw new TypeError(
