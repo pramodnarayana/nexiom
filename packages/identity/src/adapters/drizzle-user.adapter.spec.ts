@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DrizzleUserAdapter } from "./drizzle-user.adapter";
 import * as schema from "../schema";
@@ -8,22 +7,53 @@ import type {
   CreateUserInput,
   UpdateUserInput,
 } from "../interfaces";
+import { eq } from "drizzle-orm";
+
+type MockFunc = ReturnType<typeof vi.fn>;
+
+interface MockTx {
+  delete: MockFunc;
+  where: MockFunc;
+  update: MockFunc;
+  set: MockFunc;
+}
+
+interface MockDb {
+  query: {
+    user: { findFirst: MockFunc };
+    member: { findFirst: MockFunc };
+    invitation: { findFirst: MockFunc };
+  };
+  transaction: MockFunc;
+  delete: MockFunc;
+  update: MockFunc;
+  set: MockFunc;
+  where: MockFunc;
+  select: MockFunc;
+  from: MockFunc;
+  innerJoin: MockFunc;
+  limit: MockFunc;
+  offset: MockFunc;
+  orderBy: MockFunc;
+}
 
 const mkDb = () => {
-  const q: any = {
+  const q = {
     user: { findFirst: vi.fn() },
     member: { findFirst: vi.fn() },
     invitation: { findFirst: vi.fn() },
   };
-  const tx: any = {
+
+  const tx: MockTx = {
     delete: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
   };
-  const db: any = {
+
+  const db = {
     query: q,
-    transaction: vi.fn(async (fn: any) => fn(tx)),
+    transaction: vi.fn((fn: (tx: MockTx) => unknown) => fn(tx)),
     delete: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
@@ -34,28 +64,31 @@ const mkDb = () => {
     limit: vi.fn().mockReturnThis(),
     offset: vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
-  };
+  } as unknown as MockDb;
+
   db.select.mockReturnValue(db);
-  return db as unknown as NodePgDatabase<typeof schema> & any;
+  return db as unknown as NodePgDatabase<typeof schema> & MockDb;
 };
 
 const mkAuth = (over?: Partial<IAuthProvider>): IAuthProvider =>
   ({
-    createUser: vi.fn(async (input: any) => ({
-      id: "u1",
-      email: input.email,
-      name: null,
-      emailVerified: false,
-      image: undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      role: "user",
-      systemRole: null,
-      banned: false,
-      banReason: null,
-      banExpires: null,
-    })),
-    setPassword: vi.fn(async () => undefined),
+    createUser: vi.fn((input: CreateUserInput) =>
+      Promise.resolve({
+        id: "u1",
+        email: input.email,
+        name: null,
+        emailVerified: false,
+        image: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        role: "user",
+        systemRole: null,
+        banned: false,
+        banReason: null,
+        banExpires: null,
+      }),
+    ),
+    setPassword: vi.fn().mockResolvedValue(undefined),
     ...over,
   }) as unknown as IAuthProvider;
 
@@ -123,6 +156,7 @@ describe("DrizzleUserAdapter", () => {
     // password path
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "newpw" } as UpdateUserInput);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(auth.setPassword).toHaveBeenCalledWith("u1", "newpw");
 
     // field update path
@@ -135,8 +169,8 @@ describe("DrizzleUserAdapter", () => {
 
     // missing setPassword support
     const adapter2 = new DrizzleUserAdapter(db, {
-      createUser: auth.createUser,
-    } as any);
+      createUser: (input: CreateUserInput) => auth.createUser(input),
+    } as unknown as IAuthProvider);
     await expect(
       adapter2.update("u1", { password: "x" } as UpdateUserInput),
     ).rejects.toThrow("Password updates are not supported");
@@ -155,13 +189,13 @@ describe("DrizzleUserAdapter", () => {
 
     // Access the transaction mock to verify cascade behavior
     const txCalls: string[] = [];
-    db.transaction.mockImplementation(async (fn: any) => {
+    db.transaction.mockImplementation((fn: (tx: MockTx) => unknown) => {
       const tx = {
         delete: vi.fn().mockImplementation(() => {
-          txCalls.push('delete');
+          txCalls.push("delete");
           return { where: vi.fn().mockReturnThis() };
         }),
-      };
+      } as unknown as MockTx;
       return fn(tx);
     });
 
@@ -192,7 +226,7 @@ describe("DrizzleUserAdapter", () => {
   });
 
   it("findAll supports tenant-scoped and global listing with pagination and search/systemRole filters", async () => {
-    const db: any = mkDb();
+    const db = mkDb();
     const auth = mkAuth();
     const adapter = new DrizzleUserAdapter(db, auth);
 
@@ -252,7 +286,7 @@ describe("DrizzleUserAdapter", () => {
   });
 
   it("count supports tenant and global paths", async () => {
-    const db: any = mkDb();
+    const db = mkDb();
     const auth = mkAuth();
     const adapter = new DrizzleUserAdapter(db, auth);
 
@@ -279,6 +313,11 @@ describe("DrizzleUserAdapter", () => {
     const adapter = new DrizzleUserAdapter(db, auth);
 
     await adapter.forceVerifyEmail("u1");
-    expect(db.update).toHaveBeenCalled();
+
+    expect(db.update).toHaveBeenCalledWith(schema.user);
+    expect(db.set).toHaveBeenCalledWith(
+      expect.objectContaining({ emailVerified: true }),
+    );
+    expect(db.where).toHaveBeenCalledWith(eq(schema.user.id, "u1"));
   });
 });

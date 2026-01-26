@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Tenant as TenantInterface } from "../interfaces";
 import { DrizzleTenantAdapter } from "./drizzle-tenant.adapter";
