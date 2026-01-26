@@ -40,7 +40,6 @@ describe('InvitationsService', () => {
       };
       await service.create(dto, 'user-123');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.createInvitation).toHaveBeenCalledWith({
         email: dto.email,
         role: dto.role,
@@ -55,7 +54,6 @@ describe('InvitationsService', () => {
     it('should call authProvider.acceptInvitation', async () => {
       await service.accept('inv-123', 'user-123');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.acceptInvitation).toHaveBeenCalledWith(
         'inv-123',
         'user-123',
@@ -67,7 +65,6 @@ describe('InvitationsService', () => {
     it('should call authProvider.getInvitation', async () => {
       await service.get('inv-123');
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.getInvitation).toHaveBeenCalledWith('inv-123');
     });
   });
