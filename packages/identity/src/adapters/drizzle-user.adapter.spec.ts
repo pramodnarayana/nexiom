@@ -168,7 +168,7 @@ describe("DrizzleUserAdapter", () => {
     await adapter.delete("u1");
     expect(db.transaction).toHaveBeenCalled();
     // Verify multiple delete calls for cascade (member, invitation, session, account, user)
-    expect(txCalls.length).toBeGreaterThanOrEqual(1);
+    expect(txCalls.length).toBe(5);
   });
 
   it("findById and findByEmail return mapped or null", async () => {
