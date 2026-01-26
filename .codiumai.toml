@@ -1,0 +1,38 @@
+[tests]
+# 1. THE STACK
+# Unified Path: We enforce Vitest for the entire monorepo (Frontend & Backend).
+framework = "vitest"
+
+# Use React Testing Library for .tsx files
+testing_library = "react-testing-library"
+
+# 2. BEHAVIORAL RULES
+# This injects our "Zero Regression" & "Edge Case" philosophy into every generation
+plan_instructions = """
+1. PRIMARY DIRECTIVE: Focus on Behavior and Edge Cases. Do not just test the happy path.
+2. STACK: 
+   - Backend: NestJS + Drizzle ORM (Uses Vitest). 
+   - Frontend: React + Refine + Shadcn (Uses Vitest).
+3. MOCKING RULES:
+   - Backend: NEVER connect to a real DB. Use 'vi.mock' for 'drizzle-orm' and 'AsyncLocalStorage'. DO NOT use 'jest'.
+   - Frontend: Use 'msw' (Mock Service Worker) for all API calls. Do not fetch real URLs.
+4. TYPE SAFETY & QUALITY (STRICT):
+   - STRICTLY NO 'any' type casting. Use specific interfaces or 'unknown' with narrowing.
+   - Write fully typed test cases. Define interfaces for your mock data factories.
+   - NO LINT ERRORS: Ensure the generated code is clean, has no unused variables, and follows standard ESLint rules.
+5. ASSERTIONS:
+   - Use 'expect' from 'vitest'.
+   - For backend validation errors, explicitly check that 'NotifyBusinessError' was called.
+6. COVERAGE REQUIREMENT:
+   - Aim for >90% code coverage.
+   - Ensure all branches, error states, and edge cases (null/undefined inputs) are explicitly tested.
+"""
+
+# 3. CONTEXT AWARENESS
+# Allow Qodo to read related files to understand the "Router + Handler" pattern
+reference_code_len = 2000
+use_related_files = true
+
+[analysis]
+# Focus analysis on security and logic gaps
+dependency_analysis = true

@@ -6,8 +6,9 @@
   "scripts": {
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
-    "build": "tsc",
-    "test": "jest",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
     "lint": "eslint \"src/**/*.ts\" --fix"
   },
   "dependencies": {
@@ -22,44 +23,22 @@
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.18.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
-    "@eslint/js": "^9.18.0",
     "@types/bcryptjs": "^3.0.0",
-    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
     "@types/uuid": "^11.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^16.0.0",
-    "jest": "^30.0.0",
     "prettier": "^3.4.2",
     "rimraf": "^6.0.0",
-    "ts-jest": "^29.2.5",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.{t,j}s",
-      "!**/*.spec.ts",
-      "!**/jest.setup.ts"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node",
-    "setupFiles": [
-      "<rootDir>/jest.setup.ts"
-    ]
+    "typescript-eslint": "^8.20.0",
+    "unplugin-swc": "^1.5.9",
+    "vitest": "^2.1.9"
   }
 }

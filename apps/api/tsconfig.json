@@ -21,6 +21,11 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "paths": {
+      "@nexiom/identity": [
+        "../../packages/identity/src"
+      ]
+    }
   }
 }

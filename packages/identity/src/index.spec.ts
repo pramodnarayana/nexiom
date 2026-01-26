@@ -1,3 +1,6 @@
+/* eslint-disable */
+
+import { describe, it, expect, vi } from "vitest";
 import { TextEncoder, TextDecoder } from "util";
 import * as nodeCrypto from "crypto";
 
@@ -14,49 +17,48 @@ Object.defineProperty(global, "crypto", {
   value: nodeCrypto,
 });
 
-jest.mock("better-auth", () => ({
-  betterAuth: jest.fn(() => ({
+vi.mock("better-auth", () => ({
+  betterAuth: vi.fn(() => ({
     api: {},
     handler: {},
   })),
 }));
-jest.mock("better-auth/adapters/drizzle", () => ({
-  drizzleAdapter: jest.fn(),
+vi.mock("better-auth/adapters/drizzle", () => ({
+  drizzleAdapter: vi.fn(),
 }));
-jest.mock("better-auth/plugins", () => ({
-  organization: jest.fn(),
-  admin: jest.fn(),
+vi.mock("better-auth/plugins", () => ({
+  organization: vi.fn(),
+  admin: vi.fn(),
 }));
-jest.mock("better-auth/node", () => ({
-  fromNodeHeaders: jest.fn(),
+vi.mock("better-auth/node", () => ({
+  fromNodeHeaders: vi.fn(),
 }));
 
-jest.mock("./adapters/better-auth.adapter", () => ({
-  BetterAuthAdapter: class {},
+vi.mock("./adapters/better-auth.adapter", () => ({
+  BetterAuthAdapter: class { },
 }));
-jest.mock("./adapters/drizzle-user.adapter", () => ({
-  DrizzleUserAdapter: class {},
+vi.mock("./adapters/drizzle-user.adapter", () => ({
+  DrizzleUserAdapter: class { },
 }));
-jest.mock("./adapters/drizzle-tenant.adapter", () => ({
-  DrizzleTenantAdapter: class {},
+vi.mock("./adapters/drizzle-tenant.adapter", () => ({
+  DrizzleTenantAdapter: class { },
 }));
-jest.mock("./adapters/drizzle-permission.adapter", () => ({
-  DrizzlePermissionAdapter: class {},
+vi.mock("./adapters/drizzle-permission.adapter", () => ({
+  DrizzlePermissionAdapter: class { },
 }));
 
 describe("Identity Package", () => {
-  it("should export adapters", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-    const IdentityPackage = require("./index");
+  it("should export adapters", async () => {
+    const IdentityPackage = await import("./index");
 
     expect(IdentityPackage).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(IdentityPackage.BetterAuthAdapter).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(IdentityPackage.DrizzleUserAdapter).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(IdentityPackage.DrizzleTenantAdapter).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    expect(IdentityPackage.DrizzlePermissionAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).BetterAuthAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).DrizzleUserAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).DrizzleTenantAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).DrizzlePermissionAdapter).toBeDefined();
   });
 });

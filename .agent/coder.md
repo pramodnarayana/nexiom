@@ -30,6 +30,7 @@
   * **No `any`:** The use of `any` is strictly forbidden. Use `unknown` if the type is truly dynamic, and then narrow it.
   * **DTOs & Interfaces:** Define interfaces/DTOs for all inputs, outputs, and API payloads.
   * **Test Code:** Test code must be as strictly typed as production code. Do not use `any` in mock definitions or assertions.
+  * **No Global Suppressions:** Never use `/* eslint-disable */` for entire files. If a rule must be disabled, do it per-line and scoped to the specific rule with a justification.
 
 ### 3. TESTING STRATEGY
 

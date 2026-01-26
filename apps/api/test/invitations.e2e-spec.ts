@@ -9,7 +9,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'http';
 import { AppModule } from './../src/app.module';
-import { SystemAdminGuard } from './../src/modules/auth/system-admin.guard';
+import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { EmailService } from './../src/modules/email/email.service.abstract';
 import { eq } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
