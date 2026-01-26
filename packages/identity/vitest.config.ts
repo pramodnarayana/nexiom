@@ -21,6 +21,12 @@ export default defineConfig({
         'src/constants.ts',
         'src/interfaces/**'
       ],
+      thresholds: {
+        statements: 80,
+        branches: 80,
+        functions: 70,
+        lines: 80,
+      },
     },
   },
   plugins: [
