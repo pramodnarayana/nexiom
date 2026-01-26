@@ -1,25 +1,25 @@
-import { defineConfig } from 'vitest/config';
-import swc from 'unplugin-swc';
+import { defineConfig } from "vitest/config";
+import swc from "unplugin-swc";
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
-    setupFiles: ['./src/test.setup.ts'],
-    include: ['**/*.spec.ts'],
+    environment: "node",
+    setupFiles: ["./src/test.setup.ts"],
+    include: ["**/*.spec.ts"],
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      provider: "v8",
+      reporter: ["text", "json", "html"],
       all: true,
-      include: ['src/**/*.ts'],
+      include: ["src/**/*.ts"],
       exclude: [
-        'src/**/*.spec.ts',
-        'src/**/index.ts',
-        'src/interfaces.ts',
-        'src/schema.ts',
-        'src/test.setup.ts',
-        'src/constants.ts',
-        'src/interfaces/**'
+        "src/**/*.spec.ts",
+        "src/**/index.ts",
+        "src/interfaces.ts",
+        "src/schema.ts",
+        "src/test.setup.ts",
+        "src/constants.ts",
+        "src/interfaces/**",
       ],
       thresholds: {
         statements: 80,
@@ -31,7 +31,7 @@ export default defineConfig({
   },
   plugins: [
     swc.vite({
-      module: { type: 'es6' },
+      module: { type: "es6" },
     }),
   ],
 });

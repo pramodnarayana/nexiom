@@ -9,7 +9,6 @@ type Tx = Record<string, ReturnType<typeof vi.fn>>;
 
 describe("DrizzleTenantAdapter", () => {
   const now = new Date("2024-01-01T00:00:00.000Z");
-  vi.setSystemTime(now);
 
   const mkOrg = (
     overrides: Partial<schema.Organization> = {},
@@ -72,7 +71,12 @@ describe("DrizzleTenantAdapter", () => {
   };
 
   beforeEach(() => {
+    vi.setSystemTime(now);
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("create creates organization and admin member, handles slug collision retries", async () => {
@@ -194,8 +198,9 @@ describe("DrizzleTenantAdapter", () => {
     await expect(adapter.delete("org-1")).resolves.not.toThrow();
 
     db.transaction.mockImplementationOnce(async (fn: any) => {
+      // Mock delete returning empty array for second call
       (tx.returning as any)!.mockResolvedValueOnce([]);
-      await fn(tx);
+      return fn(tx);
     });
 
     await expect(adapter.delete("org-404")).rejects.toThrow("Tenant not found");

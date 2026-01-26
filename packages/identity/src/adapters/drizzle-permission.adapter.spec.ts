@@ -115,5 +115,9 @@ describe("DrizzlePermissionAdapter", () => {
       "role:admin",
       "manage:tenant",
     ]);
+
+    // tenant member not found
+    db.query.member.findFirst.mockResolvedValueOnce(null);
+    expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([]);
   });
 });

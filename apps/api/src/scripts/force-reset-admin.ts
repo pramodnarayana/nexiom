@@ -134,6 +134,7 @@ async function reset() {
       await db
         .update(schema.user)
         .set({ systemRole: ROLE as 'admin' | 'user', emailVerified: true })
+        // Explicitly casting to any to bypass Drizzle's strict column matching in this utility script
         .where(eq(schema.user.id as any, users[0].id as any));
       console.log(`   ✅ Role updated to ${ROLE}.`);
 

@@ -301,6 +301,9 @@ describe("BetterAuthAdapter", () => {
       updatedAt: new Date(),
       role: "user",
       systemRole: null,
+      banned: null,
+      banReason: null,
+      banExpires: null,
     });
 
     const res = await adapter.getSessionFromHeaders({ cookie: "x" });

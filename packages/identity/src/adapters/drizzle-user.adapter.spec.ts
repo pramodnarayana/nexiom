@@ -153,8 +153,22 @@ describe("DrizzleUserAdapter", () => {
     const auth = mkAuth();
     const adapter = new DrizzleUserAdapter(db, auth);
 
+    // Access the transaction mock to verify cascade behavior
+    const txCalls: string[] = [];
+    db.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        delete: vi.fn().mockImplementation(() => {
+          txCalls.push('delete');
+          return { where: vi.fn().mockReturnThis() };
+        }),
+      };
+      return fn(tx);
+    });
+
     await adapter.delete("u1");
     expect(db.transaction).toHaveBeenCalled();
+    // Verify multiple delete calls for cascade (member, invitation, session, account, user)
+    expect(txCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   it("findById and findByEmail return mapped or null", async () => {

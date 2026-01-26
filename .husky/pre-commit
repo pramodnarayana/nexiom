@@ -12,8 +12,8 @@ echo "🔎 Running full lint check..."
 pnpm lint || exit 1
 
 # Run build check (Strict Type Checking)
-echo "🏗️  Running build (Type Check)..."
-pnpm build || exit 1
+echo "🏗️  Running type check..."
+pnpm -r exec tsc --noEmit || exit 1
 
 # Run tests with coverage
 echo "🧪 Running tests with coverage..."
