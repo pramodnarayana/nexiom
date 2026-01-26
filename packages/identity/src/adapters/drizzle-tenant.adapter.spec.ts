@@ -1,11 +1,48 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Tenant as TenantInterface } from "../interfaces";
 import { DrizzleTenantAdapter } from "./drizzle-tenant.adapter";
 import * as schema from "../schema";
 
-type Tx = Record<string, ReturnType<typeof vi.fn>>;
+type MockFunc = ReturnType<typeof vi.fn>;
+
+interface MockTx {
+  insert: MockFunc;
+  values: MockFunc;
+  returning: MockFunc;
+  delete: MockFunc;
+  where: MockFunc;
+  update: MockFunc;
+  set: MockFunc;
+  innerJoin: MockFunc;
+  select: MockFunc;
+  from: MockFunc;
+  limit: MockFunc;
+  offset: MockFunc;
+  orderBy: MockFunc;
+}
+
+interface MockDb {
+  transaction: MockFunc;
+  insert: MockFunc;
+  values: MockFunc;
+  returning: MockFunc;
+  update: MockFunc;
+  set: MockFunc;
+  where: MockFunc;
+  delete: MockFunc;
+  select: MockFunc;
+  from: MockFunc;
+  limit: MockFunc;
+  offset: MockFunc;
+  orderBy: MockFunc;
+  query: {
+    organization: {
+      findFirst: MockFunc;
+      findMany: MockFunc;
+    };
+  };
+}
 
 describe("DrizzleTenantAdapter", () => {
   const now = new Date("2024-01-01T00:00:00.000Z");
@@ -26,7 +63,7 @@ describe("DrizzleTenantAdapter", () => {
   });
 
   const mkDb = () => {
-    const tx: Record<string, ReturnType<typeof vi.fn>> = {
+    const tx: MockTx = {
       insert: vi.fn().mockReturnThis(),
       values: vi.fn().mockReturnThis(),
       returning: vi.fn(),
@@ -42,8 +79,8 @@ describe("DrizzleTenantAdapter", () => {
       orderBy: vi.fn().mockReturnThis(),
     };
 
-    const db: any = {
-      transaction: vi.fn((fn: any) => {
+    const db = {
+      transaction: vi.fn((fn: (tx: MockTx) => unknown) => {
         return fn(tx);
       }),
       insert: vi.fn().mockReturnThis(),
@@ -61,9 +98,10 @@ describe("DrizzleTenantAdapter", () => {
       query: {
         organization: {
           findFirst: vi.fn(),
+          findMany: vi.fn(),
         },
       },
-    };
+    } as unknown as MockDb;
 
     db.select.mockReturnValue(db);
 
@@ -89,22 +127,20 @@ describe("DrizzleTenantAdapter", () => {
       code: string;
       detail?: string;
     };
-    (firstError as any).code = "23505";
-    (firstError as any).detail = "Key (slug)=(acme-1234) already exists.";
+    firstError.code = "23505";
+    firstError.detail = "Key (slug)=(acme-1234) already exists.";
 
     db.transaction
       .mockImplementationOnce(() => {
         tx.insert.mockReturnThis();
         tx.values.mockReturnThis();
-        (tx.returning as any)!.mockResolvedValue([mkOrg()]);
+        tx.returning.mockResolvedValue([mkOrg()]);
         return Promise.reject(firstError);
       })
-      .mockImplementationOnce((fn: any) => {
+      .mockImplementationOnce((fn: (tx: MockTx) => unknown) => {
         tx.insert.mockReturnThis();
         tx.values.mockReturnThis();
-        (tx.returning as any)!.mockResolvedValue([
-          mkOrg({ slug: "acme-unique" }),
-        ]);
+        tx.returning.mockResolvedValue([mkOrg({ slug: "acme-unique" })]);
         return fn(tx);
       });
 
@@ -127,8 +163,8 @@ describe("DrizzleTenantAdapter", () => {
     expect(tenant.slug).toBe("acme");
 
     const dupErr = new Error("duplicate") as Error & { code: string };
-    (dupErr as any).code = "23505";
-    db.returning.mockRejectedValueOnce(dupErr as unknown as Error);
+    dupErr.code = "23505";
+    db.returning.mockRejectedValueOnce(dupErr);
 
     await expect(
       adapter.createTenant({ name: "Acme", slug: "acme" }),
@@ -167,9 +203,9 @@ describe("DrizzleTenantAdapter", () => {
     expect(updated.slug).toBe("new-slug");
 
     const err = new Error("dup") as Error & { code: string; detail?: string };
-    (err as any).code = "23505";
-    (err as any).detail = "slug";
-    db.returning.mockRejectedValueOnce(err as unknown as Error);
+    err.code = "23505";
+    err.detail = "slug";
+    db.returning.mockRejectedValueOnce(err);
 
     await expect(adapter.update("org-2", { slug: "taken" })).rejects.toThrow(
       "Tenant with this slug already exists",
@@ -193,13 +229,13 @@ describe("DrizzleTenantAdapter", () => {
       db as unknown as NodePgDatabase<typeof schema>,
     );
 
-    (tx.returning as any)!.mockResolvedValueOnce([{ id: "org-1" }]);
+    tx.returning.mockResolvedValueOnce([{ id: "org-1" }]);
 
-    await expect(adapter.delete("org-1")).resolves.not.toThrow();
+    await adapter.delete("org-1");
 
-    db.transaction.mockImplementationOnce(async (fn: any) => {
+    db.transaction.mockImplementationOnce((fn: (tx: MockTx) => unknown) => {
       // Mock delete returning empty array for second call
-      (tx.returning as any)!.mockResolvedValueOnce([]);
+      tx.returning.mockResolvedValueOnce([]);
       return fn(tx);
     });
 

@@ -14,6 +14,7 @@ export {
   organizationRelations,
   memberRelations,
   invitationRelations,
+  organizationStatusEnum,
 } from "./schema";
 
 export type {
