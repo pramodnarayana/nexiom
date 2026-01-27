@@ -96,13 +96,31 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     if (rows.length === 0) return null;
 
     const first = rows[0];
+    const permissionsMap = new Map<string, typeof first.resource>();
+
+    rows.forEach((r) => {
+      if (r.permId && !permissionsMap.has(r.permId)) {
+        permissionsMap.set(r.permId, r.resource);
+      }
+    });
+
     const permissions = rows
       .filter((r) => r.permId !== null)
-      .map((r) => ({
-        id: r.permId!, // Non-null assertion safe due to filter
-        resource: r.resource!,
-        action: r.action!,
-      }));
+      .reduce(
+        (acc, r) => {
+          // Use a Set or Map to track unique permIds
+          const exists = acc.find((p) => p.id === r.permId);
+          if (!exists && r.permId) {
+            acc.push({
+              id: r.permId,
+              resource: r.resource!,
+              action: r.action!,
+            });
+          }
+          return acc;
+        },
+        [] as { id: string; resource: string; action: string }[],
+      );
 
     return {
       roleId: first.roleId,

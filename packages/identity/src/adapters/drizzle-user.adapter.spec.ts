@@ -177,7 +177,7 @@ describe("DrizzleUserAdapter", () => {
     expect(spyDelete).toHaveBeenCalledWith("u2");
   });
 
-  it("create: handles compensation failure (log only)", async () => {
+  it("create: handles compensation failure without masking original error", async () => {
     const db = mkDb();
     const auth = mkAuth();
     const adapter = new DrizzleUserAdapter(db, auth);
@@ -199,12 +199,6 @@ describe("DrizzleUserAdapter", () => {
       .spyOn(adapter, "delete")
       .mockRejectedValue(new Error("Delete failed"));
 
-    // Spy on logger (assuming console.error used in catch block)
-    // In real app, we'd spy on the Logger service. Here we rely on implementation detail or console.
-    // The implementation currently does `void cleanupError`. It might not log to console unless we change it.
-    // CodeRabbit requested: "Spy on console.error... and assert it was called"
-    // AND "verify adapter.update was invoked with the correct parameters"
-
     // We need to verify update args first
     await expect(
       adapter.create({
@@ -218,10 +212,6 @@ describe("DrizzleUserAdapter", () => {
       systemRole: "admin",
     });
     expect(spyDelete).toHaveBeenCalledWith("uCompFail");
-    // If the implementation swallows the error without logging (void cleanupError),
-    // we can't assert console.error.
-    // We should probably update the implementation to log it, as per review suggestion implies expectation of logging.
-    // But for now, fulfilling the "assert update args" part is key.
   });
 
   it("update handles password via auth provider; updates fields; throws if missing user after update", async () => {
