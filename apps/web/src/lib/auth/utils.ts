@@ -1,28 +1,24 @@
 
+
 /**
- * Checks if a user has sufficient permissions to access the admin area.
- * 
- * Rules:
- * 1. Default: user.permissions includes '*' (Super Admin).
- * 2. System Level: user.permissions includes 'tenants:manage', 'tenants:read', or 'users:manage'.
- * 3. Namespace: user.permissions starts with 'system_' or 'admin:'.
- * 
- * @param permissions List of permission strings.
- * @returns boolean
+ * Checks if a user has a specific permission.
+ * Supports:
+ * 1. Root Wildcard ('*')
+ * 2. Exact Match ('resource:action')
+ * 3. Resource Wildcard ('resource:*')
+ * 4. Action Wildcard ('*:action')
  */
-export function hasAdminAccess(permissions?: string[]): boolean {
+export function hasPermission(permissions: string[] | undefined, resource: string, action: string): boolean {
     if (!permissions || permissions.length === 0) return false;
 
-    // Super Admin
-    if (permissions.includes('*')) return true;
+    const requiredPermission = `${resource}:${action}`;
+    const resourceWildcard = `${resource}:*`;
+    const actionWildcard = `*:${action}`;
 
-    // Explicit System Permissions
-    const systemPermissions = ['tenants:manage', 'tenants:read', 'users:manage'];
-    if (permissions.some(p => systemPermissions.includes(p))) return true;
-
-    // Check for Namespaced System Permissions (e.g. system_users:read, admin:dashboard)
-    // We check the resource part of the permission string "resource:action" (or just verify prefix)
-    return permissions.some(p => {
-        return p.startsWith('system_') || p.startsWith('admin:');
-    });
+    return permissions.some(p =>
+        p === '*' ||                 // 1. Super Admin
+        p === requiredPermission ||  // 2. Exact Match
+        p === resourceWildcard ||  // 3. Resource Wildcard
+        p === actionWildcard         // 4. Action Wildcard
+    );
 }
