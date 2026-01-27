@@ -2,39 +2,40 @@ import type { AccessControlProvider, CanParams, CanReturnType } from "@refinedev
 import { authProvider } from "./auth-provider";
 import { hasPermission } from "../lib/auth/utils";
 
+// Resource Normalization Map
+// Strip 'admin/' prefix to map 'admin/users' -> 'users' automatically.
+const RESOURCE_MAP: Record<string, string> = {
+    // Keep distinct mappings if needed, otherwise normalization handles most
+    "admin/users": "users",
+    "admin/tenants": "tenants",
+};
+
+// Action Normalization Map
+// Map frontend actions to backend permissions
+const ACTION_MAP: Record<string, string> = {
+    "list": "read",
+    "show": "read",
+    "create": "create",
+    "edit": "update",
+    "delete": "delete",
+};
+
 export const accessControlProvider: AccessControlProvider = {
     can: async ({ resource, action }: CanParams): Promise<CanReturnType> => {
         const permissions = (await authProvider.getPermissions?.()) as string[] ?? [];
 
         // Resource Normalization
-        // Strip 'admin/' prefix to map 'admin/users' -> 'users' automatically.
-        // Fallback to manual map if ever needed, or warn on unmapped.
         let targetResource = resource ?? "";
 
-        const resourceMap: Record<string, string> = {
-            // Keep distinct mappings if needed, otherwise normalization handles most
-            "admin/users": "users",
-            "admin/tenants": "tenants",
-        };
-
-        if (resourceMap[targetResource]) {
-            targetResource = resourceMap[targetResource];
+        if (RESOURCE_MAP[targetResource]) {
+            targetResource = RESOURCE_MAP[targetResource];
         } else if (targetResource.startsWith("admin/")) {
             targetResource = targetResource.replace(/^admin\//, "");
         }
 
         // Action Normalization
-        // Map frontend actions to backend permissions
-        const actionMap: Record<string, string> = {
-            "list": "read",
-            "show": "read",
-            "create": "create",
-            "edit": "update",
-            "delete": "delete",
-        };
-
         const rawAction = action || "manage";
-        const targetAction = actionMap[rawAction] || rawAction;
+        const targetAction = ACTION_MAP[rawAction] || rawAction;
 
         // Use Shared Utility
         // Matches strict logic: *, resource:action, resource:*, *:action
