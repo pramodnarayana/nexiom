@@ -15,9 +15,7 @@ const RESOURCE_MAP: Record<string, string> = {
 const ACTION_MAP: Record<string, string> = {
     "list": "read",
     "show": "read",
-    "create": "create",
     "edit": "update",
-    "delete": "delete",
 };
 
 export const accessControlProvider: AccessControlProvider = {
