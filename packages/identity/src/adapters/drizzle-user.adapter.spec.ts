@@ -177,6 +177,43 @@ describe("DrizzleUserAdapter", () => {
     expect(spyDelete).toHaveBeenCalledWith("u2");
   });
 
+  it("create: handles compensation failure without masking original error", async () => {
+    const db = mkDb();
+    const auth = mkAuth();
+    const adapter = new DrizzleUserAdapter(db, auth);
+
+    // Mock auth to return user
+    auth.createUser = vi
+      .fn()
+      .mockResolvedValue(
+        mkUser({ id: "uCompFail", email: "comp@fail.com", systemRole: null }),
+      );
+
+    // Update throws (triggering compensation)
+    const spyUpdate = vi
+      .spyOn(adapter, "update")
+      .mockRejectedValue(new Error("Update failed"));
+
+    // Delete (compensation) ALSO throws
+    const spyDelete = vi
+      .spyOn(adapter, "delete")
+      .mockRejectedValue(new Error("Delete failed"));
+
+    // We need to verify update args first
+    await expect(
+      adapter.create({
+        email: "comp@fail.com",
+        password: "pw",
+        systemRole: "admin",
+      }),
+    ).rejects.toThrow("Update failed");
+
+    expect(spyUpdate).toHaveBeenCalledWith("uCompFail", {
+      systemRole: "admin",
+    });
+    expect(spyDelete).toHaveBeenCalledWith("uCompFail");
+  });
+
   it("update handles password via auth provider; updates fields; throws if missing user after update", async () => {
     const db = mkDb();
     const auth = mkAuth();

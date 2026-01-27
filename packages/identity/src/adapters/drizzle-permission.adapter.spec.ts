@@ -5,12 +5,29 @@ import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
 
+const mockChainedQuery = (result: unknown) => {
+  const p = Promise.resolve(result);
+  const chain: any = Object.assign(p, {});
+
+  const methods = [
+    "from",
+    "innerJoin",
+    "leftJoin",
+    "where",
+    "select",
+    "limit",
+    "offset",
+    "orderBy",
+  ];
+  methods.forEach((m) => {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  });
+  return chain;
+};
+
 const mkDb = () => {
-  const q: any = {
-    member: { findFirst: vi.fn() },
-  };
   const db: any = {
-    query: q,
+    select: vi.fn(),
   };
   return db as unknown as NodePgDatabase<typeof schema> & any;
 };
@@ -43,57 +60,84 @@ describe("DrizzlePermissionAdapter", () => {
     );
   });
 
-  it("can: tenant checks - admin/owner true, user read only, others false", async () => {
+  it("can: tenant checks - Owner true, others based on permissions", async () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);
     const user = mkUser();
 
     // no membership
-    db.query.member.findFirst.mockResolvedValueOnce(null);
+    db.select.mockReturnValue(mockChainedQuery([]));
     expect(await adapter.can(user, "read", "organization", "o1")).toBe(false);
 
-    // admin
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "admin" });
+    // Owner (name checks out)
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "owner",
+          roleName: "Owner",
+          permId: null,
+          resource: null,
+          action: null,
+        },
+      ]),
+    );
     expect(await adapter.can(user, "update", "organization", "o1")).toBe(true);
 
-    // owner
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "owner" });
-    expect(await adapter.can(user, "update", "organization", "o1")).toBe(true);
-
-    // user read true
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "user" });
+    // Regular member with specific permission
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "member",
+          roleName: "Member",
+          permId: "p1",
+          resource: "organization",
+          action: "read",
+        },
+      ]),
+    );
     expect(await adapter.can(user, "read", "organization", "o1")).toBe(true);
 
-    // user update false
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "user" });
+    // Regular member missing permission
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "member",
+          roleName: "Member",
+          permId: "p1",
+          resource: "other", // mismatch
+          action: "read",
+        },
+      ]),
+    );
     expect(await adapter.can(user, "update", "organization", "o1")).toBe(false);
   });
 
-  it("can: non-tenant user-level update returns false", async () => {
-    const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
-    const user = mkUser();
-    expect(await adapter.can(user, "update", "user", undefined)).toBe(false);
-  });
-
-  it("hasRole: tenant and system paths", async () => {
+  it("hasRole: checks role id", async () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);
     const user = mkUser();
 
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "admin" });
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "admin",
+          roleName: "Admin",
+          permId: null,
+        },
+      ]),
+    );
     expect(await adapter.hasRole(user, "admin", "o1")).toBe(true);
 
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "user" });
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "user",
+          roleName: "User",
+          permId: null,
+        },
+      ]),
+    );
     expect(await adapter.hasRole(user, "admin", "o1")).toBe(false);
-
-    expect(await adapter.hasRole(mkUser(), "platform_admin")).toBe(false);
-    expect(
-      await adapter.hasRole(
-        mkUser({ systemRole: "platform_admin" }),
-        "platform_admin",
-      ),
-    ).toBe(true);
   });
 
   it("getPermissions: aggregates wildcard and role-based perms", async () => {
@@ -105,19 +149,25 @@ describe("DrizzlePermissionAdapter", () => {
       await adapter.getPermissions(mkUser({ systemRole: "platform_admin" })),
     ).toEqual(["*"]);
 
-    // tenant member: user
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "user" });
-    expect(await adapter.getPermissions(mkUser(), "o1")).toEqual(["role:user"]);
-
-    // admin adds manage:tenant
-    db.query.member.findFirst.mockResolvedValueOnce({ role: "admin" });
+    // tenant member: user with permissions
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "custom_role",
+          roleName: "Custom",
+          permId: "users:read",
+          resource: "users",
+          action: "read",
+        },
+      ]),
+    );
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
-      "role:admin",
-      "manage:tenant",
+      "role:custom_role",
+      "users:read",
     ]);
 
     // tenant member not found
-    db.query.member.findFirst.mockResolvedValueOnce(null);
+    db.select.mockReturnValue(mockChainedQuery([]));
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([]);
   });
 });

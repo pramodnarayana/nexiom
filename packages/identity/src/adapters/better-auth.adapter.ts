@@ -461,7 +461,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           id: uuidv4(),
           organizationId: inv.organizationId,
           userId: userId,
-          role: inv.role || "user",
+          roleId: inv.role === "user" ? "member" : inv.role || "member",
           createdAt: new Date(),
         });
       } else {

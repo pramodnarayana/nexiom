@@ -6,6 +6,7 @@ import {
   pgEnum,
   unique,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -98,6 +99,57 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updatedAt"),
 });
 
+// --- RBAC Tables ---
+export const permission = pgTable("permission", {
+  id: text("id").primaryKey(), // e.g., 'users:read'
+  resource: text("resource").notNull(), // e.g., 'users'
+  action: text("action").notNull(), // e.g., 'read'
+  description: text("description"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const role = pgTable("role", {
+  id: text("id").primaryKey(), // e.g., 'admin', 'user'
+  name: text("name").notNull(), // e.g., 'Admin', 'User'
+  description: text("description"),
+  isSystem: boolean("isSystem").default(false).notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export const rolePermission = pgTable(
+  "role_permission",
+  {
+    roleId: text("roleId")
+      .notNull()
+      .references(() => role.id, { onDelete: "cascade" }),
+    permissionId: text("permissionId")
+      .notNull()
+      .references(() => permission.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.roleId, t.permissionId] })],
+);
+
+// --- RBAC Relations ---
+export const roleRelations = relations(role, ({ many }) => ({
+  permissions: many(rolePermission),
+  members: many(member),
+}));
+
+export const permissionRelations = relations(permission, ({ many }) => ({
+  roles: many(rolePermission),
+}));
+
+export const rolePermissionRelations = relations(rolePermission, ({ one }) => ({
+  role: one(role, {
+    fields: [rolePermission.roleId],
+    references: [role.id],
+  }),
+  permission: one(permission, {
+    fields: [rolePermission.permissionId],
+    references: [permission.id],
+  }),
+}));
+
 // --- Tenant Schema ---
 export const organizationStatusEnum = pgEnum("organization_status", [
   "active",
@@ -135,7 +187,9 @@ export const member = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    role: text("role").notNull(),
+    roleId: text("roleId")
+      .notNull()
+      .references(() => role.id, { onDelete: "restrict" }),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     deletedAt: timestamp("deletedAt"),
   },
@@ -154,6 +208,10 @@ export const memberRelations = relations(member, ({ one }) => ({
   user: one(user, {
     fields: [member.userId],
     references: [user.id],
+  }),
+  role: one(role, {
+    fields: [member.roleId],
+    references: [role.id],
   }),
 }));
 
