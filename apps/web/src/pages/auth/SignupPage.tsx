@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { hasAdminAccess } from '../../lib/auth/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -91,11 +92,9 @@ export function SignupPage() {
                     // --- PERMISSION BASED REDIRECT ---
                     // We check if the user has admin capabilities
                     // Note: ensure your sessions endpoint returns permissions
-                    const user = sessionData.user as { systemRole?: string; permissions?: string[] };
+                    const user = sessionData.user as { permissions?: string[] };
 
-                    const hasAdminAccess = user.permissions?.includes('*') || user.permissions?.some(p => p.startsWith('admin:'));
-
-                    if (hasAdminAccess) {
+                    if (hasAdminAccess(user.permissions)) {
                         navigate('/admin');
                     } else {
                         navigate('/dashboard');

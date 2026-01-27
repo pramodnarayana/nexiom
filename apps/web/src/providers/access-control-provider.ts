@@ -33,6 +33,9 @@ export const accessControlProvider: AccessControlProvider = {
         let targetResource = resource;
 
         // Map frontend resources to backend resources
+        // Note: This mapping ensures Refine resources (like "admin/users") align with backend RBAC resources ("system_users").
+        // If you add new resources, update this map here.
+        // TODO: Move to external config or inject via context in the future for flexibility.
         const resourceMap: Record<string, string> = {
             "admin/users": "system_users",
             "admin/tenants": "system_tenants",

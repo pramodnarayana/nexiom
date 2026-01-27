@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { authClient } from '../../lib/auth-client';
+import { hasAdminAccess } from '../../lib/auth/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -26,10 +27,7 @@ export function LoginPage() {
         if (user && !isLoading) {
             // Permission-based redirect
             // If user can manage tenants or users (system level), they belong in the admin dashboard.
-            const adminPermissions = ['*', 'tenants:manage', 'tenants:read', 'users:manage'];
-            const hasAdminAccess = user.permissions?.some(p => adminPermissions.includes(p) || p.startsWith('system_'));
-
-            const target = hasAdminAccess ? '/admin' : '/dashboard';
+            const target = hasAdminAccess(user.permissions) ? '/admin' : '/dashboard';
             navigate(target);
         }
     }, [user, navigate, isLoading]);
