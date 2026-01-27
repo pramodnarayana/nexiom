@@ -17,10 +17,10 @@ export const accessControlProvider: AccessControlProvider = {
             "admin/tenants": "tenants",
         };
 
-        if (targetResource.startsWith("admin/")) {
-            targetResource = targetResource.replace(/^admin\//, "");
-        } else if (resourceMap[targetResource]) {
+        if (resourceMap[targetResource]) {
             targetResource = resourceMap[targetResource];
+        } else if (targetResource.startsWith("admin/")) {
+            targetResource = targetResource.replace(/^admin\//, "");
         }
 
         // Action Normalization

@@ -23,7 +23,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
     { id: "tenants:manage", action: "manage", resource: "tenants" },
 
     // Dashboard
-    { id: "dashboard:view", action: "view", resource: "dashboard" },
+    { id: "dashboard:read", action: "read", resource: "dashboard" },
 
     // Settings
     { id: "settings:manage", action: "manage", resource: "settings" },
@@ -58,7 +58,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // Map role -> permission[]
   const roleMap: Record<string, string[]> = {
     owner: [
-      "dashboard:view",
+      "dashboard:read",
       "users:manage",
       "users:read",
       "users:create",
@@ -73,7 +73,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:read",
     ],
     admin: [
-      "dashboard:view",
+      "dashboard:read",
       "users:manage",
       "users:read",
       "users:create",
