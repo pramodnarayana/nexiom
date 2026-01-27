@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'; // Removed UnauthorizedException
+import { Inject, Injectable, Logger } from '@nestjs/common'; // Removed UnauthorizedException
 import {
   AUTH_PROVIDER,
   IAuthProvider,
@@ -9,13 +9,19 @@ import {
   CreateUserInput,
   TENANT_PROVIDER,
   ITenantProvider,
+  PERMISSION_PROVIDER,
+  IPermissionProvider,
 } from '@nexiom/identity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
+    @Inject(PERMISSION_PROVIDER)
+    private readonly permissionProvider: IPermissionProvider,
   ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
@@ -33,7 +39,11 @@ export class AuthService {
 
   async getEnrichedSession(token: string): Promise<{
     session: Session;
-    user: User & { organizationId?: string; hasTenant: boolean };
+    user: User & {
+      organizationId?: string;
+      hasTenant: boolean;
+      permissions: string[];
+    };
   } | null> {
     const validSession = await this.authProvider.validateSession(token);
     if (!validSession) return null;
@@ -50,6 +60,32 @@ export class AuthService {
     const hasTenant = sortedTenants.length > 0;
     const organizationId = hasTenant ? sortedTenants[0].id : undefined;
 
+    // Fetch Permissions
+    // If we have an organization context, fetch permissions for that tenant
+    // Otherwise fetch system permissions (if any, e.g. system admin)
+    const permissions: string[] = [];
+    try {
+      if (organizationId) {
+        const perms = await this.permissionProvider.getPermissions(
+          user,
+          organizationId,
+        );
+        permissions.push(...perms);
+      } else if (user.systemRole === 'platform_admin') {
+        // Platform admin gets wildcard if no tenant context
+        permissions.push('*');
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
+        error,
+      );
+      // Fallback: If platform admin, ensure they still have access
+      if (user.systemRole === 'platform_admin') {
+        permissions.push('*');
+      }
+    }
+
     return {
       session: {
         ...session,
@@ -58,6 +94,7 @@ export class AuthService {
         ...user,
         organizationId,
         hasTenant,
+        permissions,
       },
     };
   }

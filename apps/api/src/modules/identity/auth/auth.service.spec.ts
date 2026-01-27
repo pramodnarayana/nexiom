@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { AUTH_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import {
+  AUTH_PROVIDER,
+  TENANT_PROVIDER,
+  PERMISSION_PROVIDER,
+} from '@nexiom/identity';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -18,6 +22,10 @@ describe('AuthService', () => {
     findAllForUser: jest.fn(),
   };
 
+  const mockPermissionProvider = {
+    getPermissions: jest.fn().mockResolvedValue([]),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -29,6 +37,10 @@ describe('AuthService', () => {
         {
           provide: TENANT_PROVIDER,
           useValue: mockTenantProvider,
+        },
+        {
+          provide: PERMISSION_PROVIDER,
+          useValue: mockPermissionProvider,
         },
       ],
     }).compile();
@@ -153,6 +165,10 @@ describe('AuthService', () => {
           AuthService,
           { provide: AUTH_PROVIDER, useValue: providerWithoutSetPassword },
           { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
+          {
+            provide: PERMISSION_PROVIDER,
+            useValue: { getPermissions: jest.fn().mockResolvedValue([]) },
+          },
         ],
       }).compile();
       const localService = module.get<AuthService>(AuthService);

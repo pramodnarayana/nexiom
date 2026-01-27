@@ -5,7 +5,8 @@ export type PermissionAction =
   | "read"
   | "update"
   | "delete"
-  | "manage";
+  | "manage"
+  | "invite";
 export type PermissionResource = string; // e.g. 'user', 'tenant', 'settings', 'billing', 'api_key'
 
 export interface IPermissionProvider {
