@@ -8,6 +8,11 @@ import {
 } from "../interfaces";
 import * as schema from "../schema";
 
+interface PgError extends Error {
+  code: string;
+  detail?: string;
+}
+
 export class DrizzleTenantAdapter implements ITenantProvider {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
@@ -36,16 +41,22 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             id: uuidv4(),
             organizationId: orgId,
             userId: userId,
-            role: "admin",
+            roleId: "admin",
             createdAt: new Date(),
           });
 
           return this.mapTenant(org);
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check for unique constraint violation on slug
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-        if (error.code === "23505" && error.detail?.includes("slug")) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as PgError).code === "23505" &&
+          "detail" in error &&
+          (error as PgError).detail?.includes("slug")
+        ) {
           retries--;
           slug = this.generateSlug(name); // Regenerate with new random suffix
           continue;
@@ -80,9 +91,13 @@ export class DrizzleTenantAdapter implements ITenantProvider {
         .returning();
 
       return this.mapTenant(org);
-    } catch (error: any) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      if (error.code === "23505") {
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as PgError).code === "23505"
+      ) {
         throw new Error("Tenant with this slug already exists");
       }
       throw error;
@@ -117,9 +132,15 @@ export class DrizzleTenantAdapter implements ITenantProvider {
       }
 
       return this.mapTenant(updated);
-    } catch (error: any) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-      if (error.code === "23505" && error.detail?.includes("slug")) {
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as PgError).code === "23505" &&
+        "detail" in error &&
+        (error as PgError).detail?.includes("slug")
+      ) {
         throw new Error("Tenant with this slug already exists");
       }
       throw error;
@@ -164,7 +185,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const rows = await this.db
       .select({
         org: schema.organization,
-        role: schema.member.role,
+        roleId: schema.member.roleId,
       })
       .from(schema.organization)
       .innerJoin(
@@ -175,7 +196,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
     return rows.map((r) => ({
       ...this.mapTenant(r.org),
-      memberRole: r.role,
+      memberRole: r.roleId,
     }));
   }
 

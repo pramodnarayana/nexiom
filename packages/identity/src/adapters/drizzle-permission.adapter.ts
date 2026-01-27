@@ -17,48 +17,32 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     resource: PermissionResource,
     tenantId?: string,
   ): Promise<boolean> {
-    // 1. System Level Override (Platform Admin)
-    if (user.systemRole === "platform_admin") {
-      return true;
-    }
+    if (user.systemRole === "platform_admin") return true;
+    if (!tenantId) return false;
 
-    // 2. Tenant Level Checks
-    if (tenantId) {
-      // We need to fetch the member role
-      const member = await this.findMember(user.id, tenantId);
+    const context = await this.fetchMemberContext(user.id, tenantId);
+    if (!context) return false;
 
-      if (!member) return false;
+    // Owner override
+    if (context.roleName === "Owner") return true;
 
-      // Simple RBAC Logic for now (Expandable to Capability mapping later)
-      if (member.role === "admin" || member.role === "owner") {
-        return true;
-      }
-
-      if (member.role === "user") {
-        // Users can read everything, edit nothing (Simplified policy)
-        if (action === "read") return true;
-      }
-
-      // Define granular rules here
-      return false;
-    }
-
-    // 3. User Level (Self)
-    if (resource === "user" && action === "update") {
-      // Deny until instance-level checks (e.g., targetUserId) are supported.
-      return false;
-    }
-
-    return false;
+    // Check permissions
+    return context.permissions.some(
+      (p) => p.resource === resource && p.action === action,
+    );
   }
 
-  async hasRole(user: User, role: string, tenantId?: string): Promise<boolean> {
+  async hasRole(
+    user: User,
+    roleName: string,
+    tenantId?: string,
+  ): Promise<boolean> {
     if (tenantId) {
-      const member = await this.findMember(user.id, tenantId);
-      return member?.role === role;
+      const context = await this.fetchMemberContext(user.id, tenantId);
+      return context?.roleId === roleName;
     }
     if (!user.systemRole) return false;
-    return user.systemRole === role;
+    return user.systemRole === roleName;
   }
 
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
@@ -69,22 +53,61 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     }
 
     if (tenantId) {
-      const member = await this.findMember(user.id, tenantId);
-      if (member) {
-        perms.push(`role:${member.role}`);
-        if (member.role === "admin") perms.push("manage:tenant");
+      const context = await this.fetchMemberContext(user.id, tenantId);
+
+      if (context) {
+        perms.push(`role:${context.roleId}`);
+        context.permissions.forEach((p) => {
+          perms.push(p.id);
+        });
       }
     }
 
     return perms;
   }
 
-  private async findMember(userId: string, tenantId: string) {
-    return this.db.query.member.findFirst({
-      where: and(
-        eq(schema.member.userId, userId),
-        eq(schema.member.organizationId, tenantId),
-      ),
-    });
+  private async fetchMemberContext(userId: string, tenantId: string) {
+    const rows = await this.db
+      .select({
+        roleId: schema.role.id,
+        roleName: schema.role.name,
+        // Permissions might be null if role has none
+        permId: schema.permission.id,
+        resource: schema.permission.resource,
+        action: schema.permission.action,
+      })
+      .from(schema.member)
+      .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+      .leftJoin(
+        schema.rolePermission,
+        eq(schema.role.id, schema.rolePermission.roleId),
+      )
+      .leftJoin(
+        schema.permission,
+        eq(schema.rolePermission.permissionId, schema.permission.id),
+      )
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.member.organizationId, tenantId),
+        ),
+      );
+
+    if (rows.length === 0) return null;
+
+    const first = rows[0];
+    const permissions = rows
+      .filter((r) => r.permId !== null)
+      .map((r) => ({
+        id: r.permId!, // Non-null assertion safe due to filter
+        resource: r.resource!,
+        action: r.action!,
+      }));
+
+    return {
+      roleId: first.roleId,
+      roleName: first.roleName,
+      permissions,
+    };
   }
 }

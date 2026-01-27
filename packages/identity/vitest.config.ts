@@ -20,6 +20,7 @@ export default defineConfig({
         "src/test.setup.ts",
         "src/constants.ts",
         "src/interfaces/**",
+        "src/scripts/**",
       ],
       thresholds: {
         statements: 80,
