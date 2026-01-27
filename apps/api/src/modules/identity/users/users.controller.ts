@@ -12,6 +12,8 @@ import { USER_PROVIDER, IUserProvider } from '@nexiom/identity';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequirePermission } from '../auth/require-permission.decorator';
 
 /**
  * Controller for handling User Management HTTP requests.
@@ -19,7 +21,7 @@ import { AuthGuard } from '../auth/auth.guard';
  * Protected by AuthGuard to ensure only authenticated users can access.
  */
 @Controller('users')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, PermissionsGuard)
 export class UsersController {
   constructor(
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
@@ -33,6 +35,7 @@ export class UsersController {
    * @returns The created user.
    */
   @Post()
+  @RequirePermission('users', 'manage')
   create(@Body() createUser: CreateUser) {
     return this.userProvider.create(createUser);
   }
@@ -43,6 +46,7 @@ export class UsersController {
    * @returns List of users.
    */
   @Get()
+  @RequirePermission('users', 'read')
   async findAll(@Req() req: Request & { user: { organizationId?: string } }) {
     // AuthGuard guarantees session is valid and populates user info
     // We use 'organizationId' (mapped in getSessionWithOrg)
@@ -66,6 +70,7 @@ export class UsersController {
    * @returns The user object.
    */
   @Get(':id')
+  @RequirePermission('users', 'read')
   findOne(@Param('id') id: string) {
     return this.userProvider.findById(id);
   }

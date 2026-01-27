@@ -162,7 +162,6 @@ describe("DrizzlePermissionAdapter", () => {
       ]),
     );
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
-      "role:custom_role",
       "users:read",
     ]);
 

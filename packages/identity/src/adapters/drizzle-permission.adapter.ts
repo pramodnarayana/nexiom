@@ -56,9 +56,16 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        perms.push(`role:${context.roleId}`);
+        // Owner override: return * or all permissions?
+        // Implicitly Owner has all, but for granular checks we might want to wildcard it
+        // or return a special "owner" permission?
+        // For now, let's return the explicit permissions formatted as "resource:action"
+        if (context.roleName === "Owner") {
+          perms.push("*");
+        }
+
         context.permissions.forEach((p) => {
-          perms.push(p.id);
+          perms.push(`${p.resource}:${p.action}`);
         });
       }
     }
