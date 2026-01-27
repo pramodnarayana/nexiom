@@ -24,7 +24,12 @@ export function LoginPage() {
     // If the user visits /login but is already authenticated, send them to their portal.
     useEffect(() => {
         if (user && !isLoading) {
-            const target = user.systemRole === 'platform_admin' ? '/admin' : '/dashboard';
+            // Permission-based redirect
+            // If user can manage tenants or users (system level), they belong in the admin dashboard.
+            const adminPermissions = ['*', 'tenants:manage', 'tenants:read', 'users:manage'];
+            const hasAdminAccess = user.permissions?.some(p => adminPermissions.includes(p) || p.startsWith('system_'));
+
+            const target = hasAdminAccess ? '/admin' : '/dashboard';
             navigate(target);
         }
     }, [user, navigate, isLoading]);
@@ -57,16 +62,18 @@ export function LoginPage() {
             // Call AuthProvider to set state
             setAuthState(data);
 
-            interface LoginUser {
-                id: string;
-                email: string;
-                systemRole?: string;
-            }
 
-            // Redirect logic: Respect ?to param, then Fallback to Role-Based Home
+
+            // Redirect logic: Respect ?to param, then Fallback
             const searchParams = new URLSearchParams(window.location.search);
-            const systemRole = (data.user as LoginUser).systemRole;
-            const fallback = systemRole === 'platform_admin' ? '/admin' : '/dashboard';
+
+            // Default fallback
+            const fallback = '/dashboard';
+
+            // Note: systemRole check removed in favor of strict permissions. 
+            // We rely on the useEffect above to redirect if they land on /login while authenticated.
+            // Or if we wanted to be fancy, we'd check data.user.permissions here if available.
+            // For now, simple fallback is safe.
 
             const toParam = searchParams.get('to');
             // Only allow relative paths to prevent open redirect attacks

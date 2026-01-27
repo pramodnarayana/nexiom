@@ -68,7 +68,7 @@ describe('authProvider', () => {
     describe('check', () => {
         it('should return authenticated when session exists', async () => {
             (authClient.getSession as unknown as Mock).mockResolvedValue({
-                data: { user: { id: '123', role: 'admin' } },
+                data: { user: { id: '123', role: 'admin', permissions: ['*'] } },
                 error: null,
             });
 
@@ -100,7 +100,7 @@ describe('authProvider', () => {
                 authenticated: false,
                 redirectTo: '/dashboard',
                 error: {
-                    message: "Access Denied",
+                    message: "Access Denied. No adequate permissions.",
                     name: "Unauthorized"
                 }
             });
@@ -128,6 +128,7 @@ describe('authProvider', () => {
                 name: 'Test User',
                 avatar: 'avatar.png',
                 roles: ['admin'],
+                permissions: [],
             });
         });
 

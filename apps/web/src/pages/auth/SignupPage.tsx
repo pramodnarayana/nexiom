@@ -88,14 +88,14 @@ export function SignupPage() {
                         accessToken: sessionData.session.token // Using 'token' from session
                     });
 
-                    // --- ROLE BASED REDIRECT ---
-                    // Fix: Redirect System Admins to Admin Dashboard
-                    // We must cast sessionData.user because it might be untyped coming from the API
-                    const user = sessionData.user as { systemRole?: string };
-                    // console.log('[DEBUG] Signup Redirect: user object:', user);
-                    // console.log('[DEBUG] Signup Redirect: systemRole:', user.systemRole);
+                    // --- PERMISSION BASED REDIRECT ---
+                    // We check if the user has admin capabilities
+                    // Note: ensure your sessions endpoint returns permissions
+                    const user = sessionData.user as { systemRole?: string; permissions?: string[] };
 
-                    if (user.systemRole === 'platform_admin' || user.systemRole === 'platform_user') {
+                    const hasAdminAccess = user.permissions?.includes('*') || user.permissions?.some(p => p.startsWith('admin:'));
+
+                    if (hasAdminAccess) {
                         navigate('/admin');
                     } else {
                         navigate('/dashboard');

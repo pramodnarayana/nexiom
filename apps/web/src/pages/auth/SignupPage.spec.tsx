@@ -144,7 +144,7 @@ describe('SignupPage', () => {
                 user: { id: '2', systemRole: 'platform_user' },
                 accessToken: 'abc'
             }));
-            expect(mockNavigate).toHaveBeenCalledWith('/admin');
+            expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
         });
     });
 });

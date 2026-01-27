@@ -1,5 +1,4 @@
-import { useTable, useDelete } from "@refinedev/core";
-import { useAuth } from "@/lib/auth/context";
+import { useTable, useDelete, useCan } from "@refinedev/core";
 import { TenantList } from "@/modules/identity/tenants/TenantList";
 import { type TenantTableItem, type TenantApiResponse } from "@/modules/identity/tenants/types";
 import { CreateTenantDialog } from "./components/CreateTenantDialog";
@@ -18,8 +17,12 @@ import { Button } from "@/components/ui/button";
 
 export const TenantListPage = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
-    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+
+    // Permission Check
+    const { data: canCreate } = useCan({
+        resource: "admin/tenants",
+        action: "create",
+    });
 
     // RESOURCE: "admin/tenants" -> GET /api/admin/tenants
     const table = useTable<TenantApiResponse>({
@@ -91,7 +94,7 @@ export const TenantListPage = () => {
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Tenants</h2>
                 </div>
-                {isPlatformAdmin && <CreateTenantDialog />}
+                {canCreate?.can && <CreateTenantDialog />}
             </div>
 
             <TenantList

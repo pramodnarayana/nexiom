@@ -143,18 +143,13 @@ export function AdminLayout() {
             navigate('/login');
             return;
         }
-        // Strict Platform Admin Check
-        if (user && user.systemRole !== 'platform_admin' && user.systemRole !== 'platform_user') {
-            console.warn("Access Denied: Platform Admin Required. Current role:", user.systemRole);
-            navigate('/dashboard');
-        }
     }, [isAuthenticated, user, navigate, isLoading]);
 
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">Loading Admin Panel...</div>;
     }
 
-    if (!user || (user.systemRole !== 'platform_admin' && user.systemRole !== 'platform_user')) {
+    if (!user) {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">
                 Access denied.

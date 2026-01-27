@@ -1,7 +1,7 @@
 import { useState, Fragment } from "react";
 
 import { cva } from "class-variance-authority"; // Added cva
-import { useAuth } from "@/lib/auth/context";
+import { useCan } from "@refinedev/core";
 
 import {
     Table,
@@ -54,10 +54,15 @@ import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
 export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDelete }: Readonly<TenantListProps>) {
     const [search, setSearch] = useState("");
     const [expandedTenantId, setExpandedTenantId] = useState<string | null>(null);
-    const { user } = useAuth();
 
-    // Check if user is platform_admin (can perform write operations)
-    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+    // Permission Check
+    const { data: canManage } = useCan({
+        resource: "admin/tenants",
+        action: "edit", // map 'edit' to 'manage' or 'write' in AC Provider
+    });
+
+    // We use canManage.can to toggle visibility of actions
+    const showActions = canManage?.can;
 
     const filteredData = data?.filter(tenant =>
         tenant.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -144,7 +149,7 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
                                         <TableCell>
-                                            {isPlatformAdmin ? (
+                                            {showActions ? (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button
@@ -187,7 +192,7 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                             </Button>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            {isPlatformAdmin && (
+                                            {showActions && (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button

@@ -75,7 +75,7 @@ describe('LoginPage', () => {
 
     it('redirects if user is already authenticated', () => {
         (useAuth as unknown as Mock).mockReturnValue({
-            user: { id: '1', systemRole: 'platform_admin' },
+            user: { id: '1', systemRole: 'platform_admin', permissions: ['*'] },
             isLoading: false,
             setAuthState: mockSetAuthState,
         });

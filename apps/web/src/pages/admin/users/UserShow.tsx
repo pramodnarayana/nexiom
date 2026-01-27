@@ -1,5 +1,4 @@
-import { useShow, useCustomMutation } from "@refinedev/core";
-import { useAuth } from "@/lib/auth/context";
+import { useShow, useCustomMutation, useCan } from "@refinedev/core";
 import {
     Card,
     CardContent,
@@ -23,8 +22,12 @@ export const UserShow = () => {
     const { data, isLoading } = queryResult;
     const record = data?.data;
 
-    const { user } = useAuth();
-    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+    // useShow gives us 'queryResult'. We want strict permission check for buttons.
+    const { data: canManage } = useCan({
+        resource: "admin/users",
+        action: "edit",
+    });
+    const showActions = canManage?.can;
 
     const { mutate: sendInvite, isLoading: inviteLoading } = useCustomMutation();
 
@@ -65,7 +68,7 @@ export const UserShow = () => {
                         <p className="text-muted-foreground">View user information and metadata.</p>
                     </div>
                 </div>
-                {isPlatformAdmin && (
+                {showActions && (
                     <div className="flex gap-2">
                         {record?.emailVerified === false && (
                             <Button

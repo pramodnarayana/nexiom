@@ -4,6 +4,7 @@ import routerProvider from "@refinedev/react-router";
 
 import { dataProvider } from "../providers/data-provider";
 import { authProvider } from "../providers/auth-provider";
+import { accessControlProvider } from "../providers/access-control-provider";
 import { notificationProvider } from "../providers/notification-provider";
 import { AdminLayout } from '../layouts/AdminLayout';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
@@ -19,6 +20,7 @@ export function AdminRoutes() {
             authProvider={authProvider}
             dataProvider={dataProvider}
             routerProvider={routerProvider}
+            accessControlProvider={accessControlProvider}
             resources={[
                 {
                     name: "admin/users",

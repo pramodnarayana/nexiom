@@ -1,5 +1,4 @@
-import { useTable } from "@refinedev/core";
-import { useAuth } from "@/lib/auth/context";
+import { useTable, useCan } from "@refinedev/core";
 
 import { Users } from "./Users";
 import { type UserTableItem } from "./types";
@@ -14,8 +13,11 @@ export const UserList = ({
     basePath,
     resource = "users",
 }: UserListProps) => {
-    const { user } = useAuth();
-    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+    // Permission Check: Can create users?
+    const { data: canCreate } = useCan({
+        resource: "admin/users", // Explicitly targeting the admin resource
+        action: "create",
+    });
 
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
     const table = useTable<UserTableItem>({
@@ -49,7 +51,7 @@ export const UserList = ({
 
     return (
         <div className="space-y-4">
-            {isPlatformAdmin && (
+            {canCreate?.can && (
                 <div className="flex items-center justify-end">
                     <CreateUserDialog />
                 </div>
