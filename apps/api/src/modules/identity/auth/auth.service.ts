@@ -62,15 +62,26 @@ export class AuthService {
     // If we have an organization context, fetch permissions for that tenant
     // Otherwise fetch system permissions (if any, e.g. system admin)
     const permissions: string[] = [];
-    if (organizationId) {
-      const perms = await this.permissionProvider.getPermissions(
-        user,
-        organizationId,
+    try {
+      if (organizationId) {
+        const perms = await this.permissionProvider.getPermissions(
+          user,
+          organizationId,
+        );
+        permissions.push(...perms);
+      } else if (user.systemRole === 'platform_admin') {
+        // Platform admin gets wildcard if no tenant context
+        permissions.push('*');
+      }
+    } catch (error) {
+      console.error(
+        `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
+        error,
       );
-      permissions.push(...perms);
-    } else if (user.systemRole === 'platform_admin') {
-      // Platform admin gets wildcard if no tenant context
-      permissions.push('*');
+      // Fallback: If platform admin, ensure they still have access
+      if (user.systemRole === 'platform_admin') {
+        permissions.push('*');
+      }
     }
 
     return {

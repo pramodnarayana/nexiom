@@ -7,8 +7,14 @@ import {
   Req,
   Inject,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
-import { USER_PROVIDER, IUserProvider } from '@nexiom/identity';
+import {
+  USER_PROVIDER,
+  IUserProvider,
+  TENANT_PROVIDER,
+  ITenantProvider,
+} from '@nexiom/identity';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
@@ -25,6 +31,7 @@ import { RequirePermission } from '../auth/require-permission.decorator';
 export class UsersController {
   constructor(
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
+    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
   ) {}
 
   /**
@@ -71,7 +78,32 @@ export class UsersController {
    */
   @Get(':id')
   @RequirePermission('users', 'read')
-  findOne(@Param('id') id: string) {
-    return this.userProvider.findById(id);
+  async findOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user: { organizationId?: string } },
+  ) {
+    const tenantId = req.user?.organizationId;
+
+    // Strict isolation: Admin users must belong to a tenant to view details
+    if (!tenantId) {
+      throw new NotFoundException('User not found'); // Mask existence
+    }
+
+    const user = await this.userProvider.findById(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Tenant Scoping check
+    // Ensure the target user is a member of the requester's tenant
+    const userTenants = await this.tenantProvider.findAllForUser(user.id);
+    const isMember = userTenants.some((t) => t.id === tenantId);
+
+    if (!isMember) {
+      throw new NotFoundException('User not found'); // Mask existence for security
+    }
+
+    return user;
   }
 }

@@ -8,6 +8,7 @@ import {
 } from '@nexiom/identity';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
+import { PermissionsGuard } from '../auth/permissions.guard';
 import { PlatformGuard } from '../auth/platform.guard';
 
 describe('SystemAdminController', () => {
@@ -54,6 +55,8 @@ describe('SystemAdminController', () => {
       .overrideGuard(PlatformGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(PermissionsGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .compile();
 

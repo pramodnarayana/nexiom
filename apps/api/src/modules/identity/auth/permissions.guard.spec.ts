@@ -63,19 +63,7 @@ describe('PermissionsGuard', () => {
   });
 
   it('should allow if user matches one of multiple required permissions', () => {
-    // Logic check: guard uses .some()?
-    // Code: return requiredPermissions.some(...)
-    // So if ANY of the required permissions is present?
-    // Decorator stores "required permissions".
-    // Usually multiple decorators mean "AND" or "OR"?
-    // SetMetadata overrides.
-    // If I require multiple permissions (not supported by single decorator call unless array passed).
-    // The decorator takes (resource, action). It pushes `{resource, action}` into array?
-    // My decorator code: `SetMetadata(PERMISSION_KEY, [{ resource, action }])`
-    // So currently only supports ONE requirement per endpoint unless I change usage.
-    // But `getAllAndOverride` returns an array.
-    // If usage was `@UseGuards...` and Reflector merges metadata? Merge behavior depends.
-    // Assuming single requirement for now.
+    // Verify guard allows user when any required permission matches
 
     // But let's test Array behavior just in case.
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([

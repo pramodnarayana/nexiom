@@ -33,6 +33,7 @@ import { PermissionsGuard } from '../auth/permissions.guard';
 import { AuthGuard } from '../auth/auth.guard';
 
 @Controller('admin')
+@UseGuards(AuthGuard, PermissionsGuard)
 export class SystemAdminController {
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
@@ -41,7 +42,6 @@ export class SystemAdminController {
   ) {}
 
   @Post('users/:id/invite')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'invite')
   async inviteUser(
     @Param('id') id: string,
@@ -74,7 +74,6 @@ export class SystemAdminController {
   }
 
   @Post('invitations')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'invite')
   async createSystemInvitation(
     @Body() body: CreateSystemInvitationValidation,
@@ -110,7 +109,6 @@ export class SystemAdminController {
   }
 
   @Post('tenants')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_tenants', 'manage')
   async createTenant(@Body() input: CreateTenantValidation) {
     // Check if slug exists
@@ -130,7 +128,6 @@ export class SystemAdminController {
   }
 
   @Post('users')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'manage')
   async createUser(@Body() input: CreateUserValidation) {
     // Check if email already exists
@@ -149,7 +146,6 @@ export class SystemAdminController {
   }
 
   @Patch('tenants/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_tenants', 'manage')
   async updateTenant(
     @Param('id') id: string,
@@ -181,7 +177,6 @@ export class SystemAdminController {
   }
 
   @Delete('tenants/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_tenants', 'manage')
   async deleteTenant(@Param('id') id: string) {
     const tenant = await this.tenantProvider.findById(id);
@@ -196,7 +191,6 @@ export class SystemAdminController {
   }
 
   @Get('users')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'read')
   async listUsers(
     @Query('page') page = '1',
@@ -219,7 +213,6 @@ export class SystemAdminController {
   }
 
   @Patch('users/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'manage')
   async updateUser(
     @Param('id') id: string,
@@ -249,7 +242,6 @@ export class SystemAdminController {
   }
 
   @Get('users/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'read')
   async getUser(@Param('id') id: string) {
     const user = await this.userProvider.findById(id);
@@ -262,7 +254,6 @@ export class SystemAdminController {
   }
 
   @Delete('users/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_users', 'manage')
   async deleteUser(@Param('id') id: string) {
     const user = await this.userProvider.findById(id);
@@ -293,7 +284,6 @@ export class SystemAdminController {
   }
 
   @Get('tenants')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_tenants', 'read')
   async listTenants(
     @Query('page') page = '1',
@@ -315,9 +305,9 @@ export class SystemAdminController {
   }
 
   @Get('tenants/:id')
-  @UseGuards(AuthGuard, PermissionsGuard)
   @RequirePermission('system_tenants', 'read')
   async getTenant(@Param('id') id: string) {
+    // ... code ...
     const tenant = await this.tenantProvider.findById(id);
 
     if (!tenant) {
