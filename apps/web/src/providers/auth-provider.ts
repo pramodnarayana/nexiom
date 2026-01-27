@@ -39,19 +39,20 @@ export const authProvider: AuthProvider = {
             };
         }
 
-        // Role Check: Only Admin allowed
-        // Note: session.data.user.roles is an array (per our fix)
-        // We need to cast it or check 'role' if typed loosely
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const user = session.data.user as any;
-        const roles = Array.isArray(user.roles) ? user.roles : [user.role || 'user'];
+        const permissions = user.permissions || [];
 
-        if (!roles.includes("admin")) {
+        // STRICT RBAC:
+        // We do not check for "admin" or "platform_admin" role strings anymore.
+        // Access is granted if the user has ANY permissions assigned.
+        // Platform Admins will inherently have '*' or specific permissions from the backend.
+        if (permissions.length === 0) {
             return {
                 authenticated: false,
-                redirectTo: "/dashboard", // Redirect non-admins to dashboard
+                redirectTo: "/dashboard",
                 error: {
-                    message: "Access Denied",
+                    message: "Access Denied. No adequate permissions.",
                     name: "Unauthorized"
                 }
             }
@@ -71,9 +72,19 @@ export const authProvider: AuthProvider = {
                 name: user.name,
                 avatar: user.image,
                 roles: Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : []),
+                permissions: user.permissions || [],
             };
         }
         return null;
+    },
+    getPermissions: async () => {
+        const { data } = await authClient.getSession();
+        if (data?.user) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const user = data.user as any;
+            return user.permissions || [];
+        }
+        return [];
     },
     onError: async (error: Error) => {
         console.error(error);

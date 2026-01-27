@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { hasAdminAccess } from '../../lib/auth/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -88,14 +89,12 @@ export function SignupPage() {
                         accessToken: sessionData.session.token // Using 'token' from session
                     });
 
-                    // --- ROLE BASED REDIRECT ---
-                    // Fix: Redirect System Admins to Admin Dashboard
-                    // We must cast sessionData.user because it might be untyped coming from the API
-                    const user = sessionData.user as { systemRole?: string };
-                    // console.log('[DEBUG] Signup Redirect: user object:', user);
-                    // console.log('[DEBUG] Signup Redirect: systemRole:', user.systemRole);
+                    // --- PERMISSION BASED REDIRECT ---
+                    // We check if the user has admin capabilities
+                    // Note: ensure your sessions endpoint returns permissions
+                    const user = sessionData.user as { permissions?: string[] };
 
-                    if (user.systemRole === 'platform_admin' || user.systemRole === 'platform_user') {
+                    if (hasAdminAccess(user.permissions)) {
                         navigate('/admin');
                     } else {
                         navigate('/dashboard');

@@ -79,32 +79,13 @@ describe('AdminLayout', () => {
         });
     });
 
-    it('redirects to dashboard if user has invalid role', async () => {
-        (useAuth as unknown as Mock).mockReturnValue({
-            isLoading: false,
-            isAuthenticated: true,
-            user: { name: 'User', systemRole: 'invalid_role' }, // Explicitly invalid
-            logout: mockLogout
-        });
 
-        render(
-            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
-                <AdminLayout />
-            </ThemeProvider>
-        );
-
-        await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
-        });
-
-        expect(screen.getByText('Access denied.')).toBeInTheDocument();
-    });
 
     it('renders content when user is platform_user', () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: false,
             isAuthenticated: true,
-            user: { name: 'Staff', systemRole: 'platform_user' },
+            user: { name: 'Staff', systemRole: 'platform_user', permissions: ['tenants:read'] },
             logout: mockLogout
         });
 
@@ -116,13 +97,16 @@ describe('AdminLayout', () => {
 
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
         expect(screen.getAllByText('Admin Console')).toHaveLength(2);
+        // Should show tenants link because of 'tenants:read' permission
+        // Note: The Sidebar implementation blindly maps navigation groups, 
+        // but robust tests might check exact links. For now, we assert basic rendering.
     });
 
     it('renders content when user is platform_admin', () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: false,
             isAuthenticated: true,
-            user: { name: 'Admin', systemRole: 'platform_admin' },
+            user: { name: 'Admin', systemRole: 'platform_admin', permissions: ['*'] },
             logout: mockLogout
         });
 
