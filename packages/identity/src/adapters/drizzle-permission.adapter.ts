@@ -48,22 +48,24 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
     const perms: string[] = [];
 
+    // 1. Super Admin Wildcard
     if (user.systemRole === "platform_admin") {
       perms.push("*");
+      // Platform admins might implicitely have access to everything,
+      // but some frontend logic might rely on specific keys if they check `can('users', 'manage')`.
+      // The frontend wildcard check `has('*')` handles this.
     }
 
     if (tenantId) {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // Owner override: return * or all permissions?
-        // Implicitly Owner has all, but for granular checks we might want to wildcard it
-        // or return a special "owner" permission?
-        // For now, let's return the explicit permissions formatted as "resource:action"
+        // 2. Owner Wildcard
         if (context.roleName === "Owner") {
           perms.push("*");
         }
 
+        // 3. Explicit Permissions
         context.permissions.forEach((p) => {
           perms.push(`${p.resource}:${p.action}`);
         });
