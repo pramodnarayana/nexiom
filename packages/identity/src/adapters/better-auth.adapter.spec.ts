@@ -19,6 +19,8 @@ vi.mock("better-auth", () => ({
   })),
 }));
 
+import { betterAuth } from "better-auth";
+
 vi.mock("better-auth/adapters/drizzle", () => ({
   drizzleAdapter: vi.fn(),
 }));
@@ -520,8 +522,7 @@ describe("BetterAuthAdapter", () => {
     // checking that it returns a promise is enough to cover the adapter wrapper
     const hashFn = callArgs.emailAndPassword.password.hash;
     const verifyFn = callArgs.emailAndPassword.password.verify;
-    // We expect these to fail since bcrypt isn't mocked/installed deeply, but we catch it or expect promise
-    // Actually, let's just assert existence to avoid runtime errors if we don't want to mock bcrypt
+
     expect(hashFn).toBeDefined();
     expect(verifyFn).toBeDefined();
 

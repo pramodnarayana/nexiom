@@ -49,7 +49,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
     ],
     admin: ["users:manage", "users:read", "tenants:read", "settings:manage"],
-    member: ["users:read"],
+    member: ["users:read", "tenants:read"],
   };
 
   const rolePermsToInsert: { roleId: string; permissionId: string }[] = [];

@@ -6,10 +6,9 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
 
 const mockChainedQuery = (result: unknown) => {
-  const chain: Record<string, any> = {
-    then: (onfulfilled: (value: unknown) => unknown) =>
-      Promise.resolve(result).then(onfulfilled),
-  };
+  const p = Promise.resolve(result);
+  const chain: any = Object.assign(p, {});
+
   const methods = [
     "from",
     "innerJoin",

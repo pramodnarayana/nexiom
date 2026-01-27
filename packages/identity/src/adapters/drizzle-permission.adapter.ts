@@ -34,15 +34,15 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
   async hasRole(
     user: User,
-    roleName: string,
+    roleId: string,
     tenantId?: string,
   ): Promise<boolean> {
     if (tenantId) {
       const context = await this.fetchMemberContext(user.id, tenantId);
-      return context?.roleId === roleName;
+      return context?.roleId === roleId;
     }
     if (!user.systemRole) return false;
-    return user.systemRole === roleName;
+    return user.systemRole === roleId;
   }
 
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
