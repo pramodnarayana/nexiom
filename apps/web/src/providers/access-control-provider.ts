@@ -6,20 +6,35 @@ export const accessControlProvider: AccessControlProvider = {
     can: async ({ resource, action }: CanParams): Promise<CanReturnType> => {
         const permissions = (await authProvider.getPermissions?.()) as string[] ?? [];
 
+        // Resource Normalization
+        // Strip 'admin/' prefix to map 'admin/users' -> 'users' automatically.
+        // Fallback to manual map if ever needed, or warn on unmapped.
         let targetResource = resource ?? "";
-        // Map frontend resources to backend RBAC resources
-        // Note: Backend seed uses "users", "tenants". Frontend uses "admin/users", "admin/tenants".
+
         const resourceMap: Record<string, string> = {
+            // Keep distinct mappings if needed, otherwise normalization handles most
             "admin/users": "users",
             "admin/tenants": "tenants",
-            "users": "users",
-            "tenants": "tenants",
         };
-        if (resource && resourceMap[resource]) {
-            targetResource = resourceMap[resource];
+
+        if (targetResource.startsWith("admin/")) {
+            targetResource = targetResource.replace(/^admin\//, "");
+        } else if (resourceMap[targetResource]) {
+            targetResource = resourceMap[targetResource];
         }
 
-        const targetAction = action || "manage";
+        // Action Normalization
+        // Map frontend actions to backend permissions
+        const actionMap: Record<string, string> = {
+            "list": "read",
+            "show": "read",
+            "create": "create",
+            "edit": "update",
+            "delete": "delete",
+        };
+
+        const rawAction = action || "manage";
+        const targetAction = actionMap[rawAction] || rawAction;
 
         // Use Shared Utility
         // Matches strict logic: *, resource:action, resource:*, *:action
