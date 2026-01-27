@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'; // Removed UnauthorizedException
+import { Inject, Injectable, Logger } from '@nestjs/common'; // Removed UnauthorizedException
 import {
   AUTH_PROVIDER,
   IAuthProvider,
@@ -15,6 +15,8 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
@@ -74,7 +76,7 @@ export class AuthService {
         permissions.push('*');
       }
     } catch (error) {
-      console.error(
+      this.logger.error(
         `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
         error,
       );
