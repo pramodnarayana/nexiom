@@ -12,16 +12,11 @@ import {
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 
-import { type AppUser } from '@/components/layout/types';
+import { type AuthContextValue } from '@/components/layout/types';
 
 export function AdminLayout() {
     // We cast to correct type, assuming auth provider returns this shape
-    const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: AppUser | null,
-        isAuthenticated: boolean,
-        logout: () => void,
-        isLoading: boolean
-    };
+    const { user, isAuthenticated, logout, isLoading } = useAuth() as AuthContextValue;
 
     const navigate = useNavigate();
 

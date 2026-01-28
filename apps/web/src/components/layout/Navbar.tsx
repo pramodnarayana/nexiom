@@ -17,9 +17,10 @@ interface NavbarProps {
     logout: () => void;
     navigate: NavigateFunction;
     headerContent?: React.ReactNode;
+    actions?: React.ReactNode;
 }
 
-export function Navbar({ title, navGroups, user, logout, navigate, headerContent }: Readonly<NavbarProps>) {
+export function Navbar({ title, navGroups, user, logout, navigate, headerContent, actions }: Readonly<NavbarProps>) {
     const location = useLocation();
 
     // Find current active item title for breadcrumb behavior
@@ -35,6 +36,7 @@ export function Navbar({ title, navGroups, user, logout, navigate, headerContent
                     <SheetTrigger asChild>
                         <Button variant="outline" size="icon" className="bg-background text-foreground border-border shadow-sm">
                             <Menu className="h-4 w-4" />
+                            <span className="sr-only">Open mobile menu</span>
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="p-0 border-r-0 w-64">
@@ -62,9 +64,9 @@ export function Navbar({ title, navGroups, user, logout, navigate, headerContent
                 </span>
             </div>
 
-            {/* Right Side Actions (If any specific actions needed here, can receive as children) */}
+            {/* Right Side Actions */}
             <div className="flex items-center gap-4">
-                {/* Add any header actions here if needed */}
+                {actions}
             </div>
         </div>
     );

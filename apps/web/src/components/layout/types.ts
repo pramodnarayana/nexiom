@@ -6,3 +6,10 @@ export interface AppUser {
     systemRole?: string;
     permissions?: string[];
 }
+
+export interface AuthContextValue {
+    user: AppUser | null;
+    isAuthenticated: boolean;
+    logout: () => void;
+    isLoading: boolean;
+}
