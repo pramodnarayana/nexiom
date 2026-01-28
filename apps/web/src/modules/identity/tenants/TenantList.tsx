@@ -35,7 +35,7 @@ interface TenantListProps {
     onDelete?: (id: string, e: React.MouseEvent) => void;
 }
 
-const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+const getStatusVariant = (status: TenantTableItem['status']): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
         case 'active':
             return 'default';
