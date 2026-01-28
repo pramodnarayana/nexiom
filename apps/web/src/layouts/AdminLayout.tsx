@@ -12,24 +12,25 @@ import {
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 
+import { type AppUser } from '@/components/layout/types';
+
 export function AdminLayout() {
     // We cast to correct type, assuming auth provider returns this shape
     const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: { name?: string; email?: string; roles?: string[]; systemRole?: 'platform_admin' | 'platform_user' } | null,
+        user: AppUser | null,
         isAuthenticated: boolean,
         logout: () => void,
         isLoading: boolean
     };
 
     const navigate = useNavigate();
-    // location is used by Sidebar/Navbar components internally
 
     useEffect(() => {
         if (isLoading) return;
         if (!isAuthenticated) {
             navigate('/login');
         }
-    }, [isAuthenticated, user, navigate, isLoading]);
+    }, [isAuthenticated, navigate, isLoading]);
 
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen bg-background text-muted-foreground">Loading Admin Panel...</div>;
@@ -63,6 +64,18 @@ export function AdminLayout() {
         }
     ];
 
+    const headerContent = (
+        <>
+            <div className="flex items-center gap-2 mb-1">
+                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
+                    N
+                </div>
+                <span className="text-xl font-bold text-foreground tracking-tight">Nexiom</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider ml-1">Admin Console</p>
+        </>
+    );
+
     return (
         <div className="flex min-h-screen bg-muted/10 dark:bg-background font-sans">
             {/* Desktop Sidebar */}
@@ -73,17 +86,7 @@ export function AdminLayout() {
                         user={user}
                         logout={logout}
                         navigate={navigate}
-                        headerContent={
-                            <>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                                        N
-                                    </div>
-                                    <span className="text-xl font-bold text-foreground tracking-tight">Nexiom</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider ml-1">Admin Console</p>
-                            </>
-                        }
+                        headerContent={headerContent}
                     />
                 </div>
             </aside>
@@ -91,21 +94,12 @@ export function AdminLayout() {
             {/* Main Content Area */}
             <main className="flex-1 md:ml-64 min-h-screen transition-all duration-300 ease-in-out">
                 <Navbar
+                    title="Admin Console"
                     navGroups={navGroups}
                     user={user}
                     logout={logout}
                     navigate={navigate}
-                    headerContent={
-                        <>
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                                    N
-                                </div>
-                                <span className="text-xl font-bold text-foreground tracking-tight">Nexiom</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider ml-1">Admin Console</p>
-                        </>
-                    }
+                    headerContent={headerContent}
                 />
 
                 {/* Page Content */}

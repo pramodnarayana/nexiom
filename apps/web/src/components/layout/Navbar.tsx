@@ -8,16 +8,18 @@ import { Menu } from 'lucide-react';
 import { Sidebar, type NavGroup } from './Sidebar';
 import { type NavigateFunction, useLocation } from 'react-router-dom';
 
+import { type AppUser } from './types';
+
 interface NavbarProps {
     title?: string;
     navGroups: NavGroup[];
-    user: { name?: string; email?: string; roles?: string[]; organizationName?: string } | null;
+    user: AppUser | null;
     logout: () => void;
     navigate: NavigateFunction;
     headerContent?: React.ReactNode;
 }
 
-export function Navbar({ title, navGroups, user, logout, navigate, headerContent }: NavbarProps) {
+export function Navbar({ title, navGroups, user, logout, navigate, headerContent }: Readonly<NavbarProps>) {
     const location = useLocation();
 
     // Find current active item title for breadcrumb behavior

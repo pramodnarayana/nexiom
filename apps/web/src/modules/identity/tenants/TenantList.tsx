@@ -25,6 +25,8 @@ import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2, Externa
 import { type TenantTableItem } from "./types";
 import { cn } from "@/lib/utils";
 
+import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
+
 interface TenantListProps {
     data: TenantTableItem[] | undefined;
     isLoading: boolean;
@@ -46,7 +48,6 @@ const getStatusVariant = (status: string): "default" | "secondary" | "destructiv
     }
 };
 
-import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
 
 export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDelete }: Readonly<TenantListProps>) {
     const [search, setSearch] = useState("");
@@ -148,11 +149,13 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                         <TableCell>
                                             {showActions ? (
                                                 <DropdownMenu>
-                                                    <DropdownMenuTrigger className="focus:outline-none">
+                                                    <DropdownMenuTrigger asChild>
                                                         <Badge
                                                             variant={getStatusVariant(tenant.status)}
-                                                            className="cursor-pointer hover:opacity-80 gap-1 pr-1"
+                                                            className="cursor-pointer hover:opacity-80 gap-1 pr-1 focus:outline-none"
                                                             onClick={(e) => e.stopPropagation()}
+                                                            tabIndex={0}
+                                                            role="button"
                                                         >
                                                             {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
                                                             <ChevronDown className="h-3 w-3 opacity-50" />

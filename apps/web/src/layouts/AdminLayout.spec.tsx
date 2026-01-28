@@ -96,7 +96,7 @@ describe('AdminLayout', () => {
         );
 
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
-        expect(screen.getAllByText('Admin Console')).toHaveLength(2);
+        expect(screen.getAllByText('Admin Console')).toHaveLength(3);
         // Should show tenants link because of 'tenants:read' permission
         // Note: The Sidebar implementation blindly maps navigation groups, 
         // but robust tests might check exact links. For now, we assert basic rendering.
@@ -118,7 +118,7 @@ describe('AdminLayout', () => {
 
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
         // It renders twice (Desktop + Mobile sidebars)
-        expect(screen.getAllByText('Admin Console')).toHaveLength(2);
+        expect(screen.getAllByText('Admin Console')).toHaveLength(3);
         expect(screen.getAllByText('Admin')).toHaveLength(2); // Desktop + Mobile sidebars
     });
 });

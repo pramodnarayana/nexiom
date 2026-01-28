@@ -4,6 +4,8 @@ import { useAuth } from '../lib/auth/context';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 
+import { type AppUser } from '@/components/layout/types';
+
 interface NavGroup {
     title: string;
     items: {
@@ -21,7 +23,7 @@ interface DashboardLayoutProps {
 
 export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
     const { user, isAuthenticated, logout, isLoading } = useAuth() as {
-        user: { name?: string; email?: string; roles?: string[]; organizationName?: string } | null,
+        user: AppUser | null,
         isAuthenticated: boolean,
         logout: () => void,
         isLoading: boolean
@@ -44,6 +46,17 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
         return null;
     }
 
+    const headerContent = (
+        <div className="flex items-center gap-2 mb-1">
+            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
+                {user?.organizationName?.charAt(0).toUpperCase() || 'O'}
+            </div>
+            <span className="text-xl font-bold text-foreground tracking-tight truncate">
+                {user?.organizationName || "My Organization"}
+            </span>
+        </div>
+    );
+
     return (
         <div className="flex min-h-screen bg-background font-sans">
             {/* Desktop Sidebar */}
@@ -54,16 +67,7 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
                         user={user}
                         logout={logout}
                         navigate={navigate}
-                        headerContent={
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                                    {user?.organizationName?.charAt(0).toUpperCase() || 'O'}
-                                </div>
-                                <span className="text-xl font-bold text-foreground tracking-tight truncate">
-                                    {user?.organizationName || "My Organization"}
-                                </span>
-                            </div>
-                        }
+                        headerContent={headerContent}
                     />
                 </div>
             </aside>
@@ -76,16 +80,7 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
                     user={user}
                     logout={logout}
                     navigate={navigate}
-                    headerContent={
-                        <div className="flex items-center gap-2 mb-1">
-                            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                                {user?.organizationName?.charAt(0).toUpperCase() || 'O'}
-                            </div>
-                            <span className="text-xl font-bold text-foreground tracking-tight truncate">
-                                {user?.organizationName || "My Organization"}
-                            </span>
-                        </div>
-                    }
+                    headerContent={headerContent}
                 />
 
                 {/* Page Content */}

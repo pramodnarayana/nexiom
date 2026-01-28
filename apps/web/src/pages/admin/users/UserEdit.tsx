@@ -69,10 +69,10 @@ export const UserEdit = () => {
             form.reset({
                 name: record.name || "",
                 email: record.email || "",
-                systemRole: record.systemRole || "platform_user",
             });
         }
-    }, [record, form]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [record]);
 
     const onSubmit = (values: UserEditFormValues) => {
         update(
@@ -138,7 +138,7 @@ export const UserEdit = () => {
                             <p className="text-muted-foreground">{record?.email}</p>
                             {/* Status Badge */}
                             {record?.emailVerified === false && (
-                                <Badge variant="outline" className="text-warning-foreground bg-orange-100 dark:bg-orange-900 border-transparent text-[10px] h-5 px-1.5">
+                                <Badge variant="warning" className="text-[10px] h-5 px-1.5">
                                     Unverified
                                 </Badge>
                             )}
@@ -150,8 +150,7 @@ export const UserEdit = () => {
                 <div className="flex items-center gap-2">
                     {record?.emailVerified === false && (
                         <Button
-                            variant="default"
-                            className="bg-green-600 hover:bg-green-700"
+                            variant="success"
                             size="sm"
                             onClick={handleInvite}
                             disabled={inviteLoading}
@@ -207,7 +206,7 @@ export const UserEdit = () => {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>System Role</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Select a role" />

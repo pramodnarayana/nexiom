@@ -164,8 +164,8 @@ describe('TenantList Component', () => {
         // Platform admin should see status as dropdown button
         const activeStatus = screen.getByText('Active');
         const suspendedStatus = screen.getByText('Suspended');
-        expect(activeStatus.closest('button')).not.toBeNull();
-        expect(suspendedStatus.closest('button')).not.toBeNull();
+        expect(activeStatus.closest('[role="button"]')).not.toBeNull();
+        expect(suspendedStatus.closest('[role="button"]')).not.toBeNull();
     });
 
     it.skip('shows read-only status badge for platform_user', () => {
