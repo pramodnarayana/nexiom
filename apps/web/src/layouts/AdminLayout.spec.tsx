@@ -119,6 +119,6 @@ describe('AdminLayout', () => {
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
         // It renders twice (Desktop + Mobile sidebars)
         expect(screen.getAllByText('Admin Console')).toHaveLength(2);
-        expect(screen.getAllByText('Admin')).toHaveLength(3); // Desktop + Mobile + Breadcrumb
+        expect(screen.getAllByText('Admin')).toHaveLength(2); // Desktop + Mobile sidebars
     });
 });

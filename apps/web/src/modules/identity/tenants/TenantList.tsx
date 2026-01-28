@@ -1,6 +1,5 @@
 import { useState, Fragment } from "react";
 
-import { cva } from "class-variance-authority"; // Added cva
 import { useCan } from "@refinedev/core";
 
 import {
@@ -21,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { type TenantTableItem } from "./types";
 import { cn } from "@/lib/utils";
@@ -33,23 +33,20 @@ interface TenantListProps {
     onDelete?: (id: string, e: React.MouseEvent) => void;
 }
 
-// Defined variants using semantic tokens for Tweakcn compatibility
-const statusBadgeVariants = cva("h-6 gap-1 px-2 font-normal rounded-md border text-xs inline-flex items-center", {
-    variants: {
-        status: {
-            active: "bg-primary/10 text-primary border-primary/20",
-            disabled: "bg-muted text-muted-foreground border-transparent",
-            suspended: "bg-destructive/10 text-destructive border-destructive/20",
-        },
-    },
-    defaultVariants: {
-        status: "active",
-    },
-});
+const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+        case 'active':
+            return 'default'; // Or 'secondary' if preferred
+        case 'suspended':
+            return 'destructive';
+        case 'disabled':
+            return 'secondary';
+        default:
+            return 'outline';
+    }
+};
 
 import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
-
-// ... previous imports
 
 export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDelete }: Readonly<TenantListProps>) {
     const [search, setSearch] = useState("");
@@ -151,16 +148,15 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                         <TableCell>
                                             {showActions ? (
                                                 <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className={cn(statusBadgeVariants({ status: tenant.status }))}
+                                                    <DropdownMenuTrigger className="focus:outline-none">
+                                                        <Badge
+                                                            variant={getStatusVariant(tenant.status)}
+                                                            className="cursor-pointer hover:opacity-80 gap-1 pr-1"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                            <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
-                                                        </Button>
+                                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                                        </Badge>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
                                                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange?.(tenant.id, 'active'); }}>Active</DropdownMenuItem>
@@ -169,9 +165,9 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             ) : (
-                                                <span className={cn(statusBadgeVariants({ status: tenant.status }))}>
+                                                <Badge variant={getStatusVariant(tenant.status)}>
                                                     {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                </span>
+                                                </Badge>
                                             )}
                                         </TableCell>
                                         <TableCell>

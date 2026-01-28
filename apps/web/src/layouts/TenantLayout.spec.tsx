@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { TenantLayout } from './TenantLayout';
 import { useAuth } from '@/lib/auth/context';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { ThemeProvider } from "@/lib/theme/ThemeProvider";
 
 // Mock Dependencies
 vi.mock('@/lib/auth/context', () => ({
@@ -61,6 +62,8 @@ describe('TenantLayout', () => {
         (useLocation as unknown as Mock).mockReturnValue({ pathname: '/org-123/dashboard' });
     });
 
+
+
     it('renders loading state', () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: true,
@@ -69,7 +72,11 @@ describe('TenantLayout', () => {
             logout: mockLogout
         });
 
-        render(<TenantLayout navGroups={mockNavGroups} />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <TenantLayout navGroups={mockNavGroups} />
+            </ThemeProvider>
+        );
         expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
 
@@ -81,7 +88,11 @@ describe('TenantLayout', () => {
             logout: mockLogout
         });
 
-        render(<TenantLayout navGroups={mockNavGroups} />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <TenantLayout navGroups={mockNavGroups} />
+            </ThemeProvider>
+        );
 
         await waitFor(() => {
             expect(mockNavigate).toHaveBeenCalledWith('/login');
@@ -96,7 +107,11 @@ describe('TenantLayout', () => {
             logout: mockLogout
         });
 
-        render(<TenantLayout navGroups={mockNavGroups} />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <TenantLayout navGroups={mockNavGroups} />
+            </ThemeProvider>
+        );
 
         expect(screen.getByTestId('outlet')).toBeInTheDocument();
         expect(screen.getAllByText('Dashboard')).toHaveLength(3); // Sidebar x2 + Breadcrumb
@@ -110,7 +125,11 @@ describe('TenantLayout', () => {
             logout: mockLogout
         });
 
-        render(<TenantLayout navGroups={mockNavGroups} />);
+        render(
+            <ThemeProvider defaultTheme="violet-bloom" storageKey="test-theme">
+                <TenantLayout navGroups={mockNavGroups} />
+            </ThemeProvider>
+        );
 
         // It renders twice (Desktop + Mobile sidebars)
         // Wait, sidebar has user name? NO, sidebar shows Org Name. Dropdown shows User Name.
@@ -118,8 +137,8 @@ describe('TenantLayout', () => {
         // SidebarContent: line 56 shows user.organizationName.
         // Topbar Dropdown: Line 193 shows user.name.
 
-        expect(screen.getByText('John Doe')).toBeInTheDocument();
-        expect(screen.getByText('john@example.com')).toBeInTheDocument();
+        expect(screen.getAllByText('John Doe')).toHaveLength(2);
+        expect(screen.getAllByText('john@example.com')).toHaveLength(2);
         expect(screen.getAllByText('Acme Corp')).toHaveLength(2); // Desktop sidebar + Mobile sidebar
     });
 });
