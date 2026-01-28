@@ -1,6 +1,5 @@
 import { useState, Fragment } from "react";
 
-import { cva } from "class-variance-authority"; // Added cva
 import { useCan } from "@refinedev/core";
 
 import {
@@ -21,9 +20,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { type TenantTableItem } from "./types";
 import { cn } from "@/lib/utils";
+
+import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
 
 interface TenantListProps {
     data: TenantTableItem[] | undefined;
@@ -33,23 +35,19 @@ interface TenantListProps {
     onDelete?: (id: string, e: React.MouseEvent) => void;
 }
 
-// Defined variants using semantic tokens for Tweakcn compatibility
-const statusBadgeVariants = cva("h-6 gap-1 px-2 font-normal rounded-md border text-xs inline-flex items-center", {
-    variants: {
-        status: {
-            active: "bg-primary/10 text-primary border-primary/20",
-            disabled: "bg-muted text-muted-foreground border-transparent",
-            suspended: "bg-destructive/10 text-destructive border-destructive/20",
-        },
-    },
-    defaultVariants: {
-        status: "active",
-    },
-});
+const getStatusVariant = (status: TenantTableItem['status']): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+        case 'active':
+            return 'default';
+        case 'suspended':
+            return 'destructive';
+        case 'disabled':
+            return 'secondary';
+        default:
+            return 'outline';
+    }
+};
 
-import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
-
-// ... previous imports
 
 export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDelete }: Readonly<TenantListProps>) {
     const [search, setSearch] = useState("");
@@ -152,15 +150,22 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                             {showActions ? (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className={cn(statusBadgeVariants({ status: tenant.status }))}
+                                                        <button
+                                                            type="button"
+                                                            className={cn(
+                                                                badgeVariants({ variant: getStatusVariant(tenant.status) }),
+                                                                "cursor-pointer hover:opacity-80 gap-1 pr-1 focus:outline-none transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                                            )}
                                                             onClick={(e) => e.stopPropagation()}
+                                                            onKeyDown={(e) => {
+                                                                if (['Enter', ' ', 'Spacebar'].includes(e.key) || e.code === 'Space') {
+                                                                    e.stopPropagation();
+                                                                }
+                                                            }}
                                                         >
                                                             {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                            <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
-                                                        </Button>
+                                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                                        </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="start">
                                                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange?.(tenant.id, 'active'); }}>Active</DropdownMenuItem>
@@ -169,9 +174,9 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             ) : (
-                                                <span className={cn(statusBadgeVariants({ status: tenant.status }))}>
+                                                <Badge variant={getStatusVariant(tenant.status)}>
                                                     {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                                                </span>
+                                                </Badge>
                                             )}
                                         </TableCell>
                                         <TableCell>
