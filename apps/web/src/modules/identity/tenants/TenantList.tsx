@@ -157,6 +157,11 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                                 "cursor-pointer hover:opacity-80 gap-1 pr-1 focus:outline-none transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
                                                             )}
                                                             onClick={(e) => e.stopPropagation()}
+                                                            onKeyDown={(e) => {
+                                                                if (['Enter', ' ', 'Spacebar'].includes(e.key) || e.code === 'Space') {
+                                                                    e.stopPropagation();
+                                                                }
+                                                            }}
                                                         >
                                                             {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
                                                             <ChevronDown className="h-3 w-3 opacity-50" />
