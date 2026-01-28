@@ -38,7 +38,7 @@ interface TenantListProps {
 const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
         case 'active':
-            return 'default'; // Or 'secondary' if preferred
+            return 'default';
         case 'suspended':
             return 'destructive';
         case 'disabled':
@@ -151,12 +151,12 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <button
+                                                            type="button"
                                                             className={cn(
                                                                 badgeVariants({ variant: getStatusVariant(tenant.status) }),
-                                                                "cursor-pointer hover:opacity-80 gap-1 pr-1 focus:outline-none inline-flex items-center border rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                                                "cursor-pointer hover:opacity-80 gap-1 pr-1 focus:outline-none transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
                                                             )}
                                                             onClick={(e) => e.stopPropagation()}
-                                                            tabIndex={0}
                                                         >
                                                             {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
                                                             <ChevronDown className="h-3 w-3 opacity-50" />
