@@ -44,7 +44,7 @@ export function AdminLayout() {
         {
             title: "", // General
             items: [
-                { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+                { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
                 { label: 'Users', href: '/admin/users', icon: Users },
                 { label: 'Tenants', href: '/admin/tenants', icon: Shield },
             ]

@@ -20,6 +20,7 @@ export interface NavGroup {
         label: string;
         href: string;
         icon: React.ElementType;
+        exact?: boolean;
     }[];
 }
 
@@ -63,7 +64,9 @@ export function Sidebar({
                         )}
                         <div className="space-y-1">
                             {group.items.map((item) => {
-                                const isActive = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                                const isActive = item.exact
+                                    ? location.pathname === item.href
+                                    : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
                                 return (
                                     <Link key={item.href} to={item.href}>
                                         <Button
