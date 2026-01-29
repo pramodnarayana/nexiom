@@ -26,6 +26,8 @@ describe('InvitationsService', () => {
 
     service = module.get<InvitationsService>(InvitationsService);
     authProvider = module.get<IAuthProvider>(AUTH_PROVIDER);
+
+    vi.clearAllMocks();
   });
 
   it('should be defined', () => {

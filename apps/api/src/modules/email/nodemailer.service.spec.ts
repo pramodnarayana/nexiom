@@ -43,6 +43,10 @@ describe('NodemailerService', () => {
     service = module.get<NodemailerService>(NodemailerService);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });

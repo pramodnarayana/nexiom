@@ -24,7 +24,7 @@ describe('UsersController', () => {
   };
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    // vi.clearAllMocks() is redundant here as we create fresh mocks below
 
     userProvider = {
       create: vi.fn(),

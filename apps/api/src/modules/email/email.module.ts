@@ -13,6 +13,13 @@ import { MAILER_TRANSPORTER } from './email.constants';
     {
       provide: MAILER_TRANSPORTER,
       useFactory: (configService: ConfigService) => {
+        const mailMockEnv = configService.get<string>('MAIL_MOCK');
+        const useMock = mailMockEnv === 'true' || mailMockEnv === undefined;
+
+        if (useMock) {
+          return null;
+        }
+
         return nodemailer.createTransport({
           host: configService.get<string>('SMTP_HOST'),
           port: configService.get<number>('SMTP_PORT'),
@@ -29,11 +36,9 @@ import { MAILER_TRANSPORTER } from './email.constants';
       provide: EmailService,
       useFactory: (
         configService: ConfigService,
-        transporter: nodemailer.Transporter,
+        transporter: nodemailer.Transporter | null,
       ) => {
-        const mailMockEnv = configService.get<string>('MAIL_MOCK');
-        const useMock = mailMockEnv === 'true' || mailMockEnv === undefined; // Default to true if undefined
-        if (useMock) {
+        if (!transporter) {
           return new ConsoleEmailService();
         }
         return new NodemailerService(configService, transporter);

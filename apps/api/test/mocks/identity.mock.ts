@@ -1,5 +1,3 @@
-import { vi } from 'vitest';
-
 export const AUTH_PROVIDER = 'AUTH_PROVIDER';
 export const USER_PROVIDER = 'USER_PROVIDER';
 export const TENANT_PROVIDER = 'TENANT_PROVIDER';

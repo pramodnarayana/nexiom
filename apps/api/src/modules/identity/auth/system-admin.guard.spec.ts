@@ -93,7 +93,7 @@ describe('SystemAdminGuard', () => {
     );
   });
 
-  it('should allow access if user is system_admin', async () => {
+  it('should allow access if user is platform_admin', async () => {
     const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as unknown,
@@ -118,7 +118,7 @@ describe('SystemAdminGuard', () => {
   it('should throw ForbiddenException if user has undefined systemRole', async () => {
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as unknown,
-      user: { id: 'user1', systemRole: 'tenant_user' } as unknown,
+      user: { id: 'user1' } as unknown, // systemRole is undefined
     });
 
     const mockContext = {
