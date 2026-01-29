@@ -41,6 +41,7 @@ export default defineConfig({
             reporter: ['text', 'json', 'html'],
             thresholds: {
                 statements: 90,
+                // Branches are harder to cover fully in a layered architecture; 80% is strict enough for now.
                 branches: 80,
                 functions: 90,
                 lines: 90,
