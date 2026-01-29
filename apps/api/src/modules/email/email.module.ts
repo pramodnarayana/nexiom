@@ -14,7 +14,7 @@ import { MAILER_TRANSPORTER } from './email.constants';
       provide: MAILER_TRANSPORTER,
       useFactory: (configService: ConfigService) => {
         const mailMockEnv = configService.get<string>('MAIL_MOCK');
-        const useMock = mailMockEnv === 'true' || mailMockEnv === undefined;
+        const useMock = mailMockEnv === 'true';
 
         if (useMock) {
           return null;
@@ -22,7 +22,7 @@ import { MAILER_TRANSPORTER } from './email.constants';
 
         return nodemailer.createTransport({
           host: configService.get<string>('SMTP_HOST'),
-          port: configService.get<number>('SMTP_PORT'),
+          port: Number(configService.get<string>('SMTP_PORT')) || 587,
           secure: configService.get<string>('SMTP_SECURE') === 'true',
           auth: {
             user: configService.get<string>('SMTP_USER'),

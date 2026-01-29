@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
     test: {
         globals: true,
+        environment: 'node',
         root: './',
         alias: {
             '@src': path.resolve(__dirname, 'src'),
