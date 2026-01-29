@@ -1,88 +1,89 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NodemailerService } from './nodemailer.service';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 import { Logger } from '@nestjs/common';
-
-// Mock Nodemailer logic
-const mockSendMail = jest.fn();
-
-jest.mock('nodemailer', () => ({
-  createTransport: jest.fn(() => ({
-    sendMail: mockSendMail,
-  })),
-}));
+import { MAILER_TRANSPORTER } from './email.constants';
+import type { Mock } from 'vitest';
 
 describe('NodemailerService', () => {
   let service: NodemailerService;
-
-  const mockConfigService = {
-    get: jest.fn((key: string, defaultValue?: any) => {
-      if (key === 'SMTP_HOST') return 'smtp.test.com';
-      if (key === 'SMTP_PORT') return 587;
-      if (key === 'SMTP_USER') return 'user';
-      if (key === 'SMTP_PASS') return 'pass';
-      if (key === 'SMTP_SECURE') return false;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return defaultValue;
-    }),
-  };
+  let mockTransporter: { sendMail: Mock };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
-    // ensure factory mock is fresh
-    (nodemailer.createTransport as jest.Mock).mockReturnValue({
-      sendMail: mockSendMail,
-    });
+    mockTransporter = {
+      sendMail: vi.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NodemailerService,
-        { provide: ConfigService, useValue: mockConfigService },
+        {
+          provide: MAILER_TRANSPORTER,
+          useValue: mockTransporter,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: vi.fn((key: string, defaultValue?: unknown) => {
+              const config: Record<string, unknown> = {
+                SMTP_HOST: 'smtp.example.com',
+                SMTP_PORT: 587,
+                SMTP_USER: 'user',
+                SMTP_PASS: 'pass',
+                SMTP_FROM: 'noreply@example.com',
+                SMTP_SECURE: false,
+              };
+              return config[key] ?? defaultValue;
+            }),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<NodemailerService>(NodemailerService);
+  });
 
-    // Silence expected error logs
-    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
-    // createTransport is called in constructor
-    expect(nodemailer.createTransport).toHaveBeenCalled();
   });
 
-  describe('sendEmail', () => {
-    it('should send email successfully', async () => {
-      const options = {
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        text: 'Test Body',
-      };
-      mockSendMail.mockResolvedValue({});
+  it('should send email successfully', async () => {
+    const options = {
+      to: 'test@example.com',
+      subject: 'Test Subject',
+      html: '<p>Test Body</p>',
+      text: 'Test Body',
+    };
 
-      await service.sendEmail(options);
+    await service.sendEmail(options);
 
-      expect(mockSendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: options.to,
-          subject: options.subject,
-          text: options.text,
-        }),
-      );
+    expect(mockTransporter.sendMail).toHaveBeenCalledWith({
+      from: 'noreply@example.com',
+      ...options,
     });
+  });
 
-    it('should log error when sending fails', async () => {
-      const options = { to: 'fail@example.com', subject: 'Fail', text: 'Fail' };
-      Object.assign(options, { subject: 'Failure' }); // Just ensuring object structure
+  it('should log error if sending fails', async () => {
+    const error = new Error('Sending failed');
+    mockTransporter.sendMail.mockRejectedValue(error);
+    const logSpy = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
 
-      const error = new Error('SMTP Error');
-      mockSendMail.mockRejectedValue(error);
+    const options = {
+      to: 'to',
+      subject: 'subject',
+      html: 'html',
+      text: 'text',
+    };
 
-      // Our service catches the error and logs it. It does not throw.
-      await expect(service.sendEmail(options)).resolves.not.toThrow();
-    });
+    // Service swallows error and logs it
+    await expect(service.sendEmail(options)).resolves.not.toThrow();
+
+    expect(logSpy).toHaveBeenCalled();
   });
 });

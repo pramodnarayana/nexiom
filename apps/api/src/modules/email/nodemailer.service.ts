@@ -1,24 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { EmailService, SendEmailOptions } from './email.service.abstract';
+import { MAILER_TRANSPORTER } from './email.constants';
 
 @Injectable()
 export class NodemailerService implements EmailService {
-  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(NodemailerService.name);
 
-  constructor(private readonly configService: ConfigService) {
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST'),
-      port: this.configService.get<number>('SMTP_PORT'),
-      secure: this.configService.get<boolean>('SMTP_SECURE', false),
-      auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
-      },
-    });
-  }
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(MAILER_TRANSPORTER)
+    private readonly transporter: nodemailer.Transporter,
+  ) {}
 
   async sendEmail(options: SendEmailOptions): Promise<void> {
     this.logger.log(`Sending email to ${options.to} via Nodemailer...`);

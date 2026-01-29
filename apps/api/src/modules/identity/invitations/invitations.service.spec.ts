@@ -7,9 +7,10 @@ describe('InvitationsService', () => {
   let authProvider: IAuthProvider;
 
   const mockAuthProvider = {
-    createInvitation: jest.fn(),
-    acceptInvitation: jest.fn(),
-    getInvitation: jest.fn(),
+    createInvitation: vi.fn(),
+    acceptInvitation: vi.fn(),
+    getInvitation: vi.fn(),
+    listInvitations: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -25,6 +26,8 @@ describe('InvitationsService', () => {
 
     service = module.get<InvitationsService>(InvitationsService);
     authProvider = module.get<IAuthProvider>(AUTH_PROVIDER);
+
+    vi.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -69,6 +72,15 @@ describe('InvitationsService', () => {
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(authProvider.getInvitation).toHaveBeenCalledWith('inv-123');
+    });
+  });
+
+  describe('list', () => {
+    it('should call authProvider.listInvitations', async () => {
+      await service.list('org-123');
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(authProvider.listInvitations).toHaveBeenCalledWith('org-123');
     });
   });
 });

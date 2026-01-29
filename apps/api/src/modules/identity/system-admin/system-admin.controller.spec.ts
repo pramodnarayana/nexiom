@@ -16,31 +16,31 @@ describe('SystemAdminController', () => {
   const mockHeaders: Record<string, string> = {};
 
   const mockAuthProvider = {
-    getSessionFromHeaders: jest.fn(),
-    createInvitation: jest.fn(),
+    getSessionFromHeaders: vi.fn(),
+    createInvitation: vi.fn(),
   };
 
   const mockUserProvider = {
-    findById: jest.fn(),
-    findByEmail: jest.fn(),
-    findAll: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-    count: jest.fn(),
+    findById: vi.fn(),
+    findByEmail: vi.fn(),
+    findAll: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
   };
 
   const mockTenantProvider = {
-    findById: jest.fn(),
-    findBySlug: jest.fn(),
-    findAll: jest.fn(),
-    createTenant: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
+    findById: vi.fn(),
+    findBySlug: vi.fn(),
+    findAll: vi.fn(),
+    createTenant: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SystemAdminController],
@@ -51,13 +51,13 @@ describe('SystemAdminController', () => {
       ],
     })
       .overrideGuard(SystemAdminGuard)
-      .useValue({ canActivate: jest.fn(() => true) })
+      .useValue({ canActivate: vi.fn(() => true) })
       .overrideGuard(PlatformGuard)
-      .useValue({ canActivate: jest.fn(() => true) })
+      .useValue({ canActivate: vi.fn(() => true) })
       .overrideGuard(AuthGuard)
-      .useValue({ canActivate: jest.fn(() => true) })
+      .useValue({ canActivate: vi.fn(() => true) })
       .overrideGuard(PermissionsGuard)
-      .useValue({ canActivate: jest.fn(() => true) })
+      .useValue({ canActivate: vi.fn(() => true) })
       .compile();
 
     controller = module.get<SystemAdminController>(SystemAdminController);

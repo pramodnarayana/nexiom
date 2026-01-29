@@ -6,35 +6,38 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.validation';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { NotFoundException } from '@nestjs/common';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 describe('UsersController', () => {
   let controller: UsersController;
-  let mockUserProvider: {
-    create: jest.Mock;
-    findAll: jest.Mock;
-    findById: jest.Mock;
-    findByEmail: jest.Mock;
-    update: jest.Mock;
-    delete: jest.Mock;
-    forceVerifyEmail: jest.Mock;
+  let userProvider: {
+    create: Mock;
+    findAll: Mock;
+    findById: Mock;
+    findByEmail: Mock;
+    update: Mock;
+    delete: Mock;
+    forceVerifyEmail: Mock;
   };
-  let mockTenantProvider: {
-    findAllForUser: jest.Mock;
+  let tenantProvider: {
+    findAllForUser: Mock;
   };
 
   beforeEach(async () => {
-    mockUserProvider = {
-      create: jest.fn(),
-      findAll: jest.fn(),
-      findById: jest.fn(),
-      findByEmail: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      forceVerifyEmail: jest.fn(),
+    // vi.clearAllMocks() is redundant here as we create fresh mocks below
+
+    userProvider = {
+      create: vi.fn(),
+      findAll: vi.fn(),
+      findById: vi.fn(),
+      findByEmail: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      forceVerifyEmail: vi.fn(),
     };
 
-    mockTenantProvider = {
-      findAllForUser: jest.fn(),
+    tenantProvider = {
+      findAllForUser: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -42,11 +45,11 @@ describe('UsersController', () => {
       providers: [
         {
           provide: USER_PROVIDER,
-          useValue: mockUserProvider,
+          useValue: userProvider,
         },
         {
           provide: TENANT_PROVIDER,
-          useValue: mockTenantProvider,
+          useValue: tenantProvider,
         },
       ],
     })
@@ -57,7 +60,6 @@ describe('UsersController', () => {
       .compile();
 
     controller = module.get<UsersController>(UsersController);
-    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -71,11 +73,11 @@ describe('UsersController', () => {
         role: 'user',
       };
       const result = { id: '1', ...createUser };
-      mockUserProvider.create.mockResolvedValue(result);
+      userProvider.create.mockResolvedValue(result);
 
       expect(await controller.create(createUser)).toEqual(result);
 
-      expect(mockUserProvider.create).toHaveBeenCalledWith(createUser);
+      expect(userProvider.create).toHaveBeenCalledWith(createUser);
     });
   });
 
@@ -88,7 +90,7 @@ describe('UsersController', () => {
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
 
-      expect(mockUserProvider.findAll).not.toHaveBeenCalled();
+      expect(userProvider.findAll).not.toHaveBeenCalled();
     });
 
     it('should return empty list if user is undefined', async () => {
@@ -99,7 +101,7 @@ describe('UsersController', () => {
       const result = await controller.findAll(req);
       expect(result).toEqual([]);
 
-      expect(mockUserProvider.findAll).not.toHaveBeenCalled();
+      expect(userProvider.findAll).not.toHaveBeenCalled();
     });
 
     it('should call userProvider.findAll with tenantId if present', async () => {
@@ -109,12 +111,12 @@ describe('UsersController', () => {
       } as unknown as Request & { user: { organizationId?: string } };
       const users = [{ id: '1' }];
 
-      mockUserProvider.findAll.mockResolvedValue({ data: users, total: 1 });
+      userProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
       const result = await controller.findAll(req);
       expect(result).toEqual({ data: users, total: 1 });
 
-      expect(mockUserProvider.findAll).toHaveBeenCalledWith({ tenantId });
+      expect(userProvider.findAll).toHaveBeenCalledWith({ tenantId });
     });
   });
 
@@ -127,14 +129,14 @@ describe('UsersController', () => {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
 
-      mockUserProvider.findById.mockResolvedValue(user);
-      mockTenantProvider.findAllForUser.mockResolvedValue([{ id: tenantId }]); // Is Member
+      userProvider.findById.mockResolvedValue(user);
+      tenantProvider.findAllForUser.mockResolvedValue([{ id: tenantId }]); // Is Member
 
       const result = await controller.findOne(id, req);
       expect(result).toEqual(user);
 
-      expect(mockUserProvider.findById).toHaveBeenCalledWith(id);
-      expect(mockTenantProvider.findAllForUser).toHaveBeenCalledWith(id);
+      expect(userProvider.findById).toHaveBeenCalledWith(id);
+      expect(tenantProvider.findAllForUser).toHaveBeenCalledWith(id);
     });
 
     it('should throw NotFoundException if no tenantId (no context)', async () => {
@@ -156,10 +158,8 @@ describe('UsersController', () => {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
 
-      mockUserProvider.findById.mockResolvedValue(user);
-      mockTenantProvider.findAllForUser.mockResolvedValue([
-        { id: 'other-org' },
-      ]); // Not Member
+      userProvider.findById.mockResolvedValue(user);
+      tenantProvider.findAllForUser.mockResolvedValue([{ id: 'other-org' }]); // Not Member
 
       await expect(controller.findOne(id, req)).rejects.toThrow(
         NotFoundException,

@@ -14,7 +14,7 @@ export function TenantRoutes() {
         {
             title: "",
             items: [
-                { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+                { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
                 { label: 'Users', href: '/dashboard/users', icon: Users },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ]

@@ -9,12 +9,12 @@ describe('TenantsController', () => {
   let controller: TenantsController;
 
   const mockTenantProvider = {
-    findAllForUser: jest.fn(),
-    updateStatus: jest.fn(),
+    findAllForUser: vi.fn(),
+    updateStatus: vi.fn(),
   };
 
   const mockAuthGuard = {
-    canActivate: jest.fn().mockImplementation(() => true),
+    canActivate: vi.fn().mockImplementation(() => true),
   };
 
   beforeEach(async () => {
@@ -33,7 +33,7 @@ describe('TenantsController', () => {
 
     controller = module.get<TenantsController>(TenantsController);
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('should be defined', () => {

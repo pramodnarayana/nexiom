@@ -5,7 +5,7 @@ export const PERMISSION_PROVIDER = 'PERMISSION_PROVIDER';
 export const EMAIL_PROVIDER = 'EMAIL_PROVIDER';
 
 export const IdentityModule = {
-  register: jest.fn(() => ({
+  register: vi.fn(() => ({
     module: class IdentityModuleMock {},
     providers: [],
     exports: [],

@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    "types": [
+      "vitest/globals"
+    ],
     "module": "commonjs",
     "moduleResolution": "node",
     "esModuleInterop": true,
@@ -27,5 +30,9 @@
         "../../packages/identity/src"
       ]
     }
-  }
+  },
+  "exclude": [
+    "vitest.config.mts",
+    "test/vitest-e2e.config.mts"
+  ]
 }
