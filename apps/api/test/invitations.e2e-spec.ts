@@ -14,6 +14,8 @@ import { EmailService } from './../src/modules/email/email.service.abstract';
 import { eq } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
+import { vi } from 'vitest';
+
 import * as schema from './../src/db/schema';
 
 describe('Invitation Flow (e2e)', () => {
@@ -24,7 +26,7 @@ describe('Invitation Flow (e2e)', () => {
 
   // Mock Email Service to intercept the invite link
   const mockEmailService = {
-    sendEmail: jest
+    sendEmail: vi
       .fn()
       .mockImplementation(async (payload: Record<string, unknown>) => {
         lastEmail = payload;

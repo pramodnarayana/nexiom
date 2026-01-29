@@ -14,7 +14,7 @@ describe('PermissionsGuard', () => {
         {
           provide: Reflector,
           useValue: {
-            getAllAndOverride: jest.fn(),
+            getAllAndOverride: vi.fn(),
           },
         },
       ],
@@ -34,30 +34,30 @@ describe('PermissionsGuard', () => {
     }) as unknown as ExecutionContext;
 
   it('should allow if no permissions required', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(null);
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(null);
     expect(guard.canActivate(mockContext({}))).toBe(true);
   });
 
   it('should allow if user has exact permission', () => {
-    jest
-      .spyOn(reflector, 'getAllAndOverride')
-      .mockReturnValue([{ resource: 'users', action: 'manage' }]);
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      { resource: 'users', action: 'manage' },
+    ]);
     const user = { permissions: ['users:manage'] };
     expect(guard.canActivate(mockContext(user))).toBe(true);
   });
 
   it('should deny if user misses permission', () => {
-    jest
-      .spyOn(reflector, 'getAllAndOverride')
-      .mockReturnValue([{ resource: 'users', action: 'manage' }]);
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      { resource: 'users', action: 'manage' },
+    ]);
     const user = { permissions: ['users:read'] };
     expect(guard.canActivate(mockContext(user))).toBe(false);
   });
 
   it('should allow if user has wildcard', () => {
-    jest
-      .spyOn(reflector, 'getAllAndOverride')
-      .mockReturnValue([{ resource: 'users', action: 'manage' }]);
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      { resource: 'users', action: 'manage' },
+    ]);
     const user = { permissions: ['*'] };
     expect(guard.canActivate(mockContext(user))).toBe(true);
   });
@@ -66,7 +66,7 @@ describe('PermissionsGuard', () => {
     // Verify guard allows user when any required permission matches
 
     // But let's test Array behavior just in case.
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
       { resource: 'users', action: 'read' },
       { resource: 'users', action: 'manage' },
     ]);

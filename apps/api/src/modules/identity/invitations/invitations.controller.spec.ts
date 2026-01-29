@@ -10,16 +10,18 @@ describe('InvitationsController', () => {
   let service: InvitationsService;
 
   const mockService = {
-    create: jest.fn(),
-    get: jest.fn(),
-    accept: jest.fn(),
+    create: vi.fn(),
+    get: vi.fn(),
+    accept: vi.fn(),
+    list: vi.fn(),
   };
 
   const mockAuthGuard = {
-    canActivate: jest.fn(() => true),
+    canActivate: vi.fn(() => true),
   };
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [InvitationsController],
       providers: [
@@ -82,6 +84,33 @@ describe('InvitationsController', () => {
       await controller.accept(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123');
+    });
+  });
+
+  describe('list', () => {
+    it('should call service.list with organizationId', async () => {
+      const req = {
+        user: { id: 'user-123', organizationId: 'org-123' },
+      } as unknown as Request & {
+        user: { id: string; organizationId: string };
+      };
+
+      await controller.list(req);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(service.list).toHaveBeenCalledWith('org-123');
+    });
+
+    it('should return empty list if no organizationId', async () => {
+      const req = {
+        user: { id: 'user-123' },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      const result = await controller.list(req);
+      expect(result).toEqual([]);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(service.list).not.toHaveBeenCalled();
     });
   });
 });

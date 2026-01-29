@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+
 export const AUTH_PROVIDER = 'AUTH_PROVIDER';
 export const USER_PROVIDER = 'USER_PROVIDER';
 export const TENANT_PROVIDER = 'TENANT_PROVIDER';
@@ -5,7 +7,7 @@ export const PERMISSION_PROVIDER = 'PERMISSION_PROVIDER';
 export const EMAIL_PROVIDER = 'EMAIL_PROVIDER';
 
 export const IdentityModule = {
-  register: jest.fn(() => ({
+  register: vi.fn(() => ({
     module: class IdentityModuleMock {},
     providers: [],
     exports: [],

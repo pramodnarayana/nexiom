@@ -10,20 +10,20 @@ describe('AuthService', () => {
   let service: AuthService;
 
   const mockAuthProvider = {
-    login: jest.fn(),
-    getSessionFromHeaders: jest.fn(),
-    validateSession: jest.fn(),
-    createUser: jest.fn(),
-    setPassword: jest.fn(),
-    getHandler: jest.fn(),
+    login: vi.fn(),
+    getSessionFromHeaders: vi.fn(),
+    validateSession: vi.fn(),
+    createUser: vi.fn(),
+    setPassword: vi.fn(),
+    getHandler: vi.fn(),
   };
 
   const mockTenantProvider = {
-    findAllForUser: jest.fn(),
+    findAllForUser: vi.fn(),
   };
 
   const mockPermissionProvider = {
-    getPermissions: jest.fn().mockResolvedValue([]),
+    getPermissions: vi.fn().mockResolvedValue([]),
   };
 
   beforeEach(async () => {
@@ -46,7 +46,7 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -167,7 +167,7 @@ describe('AuthService', () => {
           { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
           {
             provide: PERMISSION_PROVIDER,
-            useValue: { getPermissions: jest.fn().mockResolvedValue([]) },
+            useValue: { getPermissions: vi.fn().mockResolvedValue([]) },
           },
         ],
       }).compile();
@@ -181,7 +181,7 @@ describe('AuthService', () => {
 
   describe('getHandler', () => {
     it('should return handler from provider', () => {
-      const mockHandler = jest.fn();
+      const mockHandler = vi.fn();
       mockAuthProvider.getHandler.mockReturnValue(mockHandler);
 
       expect(service.getHandler()).toBeDefined();
@@ -200,7 +200,7 @@ describe('AuthService', () => {
     });
 
     it('should bind handler to provider context', () => {
-      const mockHandlerResult = jest.fn();
+      const mockHandlerResult = vi.fn();
       mockAuthProvider.getHandler.mockReturnValue(mockHandlerResult);
 
       service.getHandler();
