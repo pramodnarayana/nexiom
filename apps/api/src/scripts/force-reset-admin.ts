@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import * as schema from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
@@ -136,10 +136,16 @@ async function reset() {
         .where(eq(schema.user.id, users[0].id));
 
       // 2. Add to System Tenant
+      // 2. Add to System Tenant
       const existingMembers = await db
         .select()
         .from(schema.member)
-        .where(eq(schema.member.userId, users[0].id));
+        .where(
+          and(
+            eq(schema.member.userId, users[0].id),
+            eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+          ),
+        );
 
       if (existingMembers.length === 0) {
         await db.insert(schema.member).values({

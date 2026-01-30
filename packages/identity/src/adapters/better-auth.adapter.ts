@@ -479,14 +479,23 @@ export class BetterAuthAdapter implements IAuthProvider {
         });
       } else {
         // System role -> Membership in System Tenant
-        // We assume the role passed in invitation matches a Role ID in the System Tenant (e.g. 'platform_admin')
-        await tx.insert(schema.member).values({
-          id: uuidv4(),
-          organizationId: SYSTEM_TENANT_ID,
-          userId: userId,
-          roleId: inv.role || "member", // Default to member if null, though system invites usually specify role
-          createdAt: new Date(),
+        // Check for existing membership first to avoid duplicates
+        const existingMember = await tx.query.member.findFirst({
+          where: and(
+            eq(schema.member.userId, userId),
+            eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+          ),
         });
+
+        if (!existingMember) {
+          await tx.insert(schema.member).values({
+            id: uuidv4(),
+            organizationId: SYSTEM_TENANT_ID,
+            userId: userId,
+            roleId: inv.role || "member",
+            createdAt: new Date(),
+          });
+        }
       }
 
       await tx

@@ -123,6 +123,41 @@ describe("DrizzlePermissionAdapter", () => {
     expect(await adapter.can(user, "update", "organization", "o1")).toBe(false);
   });
 
+  it("can: respects global wildcard access", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "all",
+          resource: "*",
+          action: "*",
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "delete", "organization", "o1")).toBe(true);
+  });
+
+  it("can: respects resource-level wildcard access", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "org_all",
+          resource: "organization",
+          action: "*",
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "delete", "organization", "o1")).toBe(true);
+    expect(await adapter.can(user, "delete", "users", "o1")).toBe(false);
+  });
+
   it("hasRole: checks role id", async () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);

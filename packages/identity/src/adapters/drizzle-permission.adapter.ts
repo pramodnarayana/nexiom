@@ -26,6 +26,19 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     if (context.roleName === "Owner") return true;
 
     // Check permissions
+    // 1. Global Wildcard
+    if (context.permissions.some((p) => p.resource === "*" && p.action === "*"))
+      return true;
+
+    // 2. Resource Wildcard
+    if (
+      context.permissions.some(
+        (p) => p.resource === resource && p.action === "*",
+      )
+    )
+      return true;
+
+    // 3. Exact Match
     return context.permissions.some(
       (p) => p.resource === resource && p.action === action,
     );

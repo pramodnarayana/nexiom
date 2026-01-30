@@ -89,13 +89,13 @@ export class AuthService {
     // Otherwise fetch system permissions (if any, e.g. system admin)
     // Fetch Permissions
     // 1. Fetch System Permissions (Global)
-    const permissions: string[] = [];
+    const permissionsSet = new Set<string>();
     try {
       const systemPerms = await this.permissionProvider.getPermissions(
         user,
         SYSTEM_TENANT_ID,
       );
-      permissions.push(...systemPerms);
+      systemPerms.forEach((p) => permissionsSet.add(p));
     } catch (_error) {
       // Ignore error if user is not part of system tenant (expected for most users)
     }
@@ -107,7 +107,7 @@ export class AuthService {
           user,
           organizationId,
         );
-        permissions.push(...tenantPerms);
+        tenantPerms.forEach((p) => permissionsSet.add(p));
       } catch (error) {
         this.logger.error(
           `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
@@ -115,6 +115,8 @@ export class AuthService {
         );
       }
     }
+
+    const permissions = Array.from(permissionsSet);
 
     return {
       session: {

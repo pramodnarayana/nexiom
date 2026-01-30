@@ -198,8 +198,125 @@ describe('SystemAdminController', () => {
     });
   });
 
-  // Additional tests skipped for brevity but would follow same pattern...
-  // updateTenant, deleteTenant, updateUser, getUser...
+  describe('updateTenant', () => {
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockTenantProvider.findById.mockResolvedValue(null);
+
+      await expect(
+        controller.updateTenant('missing', { name: 'New Name' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if slug is already taken', async () => {
+      mockTenantProvider.findById.mockResolvedValue({
+        id: 't1',
+        slug: 'old-slug',
+      });
+      mockTenantProvider.findBySlug.mockResolvedValue({ id: 'other' });
+
+      await expect(
+        controller.updateTenant('t1', { slug: 'taken' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if no fields to update', async () => {
+      mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
+
+      await expect(controller.updateTenant('t1', {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should update tenant', async () => {
+      mockTenantProvider.findById.mockResolvedValue({
+        id: 't1',
+        slug: 'old-slug',
+      });
+      mockTenantProvider.findBySlug.mockResolvedValue(null); // Slug available
+      const updated = { id: 't1', name: 'New Name' };
+      mockTenantProvider.update.mockResolvedValue(updated);
+
+      const result = await controller.updateTenant('t1', { name: 'New Name' });
+
+      expect(result).toEqual(updated);
+      expect(mockTenantProvider.update).toHaveBeenCalledWith('t1', {
+        name: 'New Name',
+      });
+    });
+  });
+
+  describe('deleteTenant', () => {
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockTenantProvider.findById.mockResolvedValue(null);
+      await expect(controller.deleteTenant('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should delete tenant', async () => {
+      mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
+
+      const result = await controller.deleteTenant('t1');
+
+      expect(result).toEqual({ success: true });
+      expect(mockTenantProvider.delete).toHaveBeenCalledWith('t1');
+    });
+  });
+
+  describe('updateUser', () => {
+    it('should throw NotFoundException if user not found', async () => {
+      mockUserProvider.findById.mockResolvedValue(null);
+      await expect(
+        controller.updateUser('missing', { name: 'New' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if email taken', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+        email: 'old@example.com',
+      });
+      mockUserProvider.findByEmail.mockResolvedValue({ id: 'other' });
+
+      await expect(
+        controller.updateUser('u1', { email: 'taken@example.com' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should update user', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+        email: 'old@example.com',
+      });
+      mockUserProvider.findByEmail.mockResolvedValue(null);
+      const updated = { id: 'u1', name: 'New' };
+      mockUserProvider.update.mockResolvedValue(updated);
+
+      const result = await controller.updateUser('u1', { name: 'New' });
+
+      expect(result).toEqual(updated);
+      expect(mockUserProvider.update).toHaveBeenCalledWith('u1', {
+        name: 'New',
+      });
+    });
+  });
+
+  describe('getUser', () => {
+    it('should throw NotFoundException if user not found', async () => {
+      mockUserProvider.findById.mockResolvedValue(null);
+      await expect(controller.getUser('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return user', async () => {
+      const user = { id: 'u1' };
+      mockUserProvider.findById.mockResolvedValue(user);
+
+      const result = await controller.getUser('u1');
+      expect(result).toEqual(user);
+    });
+  });
 
   describe('deleteUser', () => {
     it('should throw NotFoundException if user not found', async () => {

@@ -15,6 +15,12 @@ export {
   memberRelations,
   invitationRelations,
   organizationStatusEnum,
+  role,
+  permission,
+  rolePermission,
+  roleRelations,
+  permissionRelations,
+  rolePermissionRelations,
 } from "./schema";
 
 export type {
