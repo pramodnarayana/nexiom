@@ -1,9 +1,11 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import * as schema from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
+import { v4 as uuidv4 } from 'uuid';
+import { SYSTEM_TENANT_ID, PLATFORM_ADMIN_ROLE_ID } from '@nexiom/identity';
 
 // Fix path resolution for env files - go up from src/scripts
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
@@ -52,10 +54,6 @@ async function reset() {
     // 1. Delete existing user
     console.log('1️⃣  Deleting existing user record...');
     try {
-      // Note: This might fail if there are foreign key constraints like 'member' or 'session'
-      // We should try to clear those too if we can, but let's try a simple delete first
-      // or assume cascade is configured in DB (though drizzle schema definitions matter).
-      // To be safe, let's look up the user ID first.
       const existing = await db
         .select()
         .from(schema.user)
@@ -131,12 +129,52 @@ async function reset() {
       .where(eq(schema.user.email, EMAIL));
 
     if (users.length) {
+      // 1. Mark email as verified
       await db
         .update(schema.user)
-        .set({ systemRole: ROLE as 'admin' | 'user', emailVerified: true })
-        // Explicitly casting to any to bypass Drizzle's strict column matching in this utility script
-        .where(eq(schema.user.id as any, users[0].id as any));
-      console.log(`   ✅ Role updated to ${ROLE}.`);
+        .set({ emailVerified: true })
+        .where(eq(schema.user.id, users[0].id));
+
+      // 2. Add to System Tenant
+      // 2. Add to System Tenant
+      const existingMembers = await db
+        .select()
+        .from(schema.member)
+        .where(
+          and(
+            eq(schema.member.userId, users[0].id),
+            eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+          ),
+        );
+
+      if (existingMembers.length === 0) {
+        await db.insert(schema.member).values({
+          id: uuidv4(),
+          organizationId: SYSTEM_TENANT_ID,
+          userId: users[0].id,
+          roleId: PLATFORM_ADMIN_ROLE_ID,
+          createdAt: new Date(),
+        });
+        console.log(`   ✅ Role updated to ${ROLE}.`);
+      } else {
+        // Check if role needs update
+        if (existingMembers[0].roleId !== PLATFORM_ADMIN_ROLE_ID) {
+          await db
+            .update(schema.member)
+            .set({ roleId: PLATFORM_ADMIN_ROLE_ID })
+            .where(
+              and(
+                eq(schema.member.userId, users[0].id),
+                eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+              ),
+            );
+          console.log(`   ✅ Existing member role elevated to ${ROLE}.`);
+        } else {
+          console.log(
+            '   ℹ️  User is already a system tenant member with correct role.',
+          );
+        }
+      }
 
       console.log('\n🎉 SUCCESS! You can now login.');
       console.log(`   URL:      http://localhost:5173/login`);

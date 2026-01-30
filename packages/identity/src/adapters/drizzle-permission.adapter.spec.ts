@@ -1,12 +1,13 @@
-/* eslint-disable */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
+import { SYSTEM_TENANT_ID } from "../constants";
 
 const mockChainedQuery = (result: unknown) => {
   const p = Promise.resolve(result);
+
   const chain: any = Object.assign(p, {});
 
   const methods = [
@@ -20,16 +21,36 @@ const mockChainedQuery = (result: unknown) => {
     "orderBy",
   ];
   methods.forEach((m) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     chain[m] = vi.fn().mockReturnValue(chain);
   });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   return chain;
 };
 
+interface MockDb {
+  select: Mock;
+  from: Mock;
+  innerJoin: Mock;
+  leftJoin: Mock;
+  where: Mock;
+  limit: Mock;
+  offset: Mock;
+  orderBy: Mock;
+}
+
 const mkDb = () => {
-  const db: any = {
+  const db: MockDb = {
     select: vi.fn(),
+    from: vi.fn(),
+    innerJoin: vi.fn(),
+    leftJoin: vi.fn(),
+    where: vi.fn(),
+    limit: vi.fn(),
+    offset: vi.fn(),
+    orderBy: vi.fn(),
   };
-  return db as unknown as NodePgDatabase<typeof schema> & any;
+  return db as unknown as NodePgDatabase<typeof schema> & MockDb;
 };
 
 const mkUser = (over?: Partial<User>): User => ({
@@ -41,7 +62,6 @@ const mkUser = (over?: Partial<User>): User => ({
   createdAt: new Date(),
   updatedAt: new Date(),
   role: "user",
-  systemRole: null,
   banned: false,
   banReason: null,
   banExpires: null,
@@ -50,15 +70,6 @@ const mkUser = (over?: Partial<User>): User => ({
 
 describe("DrizzlePermissionAdapter", () => {
   beforeEach(() => vi.restoreAllMocks());
-
-  it("can: platform_admin always true", async () => {
-    const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
-    const user = mkUser({ systemRole: "platform_admin" });
-    expect(await adapter.can(user, "delete", "organization", undefined)).toBe(
-      true,
-    );
-  });
 
   it("can: tenant checks - Owner true, others based on permissions", async () => {
     const db = mkDb();
@@ -112,6 +123,45 @@ describe("DrizzlePermissionAdapter", () => {
     expect(await adapter.can(user, "update", "organization", "o1")).toBe(false);
   });
 
+  it("can: respects global wildcard access", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "admin",
+          roleName: "Admin",
+          permId: "all",
+          resource: "*",
+          action: "*",
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "delete", "organization", "o1")).toBe(true);
+  });
+
+  it("can: respects resource-level wildcard access", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "admin",
+          roleName: "Admin",
+          permId: "org_all",
+          resource: "organization",
+          action: "*",
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "delete", "organization", "o1")).toBe(true);
+    expect(await adapter.can(user, "delete", "users", "o1")).toBe(false);
+  });
+
   it("hasRole: checks role id", async () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);
@@ -144,11 +194,6 @@ describe("DrizzlePermissionAdapter", () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);
 
-    // platform admin
-    expect(
-      await adapter.getPermissions(mkUser({ systemRole: "platform_admin" })),
-    ).toEqual(["*"]);
-
     // tenant member: user with permissions
     db.select.mockReturnValue(
       mockChainedQuery([
@@ -168,5 +213,53 @@ describe("DrizzlePermissionAdapter", () => {
     // tenant member not found
     db.select.mockReturnValue(mockChainedQuery([]));
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([]);
+  });
+
+  it("getPermissions: returns * for system admin if DB returns it", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+
+    // Mock DB to return '*' permission for system tenant query
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "*",
+          resource: "*",
+          action: "*",
+        },
+      ]),
+    );
+
+    expect(await adapter.getPermissions(mkUser(), SYSTEM_TENANT_ID)).toEqual([
+      "*",
+    ]);
+  });
+
+  it("getPermissions: returns resource wildcard (e.g. organization:*)", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "org_all",
+          resource: "organization",
+          action: "*",
+        },
+      ]),
+    );
+
+    // Should collapse to "organization:*" because the implementation maps
+    // existing matched permissions by id. If db returns action='*', we expect result to be 'resource:*' unless
+    // resource is also '*', which is covered in the previous test.
+    // wait, existing implementation logic:
+    // context.permissions.forEach((p) => {
+    //  if (p.resource === "*" && p.action === "*") { perms.push("*"); }
+    //  else { perms.push(`${p.resource}:${p.action}`); }
+    // });
+    // So "organization" + "*" -> "organization:*"
+    expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
+      "organization:*",
+    ]);
   });
 });

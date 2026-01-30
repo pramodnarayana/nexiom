@@ -74,7 +74,6 @@ describe('Invitation Flow (e2e)', () => {
       id: 'mock-user-id',
       name: 'Admin User',
       email: 'admin@nexiom.com',
-      systemRole: 'platform_admin',
       emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),

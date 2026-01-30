@@ -4,6 +4,8 @@ import {
   AUTH_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
+  SYSTEM_TENANT_ID,
+  User,
 } from '@nexiom/identity';
 
 describe('AuthService', () => {
@@ -133,50 +135,105 @@ describe('AuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should grant admin_dashboard:view if user is platform_user', async () => {
+    it('should load system permissions from provider', async () => {
       const token = 'system-user-token';
       const mockSession = {
         session: { id: 's2' },
-        user: { id: 'u2', systemRole: 'platform_user' },
+        user: { id: 'u2' },
       };
 
       mockAuthProvider.validateSession.mockResolvedValue(mockSession);
       mockTenantProvider.findAllForUser.mockResolvedValue([]);
 
-      const result = await service.getEnrichedSession(token);
-
-      expect(result?.user.permissions).toContain('admin_dashboard:view');
-    });
-
-    it('should fallback to platform permissions if permission provider fails', async () => {
-      const token = 'system-error-token';
-      const mockSession = {
-        session: { id: 's3' },
-        user: { id: 'u3', systemRole: 'platform_user' },
-      };
-
-      mockAuthProvider.validateSession.mockResolvedValue(mockSession);
-      mockTenantProvider.findAllForUser.mockResolvedValue([]);
-
-      // Force error
-      mockPermissionProvider.getPermissions.mockRejectedValue(
-        new Error('DB Error'),
-      );
-      // Trick: we need to ensure the try block is entered.
-      // The current code only calls permissionProvider if organizationId exists.
-      // So we need to mock a tenant but force the provider to fail.
-      mockTenantProvider.findAllForUser.mockResolvedValue([
-        { id: 'org-fail', createdAt: new Date() },
+      // Mock system permissions
+      mockPermissionProvider.getPermissions.mockResolvedValueOnce([
+        'system:view',
       ]);
 
       const result = await service.getEnrichedSession(token);
 
-      // Should hit the catch block and still grant platform_user permission
-      expect(result?.user.permissions).toContain('admin_dashboard:view');
+      expect(mockPermissionProvider.getPermissions).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'u2' }),
+        SYSTEM_TENANT_ID,
+      );
+      expect(result?.user.permissions).toContain('system:view');
+    });
+    it('should ignore errors when loading system permissions', async () => {
+      const token = 'system-error-token';
+      const mockSession = {
+        session: { id: 's3' },
+        user: { id: 'u3' },
+      };
+
+      mockAuthProvider.validateSession.mockResolvedValue(mockSession);
+      mockTenantProvider.findAllForUser.mockResolvedValue([]);
+
+      // Force error on system permissions
+      mockPermissionProvider.getPermissions.mockRejectedValue(
+        new Error('DB Error'),
+      );
+
+      const result = await service.getEnrichedSession(token);
+
+      expect(result).toBeDefined();
+      expect(result?.user.permissions).toEqual([]);
+    });
+
+    it('should ignore errors when loading tenant permissions', async () => {
+      const token = 'tenant-error-token';
+      const mockSession = { session: { id: 's4' }, user: { id: 'u4' } };
+      const mockTenants = [{ id: 'org-fail', createdAt: new Date() }];
+
+      mockAuthProvider.validateSession.mockResolvedValue(mockSession);
+      mockTenantProvider.findAllForUser.mockResolvedValue(mockTenants);
+
+      // Force error on tenant permissions
+      // First call (system) succeeds with empty, second (tenant) fails
+      mockPermissionProvider.getPermissions
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error('Tenant DB Error'));
+
+      const result = await service.getEnrichedSession(token);
+
+      expect(result).toBeDefined();
+      // Should still return session, just without tenant perms
+      expect(result?.user.organizationId).toBe('org-fail');
+      expect(result?.user.permissions).toEqual([]);
     });
   });
 
-  describe('createUser', () => {
+  describe('hasSystemPermission', () => {
+    it('should return true if user has specific permission', async () => {
+      const user = { id: 'u1' } as User;
+      mockPermissionProvider.getPermissions.mockResolvedValue([
+        'system:manage',
+      ]);
+      const result = await service.hasSystemPermission(user, 'manage');
+      expect(result).toBe(true);
+    });
+
+    it('should return true if user has wildcard permission', async () => {
+      const user = { id: 'u1' } as User;
+      mockPermissionProvider.getPermissions.mockResolvedValue(['*']);
+      const result = await service.hasSystemPermission(user, 'view');
+      expect(result).toBe(true);
+    });
+
+    it('should return false if user does not have permission', async () => {
+      const user = { id: 'u1' } as User;
+      mockPermissionProvider.getPermissions.mockResolvedValue([]);
+      const result = await service.hasSystemPermission(user, 'view');
+      expect(result).toBe(false);
+    });
+
+    it('should return false if permission check throws', async () => {
+      const user = { id: 'u1' } as User;
+      mockPermissionProvider.getPermissions.mockRejectedValue(
+        new Error('DB Error'),
+      );
+      const result = await service.hasSystemPermission(user, 'view');
+      expect(result).toBe(false);
+    });
     it('should delegate to authProvider.createUser', async () => {
       const input = { email: 'new@example.com' };
       const expected = { id: 'u1' };

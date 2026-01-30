@@ -70,17 +70,8 @@ describe('SystemAdminValidation', () => {
       const result = CreateUserSchema.safeParse({
         name: 'Admin User',
         email: 'admin@nexiom.com',
-        systemRole: 'platform_admin',
       });
       expect(result.success).toBe(true);
-    });
-
-    it('should default systemRole to platform_user', () => {
-      const result = CreateUserSchema.parse({
-        name: 'Standard User',
-        email: 'user@nexiom.com',
-      });
-      expect(result.systemRole).toBe('platform_user');
     });
 
     it('should fail with invalid email', () => {
@@ -95,7 +86,7 @@ describe('SystemAdminValidation', () => {
   describe('UpdateUserSchema', () => {
     it('should allow partial updates', () => {
       const result = UpdateUserSchema.safeParse({
-        systemRole: 'platform_admin',
+        name: 'New Name',
       });
       expect(result.success).toBe(true);
     });

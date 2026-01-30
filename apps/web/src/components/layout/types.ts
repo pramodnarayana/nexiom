@@ -3,7 +3,6 @@ export interface AppUser {
     email?: string;
     roles?: string[];
     organizationName?: string;
-    systemRole?: string;
     permissions?: string[];
 }
 

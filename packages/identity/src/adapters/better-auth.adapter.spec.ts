@@ -50,6 +50,7 @@ const mkDb = () => {
     user: { findFirst: vi.fn() },
     session: { findFirst: vi.fn() },
     invitation: { findFirst: vi.fn(), findMany: vi.fn() },
+    member: { findFirst: vi.fn() },
     account: { findFirst: vi.fn() },
   };
   const db: any = {

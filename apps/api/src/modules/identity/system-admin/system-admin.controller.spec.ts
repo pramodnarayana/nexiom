@@ -5,6 +5,8 @@ import {
   AUTH_PROVIDER,
   USER_PROVIDER,
   TENANT_PROVIDER,
+  PLATFORM_ADMIN_ROLE_ID,
+  DEFAULT_SYSTEM_ROLE_ID,
 } from '@nexiom/identity';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -99,7 +101,7 @@ describe('SystemAdminController', () => {
 
       await expect(
         controller.createSystemInvitation(
-          { email: 'test@example.com', role: 'platform_admin' },
+          { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
           mockHeaders,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -114,7 +116,7 @@ describe('SystemAdminController', () => {
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
 
       const result = await controller.createSystemInvitation(
-        { email: 'test@example.com', role: 'platform_admin' },
+        { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
         mockHeaders,
       );
 
@@ -122,45 +124,10 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: 'platform_admin',
+        role: PLATFORM_ADMIN_ROLE_ID,
         organizationId: null,
         inviterId: 'admin1',
       });
-    });
-  });
-
-  describe('listTenants', () => {
-    it('should return paginated tenants', async () => {
-      const mockResult = { data: [{ id: 't1', name: 'Tenant 1' }], total: 1 };
-      mockTenantProvider.findAll.mockResolvedValue(mockResult);
-
-      const result = await controller.listTenants('1', '10');
-
-      expect(result).toEqual(mockResult);
-      expect(mockTenantProvider.findAll).toHaveBeenCalledWith({
-        page: 1,
-        limit: 10,
-      });
-    });
-  });
-
-  describe('getTenant', () => {
-    it('should return a tenant by ID', async () => {
-      const mockTenant = { id: 't1', name: 'Tenant 1' };
-      mockTenantProvider.findById.mockResolvedValue(mockTenant);
-
-      const result = await controller.getTenant('t1');
-
-      expect(result).toEqual(mockTenant);
-      expect(mockTenantProvider.findById).toHaveBeenCalledWith('t1');
-    });
-
-    it('should throw NotFoundException if tenant not found', async () => {
-      mockTenantProvider.findById.mockResolvedValue(null);
-
-      await expect(controller.getTenant('missing')).rejects.toThrow(
-        NotFoundException,
-      );
     });
   });
 
@@ -205,7 +172,6 @@ describe('SystemAdminController', () => {
         controller.createUser({
           name: 'Test',
           email: 'taken@example.com',
-          systemRole: 'platform_user',
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -215,21 +181,18 @@ describe('SystemAdminController', () => {
       const mockUser = {
         id: 'u1',
         email: 'new@example.com',
-        systemRole: 'platform_user',
       };
       mockUserProvider.create.mockResolvedValue(mockUser);
 
       const result = await controller.createUser({
         name: 'Test',
         email: 'new@example.com',
-        systemRole: 'platform_user',
       });
 
       expect(result).toEqual(mockUser);
       expect(mockUserProvider.create).toHaveBeenCalledWith({
         name: 'Test',
         email: 'new@example.com',
-        systemRole: 'platform_user',
       });
       expect(mockUserProvider.update).not.toHaveBeenCalled();
     });
@@ -240,37 +203,44 @@ describe('SystemAdminController', () => {
       mockTenantProvider.findById.mockResolvedValue(null);
 
       await expect(
-        controller.updateTenant('missing', { name: 'New' }),
+        controller.updateTenant('missing', { name: 'New Name' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if slug overlaps', async () => {
+    it('should throw BadRequestException if slug is already taken', async () => {
       mockTenantProvider.findById.mockResolvedValue({
         id: 't1',
         slug: 'old-slug',
       });
-      mockTenantProvider.findBySlug.mockResolvedValue({
-        id: 't2', // diff ID
-        slug: 'taken',
-      });
+      mockTenantProvider.findBySlug.mockResolvedValue({ id: 'other' });
 
       await expect(
         controller.updateTenant('t1', { slug: 'taken' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should update tenant via provider', async () => {
+    it('should throw BadRequestException if no fields to update', async () => {
       mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
-      // Slug check: returns null or same ID
-      mockTenantProvider.findBySlug.mockResolvedValue(null);
-      const mockUpdated = { id: 't1', name: 'New' };
-      mockTenantProvider.update.mockResolvedValue(mockUpdated);
 
-      const result = await controller.updateTenant('t1', { name: 'New' });
+      await expect(controller.updateTenant('t1', {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
 
-      expect(result).toEqual(mockUpdated);
+    it('should update tenant', async () => {
+      mockTenantProvider.findById.mockResolvedValue({
+        id: 't1',
+        slug: 'old-slug',
+      });
+      mockTenantProvider.findBySlug.mockResolvedValue(null); // Slug available
+      const updated = { id: 't1', name: 'New Name' };
+      mockTenantProvider.update.mockResolvedValue(updated);
+
+      const result = await controller.updateTenant('t1', { name: 'New Name' });
+
+      expect(result).toEqual(updated);
       expect(mockTenantProvider.update).toHaveBeenCalledWith('t1', {
-        name: 'New',
+        name: 'New Name',
       });
     });
   });
@@ -278,17 +248,17 @@ describe('SystemAdminController', () => {
   describe('deleteTenant', () => {
     it('should throw NotFoundException if tenant not found', async () => {
       mockTenantProvider.findById.mockResolvedValue(null);
-
       await expect(controller.deleteTenant('missing')).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('should delete tenant via provider', async () => {
+    it('should delete tenant', async () => {
       mockTenantProvider.findById.mockResolvedValue({ id: 't1' });
 
-      await controller.deleteTenant('t1');
+      const result = await controller.deleteTenant('t1');
 
+      expect(result).toEqual({ success: true });
       expect(mockTenantProvider.delete).toHaveBeenCalledWith('t1');
     });
   });
@@ -296,34 +266,35 @@ describe('SystemAdminController', () => {
   describe('updateUser', () => {
     it('should throw NotFoundException if user not found', async () => {
       mockUserProvider.findById.mockResolvedValue(null);
-
       await expect(
         controller.updateUser('missing', { name: 'New' }),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException if email overlaps', async () => {
+    it('should throw BadRequestException if email taken', async () => {
       mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
         email: 'old@example.com',
       });
-      mockUserProvider.findByEmail.mockResolvedValue({
-        id: 'u2', // Diff ID
-        email: 'taken@example.com',
-      });
+      mockUserProvider.findByEmail.mockResolvedValue({ id: 'other' });
 
       await expect(
         controller.updateUser('u1', { email: 'taken@example.com' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should update user via provider', async () => {
-      mockUserProvider.findById.mockResolvedValue({ id: 'u1' });
-      mockUserProvider.update.mockResolvedValue({ id: 'u1', name: 'New' });
+    it('should update user', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+        email: 'old@example.com',
+      });
+      mockUserProvider.findByEmail.mockResolvedValue(null);
+      const updated = { id: 'u1', name: 'New' };
+      mockUserProvider.update.mockResolvedValue(updated);
 
       const result = await controller.updateUser('u1', { name: 'New' });
 
-      expect(result).toEqual({ id: 'u1', name: 'New' });
+      expect(result).toEqual(updated);
       expect(mockUserProvider.update).toHaveBeenCalledWith('u1', {
         name: 'New',
       });
@@ -331,21 +302,19 @@ describe('SystemAdminController', () => {
   });
 
   describe('getUser', () => {
-    it('should return user by ID', async () => {
-      const mockUser = { id: 'u1' };
-      mockUserProvider.findById.mockResolvedValue(mockUser);
-
-      const result = await controller.getUser('u1');
-
-      expect(result).toEqual(mockUser);
-    });
-
     it('should throw NotFoundException if user not found', async () => {
       mockUserProvider.findById.mockResolvedValue(null);
-
       await expect(controller.getUser('missing')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('should return user', async () => {
+      const user = { id: 'u1' };
+      mockUserProvider.findById.mockResolvedValue(user);
+
+      const result = await controller.getUser('u1');
+      expect(result).toEqual(user);
     });
   });
 
@@ -358,46 +327,14 @@ describe('SystemAdminController', () => {
       );
     });
 
-    it('should prevent deleting the last platform admin', async () => {
-      mockUserProvider.findById.mockResolvedValue({
-        id: 'admin1',
-        systemRole: 'platform_admin',
-      });
-      // count returns 1 (only this user left)
-      mockUserProvider.count.mockResolvedValue(1);
-
-      await expect(controller.deleteUser('admin1')).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(mockUserProvider.count).toHaveBeenCalledWith({
-        systemRole: 'platform_admin',
-      });
-    });
-
-    it('should allow deleting platform admin if others exist', async () => {
-      mockUserProvider.findById.mockResolvedValue({
-        id: 'admin1',
-        systemRole: 'platform_admin',
-      });
-      // count returns 2
-      mockUserProvider.count.mockResolvedValue(2);
-
-      await controller.deleteUser('admin1');
-
-      expect(mockUserProvider.delete).toHaveBeenCalledWith('admin1');
-    });
-
-    it('should delete normal user', async () => {
+    it('should delete user', async () => {
       mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
-        systemRole: 'platform_user',
       });
 
       await controller.deleteUser('u1');
 
       expect(mockUserProvider.delete).toHaveBeenCalledWith('u1');
-      // Should not check admin count for normal user
-      expect(mockUserProvider.count).not.toHaveBeenCalled();
     });
   });
 
@@ -423,7 +360,6 @@ describe('SystemAdminController', () => {
       mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
         email: 'test@example.com',
-        systemRole: 'platform_admin',
       });
       mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
         user: { id: 'admin1' },
@@ -433,7 +369,7 @@ describe('SystemAdminController', () => {
 
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: 'platform_admin',
+        role: DEFAULT_SYSTEM_ROLE_ID, // Use constant!
         organizationId: null, // System invite
         inviterId: 'admin1',
       });

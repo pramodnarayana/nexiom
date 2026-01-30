@@ -24,13 +24,15 @@ export class SystemAdminGuard implements CanActivate {
       throw new UnauthorizedException('Invalid Session');
     }
 
-    // 3. Check System Role
+    // 3. Check System Permissions
     // Note: sessionData.user comes from Drizzle Schema via IdentityProvider.
-    // We cast to a minimal interface that includes systemRole
-    const user = sessionData.user as { systemRole?: string };
+    const user = sessionData.user;
+    const hasAccess = await this.authService.hasSystemPermission(
+      user,
+      'manage',
+    );
 
-    // Only allow platform_admin. platform_user is not sufficient for System Admin actions.
-    if (user.systemRole !== 'platform_admin') {
+    if (!hasAccess) {
       throw new ForbiddenException('Requires Platform Admin Privileges');
     }
 

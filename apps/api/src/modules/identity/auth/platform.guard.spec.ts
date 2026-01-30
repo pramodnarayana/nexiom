@@ -17,6 +17,7 @@ describe('PlatformGuard', () => {
   let module: TestingModule;
   let authService: {
     getSessionFromHeaders: Mock;
+    hasSystemPermission: Mock;
   };
 
   beforeEach(async () => {
@@ -29,6 +30,7 @@ describe('PlatformGuard', () => {
           provide: AuthService,
           useValue: {
             getSessionFromHeaders: vi.fn(),
+            hasSystemPermission: vi.fn(),
           },
         },
         {
@@ -64,11 +66,12 @@ describe('PlatformGuard', () => {
     );
   });
 
-  it('should throw ForbiddenException if user has no platform role', async () => {
+  it('should throw ForbiddenException if user has no system permission', async () => {
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
-      user: { id: 'u1', systemRole: 'tenant_user' } as any,
+      user: { id: 'u1' } as any,
     });
+    authService.hasSystemPermission.mockResolvedValue(false);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -81,19 +84,19 @@ describe('PlatformGuard', () => {
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
       ForbiddenException,
     );
+    expect(authService.hasSystemPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u1' }),
+      'view',
+    );
   });
 
-  it('should allow access if user is platform_admin', async () => {
-    const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
+  it('should allow access if user has system view privileges', async () => {
+    const mockUser = { id: 'admin1' };
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as any,
       user: mockUser as any,
     });
-    // Mock Permission Provider Success
-
-    const permissionProvider: any = module.get(PERMISSION_PROVIDER);
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-call */
-    permissionProvider.hasRole.mockResolvedValue(true);
+    authService.hasSystemPermission.mockResolvedValue(true);
 
     const mockRequest = { headers: {} };
     const mockContext = {
@@ -106,49 +109,9 @@ describe('PlatformGuard', () => {
 
     expect(result).toBe(true);
     expect((mockRequest as any).user).toEqual(mockUser);
-  });
-
-  it('should allow access if user is platform_user', async () => {
-    const mockUser = { id: 'user1', systemRole: 'platform_user' };
-    authService.getSessionFromHeaders.mockResolvedValue({
-      session: {} as any,
-      user: mockUser as any,
-    });
-    // Mock Permission Provider Success
-
-    const permissionProvider: any = module.get(PERMISSION_PROVIDER);
-    /* eslint-disable-next-line @typescript-eslint/no-unsafe-call */
-    permissionProvider.hasRole.mockResolvedValue(true);
-
-    const mockRequest = { headers: {} };
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => mockRequest,
-      }),
-    } as ExecutionContext;
-
-    const result = await guard.canActivate(mockContext);
-
-    expect(result).toBe(true);
-    expect((mockRequest as any).user).toEqual(mockUser);
-  });
-
-  it('should throw ForbiddenException if user has undefined systemRole', async () => {
-    authService.getSessionFromHeaders.mockResolvedValue({
-      session: {} as any,
-      user: { id: 'u3' } as any,
-    });
-
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {},
-        }),
-      }),
-    } as ExecutionContext;
-
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      ForbiddenException,
+    expect(authService.hasSystemPermission).toHaveBeenCalledWith(
+      mockUser,
+      'view',
     );
   });
 });

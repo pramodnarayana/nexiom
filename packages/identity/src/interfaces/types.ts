@@ -7,7 +7,6 @@ export interface User {
   createdAt: Date;
   updatedAt: Date;
   role: string | null;
-  systemRole?: string | null;
   banned?: boolean | null;
   banReason?: string | null;
   banExpires?: Date | null;

@@ -85,7 +85,7 @@ describe('AdminLayout', () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: false,
             isAuthenticated: true,
-            user: { name: 'Staff', systemRole: 'platform_user', permissions: ['tenants:read'] },
+            user: { name: 'Staff', permissions: ['tenants:read'] },
             logout: mockLogout
         });
 
@@ -106,7 +106,7 @@ describe('AdminLayout', () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isLoading: false,
             isAuthenticated: true,
-            user: { name: 'Admin', systemRole: 'platform_admin', permissions: ['*'] },
+            user: { name: 'Admin', permissions: ['*'] },
             logout: mockLogout
         });
 

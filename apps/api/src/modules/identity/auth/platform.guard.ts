@@ -4,12 +4,10 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
-  Inject,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
 import { toWebHeaders } from '../../../shared/utils/headers.util';
-import { PERMISSION_PROVIDER, IPermissionProvider } from '@nexiom/identity';
 
 /**
  * PlatformGuard
@@ -21,11 +19,7 @@ import { PERMISSION_PROVIDER, IPermissionProvider } from '@nexiom/identity';
  */
 @Injectable()
 export class PlatformGuard implements CanActivate {
-  constructor(
-    private readonly authService: AuthService,
-    @Inject(PERMISSION_PROVIDER)
-    private readonly permissionProvider: IPermissionProvider,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
@@ -38,14 +32,11 @@ export class PlatformGuard implements CanActivate {
       throw new UnauthorizedException('Invalid Session');
     }
 
-    // Check System Role - Allow both platform_admin and platform_user
+    // Check System Permissions (Read Access)
     const user = sessionData.user;
-    const [isPlatformAdmin, isPlatformUser] = await Promise.all([
-      this.permissionProvider.hasRole(user, 'platform_admin'),
-      this.permissionProvider.hasRole(user, 'platform_user'),
-    ]);
+    const hasAccess = await this.authService.hasSystemPermission(user, 'view');
 
-    if (!isPlatformAdmin && !isPlatformUser) {
+    if (!hasAccess) {
       throw new ForbiddenException('Requires Platform Access');
     }
 

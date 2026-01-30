@@ -11,6 +11,7 @@ import {
   ITenantProvider,
   PERMISSION_PROVIDER,
   IPermissionProvider,
+  SYSTEM_TENANT_ID,
 } from '@nexiom/identity';
 
 @Injectable()
@@ -86,36 +87,40 @@ export class AuthService {
     // Fetch Permissions
     // If we have an organization context, fetch permissions for that tenant
     // Otherwise fetch system permissions (if any, e.g. system admin)
-    const permissions: string[] = [];
+    // Fetch Permissions
+    // 1. Fetch System Permissions (Global)
+    const permissionsSet = new Set<string>();
     try {
-      // 1. Platform Admin always gets wildcard (Global Access)
-      if (user.systemRole === 'platform_admin') {
-        permissions.push('*');
-      } else if (user.systemRole === 'platform_user') {
-        // Platform Users get access to the admin dashboard (but not everything)
-        permissions.push('admin_dashboard:view');
+      const systemPerms = await this.permissionProvider.getPermissions(
+        user,
+        SYSTEM_TENANT_ID,
+      );
+      for (const p of systemPerms) {
+        permissionsSet.add(p);
       }
+    } catch (_error) {
+      // Ignore error if user is not part of system tenant (expected for most users)
+    }
 
-      // 2. Add Tenant-specific permissions if context exists
-      if (organizationId) {
-        const perms = await this.permissionProvider.getPermissions(
+    // 2. Fetch Tenant-specific permissions if context exists
+    if (organizationId) {
+      try {
+        const tenantPerms = await this.permissionProvider.getPermissions(
           user,
           organizationId,
         );
-        permissions.push(...perms);
-      }
-    } catch (error) {
-      this.logger.error(
-        `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
-        error,
-      );
-      // Fallback: If platform admin, ensure they still have access
-      if (user.systemRole === 'platform_admin') {
-        permissions.push('*');
-      } else if (user.systemRole === 'platform_user') {
-        permissions.push('admin_dashboard:view');
+        for (const p of tenantPerms) {
+          permissionsSet.add(p);
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
+          error,
+        );
       }
     }
+
+    const permissions = Array.from(permissionsSet);
 
     return {
       session: {
@@ -128,6 +133,25 @@ export class AuthService {
         permissions,
       },
     };
+  }
+
+  async hasSystemPermission(user: User, action: string): Promise<boolean> {
+    try {
+      const perms = await this.permissionProvider.getPermissions(
+        user,
+        SYSTEM_TENANT_ID,
+      );
+      // 'manage' implies full access, 'view' implies read access.
+      // We check if the user has specific permission OR wildcard.
+      if (perms.includes('*')) return true;
+      if (perms.includes(`system:${action}`)) return true;
+
+      // Legacy mapping (temporarily support old roles via permission check if needed,
+      // but we are moving to pure DB, so strict check is better).
+      return false;
+    } catch (_e) {
+      return false;
+    }
   }
 
   getHandler() {

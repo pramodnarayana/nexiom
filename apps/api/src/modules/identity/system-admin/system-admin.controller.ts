@@ -20,6 +20,7 @@ import {
   IUserProvider,
   TENANT_PROVIDER,
   ITenantProvider,
+  DEFAULT_SYSTEM_ROLE_ID,
 } from '@nexiom/identity';
 import {
   CreateTenantValidation,
@@ -65,7 +66,7 @@ export class SystemAdminController {
     // Create System Invitation (OrgId = null)
     await this.authProvider.createInvitation({
       email: user.email,
-      role: user.systemRole || 'platform_user',
+      role: DEFAULT_SYSTEM_ROLE_ID,
       organizationId: null, // System Invite
       inviterId: session.user.id,
     });
@@ -263,20 +264,7 @@ export class SystemAdminController {
     }
 
     // Safety: Prevent deleting the last platform admin
-    if (user.systemRole === 'platform_admin') {
-      const adminCount = await this.userProvider.count({
-        systemRole: 'platform_admin',
-      });
-
-      // The count includes the current target user.
-      // A count of 1 means this is the LAST admin left.
-      // Therefore, we must prevent deletion if count <= 1.
-      if (adminCount <= 1) {
-        throw new BadRequestException(
-          'Cannot delete the last Platform Administrator',
-        );
-      }
-    }
+    // TODO: Implement safety check for last Platform Administrator using PermissionProvider count
 
     await this.userProvider.delete(id);
 

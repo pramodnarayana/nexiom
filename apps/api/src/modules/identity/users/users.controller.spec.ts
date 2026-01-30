@@ -109,7 +109,7 @@ describe('UsersController', () => {
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
-      const users = [{ id: '1' }];
+      const users = [{ id: '1', permissions: [] }];
 
       userProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
@@ -124,7 +124,7 @@ describe('UsersController', () => {
     it('should call userProvider.findById and check tenant membership', async () => {
       const id = '1';
       const tenantId = 'org-123';
-      const user = { id: '1', email: 'test@example.com' };
+      const user = { id: '1', email: 'test@example.com', permissions: [] };
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
@@ -153,7 +153,7 @@ describe('UsersController', () => {
     it('should throw NotFoundException if user not member of tenant', async () => {
       const id = '1';
       const tenantId = 'org-123';
-      const user = { id: '1', email: 'test@example.com' };
+      const user = { id: '1', email: 'test@example.com', permissions: [] };
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };

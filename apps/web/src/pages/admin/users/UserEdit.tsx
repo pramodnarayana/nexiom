@@ -19,13 +19,7 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Save, Send, Loader2 } from "lucide-react";
@@ -36,7 +30,6 @@ import { useToast } from "@/hooks/use-toast";
 const UserEditSchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email address"),
-    systemRole: z.enum(["platform_user", "platform_admin"]),
 });
 
 type UserEditFormValues = z.infer<typeof UserEditSchema>;
@@ -60,7 +53,6 @@ export const UserEdit = () => {
         defaultValues: {
             name: "",
             email: "",
-            systemRole: "platform_user",
         },
     });
 
@@ -200,30 +192,7 @@ export const UserEdit = () => {
                                 )}
                             />
 
-                            <FormField
-                                control={form.control}
-                                name="systemRole"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>System Role</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select a role" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="platform_user">Platform User</SelectItem>
-                                                <SelectItem value="platform_admin">Platform Admin</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p className="text-[0.8rem] text-muted-foreground">
-                                            <strong>Platform Admin:</strong> Full access to Tenant & User Management.
-                                        </p>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+
 
                             <div className="flex justify-end pt-4">
                                 <Button type="submit" disabled={formLoading}>

@@ -17,7 +17,6 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     resource: PermissionResource,
     tenantId?: string,
   ): Promise<boolean> {
-    if (user.systemRole === "platform_admin") return true;
     if (!tenantId) return false;
 
     const context = await this.fetchMemberContext(user.id, tenantId);
@@ -27,6 +26,19 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     if (context.roleName === "Owner") return true;
 
     // Check permissions
+    // 1. Global Wildcard
+    if (context.permissions.some((p) => p.resource === "*" && p.action === "*"))
+      return true;
+
+    // 2. Resource Wildcard
+    if (
+      context.permissions.some(
+        (p) => p.resource === resource && p.action === "*",
+      )
+    )
+      return true;
+
+    // 3. Exact Match
     return context.permissions.some(
       (p) => p.resource === resource && p.action === action,
     );
@@ -41,20 +53,13 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       const context = await this.fetchMemberContext(user.id, tenantId);
       return context?.roleId === roleId;
     }
-    if (!user.systemRole) return false;
-    return user.systemRole === roleId;
+    return false;
   }
 
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
     const perms: string[] = [];
 
     // 1. Super Admin Wildcard
-    if (user.systemRole === "platform_admin") {
-      perms.push("*");
-      // Platform admins might implicitely have access to everything,
-      // but some frontend logic might rely on specific keys if they check `can('users', 'manage')`.
-      // The frontend wildcard check `has('*')` handles this.
-    }
 
     if (tenantId) {
       const context = await this.fetchMemberContext(user.id, tenantId);
@@ -67,7 +72,11 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
         // 3. Explicit Permissions
         context.permissions.forEach((p) => {
-          perms.push(`${p.resource}:${p.action}`);
+          if (p.resource === "*" && p.action === "*") {
+            perms.push("*");
+          } else {
+            perms.push(`${p.resource}:${p.action}`);
+          }
         });
       }
     }
