@@ -131,6 +131,8 @@ describe("DrizzlePermissionAdapter", () => {
     db.select.mockReturnValue(
       mockChainedQuery([
         {
+          roleId: "admin",
+          roleName: "Admin",
           permId: "all",
           resource: "*",
           action: "*",
@@ -148,6 +150,8 @@ describe("DrizzlePermissionAdapter", () => {
     db.select.mockReturnValue(
       mockChainedQuery([
         {
+          roleId: "admin",
+          roleName: "Admin",
           permId: "org_all",
           resource: "organization",
           action: "*",
@@ -226,10 +230,36 @@ describe("DrizzlePermissionAdapter", () => {
       ]),
     );
 
-    // Pass SYSTEM_TENANT_ID or rely on default if implementation handles it?
-    // Implementation requires tenantId usually.
     expect(await adapter.getPermissions(mkUser(), SYSTEM_TENANT_ID)).toEqual([
       "*",
+    ]);
+  });
+
+  it("getPermissions: returns resource wildcard (e.g. organization:*)", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "org_all",
+          resource: "organization",
+          action: "*",
+        },
+      ]),
+    );
+
+    // Should collapse to "organization:*" because the implementation maps
+    // existing matched permissions by id. If db returns action='*', we expect result to be 'resource:*' unless
+    // resource is also '*', which is covered in the previous test.
+    // wait, existing implementation logic:
+    // context.permissions.forEach((p) => {
+    //  if (p.resource === "*" && p.action === "*") { perms.push("*"); }
+    //  else { perms.push(`${p.resource}:${p.action}`); }
+    // });
+    // So "organization" + "*" -> "organization:*"
+    expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
+      "organization:*",
     ]);
   });
 });

@@ -157,7 +157,23 @@ async function reset() {
         });
         console.log(`   ✅ Role updated to ${ROLE}.`);
       } else {
-        console.log('   ℹ️  User is already a member of the system tenant.');
+        // Check if role needs update
+        if (existingMembers[0].roleId !== PLATFORM_ADMIN_ROLE_ID) {
+          await db
+            .update(schema.member)
+            .set({ roleId: PLATFORM_ADMIN_ROLE_ID })
+            .where(
+              and(
+                eq(schema.member.userId, users[0].id),
+                eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+              ),
+            );
+          console.log(`   ✅ Existing member role elevated to ${ROLE}.`);
+        } else {
+          console.log(
+            '   ℹ️  User is already a system tenant member with correct role.',
+          );
+        }
       }
 
       console.log('\n🎉 SUCCESS! You can now login.');

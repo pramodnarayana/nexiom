@@ -95,7 +95,9 @@ export class AuthService {
         user,
         SYSTEM_TENANT_ID,
       );
-      systemPerms.forEach((p) => permissionsSet.add(p));
+      for (const p of systemPerms) {
+        permissionsSet.add(p);
+      }
     } catch (_error) {
       // Ignore error if user is not part of system tenant (expected for most users)
     }
@@ -107,7 +109,9 @@ export class AuthService {
           user,
           organizationId,
         );
-        tenantPerms.forEach((p) => permissionsSet.add(p));
+        for (const p of tenantPerms) {
+          permissionsSet.add(p);
+        }
       } catch (error) {
         this.logger.error(
           `Failed to fetch permissions for user ${user.id} in org ${organizationId}`,
