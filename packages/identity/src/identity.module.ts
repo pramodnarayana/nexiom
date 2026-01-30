@@ -4,7 +4,7 @@ import {
   Provider,
   Global,
   Type,
-  ForwardReference,
+  ModuleMetadata,
 } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -12,6 +12,7 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
+  IDENTITY_OPTIONS,
 } from "./constants";
 import {
   BetterAuthAdapter,
@@ -31,12 +32,7 @@ export interface IdentityModuleOptions {
   // Resolved instances (for async injection)
   db?: NodePgDatabase<typeof schema>;
   email?: IEmailProvider;
-  imports?: (
-    | Type<any>
-    | DynamicModule
-    | Promise<DynamicModule>
-    | ForwardReference<any>
-  )[];
+  imports?: ModuleMetadata["imports"];
 }
 
 @Global()
@@ -111,38 +107,43 @@ export class IdentityModule {
   }
 
   static registerAsync(options: {
-    imports?: any[];
+    imports?: ModuleMetadata["imports"];
 
     useFactory: (
       ...args: any[]
     ) => Promise<IdentityModuleOptions> | IdentityModuleOptions;
 
-    inject?: any[];
+    inject?: (string | symbol | Type<any> | Function)[];
   }): DynamicModule {
     return {
       module: IdentityModule,
       imports: options.imports || [],
       providers: [
         {
-          provide: "IDENTITY_OPTIONS",
-          useFactory: options.useFactory,
-          inject: options.inject || [],
-        },
-        {
-          provide: AUTH_PROVIDER,
-          useFactory: (identityOptions: IdentityModuleOptions) => {
+          provide: IDENTITY_OPTIONS,
+
+          useFactory: async (...args: any[]) => {
+            const identityOptions = await options.useFactory(...args);
             if (!identityOptions.db || !identityOptions.email) {
               throw new Error(
                 "db and email instances must be provided in IdentityModuleOptions for registerAsync",
               );
             }
+            return identityOptions;
+          },
+          inject: options.inject || [],
+        },
+        {
+          provide: AUTH_PROVIDER,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validated in IDENTITY_OPTIONS factory
             return new BetterAuthAdapter(
-              identityOptions.db,
-              identityOptions.email,
+              identityOptions.db!,
+              identityOptions.email!,
               identityOptions.betterAuthConfig,
             );
           },
-          inject: ["IDENTITY_OPTIONS"],
+          inject: [IDENTITY_OPTIONS],
         },
         {
           provide: USER_PROVIDER,
@@ -150,38 +151,26 @@ export class IdentityModule {
             identityOptions: IdentityModuleOptions,
             authProvider: IAuthProvider,
           ) => {
-            if (!identityOptions.db) {
-              throw new Error(
-                "db instance must be provided in IdentityModuleOptions for registerAsync",
-              );
-            }
-            return new DrizzleUserAdapter(identityOptions.db, authProvider);
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzleUserAdapter(identityOptions.db!, authProvider);
           },
-          inject: ["IDENTITY_OPTIONS", AUTH_PROVIDER],
+          inject: [IDENTITY_OPTIONS, AUTH_PROVIDER],
         },
         {
           provide: TENANT_PROVIDER,
           useFactory: (identityOptions: IdentityModuleOptions) => {
-            if (!identityOptions.db) {
-              throw new Error(
-                "db instance must be provided in IdentityModuleOptions for registerAsync",
-              );
-            }
-            return new DrizzleTenantAdapter(identityOptions.db);
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzleTenantAdapter(identityOptions.db!);
           },
-          inject: ["IDENTITY_OPTIONS"],
+          inject: [IDENTITY_OPTIONS],
         },
         {
           provide: PERMISSION_PROVIDER,
           useFactory: (identityOptions: IdentityModuleOptions) => {
-            if (!identityOptions.db) {
-              throw new Error(
-                "db instance must be provided in IdentityModuleOptions for registerAsync",
-              );
-            }
-            return new DrizzlePermissionAdapter(identityOptions.db);
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzlePermissionAdapter(identityOptions.db!);
           },
-          inject: ["IDENTITY_OPTIONS"],
+          inject: [IDENTITY_OPTIONS],
         },
       ],
       exports: [

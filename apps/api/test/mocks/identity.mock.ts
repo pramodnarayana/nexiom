@@ -6,7 +6,12 @@ export const EMAIL_PROVIDER = 'EMAIL_PROVIDER';
 
 export const IdentityModule = {
   register: vi.fn(() => ({
-    module: class IdentityModuleMock {},
+    module: class IdentityModuleMock { },
+    providers: [],
+    exports: [],
+  })),
+  registerAsync: vi.fn(() => ({
+    module: class IdentityModuleMock { },
     providers: [],
     exports: [],
   })),

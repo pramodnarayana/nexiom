@@ -10,6 +10,8 @@ import { InvitationsModule } from './modules/identity/invitations/invitations.mo
 import { SystemAdminModule } from './modules/identity/system-admin/system-admin.module';
 import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from './modules/email/email.service.abstract';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './db/schema';
 
 @Module({
   imports: [
@@ -22,10 +24,8 @@ import { EmailService } from './modules/email/email.service.abstract';
       inject: [ConfigService, 'DRIZZLE_DB', EmailService],
       useFactory: (
         configService: ConfigService,
-
-        db: any,
-
-        emailService: any,
+        db: NodePgDatabase<typeof schema>,
+        emailService: EmailService,
       ) => ({
         betterAuthConfig: {
           allowedOrigins: configService
@@ -39,9 +39,7 @@ import { EmailService } from './modules/email/email.service.abstract';
           googleClientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
           nodeEnv: configService.get<string>('NODE_ENV'),
         },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        db: db,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        db: db as any,
         email: emailService,
       }),
     }),
@@ -55,4 +53,4 @@ import { EmailService } from './modules/email/email.service.abstract';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
