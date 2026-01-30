@@ -21,7 +21,6 @@ export const IdentityModule = {
 export const user = {
   id: 'user.id',
   email: 'user.email',
-  systemRole: 'user.systemRole',
   createdAt: 'user.createdAt',
   updatedAt: 'user.updatedAt',
   emailVerified: 'user.emailVerified',

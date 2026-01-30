@@ -1,12 +1,13 @@
-/* eslint-disable */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
+import { SYSTEM_TENANT_ID } from "../constants";
 
 const mockChainedQuery = (result: unknown) => {
   const p = Promise.resolve(result);
+
   const chain: any = Object.assign(p, {});
 
   const methods = [
@@ -20,16 +21,36 @@ const mockChainedQuery = (result: unknown) => {
     "orderBy",
   ];
   methods.forEach((m) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     chain[m] = vi.fn().mockReturnValue(chain);
   });
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   return chain;
 };
 
+interface MockDb {
+  select: Mock;
+  from: Mock;
+  innerJoin: Mock;
+  leftJoin: Mock;
+  where: Mock;
+  limit: Mock;
+  offset: Mock;
+  orderBy: Mock;
+}
+
 const mkDb = () => {
-  const db: any = {
+  const db: MockDb = {
     select: vi.fn(),
+    from: vi.fn(),
+    innerJoin: vi.fn(),
+    leftJoin: vi.fn(),
+    where: vi.fn(),
+    limit: vi.fn(),
+    offset: vi.fn(),
+    orderBy: vi.fn(),
   };
-  return db as unknown as NodePgDatabase<typeof schema> & any;
+  return db as unknown as NodePgDatabase<typeof schema> & MockDb;
 };
 
 const mkUser = (over?: Partial<User>): User => ({
@@ -41,7 +62,6 @@ const mkUser = (over?: Partial<User>): User => ({
   createdAt: new Date(),
   updatedAt: new Date(),
   role: "user",
-  systemRole: null,
   banned: false,
   banReason: null,
   banExpires: null,
@@ -50,15 +70,6 @@ const mkUser = (over?: Partial<User>): User => ({
 
 describe("DrizzlePermissionAdapter", () => {
   beforeEach(() => vi.restoreAllMocks());
-
-  it("can: platform_admin always true", async () => {
-    const db = mkDb();
-    const adapter = new DrizzlePermissionAdapter(db);
-    const user = mkUser({ systemRole: "platform_admin" });
-    expect(await adapter.can(user, "delete", "organization", undefined)).toBe(
-      true,
-    );
-  });
 
   it("can: tenant checks - Owner true, others based on permissions", async () => {
     const db = mkDb();
@@ -144,11 +155,6 @@ describe("DrizzlePermissionAdapter", () => {
     const db = mkDb();
     const adapter = new DrizzlePermissionAdapter(db);
 
-    // platform admin
-    expect(
-      await adapter.getPermissions(mkUser({ systemRole: "platform_admin" })),
-    ).toEqual(["*"]);
-
     // tenant member: user with permissions
     db.select.mockReturnValue(
       mockChainedQuery([
@@ -168,5 +174,27 @@ describe("DrizzlePermissionAdapter", () => {
     // tenant member not found
     db.select.mockReturnValue(mockChainedQuery([]));
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([]);
+  });
+
+  it("getPermissions: returns * for system admin if DB returns it", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+
+    // Mock DB to return '*' permission for system tenant query
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          permId: "*",
+          resource: "*",
+          action: "*",
+        },
+      ]),
+    );
+
+    // Pass SYSTEM_TENANT_ID or rely on default if implementation handles it?
+    // Implementation requires tenantId usually.
+    expect(await adapter.getPermissions(mkUser(), SYSTEM_TENANT_ID)).toEqual([
+      "*",
+    ]);
   });
 });

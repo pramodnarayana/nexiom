@@ -18,6 +18,7 @@ import {
   User as UserInterface,
 } from "../interfaces";
 import { CreateUserInput } from "../interfaces/user-provider.interface";
+import { SYSTEM_TENANT_ID } from "../constants";
 import { IEmailProvider } from "../interfaces/email-provider.interface";
 import * as schema from "../schema";
 import { IncomingHttpHeaders } from "node:http";
@@ -80,14 +81,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           });
         },
       },
-      user: {
-        additionalFields: {
-          systemRole: {
-            type: "string",
-            required: false,
-          },
-        },
-      },
+      user: {},
       emailVerification: {
         sendOnSignUp: true,
         autoSignInAfterVerification: true,
@@ -484,11 +478,15 @@ export class BetterAuthAdapter implements IAuthProvider {
           createdAt: new Date(),
         });
       } else {
-        // System role
-        await tx
-          .update(schema.user)
-          .set({ systemRole: inv.role })
-          .where(eq(schema.user.id, userId));
+        // System role -> Membership in System Tenant
+        // We assume the role passed in invitation matches a Role ID in the System Tenant (e.g. 'platform_admin')
+        await tx.insert(schema.member).values({
+          id: uuidv4(),
+          organizationId: SYSTEM_TENANT_ID,
+          userId: userId,
+          roleId: inv.role || "member", // Default to member if null, though system invites usually specify role
+          createdAt: new Date(),
+        });
       }
 
       await tx
@@ -549,7 +547,6 @@ export class BetterAuthAdapter implements IAuthProvider {
       createdAt: dbUser.createdAt,
       updatedAt: dbUser.updatedAt,
       role: dbUser.role,
-      systemRole: dbUser.systemRole || null,
       banned: dbUser.banned || false,
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,

@@ -6,7 +6,6 @@ export const PERMISSION_PROVIDER = "PERMISSION_PROVIDER";
 export const EMAIL_PROVIDER = "EMAIL_PROVIDER";
 export const DATABASE_CONNECTION = "DATABASE_CONNECTION";
 
-export enum SystemRole {
-  PLATFORM_ADMIN = "platform_admin",
-  PLATFORM_USER = "platform_user",
-}
+export const SYSTEM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
+export const PLATFORM_ADMIN_ROLE_ID = "platform_admin";
+export const DEFAULT_SYSTEM_ROLE_ID = "member";

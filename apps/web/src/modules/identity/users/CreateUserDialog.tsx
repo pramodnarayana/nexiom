@@ -18,13 +18,7 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
@@ -35,7 +29,6 @@ import { useCreate } from "@refinedev/core";
 const createUserSchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email address"),
-    systemRole: z.enum(["platform_user", "platform_admin"]),
 });
 
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
@@ -50,7 +43,6 @@ export function CreateUserDialog() {
         defaultValues: {
             name: "",
             email: "",
-            systemRole: "platform_user",
         },
     });
 
@@ -139,27 +131,7 @@ export function CreateUserDialog() {
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="systemRole"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>System Role</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select a role" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="platform_user">Platform User</SelectItem>
-                                            <SelectItem value="platform_admin">Platform Admin</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+
                         <DialogFooter>
                             <Button
                                 type="submit"

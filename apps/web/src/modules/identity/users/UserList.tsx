@@ -34,7 +34,6 @@ export const UserList = ({
         name: user.name,
         email: user.email,
         role: user.role,
-        systemRole: user.systemRole,
         emailVerified: user.emailVerified,
         status: "active"
     })) || [];

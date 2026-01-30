@@ -4,8 +4,12 @@ import * as schema from '../db/schema';
 import { eq } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
-// Load Environment Variables
+// ... (Environment loading)
+
+// ...
+
 // Current Dir: apps/api/src/scripts
 // API Root: ../../
 // Repo Root: ../../../../
@@ -75,10 +79,42 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  // 2. Elevate to Platform Admin via DB
-  console.log('2️⃣  Elevating to Platform Admin...');
+  // 2. Elevate to Platform Admin via DB (Seed System Tenant)
+  console.log('2️⃣  Elevating to Platform Admin (Seeding System Tenant)...');
   await client.connect();
   const db = drizzle(client, { schema });
+
+  const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+  // Ensure System Tenant Exists
+  await db
+    .insert(schema.organization)
+    .values({
+      id: SYSTEM_TENANT_ID,
+      name: 'Nexiom Platform',
+      slug: 'system',
+    })
+    .onConflictDoNothing();
+
+  // Ensure Platform Admin Role Exists in System Tenant
+  // We need to fetch the inserted/existing tenant first if we needed its ID, but we have it constant.
+
+  // Fetch or Create "Platform Admin" Role
+  // Note: logic assumes the role exists or we create it.
+  // Ideally, better-auth might manage roles, but here we are manual.
+
+  // Actually, we should check if the user is already a member of the System Tenant.
+
+  // Ensure "Platform Admin" Role Exists
+  await db
+    .insert(schema.role)
+    .values({
+      id: 'platform_admin',
+      name: 'Platform Admin',
+      isSystem: true,
+      description: 'Super administrator for the platform',
+    })
+    .onConflictDoNothing();
 
   console.log(`Searching for: ${EMAIL}`);
   const users = await db
@@ -94,13 +130,20 @@ async function bootstrap() {
 
   const user = users[0];
 
+  // Insert Member for System Tenant
+  console.log('3️⃣  Assigning platform_admin role in System Tenant...');
   await db
-    .update(schema.user)
-    .set({ systemRole: 'platform_admin' })
-    .where(eq(schema.user.id, user.id));
+    .insert(schema.member)
+    .values({
+      id: uuidv4(),
+      organizationId: SYSTEM_TENANT_ID,
+      userId: user.id,
+      roleId: 'platform_admin', // Correct field: roleId
+    })
+    .onConflictDoNothing();
 
   console.log(
-    `✅ User '${user.name}' (${user.email}) is now a PLATFORM ADMIN.`,
+    `✅ User '${user.name}' (${user.email}) is now a MEMBER of System Tenant with 'Platform Admin' role.`,
   );
 
   console.log('\n--------- CREDENTIALS ---------');

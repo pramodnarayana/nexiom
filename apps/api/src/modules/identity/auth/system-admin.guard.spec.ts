@@ -12,6 +12,7 @@ describe('SystemAdminGuard', () => {
   let guard: SystemAdminGuard;
   let authService: {
     getSessionFromHeaders: Mock;
+    hasSystemPermission: Mock;
   };
 
   beforeEach(async () => {
@@ -24,6 +25,7 @@ describe('SystemAdminGuard', () => {
           provide: AuthService,
           useValue: {
             getSessionFromHeaders: vi.fn(),
+            hasSystemPermission: vi.fn(),
           },
         },
       ],
@@ -55,11 +57,12 @@ describe('SystemAdminGuard', () => {
     );
   });
 
-  it('should throw ForbiddenException if user is not a system admin', async () => {
+  it('should throw ForbiddenException if user lacks manage privileges', async () => {
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as unknown,
-      user: { id: 'user1', systemRole: 'tenant_user' } as unknown,
+      user: { id: 'user1' } as unknown,
     });
+    authService.hasSystemPermission.mockResolvedValue(false);
 
     const mockContext = {
       switchToHttp: () => ({
@@ -72,33 +75,19 @@ describe('SystemAdminGuard', () => {
     await expect(guard.canActivate(mockContext)).rejects.toThrow(
       ForbiddenException,
     );
-  });
-
-  it('should throw ForbiddenException if user is platform_user (insufficient privileges)', async () => {
-    authService.getSessionFromHeaders.mockResolvedValue({
-      session: { token: 'valid' },
-      user: { id: 'u2', systemRole: 'platform_user' },
-    });
-
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {},
-        }),
-      }),
-    } as ExecutionContext;
-
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      ForbiddenException,
+    expect(authService.hasSystemPermission).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'user1' }),
+      'manage',
     );
   });
 
-  it('should allow access if user is platform_admin', async () => {
-    const mockUser = { id: 'admin1', systemRole: 'platform_admin' };
+  it('should allow access if user has manage privileges', async () => {
+    const mockUser = { id: 'admin1' };
     authService.getSessionFromHeaders.mockResolvedValue({
       session: {} as unknown,
       user: mockUser as unknown,
     });
+    authService.hasSystemPermission.mockResolvedValue(true);
 
     const mockRequest = { headers: {} };
     const mockContext = {
@@ -113,24 +102,9 @@ describe('SystemAdminGuard', () => {
     expect((mockRequest as unknown as { user: unknown }).user).toEqual(
       mockUser,
     );
-  });
-
-  it('should throw ForbiddenException if user has undefined systemRole', async () => {
-    authService.getSessionFromHeaders.mockResolvedValue({
-      session: {} as unknown,
-      user: { id: 'user1' } as unknown, // systemRole is undefined
-    });
-
-    const mockContext = {
-      switchToHttp: () => ({
-        getRequest: () => ({
-          headers: {},
-        }),
-      }),
-    } as ExecutionContext;
-
-    await expect(guard.canActivate(mockContext)).rejects.toThrow(
-      ForbiddenException,
+    expect(authService.hasSystemPermission).toHaveBeenCalledWith(
+      mockUser,
+      'manage',
     );
   });
 });

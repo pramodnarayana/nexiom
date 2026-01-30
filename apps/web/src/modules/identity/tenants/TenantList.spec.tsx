@@ -128,7 +128,6 @@ describe('TenantList Component', () => {
             id: 'admin-1',
             email: 'admin@example.com',
             name: 'Admin User',
-            systemRole: 'platform_admin' as const,
             roles: [],
             permissions: ['tenants:manage'], // Added permission
         };
@@ -175,7 +174,6 @@ describe('TenantList Component', () => {
             id: 'user-1',
             email: 'user@example.com',
             name: 'Platform User',
-            systemRole: 'platform_user' as const,
             roles: [],
             permissions: [], // No manage permissions
         };
@@ -232,7 +230,6 @@ describe('TenantList Component', () => {
             id: 'user-1',
             email: 'user@example.com',
             name: 'Platform User',
-            systemRole: 'platform_user' as const,
             roles: [],
         };
 

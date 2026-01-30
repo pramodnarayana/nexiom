@@ -23,7 +23,7 @@ vi.mock('../../lib/auth-client', () => ({
 }));
 
 // Setup global fetch mock
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('LoginPage', () => {
     const mockNavigate = vi.fn();
@@ -43,7 +43,7 @@ describe('LoginPage', () => {
             setAuthState: mockSetAuthState,
         });
         // Default fetch mock to success
-        (global.fetch as Mock).mockResolvedValue({
+        (globalThis.fetch as Mock).mockResolvedValue({
             ok: true,
             json: async () => ({
                 user: {
@@ -56,8 +56,8 @@ describe('LoginPage', () => {
         });
 
         // Mock window.location
-        originalLocation = window.location;
-        Object.defineProperty(window, 'location', {
+        originalLocation = globalThis.location;
+        Object.defineProperty(globalThis, 'location', {
             value: { origin: 'http://localhost:3000', search: '' },
             writable: true,
             configurable: true
@@ -66,7 +66,7 @@ describe('LoginPage', () => {
 
     afterEach(() => {
         vi.unstubAllEnvs();
-        Object.defineProperty(window, 'location', {
+        Object.defineProperty(globalThis, 'location', {
             value: originalLocation,
             writable: true,
             configurable: true
@@ -102,14 +102,14 @@ describe('LoginPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 expect.stringContaining('/auth/login'),
                 expect.any(Object)
             );
         });
 
         // Strict check on body
-        const fetchCall = (global.fetch as Mock).mock.calls.find(call => call[0].includes('/auth/login'));
+        const fetchCall = (globalThis.fetch as Mock).mock.calls.find(call => call[0].includes('/auth/login'));
         if (!fetchCall) throw new Error("Fetch not called");
         const body = JSON.parse(fetchCall[1].body);
         expect(body).toEqual({ email: 'test@example.com', password: 'password123' });

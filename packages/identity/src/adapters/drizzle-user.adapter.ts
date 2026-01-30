@@ -19,22 +19,6 @@ export class DrizzleUserAdapter implements IUserProvider {
     // Delegate to AuthProvider to handle account creation (and password hashing)
     const user = await this.authProvider.createUser(input);
 
-    // If systemRole is provided, we need to update the user record immediately
-    // because the Auth Provider might not support custom fields during creation
-    if (input.systemRole) {
-      try {
-        return await this.update(user.id, { systemRole: input.systemRole });
-      } catch (error) {
-        // Compensating transaction: best‑effort cleanup without masking the root cause
-        try {
-          await this.delete(user.id);
-        } catch (cleanupError) {
-          void cleanupError; // optional: log cleanupError
-        }
-        throw error;
-      }
-    }
-
     return user;
   }
 
@@ -107,7 +91,6 @@ export class DrizzleUserAdapter implements IUserProvider {
     limit?: number;
     search?: string;
     tenantId?: string;
-    systemRole?: string;
   }): Promise<{ data: UserInterface[]; total: number }> {
     const page = Math.max(1, Math.floor(Number(options?.page) || 1));
     const MAX_LIMIT = 100;
@@ -167,7 +150,6 @@ export class DrizzleUserAdapter implements IUserProvider {
   async count(filters?: {
     tenantId?: string;
     search?: string;
-    systemRole?: string;
   }): Promise<number> {
     const whereConditions = this.buildUserFilters(filters);
 
@@ -188,19 +170,11 @@ export class DrizzleUserAdapter implements IUserProvider {
     return Number(result?.count || 0);
   }
 
-  private buildUserFilters(filters?: {
-    tenantId?: string;
-    search?: string;
-    systemRole?: string;
-  }) {
+  private buildUserFilters(filters?: { tenantId?: string; search?: string }) {
     const whereConditions = [];
 
     if (filters?.search) {
       whereConditions.push(ilike(schema.user.email, `%${filters.search}%`));
-    }
-
-    if (filters?.systemRole) {
-      whereConditions.push(eq(schema.user.systemRole, filters.systemRole));
     }
 
     if (filters?.tenantId) {
@@ -227,7 +201,6 @@ export class DrizzleUserAdapter implements IUserProvider {
       createdAt: dbUser.createdAt,
       updatedAt: dbUser.updatedAt,
       role: dbUser.role,
-      systemRole: dbUser.systemRole || null,
       banned: dbUser.banned || false,
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,

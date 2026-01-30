@@ -6,7 +6,6 @@ export interface CreateUserInput {
   firstName?: string;
   lastName?: string;
   role?: string;
-  systemRole?: string;
   companyName?: string; // Optional: for auto-provisioning
 }
 
@@ -30,7 +29,6 @@ export interface IUserProvider {
     limit?: number;
     search?: string;
     tenantId?: string;
-    systemRole?: string;
   }): Promise<{ data: User[]; total: number }>;
 
   // Kept for backward compatibility if needed, but the above covers it
@@ -38,9 +36,5 @@ export interface IUserProvider {
 
   forceVerifyEmail(userId: string): Promise<void>;
 
-  count(filters?: {
-    tenantId?: string;
-    search?: string;
-    systemRole?: string;
-  }): Promise<number>;
+  count(filters?: { tenantId?: string; search?: string }): Promise<number>;
 }
