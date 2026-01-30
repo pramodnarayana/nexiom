@@ -28,7 +28,14 @@ export class AuthService {
     const result = await this.authProvider.login(credentials);
 
     // Enrich with permissions immediately so frontend can perform PBAC
-    const enriched = await this.getEnrichedSession(result.session.token);
+    let enriched = null;
+    try {
+      enriched = await this.getEnrichedSession(result.session.token);
+    } catch (error) {
+      this.logger.error('Failed to enrich session during login', error);
+      // Fallback to basic result
+      return result;
+    }
 
     if (!enriched) {
       // Should not happen if login succeeded, but fallback to basic result

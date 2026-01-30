@@ -4,7 +4,7 @@ import { authClient } from '../../lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-
+import { AppRoutes } from '../../lib/auth/constants';
 export function ResetPasswordPage() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -67,7 +67,9 @@ export function ResetPasswordPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex justify-center">
-                        <Button onClick={() => navigate('/login')} className="w-full">
+
+
+                        <Button onClick={() => navigate(AppRoutes.AUTH.LOGIN)} className="w-full">
                             Go to Login
                         </Button>
                     </CardContent>

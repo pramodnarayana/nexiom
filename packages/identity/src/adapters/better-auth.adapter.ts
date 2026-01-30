@@ -46,7 +46,11 @@ export class BetterAuthAdapter implements IAuthProvider {
       throw new Error("BetterAuthAdapter: betterAuthUrl config is missing");
     }
 
-    console.log("Better Auth Adapter Initializing with Password Reset Enabled");
+    if (config.nodeEnv !== "production") {
+      console.log(
+        "Better Auth Adapter Initializing with Password Reset Enabled",
+      );
+    }
     this.auth = betterAuth({
       trustedOrigins: config.allowedOrigins,
       baseURL: config.betterAuthUrl,
@@ -66,7 +70,7 @@ export class BetterAuthAdapter implements IAuthProvider {
         },
         sendResetPassword: async ({ user, token }) => {
           const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
-          const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+          const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
           await this.emailService.sendEmail({
             to: user.email,
@@ -133,7 +137,9 @@ export class BetterAuthAdapter implements IAuthProvider {
           : {}),
       },
     });
-    console.log("Better Auth Registered Routes:", Object.keys(this.auth.api));
+    if (config.nodeEnv !== "production") {
+      console.log("Better Auth Registered Routes:", Object.keys(this.auth.api));
+    }
   }
 
   getHandler() {

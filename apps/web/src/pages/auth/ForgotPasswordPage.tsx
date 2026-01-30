@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
+import { AppRoutes } from '../../lib/auth/constants';
 
 export function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
@@ -16,18 +17,21 @@ export function ForgotPasswordPage() {
         setError('');
         setLoading(true);
 
+
         try {
             const res = await authClient.requestPasswordReset({
                 email,
-                redirectTo: '/reset-password',
+                redirectTo: AppRoutes.AUTH.RESET_PASSWORD,
             });
 
             if (res.error) {
                 // Determine user-friendly error message
-                // Note: better-auth might return generic error for security, 
-                // but if it returns "User not found", we map it.
+                // Note: Better Auth might return generic error for security.
+                // We treat "User not found" as success to prevent enumeration.
                 if (res.error.message?.toLowerCase().includes('not found')) {
-                    throw new Error("Email Not Found");
+                    // SILENT SUCCESS: Pretend it worked
+                    setIsSubmitted(true);
+                    return;
                 }
                 throw new Error(res.error.message);
             }

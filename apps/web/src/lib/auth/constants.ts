@@ -40,6 +40,8 @@ export const AppRoutes = {
     },
     AUTH: {
         LOGIN: '/login',
+        SIGNUP: '/signup',
+        INVITE_ACCEPT: '/invite/accept',
         FORGOT_PASSWORD: '/forgot-password',
         RESET_PASSWORD: '/reset-password',
     },

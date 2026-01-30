@@ -62,7 +62,7 @@ export function LoginPage() {
             // Call AuthProvider to set state
             setAuthState(data);
 
-            const rawUser = (data).user;
+            const rawUser = data.user;
             const isAdmin = hasPermission(rawUser?.permissions || [], Resources.ADMIN_DASHBOARD, Actions.VIEW);  // Pure PBAC check
 
             const fallback = isAdmin ? AppRoutes.ADMIN.ROOT : AppRoutes.TENANT.ROOT;

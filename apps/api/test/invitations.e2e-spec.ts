@@ -1,5 +1,5 @@
 // Set Env Vars before imports if possible or at very top
-process.env.BETTER_AUTH_URL = 'http://localhost:3000/api';
+process.env.BETTER_AUTH_URL = 'http://localhost:3000/api/auth';
 process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
 process.env.FRONTEND_URL = 'http://localhost:3000';
 process.env.BETTER_AUTH_SECRET = 'test-secret-12345678901234567890123456789012';
