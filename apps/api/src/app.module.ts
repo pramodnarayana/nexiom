@@ -39,6 +39,7 @@ import * as schema from './db/schema';
           googleClientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
           nodeEnv: configService.get<string>('NODE_ENV'),
         },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         db: db as any,
         email: emailService,
       }),
@@ -53,4 +54,4 @@ import * as schema from './db/schema';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

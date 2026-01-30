@@ -113,6 +113,7 @@ export class IdentityModule {
       ...args: any[]
     ) => Promise<IdentityModuleOptions> | IdentityModuleOptions;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     inject?: (string | symbol | Type<any> | Function)[];
   }): DynamicModule {
     return {
@@ -123,6 +124,7 @@ export class IdentityModule {
           provide: IDENTITY_OPTIONS,
 
           useFactory: async (...args: any[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             const identityOptions = await options.useFactory(...args);
             if (!identityOptions.db || !identityOptions.email) {
               throw new Error(
