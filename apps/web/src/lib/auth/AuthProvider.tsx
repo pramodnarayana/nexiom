@@ -50,10 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const sessionUser = enrichedData.user as unknown as AuthUser;
 
                         // AUTO-PROVISION CHECK
-                        // FIX: Do not auto-provision if the user is a Platform Admin/User (they don't need a default tenant)
-                        const isPlatformUser =
-                            sessionUser.systemRole === 'platform_admin' ||
-                            sessionUser.systemRole === 'platform_user';
+                        // FIX: Do not auto-provision if the user is a Platform Admin (they have wildcard permission)
+                        const isPlatformUser = (sessionUser.permissions || []).includes('*');
 
                         if (!sessionUser.hasTenant && !sessionUser.organizationId && !isPlatformUser) {
                             if (!API_URL) {
@@ -138,10 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email: String(apiUser.email),
                 name: typeof apiUser.name === 'string' ? apiUser.name : undefined,
                 roles: finalRoles,
-                organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
                 organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
                 hasTenant: !!apiUser.hasTenant,
-                systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
+                permissions: Array.isArray(apiUser.permissions) ? (apiUser.permissions as string[]) : []
             };
             setToken(data.session.token);
             setUser(authUser);
@@ -179,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
             organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
             hasTenant: !!apiUser.hasTenant,
-            systemRole: apiUser.systemRole === 'platform_admin' || apiUser.systemRole === 'platform_user' ? apiUser.systemRole : undefined
+            permissions: Array.isArray(apiUser.permissions) ? (apiUser.permissions as string[]) : []
         });
     }, []);
 

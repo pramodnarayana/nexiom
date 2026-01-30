@@ -114,7 +114,7 @@ describe('SignupPage', () => {
 
         (global.fetch as Mock).mockResolvedValue({
             ok: true,
-            json: async () => ({ session: { token: 'abc' }, user: { id: '2', systemRole: 'platform_user' } }),
+            json: async () => ({ session: { token: 'abc' }, user: { id: '2', permissions: [] } }),
         });
 
         render(
@@ -141,7 +141,7 @@ describe('SignupPage', () => {
 
         await waitFor(() => {
             expect(mockSetAuthState).toHaveBeenCalledWith(expect.objectContaining({
-                user: { id: '2', systemRole: 'platform_user' },
+                user: { id: '2', permissions: [] },
                 accessToken: 'abc'
             }));
             expect(mockNavigate).toHaveBeenCalledWith('/dashboard');

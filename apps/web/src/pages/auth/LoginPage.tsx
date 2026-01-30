@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { authClient } from '../../lib/auth-client';
 import { hasPermission } from '../../lib/auth/utils';
+import { Actions, AppRoutes, Resources } from '../../lib/auth/constants';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,13 +22,14 @@ export function LoginPage() {
     const { setAuthState, user, isLoading } = useAuth(); // Type inference from useAuth
     const navigate = useNavigate();
 
-    // Production Grade: Smart Auto-Redirect
     // If the user visits /login but is already authenticated, send them to their portal.
     useEffect(() => {
         if (user && !isLoading) {
             // Permission-based redirect
             // If user can view the dashboard (admin level), they belong in the admin dashboard.
-            const target = hasPermission(user.permissions, 'dashboard', 'view') ? '/admin' : '/dashboard';
+            const target = hasPermission(user.permissions, Resources.ADMIN_DASHBOARD, Actions.VIEW)
+                ? AppRoutes.ADMIN.ROOT
+                : AppRoutes.TENANT.ROOT;
             navigate(target);
         }
     }, [user, navigate, isLoading]);
@@ -60,19 +62,12 @@ export function LoginPage() {
             // Call AuthProvider to set state
             setAuthState(data);
 
+            const rawUser = (data).user;
+            const isAdmin = hasPermission(rawUser?.permissions || [], Resources.ADMIN_DASHBOARD, Actions.VIEW);  // Pure PBAC check
 
+            const fallback = isAdmin ? AppRoutes.ADMIN.ROOT : AppRoutes.TENANT.ROOT;
 
-            // Redirect logic: Respect ?to param, then Fallback
             const searchParams = new URLSearchParams(window.location.search);
-
-            // Default fallback
-            const fallback = '/dashboard';
-
-            // Note: systemRole check removed in favor of strict permissions. 
-            // We rely on the useEffect above to redirect if they land on /login while authenticated.
-            // Or if we wanted to be fancy, we'd check data.user.permissions here if available.
-            // For now, simple fallback is safe.
-
             const toParam = searchParams.get('to');
             // Only allow relative paths to prevent open redirect attacks
             const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');

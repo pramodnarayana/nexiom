@@ -7,7 +7,7 @@ process.env.BETTER_AUTH_SECRET = 'test-secret-12345678901234567890123456789012';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { Server } from 'http';
+import { Server } from 'node:http';
 import { AppModule } from './../src/app.module';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { EmailService } from './../src/modules/email/email.service.abstract';

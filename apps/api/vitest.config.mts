@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import swc from 'unplugin-swc';
-import path from 'path';
+import path from 'node:path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);

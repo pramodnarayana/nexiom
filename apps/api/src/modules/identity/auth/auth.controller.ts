@@ -205,6 +205,8 @@ export class AuthController {
    */
   @All('*splat')
   async betterAuth(@Req() req: Request, @Res() res: Response) {
+    this.logger.log(`BetterAuth Request: ${req.method} ${req.url}`);
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const handler = this.authService.getHandler();
 
