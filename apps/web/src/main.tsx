@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { AuthProvider } from './lib/auth/AuthProvider'
-import { ThemeProvider } from './lib/theme/ThemeProvider'
+import { AuthProvider } from './shared/lib/auth/AuthProvider'
+import { ThemeProvider } from './shared/lib/theme/ThemeProvider'
 import './index.css'
-import App from './App.tsx'
+import App from './app/App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

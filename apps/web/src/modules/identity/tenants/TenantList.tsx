@@ -9,7 +9,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/shared/components/ui/table";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,15 +17,15 @@ import {
     DropdownMenuTrigger,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge, badgeVariants } from "@/components/ui/badge";
+} from "@/shared/components/ui/dropdown-menu";
+import { Button } from "@/shared/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Badge, badgeVariants } from "@/shared/components/ui/badge";
 import { Search, Building2, ChevronDown, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { type TenantTableItem } from "./types";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
-import { TenantEdit } from "@/pages/admin/tenants/TenantEdit";
+import { TenantEdit } from "@/modules/tenants/pages/TenantEdit";
 
 interface TenantListProps {
     data: TenantTableItem[] | undefined;

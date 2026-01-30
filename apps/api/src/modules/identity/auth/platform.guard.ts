@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
-import { toWebHeaders } from '../../../shared/utils/headers.util';
+import { toWebHeaders } from '../../../common/utils/headers.util';
 
 /**
  * PlatformGuard

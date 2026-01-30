@@ -4,8 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { TenantList } from './TenantList';
 import { type TenantTableItem } from './types';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { AuthProvider } from '@/lib/auth/AuthProvider';
-import { AuthContext } from '@/lib/auth/context';
+import { AuthProvider } from '@/shared/lib/auth/AuthProvider';
+import { AuthContext } from '@/shared/lib/auth/context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCan } from "@refinedev/core"; // Import mocked useCan
 

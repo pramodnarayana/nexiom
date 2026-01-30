@@ -8,7 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'node:http';
-import { AppModule } from './../src/app.module';
+import { AppModule } from './../src/app/app.module';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { EmailService } from './../src/modules/email/email.service.abstract';
 import { eq } from 'drizzle-orm';
