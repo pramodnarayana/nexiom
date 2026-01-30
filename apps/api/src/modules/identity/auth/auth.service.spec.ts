@@ -132,6 +132,48 @@ describe('AuthService', () => {
       const result = await service.getEnrichedSession('invalid');
       expect(result).toBeNull();
     });
+
+    it('should grant admin_dashboard:view if user is platform_user', async () => {
+      const token = 'system-user-token';
+      const mockSession = {
+        session: { id: 's2' },
+        user: { id: 'u2', systemRole: 'platform_user' },
+      };
+
+      mockAuthProvider.validateSession.mockResolvedValue(mockSession);
+      mockTenantProvider.findAllForUser.mockResolvedValue([]);
+
+      const result = await service.getEnrichedSession(token);
+
+      expect(result?.user.permissions).toContain('admin_dashboard:view');
+    });
+
+    it('should fallback to platform permissions if permission provider fails', async () => {
+      const token = 'system-error-token';
+      const mockSession = {
+        session: { id: 's3' },
+        user: { id: 'u3', systemRole: 'platform_user' },
+      };
+
+      mockAuthProvider.validateSession.mockResolvedValue(mockSession);
+      mockTenantProvider.findAllForUser.mockResolvedValue([]);
+
+      // Force error
+      mockPermissionProvider.getPermissions.mockRejectedValue(
+        new Error('DB Error'),
+      );
+      // Trick: we need to ensure the try block is entered.
+      // The current code only calls permissionProvider if organizationId exists.
+      // So we need to mock a tenant but force the provider to fail.
+      mockTenantProvider.findAllForUser.mockResolvedValue([
+        { id: 'org-fail', createdAt: new Date() },
+      ]);
+
+      const result = await service.getEnrichedSession(token);
+
+      // Should hit the catch block and still grant platform_user permission
+      expect(result?.user.permissions).toContain('admin_dashboard:view');
+    });
   });
 
   describe('createUser', () => {

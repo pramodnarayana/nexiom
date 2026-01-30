@@ -1,6 +1,12 @@
+export const IDENTITY_OPTIONS = "IDENTITY_OPTIONS";
 export const AUTH_PROVIDER = "AUTH_PROVIDER";
 export const USER_PROVIDER = "USER_PROVIDER";
 export const TENANT_PROVIDER = "TENANT_PROVIDER";
 export const PERMISSION_PROVIDER = "PERMISSION_PROVIDER";
 export const EMAIL_PROVIDER = "EMAIL_PROVIDER";
 export const DATABASE_CONNECTION = "DATABASE_CONNECTION";
+
+export enum SystemRole {
+  PLATFORM_ADMIN = "platform_admin",
+  PLATFORM_USER = "platform_user",
+}

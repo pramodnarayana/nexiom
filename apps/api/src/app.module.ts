@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './modules/identity/users/users.module';
@@ -10,6 +10,8 @@ import { InvitationsModule } from './modules/identity/invitations/invitations.mo
 import { SystemAdminModule } from './modules/identity/system-admin/system-admin.module';
 import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from './modules/email/email.service.abstract';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './db/schema';
 
 @Module({
   imports: [
@@ -17,20 +19,30 @@ import { EmailService } from './modules/email/email.service.abstract';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    IdentityModule.register({
-      betterAuthConfig: {
-        allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || [
-          'http://localhost:3000',
-        ],
-        betterAuthUrl:
-          process.env.BETTER_AUTH_URL || 'http://localhost:3001/api/auth',
-        frontendUrl: process.env.FRONTEND_URL,
-        googleClientId: process.env.GOOGLE_CLIENT_ID,
-        googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        nodeEnv: process.env.NODE_ENV,
-      },
-      dbToken: 'DRIZZLE_DB',
-      emailToken: EmailService,
+    IdentityModule.registerAsync({
+      imports: [ConfigModule, DbModule, AuthModule], // Ensure DbModule is here
+      inject: [ConfigService, 'DRIZZLE_DB', EmailService],
+      useFactory: (
+        configService: ConfigService,
+        db: NodePgDatabase<typeof schema>,
+        emailService: EmailService,
+      ) => ({
+        betterAuthConfig: {
+          allowedOrigins: configService
+            .get<string>('ALLOWED_ORIGINS')
+            ?.split(',') || ['http://localhost:3000'],
+          betterAuthUrl:
+            configService.get<string>('BETTER_AUTH_URL') ||
+            'http://localhost:3000/api/auth',
+          frontendUrl: configService.get<string>('FRONTEND_URL'),
+          googleClientId: configService.get<string>('GOOGLE_CLIENT_ID'),
+          googleClientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
+          nodeEnv: configService.get<string>('NODE_ENV'),
+        },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        db: db as any,
+        email: emailService,
+      }),
     }),
     AuthModule,
     UsersModule,

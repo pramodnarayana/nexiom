@@ -46,7 +46,7 @@ services:
     environment:
       <<: *common-env
       # Overrides for Docker Networking
-      BETTER_AUTH_URL: http://localhost:3001
+      BETTER_AUTH_URL: http://localhost:3000/api/auth
       ALLOWED_ORIGINS: http://localhost:8080,http://localhost:3001
     ports:
       - "3001:3000"

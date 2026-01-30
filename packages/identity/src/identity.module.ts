@@ -4,7 +4,7 @@ import {
   Provider,
   Global,
   Type,
-  ForwardReference,
+  ModuleMetadata,
 } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -12,6 +12,7 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
+  IDENTITY_OPTIONS,
 } from "./constants";
 import {
   BetterAuthAdapter,
@@ -25,21 +26,26 @@ import * as schema from "./schema";
 
 export interface IdentityModuleOptions {
   betterAuthConfig: BetterAuthAdapterConfig;
-  dbToken: string | symbol | Type<any>;
+  dbToken?: string | symbol | Type<any>;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  emailToken: string | symbol | Type<any> | Function;
-  imports?: (
-    | Type<any>
-    | DynamicModule
-    | Promise<DynamicModule>
-    | ForwardReference<any>
-  )[];
+  emailToken?: string | symbol | Type<any> | Function;
+  // Resolved instances (for async injection)
+  db?: NodePgDatabase<typeof schema>;
+  email?: IEmailProvider;
+  imports?: ModuleMetadata["imports"];
 }
 
 @Global()
 @Module({})
 export class IdentityModule {
   static register(options: IdentityModuleOptions): DynamicModule {
+    // Ensure tokens are provided for synchronous registration
+    if (!options.dbToken || !options.emailToken) {
+      throw new Error(
+        "dbToken and emailToken are required for synchronous registration",
+      );
+    }
+
     const authProvider: Provider = {
       provide: AUTH_PROVIDER,
       useFactory: (
@@ -90,6 +96,84 @@ export class IdentityModule {
         userProvider,
         tenantProvider,
         permissionProvider,
+      ],
+      exports: [
+        AUTH_PROVIDER,
+        USER_PROVIDER,
+        TENANT_PROVIDER,
+        PERMISSION_PROVIDER,
+      ],
+    };
+  }
+
+  static registerAsync(options: {
+    imports?: ModuleMetadata["imports"];
+
+    useFactory: (
+      ...args: any[]
+    ) => Promise<IdentityModuleOptions> | IdentityModuleOptions;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    inject?: (string | symbol | Type<any> | Function)[];
+  }): DynamicModule {
+    return {
+      module: IdentityModule,
+      imports: options.imports || [],
+      providers: [
+        {
+          provide: IDENTITY_OPTIONS,
+
+          useFactory: async (...args: any[]) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            const identityOptions = await options.useFactory(...args);
+            if (!identityOptions.db || !identityOptions.email) {
+              throw new Error(
+                "db and email instances must be provided in IdentityModuleOptions for registerAsync",
+              );
+            }
+            return identityOptions;
+          },
+          inject: options.inject || [],
+        },
+        {
+          provide: AUTH_PROVIDER,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validated in IDENTITY_OPTIONS factory
+            return new BetterAuthAdapter(
+              identityOptions.db!,
+              identityOptions.email!,
+              identityOptions.betterAuthConfig,
+            );
+          },
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
+          provide: USER_PROVIDER,
+          useFactory: (
+            identityOptions: IdentityModuleOptions,
+            authProvider: IAuthProvider,
+          ) => {
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzleUserAdapter(identityOptions.db!, authProvider);
+          },
+          inject: [IDENTITY_OPTIONS, AUTH_PROVIDER],
+        },
+        {
+          provide: TENANT_PROVIDER,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzleTenantAdapter(identityOptions.db!);
+          },
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
+          provide: PERMISSION_PROVIDER,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validated in IDENTITY_OPTIONS factory
+            return new DrizzlePermissionAdapter(identityOptions.db!);
+          },
+          inject: [IDENTITY_OPTIONS],
+        },
       ],
       exports: [
         AUTH_PROVIDER,

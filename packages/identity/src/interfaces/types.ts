@@ -11,6 +11,9 @@ export interface User {
   banned?: boolean | null;
   banReason?: string | null;
   banExpires?: Date | null;
+  permissions?: string[];
+  hasTenant?: boolean;
+  organizationId?: string;
 }
 
 export interface Tenant {

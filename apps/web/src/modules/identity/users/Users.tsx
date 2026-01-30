@@ -3,6 +3,8 @@ import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/auth/context";
+import { hasPermission } from "@/lib/auth/utils";
+import { Actions, Resources } from "@/lib/auth/constants";
 import {
     Table,
     TableBody,
@@ -28,7 +30,8 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { user } = useAuth();
 
     // Check if user is platform_admin (can perform write operations)
-    const isPlatformAdmin = user?.systemRole === 'platform_admin';
+    // PBAC: Check if user can manage users
+    const canManageUsers = hasPermission(user?.permissions, Resources.USERS, Actions.MANAGE);
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
@@ -122,11 +125,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 <TableCell>{user.email}</TableCell>
                                 <TableCell>
                                     <div className="flex flex-col gap-1">
-                                        {user.systemRole && (
-                                            <Badge variant={user.systemRole === 'platform_admin' ? 'default' : 'outline'}>
-                                                {user.systemRole === 'platform_admin' ? 'Platform Admin' : 'Platform User'}
-                                            </Badge>
-                                        )}
+                                        {/* Display Role Logic would go here - for now relying on user.role */}
                                         {user.role && user.role !== 'user' && (
                                             <Badge variant="secondary" className="text-xs w-fit">
                                                 Global: {user.role}
@@ -162,7 +161,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">
-                                        {!user.emailVerified && user.status !== 'pending' && isPlatformAdmin && (
+                                        {!user.emailVerified && user.status !== 'pending' && canManageUsers && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -182,7 +181,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                                 <Eye className="h-4 w-4" />
                                             </Link>
                                         </Button>
-                                        {isPlatformAdmin && (
+                                        {canManageUsers && (
                                             <>
                                                 <Button variant="ghost" size="icon" asChild aria-label={`Edit ${displayName}`}>
                                                     <Link to={`${basePath}/edit/${user.id}`}>

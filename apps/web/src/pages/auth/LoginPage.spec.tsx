@@ -45,7 +45,14 @@ describe('LoginPage', () => {
         // Default fetch mock to success
         (global.fetch as Mock).mockResolvedValue({
             ok: true,
-            json: async () => ({ user: { id: '1', email: 'test@example.com', systemRole: 'platform_user' }, session: {} }),
+            json: async () => ({
+                user: {
+                    id: '1',
+                    email: 'test@example.com',
+                    permissions: [] // Default user has no specific permissions
+                },
+                session: {}
+            }),
         });
 
         // Mock window.location
@@ -75,7 +82,10 @@ describe('LoginPage', () => {
 
     it('redirects if user is already authenticated', () => {
         (useAuth as unknown as Mock).mockReturnValue({
-            user: { id: '1', systemRole: 'platform_admin', permissions: ['*'] },
+            user: {
+                id: '1',
+                permissions: ['admin_dashboard:view'] // Admin permissions
+            },
             isLoading: false,
             setAuthState: mockSetAuthState,
         });
