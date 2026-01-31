@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
+import { authClient } from '@/shared/lib/auth-client';
 import { hasPermission } from '@/shared/lib/auth/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { PasswordInput } from '@/shared/components/ui/password-input';
+import { Icons } from '@/shared/components/icons';
 
 const API_URL = import.meta.env.VITE_API_URL;
 if (!API_URL) throw new Error("VITE_API_URL is missing");
@@ -15,11 +18,9 @@ if (!API_URL) throw new Error("VITE_API_URL is missing");
  * Handles user registration and auto-login logic.
  */
 export function SignupPage() {
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [companyName, setCompanyName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -45,9 +46,23 @@ export function SignupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (password !== confirmPassword) {
+            setError("Passwords do not match");
+            return;
+        }
+
         setLoading(true);
 
         try {
+            // Derive names from email for streamlined signup
+            const derivedName = email.split('@')[0];
+            const derivedFirstName = derivedName; // Valid default
+            const derivedLastName = "";
+            const derivedCompany = email.split('@')[1]
+                ? email.split('@')[1].split('.')[0].charAt(0).toUpperCase() + email.split('@')[1].split('.')[0].slice(1)
+                : 'My Organization';
+
             if (isInviteFlow) {
                 // --- INVITE FLOW (User Only + Auto Login + Auto Accept) ---
                 // We utilize the dedicated Atomic Endpoint for this.
@@ -61,13 +76,12 @@ export function SignupPage() {
                 }
 
                 const payload = {
-                    firstName,
-                    lastName,
+                    firstName: derivedFirstName,
+                    lastName: derivedLastName,
                     email,
                     password,
                     invitationId: inviteIdParam
                 };
-                // console.log("Submitting Payload:", payload); // DEBUGGING
 
                 const res = await fetch(`${API_URL}/auth/complete-invite`, {
                     method: 'POST',
@@ -113,9 +127,9 @@ export function SignupPage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        firstName,
-                        lastName,
-                        companyName,
+                        firstName: derivedFirstName,
+                        lastName: derivedLastName,
+                        companyName: derivedCompany,
                         email,
                         password,
                         role: 'admin'
@@ -146,58 +160,26 @@ export function SignupPage() {
     return (
         <div className="flex justify-center items-center min-h-[80vh] bg-background">
             <Card className="w-[400px]">
-                <CardHeader className="text-center">
+                <CardHeader className="text-center pb-2">
                     <CardTitle className="text-2xl">
                         {isInviteFlow ? 'Join Organization' : 'Create Account'}
                     </CardTitle>
-                    <CardDescription>
-                        {isInviteFlow
-                            ? 'Create your account to accept the invitation.'
-                            : 'Get started with your new organization.'}
-                    </CardDescription>
+                    <div className="text-sm text-muted-foreground mt-2">
+                        Already have an account?{' '}
+                        <Link
+                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl!)}` : "/login"}
+                            className="underline underline-offset-4 hover:text-primary"
+                        >
+                            Sign In
+                        </Link>
+                    </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                        <div className="flex gap-4">
-                            <div className="grid gap-2 flex-1">
-                                <Input
-                                    id="firstName"
-                                    type="text"
-                                    placeholder="First Name"
-                                    value={firstName}
-                                    onChange={e => setFirstName(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className="grid gap-2 flex-1">
-                                <Input
-                                    id="lastName"
-                                    type="text"
-                                    placeholder="Last Name"
-                                    value={lastName}
-                                    onChange={e => setLastName(e.target.value)}
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        {!isInviteFlow && (
-                            <div className="grid gap-2">
-                                <Input
-                                    type="text"
-                                    placeholder="Company Name"
-                                    value={companyName}
-                                    onChange={e => setCompanyName(e.target.value)}
-                                    required
-                                    minLength={2}
-                                />
-                            </div>
-                        )}
-
                         <div className="grid gap-2">
                             <Input
                                 type="email"
-                                placeholder="Work Email"
+                                placeholder="Email"
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 required
@@ -207,13 +189,23 @@ export function SignupPage() {
                         </div>
 
                         <div className="grid gap-2">
-                            <Input
+                            <PasswordInput
                                 type="password"
                                 placeholder="Password (min 8 chars)"
                                 value={password}
-                                onChange={e => setPassword(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                                 required
                                 minLength={8}
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <PasswordInput
+                                type="password"
+                                placeholder="Confirm Password"
+                                value={confirmPassword}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                                required
                             />
                         </div>
 
@@ -229,15 +221,36 @@ export function SignupPage() {
                         </p>
                     )}
 
-                    <div className="mt-6 text-center text-sm text-muted-foreground">
-                        Already have an account?{' '}
-                        <Link
-                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl!)}` : "/login"}
-                            className="underline underline-offset-4 hover:text-primary"
-                        >
-                            Log in
-                        </Link>
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-border" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">Or</span>
+                        </div>
                     </div>
+
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full font-medium gap-2"
+                        onClick={async () => {
+                            try {
+                                await authClient.signIn.social({
+                                    provider: "google",
+                                    callbackURL: `${window.location.origin}/dashboard`,
+                                    // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
+                                    prompt: "select_account"
+                                });
+                            } catch (error) {
+                                console.error('Social login error', error);
+                                setError('Failed to initiate Google login');
+                            }
+                        }}
+                    >
+                        <Icons.Google className="h-4 w-4" />
+                        Sign up with Google
+                    </Button>
                 </CardContent>
             </Card>
         </div>

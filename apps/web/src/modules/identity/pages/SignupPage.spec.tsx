@@ -18,7 +18,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 // Setup global fetch mock
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('SignupPage', () => {
     const mockNavigate = vi.fn();
@@ -38,7 +38,7 @@ describe('SignupPage', () => {
         });
 
         // Default fetch success
-        (global.fetch as Mock).mockResolvedValue({
+        (globalThis.fetch as Mock).mockResolvedValue({
             ok: true,
             json: async () => ({}),
         });
@@ -50,8 +50,8 @@ describe('SignupPage', () => {
                 <SignupPage />
             </MemoryRouter>
         );
-        expect(screen.getByPlaceholderText('First Name')).toBeInTheDocument();
-        expect(screen.getByPlaceholderText('Company Name')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Email')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Password (min 8 chars)')).toBeInTheDocument();
         // Use getByRole to avoid ambiguity with heading vs button
         expect(screen.getByRole('button', { name: 'Sign Up' })).toBeInTheDocument();
     });
@@ -68,13 +68,12 @@ describe('SignupPage', () => {
 
         expect(screen.getByText('Join Organization')).toBeInTheDocument();
         expect(screen.getByDisplayValue('invitee@example.com')).toBeDisabled();
-        expect(screen.queryByPlaceholderText('Company Name')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Join & Accept' })).toBeInTheDocument();
     });
 
     it('handles standard signup submission', async () => {
         // Mock alert to prevent JSDOM issues or unhandled output
-        const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => { });
+        const alertMock = vi.spyOn(globalThis, 'alert').mockImplementation(() => { });
 
         // Standard flow
         render(
@@ -83,20 +82,18 @@ describe('SignupPage', () => {
             </MemoryRouter>
         );
 
-        fireEvent.change(screen.getByPlaceholderText('First Name'), { target: { value: 'John' } });
-        fireEvent.change(screen.getByPlaceholderText('Last Name'), { target: { value: 'Doe' } });
-        fireEvent.change(screen.getByPlaceholderText('Company Name'), { target: { value: 'Acme Inc' } });
-        fireEvent.change(screen.getByPlaceholderText('Work Email'), { target: { value: 'john@acme.com' } });
+        fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'john@acme.com' } });
         fireEvent.change(screen.getByPlaceholderText('Password (min 8 chars)'), { target: { value: 'password123' } });
+        fireEvent.change(screen.getByPlaceholderText('Confirm Password'), { target: { value: 'password123' } });
 
         fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
 
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 expect.stringContaining('/auth/signup'),
                 expect.objectContaining({
                     method: 'POST',
-                    body: expect.stringContaining('"companyName":"Acme Inc"'),
+                    body: expect.stringContaining('"companyName":"Acme"'),
                 })
             );
         });
@@ -112,7 +109,7 @@ describe('SignupPage', () => {
     it('handles invite flow submission (auto-login)', async () => {
         const inviteUrl = `/signup?to=${encodeURIComponent('/invite/accept?id=123')}&email=invitee@example.com`;
 
-        (global.fetch as Mock).mockResolvedValue({
+        (globalThis.fetch as Mock).mockResolvedValue({
             ok: true,
             json: async () => ({ session: { token: 'abc' }, user: { id: '2', permissions: [] } }),
         });
@@ -123,9 +120,9 @@ describe('SignupPage', () => {
             </MemoryRouter>
         );
 
-        fireEvent.change(screen.getByPlaceholderText('First Name'), { target: { value: 'Jane' } });
-        fireEvent.change(screen.getByPlaceholderText('Last Name'), { target: { value: 'Doe' } });
+
         fireEvent.change(screen.getByPlaceholderText('Password (min 8 chars)'), { target: { value: 'securepass' } });
+        fireEvent.change(screen.getByPlaceholderText('Confirm Password'), { target: { value: 'securepass' } });
 
         fireEvent.click(screen.getByRole('button', { name: 'Join & Accept' }));
 

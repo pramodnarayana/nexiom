@@ -30,6 +30,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.71.0",
+    "react-icons": "^5.5.0",
     "react-router-dom": "^7.11.0",
     "slugify": "^1.6.6",
     "tailwindcss-animate": "^1.0.7",

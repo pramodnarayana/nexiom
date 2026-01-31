@@ -26,3 +26,5 @@ dist-ssr
 .env
 coverage
 better-auth-tutorial-eval/
+scripts/debug-user.ts
+scripts/fix-admin-permissions.ts
