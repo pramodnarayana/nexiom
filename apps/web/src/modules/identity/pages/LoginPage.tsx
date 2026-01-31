@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { authClient } from '@/shared/lib/auth-client';
 import { hasPermission } from '@/shared/lib/auth/utils';
 import { Actions, AppRoutes, Resources } from '@/shared/lib/auth/constants';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/shared/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
+import { PasswordInput } from '@/shared/components/ui/password-input';
+import { Icons } from '@/shared/components/icons';
 
 /**
  * Component for the Login Page.
@@ -67,7 +69,7 @@ export function LoginPage() {
 
             const fallback = isAdmin ? AppRoutes.ADMIN.ROOT : AppRoutes.TENANT.ROOT;
 
-            const searchParams = new URLSearchParams(window.location.search);
+            const searchParams = new URLSearchParams(globalThis.location.search);
             const toParam = searchParams.get('to');
             // Only allow relative paths to prevent open redirect attacks
             const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');
@@ -88,11 +90,47 @@ export function LoginPage() {
     return (
         <div className="flex justify-center items-center min-h-[80vh] bg-background">
             <Card className="w-[350px]">
-                <CardHeader className="text-center">
+                <CardHeader className="text-center pb-2">
                     <CardTitle className="text-2xl">Login</CardTitle>
-                    <CardDescription>Enter your credentials to access your account</CardDescription>
+                    <div className="text-sm text-muted-foreground mt-2">
+                        Don't have an account?{' '}
+                        <Link to={AppRoutes.AUTH.SIGNUP} className="underline underline-offset-4 hover:text-primary">
+                            Sign Up
+                        </Link>
+                    </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full font-medium gap-2"
+                        onClick={async () => {
+                            try {
+                                await authClient.signIn.social({
+                                    provider: "google",
+                                    callbackURL: `${globalThis.location.origin}${AppRoutes.AUTH.CALLBACK}`,
+                                    // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
+                                    prompt: "select_account"
+                                });
+                            } catch (error) {
+                                console.error('Social login error', error);
+                                setError('Failed to initiate Google login');
+                            }
+                        }}
+                    >
+                        <Icons.Google className="h-4 w-4" />
+                        Sign in with Google
+                    </Button>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-border" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">Or</span>
+                        </div>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         <Input
                             type="email"
@@ -101,48 +139,27 @@ export function LoginPage() {
                             onChange={e => setEmail(e.target.value)}
                             required
                         />
-                        {/* Password is currently ignored by backend logic but good to have in UI */}
-                        <Input
-                            type="password"
+
+                        <PasswordInput
+                            id="password"
                             placeholder="Password"
                             value={password}
-                            onChange={e => setPassword(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                            required
                         />
 
                         <Button type="submit" disabled={loading} className="w-full">
                             {loading ? 'Logging in...' : 'Login'}
                         </Button>
 
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t border-border" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-background px-2 text-muted-foreground">Or</span>
-                            </div>
+                        <div className="text-center">
+                            <Link
+                                to={AppRoutes.AUTH.FORGOT_PASSWORD}
+                                className="text-sm text-muted-foreground hover:text-primary underline underline-offset-4"
+                            >
+                                Forgot Password?
+                            </Link>
                         </div>
-
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            className="w-full"
-                            onClick={async () => {
-                                try {
-                                    await authClient.signIn.social({
-                                        provider: "google",
-                                        callbackURL: `${window.location.origin}/dashboard`,
-                                        // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
-                                        prompt: "select_account"
-                                    });
-                                    // The library handles the redirect automatically
-                                } catch (error) {
-                                    console.error('Social login error', error);
-                                    setError('Failed to initiate Google login');
-                                }
-                            }}
-                        >
-                            Sign in with Google
-                        </Button>
                     </form>
 
                     {error && (
@@ -150,11 +167,6 @@ export function LoginPage() {
                             {error}
                         </p>
                     )}
-
-                    <div className="mt-6 text-center text-xs text-muted-foreground p-3 bg-muted/50 rounded-md border border-border">
-                        Tip: Use any email you added to the User List. <br />
-                        (e.g. <code className="bg-muted px-1 rounded text-foreground">test@nexiom.com</code>)
-                    </div>
                 </CardContent>
             </Card>
         </div>

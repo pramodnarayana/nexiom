@@ -12,6 +12,11 @@ vi.mock('@/shared/hooks/useAuth', () => ({
 
 vi.mock('react-router-dom', () => ({
     useNavigate: vi.fn(),
+    Link: ({ children, to, className }: { children: React.ReactNode; to: string; className?: string }) => (
+        <a href={to} className={className}>
+            {children}
+        </a>
+    ),
 }));
 
 vi.mock('@/shared/lib/auth-client', () => ({
@@ -150,7 +155,7 @@ describe('LoginPage', () => {
 
         expect(socialLoginMock).toHaveBeenCalledWith(expect.objectContaining({
             provider: 'google',
-            callbackURL: 'http://localhost:3000/dashboard',
+            callbackURL: 'http://localhost:3000/auth/callback',
         }));
     });
 });

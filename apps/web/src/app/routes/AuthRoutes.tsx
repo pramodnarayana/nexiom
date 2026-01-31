@@ -6,6 +6,8 @@ import { ForgotPasswordPage } from '../../modules/identity/pages/ForgotPasswordP
 import { ResetPasswordPage } from '../../modules/identity/pages/ResetPasswordPage';
 import { AppRoutes } from '../../shared/lib/auth/constants';
 
+import { AuthCallbackPage } from '../../modules/identity/pages/AuthCallbackPage';
+
 export function AuthRoutes() {
     return (
         <>
@@ -14,6 +16,7 @@ export function AuthRoutes() {
             <Route path={AppRoutes.AUTH.INVITE_ACCEPT} element={<AcceptInvitePage />} />
             <Route path={AppRoutes.AUTH.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
             <Route path={AppRoutes.AUTH.RESET_PASSWORD} element={<ResetPasswordPage />} />
+            <Route path={AppRoutes.AUTH.CALLBACK} element={<AuthCallbackPage />} />
         </>
     );
 }

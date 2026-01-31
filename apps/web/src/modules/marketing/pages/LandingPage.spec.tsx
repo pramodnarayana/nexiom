@@ -44,12 +44,12 @@ describe('LandingPage', () => {
         expect(screen.getByText('Redirecting to your dashboard...')).toBeInTheDocument();
     });
 
-    it('triggers login and signup', () => {
+    it('navigates to auth pages on button click', () => {
         render(<LandingPage />);
         fireEvent.click(screen.getByRole('button', { name: 'Login' }));
-        expect(mockLogin).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/login');
 
         fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
-        expect(mockSignup).toHaveBeenCalled();
+        expect(mockNavigate).toHaveBeenCalledWith('/signup');
     });
 });
