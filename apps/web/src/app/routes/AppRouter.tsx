@@ -10,6 +10,7 @@ export function AppRouter() {
     return (
         <>
             <Routes>
+                {/* note: invoking to return fragments, as <Routes> strictly accepts <Route> or Fragment children */}
                 {MarketingRoutes()}
                 {AuthRoutes()}
 

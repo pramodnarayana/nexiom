@@ -97,7 +97,9 @@ describe('Invitation Flow (e2e)', () => {
           .from(schema.member)
           .where(eq(schema.member.userId, testUser.id));
 
-        const orgIds = memberships.map((m) => m.organizationId);
+        const orgIds = memberships
+          .map((m) => m.organizationId)
+          .filter((id): id is string => id !== null);
 
         // 3. Delete Memberships first (Foreign Key Constraint: Restrict)
         await db
