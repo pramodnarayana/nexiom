@@ -5,17 +5,18 @@ if (!API_URL) throw new Error("VITE_API_URL is not defined");
  * Hook-like wrapper or just a simple function that accepts the token.
  */
 export async function authorizedFetch(
-    token: string | undefined,
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    token?: string,
 ) {
-    // Token might be undefined if cookie-based; that's fine now.
-
-    const headers = {
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...options.headers,
+        ...options.headers as Record<string, string>,
     };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${API_URL}${endpoint}`, {
         ...options,
