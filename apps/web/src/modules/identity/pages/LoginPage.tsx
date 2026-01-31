@@ -69,7 +69,7 @@ export function LoginPage() {
 
             const fallback = isAdmin ? AppRoutes.ADMIN.ROOT : AppRoutes.TENANT.ROOT;
 
-            const searchParams = new URLSearchParams(window.location.search);
+            const searchParams = new URLSearchParams(globalThis.location.search);
             const toParam = searchParams.get('to');
             // Only allow relative paths to prevent open redirect attacks
             const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');
@@ -94,7 +94,7 @@ export function LoginPage() {
                     <CardTitle className="text-2xl">Login</CardTitle>
                     <div className="text-sm text-muted-foreground mt-2">
                         Don't have an account?{' '}
-                        <Link to="/signup" className="underline underline-offset-4 hover:text-primary">
+                        <Link to={AppRoutes.AUTH.SIGNUP} className="underline underline-offset-4 hover:text-primary">
                             Sign Up
                         </Link>
                     </div>
@@ -108,7 +108,7 @@ export function LoginPage() {
                             try {
                                 await authClient.signIn.social({
                                     provider: "google",
-                                    callbackURL: `${window.location.origin}${AppRoutes.AUTH.CALLBACK}`,
+                                    callbackURL: `${globalThis.location.origin}${AppRoutes.AUTH.CALLBACK}`,
                                     // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
                                     prompt: "select_account"
                                 });
@@ -145,6 +145,7 @@ export function LoginPage() {
                             placeholder="Password"
                             value={password}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                            required
                         />
 
                         <Button type="submit" disabled={loading} className="w-full">

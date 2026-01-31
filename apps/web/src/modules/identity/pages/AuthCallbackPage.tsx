@@ -16,10 +16,10 @@ export function AuthCallbackPage() {
                 const target = hasPermission(user.permissions, Resources.ADMIN_DASHBOARD, Actions.VIEW)
                     ? AppRoutes.ADMIN.ROOT
                     : AppRoutes.TENANT.ROOT;
-                navigate(target);
+                navigate(target, { replace: true });
             } else {
                 // Failed to auth, back to login
-                navigate('/login?error=auth_failed');
+                navigate(`${AppRoutes.AUTH.LOGIN}?error=auth_failed`, { replace: true });
             }
         }
     }, [user, isLoading, navigate]);
