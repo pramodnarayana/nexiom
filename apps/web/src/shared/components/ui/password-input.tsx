@@ -1,13 +1,9 @@
-
 import * as React from "react"
 import { Eye, EyeOff } from "lucide-react"
 
 import { cn } from "@/shared/lib/utils"
 import { Button } from "@/shared/components/ui/button"
 import { Input } from "@/shared/components/ui/input"
-
-// export interface PasswordInputProps
-//     extends React.InputHTMLAttributes<HTMLInputElement> { }
 
 const PasswordInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
     ({ className, ...props }, ref) => {

@@ -108,7 +108,7 @@ export function LoginPage() {
                             try {
                                 await authClient.signIn.social({
                                     provider: "google",
-                                    callbackURL: `${window.location.origin}/dashboard`,
+                                    callbackURL: `${window.location.origin}${AppRoutes.AUTH.CALLBACK}`,
                                     // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
                                     prompt: "select_account"
                                 });

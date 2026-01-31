@@ -155,7 +155,7 @@ describe('LoginPage', () => {
 
         expect(socialLoginMock).toHaveBeenCalledWith(expect.objectContaining({
             provider: 'google',
-            callbackURL: 'http://localhost:3000/dashboard',
+            callbackURL: 'http://localhost:3000/auth/callback',
         }));
     });
 });

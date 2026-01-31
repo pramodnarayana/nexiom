@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { authClient } from '@/shared/lib/auth-client';
 import { hasPermission } from '@/shared/lib/auth/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -59,8 +60,9 @@ export function SignupPage() {
             const derivedName = email.split('@')[0];
             const derivedFirstName = derivedName; // Valid default
             const derivedLastName = "";
-            const derivedCompany = email.split('@')[1]
-                ? email.split('@')[1].split('.')[0].charAt(0).toUpperCase() + email.split('@')[1].split('.')[0].slice(1)
+            const domain = email.split('@')[1];
+            const derivedCompany = domain
+                ? domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1)
                 : 'My Organization';
 
             if (isInviteFlow) {
@@ -238,7 +240,8 @@ export function SignupPage() {
                             try {
                                 await authClient.signIn.social({
                                     provider: "google",
-                                    callbackURL: `${window.location.origin}/dashboard`,
+                                    // [REPLACEMENT_1 - Callback URL]
+                                    callbackURL: `${window.location.origin}${AppRoutes.AUTH.CALLBACK}`,
                                     // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
                                     prompt: "select_account"
                                 });

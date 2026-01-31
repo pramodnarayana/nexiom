@@ -44,7 +44,7 @@ describe('LandingPage', () => {
         expect(screen.getByText('Redirecting to your dashboard...')).toBeInTheDocument();
     });
 
-    it('upgrades navigation to auth pages', () => {
+    it('navigates to auth pages on button click', () => {
         render(<LandingPage />);
         fireEvent.click(screen.getByRole('button', { name: 'Login' }));
         expect(mockNavigate).toHaveBeenCalledWith('/login');
