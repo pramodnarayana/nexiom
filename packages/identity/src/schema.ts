@@ -180,7 +180,9 @@ export const member = pgTable(
   "member",
   {
     id: text("id").primaryKey(),
-    organizationId: text("organizationId").references(() => organization.id),
+    organizationId: text("organizationId").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
