@@ -8,7 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'node:http';
-import { AppModule } from './../src/app.module';
+import { AppModule } from './../src/app/app.module';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { EmailService } from './../src/modules/email/email.service.abstract';
 import { eq } from 'drizzle-orm';
@@ -97,7 +97,9 @@ describe('Invitation Flow (e2e)', () => {
           .from(schema.member)
           .where(eq(schema.member.userId, testUser.id));
 
-        const orgIds = memberships.map((m) => m.organizationId);
+        const orgIds = memberships
+          .map((m) => m.organizationId)
+          .filter((id): id is string => id !== null);
 
         // 3. Delete Memberships first (Foreign Key Constraint: Restrict)
         await db

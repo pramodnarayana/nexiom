@@ -299,6 +299,12 @@ describe('SystemAdminController', () => {
         name: 'New',
       });
     });
+    it('should throw BadRequestException if no fields to update', async () => {
+      mockUserProvider.findById.mockResolvedValue({ id: 'u1' });
+      await expect(controller.updateUser('u1', {})).rejects.toThrow(
+        BadRequestException,
+      );
+    });
   });
 
   describe('getUser', () => {
@@ -373,6 +379,49 @@ describe('SystemAdminController', () => {
         organizationId: null, // System invite
         inviterId: 'admin1',
       });
+    });
+  });
+
+  describe('listTenants', () => {
+    it('should return paginated tenants', async () => {
+      const mockResult = { data: [{ id: 't1', name: 'Tenant 1' }], total: 1 };
+      mockTenantProvider.findAll.mockResolvedValue(mockResult);
+
+      const result = await controller.listTenants('1', '10');
+
+      expect(result).toEqual(mockResult);
+      expect(mockTenantProvider.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+      });
+    });
+
+    it('should use default pagination', async () => {
+      mockTenantProvider.findAll.mockResolvedValue({ data: [], total: 0 });
+
+      await controller.listTenants();
+
+      expect(mockTenantProvider.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+      });
+    });
+  });
+
+  describe('getTenant', () => {
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockTenantProvider.findById.mockResolvedValue(null);
+      await expect(controller.getTenant('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return tenant', async () => {
+      const tenant = { id: 't1', name: 'Test Tenant' };
+      mockTenantProvider.findById.mockResolvedValue(tenant);
+
+      const result = await controller.getTenant('t1');
+      expect(result).toEqual(tenant);
     });
   });
 });

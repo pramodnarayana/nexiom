@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1769797531560,
+      "tag": "0000_sudden_silver_surfer",
+      "breakpoints": true
+    }
+  ]
+}

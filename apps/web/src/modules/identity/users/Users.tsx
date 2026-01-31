@@ -2,9 +2,9 @@ import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/lib/auth/context";
-import { hasPermission } from "@/lib/auth/utils";
-import { Actions, Resources } from "@/lib/auth/constants";
+import { useAuth } from "@/shared/lib/auth/context";
+import { hasPermission } from "@/shared/lib/auth/utils";
+import { Actions, Resources } from "@/shared/lib/auth/constants";
 import {
     Table,
     TableBody,
@@ -12,9 +12,9 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from "@/shared/components/ui/table";
+import { Button } from "@/shared/components/ui/button";
+import { Badge } from "@/shared/components/ui/badge";
 import { type UserTableItem } from "./types";
 
 interface UsersProps {

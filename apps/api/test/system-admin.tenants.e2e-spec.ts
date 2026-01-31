@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'http';
-import { AppModule } from './../src/app.module';
+import { AppModule } from './../src/app/app.module';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './../src/db/schema';

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { authProvider } from '../providers/auth-provider';
-import { authClient } from '../lib/auth-client';
+import { authProvider } from '../app/providers/auth-provider';
+import { authClient } from '../shared/lib/auth-client';
 
 // Mock the Better Auth Client
-vi.mock('../lib/auth-client', () => ({
+vi.mock('../shared/lib/auth-client', () => ({
     authClient: {
         signIn: {
             email: vi.fn(),

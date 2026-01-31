@@ -9,7 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@/shared/components/ui/dialog";
 import {
     Form,
     FormControl,
@@ -17,12 +17,12 @@ import {
     FormItem,
     FormLabel,
     FormMessage,
-} from "@/components/ui/form";
+} from "@/shared/components/ui/form";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/shared/components/ui/input";
+import { Button } from "@/shared/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/shared/hooks/use-toast";
 import { useCreate } from "@refinedev/core";
 
 // Schema matching Backend CreateUserValidation
