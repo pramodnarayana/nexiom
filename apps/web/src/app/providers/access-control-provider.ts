@@ -6,8 +6,9 @@ import { hasPermission } from "@/shared/lib/auth/utils";
 // Strip 'admin/' prefix to map 'admin/users' -> 'users' automatically.
 const RESOURCE_MAP: Record<string, string> = {
     // Keep distinct mappings if needed, otherwise normalization handles most
-    "admin/users": "users",
-    "admin/tenants": "tenants",
+    "admin/users": "system_users",
+    "admin/tenants": "system_tenants",
+    "admin_dashboard": "admin_dashboard",
 };
 
 // Action Normalization Map
