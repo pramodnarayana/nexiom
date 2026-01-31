@@ -8,7 +8,6 @@ const RESOURCE_MAP: Record<string, string> = {
     // Keep distinct mappings if needed, otherwise normalization handles most
     "admin/users": "system_users",
     "admin/tenants": "system_tenants",
-    "admin_dashboard": "admin_dashboard",
 };
 
 // Action Normalization Map
