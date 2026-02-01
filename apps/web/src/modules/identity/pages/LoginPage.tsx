@@ -46,26 +46,50 @@ export function LoginPage() {
         setLoading(true);
 
         try {
+            const { error } = await authClient.signIn.email({
+                email,
+                password,
+            });
+
+            if (error) {
+                throw new Error(error.message || 'Login failed');
+            }
+
+            // Standard Better Auth Login succeeded, identifying cookie is set.
+            // Now fetch the ENRICHED session (with permissions) from our custom endpoint.
+            // The native signIn.email response lacks custom permissions fields.
             const API_URL = import.meta.env.VITE_API_URL;
             if (!API_URL) throw new Error("VITE_API_URL is missing");
 
-            const res = await fetch(`${API_URL}/auth/login`, {
+            const sessionRes = await fetch(`${API_URL}/auth/refresh-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                credentials: 'include', // Important to send the just-set cookie
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.message || 'Login failed');
+            if (!sessionRes.ok) {
+                throw new Error('Failed to fetch user profile');
             }
 
-            const data = await res.json();
-            // Call AuthProvider to set state
-            setAuthState(data);
+            const enrichedData = await sessionRes.json();
 
-            const rawUser = data.user;
-            const isAdmin = hasPermission(rawUser?.permissions || [], Resources.ADMIN_DASHBOARD, Actions.VIEW);  // Pure PBAC check
+            // Validate enriched session data
+            if (!enrichedData?.user || !enrichedData?.session?.token) {
+                throw new Error('Invalid session data received from server');
+            }
+
+            // Map enriched data to AuthContext state
+            const authState = {
+                accessToken: enrichedData.session.token,
+                user: enrichedData.user
+            };
+
+            setAuthState(authState);
+
+            const rawUser = enrichedData.user;
+            const userPermissions = rawUser?.permissions || [];
+
+            const isAdmin = hasPermission(userPermissions, Resources.ADMIN_DASHBOARD, Actions.VIEW);
 
             const fallback = isAdmin ? AppRoutes.ADMIN.ROOT : AppRoutes.TENANT.ROOT;
 
@@ -75,6 +99,7 @@ export function LoginPage() {
             const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');
             const redirectUrl = isValidRedirect ? toParam : fallback;
             navigate(redirectUrl);
+
 
         } catch (err: unknown) {
             if (err instanceof Error) {

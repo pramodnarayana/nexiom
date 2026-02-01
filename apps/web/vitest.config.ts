@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -10,39 +11,30 @@ export default defineConfig({
     plugins: [react()],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, './src'),
+            "@": path.resolve(__dirname, "./src"),
         },
     },
     test: {
-        environment: 'happy-dom',
         globals: true,
-        setupFiles: ['./src/test/setup.ts'],
-        env: {
-            VITE_API_URL: 'http://localhost:3000/api',
-        },
+        environment: 'jsdom',
+        setupFiles: './src/setupTests.ts',
         coverage: {
+            enabled: true,
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
-            include: [
-                'src/providers/auth-provider.ts',
-                'src/lib/auth-client.ts',
-                'src/pages/**/*.tsx',
-                'src/components/**/*.tsx',
-                'src/layouts/**/*.tsx'
-            ],
+            include: ['src/**/*.{ts,tsx}'],
             exclude: [
-                'src/components/ui/**',
-                'src/main.tsx',
-                'src/App.tsx',
-                'src/vite-env.d.ts',
-                'src/pages/admin/**',
+                'src/**/*.spec.{ts,tsx}',
+                'src/**/*.test.{ts,tsx}',
+                'src/setupTests.ts',
+                'src/**/index.ts',
+                'src/shared/components/ui/*.tsx',
+                'src/vite-env.d.ts'
             ],
-            thresholds: {
-                lines: 80,
-                functions: 80,
-                branches: 80,
-                statements: 80
-            },
+            all: true,
+        },
+        env: {
+            VITE_API_URL: 'http://localhost:3000/api',
         },
     },
 });

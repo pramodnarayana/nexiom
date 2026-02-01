@@ -23,6 +23,7 @@ vi.mock('@/shared/lib/auth-client', () => ({
     authClient: {
         signIn: {
             social: vi.fn(),
+            email: vi.fn(),
         },
     },
 }));
@@ -47,7 +48,14 @@ describe('LoginPage', () => {
             isLoading: false,
             setAuthState: mockSetAuthState,
         });
-        // Default fetch mock to success
+
+        // Mock authClient.signIn.email default success
+        (authClient.signIn.email as unknown as Mock).mockResolvedValue({
+            data: { user: { id: '1' }, session: { token: 'valid-token' } },
+            error: null
+        });
+
+        // Default fetch mock (for refresh-session) to success
         (globalThis.fetch as Mock).mockResolvedValue({
             ok: true,
             json: async () => ({
@@ -56,7 +64,7 @@ describe('LoginPage', () => {
                     email: 'test@example.com',
                     permissions: [] // Default user has no specific permissions
                 },
-                session: {}
+                session: { token: 'enriched-token' }
             }),
         });
 
@@ -107,28 +115,33 @@ describe('LoginPage', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Login' }));
 
         await waitFor(() => {
+            // 1. Check authClient call
+            expect(authClient.signIn.email).toHaveBeenCalledWith({
+                email: 'test@example.com',
+                password: 'password123'
+            });
+
+            // 2. Check refresh-session fetch
             expect(globalThis.fetch).toHaveBeenCalledWith(
-                expect.stringContaining('/auth/login'),
-                expect.any(Object)
+                'http://test-api.com/auth/refresh-session',
+                expect.objectContaining({ credentials: 'include' })
             );
         });
 
-        // Strict check on body
-        const fetchCall = (globalThis.fetch as Mock).mock.calls.find(call => call[0].includes('/auth/login'));
-        if (!fetchCall) throw new Error("Fetch not called");
-        const body = JSON.parse(fetchCall[1].body);
-        expect(body).toEqual({ email: 'test@example.com', password: 'password123' });
-
         await waitFor(() => {
-            expect(mockSetAuthState).toHaveBeenCalled();
+            expect(mockSetAuthState).toHaveBeenCalledWith({
+                accessToken: 'enriched-token',
+                user: expect.objectContaining({ id: '1' })
+            });
             expect(mockNavigate).toHaveBeenCalledWith('/dashboard'); // Default fallback
         });
     });
 
     it('handles login failure', async () => {
-        (global.fetch as Mock).mockResolvedValueOnce({
-            ok: false,
-            json: async () => ({ message: 'Invalid credentials' }),
+        // Mock authClient failure
+        (authClient.signIn.email as unknown as Mock).mockResolvedValueOnce({
+            data: null,
+            error: { message: 'Invalid credentials' }
         });
 
         render(<LoginPage />);
