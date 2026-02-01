@@ -1,5 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL;
-if (!API_URL) throw new Error("VITE_API_URL is not defined");
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+// In production, we must have a valid API_URL.
+// In tests, we can fall back to empty string and rely on mocks.
+if (!API_URL && import.meta.env.PROD) {
+    throw new Error("VITE_API_URL is not defined");
+}
 
 /**
  * Hook-like wrapper or just a simple function that accepts the token.
@@ -9,13 +14,16 @@ export async function authorizedFetch(
     options: RequestInit = {},
     token?: string,
 ) {
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...options.headers as Record<string, string>,
-    };
+    // Normalize headers to Headers instance to handle all RequestInit.headers types safely
+    const headers = new Headers(options.headers);
+
+    // Set Content-Type if not already present
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+    }
 
     if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers.set('Authorization', `Bearer ${token}`);
     }
 
     const response = await fetch(`${API_URL}${endpoint}`, {

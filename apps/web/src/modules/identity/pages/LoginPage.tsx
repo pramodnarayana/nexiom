@@ -73,19 +73,21 @@ export function LoginPage() {
 
             const enrichedData = await sessionRes.json();
 
+            // Validate enriched session data
+            if (!enrichedData?.user || !enrichedData?.session?.token) {
+                throw new Error('Invalid session data received from server');
+            }
+
             // Map enriched data to AuthContext state
             const authState = {
-                accessToken: enrichedData.session?.token,
+                accessToken: enrichedData.session.token,
                 user: enrichedData.user
             };
 
             setAuthState(authState);
 
             const rawUser = enrichedData.user;
-             
-            const userPermissions = (rawUser).permissions || [];
-            console.log('[LoginPage] User Permissions:', userPermissions);
-            console.log('[LoginPage] Checking for:', Resources.ADMIN_DASHBOARD, Actions.VIEW);
+            const userPermissions = rawUser?.permissions || [];
 
             const isAdmin = hasPermission(userPermissions, Resources.ADMIN_DASHBOARD, Actions.VIEW);
 
@@ -97,6 +99,7 @@ export function LoginPage() {
             const isValidRedirect = toParam && toParam.startsWith('/') && !toParam.startsWith('//');
             const redirectUrl = isValidRedirect ? toParam : fallback;
             navigate(redirectUrl);
+
 
         } catch (err: unknown) {
             if (err instanceof Error) {
