@@ -4,15 +4,18 @@ import { BrowserRouter } from 'react-router-dom';
 import { VerifyEmailPage } from './VerifyEmailPage';
 
 // Mock useNavigate and useSearchParams
+// Mock useNavigate and useSearchParams
 const mockNavigate = vi.fn();
-const mockSearchParams = new URLSearchParams();
+// Mutable reference to search params for the current test
+let currentSearchParams = new URLSearchParams();
 
 vi.mock('react-router-dom', async () => {
     const actual = await vi.importActual('react-router-dom');
     return {
         ...actual,
         useNavigate: () => mockNavigate,
-        useSearchParams: () => [mockSearchParams],
+        // Return a closure that accesses the current test's params
+        useSearchParams: () => [currentSearchParams],
     };
 });
 
@@ -22,7 +25,9 @@ globalThis.fetch = vi.fn();
 describe('VerifyEmailPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockSearchParams.set('email', 'test@example.com');
+        // Recreate params per test to ensure isolation
+        currentSearchParams = new URLSearchParams();
+        currentSearchParams.set('email', 'test@example.com');
     });
 
     it('renders with email from URL params', () => {
@@ -37,7 +42,7 @@ describe('VerifyEmailPage', () => {
     });
 
     it('redirects to signup if no email provided', () => {
-        mockSearchParams.delete('email');
+        currentSearchParams.delete('email');
 
         render(
             <BrowserRouter>
@@ -99,7 +104,9 @@ describe('VerifyEmailPage', () => {
     it('handles resend error', async () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
             ok: false,
-            json: async () => ({ message: 'Failed to send email' }),
+            // Mock both json and text as the component falls back
+            json: async () => { throw new Error('Invalid JSON'); },
+            text: async () => 'Failed to resend email', // Matches the component's fallback logic
         });
 
         render(

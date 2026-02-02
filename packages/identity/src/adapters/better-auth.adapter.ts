@@ -648,7 +648,15 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     if (!user) {
       // Mask email for logging: a***@example.com
-      const masked = email.replace(/(^.{1})[^@]*(@.*$)/, "$1***$2");
+      let masked: string;
+      if (email.includes("@")) {
+        masked = email.replace(/(^.{1})[^@]*(@.*$)/, "$1***$2");
+      } else if (email.length > 0) {
+        // If no @, mask all but first char: a***
+        masked = email.substring(0, 1) + "***";
+      } else {
+        masked = "***";
+      }
       console.warn(
         `[BetterAuthAdapter] resendVerificationEmail: User not found for email ${masked}`,
       );
