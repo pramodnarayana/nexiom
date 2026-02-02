@@ -643,15 +643,17 @@ export class BetterAuthAdapter implements IAuthProvider {
     });
 
     if (!user) {
+      // Mask email for logging: a***@example.com
+      const masked = email.replace(/(^.{1})[^@]*(@.*$)/, "$1***$2");
       console.warn(
-        `[BetterAuthAdapter] resendVerificationEmail: User not found for email ${email}`,
+        `[BetterAuthAdapter] resendVerificationEmail: User not found for email ${masked}`,
       );
       return;
     }
 
     if (user.emailVerified) {
       console.warn(
-        `[BetterAuthAdapter] resendVerificationEmail: Email already verified for user ${email}`,
+        `[BetterAuthAdapter] resendVerificationEmail: Email already verified for user ${user.id}`,
       );
       return;
     }

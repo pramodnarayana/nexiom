@@ -14,12 +14,19 @@ async function bootstrap() {
       origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
-      const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
-      if (process.env.NODE_ENV !== 'production' && !origin) {
-        // Allow no origin/curl in dev
+      const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter((o) => o.length > 0);
+
+      const isDev = process.env.NODE_ENV !== 'production';
+
+      if (isDev && (!origin || allowedOrigins.length === 0)) {
+        // Allow no origin/curl or any origin if list is empty in dev
         callback(null, true);
         return;
       }
+
       if (origin && allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {

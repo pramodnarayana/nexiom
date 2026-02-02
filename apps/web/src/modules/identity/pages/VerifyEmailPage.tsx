@@ -54,8 +54,18 @@ export function VerifyEmailPage() {
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to resend email');
+                let errorMessage = 'Failed to resend email';
+                try {
+                    const error = await response.json();
+                    if (error && error.message) {
+                        errorMessage = error.message;
+                    }
+                } catch {
+                    // Fallback if JSON parsing fails/empty body
+                    const text = await response.text();
+                    errorMessage = text || response.statusText || errorMessage;
+                }
+                throw new Error(errorMessage);
             }
 
             setMessage('Verification email sent successfully!');
