@@ -1,4 +1,4 @@
--- Cleanup script for user: pramod.narayana+tenant1@gmail.com
+-- Cleanup script for user: user@example.com
 -- Run this in Drizzle Studio SQL console or via psql
 
 -- Start transaction
@@ -8,7 +8,7 @@ BEGIN;
 DO $$
 DECLARE
     target_user_id TEXT;
-    target_email TEXT := 'pramod.narayana+tenant1@gmail.com';
+    target_email TEXT := 'user@example.com';
     org_id TEXT;
     member_count INT;
 BEGIN
@@ -75,4 +75,4 @@ END $$;
 COMMIT;
 
 -- Verify deletion
-SELECT 'User exists: ' || CASE WHEN EXISTS(SELECT 1 FROM "user" WHERE email = 'pramod.narayana+tenant1@gmail.com') THEN 'YES' ELSE 'NO' END as status;
+SELECT 'User exists: ' || CASE WHEN EXISTS(SELECT 1 FROM "user" WHERE email = 'user@example.com') THEN 'YES' ELSE 'NO' END as status;

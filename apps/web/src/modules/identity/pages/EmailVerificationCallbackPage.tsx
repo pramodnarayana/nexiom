@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import { Icons } from '@/shared/components/icons';
 
 export function EmailVerificationCallbackPage() {
@@ -19,7 +20,8 @@ export function EmailVerificationCallbackPage() {
                 // or the session wasn't set correctly. Redirect to login.
                 // We add a small delay to ensure it's not a race condition with session setting
                 const timer = setTimeout(() => {
-                    navigate('/login?error=Verification%20failed%20or%20session%20expired', { replace: true });
+                    const params = new URLSearchParams({ error: 'Verification failed or session expired' });
+                    navigate(`${AppRoutes.AUTH.LOGIN}?${params.toString()}`, { replace: true });
                 }, 1000);
                 return () => clearTimeout(timer);
             }

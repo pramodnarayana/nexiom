@@ -72,6 +72,9 @@ export class BetterAuthAdapter implements IAuthProvider {
           },
         },
         sendResetPassword: async ({ user, url }) => {
+          if (!url) {
+            throw new Error("URL Argument is missing from Better Auth");
+          }
           await this.emailService.sendEmail({
             to: user.email,
             subject: "Reset Password",
@@ -634,11 +637,17 @@ export class BetterAuthAdapter implements IAuthProvider {
     });
 
     if (!user) {
-      throw new Error("User not found");
+      console.warn(
+        `[BetterAuthAdapter] resendVerificationEmail: User not found for email ${email}`,
+      );
+      return;
     }
 
     if (user.emailVerified) {
-      throw new Error("Email already verified");
+      console.warn(
+        `[BetterAuthAdapter] resendVerificationEmail: Email already verified for user ${email}`,
+      );
+      return;
     }
 
     // Generate verification token using Better Auth's API
@@ -652,7 +661,10 @@ export class BetterAuthAdapter implements IAuthProvider {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to send verification email");
+      console.error(
+        `[BetterAuthAdapter] resendVerificationEmail: Failed to send verification email. Status: ${response.status}`,
+      );
+      // We do NOT throw here to keep the public API uniform
     }
   }
 }

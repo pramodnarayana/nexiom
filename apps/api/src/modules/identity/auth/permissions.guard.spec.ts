@@ -24,7 +24,9 @@ describe('PermissionsGuard', () => {
     reflector = module.get(Reflector);
   });
 
-  const mockContext = (user: { permissions: string[] } | Record<string, any>) =>
+  const mockContext = (
+    user: { permissions: string[] } | undefined | Record<string, any>,
+  ) =>
     ({
       getHandler: () => ({}),
       getClass: () => ({}),
@@ -80,7 +82,7 @@ describe('PermissionsGuard', () => {
     vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
       { resource: 'users', action: 'manage' },
     ]);
-    expect(() => guard.canActivate(mockContext(undefined as any))).toThrow(
+    expect(() => guard.canActivate(mockContext(undefined))).toThrow(
       'User not authenticated',
     );
   });

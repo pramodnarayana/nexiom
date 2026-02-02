@@ -38,6 +38,12 @@ export class Login extends createZodDto(
   }),
 ) {}
 
+export class ResendVerificationDto extends createZodDto(
+  z.object({
+    email: z.string().email(),
+  }),
+) {}
+
 // ... (imports)
 
 @Controller('auth')
@@ -94,16 +100,11 @@ export class AuthController {
 
   /**
    * Resend verification email for a user
-   * Rate limited to prevent spam
    */
   @Post('resend-verification')
   async resendVerification(
-    @Body() body: { email: string },
+    @Body() body: ResendVerificationDto,
   ): Promise<{ message: string }> {
-    if (!body.email) {
-      throw new BadRequestException('Email is required');
-    }
-
     try {
       await this.authService.resendVerificationEmail(body.email);
       return { message: 'Verification email sent successfully' };

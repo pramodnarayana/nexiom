@@ -102,8 +102,8 @@ export function VerifyEmailPage() {
 
                     {message && (
                         <div className={`text-sm text-center p-4 rounded-lg font-medium ${message.includes('success')
-                                ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
-                                : 'bg-destructive/10 text-destructive border border-destructive/20'
+                            ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
+                            : 'bg-destructive/10 text-destructive border border-destructive/20'
                             }`}>
                             {message}
                         </div>
@@ -133,6 +133,7 @@ export function VerifyEmailPage() {
 
                             <div className="flex flex-col gap-2 text-center text-sm">
                                 <button
+                                    type="button"
                                     onClick={handleChangeEmail}
                                     className="text-muted-foreground hover:text-primary transition-colors underline underline-offset-4 font-medium"
                                 >

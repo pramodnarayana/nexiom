@@ -91,7 +91,7 @@ async function cleanupUser(email: string) {
                     [membership.organizationId]
                 );
 
-                if (parseInt(remainingMembersResult.rows[0].count) === 0) {
+                if (Number.parseInt(remainingMembersResult.rows[0].count) === 0) {
                     await client.query(
                         'DELETE FROM "organization" WHERE id = $1',
                         [membership.organizationId]
@@ -117,16 +117,22 @@ async function cleanupUser(email: string) {
 }
 
 // Main execution
-const emailToCleanup = process.argv[2] || 'pramod.narayana+tenant1@gmail.com';
+const emailToCleanup = process.argv[2];
+
+if (!emailToCleanup) {
+    console.error('Usage: ts-node scripts/cleanup-user.ts <email>');
+    process.exit(1);
+}
 
 cleanupUser(emailToCleanup)
     .then(() => {
         console.log('\n✅ Cleanup complete');
-        pool.end();
-        process.exit(0);
+        process.exitCode = 0;
     })
     .catch((error) => {
         console.error('\n❌ Cleanup failed:', error);
-        pool.end();
-        process.exit(1);
+        process.exitCode = 1;
+    })
+    .finally(() => {
+        void pool.end();
     });

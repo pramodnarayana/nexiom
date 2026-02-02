@@ -1,10 +1,10 @@
--- Simple cleanup script for pramod.narayana+tenant1@gmail.com
+-- Simple cleanup script for user+tenant@example.com
 -- Copy and paste each section separately in Drizzle Studio SQL Console
 
 -- 1. Find and display user info
 SELECT id, email, "emailVerified", "createdAt" 
 FROM "user" 
-WHERE email = 'pramod.narayana+tenant1@gmail.com';
+WHERE email = 'user+tenant@example.com';
 
 -- 2. Delete sessions (copy user id from step 1)
 -- Replace 'USER_ID_HERE' with the actual user ID from step 1
@@ -14,13 +14,13 @@ DELETE FROM "session" WHERE "userId" = 'USER_ID_HERE';
 DELETE FROM "account" WHERE "userId" = 'USER_ID_HERE';
 
 -- 4. Delete verification tokens
-DELETE FROM "verification" WHERE identifier = 'pramod.narayana+tenant1@gmail.com';
+DELETE FROM "verification" WHERE identifier = 'user+tenant@example.com';
 
 -- 5. Delete invitations sent by user
 DELETE FROM "invitation" WHERE "inviterId" = 'USER_ID_HERE';
 
 -- 6. Delete invitations to user
-DELETE FROM "invitation" WHERE email = 'pramod.narayana+tenant1@gmail.com';
+DELETE FROM "invitation" WHERE email = 'user+tenant@example.com';
 
 -- 7. Find organizations this user is a member of
 SELECT "organizationId", COUNT(*) as member_count
@@ -38,9 +38,7 @@ DELETE FROM "member" WHERE "userId" = 'USER_ID_HERE';
 DELETE FROM "organization" WHERE id = 'ORG_ID_HERE';
 
 -- 10. Finally, delete the user
-DELETE FROM "user" WHERE id = 'USER_ID_HERE';
-
 -- 11. Verify deletion
 SELECT COUNT(*) as user_exists 
 FROM "user" 
-WHERE email = 'pramod.narayana+tenant1@gmail.com';
+WHERE email = 'user+tenant@example.com';

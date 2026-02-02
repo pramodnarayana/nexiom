@@ -1,20 +1,35 @@
 #!/bin/bash
+set -euo pipefail
 
 # Cleanup user script using psql
-# Usage: ./scripts/cleanup-user.sh pramod.narayana+tenant1@gmail.com
+# Usage: ./scripts/cleanup-user.sh <email>
 
-EMAIL="${1:-pramod.narayana+tenant1@gmail.com}"
+if [ -z "${1:-}" ]; then
+    echo "Usage: ./scripts/cleanup-user.sh <email>"
+    exit 1
+fi
+
+EMAIL="$1"
 
 echo "🧹 Cleaning up user: $EMAIL"
 
 # Get database connection details from .env
+if [ ! -f .env ]; then
+    echo "❌ Error: .env file not found"
+    exit 1
+fi
 source .env
 
-psql "$DATABASE_URL" <<EOF
+if [ -z "${DATABASE_URL:-}" ]; then
+    echo "❌ Error: DATABASE_URL not set in .env"
+    exit 1
+fi
+
+psql "$DATABASE_URL" -v email="$EMAIL" <<EOF
 DO \$\$
 DECLARE
     target_user_id TEXT;
-    target_email TEXT := '$EMAIL';
+    target_email TEXT := :'email';
     org_id TEXT;
     member_count INT;
 BEGIN

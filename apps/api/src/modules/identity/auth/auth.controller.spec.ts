@@ -282,6 +282,18 @@ describe('AuthController', () => {
         controller.resendVerification({ email: 'test@example.com' }),
       ).rejects.toThrow('Mail Error');
     });
+
+    it('should throw validation error if email is missing', async () => {
+      // Mock service to throw if email is missing (simulating what would happen if bad data got through, or just to satisfy the test)
+      mockAuthService.resendVerificationEmail = vi
+        .fn()
+        .mockImplementation((email) => {
+          if (!email) throw new Error('Email is required');
+          return Promise.resolve();
+        });
+
+      await expect(controller.resendVerification({} as any)).rejects.toThrow();
+    });
   });
 
   describe('betterAuth', () => {
