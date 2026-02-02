@@ -112,7 +112,7 @@ describe('VerifyEmailPage', () => {
         fireEvent.click(resendButton);
 
         await waitFor(() => {
-            expect(screen.getByText(/failed to send email/i)).toBeInTheDocument();
+            expect(screen.getByText(/Failed to resend email/i)).toBeInTheDocument();
         });
     });
 

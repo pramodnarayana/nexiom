@@ -102,6 +102,10 @@ export class BetterAuthAdapter implements IAuthProvider {
           // NOTE: 'url' passed here might be frontendUrl based or betterAuthUrl based depending on config
           // But we want it to be CLEAN.
 
+          if (!token) {
+            throw new Error("Token Argument is missing from Better Auth");
+          }
+
           if (!url) {
             throw new Error("URL Argument is missing from Better Auth");
           }

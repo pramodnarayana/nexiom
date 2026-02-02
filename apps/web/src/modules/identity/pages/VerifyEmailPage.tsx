@@ -23,6 +23,7 @@ export function VerifyEmailPage() {
     const [resending, setResending] = useState(false);
     const [cooldown, setCooldown] = useState(0);
     const [message, setMessage] = useState('');
+    const [messageType, setMessageType] = useState<'success' | 'error' | null>(null);
 
     // Redirect to signup if no email provided
     useEffect(() => {
@@ -44,6 +45,7 @@ export function VerifyEmailPage() {
 
         setResending(true);
         setMessage('');
+        setMessageType(null);
 
         try {
             const response = await fetch(`${API_URL}/auth/resend-verification`, {
@@ -56,22 +58,30 @@ export function VerifyEmailPage() {
             if (!response.ok) {
                 let errorMessage = 'Failed to resend email';
                 try {
-                    const error = await response.json();
-                    if (error && error.message) {
-                        errorMessage = error.message;
+                    // Safe single-read approach
+                    const text = await response.text();
+                    try {
+                        const error = JSON.parse(text);
+                        if (error && error.message) {
+                            errorMessage = error.message;
+                        }
+                    } catch {
+                        // JSON parse failed, use text or fallback
+                        errorMessage = text || response.statusText || errorMessage;
                     }
                 } catch {
-                    // Fallback if JSON parsing fails/empty body
-                    const text = await response.text();
-                    errorMessage = text || response.statusText || errorMessage;
+                    // response.text() failed
+                    errorMessage = response.statusText || errorMessage;
                 }
                 throw new Error(errorMessage);
             }
 
             setMessage('Verification email sent successfully!');
+            setMessageType('success');
             setCooldown(60); // 60 second cooldown
         } catch (err) {
             setMessage(err instanceof Error ? err.message : 'Failed to resend email');
+            setMessageType('error');
         } finally {
             setResending(false);
         }
@@ -111,9 +121,9 @@ export function VerifyEmailPage() {
                     </div>
 
                     {message && (
-                        <div className={`text-sm text-center p-4 rounded-lg font-medium ${message.includes('success')
+                        <div className={`text-sm text-center p-4 rounded-lg font-medium ${messageType === 'success'
                             ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
-                            : 'bg-destructive/10 text-destructive border border-destructive/20'
+                            : (messageType === 'error' ? 'bg-destructive/10 text-destructive border border-destructive/20' : '')
                             }`}>
                             {message}
                         </div>
