@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
+import { AppRoutes } from '@/shared/lib/auth/constants';
 
 import { dataProvider } from "../providers/data-provider";
 import { authProvider } from "../providers/auth-provider";
@@ -16,48 +17,50 @@ import { TenantEdit } from '../../modules/tenants/pages/TenantEdit';
 
 export function AdminRoutes() {
     return (
-        <Refine
-            authProvider={authProvider}
-            dataProvider={dataProvider}
-            routerProvider={routerProvider}
-            accessControlProvider={accessControlProvider}
-            resources={[
-                {
-                    name: "admin/users",
-                    list: "/admin/users",
-                    edit: "/admin/users/edit/:id",
-                    show: "/admin/users/show/:id",
-                    meta: {
-                        canDelete: true,
+        <Route path={`${AppRoutes.ADMIN.ROOT}/*`} element={
+            <Refine
+                authProvider={authProvider}
+                dataProvider={dataProvider}
+                routerProvider={routerProvider}
+                accessControlProvider={accessControlProvider}
+                resources={[
+                    {
+                        name: "admin/users",
+                        list: "/admin/users",
+                        edit: "/admin/users/edit/:id",
+                        show: "/admin/users/show/:id",
+                        meta: {
+                            canDelete: true,
+                        }
+                    },
+                    {
+                        name: "admin/tenants",
+                        list: "/admin/tenants",
+                        edit: "/admin/tenants/:id",
+                        show: "/admin/tenants/:id",
+                        meta: {
+                            label: "Tenants",
+                        }
                     }
-                },
-                {
-                    name: "admin/tenants",
-                    list: "/admin/tenants",
-                    edit: "/admin/tenants/:id",
-                    show: "/admin/tenants/:id",
-                    meta: {
-                        label: "Tenants",
-                    }
-                }
-            ]}
-            options={{
-                syncWithLocation: true,
-                warnWhenUnsavedChanges: true,
-            }}
-            notificationProvider={notificationProvider}
-        >
-            <Routes>
-                <Route element={<AdminLayout />}>
-                    <Route index element={<AdminDashboardPage />} />
-                    <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" />} />
-                    <Route path="users/show/:id" element={<UserShow />} />
-                    <Route path="users/edit/:id" element={<UserEdit />} />
-                    <Route path="tenants" element={<TenantListPage />} />
-                    <Route path="tenants/:id" element={<TenantEdit />} />
-                    <Route path="settings" element={<div>Settings Placeholder</div>} />
-                </Route>
-            </Routes>
-        </Refine>
+                ]}
+                options={{
+                    syncWithLocation: true,
+                    warnWhenUnsavedChanges: true,
+                }}
+                notificationProvider={notificationProvider}
+            >
+                <Routes>
+                    <Route element={<AdminLayout />}>
+                        <Route index element={<AdminDashboardPage />} />
+                        <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" />} />
+                        <Route path="users/show/:id" element={<UserShow />} />
+                        <Route path="users/edit/:id" element={<UserEdit />} />
+                        <Route path="tenants" element={<TenantListPage />} />
+                        <Route path="tenants/:id" element={<TenantEdit />} />
+                        <Route path="settings" element={<div>Settings Placeholder</div>} />
+                    </Route>
+                </Routes>
+            </Refine>
+        } />
     );
 }
