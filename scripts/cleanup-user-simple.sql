@@ -38,6 +38,8 @@ DELETE FROM "member" WHERE "userId" = 'USER_ID_HERE';
 DELETE FROM "organization" WHERE id = 'ORG_ID_HERE';
 
 -- 10. Finally, delete the user
+DELETE FROM "user" WHERE email = 'user+tenant@example.com';
+
 -- 11. Verify deletion
 SELECT COUNT(*) as user_exists 
 FROM "user" 

@@ -89,7 +89,13 @@ export class BetterAuthAdapter implements IAuthProvider {
         sendVerificationEmail: async ({ user, url, token }) => {
           // Enterprise pattern: Explicitly construct the URL using URL object for robustness
           const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
-          const callbackTarget = `${frontendUrl}/verify-email-callback`;
+
+          // Use URL API to safely join paths and prevent double slashes
+          const callbackTargetUrl = new URL(
+            "/verify-email-callback",
+            frontendUrl,
+          );
+          const callbackTarget = callbackTargetUrl.toString();
 
           // Use the URL object to safely manipulate parameters
           // We clear strict existing parameters to prevent any duplicates

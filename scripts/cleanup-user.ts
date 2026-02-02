@@ -3,7 +3,12 @@ import pg from 'pg';
 const { Pool } = pg;
 
 // Use the correct database URL from apps/api/.env
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/nexiom_local';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL environment variable is required.');
+    process.exit(1);
+}
 
 const pool = new Pool({
     connectionString: DATABASE_URL,

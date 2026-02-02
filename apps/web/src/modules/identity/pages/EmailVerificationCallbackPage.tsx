@@ -14,7 +14,7 @@ export function EmailVerificationCallbackPage() {
         if (!isLoading) {
             if (isAuthenticated) {
                 // Verification successful and session active
-                navigate('/dashboard', { replace: true });
+                navigate(AppRoutes.TENANT.ROOT, { replace: true });
             } else {
                 // If we are not authenticated after loading, verification presumably failed
                 // or the session wasn't set correctly. Redirect to login.

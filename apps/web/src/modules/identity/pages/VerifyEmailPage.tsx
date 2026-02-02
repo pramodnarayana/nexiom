@@ -40,7 +40,7 @@ export function VerifyEmailPage() {
     }, [cooldown]);
 
     const handleResendEmail = async () => {
-        if (!email || cooldown > 0) return;
+        if (!email || cooldown > 0 || resending) return;
 
         setResending(true);
         setMessage('');

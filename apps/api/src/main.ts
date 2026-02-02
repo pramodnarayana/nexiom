@@ -10,7 +10,22 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: true,
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
+      if (process.env.NODE_ENV !== 'production' && !origin) {
+        // Allow no origin/curl in dev
+        callback(null, true);
+        return;
+      }
+      if (origin && allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
