@@ -93,6 +93,31 @@ export class AuthController {
   }
 
   /**
+   * Resend verification email for a user
+   * Rate limited to prevent spam
+   */
+  @Post('resend-verification')
+  async resendVerification(
+    @Body() body: { email: string },
+  ): Promise<{ message: string }> {
+    if (!body.email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    try {
+      await this.authService.resendVerificationEmail(body.email);
+      return { message: 'Verification email sent successfully' };
+    } catch (error) {
+      this.logger.error('Failed to resend verification email', error);
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to send verification email',
+      );
+    }
+  }
+
+  /**
    * Completes an invitation by creating a user (if needed), accepting the invite,
    * verifying email, and logging the user in.
    */

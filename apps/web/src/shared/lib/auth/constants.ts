@@ -45,6 +45,8 @@ export const AppRoutes = {
         FORGOT_PASSWORD: '/forgot-password',
         RESET_PASSWORD: '/reset-password',
         CALLBACK: '/auth/callback',
+        VERIFY_EMAIL: '/verify-email',
+        VERIFY_EMAIL_CALLBACK: '/verify-email-callback',
     },
     ROOT: '/',
 } as const;

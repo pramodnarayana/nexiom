@@ -36,6 +36,16 @@ export function LoginPage() {
         }
     }, [user, navigate, isLoading]);
 
+    // Show loading state while checking authentication
+    // This prevents the login form from flashing when verifying email or checking session
+    if (isLoading) {
+        return (
+            <div className="flex h-screen w-screen items-center justify-center">
+                <Icons.Spinner className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
     /**
      * Submit handler for the login form.
      * Prevents default submission, validates, and triggers the API call.

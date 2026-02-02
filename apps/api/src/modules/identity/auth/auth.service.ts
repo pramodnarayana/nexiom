@@ -99,7 +99,8 @@ export class AuthService {
         permissionsSet.add(p);
       }
     } catch (_error) {
-      // Ignore error if user is not part of system tenant (expected for most users)
+      // Expected: Most users won't have system-level permissions
+      this.logger.debug(`No system permissions for user ${user.id}`);
     }
 
     // 2. Fetch Tenant-specific permissions if context exists
@@ -149,7 +150,11 @@ export class AuthService {
       // Legacy mapping (temporarily support old roles via permission check if needed,
       // but we are moving to pure DB, so strict check is better).
       return false;
-    } catch (_e) {
+    } catch (error) {
+      this.logger.warn(
+        `Failed to check system permission for user ${user.id}`,
+        error,
+      );
       return false;
     }
   }
@@ -175,5 +180,18 @@ export class AuthService {
       return this.authProvider.setPassword(userId, password);
     }
     throw new Error('Auth Provider does not support setting password');
+  }
+
+  /**
+   * Resend verification email for a user
+   * @param email User's email address
+   */
+  async resendVerificationEmail(email: string): Promise<void> {
+    if (this.authProvider.resendVerificationEmail) {
+      return this.authProvider.resendVerificationEmail(email);
+    }
+    throw new Error(
+      'Auth Provider does not support resending verification email',
+    );
   }
 }

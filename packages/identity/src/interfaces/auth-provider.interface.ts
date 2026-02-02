@@ -40,4 +40,6 @@ export interface IAuthProvider {
   listInvitations(organizationId: string): Promise<Invitation[]>;
 
   setPassword?(userId: string, password: string): Promise<void>;
+
+  resendVerificationEmail?(email: string): Promise<void>;
 }

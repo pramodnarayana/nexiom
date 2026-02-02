@@ -69,7 +69,7 @@ export function SignupPage() {
                 // --- INVITE FLOW (User Only + Auto Login + Auto Accept) ---
                 // We utilize the dedicated Atomic Endpoint for this.
 
-                const inviteIdParam = redirectUrl && redirectUrl.includes('id=')
+                const inviteIdParam = redirectUrl?.includes('id=')
                     ? new URLSearchParams(redirectUrl.split('?')[1]).get('id')
                     : null;
 
@@ -98,7 +98,7 @@ export function SignupPage() {
 
                 const sessionData = await res.json(); // { session: ..., user: ... }
 
-                if (sessionData && sessionData.session) {
+                if (sessionData?.session) {
                     // Update Auth Context with new Session
                     setAuthState({
                         user: sessionData.user,
@@ -143,8 +143,8 @@ export function SignupPage() {
                     throw new Error(data.message || 'Signup failed');
                 }
 
-                alert('Account created! Please log in.');
-                navigate('/login');
+                // Redirect to verification page with email parameter
+                navigate(`${AppRoutes.AUTH.VERIFY_EMAIL}?email=${encodeURIComponent(email)}`);
             }
 
         } catch (err: unknown) {
@@ -169,7 +169,7 @@ export function SignupPage() {
                     <div className="text-sm text-muted-foreground mt-2">
                         Already have an account?{' '}
                         <Link
-                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl!)}` : "/login"}
+                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl)}` : "/login"}
                             className="underline underline-offset-4 hover:text-primary"
                         >
                             Sign In
@@ -241,7 +241,7 @@ export function SignupPage() {
                                 await authClient.signIn.social({
                                     provider: "google",
                                     // [REPLACEMENT_1 - Callback URL]
-                                    callbackURL: `${window.location.origin}${AppRoutes.AUTH.CALLBACK}`,
+                                    callbackURL: `${globalThis.location.origin}${AppRoutes.AUTH.CALLBACK}`,
                                     // @ts-expect-error - 'prompt' is a valid Google OAuth param but missing in better-auth types
                                     prompt: "select_account"
                                 });

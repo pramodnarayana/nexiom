@@ -7,6 +7,8 @@ import { ResetPasswordPage } from '../../modules/identity/pages/ResetPasswordPag
 import { AppRoutes } from '../../shared/lib/auth/constants';
 
 import { AuthCallbackPage } from '../../modules/identity/pages/AuthCallbackPage';
+import { VerifyEmailPage } from '../../modules/identity/pages/VerifyEmailPage';
+import { EmailVerificationCallbackPage } from '../../modules/identity/pages/EmailVerificationCallbackPage';
 
 export function AuthRoutes() {
     return (
@@ -17,6 +19,9 @@ export function AuthRoutes() {
             <Route path={AppRoutes.AUTH.FORGOT_PASSWORD} element={<ForgotPasswordPage />} />
             <Route path={AppRoutes.AUTH.RESET_PASSWORD} element={<ResetPasswordPage />} />
             <Route path={AppRoutes.AUTH.CALLBACK} element={<AuthCallbackPage />} />
+            <Route path={AppRoutes.AUTH.VERIFY_EMAIL} element={<VerifyEmailPage />} />
+            {/* Dedicated callback for email verification links - shows only loading spinner */}
+            <Route path={AppRoutes.AUTH.VERIFY_EMAIL_CALLBACK} element={<EmailVerificationCallbackPage />} />
         </>
     );
 }

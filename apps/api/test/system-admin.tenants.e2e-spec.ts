@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { Server } from 'http';
+import { Server } from 'node:http';
 import { AppModule } from './../src/app/app.module';
 import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';

@@ -12,7 +12,7 @@ const API_URL = import.meta.env.VITE_API_URL;
  * 
  * @param children - The child components that need access to auth context.
  */
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
@@ -20,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Init: Check localStorage and Backend Session (Better Auth)
     useEffect(() => {
         const initAuth = async () => {
+            const startTime = Date.now(); // Track start time for minimum loading duration
+
             try {
                 // 1. Check Server Session (Cookies) - Source of Truth
                 const { data, error } = await authClient.getSession();
@@ -67,10 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                 credentials: 'include',
                             });
 
-                            if (!res.ok) {
-                                console.error("Provisioning Failed!", res.status);
-                                hydrateUser(enrichedData);
-                            } else {
+                            if (res.ok) {
                                 // Retry Enriched Fetch
                                 const retryRes = await fetch(`${API_URL}/auth/refresh-session`, {
                                     method: 'POST',
@@ -94,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     // or just data if enriched was null (though we are inside enrichedData check here)
                                     hydrateUser(enrichedData);
                                 }
+                            } else {
+                                console.error("Provisioning Failed!", res.status);
+                                hydrateUser(enrichedData);
                             }
                         } else {
                             // Already has tenant
@@ -115,7 +117,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 console.error('Failed to fetch session', error);
             } finally {
-                setIsLoading(false);
+                // Enterprise pattern: Ensure minimum loading duration to prevent flash
+                // This is used by Vercel, Linear, Stripe, etc.
+                const elapsed = Date.now() - startTime;
+                const minLoadingDuration = 300; // 300ms minimum
+
+                if (elapsed < minLoadingDuration) {
+                    // Wait for the remaining time
+                    setTimeout(() => {
+                        setIsLoading(false);
+                    }, minLoadingDuration - elapsed);
+                } else {
+                    setIsLoading(false);
+                }
             }
         };
 

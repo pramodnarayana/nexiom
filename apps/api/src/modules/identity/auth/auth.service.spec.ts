@@ -18,6 +18,7 @@ describe('AuthService', () => {
     createUser: vi.fn(),
     setPassword: vi.fn(),
     getHandler: vi.fn(),
+    resendVerificationEmail: vi.fn(),
   };
 
   const mockTenantProvider = {

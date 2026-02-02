@@ -75,4 +75,21 @@ describe('PermissionsGuard', () => {
     const user = { permissions: ['users:read'] };
     expect(guard.canActivate(mockContext(user))).toBe(true);
   });
+
+  it('should deny and throw if user is missing', () => {
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      { resource: 'users', action: 'manage' },
+    ]);
+    expect(() => guard.canActivate(mockContext(undefined as any))).toThrow(
+      'User not authenticated',
+    );
+  });
+
+  it('should deny if user has no permissions array', () => {
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue([
+      { resource: 'users', action: 'manage' },
+    ]);
+    const user = { permissions: undefined };
+    expect(guard.canActivate(mockContext(user))).toBe(false);
+  });
 });
