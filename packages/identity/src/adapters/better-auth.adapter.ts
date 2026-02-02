@@ -54,6 +54,8 @@ export class BetterAuthAdapter implements IAuthProvider {
     }
     this.auth = betterAuth({
       trustedOrigins: config.allowedOrigins,
+      // Use betterAuthUrl as baseURL (API URL)
+      // We manually construct frontend redirects for email flows
       baseURL: config.betterAuthUrl,
       database: drizzleAdapter(this.db, {
         provider: "pg",
@@ -69,28 +71,59 @@ export class BetterAuthAdapter implements IAuthProvider {
             return await bcrypt.compare(password, hash);
           },
         },
-        sendResetPassword: async ({ user, token }) => {
-          const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
-          const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
-
+        sendResetPassword: async ({ user, url }) => {
+          if (!url) {
+            throw new Error("URL Argument is missing from Better Auth");
+          }
           await this.emailService.sendEmail({
             to: user.email,
-            subject: "Reset your password",
-            text: `Click the link to reset your password: ${resetUrl}`,
-            html: `<p>Click the link to reset your password: <a href="${resetUrl}">${resetUrl}</a></p>`,
+            subject: "Reset Password",
+            text: `Reset your password here: ${url}`,
+            html: `<a href="${url}">Reset Password</a>`,
           });
         },
       },
-      user: {},
       emailVerification: {
         sendOnSignUp: true,
         autoSignInAfterVerification: true,
-        sendVerificationEmail: async ({ user, url }) => {
+        sendVerificationEmail: async ({ user, url, token }) => {
+          // Enterprise pattern: Explicitly construct the URL using URL object for robustness
+          const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+
+          // Use URL API to safely join paths and prevent double slashes
+          const callbackTargetUrl = new URL(
+            "/verify-email-callback",
+            frontendUrl,
+          );
+          const callbackTarget = callbackTargetUrl.toString();
+
+          // Use the URL object to safely manipulate parameters
+          // We clear strict existing parameters to prevent any duplicates
+          // NOTE: 'url' passed here might be frontendUrl based or betterAuthUrl based depending on config
+          // But we want it to be CLEAN.
+
+          if (!token) {
+            throw new Error("Token Argument is missing from Better Auth");
+          }
+
+          if (!url) {
+            throw new Error("URL Argument is missing from Better Auth");
+          }
+          const urlObj = new URL(url, this.config.betterAuthUrl);
+
+          urlObj.search = ""; // Wipe existing query string (Removes default callbackURL=/)
+
+          // Set our parameters
+          urlObj.searchParams.set("token", token);
+          urlObj.searchParams.set("callbackURL", callbackTarget);
+
+          const verificationUrl = urlObj.toString();
+
           await this.emailService.sendEmail({
             to: user.email,
             subject: "Verify your email for Nexiom",
-            text: `Please verify your email by clicking the following link: ${url}`,
-            html: `<p>Please verify your email by clicking the following link: <a href="${url}">${url}</a></p>`,
+            text: `Please verify your email by clicking the following link: ${verificationUrl}`,
+            html: `<p>Please verify your email by clicking the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
           });
         },
       },
@@ -131,9 +164,6 @@ export class BetterAuthAdapter implements IAuthProvider {
           : {}),
       },
     });
-    if (config.nodeEnv !== "production") {
-      console.log("Better Auth Registered Routes:", Object.keys(this.auth.api));
-    }
   }
 
   getHandler() {
@@ -604,5 +634,57 @@ export class BetterAuthAdapter implements IAuthProvider {
       expiresAt: dbInv.expiresAt,
       createdAt: dbInv.createdAt,
     };
+  }
+
+  /**
+   * Resend verification email for a user
+   * @param email User's email address
+   */
+  async resendVerificationEmail(email: string): Promise<void> {
+    // Find user by email
+    const user = await this.db.query.user.findFirst({
+      where: eq(schema.user.email, email),
+    });
+
+    if (!user) {
+      // Mask email for logging: a***@example.com
+      let masked: string;
+      if (email.includes("@")) {
+        masked = email.replace(/(^.{1})[^@]*(@.*$)/, "$1***$2");
+      } else if (email.length > 0) {
+        // If no @, mask all but first char: a***
+        masked = email.substring(0, 1) + "***";
+      } else {
+        masked = "***";
+      }
+      console.warn(
+        `[BetterAuthAdapter] resendVerificationEmail: User not found for email ${masked}`,
+      );
+      return;
+    }
+
+    if (user.emailVerified) {
+      console.warn(
+        `[BetterAuthAdapter] resendVerificationEmail: Email already verified for user ${user.id}`,
+      );
+      return;
+    }
+
+    // Generate verification token using Better Auth's API
+    // Better Auth will use the configured baseURL/trustedOrigins to construct the verification URL
+
+    const response = await this.auth.api.sendVerificationEmail({
+      body: {
+        email: user.email,
+      },
+      asResponse: true,
+    });
+
+    if (!response.ok) {
+      console.error(
+        `[BetterAuthAdapter] resendVerificationEmail: Failed to send verification email. Status: ${response.status}`,
+      );
+      // We do NOT throw here to keep the public API uniform
+    }
   }
 }

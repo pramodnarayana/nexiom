@@ -532,6 +532,7 @@ describe("BetterAuthAdapter", () => {
     await sendVerify({
       user: { email: "test@test.com" },
       url: "http://verify.com",
+      token: "dummy-token",
     });
     expect(email.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({

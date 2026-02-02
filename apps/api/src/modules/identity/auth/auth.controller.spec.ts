@@ -26,6 +26,7 @@ describe('AuthController', () => {
     getHandler: vi.fn(() => () => {}),
     setPassword: vi.fn(),
     getEnrichedSession: vi.fn(),
+    resendVerificationEmail: vi.fn(),
   };
 
   const mockUserProvider = {
@@ -260,6 +261,43 @@ describe('AuthController', () => {
       expect(mockUserProvider.delete).toHaveBeenCalledWith('user-fail');
     });
   });
+  describe('resendVerification', () => {
+    it('should satisfy coverage by handling success', async () => {
+      mockAuthService.resendVerificationEmail = vi
+        .fn()
+        .mockResolvedValue(undefined);
+      const result = await controller.resendVerification({
+        email: 'test@example.com',
+      });
+      expect(result).toEqual({
+        message: 'Verification email sent successfully',
+      });
+    });
+
+    it('should satisfy coverage by handling error', async () => {
+      mockAuthService.resendVerificationEmail = vi
+        .fn()
+        .mockRejectedValue(new Error('Mail Error'));
+      await expect(
+        controller.resendVerification({ email: 'test@example.com' }),
+      ).rejects.toThrow('Mail Error');
+    });
+
+    it('should throw when service receives empty email', async () => {
+      // Mock service to throw if email is missing (simulating service validation)
+      mockAuthService.resendVerificationEmail = vi
+        .fn()
+        .mockImplementation((email) => {
+          if (!email) throw new Error('Email is required');
+          return Promise.resolve();
+        });
+
+      await expect(
+        controller.resendVerification({ email: '' }),
+      ).rejects.toThrow();
+    });
+  });
+
   describe('betterAuth', () => {
     it.skip('should delegate to authService.getHandler', async () => {
       const mockHandler = vi.fn();

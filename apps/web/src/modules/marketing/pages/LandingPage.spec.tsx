@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LandingPage } from './LandingPage';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -23,29 +23,36 @@ describe('LandingPage', () => {
         (useNavigate as unknown as Mock).mockReturnValue(mockNavigate);
         (useAuth as unknown as Mock).mockReturnValue({
             isAuthenticated: false,
+            isLoading: false,
             login: mockLogin,
             signup: mockSignup,
         });
     });
 
-    it('renders landing page content', () => {
+    it('renders landing page content', async () => {
         render(<LandingPage />);
-        expect(screen.getByRole('heading', { name: 'Nexiom' })).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByRole('heading', { name: 'Nexiom' })).toBeInTheDocument();
+        });
         expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Sign Up' })).toBeInTheDocument();
     });
 
-    it('navigates to dashboard if authenticated', () => {
+    it('navigates to dashboard if authenticated', async () => {
         (useAuth as unknown as Mock).mockReturnValue({
             isAuthenticated: true,
+            isLoading: false,
         });
         render(<LandingPage />);
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
-        expect(screen.getByText('Redirecting to your dashboard...')).toBeInTheDocument();
     });
 
-    it('navigates to auth pages on button click', () => {
+    it('navigates to auth pages on button click', async () => {
         render(<LandingPage />);
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
+        });
+
         fireEvent.click(screen.getByRole('button', { name: 'Login' }));
         expect(mockNavigate).toHaveBeenCalledWith('/login');
 

@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes } from 'react-router-dom';
 import { Toaster } from "@/shared/components/ui/toaster";
 
 import { MarketingRoutes } from './MarketingRoutes';
@@ -14,11 +14,9 @@ export function AppRouter() {
                 {MarketingRoutes()}
                 {AuthRoutes()}
 
-                {/* Tenant Routes */}
-                <Route path="/dashboard/*" element={<TenantRoutes />} />
-
-                {/* Admin Routes */}
-                <Route path="/admin/*" element={<AdminRoutes />} />
+                {/* Tenant & Admin Routes */}
+                {TenantRoutes()}
+                {AdminRoutes()}
             </Routes>
             <Toaster />
         </>

@@ -38,6 +38,12 @@ export class Login extends createZodDto(
   }),
 ) {}
 
+export class ResendVerificationDto extends createZodDto(
+  z.object({
+    email: z.string().email(),
+  }),
+) {}
+
 // ... (imports)
 
 @Controller('auth')
@@ -90,6 +96,26 @@ export class AuthController {
     }
 
     return this.tenantProvider.provisionTenantForUser(sessionData.user.id);
+  }
+
+  /**
+   * Resend verification email for a user
+   */
+  @Post('resend-verification')
+  async resendVerification(
+    @Body() body: ResendVerificationDto,
+  ): Promise<{ message: string }> {
+    try {
+      await this.authService.resendVerificationEmail(body.email);
+      return { message: 'Verification email sent successfully' };
+    } catch (error) {
+      this.logger.error('Failed to resend verification email', error);
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to send verification email',
+      );
+    }
   }
 
   /**

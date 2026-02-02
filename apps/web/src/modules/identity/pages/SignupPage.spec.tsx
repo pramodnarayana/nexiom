@@ -100,7 +100,7 @@ describe('SignupPage', () => {
 
         // Wrap navigation check in waitFor to handle async microtask queue
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/login');
+            expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/verify-email'));
         });
 
         alertMock.mockRestore();
