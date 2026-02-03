@@ -16,14 +16,15 @@ interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
 const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
     ({ className, defaultValue, onValueChange, children, ...props }, ref) => {
         const [activeTab, setActiveTabState] = React.useState(defaultValue)
+        const uniqueId = React.useId()
 
         const setActiveTab = (value: string) => {
             setActiveTabState(value)
             onValueChange?.(value)
         }
 
-        const getTabId = (value: string) => `tab-${value}`
-        const getPanelId = (value: string) => `tabpanel-${value}`
+        const getTabId = (value: string) => `${uniqueId}-tab-${value}`
+        const getPanelId = (value: string) => `${uniqueId}-tabpanel-${value}`
 
         return (
             <TabsContext.Provider value={{ activeTab, setActiveTab, getTabId, getPanelId }}>

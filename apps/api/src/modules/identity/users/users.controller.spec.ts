@@ -212,7 +212,7 @@ describe('UsersController', () => {
       );
 
       await expect(controller.remove(id, req)).rejects.toThrow(
-        'User is not a member of this organization',
+        'User not found in this organization',
       );
     });
 
@@ -243,27 +243,6 @@ describe('UsersController', () => {
       };
 
       // Atomic operation succeeds
-      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
-
-      const result = await controller.remove(id, req);
-
-      expect(result).toEqual({ success: true });
-      expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
-        id,
-        tenantId,
-      );
-    });
-
-    it('should successfully delete admin if there are other admins', async () => {
-      const id = 'user-123';
-      const tenantId = 'org-123';
-      const req = {
-        user: { id: 'current-user', organizationId: tenantId },
-      } as unknown as Request & {
-        user: { id: string; organizationId?: string };
-      };
-
-      // Atomic operation succeeds (not last admin)
       userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
 
       const result = await controller.remove(id, req);

@@ -126,16 +126,39 @@ export class UsersController {
       throw new BadRequestException('You cannot delete your own account.');
     }
 
-    // Use atomic operation to prevent TOCTOU race condition
-    // This combines membership verification, last-admin check, and deletion in a single transaction
-    const deleted = await this.userProvider.deleteIfNotLastAdmin(id, tenantId);
+    try {
+      // Use atomic operation to prevent TOCTOU race condition
+      // This combines membership verification, last-admin check, and deletion in a single transaction
+      const deleted = await this.userProvider.deleteIfNotLastAdmin(
+        id,
+        tenantId,
+      );
 
-    if (!deleted) {
+      if (!deleted) {
+        throw new BadRequestException(
+          'Cannot delete the last admin of the organization',
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      // Translate provider-specific errors to HTTP exceptions
+      if (
+        error instanceof Error &&
+        error.message.includes('not a member of this organization')
+      ) {
+        throw new NotFoundException('User not found in this organization');
+      }
+
+      // Re-throw BadRequestException (last admin case)
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // Handle unexpected errors
       throw new BadRequestException(
-        'Cannot delete the last admin of the organization',
+        error instanceof Error ? error.message : 'Failed to delete user',
       );
     }
-
-    return { success: true };
   }
 }

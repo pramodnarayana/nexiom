@@ -9,6 +9,9 @@ import {
 } from "../interfaces";
 import * as schema from "../schema";
 
+// Role name constant to match database value
+const ADMIN_ROLE_NAME = "Admin";
+
 export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
@@ -239,7 +242,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const userRole = membershipWithRole[0].roleName;
 
       // 2. If user is an admin, count total admins
-      if (userRole === "admin") {
+      if (userRole === ADMIN_ROLE_NAME) {
         // Count admins by joining member with role table
         const adminCountResult = await tx
           .select({ count: count(schema.member.id) })
@@ -248,7 +251,7 @@ export class DrizzleUserAdapter implements IUserProvider {
           .where(
             and(
               eq(schema.member.organizationId, tenantId),
-              eq(schema.role.name, "admin"),
+              eq(schema.role.name, ADMIN_ROLE_NAME),
             ),
           );
 

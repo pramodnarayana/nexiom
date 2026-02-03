@@ -42,13 +42,24 @@ export function TenantSettingsPage() {
 
 function GeneralSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
     // Fetch organization by ID
-    const { data: org, isLoading } = useQuery({
+    const { data: org, isLoading, isError, error } = useQuery({
         queryKey: ['organization', orgId],
         queryFn: async () => {
             const res = await apiClient.get<{ id: string; name: string; slug: string }>(`/tenants/${orgId}`);
             return res.data;
         }
     });
+
+    if (isError) {
+        return (
+            <div className="text-center py-8">
+                <p className="text-destructive font-medium">Error loading organization</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                    {error instanceof Error ? error.message : 'An unexpected error occurred'}
+                </p>
+            </div>
+        );
+    }
 
     if (isLoading) return <div>Loading...</div>;
     if (!org) return <div>Organization not found</div>;
@@ -77,7 +88,7 @@ function GeneralSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
     )
 }
 
-function UsersListTab({ orgId }: { orgId: string }) {
+function UsersListTab({ orgId }: Readonly<{ orgId: string }>) {
     const { data: users, isLoading, isError, error } = useQuery({
         queryKey: ['users', orgId],
         queryFn: async () => {
@@ -116,9 +127,9 @@ function UsersListTab({ orgId }: { orgId: string }) {
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 border-b">
                                 <tr>
-                                    <th className="h-10 px-4 text-left font-medium">Name</th>
-                                    <th className="h-10 px-4 text-left font-medium">Email</th>
-                                    <th className="h-10 px-4 text-left font-medium">Role</th>
+                                    <th scope="col" className="h-10 px-4 text-left font-medium">Name</th>
+                                    <th scope="col" className="h-10 px-4 text-left font-medium">Email</th>
+                                    <th scope="col" className="h-10 px-4 text-left font-medium">Role</th>
                                 </tr>
                             </thead>
                             <tbody>
