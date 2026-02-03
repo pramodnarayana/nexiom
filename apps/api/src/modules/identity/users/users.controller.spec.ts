@@ -18,6 +18,7 @@ describe('UsersController', () => {
     update: Mock;
     delete: Mock;
     forceVerifyEmail: Mock;
+    deleteIfNotLastAdmin: Mock;
   };
   let tenantProvider: {
     findAllForUser: Mock;
@@ -34,6 +35,7 @@ describe('UsersController', () => {
       update: vi.fn(),
       delete: vi.fn(),
       forceVerifyEmail: vi.fn(),
+      deleteIfNotLastAdmin: vi.fn(),
     };
 
     tenantProvider = {
@@ -195,7 +197,7 @@ describe('UsersController', () => {
       );
     });
 
-    it('should throw NotFoundException if user not member of tenant', async () => {
+    it('should throw error if user not member of tenant', async () => {
       const id = 'user-123';
       const tenantId = 'org-123';
       const req = {
@@ -204,10 +206,13 @@ describe('UsersController', () => {
         user: { id: string; organizationId?: string };
       };
 
-      tenantProvider.findAllForUser.mockResolvedValue([{ id: 'other-org' }]); // Not Member
+      // Atomic operation throws error for non-member
+      userProvider.deleteIfNotLastAdmin.mockRejectedValue(
+        new Error('User is not a member of this organization'),
+      );
 
       await expect(controller.remove(id, req)).rejects.toThrow(
-        'User not found in this organization',
+        'User is not a member of this organization',
       );
     });
 
@@ -220,16 +225,8 @@ describe('UsersController', () => {
         user: { id: string; organizationId?: string };
       };
 
-      // User is a member and is an admin
-      tenantProvider.findAllForUser.mockResolvedValue([
-        { id: tenantId, memberRole: 'admin' },
-      ]);
-
-      // Only one admin in the organization
-      userProvider.findAll.mockResolvedValue({
-        data: [{ id: 'user-123', memberRole: 'admin' }],
-        total: 1,
-      });
+      // Atomic operation returns false when last admin
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue(false);
 
       await expect(controller.remove(id, req)).rejects.toThrow(
         'Cannot delete the last admin of the organization',
@@ -245,14 +242,16 @@ describe('UsersController', () => {
         user: { id: string; organizationId?: string };
       };
 
-      tenantProvider.findAllForUser.mockResolvedValue([{ id: tenantId }]); // Is Member
-      userProvider.delete.mockResolvedValue(undefined);
+      // Atomic operation succeeds
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
 
       const result = await controller.remove(id, req);
 
       expect(result).toEqual({ success: true });
-      expect(tenantProvider.findAllForUser).toHaveBeenCalledWith(id);
-      expect(userProvider.delete).toHaveBeenCalledWith(id);
+      expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        id,
+        tenantId,
+      );
     });
 
     it('should successfully delete admin if there are other admins', async () => {
@@ -264,25 +263,16 @@ describe('UsersController', () => {
         user: { id: string; organizationId?: string };
       };
 
-      // User is a member and is an admin
-      tenantProvider.findAllForUser.mockResolvedValue([
-        { id: tenantId, memberRole: 'admin' },
-      ]);
-
-      // Multiple admins in the organization
-      userProvider.findAll.mockResolvedValue({
-        data: [
-          { id: 'user-123', memberRole: 'admin' },
-          { id: 'user-456', memberRole: 'admin' },
-        ],
-        total: 2,
-      });
-      userProvider.delete.mockResolvedValue(undefined);
+      // Atomic operation succeeds (not last admin)
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
 
       const result = await controller.remove(id, req);
 
       expect(result).toEqual({ success: true });
-      expect(userProvider.delete).toHaveBeenCalledWith(id);
+      expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        id,
+        tenantId,
+      );
     });
   });
 });

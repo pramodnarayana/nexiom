@@ -13,8 +13,9 @@ export const ROLES = {
 
 /**
  * Shared role enum for consistent validation across schemas
+ * Derived from ROLES constant to ensure single source of truth
  */
-const RoleEnum = z.enum(['admin', 'editor', 'viewer', 'user'], {
+const RoleEnum = z.enum(Object.values(ROLES) as [string, ...string[]], {
   message: 'Role must be admin, editor, viewer, or user',
 });
 

@@ -207,6 +207,73 @@ export class DrizzleUserAdapter implements IUserProvider {
       .where(eq(schema.user.id, userId));
   }
 
+  /**
+   * Atomically delete a user only if they are not the last admin in the organization.
+   * This operation is performed in a single transaction to prevent TOCTOU race conditions.
+   */
+  async deleteIfNotLastAdmin(
+    userId: string,
+    tenantId: string,
+  ): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      // 1. Verify user exists and is a member of the tenant, and get their role
+      const membershipWithRole = await tx
+        .select({
+          memberId: schema.member.id,
+          roleName: schema.role.name,
+        })
+        .from(schema.member)
+        .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+        .where(
+          and(
+            eq(schema.member.userId, userId),
+            eq(schema.member.organizationId, tenantId),
+          ),
+        )
+        .limit(1);
+
+      if (!membershipWithRole.length) {
+        throw new Error("User is not a member of this organization");
+      }
+
+      const userRole = membershipWithRole[0].roleName;
+
+      // 2. If user is an admin, count total admins
+      if (userRole === "admin") {
+        // Count admins by joining member with role table
+        const adminCountResult = await tx
+          .select({ count: count(schema.member.id) })
+          .from(schema.member)
+          .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+          .where(
+            and(
+              eq(schema.member.organizationId, tenantId),
+              eq(schema.role.name, "admin"),
+            ),
+          );
+
+        const adminCount = Number(adminCountResult[0]?.count || 0);
+
+        // 3. Prevent deletion if last admin
+        if (adminCount <= 1) {
+          return false; // Signal that deletion was prevented
+        }
+      }
+
+      // 4. Delete the user membership (atomic with the check above)
+      await tx
+        .delete(schema.member)
+        .where(
+          and(
+            eq(schema.member.userId, userId),
+            eq(schema.member.organizationId, tenantId),
+          ),
+        );
+
+      return true; // Successfully deleted
+    });
+  }
+
   private mapUser(dbUser: schema.User): UserInterface {
     return {
       id: dbUser.id,

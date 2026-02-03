@@ -4,6 +4,8 @@ import { cn } from "@/shared/lib/utils"
 const TabsContext = React.createContext<{
     activeTab: string
     setActiveTab: (value: string) => void
+    getTabId: (value: string) => string
+    getPanelId: (value: string) => string
 } | null>(null)
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -20,8 +22,11 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
             onValueChange?.(value)
         }
 
+        const getTabId = (value: string) => `tab-${value}`
+        const getPanelId = (value: string) => `tabpanel-${value}`
+
         return (
-            <TabsContext.Provider value={{ activeTab, setActiveTab }}>
+            <TabsContext.Provider value={{ activeTab, setActiveTab, getTabId, getPanelId }}>
                 <div ref={ref} className={cn("", className)} {...props}>
                     {children}
                 </div>
@@ -107,7 +112,9 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
                 ref={ref}
                 type="button"
                 role="tab"
+                id={context.getTabId(value)}
                 aria-selected={isActive}
+                aria-controls={context.getPanelId(value)}
                 data-state={isActive ? "active" : "inactive"}
                 className={cn(
                     "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
@@ -141,6 +148,8 @@ const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
             <div
                 ref={ref}
                 role="tabpanel"
+                id={context.getPanelId(value)}
+                aria-labelledby={context.getTabId(value)}
                 className={cn(
                     "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     className

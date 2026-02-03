@@ -40,7 +40,7 @@ export function TenantSettingsPage() {
     );
 }
 
-function GeneralSettingsTab({ orgId }: { orgId: string }) {
+function GeneralSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
     // Fetch organization by ID
     const { data: org, isLoading } = useQuery({
         queryKey: ['organization', orgId],
@@ -78,7 +78,7 @@ function GeneralSettingsTab({ orgId }: { orgId: string }) {
 }
 
 function UsersListTab({ orgId }: { orgId: string }) {
-    const { data: users, isLoading } = useQuery({
+    const { data: users, isLoading, isError, error } = useQuery({
         queryKey: ['users', orgId],
         queryFn: async () => {
             // Tenant-scoped endpoint to prevent cross-tenant data leakage
@@ -98,9 +98,20 @@ function UsersListTab({ orgId }: { orgId: string }) {
                 </div>
             </CardHeader>
             <CardContent>
-                {isLoading ? (
+                {isError && (
+                    <div className="text-center py-8">
+                        <p className="text-destructive font-medium">Failed to load users</p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                            {error instanceof Error ? error.message : 'An unexpected error occurred'}
+                        </p>
+                    </div>
+                )}
+
+                {!isError && isLoading && (
                     <div>Loading users...</div>
-                ) : (
+                )}
+
+                {!isError && !isLoading && (
                     <div className="border rounded-md">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 border-b">

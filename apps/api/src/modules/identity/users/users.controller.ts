@@ -17,7 +17,7 @@ import {
   TENANT_PROVIDER,
   ITenantProvider,
 } from '@nexiom/identity';
-import { CreateUser, ROLES } from './users.validation';
+import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -126,36 +126,15 @@ export class UsersController {
       throw new BadRequestException('You cannot delete your own account.');
     }
 
-    // Verify target is a member of this tenant
-    const userTenants = await this.tenantProvider.findAllForUser(id);
-    const isMember = userTenants.some((t) => t.id === tenantId);
+    // Use atomic operation to prevent TOCTOU race condition
+    // This combines membership verification, last-admin check, and deletion in a single transaction
+    const deleted = await this.userProvider.deleteIfNotLastAdmin(id, tenantId);
 
-    if (!isMember) {
-      throw new NotFoundException('User not found in this organization');
+    if (!deleted) {
+      throw new BadRequestException(
+        'Cannot delete the last admin of the organization',
+      );
     }
-
-    // SECURITY: Prevent deleting the last admin
-    // Check if the target user is an admin and if they're the last one
-    const targetMembership = userTenants.find((t) => t.id === tenantId);
-    if (targetMembership?.memberRole === ROLES.ADMIN) {
-      // Count total admins in this organization
-      const allOrgUsers = await this.userProvider.findAll({ tenantId });
-      const adminCount = allOrgUsers.data.filter(
-        (u: { memberRole?: string }) => u.memberRole === ROLES.ADMIN,
-      ).length;
-
-      if (adminCount <= 1) {
-        throw new BadRequestException(
-          'Cannot delete the last admin of the organization',
-        );
-      }
-    }
-
-    // Execute deletion
-    // Currently, this deletes the user globally.
-    // In a future "Strict Multi-tenant" refinement, this might only remove the 'Member' link.
-    // But for now, ensuring the user is removed satisfies the requirement.
-    await this.userProvider.delete(id);
 
     return { success: true };
   }
