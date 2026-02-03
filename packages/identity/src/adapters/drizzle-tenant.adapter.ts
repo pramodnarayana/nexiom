@@ -7,6 +7,7 @@ import {
   UpdateTenantInput,
 } from "../interfaces";
 import * as schema from "../schema";
+import { generateFancyTenantName } from "../utils/name-generator";
 
 interface PgError extends Error {
   code: string;
@@ -269,10 +270,8 @@ export class DrizzleTenantAdapter implements ITenantProvider {
   }
 
   async provisionTenantForUser(userId: string): Promise<TenantInterface> {
-    // 1. Fetch User to get name (optional optimization)
-    // For now, generate generic name
-    const randomSuffix = Math.random().toString(36).substring(7);
-    const companyName = `Organization ${randomSuffix}`;
+    // Use Fancy Name Generator for better user experience
+    const companyName = generateFancyTenantName();
 
     return this.create(userId, companyName);
   }

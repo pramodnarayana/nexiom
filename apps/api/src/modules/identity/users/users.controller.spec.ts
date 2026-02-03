@@ -166,4 +166,68 @@ describe('UsersController', () => {
       );
     });
   });
+
+  describe('remove', () => {
+    it('should throw BadRequestException if no organizationId (no context)', async () => {
+      const id = 'user-123';
+      const req = {
+        user: { id: 'current-user' },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'Organization context required',
+      );
+    });
+
+    it('should throw BadRequestException if trying to delete self', async () => {
+      const id = 'current-user';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'You cannot delete your own account.',
+      );
+    });
+
+    it('should throw NotFoundException if user not member of tenant', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      tenantProvider.findAllForUser.mockResolvedValue([{ id: 'other-org' }]); // Not Member
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'User not found in this organization',
+      );
+    });
+
+    it('should successfully delete user if all checks pass', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      tenantProvider.findAllForUser.mockResolvedValue([{ id: tenantId }]); // Is Member
+      userProvider.delete.mockResolvedValue(undefined);
+
+      const result = await controller.remove(id, req);
+
+      expect(result).toEqual({ success: true });
+      expect(tenantProvider.findAllForUser).toHaveBeenCalledWith(id);
+      expect(userProvider.delete).toHaveBeenCalledWith(id);
+    });
+  });
 });

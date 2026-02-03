@@ -53,3 +53,14 @@ export const CompleteInviteSchema = z.object({
 });
 
 export class CompleteInvite extends createZodDto(CompleteInviteSchema) {}
+
+export const InviteUserSchema = z.object({
+  email: z.string().email(),
+  role: z
+    .enum(['admin', 'editor', 'viewer', 'user'], {
+      message: 'Role must be admin, editor, viewer, or user',
+    })
+    .default('user'),
+});
+
+export class InviteUser extends createZodDto(InviteUserSchema) {}

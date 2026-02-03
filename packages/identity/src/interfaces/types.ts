@@ -13,6 +13,7 @@ export interface User {
   permissions?: string[];
   hasTenant?: boolean;
   organizationId?: string;
+  memberRole?: string;
 }
 
 export interface Tenant {

@@ -105,10 +105,18 @@ export class DrizzleUserAdapter implements IUserProvider {
     if (options?.tenantId) {
       // Tenant-scoped (requires Join)
       const dataQuery = this.db
-        .select({ user: schema.user })
+        .select({
+          user: schema.user,
+          memberRole: schema.member.roleId,
+        })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(filters.length ? and(...filters) : undefined)
+        .where(
+          and(
+            eq(schema.member.organizationId, options.tenantId),
+            ...(filters.length ? filters : []),
+          ),
+        )
         .limit(limit)
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
@@ -117,11 +125,19 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ count: count(schema.user.id) })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(filters.length ? and(...filters) : undefined);
+        .where(
+          and(
+            eq(schema.member.organizationId, options.tenantId),
+            ...(filters.length ? filters : []),
+          ),
+        );
 
       const users = await dataQuery;
       return {
-        data: users.map((u) => this.mapUser(u.user)),
+        data: users.map((u) => ({
+          ...this.mapUser(u.user),
+          memberRole: u.memberRole, // Pass the joined role ID
+        })),
         total: Number(countResult?.count || 0),
       };
     } else {

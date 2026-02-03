@@ -9,6 +9,10 @@ import { tenantAuthProvider } from "../providers/tenant-auth-provider";
 import { TenantLayout } from '../layouts/TenantLayout';
 import { DashboardPage } from '../../modules/dashboard/pages/DashboardPage';
 import { UserList } from '../../modules/identity/users/UserList';
+import { UserShow } from '../../modules/identity/pages/admin/users/UserShow';
+import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
+import { TenantSettingsPage } from '../../modules/identity/pages/TenantSettingsPage';
+import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -36,6 +40,8 @@ export function TenantRoutes() {
                     {
                         name: "users",
                         list: "/dashboard/users",
+                        show: "/dashboard/users/show/:id",
+                        edit: "/dashboard/users/edit/:id",
                         meta: {
                             label: "Users",
                         }
@@ -50,7 +56,10 @@ export function TenantRoutes() {
                     <Route element={<TenantLayout navGroups={navGroups} />}>
                         <Route index element={<DashboardPage />} />
                         <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" />} />
-                        <Route path="settings" element={<div className="p-4">Settings coming soon</div>} />
+                        <Route path="users/show/:id" element={<UserShow basePath="/dashboard/users" resource="users" />} />
+                        <Route path="users/edit/:id" element={<UserEdit basePath="/dashboard/users" resource="users" />} />
+                        <Route path="settings" element={<TenantSettingsPage />} />
+                        <Route path="profile" element={<UserProfilePage />} />
                     </Route>
                 </Routes>
             </Refine>

@@ -8,6 +8,8 @@ import {
   Inject,
   UseGuards,
   NotFoundException,
+  BadRequestException,
+  Delete,
 } from '@nestjs/common';
 import {
   USER_PROVIDER,
@@ -35,11 +37,7 @@ export class UsersController {
   ) {}
 
   /**
-   * Endpoint to create a new user.
-   * The Body is automatically validated against the Zod Schema.
-   *
-   * @param createUser - The validated request body.
-   * @returns The created user.
+   * Endpoint to create a new user directly (Admin only).
    */
   @Post()
   @RequirePermission('users', 'manage')
@@ -67,6 +65,8 @@ export class UsersController {
     }
 
     const result = await this.userProvider.findAll({ tenantId });
+    console.log('--- findAll result ---');
+    console.log(JSON.stringify(result.data.slice(0, 1), null, 2)); // Log first user
     return result;
   }
 
@@ -105,5 +105,43 @@ export class UsersController {
     }
 
     return user;
+  }
+
+  /**
+   * Endpoint to remove a user from the organization.
+   * If strictly 1:1, this effectively acts as a delete.
+   */
+  @Delete(':id')
+  @RequirePermission('users', 'manage')
+  async remove(
+    @Param('id') id: string,
+    @Req() req: Request & { user: { id: string; organizationId?: string } },
+  ) {
+    const tenantId = req.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('Organization context required');
+    }
+
+    // SECURITY: Prevent self-deletion
+    // This is a critical enterprise-grade guard.
+    if (id === req.user.id) {
+      throw new BadRequestException('You cannot delete your own account.');
+    }
+
+    // Verify target is a member of this tenant
+    const userTenants = await this.tenantProvider.findAllForUser(id);
+    const isMember = userTenants.some((t) => t.id === tenantId);
+
+    if (!isMember) {
+      throw new NotFoundException('User not found in this organization');
+    }
+
+    // Execute deletion
+    // Currently, this deletes the user globally.
+    // In a future "Strict Multi-tenant" refinement, this might only remove the 'Member' link.
+    // But for now, ensuring the user is removed satisfies the requirement.
+    await this.userProvider.delete(id);
+
+    return { success: true };
   }
 }

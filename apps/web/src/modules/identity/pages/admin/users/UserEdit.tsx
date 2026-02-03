@@ -34,7 +34,15 @@ const UserEditSchema = z.object({
 
 type UserEditFormValues = z.infer<typeof UserEditSchema>;
 
-export const UserEdit = () => {
+interface UserEditProps {
+    basePath?: string;
+    resource?: string;
+}
+
+export const UserEdit = ({
+    basePath = "/admin/users",
+    resource = "admin/users",
+}: UserEditProps) => {
     const { id } = useParsed();
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -42,7 +50,7 @@ export const UserEdit = () => {
     const { mutate: update, isLoading: formLoading } = useUpdate();
 
     const { data: userResult, isLoading: userLoading } = useOne({
-        resource: "admin/users",
+        resource: resource,
         id: id,
     });
 
@@ -69,7 +77,7 @@ export const UserEdit = () => {
     const onSubmit = (values: UserEditFormValues) => {
         update(
             {
-                resource: "admin/users",
+                resource: resource,
                 id: id as string,
                 values: values,
             },
@@ -79,7 +87,7 @@ export const UserEdit = () => {
                         title: "Success",
                         description: "User updated successfully",
                     });
-                    navigate("/admin/users");
+                    navigate(basePath);
                 },
                 onError: (error) => {
                     toast({
@@ -96,8 +104,10 @@ export const UserEdit = () => {
         if (!record?.id) return;
 
         const API_URL = import.meta.env.VITE_API_URL || '/api';
+        const resourcePath = resource.replace(/^\/+|\/+$/g, "");
+
         sendInvite({
-            url: `${API_URL}/admin/users/${record.id}/invite`,
+            url: `${API_URL}/${resourcePath}/${record.id}/invite`,
             method: "post",
             values: {},
             successNotification: {
@@ -120,7 +130,7 @@ export const UserEdit = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" size="icon" asChild>
-                        <Link to="/admin/users">
+                        <Link to={basePath}>
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>
@@ -191,8 +201,6 @@ export const UserEdit = () => {
                                     </FormItem>
                                 )}
                             />
-
-
 
                             <div className="flex justify-end pt-4">
                                 <Button type="submit" disabled={formLoading}>

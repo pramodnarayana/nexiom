@@ -235,15 +235,39 @@ describe('AuthService', () => {
       const result = await service.hasSystemPermission(user, 'view');
       expect(result).toBe(false);
     });
-    it('should delegate to authProvider.createUser', async () => {
+    it('should delegate to authProvider.createUser and auto-provision tenant', async () => {
       const input = { email: 'new@example.com' };
-      const expected = { id: 'u1' };
-      mockAuthProvider.createUser.mockResolvedValue(expected);
+      const expectedUser = { id: 'u1' };
+      mockAuthProvider.createUser.mockResolvedValue(expectedUser);
+      // Mock tenant provider provision method we just added
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (mockTenantProvider as any).provisionTenantForUser = vi
+        .fn()
+        .mockResolvedValue({ id: 'org1' });
 
       const result = await service.createUser(input);
 
       expect(mockAuthProvider.createUser).toHaveBeenCalledWith(input);
-      expect(result).toEqual(expected);
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (mockTenantProvider as any).provisionTenantForUser,
+      ).toHaveBeenCalledWith('u1');
+      expect(result).toEqual(expectedUser);
+    });
+
+    it('should swallow error if auto-provisioning fails', async () => {
+      const input = { email: 'new@example.com' };
+      const expectedUser = { id: 'u1' };
+      mockAuthProvider.createUser.mockResolvedValue(expectedUser);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (mockTenantProvider as any).provisionTenantForUser = vi
+        .fn()
+        .mockRejectedValue(new Error('Provision failed'));
+
+      // Should not throw
+      const result = await service.createUser(input);
+
+      expect(result).toEqual(expectedUser);
     });
   });
 

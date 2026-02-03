@@ -10,10 +10,18 @@ import { ArrowLeft, Edit, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/shared/components/ui/badge";
 
-export const UserShow = () => {
+interface UserShowProps {
+    basePath?: string;
+    resource?: string;
+}
+
+export const UserShow = ({
+    basePath = "/admin/users",
+    resource = "admin/users",
+}: UserShowProps) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const start = useShow<any>({
-        resource: "admin/users",
+        resource: resource,
     });
 
     // Explicitly casting to avoid 'any' lint if possible, or using BaseRecord
@@ -24,7 +32,7 @@ export const UserShow = () => {
 
     // useShow gives us 'queryResult'. We want strict permission check for buttons.
     const { data: canManage } = useCan({
-        resource: "admin/users",
+        resource: resource,
         action: "edit",
     });
     const showActions = canManage?.can;
@@ -35,8 +43,10 @@ export const UserShow = () => {
         if (!record?.id) return;
 
         const API_URL = import.meta.env.VITE_API_URL || '/api';
+        const resourcePath = resource.replace(/^\/+|\/+$/g, "");
+
         sendInvite({
-            url: `${API_URL}/admin/users/${record.id}/invite`,
+            url: `${API_URL}/${resourcePath}/${record.id}/invite`,
             method: "post",
             values: {},
             successNotification: {
@@ -59,7 +69,7 @@ export const UserShow = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" size="icon" asChild>
-                        <Link to="/admin/users">
+                        <Link to={basePath}>
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>
@@ -86,7 +96,7 @@ export const UserShow = () => {
                         )}
                         {record?.id && (
                             <Button asChild>
-                                <Link to={`/admin/users/edit/${record.id}`}>
+                                <Link to={`${basePath}/edit/${record.id}`}>
                                     <Edit className="mr-2 h-4 w-4" />
                                     Edit User
                                 </Link>
