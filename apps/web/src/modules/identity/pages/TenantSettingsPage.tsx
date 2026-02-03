@@ -41,16 +41,12 @@ export function TenantSettingsPage() {
 }
 
 function GeneralSettingsTab({ orgId }: { orgId: string }) {
-    // Placeholder for Org Details Fetch
+    // Fetch organization by ID
     const { data: org, isLoading } = useQuery({
         queryKey: ['organization', orgId],
         queryFn: async () => {
-            // We need an endpoint for GET /tenants/:id or similar
-            // For now mocking/assuming we can fetch it.
-            // But actually, we don't have a direct "Get My Tenant" endpoint exposed easily except list.
-            // We can use the 'list' endpoint and find ours, or add GET /tenants/me
-            const res = await apiClient.get<{ data: Array<{ id: string; name: string; slug: string }> }>(`/tenants?limit=1`);
-            return res.data.data.find(t => t.id === orgId);
+            const res = await apiClient.get<{ id: string; name: string; slug: string }>(`/tenants/${orgId}`);
+            return res.data;
         }
     });
 
@@ -65,15 +61,15 @@ function GeneralSettingsTab({ orgId }: { orgId: string }) {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid gap-2">
-                    <label className="text-sm font-medium">Fancy Name</label>
+                    <div className="text-sm font-medium">Fancy Name</div>
                     <div className="p-2 bg-muted rounded">{org.name}</div>
                 </div>
                 <div className="grid gap-2">
-                    <label className="text-sm font-medium">Slug</label>
+                    <div className="text-sm font-medium">Slug</div>
                     <div className="p-2 bg-muted rounded font-mono text-sm">{org.slug}</div>
                 </div>
                 <div className="grid gap-2">
-                    <label className="text-sm font-medium">Organization ID</label>
+                    <div className="text-sm font-medium">Organization ID</div>
                     <div className="p-2 bg-muted rounded font-mono text-xs">{org.id}</div>
                 </div>
             </CardContent>
@@ -85,8 +81,9 @@ function UsersListTab({ orgId }: { orgId: string }) {
     const { data: users, isLoading } = useQuery({
         queryKey: ['users', orgId],
         queryFn: async () => {
-            const res = await apiClient.get<Array<{ id: string; name: string; email: string; role: string }>>(`/users`);
-            return res.data;
+            // Tenant-scoped endpoint to prevent cross-tenant data leakage
+            const res = await apiClient.get<{ data: Array<{ id: string; name: string; email: string; role: string }> }>(`/tenants/${orgId}/users`);
+            return res.data.data;
         }
     });
 

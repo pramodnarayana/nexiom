@@ -17,7 +17,7 @@ import {
   TENANT_PROVIDER,
   ITenantProvider,
 } from '@nexiom/identity';
-import { CreateUser } from './users.validation';
+import { CreateUser, ROLES } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -65,8 +65,6 @@ export class UsersController {
     }
 
     const result = await this.userProvider.findAll({ tenantId });
-    console.log('--- findAll result ---');
-    console.log(JSON.stringify(result.data.slice(0, 1), null, 2)); // Log first user
     return result;
   }
 
@@ -134,6 +132,23 @@ export class UsersController {
 
     if (!isMember) {
       throw new NotFoundException('User not found in this organization');
+    }
+
+    // SECURITY: Prevent deleting the last admin
+    // Check if the target user is an admin and if they're the last one
+    const targetMembership = userTenants.find((t) => t.id === tenantId);
+    if (targetMembership?.memberRole === ROLES.ADMIN) {
+      // Count total admins in this organization
+      const allOrgUsers = await this.userProvider.findAll({ tenantId });
+      const adminCount = allOrgUsers.data.filter(
+        (u: { memberRole?: string }) => u.memberRole === ROLES.ADMIN,
+      ).length;
+
+      if (adminCount <= 1) {
+        throw new BadRequestException(
+          'Cannot delete the last admin of the organization',
+        );
+      }
     }
 
     // Execute deletion

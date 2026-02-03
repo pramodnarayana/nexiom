@@ -2,6 +2,23 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
 /**
+ * Role constants for consistent usage across the codebase
+ */
+export const ROLES = {
+  ADMIN: 'admin',
+  EDITOR: 'editor',
+  VIEWER: 'viewer',
+  USER: 'user',
+} as const;
+
+/**
+ * Shared role enum for consistent validation across schemas
+ */
+const RoleEnum = z.enum(['admin', 'editor', 'viewer', 'user'], {
+  message: 'Role must be admin, editor, viewer, or user',
+});
+
+/**
  * Zod Schema to validate the Create User Request.
  * Enforces email format and allowed roles.
  */
@@ -13,12 +30,7 @@ export const CreateUserSchema = z.object({
     .string()
     .min(2, { message: 'Company name is required' })
     .optional(), // Optional on CreateUser (e.g. invites), required on Signup
-  role: z
-    .enum(['admin', 'editor', 'viewer', 'user'], {
-      message: 'Role must be admin, editor, viewer, or user',
-    })
-    .optional()
-    .default('user'),
+  role: RoleEnum.optional().default('user'),
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters' })
@@ -56,11 +68,7 @@ export class CompleteInvite extends createZodDto(CompleteInviteSchema) {}
 
 export const InviteUserSchema = z.object({
   email: z.string().email(),
-  role: z
-    .enum(['admin', 'editor', 'viewer', 'user'], {
-      message: 'Role must be admin, editor, viewer, or user',
-    })
-    .default('user'),
+  role: RoleEnum.default('user'),
 });
 
 export class InviteUser extends createZodDto(InviteUserSchema) {}

@@ -29,12 +29,11 @@ export const UserList = ({
     const { data, isLoading } = tableQueryResult || {};
 
     // Transform data to match shared component interface
-    console.log('UserList Raw Data:', data?.data);
     const users: UserTableItem[] = data?.data?.map((user) => ({
         id: user.id,
         name: user.name,
         email: user.email,
-        role: (user as { memberRole?: string }).memberRole || user.role, // Use memberRole if available (tenant view), fallback to global role
+        role: user.memberRole || user.role, // Use memberRole if available (tenant view), fallback to global role
         emailVerified: user.emailVerified,
         status: "active"
     })) || [];

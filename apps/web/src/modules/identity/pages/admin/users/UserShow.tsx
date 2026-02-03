@@ -21,7 +21,7 @@ export const UserShow = ({
 }: UserShowProps) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const start = useShow<any>({
-        resource: resource,
+        resource,
     });
 
     // Explicitly casting to avoid 'any' lint if possible, or using BaseRecord

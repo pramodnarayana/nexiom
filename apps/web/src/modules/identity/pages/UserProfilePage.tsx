@@ -31,12 +31,14 @@ export function UserProfilePage() {
 
                     <div className="grid gap-4">
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium">User ID</label>
+                            <div className="text-sm font-medium">User ID</div>
                             <code className="bg-muted p-2 rounded text-sm">{user.id}</code>
                         </div>
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium">Roles</label>
-                            <div className="text-sm capitalize">{user.roles.join(', ') || 'Member'}</div>
+                            <div className="text-sm font-medium">Roles</div>
+                            <div className="text-sm capitalize">
+                                {user.roles && user.roles.length > 0 ? user.roles.join(', ') : 'Member'}
+                            </div>
                         </div>
                     </div>
                 </CardContent>

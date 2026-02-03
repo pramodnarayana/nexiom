@@ -50,8 +50,8 @@ export const UserEdit = ({
     const { mutate: update, isLoading: formLoading } = useUpdate();
 
     const { data: userResult, isLoading: userLoading } = useOne({
-        resource: resource,
-        id: id,
+        resource,
+        id,
     });
 
     const record = userResult?.data;

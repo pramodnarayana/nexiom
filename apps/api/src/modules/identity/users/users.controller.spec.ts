@@ -211,6 +211,31 @@ describe('UsersController', () => {
       );
     });
 
+    it('should throw BadRequestException if trying to delete the last admin', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      // User is a member and is an admin
+      tenantProvider.findAllForUser.mockResolvedValue([
+        { id: tenantId, memberRole: 'admin' },
+      ]);
+
+      // Only one admin in the organization
+      userProvider.findAll.mockResolvedValue({
+        data: [{ id: 'user-123', memberRole: 'admin' }],
+        total: 1,
+      });
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'Cannot delete the last admin of the organization',
+      );
+    });
+
     it('should successfully delete user if all checks pass', async () => {
       const id = 'user-123';
       const tenantId = 'org-123';
@@ -227,6 +252,36 @@ describe('UsersController', () => {
 
       expect(result).toEqual({ success: true });
       expect(tenantProvider.findAllForUser).toHaveBeenCalledWith(id);
+      expect(userProvider.delete).toHaveBeenCalledWith(id);
+    });
+
+    it('should successfully delete admin if there are other admins', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      // User is a member and is an admin
+      tenantProvider.findAllForUser.mockResolvedValue([
+        { id: tenantId, memberRole: 'admin' },
+      ]);
+
+      // Multiple admins in the organization
+      userProvider.findAll.mockResolvedValue({
+        data: [
+          { id: 'user-123', memberRole: 'admin' },
+          { id: 'user-456', memberRole: 'admin' },
+        ],
+        total: 2,
+      });
+      userProvider.delete.mockResolvedValue(undefined);
+
+      const result = await controller.remove(id, req);
+
+      expect(result).toEqual({ success: true });
       expect(userProvider.delete).toHaveBeenCalledWith(id);
     });
   });

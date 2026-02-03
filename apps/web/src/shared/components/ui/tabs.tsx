@@ -37,6 +37,7 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <div
         ref={ref}
+        role="tablist"
         className={cn(
             "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
             className
@@ -51,11 +52,55 @@ interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-    ({ className, value, onClick, ...props }, ref) => {
+    ({ className, value, onClick, onKeyDown, ...props }, ref) => {
         const context = React.useContext(TabsContext)
         if (!context) throw new Error("TabsTrigger must be used within Tabs")
 
         const isActive = context.activeTab === value
+
+        const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+            // Basic keyboard navigation for tabs
+            const currentButton = e.currentTarget
+            const tablist = currentButton.parentElement
+            if (!tablist) return
+
+            const tabs = Array.from(tablist.querySelectorAll('[role="tab"]')) as HTMLButtonElement[]
+            const currentIndex = tabs.indexOf(currentButton)
+
+            let nextIndex = currentIndex
+
+            switch (e.key) {
+                case 'ArrowRight':
+                case 'ArrowDown':
+                    e.preventDefault()
+                    nextIndex = (currentIndex + 1) % tabs.length
+                    break
+                case 'ArrowLeft':
+                case 'ArrowUp':
+                    e.preventDefault()
+                    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
+                    break
+                case 'Home':
+                    e.preventDefault()
+                    nextIndex = 0
+                    break
+                case 'End':
+                    e.preventDefault()
+                    nextIndex = tabs.length - 1
+                    break
+                default:
+                    onKeyDown?.(e)
+                    return
+            }
+
+            const nextTab = tabs[nextIndex]
+            if (nextTab) {
+                nextTab.focus()
+                nextTab.click()
+            }
+
+            onKeyDown?.(e)
+        }
 
         return (
             <button
@@ -73,6 +118,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
                     context.setActiveTab(value)
                     onClick?.(e)
                 }}
+                onKeyDown={handleKeyDown}
                 {...props}
             />
         )

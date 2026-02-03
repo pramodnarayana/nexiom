@@ -235,6 +235,9 @@ describe('AuthService', () => {
       const result = await service.hasSystemPermission(user, 'view');
       expect(result).toBe(false);
     });
+  });
+
+  describe('createUser', () => {
     it('should delegate to authProvider.createUser and auto-provision tenant', async () => {
       const input = { email: 'new@example.com' };
       const expectedUser = { id: 'u1' };
