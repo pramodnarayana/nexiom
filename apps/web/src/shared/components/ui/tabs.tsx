@@ -35,7 +35,7 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
 
         return (
             <TabsContext.Provider value={contextValue}>
-                <div ref={ref} className={cn("", className)} {...props}>
+                <div ref={ref} className={cn(className)} {...props}>
                     {children}
                 </div>
             </TabsContext.Provider>
@@ -162,6 +162,7 @@ const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
                 ref={ref}
                 role="tabpanel"
                 id={context.getPanelId(value)}
+                tabIndex={0}
                 aria-labelledby={context.getTabId(value)}
                 className={cn(
                     "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

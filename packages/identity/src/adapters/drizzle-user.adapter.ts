@@ -220,6 +220,13 @@ export class DrizzleUserAdapter implements IUserProvider {
     tenantId: string,
   ): Promise<boolean> {
     return await this.db.transaction(async (tx) => {
+      // 0. Acquire lock on organization row to prevent write-skew (concurrent admin deletions)
+      await tx
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, tenantId))
+        .for("update");
+
       // 1. Verify user exists and is a member of the tenant, and get their role
       const membershipWithRole = await tx
         .select({

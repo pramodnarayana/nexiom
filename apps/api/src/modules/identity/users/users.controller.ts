@@ -9,6 +9,7 @@ import {
   UseGuards,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
   Delete,
 } from '@nestjs/common';
 import {
@@ -160,7 +161,7 @@ export class UsersController {
       console.error('User deletion failed:', error);
 
       // Return generic message to client to avoid leaking internals
-      throw new BadRequestException('Failed to delete user');
+      throw new InternalServerErrorException('Failed to delete user');
     }
   }
 }
