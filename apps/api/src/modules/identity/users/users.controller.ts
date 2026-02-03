@@ -156,9 +156,11 @@ export class UsersController {
       }
 
       // Handle unexpected errors
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Failed to delete user',
-      );
+      // Log full details for debugging (in real app utilize a logger)
+      console.error('User deletion failed:', error);
+
+      // Return generic message to client to avoid leaking internals
+      throw new BadRequestException('Failed to delete user');
     }
   }
 }

@@ -18,16 +18,23 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
         const [activeTab, setActiveTabState] = React.useState(defaultValue)
         const uniqueId = React.useId()
 
-        const setActiveTab = (value: string) => {
+        const setActiveTab = React.useCallback((value: string) => {
             setActiveTabState(value)
             onValueChange?.(value)
-        }
+        }, [onValueChange])
 
-        const getTabId = (value: string) => `${uniqueId}-tab-${value}`
-        const getPanelId = (value: string) => `${uniqueId}-tabpanel-${value}`
+        const getTabId = React.useCallback((value: string) => `${uniqueId}-tab-${value}`, [uniqueId])
+        const getPanelId = React.useCallback((value: string) => `${uniqueId}-tabpanel-${value}`, [uniqueId])
+
+        const contextValue = React.useMemo(() => ({
+            activeTab,
+            setActiveTab,
+            getTabId,
+            getPanelId
+        }), [activeTab, setActiveTab, getTabId, getPanelId])
 
         return (
-            <TabsContext.Provider value={{ activeTab, setActiveTab, getTabId, getPanelId }}>
+            <TabsContext.Provider value={contextValue}>
                 <div ref={ref} className={cn("", className)} {...props}>
                     {children}
                 </div>
@@ -70,10 +77,14 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
             const tablist = currentButton.parentElement
             if (!tablist) return
 
-            const tabs = Array.from(tablist.querySelectorAll('[role="tab"]')) as HTMLButtonElement[]
+            // Query only enabled tabs for navigation
+            const tabs = Array.from(tablist.querySelectorAll('[role="tab"]:not([disabled])'))
             const currentIndex = tabs.indexOf(currentButton)
 
-            let nextIndex = currentIndex
+            // If current button is somehow disabled (shouldn't happen with pointer-events-none but safe guard)
+            if (currentIndex === -1) return
+
+            let nextIndex: number
 
             switch (e.key) {
                 case 'ArrowRight':
@@ -99,7 +110,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
                     return
             }
 
-            const nextTab = tabs[nextIndex]
+            const nextTab = tabs[nextIndex] as HTMLButtonElement | undefined
             if (nextTab) {
                 nextTab.focus()
                 nextTab.click()
@@ -114,6 +125,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
                 type="button"
                 role="tab"
                 id={context.getTabId(value)}
+                tabIndex={isActive ? 0 : -1}
                 aria-selected={isActive}
                 aria-controls={context.getPanelId(value)}
                 data-state={isActive ? "active" : "inactive"}

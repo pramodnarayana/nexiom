@@ -211,7 +211,8 @@ export class DrizzleUserAdapter implements IUserProvider {
   }
 
   /**
-   * Atomically delete a user only if they are not the last admin in the organization.
+   * Atomically remove a user's membership from an organization, ensuring the user is not the last admin.
+   * This does NOT delete the user account itself, only the membership record.
    * This operation is performed in a single transaction to prevent TOCTOU race conditions.
    */
   async deleteIfNotLastAdmin(
