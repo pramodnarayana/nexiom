@@ -89,3 +89,26 @@
   2. Update/Create **DTOs**.
   3. Update **Service** Logic.
   4. Update **Controller**.
+
+### 6. WORKFLOW ENFORCEMENT (STRICT)
+
+To minimize code review cycles, you must adhere to this workflow:
+
+1. **Design-First**:
+    * **STOP** before writing feature code.
+    * Create or update `implementation_plan.md`.
+    * Detail the Architecture, Schema, Interface, and **Edge Cases**.
+    * **WAIT** for User Approval on the plan.
+
+2. **Test-Driven Development (TDD)**:
+    * Write the test **FIRST** (or concurrently).
+    * Verification suites `npm run test:cov` must pass **before** you request review.
+    * "It builds" is not enough. "It behaves correctly" is the requirement.
+
+3. **Self-Correction**:
+    * Treat your own code as a Pull Request.
+    * Review it for:
+        * `any` usage (forbidden).
+        * Error handling (no swallowed errors).
+        * Console logs (remove them).
+    * Only `notify_user` when you are 100% confident it is "Enterprise Grade".

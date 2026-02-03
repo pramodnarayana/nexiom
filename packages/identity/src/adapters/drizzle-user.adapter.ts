@@ -9,6 +9,9 @@ import {
 } from "../interfaces";
 import * as schema from "../schema";
 
+// Role name constant to match database value
+const ADMIN_ROLE_NAME = "Admin";
+
 export class DrizzleUserAdapter implements IUserProvider {
   constructor(
     private readonly db: NodePgDatabase<typeof schema>,
@@ -105,10 +108,18 @@ export class DrizzleUserAdapter implements IUserProvider {
     if (options?.tenantId) {
       // Tenant-scoped (requires Join)
       const dataQuery = this.db
-        .select({ user: schema.user })
+        .select({
+          user: schema.user,
+          memberRole: schema.member.roleId,
+        })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(filters.length ? and(...filters) : undefined)
+        .where(
+          and(
+            eq(schema.member.organizationId, options.tenantId),
+            ...(filters.length ? filters : []),
+          ),
+        )
         .limit(limit)
         .offset(offset)
         .orderBy(desc(schema.user.createdAt));
@@ -117,11 +128,19 @@ export class DrizzleUserAdapter implements IUserProvider {
         .select({ count: count(schema.user.id) })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
-        .where(filters.length ? and(...filters) : undefined);
+        .where(
+          and(
+            eq(schema.member.organizationId, options.tenantId),
+            ...(filters.length ? filters : []),
+          ),
+        );
 
       const users = await dataQuery;
       return {
-        data: users.map((u) => this.mapUser(u.user)),
+        data: users.map((u) => ({
+          ...this.mapUser(u.user),
+          memberRole: u.memberRole, // Pass the joined role ID
+        })),
         total: Number(countResult?.count || 0),
       };
     } else {
@@ -189,6 +208,81 @@ export class DrizzleUserAdapter implements IUserProvider {
       .update(schema.user)
       .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(schema.user.id, userId));
+  }
+
+  /**
+   * Atomically remove a user's membership from an organization, ensuring the user is not the last admin.
+   * This does NOT delete the user account itself, only the membership record.
+   * This operation is performed in a single transaction to prevent TOCTOU race conditions.
+   */
+  async deleteIfNotLastAdmin(
+    userId: string,
+    tenantId: string,
+  ): Promise<boolean> {
+    return await this.db.transaction(async (tx) => {
+      // 0. Acquire lock on organization row to prevent write-skew (concurrent admin deletions)
+      await tx
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, tenantId))
+        .for("update");
+
+      // 1. Verify user exists and is a member of the tenant, and get their role
+      const membershipWithRole = await tx
+        .select({
+          memberId: schema.member.id,
+          roleName: schema.role.name,
+        })
+        .from(schema.member)
+        .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+        .where(
+          and(
+            eq(schema.member.userId, userId),
+            eq(schema.member.organizationId, tenantId),
+          ),
+        )
+        .limit(1);
+
+      if (!membershipWithRole.length) {
+        throw new Error("User is not a member of this organization");
+      }
+
+      const userRole = membershipWithRole[0].roleName;
+
+      // 2. If user is an admin, count total admins
+      if (userRole === ADMIN_ROLE_NAME) {
+        // Count admins by joining member with role table
+        const adminCountResult = await tx
+          .select({ count: count(schema.member.id) })
+          .from(schema.member)
+          .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+          .where(
+            and(
+              eq(schema.member.organizationId, tenantId),
+              eq(schema.role.name, ADMIN_ROLE_NAME),
+            ),
+          );
+
+        const adminCount = Number(adminCountResult[0]?.count || 0);
+
+        // 3. Prevent deletion if last admin
+        if (adminCount <= 1) {
+          return false; // Signal that deletion was prevented
+        }
+      }
+
+      // 4. Delete the user membership (atomic with the check above)
+      await tx
+        .delete(schema.member)
+        .where(
+          and(
+            eq(schema.member.userId, userId),
+            eq(schema.member.organizationId, tenantId),
+          ),
+        );
+
+      return true; // Successfully deleted
+    });
   }
 
   private mapUser(dbUser: schema.User): UserInterface {

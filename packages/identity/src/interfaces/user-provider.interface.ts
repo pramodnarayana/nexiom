@@ -37,4 +37,15 @@ export interface IUserProvider {
   forceVerifyEmail(userId: string): Promise<void>;
 
   count(filters?: { tenantId?: string; search?: string }): Promise<number>;
+
+  /**
+   * Atomically delete a user only if they are not the last admin in the organization.
+   * This operation is performed in a single transaction to prevent TOCTOU race conditions.
+   *
+   * @param userId - ID of the user to delete
+   * @param tenantId - ID of the tenant/organization
+   * @returns true if deleted, false if user was the last admin
+   * @throws NotFoundException if user doesn't exist or isn't a member of the tenant
+   */
+  deleteIfNotLastAdmin(userId: string, tenantId: string): Promise<boolean>;
 }

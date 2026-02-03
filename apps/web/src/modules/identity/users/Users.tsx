@@ -27,11 +27,11 @@ interface UsersProps {
 export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
     const { mutate: sendInvite } = useCustomMutation();
-    const { user } = useAuth();
+    const { user: currentUser } = useAuth();
 
     // Check if user is platform_admin (can perform write operations)
     // PBAC: Check if user can manage users
-    const canManageUsers = hasPermission(user?.permissions, Resources.USERS, Actions.MANAGE);
+    const canManageUsers = hasPermission(currentUser?.permissions, Resources.USERS, Actions.MANAGE);
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
@@ -119,6 +119,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                     {data.map((user) => {
                         const displayName = user.name || 'user';
                         const isInviting = invitingIds.has(user.id);
+                        const isSelf = currentUser?.id === user.id;
                         return (
                             <TableRow key={user.id}>
                                 <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
@@ -126,9 +127,9 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                 <TableCell>
                                     <div className="flex flex-col gap-1">
                                         {/* Display Role Logic would go here - for now relying on user.role */}
-                                        {user.role && user.role !== 'user' && (
-                                            <Badge variant="secondary" className="text-xs w-fit">
-                                                Global: {user.role}
+                                        {user.role && (
+                                            <Badge variant={user.role === 'admin' || user.role === 'owner' ? 'default' : 'secondary'} className="text-xs w-fit capitalize">
+                                                {user.role}
                                             </Badge>
                                         )}
                                     </div>
@@ -188,15 +189,17 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                                         <Edit className="h-4 w-4" />
                                                     </Link>
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={() => handleDelete(user.id, displayName)}
-                                                    aria-label={`Delete ${displayName}`}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                {!isSelf && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={() => handleDelete(user.id, displayName)}
+                                                        aria-label={`Delete ${displayName}`}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </>
                                         )}
                                     </div>

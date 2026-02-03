@@ -8,6 +8,9 @@ import {
   Inject,
   UseGuards,
   NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+  Delete,
 } from '@nestjs/common';
 import {
   USER_PROVIDER,
@@ -35,11 +38,7 @@ export class UsersController {
   ) {}
 
   /**
-   * Endpoint to create a new user.
-   * The Body is automatically validated against the Zod Schema.
-   *
-   * @param createUser - The validated request body.
-   * @returns The created user.
+   * Endpoint to create a new user directly (Admin only).
    */
   @Post()
   @RequirePermission('users', 'manage')
@@ -105,5 +104,64 @@ export class UsersController {
     }
 
     return user;
+  }
+
+  /**
+   * Endpoint to remove a user from the organization.
+   * If strictly 1:1, this effectively acts as a delete.
+   */
+  @Delete(':id')
+  @RequirePermission('users', 'manage')
+  async remove(
+    @Param('id') id: string,
+    @Req() req: Request & { user: { id: string; organizationId?: string } },
+  ) {
+    const tenantId = req.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('Organization context required');
+    }
+
+    // SECURITY: Prevent self-deletion
+    // This is a critical enterprise-grade guard.
+    if (id === req.user.id) {
+      throw new BadRequestException('You cannot delete your own account.');
+    }
+
+    try {
+      // Use atomic operation to prevent TOCTOU race condition
+      // This combines membership verification, last-admin check, and deletion in a single transaction
+      const deleted = await this.userProvider.deleteIfNotLastAdmin(
+        id,
+        tenantId,
+      );
+
+      if (!deleted) {
+        throw new BadRequestException(
+          'Cannot delete the last admin of the organization',
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      // Translate provider-specific errors to HTTP exceptions
+      if (
+        error instanceof Error &&
+        error.message.includes('not a member of this organization')
+      ) {
+        throw new NotFoundException('User not found in this organization');
+      }
+
+      // Re-throw BadRequestException (last admin case)
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // Handle unexpected errors
+      // Log full details for debugging (in real app utilize a logger)
+      console.error('User deletion failed:', error);
+
+      // Return generic message to client to avoid leaking internals
+      throw new InternalServerErrorException('Failed to delete user');
+    }
   }
 }

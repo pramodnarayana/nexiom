@@ -1,4 +1,10 @@
 import pg from 'pg';
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from apps/api/.env
+const envPath = path.resolve(process.cwd(), 'apps/api/.env');
+dotenv.config({ path: envPath });
 
 const { Pool } = pg;
 

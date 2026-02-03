@@ -23,6 +23,7 @@ describe('AuthService', () => {
 
   const mockTenantProvider = {
     findAllForUser: vi.fn(),
+    provisionTenantForUser: vi.fn(),
   };
 
   const mockPermissionProvider = {
@@ -235,15 +236,38 @@ describe('AuthService', () => {
       const result = await service.hasSystemPermission(user, 'view');
       expect(result).toBe(false);
     });
-    it('should delegate to authProvider.createUser', async () => {
+  });
+
+  describe('createUser', () => {
+    it('should delegate to authProvider.createUser and auto-provision tenant', async () => {
       const input = { email: 'new@example.com' };
-      const expected = { id: 'u1' };
-      mockAuthProvider.createUser.mockResolvedValue(expected);
+      const expectedUser = { id: 'u1' };
+      mockAuthProvider.createUser.mockResolvedValue(expectedUser);
+      mockTenantProvider.provisionTenantForUser.mockResolvedValue({
+        id: 'org1',
+      });
 
       const result = await service.createUser(input);
 
       expect(mockAuthProvider.createUser).toHaveBeenCalledWith(input);
-      expect(result).toEqual(expected);
+      expect(mockTenantProvider.provisionTenantForUser).toHaveBeenCalledWith(
+        'u1',
+      );
+      expect(result).toEqual(expectedUser);
+    });
+
+    it('should swallow error if auto-provisioning fails', async () => {
+      const input = { email: 'new@example.com' };
+      const expectedUser = { id: 'u1' };
+      mockAuthProvider.createUser.mockResolvedValue(expectedUser);
+      mockTenantProvider.provisionTenantForUser.mockRejectedValue(
+        new Error('Provision failed'),
+      );
+
+      // Should not throw
+      const result = await service.createUser(input);
+
+      expect(result).toEqual(expectedUser);
     });
   });
 

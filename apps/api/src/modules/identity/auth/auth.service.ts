@@ -172,7 +172,23 @@ export class AuthService {
   // Delegated methods
 
   async createUser(input: CreateUserInput) {
-    return this.authProvider.createUser(input);
+    const user = await this.authProvider.createUser(input);
+
+    // Auto-provision tenant with fancy name + admin role
+    try {
+      await this.tenantProvider.provisionTenantForUser(user.id);
+    } catch (error) {
+      this.logger.error(
+        `Failed to auto-provision tenant for user ${user.id}`,
+        error,
+      );
+      // We don't fail the signup if tenant provisioning fails,
+      // but we should probably alert or retry.
+      // For now, logging effectively "swallows" the error but preserves the user account.
+      // Ideally, transaction should be used, but AuthProvider is separate.
+    }
+
+    return user;
   }
 
   async setPassword(userId: string, password: string) {

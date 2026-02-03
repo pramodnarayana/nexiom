@@ -33,7 +33,7 @@ export const UserList = ({
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: user.memberRole || user.role, // Use memberRole if available (tenant view), fallback to global role
         emailVerified: user.emailVerified,
         status: "active"
     })) || [];

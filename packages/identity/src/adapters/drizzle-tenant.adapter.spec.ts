@@ -373,7 +373,7 @@ describe("DrizzleTenantAdapter", () => {
     const tenant = await adapter.provisionTenantForUser("user-1");
     expect(spy).toHaveBeenCalledWith(
       "user-1",
-      expect.stringMatching(/^Organization /),
+      expect.any(String), // Fancy name generator produces various names
     );
     expect(tenant.id).toBe("org-1");
   });

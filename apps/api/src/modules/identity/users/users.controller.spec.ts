@@ -18,6 +18,7 @@ describe('UsersController', () => {
     update: Mock;
     delete: Mock;
     forceVerifyEmail: Mock;
+    deleteIfNotLastAdmin: Mock;
   };
   let tenantProvider: {
     findAllForUser: Mock;
@@ -34,6 +35,7 @@ describe('UsersController', () => {
       update: vi.fn(),
       delete: vi.fn(),
       forceVerifyEmail: vi.fn(),
+      deleteIfNotLastAdmin: vi.fn(),
     };
 
     tenantProvider = {
@@ -163,6 +165,92 @@ describe('UsersController', () => {
 
       await expect(controller.findOne(id, req)).rejects.toThrow(
         NotFoundException,
+      );
+    });
+  });
+
+  describe('remove', () => {
+    it('should throw BadRequestException if no organizationId (no context)', async () => {
+      const id = 'user-123';
+      const req = {
+        user: { id: 'current-user' },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'Organization context required',
+      );
+    });
+
+    it('should throw BadRequestException if trying to delete self', async () => {
+      const id = 'current-user';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'You cannot delete your own account.',
+      );
+    });
+
+    it('should throw error if user not member of tenant', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      // Atomic operation throws error for non-member
+      userProvider.deleteIfNotLastAdmin.mockRejectedValue(
+        new Error('User is not a member of this organization'),
+      );
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'User not found in this organization',
+      );
+    });
+
+    it('should throw BadRequestException if trying to delete the last admin', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      // Atomic operation returns false when last admin
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue(false);
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        'Cannot delete the last admin of the organization',
+      );
+    });
+
+    it('should successfully delete user if all checks pass', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      // Atomic operation succeeds
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
+
+      const result = await controller.remove(id, req);
+
+      expect(result).toEqual({ success: true });
+      expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        id,
+        tenantId,
       );
     });
   });

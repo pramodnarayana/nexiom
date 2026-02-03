@@ -283,4 +283,71 @@ describe("DrizzleUserAdapter", () => {
     );
     expect(db.where).toHaveBeenCalledWith(eq(schema.user.id, "u1"));
   });
+
+  it("deleteIfNotLastAdmin acquires lock, verifies membership, checks admin count, and deletes if safe", async () => {
+    const db = mkDb();
+    const auth = mkAuth();
+    const adapter = new DrizzleUserAdapter(db, auth);
+
+    // Mock transaction context
+    const mockDelete = vi.fn().mockReturnThis();
+    const mockFor = vi.fn().mockReturnThis();
+
+    // Setup chain for select().from().where().for() and select().from()...
+
+    // We need specific results for the 3 selects in sequence:
+    // 1. Lock organization
+    // 2. Get membership/role
+    // 3. Count admins
+
+    // Because mockChain is reused, we manage return values via the 'then' resolution or simple mocks if separate
+    // Actually simpler to mock tx.select to return differnt chains or values based on calls.
+
+    // Let's rely on the sequence of execution or just broad mocks since logic is sequential using await.
+
+    // Mock the transaction execution
+    db.transaction.mockImplementation(
+      async (fn: (tx: MockTx) => Promise<unknown>) => {
+        const tx = {
+          select: vi.fn(),
+          delete: mockDelete,
+          where: vi.fn().mockReturnThis(),
+          update: vi.fn().mockReturnThis(),
+          set: vi.fn().mockReturnThis(),
+        };
+
+        // 1. Lock call
+        tx.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          for: mockFor, // Key verification
+        });
+
+        // 2. Membership call
+        tx.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValueOnce([{ roleName: "Admin" }]),
+        });
+
+        // 3. Count admins call
+        tx.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValueOnce([{ count: 2 }]), // returns promise of array
+        });
+
+        return await fn(tx);
+      },
+    );
+
+    const result = await adapter.deleteIfNotLastAdmin("u1", "o1");
+
+    expect(result).toBe(true);
+    // Verify lock was acquired
+    expect(mockFor).toHaveBeenCalledWith("update");
+    // Verify delete was called
+    expect(mockDelete).toHaveBeenCalled();
+  });
 });
