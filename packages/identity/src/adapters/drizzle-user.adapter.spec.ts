@@ -328,16 +328,14 @@ describe("DrizzleUserAdapter", () => {
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValueOnce([{ roleName: "admin" }]),
+          limit: vi.fn().mockResolvedValueOnce([{ roleName: "Admin" }]),
         });
 
         // 3. Count admins call
         tx.select.mockReturnValueOnce({
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(), // returns promise of array
-          then: (cb: (val: unknown) => unknown) =>
-            Promise.resolve([{ count: 2 }]).then(cb),
+          where: vi.fn().mockResolvedValueOnce([{ count: 2 }]), // returns promise of array
         });
 
         return await fn(tx);
