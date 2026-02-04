@@ -34,6 +34,42 @@ export interface BetterAuthAdapterConfig {
   nodeEnv?: string;
 }
 
+// Local Interface to type dynamic Better Auth API methods
+interface BetterAuthApi {
+  signUpEmail(params: {
+    body: { email: string; password?: string; name?: string; image?: string };
+    asResponse?: boolean;
+  }): Promise<
+    { user: UserInterface; session: Session; token: string } | Response
+  >;
+
+  signInEmail(params: {
+    body: { email: string; password?: string };
+    asResponse?: boolean;
+  }): Promise<
+    | {
+        user: UserInterface;
+        session: Session;
+        token: string;
+        twoFactorRedirect?: boolean;
+      }
+    | Response
+  >;
+
+  getSession(params: {
+    headers: Headers;
+  }): Promise<{ session: Session; user: UserInterface } | null>;
+
+  createInvitation(params: {
+    body: CreateInvitationInput;
+  }): Promise<{ invitation: Invitation } | Invitation>;
+
+  sendVerificationEmail(params: {
+    body: { email: string };
+    asResponse?: boolean;
+  }): Promise<{ status: boolean; error?: { message: string } } | Response>;
+}
+
 export class BetterAuthAdapter implements IAuthProvider {
   private readonly auth: ReturnType<typeof betterAuth>;
 
@@ -235,6 +271,11 @@ export class BetterAuthAdapter implements IAuthProvider {
     return this.auth.handler.bind(this.auth);
   }
 
+  // Helper getter to access typed API
+  private get api(): BetterAuthApi {
+    return this.auth.api as unknown as BetterAuthApi;
+  }
+
   private validateFrontendUrl(url?: string): string {
     if (url && this.config.allowedOrigins.includes(url)) {
       return url;
@@ -247,30 +288,25 @@ export class BetterAuthAdapter implements IAuthProvider {
       throw new Error("Password is required for email signup");
     }
 
-    const api = this.auth.api as any;
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-    const result = await api.signUpEmail({
+    const result = (await this.api.signUpEmail({
       body: {
         email: input.email,
         password: input.password,
         name: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
       },
       asResponse: false,
-    });
+    })) as { user: UserInterface };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!result || typeof result !== "object" || !result.user?.id) {
       throw new Error(
-        `User creation failed: Unexpected response from Better Auth. Response: ${JSON.stringify(result)}`,
+        `User creation failed: Unexpected response from Better Auth.`,
       );
     }
 
     // Rehydrate from DB to ensure consistent Date objects
 
     const dbUser = await this.db.query.user.findFirst({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.user.id, result.user.id as string),
+      where: eq(schema.user.id, result.user.id),
     });
 
     if (!dbUser) {
@@ -287,58 +323,55 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     // Using Better Auth API
 
-    const api = this.auth.api as any;
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-    const apiResponse = await api.signInEmail({
+    // Using Better Auth API
+    const apiResponse = (await this.api.signInEmail({
       body: { email: credentials.email, password: credentials.password },
       asResponse: true,
-    });
+    })) as Response;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!apiResponse.ok) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      throw new Error("Login failed (API Error): " + apiResponse.statusText);
+      const errorData = (await apiResponse.json()) as {
+        error?: { message?: string };
+      };
+      throw new Error(
+        `Login failed: ${errorData?.error?.message || apiResponse.statusText}`,
+      );
     }
 
     const cookieHeader =
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       typeof apiResponse.headers.getSetCookie === "function"
-        ? // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-          apiResponse.headers.getSetCookie()
-        : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-          apiResponse.headers.get("set-cookie");
+        ? apiResponse.headers.getSetCookie()
+        : apiResponse.headers.get("set-cookie");
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-    const result = await apiResponse.json();
+    const result = (await apiResponse.json()) as {
+      token: string;
+      user: { id: string };
+      twoFactorRedirect?: boolean;
+    };
 
     // Validate Response Shape
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     if (result.twoFactorRedirect) {
       throw new Error("2FA required (not supported via this adapter yet)");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!result.token || typeof result.token !== "string") {
       throw new Error("Login failed (No token returned)");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!result.user?.id) {
       throw new Error("Login failed (No user returned)");
     }
 
     // Resolve Session from DB for consistency
     const dbSession = await this.db.query.session.findFirst({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.session.token, result.token as string),
+      where: eq(schema.session.token, result.token),
     });
 
     if (!dbSession) throw new Error("Session not found after login");
 
     const dbUser = await this.db.query.user.findFirst({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      where: eq(schema.user.id, result.user.id as string),
+      where: eq(schema.user.id, result.user.id),
     });
 
     if (!dbUser) throw new Error("User not found after login");
@@ -382,15 +415,14 @@ export class BetterAuthAdapter implements IAuthProvider {
           )
         : fromNodeHeaders(headers as IncomingHttpHeaders);
 
-    const result = (await this.auth.api.getSession({
+    const result = await this.api.getSession({
       headers: headerObj,
-    })) as any;
+    });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     if (!result?.session?.token) return null;
 
     // Rehydrate and validate from DB to ensure consistent object shape (dates etc)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+
     return this.validateSession(result.session.token);
   }
 
@@ -402,10 +434,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     // Org Invite via Better Auth API
 
-    const api = this.auth.api as any;
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
-    const result = await api.createInvitation({
+    const result = await this.api.createInvitation({
       body: {
         email: input.email,
         role: input.role,
@@ -415,8 +444,9 @@ export class BetterAuthAdapter implements IAuthProvider {
       },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const invData = result.invitation ?? result;
+    const invData = ("invitation" in result
+      ? result.invitation
+      : result) as unknown as Record<string, unknown>;
 
     // Validate that invData is an object
 
@@ -439,7 +469,6 @@ export class BetterAuthAdapter implements IAuthProvider {
     ];
 
     for (const field of requiredFields) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const value = invData[field];
 
       if (field === "role") {
@@ -463,9 +492,9 @@ export class BetterAuthAdapter implements IAuthProvider {
     }
 
     // Validate Date fields
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     const expiresAt = new Date(invData.expiresAt as string);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     const createdAt = new Date(invData.createdAt as string);
 
     if (Number.isNaN(expiresAt.getTime())) {
@@ -480,18 +509,16 @@ export class BetterAuthAdapter implements IAuthProvider {
     }
 
     return {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      id: invData.id,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      email: invData.email,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      role: invData.role,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      organizationId: invData.organizationId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      inviterId: invData.inviterId,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      status: invData.status,
+      id: invData.id as string,
+      email: invData.email as string,
+      role: invData.role as string,
+      organizationId: invData.organizationId as string,
+      inviterId: invData.inviterId as string,
+      status: invData.status as
+        | "pending"
+        | "accepted"
+        | "rejected"
+        | "canceled",
       expiresAt: expiresAt,
       createdAt: createdAt,
     };
@@ -737,13 +764,19 @@ export class BetterAuthAdapter implements IAuthProvider {
     // Generate verification token using Better Auth's API
     // Better Auth will use the configured baseURL/trustedOrigins to construct the verification URL
 
-    await this.auth.api.sendVerificationEmail({
+    const res = (await this.api.sendVerificationEmail({
       body: {
         email: user.email,
       },
-      // We don't need 'asResponse: true' unless we want headers. The API doc returns object typically.
-    });
+      asResponse: true,
+    })) as Response;
 
-    // Check result if needed. Better Auth throws on error usually or returns object.
+    if (!res.ok) {
+      const errorData = (await res.json()) as { error?: { message?: string } };
+
+      throw new Error(
+        `Failed to send verification email: ${errorData?.error?.message || res.statusText}`,
+      );
+    }
   }
 }

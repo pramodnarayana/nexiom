@@ -212,7 +212,11 @@ describe("BetterAuthAdapter", () => {
     const result = await adapter.login({ email: "a@b.com", password: "pw" });
     expect(result.cookie).toBe("cookie=1");
 
-    auth.api.signInEmail.mockResolvedValue({ ok: false, statusText: "Bad" });
+    auth.api.signInEmail.mockResolvedValue({
+      ok: false,
+      statusText: "Bad",
+      json: vi.fn(async () => ({ error: { message: "API Error" } })),
+    });
     await expect(
       adapter.login({ email: "a@b.com", password: "pw" }),
     ).rejects.toThrow("API Error");

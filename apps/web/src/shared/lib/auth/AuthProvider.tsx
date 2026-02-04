@@ -77,8 +77,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                 } else {
                     // 3. Explicitly Fetch Tenants
                     let tenantsFound = false;
+                    let fetchSucceeded = false;
                     try {
                         const res = await apiClient.get<Tenant[]>('/tenants');
+                        fetchSucceeded = true;
                         const tenants = res.data;
 
                         if (tenants.length > 0) {
@@ -94,11 +96,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                         }
                     } catch (error_) {
                         // Don't fail completely, try provisioning if really needed
-                        void error_;
+                        // Log error but continue to allow fallback if logic permits
+                        console.warn("[AuthProvider] Failed to fetch tenants:", error_);
                     }
 
-                    // 4. Fallback: Auto-Provisioning (Only if NO tenants found)
-                    if (!tenantsFound && provisionAttemptsRef.current < MAX_RETRIES) {
+                    // 4. Fallback: Auto-Provisioning (Only if NO tenants found AND fetch succeeded)
+                    // If fetch failed, we shouldn't auto-provision because we don't know if tenants exist.
+                    if (!tenantsFound && fetchSucceeded && provisionAttemptsRef.current < MAX_RETRIES) {
                         provisionAttemptsRef.current += 1;
                         try {
                             await apiClient.post('/auth/provision-tenant');
@@ -139,9 +143,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                 setIsLoading(false);
             }
         } catch (err) {
-            console.error("[AuthProvider] refreshSession Critical Failure", err);
-            setToken(undefined);
-            setUser(null);
+            console.error("[AuthProvider] refreshSession Failure", err);
+
+            // Only clear auth state on explicit Unauthorized errors
+            const errorStatus = (err as { status?: number; statusCode?: number })?.status || (err as { status?: number; statusCode?: number })?.statusCode;
+            if (errorStatus === 401) {
+                setToken(undefined);
+                setUser(null);
+            }
+            // For other errors (network, timeout, 500) -> Keep existing state (optimistic)
             setIsLoading(false);
         }
     }, [hydrateUser]);

@@ -24,7 +24,12 @@ export class TenantsController {
   ) {}
 
   @Get()
-  // @RequirePermission('tenants', 'read') -- Removed to allow fetching own tenants without context
+  /**
+   * Fetch all tenants for the user (Context Discovery).
+   * Permission enforcement is deliberately omitted here to allow users
+   * to discover which tenants they belong to.
+   * Uses `tenantProvider.findAllForUser` which filters by userId.
+   */
   findAll(@Req() req: Request & { user: { id: string } }) {
     return this.tenantProvider.findAllForUser(req.user.id);
   }
