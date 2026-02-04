@@ -14,6 +14,7 @@ vi.mock("better-auth", () => ({
       signInEmail: vi.fn(),
       getSession: vi.fn(),
       createInvitation: vi.fn(),
+      sendVerificationEmail: vi.fn(),
     },
     handler: vi.fn(),
   })),
@@ -257,6 +258,44 @@ describe("BetterAuthAdapter", () => {
     await expect(
       adapter.login({ email: "a@b.com", password: "pw" }),
     ).rejects.toThrow("Session not found");
+  });
+
+  it("resendVerificationEmail handles object-style error response", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
+    const auth: any = (adapter as any).auth;
+
+    // Mock user exists and is not verified
+    db.query.user.findFirst.mockResolvedValue({ id: "u1", email: "a@b.com", emailVerified: false });
+
+    auth.api.sendVerificationEmail.mockResolvedValue({
+      status: false,
+      error: { message: "Custom Error" },
+    });
+
+    await expect(adapter.resendVerificationEmail("a@b.com")).rejects.toThrow(
+      "Custom Error",
+    );
+  });
+
+  it("resendVerificationEmail handles Response-style error", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
+    const auth: any = (adapter as any).auth;
+
+    db.query.user.findFirst.mockResolvedValue({ id: "u1", email: "a@b.com", emailVerified: false });
+
+    auth.api.sendVerificationEmail.mockResolvedValue({
+      ok: false,
+      statusText: "Server Error",
+      json: vi.fn(async () => ({ error: { message: "Http Error" } })),
+    });
+
+    await expect(adapter.resendVerificationEmail("a@b.com")).rejects.toThrow(
+      "Http Error",
+    );
   });
 
   it("validateSession returns null for missing/expired, else mapped", async () => {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -98,13 +97,18 @@ export class BetterAuthAdapter implements IAuthProvider {
       hooks: {
         after: [
           {
-            matcher: (context: { path?: string }) =>
-              context.path === "/auth/sign-up/email" ||
-              context.path === "/auth/sign-in/email" ||
-              (context.path?.startsWith("/auth/callback/") ?? false), // Catches social logins (callback)
+            matcher: (context: { path?: string }) => {
+              const path = context.path;
+              if (!path) return false;
+              return (
+                path.endsWith("/sign-up/email") ||
+                path.endsWith("/sign-in/email") ||
+                path.includes("/callback/")
+              );
+            },
             handler: createAuthMiddleware(async (ctx: any) => {
               // Context returned contains the user info from the original action
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
               const returned = ctx.context.returned;
 
               // Helper to parse response if needed (Better Auth inner API returns typed objects usually)
@@ -122,7 +126,7 @@ export class BetterAuthAdapter implements IAuthProvider {
                 }
               }
 
-              if (user && user.id) {
+              if (user?.id) {
                 try {
                   // Idempotent Check: Handled by provisionTenantForUser logic
                   // We check existence to avoid redundant DB calls/logs
@@ -764,18 +768,39 @@ export class BetterAuthAdapter implements IAuthProvider {
     // Generate verification token using Better Auth's API
     // Better Auth will use the configured baseURL/trustedOrigins to construct the verification URL
 
-    const res = (await this.api.sendVerificationEmail({
+    const res = await this.api.sendVerificationEmail({
       body: {
         email: user.email,
       },
       asResponse: true,
-    })) as Response;
+    });
 
-    if (!res.ok) {
-      const errorData = (await res.json()) as { error?: { message?: string } };
+    // Check if result is the object form (status: boolean)
+    if (
+      res &&
+      typeof res === "object" &&
+      "status" in res &&
+      typeof (res as Record<string, unknown>).status === "boolean"
+    ) {
+      const typedRes = res as { status: boolean; error?: { message: string } };
+      if (!typedRes.status) {
+        throw new Error(
+          `Failed to send verification email: ${typedRes.error?.message || "Unknown error"}`,
+        );
+      }
+      return; // Success case for object return
+    }
+
+    // Otherwise treat as Response object
+    const response = res as Response;
+
+    if (!response.ok) {
+      const errorData = (await response.json()) as {
+        error?: { message?: string };
+      };
 
       throw new Error(
-        `Failed to send verification email: ${errorData?.error?.message || res.statusText}`,
+        `Failed to send verification email: ${errorData?.error?.message || response.statusText}`,
       );
     }
   }

@@ -85,7 +85,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
                         if (tenants.length > 0) {
                             // Found tenants! Pick the first one (or recently active if we tracked it)
-                            const sorted = tenants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                            const sorted = [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                             const activeTenant = sorted[0];
 
                             hydrateUser(data, activeTenant);
