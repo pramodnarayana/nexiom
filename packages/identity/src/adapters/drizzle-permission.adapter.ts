@@ -23,7 +23,9 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     if (!context) return false;
 
     // Owner override
-    if (context.roleName === "Owner") return true;
+    // Safe check for roleName
+    const roleName = context.roleName ? context.roleName.toLowerCase() : "";
+    if (roleName === "owner" || roleName === "system admin") return true;
 
     // Check permissions
     // 1. Global Wildcard
@@ -59,14 +61,13 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
     const perms: string[] = [];
 
-    // 1. Super Admin Wildcard
-
     if (tenantId) {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // 2. Owner Wildcard
-        if (context.roleName === "Owner") {
+        // 2. Owner/Admin Wildcard
+        const roleName = context.roleName ? context.roleName.toLowerCase() : "";
+        if (roleName === "owner" || roleName === "system admin") {
           perms.push("*");
         }
 

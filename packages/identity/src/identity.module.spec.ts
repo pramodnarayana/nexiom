@@ -41,7 +41,9 @@ describe("IdentityModule.register", () => {
 
     // factories inject requested tokens
     const authProv = providers.find((p) => p.provide === AUTH_PROVIDER);
-    expect(authProv.inject).toEqual([opts.dbToken, opts.emailToken]);
+    // AUTH_PROVIDER now needs TENANT_PROVIDER injected
+    expect(authProv.inject).toEqual([opts.dbToken, opts.emailToken, TENANT_PROVIDER]);
+
     const userProv = providers.find((p) => p.provide === USER_PROVIDER);
     expect(userProv.inject).toEqual([opts.dbToken, AUTH_PROVIDER]);
     const tenantProv = providers.find((p) => p.provide === TENANT_PROVIDER);

@@ -25,10 +25,11 @@ export interface AuthContextType {
     token?: string;
 
     // Actions
-    login: () => void;
+    login: (data: { accessToken: string; user: unknown }) => void;
     signup: () => void;
     logout: () => void;
 
     // Helper to set state from outside
     setAuthState: (data: { accessToken: string; user: unknown }) => void;
+    refreshSession: () => Promise<void>;
 }

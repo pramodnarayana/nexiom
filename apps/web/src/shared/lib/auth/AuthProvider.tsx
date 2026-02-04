@@ -1,208 +1,185 @@
+
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
+import { apiClient } from '../api-client';
 import { AuthContext } from './context';
 
-const API_URL = import.meta.env.VITE_API_URL;
+// Constants
+const MAX_RETRIES = 3;
+
+interface Tenant {
+    id: string;
+    name: string;
+    slug?: string;
+    createdAt: string;
+}
 
 /**
  * Context Provider for managing Authentication state.
  * Replaces the previous OIDC provider with a custom implementation
  * that corresponds to the internal Better Auth backend.
  * 
- * @param children - The child components that need access to auth context.
+ * Includes Enterprise-Grade fallback and provisioning logic.
  */
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Init: Check localStorage and Backend Session (Better Auth)
-    useEffect(() => {
-        const initAuth = async () => {
-            const startTime = Date.now(); // Track start time for minimum loading duration
-
-            try {
-                // 1. Check Server Session (Cookies) - Source of Truth
-                const { data, error } = await authClient.getSession();
-
-                if (data) {
-                    // Standard getSession returns basic info. We MUST fetch enriched info (Organization, etc.)
-                    // using our custom endpoint, as we removed customSession hook.
-                    let enrichedData = null;
-                    try {
-                        const sessionRes = await fetch(`${API_URL}/auth/refresh-session`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${data.session.token}` // Ensure Token is explicit if cookie fails
-                            },
-                            credentials: 'include',
-                        });
-                        if (sessionRes.ok) {
-                            enrichedData = await sessionRes.json();
-                        } else {
-                            console.warn("AuthProvider: Enriched fetch failed", sessionRes.status);
-                        }
-                    } catch (err) {
-                        console.error("Failed to fetch enriched session", err);
-                    }
-
-                    // Fallback to basic data if enriched fails, but DO NOT auto-provision based on incomplete data.
-                    if (enrichedData) {
-                        const sessionUser = enrichedData.user as unknown as AuthUser;
-
-                        // AUTO-PROVISION CHECK
-                        // FIX: Do not auto-provision if the user is a Platform Admin (they have wildcard permission)
-                        const isPlatformUser = (sessionUser.permissions || []).includes('*');
-
-                        if (!sessionUser.hasTenant && !sessionUser.organizationId && !isPlatformUser) {
-                            if (!API_URL) {
-                                console.error("VITE_API_URL is missing!");
-                                return;
-                            }
-                            const res = await fetch(`${API_URL}/auth/provision-tenant`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${data.session.token}`
-                                },
-                                credentials: 'include',
-                            });
-
-                            if (res.ok) {
-                                // Retry Enriched Fetch
-                                const retryRes = await fetch(`${API_URL}/auth/refresh-session`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Authorization': `Bearer ${data.session.token}`
-                                    },
-                                    credentials: 'include',
-                                });
-
-                                if (retryRes.ok) {
-                                    try {
-                                        const refreshed = await retryRes.json();
-                                        hydrateUser(refreshed);
-                                    } catch (err) {
-                                        console.warn("Retry refresh-session JSON parse failed:", err);
-                                        hydrateUser(enrichedData);
-                                    }
-                                } else {
-                                    console.warn("Retrying Enriched Fetch failed:", retryRes.status);
-                                    // Fallback to initial enrichedData (which lacks tenant but is better than nothing)
-                                    // or just data if enriched was null (though we are inside enrichedData check here)
-                                    hydrateUser(enrichedData);
-                                }
-                            } else {
-                                console.error("Provisioning Failed!", res.status);
-                                hydrateUser(enrichedData);
-                            }
-                        } else {
-                            // Already has tenant
-                            hydrateUser(enrichedData);
-                        }
-                    } else {
-                        // Enriched fetch failed (e.g. network error, 401).
-                        // Fallback to basic session data but SKIP auto-provisioning to avoid creating duplicate tenants.
-                        // The user might see a degraded UI (no org context), but that's better than corrupting state.
-                        console.warn("AuthProvider: Skipping auto-provisioning due to missing enriched data.");
-                        hydrateUser(data);
-                    }
-                } else {
-                    // Server says "No Session". Trust it.
-                    console.warn("AuthProvider: No Session Found (data is null). Error:", error);
-                    setToken(undefined);
-                    setUser(null);
-                }
-            } catch (error) {
-                console.error('Failed to fetch session', error);
-            } finally {
-                // Enterprise pattern: Ensure minimum loading duration to prevent flash
-                // This is used by Vercel, Linear, Stripe, etc.
-                const elapsed = Date.now() - startTime;
-                const minLoadingDuration = 300; // 300ms minimum
-
-                if (elapsed < minLoadingDuration) {
-                    // Wait for the remaining time
-                    setTimeout(() => {
-                        setIsLoading(false);
-                    }, minLoadingDuration - elapsed);
-                } else {
-                    setIsLoading(false);
-                }
-            }
-        };
-
-        const hydrateUser = (data: { user: unknown; session: { token: string } }) => {
-            const apiUser = data.user as Record<string, unknown>;
-            console.log("AuthProvider Hydrate:", JSON.stringify(apiUser, null, 2));
-
-            // Better Auth returns 'roles' as an array OR 'role' as string. Normalize to array.
-            let finalRoles: string[] = ['user'];
-            if (Array.isArray(apiUser.roles)) {
-                finalRoles = apiUser.roles as string[];
-            } else if (typeof apiUser.role === 'string') {
-                finalRoles = [apiUser.role];
-            }
-
-            const authUser: AuthUser = {
-                id: String(apiUser.id),
-                email: String(apiUser.email),
-                name: typeof apiUser.name === 'string' ? apiUser.name : undefined,
-                roles: finalRoles,
-                organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
-                hasTenant: !!apiUser.hasTenant,
-                permissions: Array.isArray(apiUser.permissions) ? (apiUser.permissions as string[]) : []
-            };
-            setToken(data.session.token);
-            setUser(authUser);
-        }
-
-        initAuth();
-    }, []);
-
-    /**
-     * Updates the local auth state upon successful login.
-     * 
-     * @param data - The login response containing accessToken and user object.
-     */
-    const login = useCallback((data: { accessToken: string; user: unknown }) => {
+    const hydrateUser = useCallback((data: { user: unknown; session: { token: string } }, orgContext?: Tenant) => {
         const apiUser = data.user as Record<string, unknown>;
-        setToken(data.accessToken);
 
-        const fullName = typeof apiUser.name === 'string' ? apiUser.name :
-            `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
-
-        // Handle both Singular ('role') and Plural ('roles') formats
+        // Better Auth returns 'roles' as an array OR 'role' as string. Normalize to array.
         let finalRoles: string[] = ['user'];
-
         if (Array.isArray(apiUser.roles)) {
             finalRoles = apiUser.roles as string[];
         } else if (typeof apiUser.role === 'string') {
             finalRoles = [apiUser.role];
         }
 
+        // Use Explicit Org Context if provided, otherwise fallback to session
+        const orgId = orgContext?.id || (typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined);
+        const orgName = orgContext?.name || (typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined);
+
+        const authUser: AuthUser = {
+            id: String(apiUser.id),
+            email: String(apiUser.email),
+            name: typeof apiUser.name === 'string' ? apiUser.name : undefined,
+            roles: finalRoles,
+            organizationName: orgName,
+            organizationId: orgId,
+            hasTenant: !!orgId || !!apiUser.hasTenant,
+            permissions: Array.isArray(apiUser.permissions) ? (apiUser.permissions as string[]) : []
+        };
+        setToken(data.session.token);
+        setUser(authUser);
+    }, []);
+
+    const refreshSession = useCallback(async (retryCount = 0, shouldSetLoading = true) => {
+        // Keep loading true during retries
+        if (shouldSetLoading) setIsLoading(true);
+
+        try {
+            // 1. Check Server Session (Cookies) - Source of Truth
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { data, error: _error } = await authClient.getSession();
+
+            if (data) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const apiUser = data.user as any;
+
+                // 2. Check for Organization Context in Session (Fast Path)
+                if (apiUser.organizationId) {
+                    hydrateUser(data);
+                    setIsLoading(false);
+                } else {
+                    // 3. Explicitly Fetch Tenants
+                    let tenantsFound = false;
+                    try {
+                        const res = await apiClient.get<Tenant[]>('/tenants');
+                        const tenants = res.data;
+
+                        if (tenants.length > 0) {
+                            // Found tenants! Pick the first one (or recently active if we tracked it)
+                            const sorted = tenants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                            const activeTenant = sorted[0];
+
+                            hydrateUser(data, activeTenant);
+                            setIsLoading(false);
+                            tenantsFound = true;
+                            return;
+                        }
+                    } catch (fetchErr) {
+                        // Don't fail completely, try provisioning if really needed
+                        void fetchErr;
+                    }
+
+                    // 4. Fallback: Auto-Provisioning (Only if NO tenants found)
+                    if (!tenantsFound && retryCount < MAX_RETRIES) {
+                        try {
+                            await apiClient.post('/auth/provision-tenant');
+
+                            // Immediately re-check session after provisioning success
+                            // This avoids recursive call issues in useCallback
+                            const { data: newData } = await authClient.getSession();
+                            if (newData) {
+                                // Try fetching tenants one last time
+                                try {
+                                    const res = await apiClient.get<Tenant[]>('/tenants');
+                                    if (res.data.length > 0) {
+                                        hydrateUser(newData, res.data[0]);
+                                        setIsLoading(false);
+                                        return;
+                                    }
+                                } catch (e) { void e; }
+
+                                // Or at least hydrate what we have
+                                hydrateUser(newData);
+                                setIsLoading(false);
+                                return;
+                            }
+                        } catch (provError) {
+                            console.error("[AuthProvider] Auto-Provisioning Failed:", provError);
+                        }
+                    }
+
+                    // If exhausted retries or provisioning failed:
+                    hydrateUser(data);
+                    setIsLoading(false);
+                }
+            } else {
+                setToken(undefined);
+                setUser(null);
+                setIsLoading(false);
+            }
+        } catch (err) {
+            console.error("[AuthProvider] refreshSession Critical Failure", err);
+            setToken(undefined);
+            setUser(null);
+            setIsLoading(false);
+        }
+    }, [hydrateUser]);
+
+    // Init
+    useEffect(() => {
+        // Use timeout to avoid "setState in effect" lint error (cascading render warning)
+        // Since we are fetching data, this is acceptable.
+        const timer = setTimeout(() => {
+            void refreshSession(0, false);
+        }, 0);
+        return () => clearTimeout(timer);
+    }, [refreshSession]);
+
+    const login = useCallback((data: { accessToken: string; user: unknown }) => {
+        // On Login, we also want to ensure we have context.
+        const apiUser = data.user as Record<string, unknown>;
+        setToken(data.accessToken);
+
+        // ... (Basic hydration) ...
+        const fullName = typeof apiUser.name === 'string' ? apiUser.name : `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
         setUser({
             id: String(apiUser.id),
             email: String(apiUser.email),
             name: fullName,
-            roles: finalRoles,
-            organizationId: typeof apiUser.organizationId === 'string' ? apiUser.organizationId : undefined,
-            organizationName: typeof apiUser.organizationName === 'string' ? apiUser.organizationName : undefined,
-            hasTenant: !!apiUser.hasTenant,
-            permissions: Array.isArray(apiUser.permissions) ? (apiUser.permissions as string[]) : []
+            roles: ['user'],
+            organizationId: undefined,
+            organizationName: undefined,
+            hasTenant: false,
+            permissions: []
         });
-    }, []);
+
+        // Trigger full refresh to get org context
+        void refreshSession();
+
+    }, [refreshSession]);
 
     const logout = useCallback(async () => {
         try {
-            console.log("Initiating logout...");
             await authClient.signOut();
-            console.log("Logout successful from server");
         } catch (error) {
             console.error('Logout failed', error);
         }
-
         setToken(undefined);
         setUser(null);
         window.location.href = '/';
@@ -213,11 +190,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         token,
         isAuthenticated: !!user,
         isLoading,
-        login: async () => { },
+        login, // Updated to use refresh
         signup: async () => { },
         logout,
         setAuthState: login,
-    }), [user, token, isLoading, logout, login]);
+        refreshSession: async () => { await refreshSession(); },
+    }), [user, token, isLoading, logout, login, refreshSession]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

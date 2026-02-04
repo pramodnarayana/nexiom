@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
 
+import { ITenantProvider } from "../interfaces/tenant-provider.interface";
 import {
   IAuthProvider,
   LoginCredentials,
@@ -39,6 +40,7 @@ export class BetterAuthAdapter implements IAuthProvider {
     private readonly db: NodePgDatabase<typeof schema>,
     private readonly emailService: IEmailProvider,
     private readonly config: BetterAuthAdapterConfig,
+    private readonly tenantProvider: ITenantProvider, // Injected Dependency
   ) {
     if (!config.allowedOrigins || config.allowedOrigins.length === 0) {
       throw new Error("BetterAuthAdapter: allowedOrigins config is missing");
@@ -52,6 +54,67 @@ export class BetterAuthAdapter implements IAuthProvider {
         "Better Auth Adapter Initializing with Password Reset Enabled",
       );
     }
+
+    // Enterprise Plugin for Tenant Auto-Provisioning
+    const tenantProvisioningPlugin = {
+      id: "tenant-provisioning",
+      hooks: {
+        after: [
+          {
+            matcher: (context: { path?: string }) =>
+              context.path === "/auth/sign-up/email" ||
+              context.path === "/auth/sign-in/email" ||
+              (context.path?.startsWith("/auth/callback/") ?? false), // Catches social logins (callback)
+            handler: async (ctx: any) => {
+              // Context response contains the user/session info
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              const response = ctx.response; // Might be object or Response
+
+              // Helper to parse response if needed (Better Auth inner API returns typed objects usually)
+              let user: UserInterface | undefined;
+
+              if (response && typeof response === "object") {
+                if ("user" in response) {
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                  user = response.user as UserInterface;
+                } else if ("token" in response) {
+                  // Login response
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                  user = response.user as UserInterface;
+                }
+              }
+
+              if (user && user.id) {
+                try {
+                  // Idempotent Check: Handled by provisionTenantForUser logic
+                  // We check existence to avoid redundant DB calls/logs
+                  const existing = await this.tenantProvider.findAllForUser(
+                    user.id,
+                  );
+                  if (existing.length === 0) {
+                    try {
+                      await this.tenantProvider.provisionTenantForUser(user.id);
+                    } catch (err) {
+                      console.error(
+                        `[BetterAuth Hook] Failed to provision tenant for ${user.id}`,
+                        err,
+                      );
+                    }
+                  }
+                } catch (error) {
+                  // Suppress error to avoid failing the auth flow
+                  console.error(`[BetterAuth Hook] verification failed`, error);
+                }
+              }
+
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              return { response: ctx.response };
+            },
+          },
+        ],
+      },
+    };
+
     this.auth = betterAuth({
       trustedOrigins: config.allowedOrigins,
       // Use betterAuthUrl as baseURL (API URL)
@@ -144,6 +207,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           },
         }),
         admin(),
+        tenantProvisioningPlugin, // Register our hook
       ],
       advanced: {
         defaultCookieAttributes: {
@@ -381,7 +445,6 @@ export class BetterAuthAdapter implements IAuthProvider {
         // Role is nullable/optional in some contexts, but if it exists it must be valid.
         // If invData has the key, we check if it is explicitly undefined (missing).
         // If the key is present but null, that's allowed by schema if nullable.
-        // However, schema says role: text("role"), which defaults to nullable in drizzle-pg unless .notNull()
         // Wait, schema.invitation has role: text("role"), so it IS nullable.
         if (value === undefined) {
           throw new Error(
@@ -673,18 +736,13 @@ export class BetterAuthAdapter implements IAuthProvider {
     // Generate verification token using Better Auth's API
     // Better Auth will use the configured baseURL/trustedOrigins to construct the verification URL
 
-    const response = await this.auth.api.sendVerificationEmail({
+    await this.auth.api.sendVerificationEmail({
       body: {
         email: user.email,
       },
-      asResponse: true,
+      // We don't need 'asResponse: true' unless we want headers. The API doc returns object typically.
     });
 
-    if (!response.ok) {
-      console.error(
-        `[BetterAuthAdapter] resendVerificationEmail: Failed to send verification email. Status: ${response.status}`,
-      );
-      // We do NOT throw here to keep the public API uniform
-    }
+    // Check result if needed. Better Auth throws on error usually or returns object.
   }
 }

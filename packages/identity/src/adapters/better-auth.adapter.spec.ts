@@ -72,6 +72,15 @@ const mkEmail = () => ({
   sendEmail: vi.fn(async () => undefined),
 });
 
+const mkTenantProvider = () => ({
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  findById: vi.fn(),
+  findBySlug: vi.fn(),
+  listForUser: vi.fn(),
+});
+
 const cfg = (
   over?: Partial<BetterAuthAdapterConfig>,
 ): BetterAuthAdapterConfig => ({
@@ -92,17 +101,28 @@ describe("BetterAuthAdapter", () => {
     const email = mkEmail();
     expect(
       () =>
-        new BetterAuthAdapter(db, email as any, cfg({ allowedOrigins: [] })),
+        new BetterAuthAdapter(
+          db,
+          email as any,
+          cfg({ allowedOrigins: [] }),
+          mkTenantProvider() as any,
+        ),
     ).toThrow("allowedOrigins");
     expect(
-      () => new BetterAuthAdapter(db, email as any, cfg({ betterAuthUrl: "" })),
+      () =>
+        new BetterAuthAdapter(
+          db,
+          email as any,
+          cfg({ betterAuthUrl: "" }),
+          mkTenantProvider() as any,
+        ),
     ).toThrow("betterAuthUrl");
   });
 
   it("createUser validates and maps from DB", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     await expect(
       adapter.createUser({ email: "a@b.com" } as any),
@@ -148,7 +168,7 @@ describe("BetterAuthAdapter", () => {
   it("login validates, hits API, rehydrates session and user", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
     await expect(adapter.login({ email: "a@b.com" } as any)).rejects.toThrow(
       "Password is required",
     );
@@ -235,7 +255,7 @@ describe("BetterAuthAdapter", () => {
   it("validateSession returns null for missing/expired, else mapped", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     db.query.session.findFirst.mockResolvedValue(null);
     expect(await adapter.validateSession("t1")).toBeNull();
@@ -282,7 +302,7 @@ describe("BetterAuthAdapter", () => {
   it("getSessionFromHeaders adapts headers and validates", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
     const auth: any = (adapter as any).auth;
 
     auth.api.getSession.mockResolvedValue({ session: { token: "t1" } });
@@ -319,7 +339,7 @@ describe("BetterAuthAdapter", () => {
   it("createInvitation handles system and org flows with validation", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     // System
     db.returning.mockResolvedValueOnce([
@@ -403,7 +423,7 @@ describe("BetterAuthAdapter", () => {
   it("getInvitation and listInvitations map correctly; handles partial data/unknown status", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     db.query.invitation.findFirst.mockResolvedValueOnce(null);
     expect(await adapter.getInvitation("x")).toBeNull();
@@ -438,7 +458,7 @@ describe("BetterAuthAdapter", () => {
   it("acceptInvitation validates and inserts membership or sets system role", async () => {
     const db: any = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     db.query.invitation.findFirst.mockResolvedValueOnce(null);
     await expect(adapter.acceptInvitation("i1", "u1")).rejects.toThrow(
@@ -493,7 +513,7 @@ describe("BetterAuthAdapter", () => {
   it("setPassword upserts credential account", async () => {
     const db: any = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg());
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     db.query.account.findFirst.mockResolvedValueOnce(null);
     await adapter.setPassword("u1", "pw");
@@ -514,7 +534,7 @@ describe("BetterAuthAdapter", () => {
     const { betterAuth } = await import("better-auth");
 
     // Instantiate adapter to trigger betterAuth call
-    new BetterAuthAdapter(db, email as any, cfg());
+    new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any);
 
     const callArgs = vi.mocked(betterAuth).mock.calls[0][0] as any;
     expect(callArgs).toBeDefined();
