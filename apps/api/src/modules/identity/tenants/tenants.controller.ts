@@ -50,7 +50,15 @@ export class TenantsController {
 
   @Patch(':id/details')
   @RequirePermission('settings', 'manage')
-  updateDetails(@Param('id') id: string, @Body() body: UpdateTenantDto) {
+  async updateDetails(
+    @Param('id') id: string,
+    @Body() body: UpdateTenantDto,
+    @Req() req: Request & { user: { id: string } },
+  ) {
+    const tenant = await this.tenantProvider.findOneForUser(req.user.id, id);
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
     return this.tenantProvider.update(id, body);
   }
 }

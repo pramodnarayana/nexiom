@@ -89,6 +89,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                             hydrateUser(data, activeTenant);
                             setIsLoading(false);
                             tenantsFound = true;
+                            provisionAttemptsRef.current = 0; // Reset on success
                             return;
                         }
                     } catch (error_) {
@@ -112,6 +113,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                                     if (res.data.length > 0) {
                                         hydrateUser(newData, res.data[0]);
                                         setIsLoading(false);
+                                        provisionAttemptsRef.current = 0; // Reset on success
                                         return;
                                     }
                                 } catch (e) { void e; }
@@ -119,6 +121,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                                 // Or at least hydrate what we have
                                 hydrateUser(newData);
                                 setIsLoading(false);
+                                provisionAttemptsRef.current = 0; // Reset on success
                                 return;
                             }
                         } catch (provError) {
@@ -184,6 +187,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         }
         setToken(undefined);
         setUser(null);
+        provisionAttemptsRef.current = 0; // Reset on logout
         globalThis.location.href = '/';
     }, []);
 

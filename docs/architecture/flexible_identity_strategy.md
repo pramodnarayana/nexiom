@@ -95,8 +95,8 @@ export const PLANS = {
     id: 'enterprise',
     name: 'Enterprise',
     limits: {
-      maxMembers: Infinity,
-      maxProjects: Infinity,
+      maxMembers: Number.MAX_SAFE_INTEGER, // Sentinel for Unlimited
+      maxProjects: Number.MAX_SAFE_INTEGER,
     },
     features: ['basic_auth', 'team_management', 'invite_members', 'sso', 'audit_logs', 'custom_roles'],
   },

@@ -79,7 +79,8 @@ export class BetterAuthAdapter implements IAuthProvider {
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                   user = returned.user as UserInterface;
                 } else if ("token" in returned) {
-                  // Login response
+                  // Login response often mimics the same shape or we assume getting user from it
+                  // However, let's just unify the access if possible
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                   user = returned.user as UserInterface;
                 }
