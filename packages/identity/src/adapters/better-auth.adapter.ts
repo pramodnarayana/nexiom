@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization, admin } from "better-auth/plugins";
 import * as bcrypt from "bcryptjs";
@@ -65,22 +66,22 @@ export class BetterAuthAdapter implements IAuthProvider {
               context.path === "/auth/sign-up/email" ||
               context.path === "/auth/sign-in/email" ||
               (context.path?.startsWith("/auth/callback/") ?? false), // Catches social logins (callback)
-            handler: async (ctx: any) => {
-              // Context response contains the user/session info
+            handler: createAuthMiddleware(async (ctx: any) => {
+              // Context returned contains the user info from the original action
               // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-              const response = ctx.response; // Might be object or Response
+              const returned = ctx.context.returned;
 
               // Helper to parse response if needed (Better Auth inner API returns typed objects usually)
               let user: UserInterface | undefined;
 
-              if (response && typeof response === "object") {
-                if ("user" in response) {
+              if (returned && typeof returned === "object") {
+                if ("user" in returned) {
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                  user = response.user as UserInterface;
-                } else if ("token" in response) {
+                  user = returned.user as UserInterface;
+                } else if ("token" in returned) {
                   // Login response
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                  user = response.user as UserInterface;
+                  user = returned.user as UserInterface;
                 }
               }
 
@@ -107,9 +108,8 @@ export class BetterAuthAdapter implements IAuthProvider {
                 }
               }
 
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-              return { response: ctx.response };
-            },
+              return; // Void return, do not modify response
+            }),
           },
         ],
       },

@@ -79,6 +79,9 @@ const mkTenantProvider = () => ({
   findById: vi.fn(),
   findBySlug: vi.fn(),
   listForUser: vi.fn(),
+  findAllForUser: vi.fn(async () => []),
+  provisionTenantForUser: vi.fn(),
+  findOneForUser: vi.fn(),
 });
 
 const cfg = (

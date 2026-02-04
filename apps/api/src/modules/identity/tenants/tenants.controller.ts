@@ -35,8 +35,7 @@ export class TenantsController {
     @Param('id') id: string,
     @Req() req: Request & { user: { id: string } },
   ) {
-    const myTenants = await this.tenantProvider.findAllForUser(req.user.id);
-    const tenant = myTenants.find((t) => t.id === id);
+    const tenant = await this.tenantProvider.findOneForUser(req.user.id, id);
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }

@@ -24,8 +24,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
     // Owner override
     // Safe check for roleName
-    const roleName = context.roleName ? context.roleName.toLowerCase() : "";
-    if (roleName === "owner" || roleName === "system admin") return true;
+    if (this.isPrivilegedRole(context.roleName)) return true;
 
     // Check permissions
     // 1. Global Wildcard
@@ -66,8 +65,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
       if (context) {
         // 2. Owner/Admin Wildcard
-        const roleName = context.roleName ? context.roleName.toLowerCase() : "";
-        if (roleName === "owner" || roleName === "system admin") {
+        if (this.isPrivilegedRole(context.roleName)) {
           perms.push("*");
         }
 
@@ -137,5 +135,10 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       roleName: first.roleName,
       permissions,
     };
+  }
+
+  private isPrivilegedRole(roleName: string | null | undefined): boolean {
+    const normalize = roleName ? roleName.toLowerCase() : "";
+    return normalize === "owner" || normalize === "system admin";
   }
 }

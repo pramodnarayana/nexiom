@@ -201,6 +201,35 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     }));
   }
 
+  async findOneForUser(
+    userId: string,
+    tenantId: string,
+  ): Promise<(TenantInterface & { memberRole?: string }) | null> {
+    const [row] = await this.db
+      .select({
+        org: schema.organization,
+        roleId: schema.member.roleId,
+      })
+      .from(schema.organization)
+      .innerJoin(
+        schema.member,
+        eq(schema.member.organizationId, schema.organization.id),
+      )
+      .where(
+        and(
+          eq(schema.member.userId, userId),
+          eq(schema.organization.id, tenantId),
+        ),
+      );
+
+    if (!row) return null;
+
+    return {
+      ...this.mapTenant(row.org),
+      memberRole: row.roleId,
+    };
+  }
+
   async findAll(options?: {
     page?: number;
     limit?: number;

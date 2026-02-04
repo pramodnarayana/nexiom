@@ -18,7 +18,7 @@ import { User } from '@nexiom/identity';
 export class PermissionsGuard implements CanActivate {
   private readonly logger = new Logger(PermissionsGuard.name);
 
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredPermissions = this.reflector.getAllAndOverride<
@@ -51,9 +51,12 @@ export class PermissionsGuard implements CanActivate {
       const requiredStrings = requiredPermissions
         .map((r) => `${r.resource}:${r.action}`)
         .join(', ');
-      throw new ForbiddenException(
+
+      this.logger.warn(
         `Missing required permissions: [${requiredStrings}]. User has: [${user.permissions.join(', ')}]`,
       );
+
+      throw new ForbiddenException('Missing required permissions');
     }
 
     return true;

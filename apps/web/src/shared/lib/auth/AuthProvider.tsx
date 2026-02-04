@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { apiClient } from '../api-client';
@@ -26,6 +26,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
+    const provisionAttemptsRef = useRef(0);
 
     const hydrateUser = useCallback((data: { user: unknown; session: { token: string } }, orgContext?: Tenant) => {
         const apiUser = data.user as Record<string, unknown>;
@@ -56,7 +57,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setUser(authUser);
     }, []);
 
-    const refreshSession = useCallback(async (retryCount = 0, shouldSetLoading = true) => {
+    const refreshSession = useCallback(async (shouldSetLoading = true) => {
         // Keep loading true during retries
         if (shouldSetLoading) setIsLoading(true);
 
@@ -90,13 +91,14 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                             tenantsFound = true;
                             return;
                         }
-                    } catch (fetchErr) {
+                    } catch (error_) {
                         // Don't fail completely, try provisioning if really needed
-                        void fetchErr;
+                        void error_;
                     }
 
                     // 4. Fallback: Auto-Provisioning (Only if NO tenants found)
-                    if (!tenantsFound && retryCount < MAX_RETRIES) {
+                    if (!tenantsFound && provisionAttemptsRef.current < MAX_RETRIES) {
+                        provisionAttemptsRef.current += 1;
                         try {
                             await apiClient.post('/auth/provision-tenant');
 
@@ -146,7 +148,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         // Use timeout to avoid "setState in effect" lint error (cascading render warning)
         // Since we are fetching data, this is acceptable.
         const timer = setTimeout(() => {
-            void refreshSession(0, false);
+            void refreshSession(false);
         }, 0);
         return () => clearTimeout(timer);
     }, [refreshSession]);
@@ -182,7 +184,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         }
         setToken(undefined);
         setUser(null);
-        window.location.href = '/';
+        globalThis.location.href = '/';
     }, []);
 
     const value: AuthContextType = useMemo(() => ({
