@@ -8,7 +8,17 @@ import { AuthContext } from './context';
 // Constants
 const MAX_RETRIES = 3;
 
-import type { Tenant } from '@nexiom/identity';
+interface Tenant {
+    id: string;
+    name: string;
+    slug: string;
+    logo?: string | null;
+    status: "active" | "archived" | "suspended";
+    createdAt: Date;
+    updatedAt?: Date;
+    metadata?: Record<string, unknown>;
+    isSystem: boolean;
+}
 
 /**
  * Context Provider for managing Authentication state.
@@ -58,8 +68,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
         try {
             // 1. Check Server Session (Cookies) - Source of Truth
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { data, error: _error } = await authClient.getSession();
+            // Renaming _error to sessionError to check status
+            const { data, error: sessionError } = await authClient.getSession();
 
             if (data) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,8 +149,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                     setIsLoading(false);
                 }
             } else {
-                setToken(undefined);
-                setUser(null);
+                // Handle Session Error / Null Data
+                if (sessionError) {
+                    // Start of Review Fix: Only clear state on 401
+                    if (sessionError.status === 401) {
+                        setToken(undefined);
+                        setUser(null);
+                    } else {
+                        // Log transient error but keep state (optimistic) or just stop loading
+                        console.warn("[AuthProvider] Session error (not 401):", sessionError);
+                    }
+                } else {
+                    // No error but no data -> valid logout/unauthenticated state
+                    setToken(undefined);
+                    setUser(null);
+                }
                 setIsLoading(false);
             }
         } catch (err) {

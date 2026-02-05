@@ -34,9 +34,9 @@ const main = async () => {
 
   console.log('Connecting to DB...');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
-  await client.connect();
 
   try {
+    await client.connect();
     console.log('--- 1. Truncating Tables ---');
     const tables = [
       'role_permission',
@@ -129,14 +129,24 @@ const main = async () => {
       `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('member', 'tenants:read') ON CONFLICT DO NOTHING`,
     );
 
+    // Admin: All non-system permissions
+    for (const p of perms) {
+      if (!p.startsWith('system_')) {
+        await client.query(
+          `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('admin', $1) ON CONFLICT DO NOTHING`,
+          [p],
+        );
+      }
+    }
+
     console.log('--- 3. Seeding User ---');
     const userId = uuidv4();
-    const email = 'pramod.narayana@example.com';
+    const email = 'test.user+e2e@example.com';
 
     await client.query(
       `
             INSERT INTO "user" (id, email, "emailVerified", name, "createdAt", "updatedAt")
-            VALUES ($1, $2, true, 'Pramod Narayana', NOW(), NOW());
+            VALUES ($1, $2, true, 'Test User', NOW(), NOW());
         `,
       [userId, email],
     );
@@ -224,12 +234,24 @@ const main = async () => {
     );
 
     console.log('✅ SEED COMPLETE');
-    console.log(
-      `[Platform Admin] ${email} / ${passwordStart} (Org: Nexiom Platform)`,
-    );
-    console.log(
-      `[Customer User]  ${customerEmail} / password123 (Org: Acme Corp)`,
-    );
+    // Security: Do not log full credentials in CI/Production logs
+    const showCreds = process.env.SHOW_CREDENTIALS === 'true';
+    if (showCreds) {
+      console.log(
+        `[Platform Admin] ${email} / ${passwordStart} (Org: Nexiom Platform)`,
+      );
+      console.log(
+        `[Customer User]  ${customerEmail} / password123 (Org: Acme Corp)`,
+      );
+    } else {
+      console.log(
+        `[Platform Admin] ${email} / ******** (Org: Nexiom Platform)`,
+      );
+      console.log(
+        `[Customer User]  ${customerEmail} / ******** (Org: Acme Corp)`,
+      );
+      console.log('(Set SHOW_CREDENTIALS=true to view passwords)');
+    }
   } catch (error) {
     console.error('Seed failed:', error);
     process.exit(1);

@@ -103,7 +103,7 @@ export class BetterAuthAdapter implements IAuthProvider {
               return (
                 path.endsWith("/sign-up/email") ||
                 path.endsWith("/sign-in/email") ||
-                path.includes("/callback/")
+                path.startsWith("/callback/")
               );
             },
             // NOTE: ctx is typed as 'any' because better-auth does not export typed middleware context.

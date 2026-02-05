@@ -25,16 +25,13 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@nexiom/identity": [
-        "../../packages/identity/src/index.ts"
       ]
     },
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": false,
+    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
