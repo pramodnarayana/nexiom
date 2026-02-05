@@ -221,6 +221,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
         eq(schema.member.organizationId, schema.organization.id),
       )
       .where(and(...conditions))
+      .orderBy(desc(schema.organization.createdAt))
       .limit(1);
 
     if (!row) return null;
