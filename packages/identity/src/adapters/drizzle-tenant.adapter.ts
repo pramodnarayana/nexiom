@@ -203,8 +203,13 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
   async findOneForUser(
     userId: string,
-    tenantId: string,
+    tenantId?: string,
   ): Promise<(TenantInterface & { memberRole?: string }) | null> {
+    const conditions = [eq(schema.member.userId, userId)];
+    if (tenantId) {
+      conditions.push(eq(schema.organization.id, tenantId));
+    }
+
     const [row] = await this.db
       .select({
         org: schema.organization,
@@ -215,12 +220,8 @@ export class DrizzleTenantAdapter implements ITenantProvider {
         schema.member,
         eq(schema.member.organizationId, schema.organization.id),
       )
-      .where(
-        and(
-          eq(schema.member.userId, userId),
-          eq(schema.organization.id, tenantId),
-        ),
-      );
+      .where(and(...conditions))
+      .limit(1);
 
     if (!row) return null;
 

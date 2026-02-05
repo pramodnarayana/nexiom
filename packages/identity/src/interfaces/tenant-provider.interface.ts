@@ -27,7 +27,7 @@ export interface ITenantProvider {
 
   findOneForUser(
     userId: string,
-    tenantId: string,
+    tenantId?: string,
   ): Promise<(Tenant & { memberRole?: string }) | null>;
 
   findAll(options?: {
