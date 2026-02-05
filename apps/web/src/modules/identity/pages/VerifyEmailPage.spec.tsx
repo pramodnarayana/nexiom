@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { VerifyEmailPage } from './VerifyEmailPage';
 
 // Mock useNavigate and useSearchParams
-// Mock useNavigate and useSearchParams
 const mockNavigate = vi.fn();
 // Mutable reference to search params for the current test
 let currentSearchParams = new URLSearchParams();

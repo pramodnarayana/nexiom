@@ -1,6 +1,6 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and } from "drizzle-orm";
-import {
+import type {
   IPermissionProvider,
   PermissionAction,
   PermissionResource,
@@ -23,7 +23,8 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     if (!context) return false;
 
     // Owner override
-    if (context.roleName === "Owner") return true;
+    // Safe check for roleName
+    if (this.isPrivilegedRole(context.roleName)) return true;
 
     // Check permissions
     // 1. Global Wildcard
@@ -59,14 +60,12 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
   async getPermissions(user: User, tenantId?: string): Promise<string[]> {
     const perms: string[] = [];
 
-    // 1. Super Admin Wildcard
-
     if (tenantId) {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // 2. Owner Wildcard
-        if (context.roleName === "Owner") {
+        // 2. Owner/Admin Wildcard
+        if (this.isPrivilegedRole(context.roleName)) {
           perms.push("*");
         }
 
@@ -136,5 +135,10 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       roleName: first.roleName,
       permissions,
     };
+  }
+
+  private isPrivilegedRole(roleName: string | null | undefined): boolean {
+    const normalize = roleName ? roleName.toLowerCase() : "";
+    return normalize === "owner" || normalize === "system admin";
   }
 }

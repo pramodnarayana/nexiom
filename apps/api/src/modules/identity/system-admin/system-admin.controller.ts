@@ -21,6 +21,7 @@ import {
   TENANT_PROVIDER,
   ITenantProvider,
   DEFAULT_SYSTEM_ROLE_ID,
+  SYSTEM_TENANT_ID,
 } from '@nexiom/identity';
 import {
   CreateTenantValidation,
@@ -208,7 +209,8 @@ export class SystemAdminController {
     const result = await this.userProvider.findAll({
       page: p,
       limit,
-    }); // No tenantId -> Global list
+      tenantId: SYSTEM_TENANT_ID, // Scope to System Tenant (Platform Admins only)
+    });
 
     return result; // Envelope { data, total } matches
   }

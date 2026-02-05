@@ -1,4 +1,4 @@
-import { Tenant } from "./types";
+import type { Tenant } from "./types";
 
 export interface UpdateTenantInput {
   name?: string;
@@ -24,6 +24,11 @@ export interface ITenantProvider {
   delete(id: string): Promise<void>;
 
   findAllForUser(userId: string): Promise<(Tenant & { memberRole?: string })[]>;
+
+  findOneForUser(
+    userId: string,
+    tenantId?: string,
+  ): Promise<(Tenant & { memberRole?: string }) | null>;
 
   findAll(options?: {
     page?: number;

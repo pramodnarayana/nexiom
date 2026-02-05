@@ -80,6 +80,7 @@ describe('SystemAdminController', () => {
       expect(mockUserProvider.findAll).toHaveBeenCalledWith({
         page: 1,
         limit: 10,
+        tenantId: '00000000-0000-0000-0000-000000000000',
       });
     });
 
@@ -91,6 +92,7 @@ describe('SystemAdminController', () => {
       expect(mockUserProvider.findAll).toHaveBeenCalledWith({
         page: 1,
         limit: 10,
+        tenantId: '00000000-0000-0000-0000-000000000000',
       });
     });
   });

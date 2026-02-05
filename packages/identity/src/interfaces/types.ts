@@ -25,6 +25,7 @@ export interface Tenant {
   createdAt: Date;
   updatedAt?: Date; // Optional as not critical for all projections
   metadata?: Record<string, any>;
+  isSystem?: boolean;
 }
 
 export interface Session {

@@ -1,7 +1,7 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import {
+import type {
   ITenantProvider,
   Tenant as TenantInterface,
   UpdateTenantInput,
@@ -201,6 +201,40 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     }));
   }
 
+  async findOneForUser(
+    userId: string,
+    tenantId?: string,
+  ): Promise<(TenantInterface & { memberRole?: string }) | null> {
+    const conditions = [eq(schema.member.userId, userId)];
+    if (tenantId) {
+      conditions.push(eq(schema.organization.id, tenantId));
+    }
+
+    const [row] = await this.db
+      .select({
+        org: schema.organization,
+        roleId: schema.member.roleId,
+      })
+      .from(schema.organization)
+      .innerJoin(
+        schema.member,
+        eq(schema.member.organizationId, schema.organization.id),
+      )
+      .where(and(...conditions))
+      .orderBy(
+        desc(schema.organization.createdAt),
+        desc(schema.organization.id),
+      )
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      ...this.mapTenant(row.org),
+      memberRole: row.roleId,
+    };
+  }
+
   async findAll(options?: {
     page?: number;
     limit?: number;
@@ -292,6 +326,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
           return undefined;
         }
       })(),
+      isSystem: dbOrg.isSystem,
     };
   }
 }

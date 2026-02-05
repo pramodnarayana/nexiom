@@ -168,6 +168,7 @@ export const organization = pgTable("organization", {
     .$onUpdate(() => new Date()),
   metadata: text("metadata"),
   status: organizationStatusEnum("status").default("active").notNull(),
+  isSystem: boolean("isSystem").default(false).notNull(),
   deletedAt: timestamp("deletedAt"),
 });
 

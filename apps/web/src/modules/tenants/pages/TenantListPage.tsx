@@ -40,16 +40,19 @@ export const TenantListPage = () => {
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     // Transform API response to UI model
-    const tenants: TenantTableItem[] = data?.data?.map((org: TenantApiResponse) => ({
-        id: org.id,
-        name: org.name,
-        slug: org.slug,
-        logo: org.logo,
-        createdAt: new Date(org.createdAt),
-        updatedAt: new Date(org.updatedAt || org.createdAt), // Handle missing updatedAt if any
-        metadata: org.metadata,
-        status: org.status,
-    })) || [];
+    const tenants: TenantTableItem[] = data?.data?.map((org: TenantApiResponse) => {
+        return {
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+            logo: org.logo,
+            createdAt: new Date(org.createdAt),
+            updatedAt: new Date(org.updatedAt || org.createdAt), // Handle missing updatedAt if any
+            metadata: org.metadata,
+            status: org.status,
+            isSystem: org.isSystem,
+        };
+    }) || [];
 
     const handleEdit = (tenant: TenantTableItem) => {
         navigate(`/admin/tenants/${tenant.id}`);

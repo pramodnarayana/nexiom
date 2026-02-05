@@ -1,11 +1,10 @@
-import {
+import type {
   DynamicModule,
-  Module,
-  Provider,
-  Global,
-  Type,
   ModuleMetadata,
+  Provider,
+  Type,
 } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   AUTH_PROVIDER,
@@ -16,12 +15,16 @@ import {
 } from "./constants";
 import {
   BetterAuthAdapter,
-  BetterAuthAdapterConfig,
+  type BetterAuthAdapterConfig,
 } from "./adapters/better-auth.adapter";
 import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
 import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
-import { IAuthProvider, IEmailProvider } from "./interfaces";
+import type {
+  IAuthProvider,
+  IEmailProvider,
+  ITenantProvider,
+} from "./interfaces";
 import * as schema from "./schema";
 
 export interface IdentityModuleOptions {
@@ -51,14 +54,16 @@ export class IdentityModule {
       useFactory: (
         db: NodePgDatabase<typeof schema>,
         emailService: IEmailProvider,
+        tenantProvider: ITenantProvider,
       ) => {
         return new BetterAuthAdapter(
           db,
           emailService,
           options.betterAuthConfig,
+          tenantProvider,
         );
       },
-      inject: [options.dbToken, options.emailToken],
+      inject: [options.dbToken, options.emailToken, TENANT_PROVIDER],
     };
 
     const userProvider: Provider = {
@@ -137,15 +142,19 @@ export class IdentityModule {
         },
         {
           provide: AUTH_PROVIDER,
-          useFactory: (identityOptions: IdentityModuleOptions) => {
+          useFactory: (
+            identityOptions: IdentityModuleOptions,
+            tenantProvider: ITenantProvider,
+          ) => {
             // Validated in IDENTITY_OPTIONS factory
             return new BetterAuthAdapter(
               identityOptions.db!,
               identityOptions.email!,
               identityOptions.betterAuthConfig,
+              tenantProvider,
             );
           },
-          inject: [IDENTITY_OPTIONS],
+          inject: [IDENTITY_OPTIONS, TENANT_PROVIDER],
         },
         {
           provide: USER_PROVIDER,

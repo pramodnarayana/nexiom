@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
@@ -17,7 +18,7 @@ import { User } from '@nexiom/identity';
 export class PermissionsGuard implements CanActivate {
   private readonly logger = new Logger(PermissionsGuard.name);
 
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
     const requiredPermissions = this.reflector.getAllAndOverride<
@@ -39,12 +40,26 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user.permissions) {
       this.logger.warn(`User ${user.id} has no permissions loaded`);
-      return false;
+      throw new ForbiddenException('User has no permissions assigned');
     }
 
-    return requiredPermissions.some((required) =>
+    const hasPerm = requiredPermissions.some((required) =>
       this.hasPermission(user.permissions, required),
     );
+
+    if (!hasPerm) {
+      const requiredStrings = requiredPermissions
+        .map((r) => `${r.resource}:${r.action}`)
+        .join(', ');
+
+      this.logger.warn(
+        `Missing required permissions: [${requiredStrings}]. User has: [${user.permissions.join(', ')}]`,
+      );
+
+      throw new ForbiddenException('Missing required permissions');
+    }
+
+    return true;
   }
 
   private hasPermission(

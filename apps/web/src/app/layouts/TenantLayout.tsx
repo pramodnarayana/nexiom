@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/shared/lib/auth/context';
 import { Sidebar } from '@/shared/components/layout/Sidebar';
 import { Navbar } from '@/shared/components/layout/Navbar';
+import { useOrganization } from '@/modules/identity/hooks/useOrganization';
 
 import { type AuthContextValue } from '@/shared/components/layout/types';
 
@@ -21,10 +22,16 @@ interface DashboardLayoutProps {
     basePath?: string; // e.g. /admin or /dashboard
 }
 
-export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
+export function TenantLayout({ title, navGroups }: Readonly<DashboardLayoutProps>) {
     const { user, isAuthenticated, logout, isLoading } = useAuth() as AuthContextValue;
-
     const navigate = useNavigate();
+
+    // Move Hook to top-level (Unconditional)
+    // We pass user?.organizationId safely. Hook handles undefined.
+    const { data: org } = useOrganization(user?.organizationId);
+
+    // Derived state
+    const orgName = org?.name || user?.organizationName || "My Organization";
 
     useEffect(() => {
         if (isLoading) return;
@@ -44,10 +51,10 @@ export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
     const headerContent = (
         <div className="flex items-center gap-2 mb-1">
             <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-lg shadow-sm">
-                {user.organizationName?.charAt(0).toUpperCase() || 'O'}
+                {orgName.charAt(0).toUpperCase()}
             </div>
             <span className="text-xl font-bold text-foreground tracking-tight truncate">
-                {user.organizationName || "My Organization"}
+                {orgName}
             </span>
         </div>
     );

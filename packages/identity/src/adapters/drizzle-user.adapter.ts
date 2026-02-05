@@ -1,6 +1,6 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
-import {
+import type {
   IUserProvider,
   CreateUserInput,
   UpdateUserInput,

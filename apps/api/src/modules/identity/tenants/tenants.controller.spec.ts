@@ -11,6 +11,8 @@ describe('TenantsController', () => {
   const mockTenantProvider = {
     findAllForUser: vi.fn(),
     updateStatus: vi.fn(),
+    findOneForUser: vi.fn(),
+    update: vi.fn(),
   };
 
   const mockAuthGuard = {
@@ -76,6 +78,85 @@ describe('TenantsController', () => {
         id,
         status.status,
       );
+    });
+  });
+
+  describe('findOne', () => {
+    it('should return a tenant for the user', async () => {
+      const tenant = {
+        id: '1',
+        name: 'Test Org',
+        slug: 'test-org',
+        logo: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: undefined,
+        status: 'active' as const,
+      };
+      mockTenantProvider.findOneForUser.mockResolvedValue(tenant);
+
+      const req = { user: { id: 'user-1' } } as unknown as Request & {
+        user: { id: string };
+      };
+      expect(await controller.findOne('1', req)).toBe(tenant);
+      expect(mockTenantProvider.findOneForUser).toHaveBeenCalledWith(
+        'user-1',
+        '1',
+      );
+    });
+
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockTenantProvider.findOneForUser.mockResolvedValue(null);
+
+      const req = { user: { id: 'user-1' } } as unknown as Request & {
+        user: { id: string };
+      };
+      await expect(controller.findOne('1', req)).rejects.toThrow(
+        'Tenant not found',
+      );
+    });
+  });
+
+  describe('updateDetails', () => {
+    it('should update tenant details', async () => {
+      const tenant = {
+        id: '1',
+        name: 'Test Org',
+        slug: 'test-org',
+        logo: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: undefined,
+        status: 'active' as const,
+      };
+      const updateDto = { name: 'Updated Org' };
+      const updatedTenant = { ...tenant, name: 'Updated Org' };
+
+      mockTenantProvider.findOneForUser.mockResolvedValue(tenant);
+      mockTenantProvider.update.mockResolvedValue(updatedTenant);
+
+      const req = { user: { id: 'user-1' } } as unknown as Request & {
+        user: { id: string };
+      };
+      expect(await controller.updateDetails('1', updateDto, req)).toBe(
+        updatedTenant,
+      );
+      expect(mockTenantProvider.findOneForUser).toHaveBeenCalledWith(
+        'user-1',
+        '1',
+      );
+      expect(mockTenantProvider.update).toHaveBeenCalledWith('1', updateDto);
+    });
+
+    it('should throw NotFoundException if tenant not found', async () => {
+      mockTenantProvider.findOneForUser.mockResolvedValue(null);
+
+      const req = { user: { id: 'user-1' } } as unknown as Request & {
+        user: { id: string };
+      };
+      await expect(
+        controller.updateDetails('1', { name: 'Updated' }, req),
+      ).rejects.toThrow('Tenant not found');
     });
   });
 });

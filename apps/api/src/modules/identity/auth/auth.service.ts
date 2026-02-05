@@ -65,6 +65,8 @@ export class AuthService {
     session: Session;
     user: User & {
       organizationId?: string;
+      organizationName?: string;
+      organizationSlug?: string;
       hasTenant: boolean;
       permissions: string[];
     };
@@ -83,6 +85,12 @@ export class AuthService {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const hasTenant = sortedTenants.length > 0;
     const organizationId = hasTenant ? sortedTenants[0].id : undefined;
+    const organizationName = hasTenant
+      ? (sortedTenants[0].name ?? undefined)
+      : undefined;
+    const organizationSlug = hasTenant
+      ? (sortedTenants[0].slug ?? undefined)
+      : undefined;
 
     // Fetch Permissions
     // If we have an organization context, fetch permissions for that tenant
@@ -130,6 +138,8 @@ export class AuthService {
       user: {
         ...user,
         organizationId,
+        organizationName,
+        organizationSlug,
         hasTenant,
         permissions,
       },

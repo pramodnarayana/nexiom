@@ -59,6 +59,7 @@ describe("DrizzleTenantAdapter", () => {
     updatedAt: now,
     deletedAt: null,
     metadata: null,
+    isSystem: false,
     ...overrides,
   });
 

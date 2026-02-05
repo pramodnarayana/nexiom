@@ -31,6 +31,7 @@ export default defineConfig({
                 'src/**/*.mock.ts',
                 'src/scripts/**',
                 'src/db/seed.ts',
+                'src/db/reset-e2e.ts',
                 'src/db/truncate.ts',
                 'src/db/verify.ts',
                 'src/db/db.provider.ts',

@@ -7,6 +7,7 @@ export interface TenantTableItem {
     updatedAt: Date;
     metadata: string | null;
     status: 'active' | 'disabled' | 'suspended';
+    isSystem: boolean;
 }
 
 export interface TenantApiResponse {
@@ -18,4 +19,5 @@ export interface TenantApiResponse {
     updatedAt: string;
     metadata: string | null;
     status: 'active' | 'disabled' | 'suspended';
+    isSystem: boolean;
 }
