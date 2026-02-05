@@ -53,6 +53,7 @@ describe('ForgotPasswordPage', () => {
     });
 
     it('handles submission error', async () => {
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
         (authClient.requestPasswordReset as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Network error'));
 
         renderComponent();
@@ -66,5 +67,6 @@ describe('ForgotPasswordPage', () => {
         await waitFor(() => {
             expect(screen.getByText('Network error')).toBeInTheDocument();
         });
+        consoleSpy.mockRestore();
     });
 });

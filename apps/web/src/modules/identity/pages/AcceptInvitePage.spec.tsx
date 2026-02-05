@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { AcceptInvitePage } from './AcceptInvitePage';
 import { useAuth } from '@/shared/hooks/useAuth';
@@ -17,14 +17,14 @@ vi.mock('react-router-dom', () => ({
 // Mock UI components (shallow render mostly, but since we use happy-dom, full render is fine)
 // Card etc are just divs usually.
 
-// Setup global fetch mock
-global.fetch = vi.fn();
+// Global fetch mock will be setup per-test in beforeEach
 
 describe('AcceptInvitePage', () => {
     const mockNavigate = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.stubGlobal('fetch', vi.fn());
         (useNavigate as unknown as Mock).mockReturnValue(mockNavigate);
         (useAuth as unknown as Mock).mockReturnValue({
             user: null,
@@ -35,10 +35,14 @@ describe('AcceptInvitePage', () => {
         (useSearchParams as unknown as Mock).mockReturnValue([new URLSearchParams('id=123')]);
 
         // Default fetch success
-        (global.fetch as Mock).mockResolvedValue({
+        (globalThis.fetch as Mock).mockResolvedValue({
             ok: true,
             json: async () => ({}),
         });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('renders error state when invite ID is missing', () => {
@@ -87,7 +91,7 @@ describe('AcceptInvitePage', () => {
 
         // Should call fetch
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 expect.stringContaining('/invitations/accept'),
                 expect.objectContaining({
                     method: 'POST',
@@ -106,24 +110,32 @@ describe('AcceptInvitePage', () => {
     });
 
     it('proceeds to dashboard even if silent accept fails (idempotency)', async () => {
-        (useAuth as unknown as Mock).mockReturnValue({
-            user: { id: 'u1' },
-            isLoading: false,
-            token: 'valid-token'
-        });
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
-        (global.fetch as Mock).mockRejectedValueOnce(new Error('Network Error'));
+        try {
+            (useAuth as unknown as Mock).mockReturnValue({
+                user: { id: 'u1' },
+                isLoading: false,
+                token: 'valid-token'
+            });
 
-        render(<AcceptInvitePage />);
+            (globalThis.fetch as Mock).mockRejectedValueOnce(new Error('Network Error'));
 
-        await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalled();
-        });
+            render(<AcceptInvitePage />);
 
-        // Still navigates
-        await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
-        });
+            await waitFor(() => {
+                expect(globalThis.fetch).toHaveBeenCalled();
+            });
+
+            // Still navigates
+            await waitFor(() => {
+                expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+            });
+        } finally {
+            consoleErrorSpy.mockRestore();
+            consoleWarnSpy.mockRestore();
+        }
     });
 
     it('waits for loading state before acting', () => {
@@ -138,6 +150,6 @@ describe('AcceptInvitePage', () => {
         // Should NOT navigate yet
         expect(mockNavigate).not.toHaveBeenCalled();
         // Should NOT fetch
-        expect(global.fetch).not.toHaveBeenCalled();
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 });

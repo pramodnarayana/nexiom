@@ -115,12 +115,16 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                                 try {
                                     const res = await apiClient.get<Tenant[]>('/tenants');
                                     if (res.data.length > 0) {
-                                        hydrateUser(newData, res.data[0]);
+                                        // Sort by createdAt (newest first) to match tenant selection logic
+                                        const sorted = [...res.data].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                                        hydrateUser(newData, sorted[0]);
                                         setIsLoading(false);
                                         provisionAttemptsRef.current = 0; // Reset on success
                                         return;
                                     }
-                                } catch (e) { void e; }
+                                } catch (e) {
+                                    console.error('Failed to refetch tenants after provisioning:', e);
+                                }
 
                                 // Or at least hydrate what we have
                                 hydrateUser(newData);
@@ -158,8 +162,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
     // Init
     useEffect(() => {
-        // Use timeout to avoid "setState in effect" lint error (cascading render warning)
-        // Since we are fetching data, this is acceptable.
+        // Defer refreshSession to next tick to avoid Strict Mode double-invoke issues
+        // and ensure proper timing with hydration cycle.
         const timer = setTimeout(() => {
             void refreshSession(false);
         }, 0);

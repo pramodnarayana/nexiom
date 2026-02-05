@@ -106,6 +106,9 @@ export class BetterAuthAdapter implements IAuthProvider {
                 path.includes("/callback/")
               );
             },
+            // NOTE: ctx is typed as 'any' because better-auth does not export typed middleware context.
+            // The middleware context structure is internal and may change between versions.
+            // See: https://github.com/better-auth/better-auth/issues (tracking typed middleware support)
             handler: createAuthMiddleware(async (ctx: any) => {
               // Context returned contains the user info from the original action
               // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment

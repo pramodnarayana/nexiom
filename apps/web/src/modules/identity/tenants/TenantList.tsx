@@ -63,8 +63,9 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
     const showActions = canManage?.can;
 
     const filteredData = data?.filter(tenant =>
-        tenant.name.toLowerCase().includes(search.toLowerCase()) ||
-        tenant.slug?.toLowerCase().includes(search.toLowerCase())
+        (tenant.name.toLowerCase().includes(search.toLowerCase()) ||
+            tenant.slug?.toLowerCase().includes(search.toLowerCase())) &&
+        !tenant.isSystem // Hide System Tenant (Enterprise Architecture)
     ) || [];
 
     if (isLoading) {

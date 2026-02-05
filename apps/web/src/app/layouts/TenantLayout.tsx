@@ -22,7 +22,7 @@ interface DashboardLayoutProps {
     basePath?: string; // e.g. /admin or /dashboard
 }
 
-export function TenantLayout({ title, navGroups }: DashboardLayoutProps) {
+export function TenantLayout({ title, navGroups }: Readonly<DashboardLayoutProps>) {
     const { user, isAuthenticated, logout, isLoading } = useAuth() as AuthContextValue;
     const navigate = useNavigate();
 

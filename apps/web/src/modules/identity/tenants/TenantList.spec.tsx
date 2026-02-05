@@ -59,6 +59,7 @@ describe('TenantList Component', () => {
             createdAt: new Date('2023-01-01'),
             metadata: null,
             updatedAt: new Date(),
+            isSystem: false,
         },
         {
             id: '2',
@@ -69,6 +70,7 @@ describe('TenantList Component', () => {
             createdAt: new Date('2023-02-01'),
             metadata: null,
             updatedAt: new Date(),
+            isSystem: false,
         }
     ];
 

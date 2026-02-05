@@ -32,25 +32,8 @@ describe("IdentityModule.register", () => {
     const mod: DynamicModule = IdentityModule.register(opts);
 
     expect(mod.module).toBe(IdentityModule);
-    // providers include all 4
+    // Verify all expected providers are registered
     const providers = (mod.providers || []) as FactoryProvider[];
-
-    // Execute synchronous factories too
-    for (const p of providers) {
-      if (typeof p.useFactory === "function") {
-        try {
-          if (p.inject?.includes(TENANT_PROVIDER)) {
-            p.useFactory({}, {}, {});
-          } else if (p.inject?.includes(AUTH_PROVIDER)) {
-            p.useFactory({}, {});
-          } else {
-            p.useFactory({});
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
 
     const tokens = providers.map((p) => p.provide);
     expect(tokens).toContain(AUTH_PROVIDER);
@@ -81,7 +64,7 @@ describe("IdentityModule.register", () => {
     expect(permProv?.inject).toEqual([opts.dbToken]);
   });
 
-  it("registerAsync wires providers correctly", async () => {
+  it("registerAsync wires providers correctly", () => {
     const opts = mkOptions();
     const mod = IdentityModule.registerAsync({
       imports: [],
@@ -97,32 +80,8 @@ describe("IdentityModule.register", () => {
     expect(mod.module).toBe(IdentityModule);
     expect(mod.providers).toBeDefined();
     expect(mod.providers?.length).toBeGreaterThan(0);
+    // Verify exported providers
     expect(mod.exports).toContain(AUTH_PROVIDER);
-
-    // Execute factories to increase coverage
-    const asyncProviders = (mod.providers || []) as FactoryProvider[];
-
-    for (const p of asyncProviders) {
-      if (typeof p.useFactory === "function") {
-        try {
-          if (p.inject?.includes(TENANT_PROVIDER)) {
-            // Auth provider factory
-            p.useFactory(
-              { db: {}, email: {}, betterAuthConfig: opts.betterAuthConfig },
-              {},
-            );
-          } else if (p.inject?.includes(AUTH_PROVIDER)) {
-            // User provider
-            p.useFactory({ db: {} }, {});
-          } else {
-            // Tenant/Perm or Options
-            await p.useFactory();
-          }
-        } catch {
-          // ignore, just trying to hit lines
-        }
-      }
-    }
   });
 
   it("registerAsync throws if db or email missing in options", async () => {
@@ -136,11 +95,17 @@ describe("IdentityModule.register", () => {
       inject: [],
     });
 
-    // In compiled output it might differ, but let's assume index 0 based on implementation
-    const provider = (mod.providers as FactoryProvider[])[0];
+    // Find the options provider by token instead of index-based access
+    const providers = mod.providers as FactoryProvider[];
+    const optionsProvider = providers.find(
+      (p) => p.provide === "IDENTITY_OPTIONS",
+    );
 
+    expect(optionsProvider).toBeDefined();
     // We expect the factory to throw
-    await expect(provider.useFactory()).rejects.toThrow("must be provided");
+    await expect(optionsProvider!.useFactory()).rejects.toThrow(
+      "must be provided",
+    );
   });
 
   it("registerAsync handles default imports/inject", () => {

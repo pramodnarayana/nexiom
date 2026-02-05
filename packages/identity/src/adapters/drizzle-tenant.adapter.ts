@@ -321,6 +321,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
           return undefined;
         }
       })(),
+      isSystem: dbOrg.isSystem,
     };
   }
 }
