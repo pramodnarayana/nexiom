@@ -98,7 +98,7 @@ describe("IdentityModule.register", () => {
     // Find the options provider by token instead of index-based access
     const providers = mod.providers as FactoryProvider[];
     const optionsProvider = providers.find(
-      (p) => p.provide === "IDENTITY_OPTIONS",
+      (p) => p.provide === IDENTITY_OPTIONS,
     );
 
     expect(optionsProvider).toBeDefined();

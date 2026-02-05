@@ -134,5 +134,13 @@ describe('accessControlProvider', () => {
 
             expect(authUtils.hasPermission).toHaveBeenCalledWith(['users:manage'], 'users', 'manage');
         });
+
+        it('should propagate errors from authProvider.getPermissions', async () => {
+            vi.mocked(authProvider.getPermissions!).mockRejectedValue(new Error('Session expired'));
+
+            await expect(
+                accessControlProvider.can({ resource: 'users', action: 'read' })
+            ).rejects.toThrow('Session expired');
+        });
     });
 });

@@ -13,6 +13,25 @@ const main = async () => {
     process.exit(1);
   }
 
+  // Production safeguard
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.DATABASE_URL.includes('prod') ||
+    process.env.DATABASE_URL.includes('rds.amazonaws.com')
+  ) {
+    if (process.env.FORCE_RESET !== 'true') {
+      console.error(
+        'FATAL: Attempting to run reset-e2e against production database!',
+      );
+      console.error('This operation would destroy all production data.');
+      console.error('If you absolutely must proceed, set FORCE_RESET=true');
+      process.exit(1);
+    }
+    console.warn(
+      'WARNING: FORCE_RESET=true detected, proceeding with production reset...',
+    );
+  }
+
   console.log('Connecting to DB...');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -35,8 +54,9 @@ const main = async () => {
     for (const table of tables) {
       try {
         await client.query(`TRUNCATE TABLE "${table}" CASCADE;`);
-      } catch (_e) {
-        console.log(`Skipped ${table} (maybe empty or missing)`);
+      } catch (e) {
+        console.error(`Error truncating table "${table}":`, e);
+        console.log(`Skipped ${table} - check permissions or table existence`);
       }
     }
 
@@ -63,7 +83,6 @@ const main = async () => {
       'tenants:update',
       'tenants:delete',
       'tenants:manage',
-      'dashboard:read',
       'dashboard:read',
       'admin_dashboard:view', // Required for Redirect to /admin
       'settings:manage',
@@ -112,7 +131,7 @@ const main = async () => {
 
     console.log('--- 3. Seeding User ---');
     const userId = uuidv4();
-    const email = 'pramod.narayana@gmail.com';
+    const email = 'pramod.narayana@example.com';
 
     await client.query(
       `
@@ -162,15 +181,7 @@ const main = async () => {
 
     // 6a. Platform Admin Access (System Context)
     const sysMemberId = uuidv4();
-    // Ensure platform_admin role exists or use 'owner' for now if not in seed
-    // We'll use 'owner' in system tenant as proxy for Super Admin if platform_admin isn't in DB yet
-    // Checking roles... we inserted owner/admin/member.
-    // Let's add platform_admin to role table first just in case
-    await client.query(`
-            INSERT INTO "role" (id, name, "isSystem", description, "createdAt") 
-            VALUES ('platform_admin', 'Platform Admin', true, 'System Root Access', NOW())
-            ON CONFLICT DO NOTHING;
-        `);
+    // Note: platform_admin role already seeded in step 2 (roles: owner, admin, member, platform_admin)
 
     await client.query(
       `

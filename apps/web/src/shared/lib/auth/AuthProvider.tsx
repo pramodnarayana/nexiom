@@ -150,7 +150,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             console.error("[AuthProvider] refreshSession Failure", err);
 
             // Only clear auth state on explicit Unauthorized errors
-            const errorStatus = (err as { status?: number; statusCode?: number })?.status || (err as { status?: number; statusCode?: number })?.statusCode;
+            // Check Axios error format first, then fall back to generic error formats
+            const errorStatus = (err as { response?: { status?: number } })?.response?.status ||
+                (err as { status?: number; statusCode?: number })?.status ||
+                (err as { status?: number; statusCode?: number })?.statusCode;
             if (errorStatus === 401) {
                 setToken(undefined);
                 setUser(null);
