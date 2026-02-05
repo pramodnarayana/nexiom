@@ -8,8 +8,8 @@ import { eq, and } from "drizzle-orm";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
 
-import { ITenantProvider } from "../interfaces/tenant-provider.interface";
-import {
+import type { ITenantProvider } from "../interfaces/tenant-provider.interface";
+import type {
   IAuthProvider,
   LoginCredentials,
   CreateInvitationInput,
@@ -18,11 +18,11 @@ import {
   Session,
   User as UserInterface,
 } from "../interfaces";
-import { CreateUserInput } from "../interfaces/user-provider.interface";
+import type { CreateUserInput } from "../interfaces/user-provider.interface";
 import { SYSTEM_TENANT_ID } from "../constants";
-import { IEmailProvider } from "../interfaces/email-provider.interface";
+import type { IEmailProvider } from "../interfaces/email-provider.interface";
 import * as schema from "../schema";
-import { IncomingHttpHeaders } from "node:http";
+import type { IncomingHttpHeaders } from "node:http";
 
 export interface BetterAuthAdapterConfig {
   allowedOrigins: string[];

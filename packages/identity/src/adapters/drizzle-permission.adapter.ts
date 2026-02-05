@@ -1,6 +1,6 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and } from "drizzle-orm";
-import {
+import type {
   IPermissionProvider,
   PermissionAction,
   PermissionResource,

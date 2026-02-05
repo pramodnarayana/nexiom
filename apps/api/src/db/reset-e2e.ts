@@ -2,7 +2,7 @@ import { Client } from 'pg';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Load .env from apps/api root
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -195,7 +195,7 @@ const main = async () => {
     // STRICT: One User One Org. Pramod is Platform Admin ONLY.
     // We create a separate user for the customer tenant.
     const customerUserId = uuidv4();
-    const customerEmail = 'customer@acme.com';
+    const customerEmail = 'customer@example.com';
 
     await client.query(
       `

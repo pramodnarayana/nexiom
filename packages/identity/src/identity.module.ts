@@ -1,11 +1,10 @@
-import {
+import type {
   DynamicModule,
-  Module,
-  Provider,
-  Global,
-  Type,
   ModuleMetadata,
+  Provider,
+  Type,
 } from "@nestjs/common";
+import { Global, Module } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   AUTH_PROVIDER,
@@ -16,12 +15,16 @@ import {
 } from "./constants";
 import {
   BetterAuthAdapter,
-  BetterAuthAdapterConfig,
+  type BetterAuthAdapterConfig,
 } from "./adapters/better-auth.adapter";
 import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
 import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
-import { IAuthProvider, IEmailProvider, ITenantProvider } from "./interfaces";
+import type {
+  IAuthProvider,
+  IEmailProvider,
+  ITenantProvider,
+} from "./interfaces";
 import * as schema from "./schema";
 
 export interface IdentityModuleOptions {

@@ -25,7 +25,7 @@ export interface AuthContextType {
     token?: string;
 
     // Actions
-    login: (data: { accessToken: string; user: unknown }) => void;
+    login: (data: { accessToken: string; user: unknown }) => Promise<void>;
     signup: () => void;
     logout: () => void;
 

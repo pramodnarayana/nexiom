@@ -8,12 +8,7 @@ import { AuthContext } from './context';
 // Constants
 const MAX_RETRIES = 3;
 
-interface Tenant {
-    id: string;
-    name: string;
-    slug?: string;
-    createdAt: string;
-}
+import type { Tenant } from '@nexiom/identity';
 
 /**
  * Context Provider for managing Authentication state.
@@ -116,8 +111,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                                     const res = await apiClient.get<Tenant[]>('/tenants');
                                     if (res.data.length > 0) {
                                         // Sort by createdAt (newest first) to match tenant selection logic
-                                        const sorted = [...res.data].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                                        hydrateUser(newData, sorted[0]);
+                                        // Handle parsing date string from API vs Date object in type
+                                        const sorted = [...res.data].sort((a, b) =>
+                                            new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()
+                                        ); hydrateUser(newData, sorted[0]);
                                         setIsLoading(false);
                                         provisionAttemptsRef.current = 0; // Reset on success
                                         return;
@@ -173,7 +170,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return () => clearTimeout(timer);
     }, [refreshSession]);
 
-    const login = useCallback((data: { accessToken: string; user: unknown }) => {
+    const login = useCallback(async (data: { accessToken: string; user: unknown }) => {
         // On Login, we also want to ensure we have context.
         const apiUser = data.user as Record<string, unknown>;
         setToken(data.accessToken);
@@ -191,8 +188,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             permissions: []
         });
 
-        // Trigger full refresh to get org context
-        void refreshSession();
+        // Trigger full refresh to get org context and await it
+        await refreshSession();
 
     }, [refreshSession]);
 
