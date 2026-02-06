@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import {
-  PLATFORM_ADMIN_ROLE_ID,
-  DEFAULT_SYSTEM_ROLE_ID,
-} from '@nexiom/identity';
+  REQUIRED_ADMIN_ROLE_ID,
+  REQUIRED_OWNER_ROLE_ID,
+} from '../../../constants';
 
 export const CreateTenantSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -51,8 +51,8 @@ export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 export const CreateSystemInvitationSchema = z.object({
   email: z.string().email(),
   role: z
-    .enum([PLATFORM_ADMIN_ROLE_ID, DEFAULT_SYSTEM_ROLE_ID])
-    .default(DEFAULT_SYSTEM_ROLE_ID),
+    .enum([REQUIRED_OWNER_ROLE_ID, REQUIRED_ADMIN_ROLE_ID]) // Only System Roles
+    .default(REQUIRED_ADMIN_ROLE_ID),
 });
 
 export class CreateSystemInvitationValidation extends createZodDto(

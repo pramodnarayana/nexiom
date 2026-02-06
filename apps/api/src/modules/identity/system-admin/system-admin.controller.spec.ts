@@ -5,13 +5,22 @@ import {
   AUTH_PROVIDER,
   USER_PROVIDER,
   TENANT_PROVIDER,
-  PLATFORM_ADMIN_ROLE_ID,
-  DEFAULT_SYSTEM_ROLE_ID,
 } from '@nexiom/identity';
+import {
+  REQUIRED_ADMIN_ROLE_ID,
+  REQUIRED_OWNER_ROLE_ID,
+} from '../../../constants';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { PlatformGuard } from '../auth/platform.guard';
+
+vi.mock('../../../constants', () => ({
+  REQUIRED_ADMIN_ROLE_ID: 'admin-role-id',
+  REQUIRED_OWNER_ROLE_ID: 'owner-role-id',
+  REQUIRED_SYSTEM_TENANT_ID: '00000000-0000-0000-0000-000000000000',
+  REQUIRED_MEMBER_ROLE_ID: 'member-role-id',
+}));
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
@@ -103,7 +112,7 @@ describe('SystemAdminController', () => {
 
       await expect(
         controller.createSystemInvitation(
-          { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
+          { email: 'test@example.com', role: REQUIRED_OWNER_ROLE_ID },
           mockHeaders,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -118,7 +127,7 @@ describe('SystemAdminController', () => {
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
 
       const result = await controller.createSystemInvitation(
-        { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
+        { email: 'test@example.com', role: REQUIRED_OWNER_ROLE_ID },
         mockHeaders,
       );
 
@@ -126,7 +135,7 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: PLATFORM_ADMIN_ROLE_ID,
+        role: REQUIRED_OWNER_ROLE_ID,
         organizationId: null,
         inviterId: 'admin1',
       });
@@ -377,7 +386,7 @@ describe('SystemAdminController', () => {
 
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: DEFAULT_SYSTEM_ROLE_ID, // Use constant!
+        role: REQUIRED_ADMIN_ROLE_ID, // Use constant!
         organizationId: null, // System invite
         inviterId: 'admin1',
       });

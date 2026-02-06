@@ -1,4 +1,6 @@
+import { Inject } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { IDENTITY_DB } from "../constants";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
@@ -15,7 +17,9 @@ interface PgError extends Error {
 }
 
 export class DrizzleTenantAdapter implements ITenantProvider {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  constructor(
+    @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
+  ) {}
 
   async create(userId: string, name: string): Promise<TenantInterface> {
     const orgId = uuidv4();
@@ -42,7 +46,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             id: uuidv4(),
             organizationId: orgId,
             userId: userId,
-            roleId: "admin",
+            roleId: "owner",
             createdAt: new Date(),
           });
 

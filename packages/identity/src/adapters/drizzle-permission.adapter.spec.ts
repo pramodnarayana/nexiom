@@ -86,9 +86,10 @@ describe("DrizzlePermissionAdapter", () => {
         {
           roleId: "owner",
           roleName: "Owner",
-          permId: null,
-          resource: null,
-          action: null,
+          permId: "super_admin",
+          resource: "*",
+          action: "*",
+          permOrgId: null, // Global
         },
       ]),
     );
@@ -103,6 +104,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "p1",
           resource: "organization",
           action: "read",
+          permOrgId: "o1", // Scoped to o1
         },
       ]),
     );
@@ -117,6 +119,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "p1",
           resource: "other", // mismatch
           action: "read",
+          permOrgId: "o1",
         },
       ]),
     );
@@ -136,6 +139,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "all",
           resource: "*",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
@@ -155,6 +159,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "org_all",
           resource: "organization",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
@@ -173,6 +178,7 @@ describe("DrizzlePermissionAdapter", () => {
           roleId: "admin",
           roleName: "Admin",
           permId: null,
+          permOrgId: null,
         },
       ]),
     );
@@ -184,6 +190,7 @@ describe("DrizzlePermissionAdapter", () => {
           roleId: "user",
           roleName: "User",
           permId: null,
+          permOrgId: null,
         },
       ]),
     );
@@ -203,6 +210,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "users:read",
           resource: "users",
           action: "read",
+          permOrgId: "o1",
         },
       ]),
     );
@@ -226,6 +234,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "*",
           resource: "*",
           action: "*",
+          permOrgId: SYSTEM_TENANT_ID,
         },
       ]),
     );
@@ -245,21 +254,34 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "org_all",
           resource: "organization",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
 
-    // Should collapse to "organization:*" because the implementation maps
-    // existing matched permissions by id. If db returns action='*', we expect result to be 'resource:*' unless
-    // resource is also '*', which is covered in the previous test.
-    // wait, existing implementation logic:
-    // context.permissions.forEach((p) => {
-    //  if (p.resource === "*" && p.action === "*") { perms.push("*"); }
-    //  else { perms.push(`${p.resource}:${p.action}`); }
-    // });
-    // So "organization" + "*" -> "organization:*"
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
       "organization:*",
     ]);
+  });
+
+  it("can: denies permission if scope mismatch", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    // User has 'admin:read' but scoped to 'other_tenant'
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "owner",
+          roleName: "OWner",
+          permId: "p1",
+          resource: "admin",
+          action: "read",
+          permOrgId: "other_tenant", // Mismatch with requested 'o1'
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "read", "admin", "o1")).toBe(false);
   });
 });

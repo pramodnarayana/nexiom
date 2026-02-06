@@ -39,14 +39,14 @@ describe('Users Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject invalid role', () => {
-      const invalidUser = {
+    it('should accept custom role (dynamic roles supported)', () => {
+      const customRoleUser = {
         email: 'test@example.com',
-        role: 'superadmin', // Not in allowed roles
+        role: 'superadmin',
       };
 
-      const result = CreateUserSchema.safeParse(invalidUser);
-      expect(result.success).toBe(false);
+      const result = CreateUserSchema.safeParse(customRoleUser);
+      expect(result.success).toBe(true);
     });
 
     it('should reject company name less than 2 characters', () => {

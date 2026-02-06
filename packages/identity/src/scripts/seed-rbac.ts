@@ -1,5 +1,7 @@
+import "dotenv/config";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
+import { OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID } from "../constants";
 
 export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   console.log("Seeding RBAC...");
@@ -37,15 +39,20 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
 
   // 2. Define Standard Roles
   const roles = [
-    { id: "owner", name: "Owner", isSystem: true, description: "Full access" },
     {
-      id: "admin",
+      id: OWNER_ROLE_ID,
+      name: "Owner",
+      isSystem: true,
+      description: "Full access",
+    },
+    {
+      id: ADMIN_ROLE_ID,
       name: "Admin",
       isSystem: true,
       description: "Manage users and settings",
     },
     {
-      id: "member",
+      id: MEMBER_ROLE_ID,
       name: "Member",
       isSystem: true,
       description: "Read-only access",
@@ -57,7 +64,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 3. Assign Permissions to Roles
   // Map role -> permission[]
   const roleMap: Record<string, string[]> = {
-    owner: [
+    [OWNER_ROLE_ID]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -72,7 +79,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    admin: [
+    [ADMIN_ROLE_ID]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -83,7 +90,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    member: ["users:read", "tenants:read"],
+    [MEMBER_ROLE_ID]: ["users:read", "tenants:read"],
   };
 
   const rolePermsToInsert: { roleId: string; permissionId: string }[] = [];

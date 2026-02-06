@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation, type NavigateFunction } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/utils';
+import { hasPermission } from '@/shared/lib/auth/utils';
 import { ThemeSwitcher } from '@/shared/components/ThemeSwitcher';
 import {
     DropdownMenu,
@@ -26,7 +27,7 @@ export interface NavGroup {
 
 interface SidebarProps {
     navGroups: NavGroup[];
-    user: { name?: string; email?: string; roles?: string[]; organizationName?: string } | null;
+    user: { name?: string; email?: string; roles?: string[]; permissions?: string[]; organizationName?: string } | null;
     logout: () => void;
     navigate: NavigateFunction;
     title?: string;
@@ -44,7 +45,7 @@ export function Sidebar({
     const location = useLocation();
     const isAdminView = location.pathname.startsWith('/admin');
     const isTenantView = location.pathname.startsWith('/dashboard');
-    const hasAdminRole = user?.roles?.includes('admin') || user?.roles?.includes('owner') || user?.roles?.includes('platform_admin');
+    const hasAdminRole = hasPermission(user?.permissions, 'admin_dashboard', 'view');
 
     return (
         <div className="flex flex-col h-full bg-card/50 backdrop-blur-md border-r border-border">

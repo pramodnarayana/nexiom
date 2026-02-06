@@ -69,6 +69,9 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
@@ -139,9 +142,6 @@ importers:
       '@vitest/coverage-istanbul':
         specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.3)(happy-dom@20.1.0)(jsdom@27.4.0)(lightningcss@1.30.2)(terser@5.44.1))
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
       drizzle-kit:
         specifier: ^0.31.8
         version: 0.31.8

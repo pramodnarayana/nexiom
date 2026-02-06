@@ -4,9 +4,9 @@ import {
   AUTH_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
-  SYSTEM_TENANT_ID,
   User,
 } from '@nexiom/identity';
+import { REQUIRED_SYSTEM_TENANT_ID } from '../../../constants';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -156,7 +156,7 @@ describe('AuthService', () => {
 
       expect(mockPermissionProvider.getPermissions).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'u2' }),
-        SYSTEM_TENANT_ID,
+        REQUIRED_SYSTEM_TENANT_ID,
       );
       expect(result?.user.permissions).toContain('system:view');
     });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DrizzleUserAdapter } from "./drizzle-user.adapter";
 import * as schema from "../schema";
@@ -126,6 +127,17 @@ const mkUser = (over?: Partial<schema.User>): schema.User =>
     ...over,
   }) as unknown as schema.User;
 
+const mkOptions = () =>
+  ({
+    dbToken: "DB_TOKEN",
+    constants: {
+      systemTenantId: "system-tenant-id",
+      ownerRoleId: "owner-role-id",
+      adminRoleId: "Admin", // Matches the mock role name in test case
+      memberRoleId: "member-role-id",
+    },
+  }) as any;
+
 describe("DrizzleUserAdapter", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -134,7 +146,7 @@ describe("DrizzleUserAdapter", () => {
   it("create delegates to auth provider", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     const user = await adapter.create({
       email: "a@b.com",
@@ -146,12 +158,12 @@ describe("DrizzleUserAdapter", () => {
   it("update handles password via auth provider; updates fields; throws if missing user after update", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // password path
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "newpw" } as UpdateUserInput);
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+
     expect(auth.setPassword).toHaveBeenCalledWith("u1", "newpw");
 
     // field update path
@@ -163,7 +175,7 @@ describe("DrizzleUserAdapter", () => {
     expect(res.name).toBe("A");
 
     // missing setPassword support
-    const adapter2 = new DrizzleUserAdapter(db, {
+    const adapter2 = new DrizzleUserAdapter(db, mkOptions(), {
       createUser: (input: CreateUserInput) => auth.createUser(input),
     } as unknown as IAuthProvider);
     await expect(
@@ -180,7 +192,7 @@ describe("DrizzleUserAdapter", () => {
   it("delete cascades and related tables in a transaction", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // Access the transaction mock to verify cascade behavior
     const txCalls: string[] = [];
@@ -204,7 +216,7 @@ describe("DrizzleUserAdapter", () => {
   it("findById and findByEmail return mapped or null", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     const byId = await adapter.findById("u1");
@@ -224,7 +236,7 @@ describe("DrizzleUserAdapter", () => {
   it("findAll supports tenant-scoped and global listing with pagination and search", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     const users = [mkUser({ id: "u1" }), mkUser({ id: "u2" })];
 
@@ -259,7 +271,7 @@ describe("DrizzleUserAdapter", () => {
   it("count supports tenant and global paths", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // tenant path
     db.select.mockReturnValueOnce(mockChainedQuery([{ count: 5 }]));
@@ -273,7 +285,7 @@ describe("DrizzleUserAdapter", () => {
   it("forceVerifyEmail updates verification flag", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     await adapter.forceVerifyEmail("u1");
 
@@ -287,7 +299,7 @@ describe("DrizzleUserAdapter", () => {
   it("deleteIfNotLastAdmin acquires lock, verifies membership, checks admin count, and deletes if safe", async () => {
     const db = mkDb();
     const auth = mkAuth();
-    const adapter = new DrizzleUserAdapter(db, auth);
+    const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // Mock transaction context
     const mockDelete = vi.fn().mockReturnThis();

@@ -5,7 +5,10 @@ import { eq, and } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import { SYSTEM_TENANT_ID, PLATFORM_ADMIN_ROLE_ID } from '@nexiom/identity';
+import {
+  REQUIRED_ADMIN_ROLE_ID,
+  REQUIRED_SYSTEM_TENANT_ID,
+} from '../constants';
 
 // Fix path resolution for env files - go up from src/scripts
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
@@ -143,29 +146,32 @@ async function reset() {
         .where(
           and(
             eq(schema.member.userId, users[0].id),
-            eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+            eq(schema.member.organizationId, REQUIRED_SYSTEM_TENANT_ID),
           ),
         );
 
       if (existingMembers.length === 0) {
         await db.insert(schema.member).values({
           id: uuidv4(),
-          organizationId: SYSTEM_TENANT_ID,
+          organizationId: REQUIRED_SYSTEM_TENANT_ID,
           userId: users[0].id,
-          roleId: PLATFORM_ADMIN_ROLE_ID,
+          roleId: REQUIRED_ADMIN_ROLE_ID,
           createdAt: new Date(),
         });
         console.log(`   ✅ Role updated to ${ROLE}.`);
       } else {
         // Check if role needs update
-        if (existingMembers[0].roleId !== PLATFORM_ADMIN_ROLE_ID) {
+        if (existingMembers[0].roleId !== REQUIRED_ADMIN_ROLE_ID) {
+          console.log(
+            `Fixing role for existing admin (Current: ${existingMembers[0].roleId})...`,
+          );
           await db
             .update(schema.member)
-            .set({ roleId: PLATFORM_ADMIN_ROLE_ID })
+            .set({ roleId: REQUIRED_ADMIN_ROLE_ID })
             .where(
               and(
                 eq(schema.member.userId, users[0].id),
-                eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+                eq(schema.member.organizationId, REQUIRED_SYSTEM_TENANT_ID),
               ),
             );
           console.log(`   ✅ Existing member role elevated to ${ROLE}.`);

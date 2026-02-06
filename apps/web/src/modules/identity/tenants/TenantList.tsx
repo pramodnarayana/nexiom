@@ -109,7 +109,7 @@ export function TenantList({ data = [], isLoading, onStatusChange, onEdit, onDel
                     <TableHeader>
                         <TableRow>
                             {/* Same Headers */}
-                            <TableHead>Tenant</TableHead>
+                            <TableHead>Company Name</TableHead>
                             <TableHead>Slug</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Last Updated</TableHead>

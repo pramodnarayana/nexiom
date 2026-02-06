@@ -5,6 +5,10 @@ import { eq } from 'drizzle-orm';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  REQUIRED_ADMIN_ROLE_ID,
+  REQUIRED_SYSTEM_TENANT_ID,
+} from '../constants';
 
 // ... (Environment loading)
 
@@ -84,17 +88,22 @@ async function bootstrap() {
   await client.connect();
   const db = drizzle(client, { schema });
 
-  const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
-
   // Ensure System Tenant Exists
-  await db
-    .insert(schema.organization)
-    .values({
-      id: SYSTEM_TENANT_ID,
-      name: 'Nexiom Platform',
-      slug: 'system',
-    })
-    .onConflictDoNothing();
+  const systemTenant = await db.query.organization.findFirst({
+    where: eq(schema.organization.id, REQUIRED_SYSTEM_TENANT_ID),
+  });
+
+  if (!systemTenant) {
+    console.log(`Creating System Tenant (${REQUIRED_SYSTEM_TENANT_ID})...`);
+    await db
+      .insert(schema.organization)
+      .values({
+        id: REQUIRED_SYSTEM_TENANT_ID,
+        name: 'Nexiom Platform',
+        slug: 'system',
+      })
+      .onConflictDoNothing();
+  }
 
   // Ensure Platform Admin Role Exists in System Tenant
   // We need to fetch the inserted/existing tenant first if we needed its ID, but we have it constant.
@@ -105,11 +114,11 @@ async function bootstrap() {
 
   // Actually, we should check if the user is already a member of the System Tenant.
 
-  // Ensure "Platform Admin" Role Exists
+  // Ensure "Platform Admin" Role Exists (using ID from constants)
   await db
     .insert(schema.role)
     .values({
-      id: 'platform_admin',
+      id: REQUIRED_ADMIN_ROLE_ID,
       name: 'Platform Admin',
       isSystem: true,
       description: 'Super administrator for the platform',
@@ -136,9 +145,10 @@ async function bootstrap() {
     .insert(schema.member)
     .values({
       id: uuidv4(),
-      organizationId: SYSTEM_TENANT_ID,
-      userId: user.id,
-      roleId: 'platform_admin', // Correct field: roleId
+      userId: user.id, // Keeping user.id as adminUser is not defined in this context
+      organizationId: REQUIRED_SYSTEM_TENANT_ID,
+      roleId: REQUIRED_ADMIN_ROLE_ID, // Platform Admin Role
+      createdAt: new Date(),
     })
     .onConflictDoNothing();
 

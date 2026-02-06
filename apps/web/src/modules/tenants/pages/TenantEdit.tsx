@@ -194,7 +194,7 @@ export const TenantEdit = ({ tenantId, onCancel }: TenantEditProps) => {
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Name</FormLabel>
+                                        <FormLabel>Company Name</FormLabel>
                                         <FormControl>
                                             <Input
                                                 placeholder="Acme Corp"
