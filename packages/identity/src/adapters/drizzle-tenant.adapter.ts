@@ -1,4 +1,4 @@
-import { Inject } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { IDENTITY_DB } from "../constants";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
@@ -16,6 +16,7 @@ interface PgError extends Error {
   detail?: string;
 }
 
+@Injectable()
 export class DrizzleTenantAdapter implements ITenantProvider {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,

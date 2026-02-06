@@ -49,6 +49,18 @@ describe('Users Validation', () => {
       expect(result.success).toBe(true);
     });
 
+    it('should reject empty role', () => {
+      const invalidUser = {
+        email: 'test@example.com',
+        role: '',
+      };
+      const result = CreateUserSchema.safeParse(invalidUser);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toContain('role');
+      }
+    });
+
     it('should reject company name less than 2 characters', () => {
       const invalidUser = {
         email: 'test@example.com',

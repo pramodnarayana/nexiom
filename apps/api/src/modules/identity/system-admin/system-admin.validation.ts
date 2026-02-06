@@ -48,6 +48,12 @@ export const CreateUserSchema = z.object({
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 
+if (!REQUIRED_OWNER_ROLE_ID || !REQUIRED_ADMIN_ROLE_ID) {
+  throw new Error(
+    'System Roles must be defined for System Invitation Validation',
+  );
+}
+
 export const CreateSystemInvitationSchema = z.object({
   email: z.string().email(),
   role: z

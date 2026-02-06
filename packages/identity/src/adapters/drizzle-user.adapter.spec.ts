@@ -340,7 +340,7 @@ describe("DrizzleUserAdapter", () => {
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValueOnce([{ roleName: "Admin" }]),
+          limit: vi.fn().mockResolvedValueOnce([{ roleId: "Admin" }]),
         });
 
         // 3. Count admins call

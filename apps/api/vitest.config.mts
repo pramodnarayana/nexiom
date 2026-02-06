@@ -14,6 +14,12 @@ export default defineConfig({
         alias: {
             '@src': path.resolve(__dirname, 'src'),
         },
+        env: {
+            SYSTEM_TENANT_ID: '00000000-0000-0000-0000-000000000000',
+            OWNER_ROLE_ID: 'owner',
+            ADMIN_ROLE_ID: 'admin',
+            MEMBER_ROLE_ID: 'member',
+        },
         coverage: {
             provider: 'istanbul',
             exclude: [

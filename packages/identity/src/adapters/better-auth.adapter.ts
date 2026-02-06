@@ -19,7 +19,13 @@ import type {
   User as UserInterface,
 } from "../interfaces";
 import type { CreateUserInput } from "../interfaces/user-provider.interface";
-import { EMAIL_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
+import {
+  EMAIL_PROVIDER,
+  IDENTITY_OPTIONS,
+  IDENTITY_DB,
+  BETTER_AUTH_CONFIG,
+  TENANT_PROVIDER,
+} from "../constants";
 import type { IdentityModuleOptions } from "../identity.module";
 import type { IEmailProvider } from "../interfaces/email-provider.interface";
 import * as schema from "../schema";
@@ -78,8 +84,9 @@ export class BetterAuthAdapter implements IAuthProvider {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
     @Inject(EMAIL_PROVIDER) private readonly emailService: IEmailProvider,
+    @Inject(BETTER_AUTH_CONFIG)
     private readonly config: BetterAuthAdapterConfig,
-    private readonly tenantProvider: ITenantProvider, // Injected Dependency
+    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider, // Injected Dependency
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
   ) {
     if (!config.allowedOrigins || config.allowedOrigins.length === 0) {

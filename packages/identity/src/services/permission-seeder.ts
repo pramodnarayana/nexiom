@@ -3,6 +3,7 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
 import { IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
 import type { IdentityModuleOptions } from "../identity.module";
+import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
 export class PermissionSeeder implements OnModuleInit {
@@ -22,6 +23,7 @@ export class PermissionSeeder implements OnModuleInit {
 
     const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
       this.options.constants;
+    const now = new Date();
 
     try {
       // 1. Ensure Roles
@@ -51,7 +53,7 @@ export class PermissionSeeder implements OnModuleInit {
         .values(
           roles.map((r) => ({
             ...r,
-            createdAt: new Date(),
+            createdAt: now,
           })),
         )
         .onConflictDoNothing();
@@ -80,12 +82,24 @@ export class PermissionSeeder implements OnModuleInit {
       ];
 
       const permissionsToInsert = perms.map((p) => {
-        const [resource, action] = p.split(":");
+        // Handle "system:users:read" -> resource="system:users", action="read" ?
+        // OR "users:read" -> resource="users", action="read"
+        // Instruction says: "only the first colon separates resource and action"
+        // e.g. "system:users:read" => resource="system", action="users:read"?
+        // Wait, typical RBAC is resource:action. "system:users" might be resource.
+        // User feedback: "split with a limit... so only the first colon separates"
+        const separatorIndex = p.indexOf(":");
+        if (separatorIndex === -1) {
+          throw new Error(`Invalid permission format: ${p}`);
+        }
+        const resource = p.substring(0, separatorIndex);
+        const action = p.substring(separatorIndex + 1);
+
         return {
           id: p,
           resource,
           action,
-          createdAt: new Date(),
+          createdAt: now,
         };
       });
 
@@ -96,6 +110,7 @@ export class PermissionSeeder implements OnModuleInit {
 
       // 3. Assign Permissions to Roles
       const rolePermissionsToInsert: {
+        id: string;
         roleId: string;
         permissionId: string;
         organizationId?: string | null;
@@ -105,9 +120,24 @@ export class PermissionSeeder implements OnModuleInit {
       const adminPerms = perms.filter((p) => !p.startsWith("system_"));
       for (const p of adminPerms) {
         rolePermissionsToInsert.push({
+          id: uuidv4(),
           roleId: adminRoleId,
           permissionId: p,
         });
+      }
+
+      // Member: Read-only permissions
+      // We explicitly select 'users:read' and 'tenants:read' or similar safe subsets
+      const memberPerms = ["users:read", "tenants:read"];
+      for (const p of memberPerms) {
+        if (perms.includes(p)) {
+          rolePermissionsToInsert.push({
+            id: uuidv4(),
+            roleId: memberRoleId,
+            permissionId: p,
+            organizationId: null, // Global
+          });
+        }
       }
 
       // Owner: Split assignments
@@ -117,6 +147,7 @@ export class PermissionSeeder implements OnModuleInit {
       );
       for (const p of tenantPerms) {
         rolePermissionsToInsert.push({
+          id: uuidv4(),
           roleId: ownerRoleId,
           permissionId: p,
           organizationId: null, // Global
@@ -130,6 +161,7 @@ export class PermissionSeeder implements OnModuleInit {
       );
       for (const p of systemPerms) {
         rolePermissionsToInsert.push({
+          id: uuidv4(),
           roleId: ownerRoleId, // Scoped Owner acts as System Admin
           permissionId: p,
           organizationId: systemTenantId, // Scoped
@@ -144,6 +176,7 @@ export class PermissionSeeder implements OnModuleInit {
       this.logger.log("RBAC Seeding Complete (Scoped)");
     } catch (error) {
       this.logger.error("Failed to seed RBAC", error);
+      throw error;
     }
   }
 }

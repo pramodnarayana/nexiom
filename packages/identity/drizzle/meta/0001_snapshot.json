@@ -524,6 +524,12 @@
       "name": "role_permission",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "roleId": {
           "name": "roleId",
           "type": "text",
@@ -543,7 +549,50 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_role_permission_org_id": {
+          "name": "idx_role_permission_org_id",
+          "columns": [
+            {
+              "expression": "organizationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_role_permission_unique": {
+          "name": "idx_role_permission_unique",
+          "columns": [
+            {
+              "expression": "roleId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "permissionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "COALESCE(\"organizationId\", '__global__')",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "role_permission_roleId_role_id_fk": {
           "name": "role_permission_roleId_role_id_fk",
@@ -585,15 +634,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "role_permission_roleId_permissionId_pk": {
-          "name": "role_permission_roleId_permissionId_pk",
-          "columns": [
-            "roleId",
-            "permissionId"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

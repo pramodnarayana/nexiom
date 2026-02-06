@@ -1,4 +1,4 @@
-import { Inject } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { IDENTITY_DB } from "../constants";
 import { eq, and } from "drizzle-orm";
@@ -10,6 +10,7 @@ import type {
 } from "../interfaces";
 import * as schema from "../schema";
 
+@Injectable()
 export class DrizzlePermissionAdapter implements IPermissionProvider {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
@@ -25,9 +26,6 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
     const context = await this.fetchMemberContext(user.id, tenantId);
     if (!context) return false;
-
-    // Owner override removed - relying on DB permissions
-    // if (this.isPrivilegedRole(context.roleName)) return true;
 
     // Check permissions
     // 1. Global Wildcard

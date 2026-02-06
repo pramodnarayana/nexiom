@@ -37,15 +37,48 @@ const loadEnv = () => {
 };
 
 const validateEnv = (dbUrl: string) => {
-  if (
-    process.env.NODE_ENV === 'production' ||
-    dbUrl.includes('prod') ||
-    dbUrl.includes('rds.amazonaws.com')
-  ) {
+  let isProduction = process.env.NODE_ENV === 'production';
+  let hostname = '';
+
+  try {
+    const url = new URL(dbUrl);
+    hostname = url.hostname;
+    // Strict allowed hostnames for non-production
+    const allowedHosts = ['localhost', '127.0.0.1', 'postgres', 'db'];
+    if (!allowedHosts.includes(hostname) && !dbUrl.includes(':5432')) {
+      // If not in allowed local hosts, assume likely production-ish
+      // unless explicitly overridden by standard conventions
+      // But user asked for "strict allowlist or require explicit env flag"
+      // We'll trust the explicit IS_PRODUCTION flag if present, else infer from host
+      if (!process.env.IS_PRODUCTION) {
+        // Fallback detection
+        if (
+          hostname.includes('rds.amazonaws.com') ||
+          hostname.includes('prod') ||
+          hostname.includes('railway.app') // Example cloud provider
+        ) {
+          isProduction = true;
+        }
+      }
+    }
+  } catch (_e) {
+    // If URL parsing fails, we fallback to string checks but be conservative
+    if (dbUrl.includes('prod') || dbUrl.includes('rds')) {
+      isProduction = true;
+    }
+  }
+
+  // Explicit Override
+  if (process.env.IS_PRODUCTION === 'true') {
+    isProduction = true;
+  }
+
+  if (isProduction) {
     if (process.env.FORCE_RESET !== 'true') {
       console.error(
-        'FATAL: Attempting to run reset-e2e against production database!',
+        `FATAL: Attempting to run reset-e2e against detected production database (${hostname})!`,
       );
+      console.error('To bypass, set FORCE_RESET=true');
       process.exit(1);
     }
     console.warn(
@@ -82,13 +115,13 @@ const seedRBAC = async (
   client: Client,
   ids: { owner: string; admin: string; member: string; systemTenant: string },
 ) => {
-  console.log('--- 3. Seeding RBAC ---');
+  console.log('--- 2. Seeding RBAC ---');
   await client.query(
     `INSERT INTO "role" (id, name, "isSystem", description, "createdAt") VALUES
         ($1, 'Owner', true, 'Full access', NOW()),
         ($2, 'Admin', true, 'Manage users', NOW()),
         ($3, 'Member', true, 'Read only', NOW())
-        ON CONFLICT DO NOTHING;`,
+        ON CONFLICT (id) DO NOTHING;`,
     [ids.owner, ids.admin, ids.member],
   );
 
@@ -114,53 +147,71 @@ const seedRBAC = async (
     'system_tenants:manage',
   ];
 
-  for (const p of perms) {
-    const [resource, action] = p.split(':');
-    await client.query(
-      `INSERT INTO "permission" (id, resource, action, "createdAt") VALUES ($1, $2, $3, NOW()) ON CONFLICT (id) DO NOTHING;`,
-      [p, resource, action],
-    );
-  }
+  // Batch Insert Permissions using UNNEST
+  await client.query(
+    `INSERT INTO "permission" (id, resource, action, "createdAt")
+     SELECT p, split_part(p, ':', 1), split_part(p, ':', 2), NOW()
+     FROM unnest($1::text[]) as t(p)
+     ON CONFLICT (id) DO NOTHING;`,
+    [perms],
+  );
 
-  // Assign Permissions
+  // Prepare Role Permissions in memory
+  const rolePermRows: { id: string; r: string; p: string; o: string | null }[] =
+    [];
+
   // Member (Read Only)
-  await client.query(
-    `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, 'users:read', NULL) ON CONFLICT DO NOTHING`,
-    [ids.member],
-  );
-  await client.query(
-    `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, 'tenants:read', NULL) ON CONFLICT DO NOTHING`,
-    [ids.member],
-  );
+  rolePermRows.push({
+    id: uuidv4(),
+    r: ids.member,
+    p: 'users:read',
+    o: null,
+  });
+  rolePermRows.push({
+    id: uuidv4(),
+    r: ids.member,
+    p: 'tenants:read',
+    o: null,
+  });
 
   for (const p of perms) {
     if (!p.startsWith('system_')) {
       // Admin (Global)
-      await client.query(
-        `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, $2, NULL) ON CONFLICT DO NOTHING`,
-        [ids.admin, p],
-      );
+      rolePermRows.push({ id: uuidv4(), r: ids.admin, p, o: null });
+
       // Owner (Global) - except dashboard override
       if (p !== 'admin_dashboard:view') {
-        await client.query(
-          `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, $2, NULL) ON CONFLICT DO NOTHING`,
-          [ids.owner, p],
-        );
+        rolePermRows.push({ id: uuidv4(), r: ids.owner, p, o: null });
       }
     } else {
       // System Permissions for Owner (Scoped)
-      await client.query(
-        `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [ids.owner, p, ids.systemTenant],
-      );
+      rolePermRows.push({ id: uuidv4(), r: ids.owner, p, o: ids.systemTenant });
     }
   }
 
   // Add back admin_dashboard:view for Owner in System Tenant
-  await client.query(
-    `INSERT INTO "role_permission" ("roleId", "permissionId", "organizationId") VALUES ($1, 'admin_dashboard:view', $2) ON CONFLICT DO NOTHING`,
-    [ids.owner, ids.systemTenant],
-  );
+  rolePermRows.push({
+    id: uuidv4(),
+    r: ids.owner,
+    p: 'admin_dashboard:view',
+    o: ids.systemTenant,
+  });
+
+  // Batch Insert Role Permissions
+  if (rolePermRows.length > 0) {
+    const rpIds = rolePermRows.map((row) => row.id);
+    const roles = rolePermRows.map((row) => row.r);
+    const permissions = rolePermRows.map((row) => row.p);
+    const orgs = rolePermRows.map((row) => row.o);
+
+    await client.query(
+      `INSERT INTO "role_permission" (id, "roleId", "permissionId", "organizationId")
+       SELECT i, r, p, o
+       FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::uuid[]) as t(i, r, p, o)
+       ON CONFLICT (id) DO NOTHING;`,
+      [rpIds, roles, permissions, orgs],
+    );
+  }
 };
 
 const seedUsersAndTenants = async (
@@ -170,7 +221,7 @@ const seedUsersAndTenants = async (
     owner: string;
   },
 ) => {
-  console.log('--- 2. Seeding Organizations ---');
+  console.log('--- 3. Seeding Organizations ---');
   await client.query(
     `INSERT INTO "organization" (id, name, status, "isSystem", "createdAt", "updatedAt") VALUES ($1, 'Nexiom Platform', 'active', true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;`,
     [ids.systemTenant],

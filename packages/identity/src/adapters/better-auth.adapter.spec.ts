@@ -138,7 +138,13 @@ describe("BetterAuthAdapter", () => {
   it("createUser validates and maps from DB", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+    const adapter = new BetterAuthAdapter(
+      db,
+      email as any,
+      cfg(),
+      mkTenantProvider() as any,
+      mkOptions(),
+    );
 
     await expect(
       adapter.createUser({ email: "a@b.com" } as any),

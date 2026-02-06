@@ -15,7 +15,14 @@ export const ROLES = {
  * Shared role validation
  * Changed to string to support dynamic DB-driven roles.
  */
-const RoleEnum = z.string().min(1, 'Role is required');
+const RoleEnum = z
+  .string()
+  .min(1, 'Role is required')
+  .max(50, 'Role too long')
+  .regex(
+    /^[a-z0-9-_]+$/,
+    'Role must be lowercase alphanumeric with hyphens/underscores',
+  );
 
 /**
  * Zod Schema to validate the Create User Request.

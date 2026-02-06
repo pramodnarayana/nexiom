@@ -3,8 +3,20 @@ import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
-import { SYSTEM_TENANT_ID } from "../constants";
+import { getSystemTenantId } from "../constants";
 
+vi.mock("../constants", async () => {
+  return {
+    ...(await vi.importActual("../constants")),
+    getSystemTenantId: () => "sys-tenant-id",
+    getOwnerRoleId: () => "owner-role-id",
+    getAdminRoleId: () => "admin-role-id",
+    getMemberRoleId: () => "member-role-id",
+    IDENTITY_DB: "IDENTITY_DB",
+  };
+});
+
+// Helper for generic mocked DB
 const mockChainedQuery = (result: unknown) => {
   const p = Promise.resolve(result);
 
@@ -234,14 +246,14 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "*",
           resource: "*",
           action: "*",
-          permOrgId: SYSTEM_TENANT_ID,
+          permOrgId: getSystemTenantId(),
         },
       ]),
     );
 
-    expect(await adapter.getPermissions(mkUser(), SYSTEM_TENANT_ID)).toEqual([
-      "*",
-    ]);
+    expect(await adapter.getPermissions(mkUser(), getSystemTenantId())).toEqual(
+      ["*"],
+    );
   });
 
   it("getPermissions: returns resource wildcard (e.g. organization:*)", async () => {
@@ -274,11 +286,11 @@ describe("DrizzlePermissionAdapter", () => {
       mockChainedQuery([
         {
           roleId: "owner",
-          roleName: "OWner",
+          roleName: "Owner",
           permId: "p1",
           resource: "admin",
           action: "read",
-          permOrgId: "other_tenant", // Mismatch with requested 'o1'
+          permOrgId: getSystemTenantId(), // Mismatch with requested 'o1'
         },
       ]),
     );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, type NavigateFunction } from 'react-router-dom';
+import { Link as SidebarLink, useLocation, type NavigateFunction } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { hasPermission } from '@/shared/lib/auth/utils';
@@ -27,7 +27,7 @@ export interface NavGroup {
 
 interface SidebarProps {
     navGroups: NavGroup[];
-    user: { name?: string; email?: string; roles?: string[]; permissions?: string[]; organizationName?: string } | null;
+    user: { name?: string; email?: string; permissions?: string[]; organizationName?: string } | null;
     logout: () => void;
     navigate: NavigateFunction;
     title?: string;
@@ -69,7 +69,7 @@ export function Sidebar({
                                     ? location.pathname === item.href
                                     : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
                                 return (
-                                    <Link key={item.href} to={item.href}>
+                                    <SidebarLink key={item.href} to={item.href}>
                                         <Button
                                             variant="ghost"
                                             className={cn(
@@ -82,7 +82,7 @@ export function Sidebar({
                                             <item.icon className={cn("mr-3 h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                             {item.label}
                                         </Button>
-                                    </Link>
+                                    </SidebarLink>
                                 );
                             })}
                         </div>

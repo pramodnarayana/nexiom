@@ -8,6 +8,10 @@ import {
 } from '@nexiom/identity';
 import { REQUIRED_SYSTEM_TENANT_ID } from '../../../constants';
 
+vi.mock('../../../constants', () => ({
+  REQUIRED_SYSTEM_TENANT_ID: 'mock-system-tenant-id',
+}));
+
 describe('AuthService', () => {
   let service: AuthService;
 

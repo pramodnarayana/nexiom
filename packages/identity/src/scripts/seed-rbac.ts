@@ -1,10 +1,16 @@
-import "dotenv/config";
+import { v4 as uuidv4 } from "uuid";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
-import { OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID } from "../constants";
+import { getOwnerRoleId, getAdminRoleId, getMemberRoleId } from "../constants";
 
 export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   console.log("Seeding RBAC...");
+
+  if (!getOwnerRoleId() || !getAdminRoleId() || !getMemberRoleId()) {
+    throw new Error(
+      "Missing required RBAC Role IDs (OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID)",
+    );
+  }
 
   // 1. Define Standard Permissions
   // resource:action
@@ -40,19 +46,19 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 2. Define Standard Roles
   const roles = [
     {
-      id: OWNER_ROLE_ID,
+      id: getOwnerRoleId(),
       name: "Owner",
       isSystem: true,
       description: "Full access",
     },
     {
-      id: ADMIN_ROLE_ID,
+      id: getAdminRoleId(),
       name: "Admin",
       isSystem: true,
       description: "Manage users and settings",
     },
     {
-      id: MEMBER_ROLE_ID,
+      id: getMemberRoleId(),
       name: "Member",
       isSystem: true,
       description: "Read-only access",
@@ -64,7 +70,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 3. Assign Permissions to Roles
   // Map role -> permission[]
   const roleMap: Record<string, string[]> = {
-    [OWNER_ROLE_ID]: [
+    [getOwnerRoleId()]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -79,7 +85,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    [ADMIN_ROLE_ID]: [
+    [getAdminRoleId()]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -90,14 +96,18 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    [MEMBER_ROLE_ID]: ["users:read", "tenants:read"],
+    [getMemberRoleId()]: ["users:read", "tenants:read"],
   };
 
-  const rolePermsToInsert: { roleId: string; permissionId: string }[] = [];
+  const rolePermsToInsert: {
+    id: string;
+    roleId: string;
+    permissionId: string;
+  }[] = [];
 
   for (const [roleId, permIds] of Object.entries(roleMap)) {
     for (const permId of permIds) {
-      rolePermsToInsert.push({ roleId, permissionId: permId });
+      rolePermsToInsert.push({ id: uuidv4(), roleId, permissionId: permId });
     }
   }
 

@@ -13,6 +13,7 @@ import {
   PERMISSION_PROVIDER,
   IDENTITY_OPTIONS,
   IDENTITY_DB,
+  BETTER_AUTH_CONFIG,
 } from "./constants";
 import {
   BetterAuthAdapter,
@@ -23,6 +24,7 @@ import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
 import type { IEmailProvider } from "./interfaces";
 import * as schema from "./schema";
+import { PermissionSeeder } from "./services/permission-seeder";
 
 export interface IdentityConstants {
   systemTenantId: string;
@@ -42,8 +44,6 @@ export interface IdentityModuleOptions {
   email?: IEmailProvider;
   imports?: ModuleMetadata["imports"];
 }
-
-import { PermissionSeeder } from "./services/permission-seeder";
 
 @Global()
 @Module({})
@@ -71,6 +71,10 @@ export class IdentityModule {
         {
           provide: IDENTITY_OPTIONS,
           useValue: options,
+        },
+        {
+          provide: BETTER_AUTH_CONFIG,
+          useValue: options.betterAuthConfig,
         },
         {
           provide: IDENTITY_DB,
@@ -143,6 +147,12 @@ export class IdentityModule {
           inject: options.inject || [],
         },
         {
+          provide: BETTER_AUTH_CONFIG,
+          useFactory: (identityOptions: IdentityModuleOptions) =>
+            identityOptions.betterAuthConfig,
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
           provide: IDENTITY_DB,
           useFactory: (identityOptions: IdentityModuleOptions) =>
             identityOptions.db!,
@@ -165,6 +175,7 @@ export class IdentityModule {
           useClass: DrizzlePermissionAdapter,
         },
         PermissionSeeder,
+        // Removed duplicate class providers to avoid multiple instances
         BetterAuthAdapter,
         DrizzleUserAdapter,
         DrizzleTenantAdapter,
