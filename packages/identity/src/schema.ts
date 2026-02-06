@@ -137,10 +137,12 @@ export const rolePermission = pgTable(
     // Also requested "index for fast lookup" on organizationId.
     index("idx_role_permission_org_id").on(t.organizationId),
     // Advisory unique index for nullable organizationId to prevent duplicates in code-logic
+    // Sentinel value '__NULL__' chosen to avoid collision with real UUIDs/IDs.
+    // Invariant: No organization shall ever have the ID '__NULL__'.
     uniqueIndex("idx_role_permission_unique").on(
       t.roleId,
       t.permissionId,
-      sql`COALESCE("organizationId", '__global__')`,
+      sql`COALESCE("organizationId", '__NULL__')`,
     ),
   ],
 );

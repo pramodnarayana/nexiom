@@ -57,7 +57,8 @@ if (!REQUIRED_OWNER_ROLE_ID || !REQUIRED_ADMIN_ROLE_ID) {
 export const CreateSystemInvitationSchema = z.object({
   email: z.string().email(),
   role: z
-    .enum([REQUIRED_OWNER_ROLE_ID, REQUIRED_ADMIN_ROLE_ID]) // Only System Roles
+    .enum([REQUIRED_OWNER_ROLE_ID, REQUIRED_ADMIN_ROLE_ID] as const)
+    .optional()
     .default(REQUIRED_ADMIN_ROLE_ID),
 });
 

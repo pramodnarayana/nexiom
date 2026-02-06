@@ -7,7 +7,7 @@ export const ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID;
 export const MEMBER_ROLE_ID = process.env.MEMBER_ROLE_ID;
 
 // Validation for scripts/standalone usage
-// Validation for scripts/standalone usage
+
 if (!SYSTEM_TENANT_ID || !OWNER_ROLE_ID || !ADMIN_ROLE_ID || !MEMBER_ROLE_ID) {
   throw new Error(
     'Missing Identity Environment Variables (SYSTEM_TENANT_ID, OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID)',

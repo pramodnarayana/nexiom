@@ -62,16 +62,13 @@ describe("PermissionSeeder", () => {
     // const rolesCall = db.insert.mock.calls[0]; // First call
     // We can't easily check args if the mock chain is complex (insert -> values)
     // But we CAN check values() calls if we spy on the chain return.
-    // However, mkDb mocks return `this`. So db.values calls should be recorded.
 
     expect(db.values).toHaveBeenCalledTimes(3);
 
-    // 1. Roles
     const roleValues = db.values.mock.calls[0][0] as Record<string, unknown>[];
     expect(roleValues).toHaveLength(3);
     expect(roleValues.find((r) => r.name === "Owner")).toBeDefined();
 
-    // 2. Permissions
     const permValues = db.values.mock.calls[1][0] as Record<string, unknown>[];
     expect(permValues.length).toBeGreaterThan(10);
     expect(permValues[0]).toHaveProperty("resource");

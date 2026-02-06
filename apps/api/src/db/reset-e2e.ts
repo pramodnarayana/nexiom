@@ -37,46 +37,32 @@ const loadEnv = () => {
 };
 
 const validateEnv = (dbUrl: string) => {
-  let isProduction = process.env.NODE_ENV === 'production';
+  let isProduction = false;
   let hostname = '';
 
-  try {
-    const url = new URL(dbUrl);
-    hostname = url.hostname;
-    // Strict allowed hostnames for non-production
-    const allowedHosts = ['localhost', '127.0.0.1', 'postgres', 'db'];
-    if (!allowedHosts.includes(hostname) && !dbUrl.includes(':5432')) {
-      // If not in allowed local hosts, assume likely production-ish
-      // unless explicitly overridden by standard conventions
-      // But user asked for "strict allowlist or require explicit env flag"
-      // We'll trust the explicit IS_PRODUCTION flag if present, else infer from host
-      if (!process.env.IS_PRODUCTION) {
-        // Fallback detection
-        if (
-          hostname.includes('rds.amazonaws.com') ||
-          hostname.includes('prod') ||
-          hostname.includes('railway.app') // Example cloud provider
-        ) {
-          isProduction = true;
-        }
-      }
-    }
-  } catch (_e) {
-    // If URL parsing fails, we fallback to string checks but be conservative
-    if (dbUrl.includes('prod') || dbUrl.includes('rds')) {
-      isProduction = true;
-    }
-  }
-
-  // Explicit Override
   if (process.env.IS_PRODUCTION === 'true') {
     isProduction = true;
+  } else {
+    try {
+      const url = new URL(dbUrl);
+      hostname = url.hostname;
+      // Strict allowed hostnames for non-production
+      const allowedHosts = ['localhost', '127.0.0.1', 'postgres', 'db'];
+      if (!allowedHosts.includes(hostname)) {
+        // Any other host is considered production-candidate if not strictly allowed
+        isProduction = true;
+      }
+    } catch (_error) {
+      // If URL parsing fails, allow only if explicit force or known safe
+      // We set isProduction true here to trigger the guard below
+      isProduction = true;
+    }
   }
 
   if (isProduction) {
     if (process.env.FORCE_RESET !== 'true') {
       console.error(
-        `FATAL: Attempting to run reset-e2e against detected production database (${hostname})!`,
+        `FATAL: Attempting to run reset-e2e against detected production database (${hostname || 'unknown'})!`,
       );
       console.error('To bypass, set FORCE_RESET=true');
       process.exit(1);
@@ -150,8 +136,12 @@ const seedRBAC = async (
   // Batch Insert Permissions using UNNEST
   await client.query(
     `INSERT INTO "permission" (id, resource, action, "createdAt")
-     SELECT p, split_part(p, ':', 1), split_part(p, ':', 2), NOW()
-     FROM unnest($1::text[]) as t(p)
+        SELECT
+          p as id,
+          split_part(p, ':', 1) as resource,
+          substring(p from position(':' in p) + 1) as action,
+          NOW()
+        FROM UNNEST($1::text[]) as pt(p)
      ON CONFLICT (id) DO NOTHING;`,
     [perms],
   );
@@ -207,7 +197,7 @@ const seedRBAC = async (
     await client.query(
       `INSERT INTO "role_permission" (id, "roleId", "permissionId", "organizationId")
        SELECT i, r, p, o
-       FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::uuid[]) as t(i, r, p, o)
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) as t(i, r, p, o)
        ON CONFLICT (id) DO NOTHING;`,
       [rpIds, roles, permissions, orgs],
     );

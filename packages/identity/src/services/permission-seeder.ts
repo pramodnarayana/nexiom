@@ -82,12 +82,8 @@ export class PermissionSeeder implements OnModuleInit {
       ];
 
       const permissionsToInsert = perms.map((p) => {
-        // Handle "system:users:read" -> resource="system:users", action="read" ?
-        // OR "users:read" -> resource="users", action="read"
-        // Instruction says: "only the first colon separates resource and action"
-        // e.g. "system:users:read" => resource="system", action="users:read"?
-        // Wait, typical RBAC is resource:action. "system:users" might be resource.
-        // User feedback: "split with a limit... so only the first colon separates"
+        // Map to permission objects (split permission string at the first ':'
+        // so the portion before the first colon is resource and the remainder is action)
         const separatorIndex = p.indexOf(":");
         if (separatorIndex === -1) {
           throw new Error(`Invalid permission format: ${p}`);

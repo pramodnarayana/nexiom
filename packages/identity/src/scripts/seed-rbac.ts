@@ -12,6 +12,18 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
     );
   }
 
+  const ownerRoleId = getOwnerRoleId();
+  const adminRoleId = getAdminRoleId();
+  const memberRoleId = getMemberRoleId();
+
+  // Validate uniqueness
+  const roleIds = [ownerRoleId, adminRoleId, memberRoleId];
+  if (new Set(roleIds).size !== 3) {
+    throw new Error(
+      "OWNER_ROLE_ID, ADMIN_ROLE_ID, and MEMBER_ROLE_ID must be unique",
+    );
+  }
+
   // 1. Define Standard Permissions
   // resource:action
   // Strictly granular for PBAC strategies
@@ -46,19 +58,19 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 2. Define Standard Roles
   const roles = [
     {
-      id: getOwnerRoleId(),
+      id: ownerRoleId,
       name: "Owner",
       isSystem: true,
       description: "Full access",
     },
     {
-      id: getAdminRoleId(),
+      id: adminRoleId,
       name: "Admin",
       isSystem: true,
       description: "Manage users and settings",
     },
     {
-      id: getMemberRoleId(),
+      id: memberRoleId,
       name: "Member",
       isSystem: true,
       description: "Read-only access",
@@ -70,7 +82,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 3. Assign Permissions to Roles
   // Map role -> permission[]
   const roleMap: Record<string, string[]> = {
-    [getOwnerRoleId()]: [
+    [ownerRoleId]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -85,7 +97,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    [getAdminRoleId()]: [
+    [adminRoleId]: [
       "dashboard:read",
       "users:manage",
       "users:read",
@@ -96,7 +108,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
       "settings:manage",
       "settings:read",
     ],
-    [getMemberRoleId()]: ["users:read", "tenants:read"],
+    [memberRoleId]: ["users:read", "tenants:read"],
   };
 
   const rolePermsToInsert: {
