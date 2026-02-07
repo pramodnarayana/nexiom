@@ -22,8 +22,8 @@ import {
   ITenantProvider,
 } from '@nexiom/identity';
 import {
-  REQUIRED_ADMIN_ROLE_ID,
-  REQUIRED_SYSTEM_TENANT_ID,
+  getRequiredAdminRoleId,
+  getRequiredSystemTenantId,
 } from '../../../constants';
 import {
   CreateTenantValidation,
@@ -69,7 +69,7 @@ export class SystemAdminController {
     // Create System Invitation (OrgId = null)
     await this.authProvider.createInvitation({
       email: user.email,
-      role: REQUIRED_ADMIN_ROLE_ID,
+      role: getRequiredAdminRoleId(),
       organizationId: null, // System Invite
       inviterId: session.user.id,
     });
@@ -213,7 +213,7 @@ export class SystemAdminController {
       page: p,
       limit,
       search,
-      tenantId: REQUIRED_SYSTEM_TENANT_ID, // Scope to System Tenant (Platform Admins only)
+      tenantId: getRequiredSystemTenantId(), // Scope to System Tenant (Platform Admins only)
     });
 
     return result; // Envelope { data, total } matches

@@ -36,7 +36,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
     const colonIdx = p.indexOf(":");
     if (colonIdx === -1) {
       throw new Error(
-        `Malformed permission: "${p}" - must contain exactly one colon to separate resource:action`,
+        `Malformed permission: "${p}" - must contain at least one colon to separate resource and action`,
       );
     }
     const resource = p.substring(0, colonIdx);

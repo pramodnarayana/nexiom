@@ -12,16 +12,12 @@ import { eq, and } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { v4 as uuidv4 } from 'uuid';
 import {
-  REQUIRED_OWNER_ROLE_ID,
-  REQUIRED_ADMIN_ROLE_ID,
-  REQUIRED_MEMBER_ROLE_ID,
-  REQUIRED_SYSTEM_TENANT_ID,
+  getRequiredOwnerRoleId,
+  getRequiredAdminRoleId,
+  getRequiredMemberRoleId,
+  getRequiredSystemTenantId,
   ALL_PERMISSIONS,
-  validateRequiredEnv,
 } from '../constants';
-
-// Validate env vars early (scripts need them immediately)
-validateRequiredEnv();
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
@@ -46,22 +42,28 @@ const getDbClient = () => {
 async function seedRbac(db: NodePgDatabase<typeof schema>) {
   console.log('3️⃣  Seeding RBAC (Roles & Permissions)...');
 
+  // Get validated env vars (throws if missing)
+  const OWNER_ROLE_ID = getRequiredOwnerRoleId();
+  const ADMIN_ROLE_ID = getRequiredAdminRoleId();
+  const MEMBER_ROLE_ID = getRequiredMemberRoleId();
+  const SYSTEM_TENANT_ID = getRequiredSystemTenantId();
+
   // --- Definitions ---
   const ROLES = [
     {
-      id: REQUIRED_OWNER_ROLE_ID,
+      id: OWNER_ROLE_ID,
       name: 'Owner',
       isSystem: true,
       description: 'Full access',
     },
     {
-      id: REQUIRED_ADMIN_ROLE_ID,
+      id: ADMIN_ROLE_ID,
       name: 'Admin',
       isSystem: true,
       description: 'Manage users and settings',
     },
     {
-      id: REQUIRED_MEMBER_ROLE_ID,
+      id: MEMBER_ROLE_ID,
       name: 'Member',
       isSystem: true,
       description: 'Read only access',
@@ -82,8 +84,13 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   // --- 2. Ensure Permissions Exist ---
   const permissionsToInsert = ALL_DEFINED_PERMISSIONS.map((p) => {
     const colonIdx = p.indexOf(':');
-    const resource = colonIdx === -1 ? p : p.substring(0, colonIdx);
-    const action = colonIdx === -1 ? '' : p.substring(colonIdx + 1);
+    if (colonIdx === -1) {
+      throw new Error(
+        `Malformed permission: "${p}" - must contain a colon to separate resource and action`,
+      );
+    }
+    const resource = p.substring(0, colonIdx);
+    const action = p.substring(colonIdx + 1);
     return {
       id: p,
       resource,
@@ -110,10 +117,10 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   // Owners have system permissions SCOPED to the System Tenant, and global permissions elsewhere.
   for (const p of OWNER_PERMISSIONS) {
     const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
-    const orgId = isSystem ? REQUIRED_SYSTEM_TENANT_ID : null;
+    const orgId = isSystem ? SYSTEM_TENANT_ID : null;
     rolePermissionsToInsert.push({
       id: uuidv4(),
-      roleId: REQUIRED_OWNER_ROLE_ID,
+      roleId: OWNER_ROLE_ID,
       permissionId: p,
       organizationId: orgId,
     });
@@ -123,10 +130,10 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   // Admins also have system permissions if scoped to System Tenant.
   for (const p of ADMIN_PERMISSIONS) {
     const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
-    const orgId = isSystem ? REQUIRED_SYSTEM_TENANT_ID : null;
+    const orgId = isSystem ? SYSTEM_TENANT_ID : null;
     rolePermissionsToInsert.push({
       id: uuidv4(),
-      roleId: REQUIRED_ADMIN_ROLE_ID,
+      roleId: ADMIN_ROLE_ID,
       permissionId: p,
       organizationId: orgId,
     });
@@ -137,7 +144,7 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   for (const p of MEMBER_PERMISSIONS) {
     rolePermissionsToInsert.push({
       id: uuidv4(),
-      roleId: REQUIRED_MEMBER_ROLE_ID,
+      roleId: MEMBER_ROLE_ID,
       permissionId: p,
       organizationId: null,
     });
@@ -157,31 +164,35 @@ async function elevateToOwner(
   db: NodePgDatabase<typeof schema>,
   email: string,
 ): Promise<void> {
+  // Get validated env vars (throws if missing)
+  const OWNER_ROLE_ID = getRequiredOwnerRoleId();
+  const SYSTEM_TENANT_ID = getRequiredSystemTenantId();
+
   // Ensure System Tenant
   const systemTenant = await db.query.organization.findFirst({
-    where: eq(schema.organization.id, REQUIRED_SYSTEM_TENANT_ID),
+    where: eq(schema.organization.id, SYSTEM_TENANT_ID),
   });
 
   if (!systemTenant) {
-    console.log(`Creating System Tenant (${REQUIRED_SYSTEM_TENANT_ID})...`);
+    console.log(`Creating System Tenant (${SYSTEM_TENANT_ID})...`);
     await db
       .insert(schema.organization)
       .values({
-        id: REQUIRED_SYSTEM_TENANT_ID,
+        id: SYSTEM_TENANT_ID,
         name: 'Nexiom Platform',
         slug: 'system',
       })
       .onConflictDoNothing();
   }
 
-  // Ensure Role
+  // Ensure Role (use canonical name to match seedRbac)
   await db
     .insert(schema.role)
     .values({
-      id: REQUIRED_OWNER_ROLE_ID,
-      name: 'System Owner',
+      id: OWNER_ROLE_ID,
+      name: 'Owner',
       isSystem: true,
-      description: 'Super administrator for the platform',
+      description: 'Full access',
     })
     .onConflictDoNothing();
 
@@ -213,7 +224,7 @@ async function elevateToOwner(
     .where(
       and(
         eq(schema.member.userId, user.id),
-        eq(schema.member.organizationId, REQUIRED_SYSTEM_TENANT_ID),
+        eq(schema.member.organizationId, SYSTEM_TENANT_ID),
       ),
     );
 
@@ -221,17 +232,17 @@ async function elevateToOwner(
     await db.insert(schema.member).values({
       id: uuidv4(),
       userId: user.id,
-      organizationId: REQUIRED_SYSTEM_TENANT_ID,
-      roleId: REQUIRED_OWNER_ROLE_ID,
+      organizationId: SYSTEM_TENANT_ID,
+      roleId: OWNER_ROLE_ID,
       createdAt: new Date(),
     });
     console.log(`✅ User assigned to System Tenant as Owner.`);
   } else {
     // Force update role to Owner if it's different
-    if (existingMember[0].roleId !== REQUIRED_OWNER_ROLE_ID) {
+    if (existingMember[0].roleId !== OWNER_ROLE_ID) {
       await db
         .update(schema.member)
-        .set({ roleId: REQUIRED_OWNER_ROLE_ID })
+        .set({ roleId: OWNER_ROLE_ID })
         .where(eq(schema.member.id, existingMember[0].id));
       console.log(`✅ User role updated to System Owner.`);
     } else {
@@ -301,17 +312,21 @@ async function bootstrapAdmin() {
     await client.connect();
     const db = drizzle(client, { schema });
 
+    // Get validated env vars (throws if missing)
+    const OWNER_ROLE_ID = getRequiredOwnerRoleId();
+    const SYSTEM_TENANT_ID = getRequiredSystemTenantId();
+
     // Ensure System Tenant
     const systemTenant = await db.query.organization.findFirst({
-      where: eq(schema.organization.id, REQUIRED_SYSTEM_TENANT_ID),
+      where: eq(schema.organization.id, SYSTEM_TENANT_ID),
     });
 
     if (!systemTenant) {
-      console.log(`Creating System Tenant (${REQUIRED_SYSTEM_TENANT_ID})...`);
+      console.log(`Creating System Tenant (${SYSTEM_TENANT_ID})...`);
       await db
         .insert(schema.organization)
         .values({
-          id: REQUIRED_SYSTEM_TENANT_ID,
+          id: SYSTEM_TENANT_ID,
           name: 'Nexiom Platform',
           slug: 'system',
         })
@@ -322,7 +337,7 @@ async function bootstrapAdmin() {
     await db
       .insert(schema.role)
       .values({
-        id: REQUIRED_OWNER_ROLE_ID,
+        id: OWNER_ROLE_ID,
         name: 'System Owner',
         isSystem: true,
         description: 'Super administrator for the platform',
@@ -349,7 +364,7 @@ async function bootstrapAdmin() {
       .where(
         and(
           eq(schema.member.userId, user.id),
-          eq(schema.member.organizationId, REQUIRED_SYSTEM_TENANT_ID),
+          eq(schema.member.organizationId, SYSTEM_TENANT_ID),
         ),
       );
 
@@ -357,19 +372,19 @@ async function bootstrapAdmin() {
       await db.insert(schema.member).values({
         id: uuidv4(),
         userId: user.id,
-        organizationId: REQUIRED_SYSTEM_TENANT_ID,
-        roleId: REQUIRED_OWNER_ROLE_ID,
+        organizationId: SYSTEM_TENANT_ID,
+        roleId: OWNER_ROLE_ID,
         createdAt: new Date(),
       });
       console.log(`✅ User assigned to System Tenant as Owner.`);
     } else {
       // Force update role to Owner if it's different
-      if (existingMember[0].roleId === REQUIRED_OWNER_ROLE_ID) {
+      if (existingMember[0].roleId === OWNER_ROLE_ID) {
         console.log(`ℹ️  User is already a System Owner.`);
       } else {
         await db
           .update(schema.member)
-          .set({ roleId: REQUIRED_OWNER_ROLE_ID })
+          .set({ roleId: OWNER_ROLE_ID })
           .where(eq(schema.member.id, existingMember[0].id));
         console.log(`✅ User role updated to System Owner.`);
       }

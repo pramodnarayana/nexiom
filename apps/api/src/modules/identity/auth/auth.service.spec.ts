@@ -6,10 +6,10 @@ import {
   PERMISSION_PROVIDER,
   User,
 } from '@nexiom/identity';
-import { REQUIRED_SYSTEM_TENANT_ID } from '../../../constants';
+import { getRequiredSystemTenantId } from '../../../constants';
 
 vi.mock('../../../constants', () => ({
-  REQUIRED_SYSTEM_TENANT_ID: 'mock-system-tenant-id',
+  getRequiredSystemTenantId: vi.fn(() => 'mock-system-tenant-id'),
 }));
 
 describe('AuthService', () => {
@@ -160,7 +160,7 @@ describe('AuthService', () => {
 
       expect(mockPermissionProvider.getPermissions).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'u2' }),
-        REQUIRED_SYSTEM_TENANT_ID,
+        getRequiredSystemTenantId(),
       );
       expect(result?.user.permissions).toContain('system:view');
     });

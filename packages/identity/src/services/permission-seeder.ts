@@ -20,7 +20,13 @@ export class PermissionSeeder implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seed();
+    // Only seed if RBAC data is missing (performance optimization)
+    const existingRoles = await this.db.query.role.findMany({ limit: 1 });
+    if (existingRoles.length === 0) {
+      await this.seed();
+    } else {
+      this.logger.log("RBAC data already exists, skipping seed");
+    }
   }
 
   async seed() {

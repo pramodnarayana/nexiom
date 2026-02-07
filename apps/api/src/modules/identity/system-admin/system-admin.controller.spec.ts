@@ -7,8 +7,8 @@ import {
   TENANT_PROVIDER,
 } from '@nexiom/identity';
 import {
-  REQUIRED_ADMIN_ROLE_ID,
-  REQUIRED_OWNER_ROLE_ID,
+  getRequiredAdminRoleId,
+  getRequiredOwnerRoleId,
 } from '../../../constants';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -16,10 +16,12 @@ import { PermissionsGuard } from '../auth/permissions.guard';
 import { PlatformGuard } from '../auth/platform.guard';
 
 vi.mock('../../../constants', () => ({
-  REQUIRED_ADMIN_ROLE_ID: 'admin-role-id',
-  REQUIRED_OWNER_ROLE_ID: 'owner-role-id',
-  REQUIRED_SYSTEM_TENANT_ID: '00000000-0000-0000-0000-000000000000',
-  REQUIRED_MEMBER_ROLE_ID: 'member-role-id',
+  getRequiredAdminRoleId: vi.fn(() => 'admin-role-id'),
+  getRequiredOwnerRoleId: vi.fn(() => 'owner-role-id'),
+  getRequiredSystemTenantId: vi.fn(
+    () => '00000000-0000-0000-0000-000000000000',
+  ),
+  getRequiredMemberRoleId: vi.fn(() => 'member-role-id'),
 }));
 
 describe('SystemAdminController', () => {
@@ -112,7 +114,7 @@ describe('SystemAdminController', () => {
 
       await expect(
         controller.createSystemInvitation(
-          { email: 'test@example.com', role: REQUIRED_OWNER_ROLE_ID },
+          { email: 'test@example.com', role: getRequiredOwnerRoleId() },
           mockHeaders,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -127,7 +129,7 @@ describe('SystemAdminController', () => {
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
 
       const result = await controller.createSystemInvitation(
-        { email: 'test@example.com', role: REQUIRED_OWNER_ROLE_ID },
+        { email: 'test@example.com', role: getRequiredOwnerRoleId() },
         mockHeaders,
       );
 
@@ -135,7 +137,7 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: REQUIRED_OWNER_ROLE_ID,
+        role: getRequiredOwnerRoleId(),
         organizationId: null,
         inviterId: 'admin1',
       });
@@ -386,7 +388,7 @@ describe('SystemAdminController', () => {
 
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: REQUIRED_ADMIN_ROLE_ID,
+        role: getRequiredAdminRoleId(),
         organizationId: null, // System invite
         inviterId: 'admin1',
       });

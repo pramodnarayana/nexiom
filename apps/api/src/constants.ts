@@ -44,11 +44,33 @@ export const validateRequiredEnv = (): void => {
   getMemberRoleId();
 };
 
-// Deprecated exports for backward compatibility - use getters instead
-// These still evaluate immediately, so scripts should call validateRequiredEnv() first
-export const REQUIRED_SYSTEM_TENANT_ID = process.env.SYSTEM_TENANT_ID || '';
-export const REQUIRED_OWNER_ROLE_ID = process.env.OWNER_ROLE_ID || '';
-export const REQUIRED_ADMIN_ROLE_ID = process.env.ADMIN_ROLE_ID || '';
-export const REQUIRED_MEMBER_ROLE_ID = process.env.MEMBER_ROLE_ID || '';
+// REQUIRED_* getters - throw if env vars are missing (safer than defaults)
+export const getRequiredSystemTenantId = (): string => {
+  const value = process.env.SYSTEM_TENANT_ID;
+  if (!value)
+    throw new Error('Missing required environment variable: SYSTEM_TENANT_ID');
+  return value;
+};
+
+export const getRequiredOwnerRoleId = (): string => {
+  const value = process.env.OWNER_ROLE_ID;
+  if (!value)
+    throw new Error('Missing required environment variable: OWNER_ROLE_ID');
+  return value;
+};
+
+export const getRequiredAdminRoleId = (): string => {
+  const value = process.env.ADMIN_ROLE_ID;
+  if (!value)
+    throw new Error('Missing required environment variable: ADMIN_ROLE_ID');
+  return value;
+};
+
+export const getRequiredMemberRoleId = (): string => {
+  const value = process.env.MEMBER_ROLE_ID;
+  if (!value)
+    throw new Error('Missing required environment variable: MEMBER_ROLE_ID');
+  return value;
+};
 
 export { ALL_PERMISSIONS } from '@nexiom/identity/src/constants';

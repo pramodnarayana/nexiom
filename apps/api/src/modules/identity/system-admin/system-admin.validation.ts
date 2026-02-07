@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import {
-  REQUIRED_ADMIN_ROLE_ID,
-  REQUIRED_OWNER_ROLE_ID,
+  getRequiredAdminRoleId,
+  getRequiredOwnerRoleId,
 } from '../../../constants';
 
 export const CreateTenantSchema = z.object({
@@ -51,9 +51,9 @@ export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 export const CreateSystemInvitationSchema = z.object({
   email: z.string().email(),
   role: z
-    .enum([REQUIRED_OWNER_ROLE_ID, REQUIRED_ADMIN_ROLE_ID] as const)
+    .enum([getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as const)
     .optional()
-    .default(REQUIRED_ADMIN_ROLE_ID),
+    .default(getRequiredAdminRoleId()),
 });
 
 export class CreateSystemInvitationValidation extends createZodDto(

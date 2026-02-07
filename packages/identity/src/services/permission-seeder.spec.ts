@@ -48,6 +48,10 @@ describe("PermissionSeeder", () => {
   });
 
   it("onModuleInit calls seed", async () => {
+    // Mock db.query.role to return empty (triggering seed)
+    db.query = {
+      role: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as typeof db.query;
     const spy = vi.spyOn(seeder, "seed").mockResolvedValue(undefined);
     await seeder.onModuleInit();
     expect(spy).toHaveBeenCalled();
