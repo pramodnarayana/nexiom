@@ -126,7 +126,8 @@ export class PermissionSeeder implements OnModuleInit {
       }
 
       // Member: Read-only permissions
-      // We explicitly select 'users:read' and 'tenants:read' or similar safe subsets
+      // INTENTIONAL: Only 'users:read' and 'tenants:read' are allowed for security.
+      // This is a curated, safe subset - not derived dynamically from ALL_PERMISSIONS.
       const memberPerms = ["users:read", "tenants:read"];
       for (const p of memberPerms) {
         if (perms.includes(p as PermissionType)) {

@@ -1,11 +1,19 @@
 import { Client } from 'pg';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import * as dotenv from 'dotenv';
+import * as dotEnv from 'dotenv';
 import * as path from 'node:path';
+import { ALL_PERMISSIONS } from '../constants';
 
 // Load .env from apps/api root
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotEnv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const assertEnv = (val: string | undefined, name: string): string => {
+  if (!val) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return val;
+};
 
 const loadEnv = () => {
   const {
@@ -16,27 +24,19 @@ const loadEnv = () => {
     MEMBER_ROLE_ID,
   } = process.env;
 
-  const missing = [];
-  if (!DATABASE_URL) missing.push('DATABASE_URL');
-  if (!SYSTEM_TENANT_ID) missing.push('SYSTEM_TENANT_ID');
-  if (!OWNER_ROLE_ID) missing.push('OWNER_ROLE_ID');
-  if (!ADMIN_ROLE_ID) missing.push('ADMIN_ROLE_ID');
-  if (!MEMBER_ROLE_ID) missing.push('MEMBER_ROLE_ID');
-
-  if (missing.length > 0) {
-    console.error(
-      `FATAL: Missing required environment variables: ${missing.join(', ')}`,
-    );
+  try {
+    return {
+      DATABASE_URL: assertEnv(DATABASE_URL, 'DATABASE_URL'),
+      SYSTEM_TENANT_ID: assertEnv(SYSTEM_TENANT_ID, 'SYSTEM_TENANT_ID'),
+      OWNER_ROLE_ID: assertEnv(OWNER_ROLE_ID, 'OWNER_ROLE_ID'),
+      ADMIN_ROLE_ID: assertEnv(ADMIN_ROLE_ID, 'ADMIN_ROLE_ID'),
+      MEMBER_ROLE_ID: assertEnv(MEMBER_ROLE_ID, 'MEMBER_ROLE_ID'),
+    };
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error(`FATAL: ${errorMsg}`);
     process.exit(1);
   }
-
-  return {
-    DATABASE_URL,
-    SYSTEM_TENANT_ID,
-    OWNER_ROLE_ID,
-    ADMIN_ROLE_ID,
-    MEMBER_ROLE_ID,
-  };
 };
 
 const validateEnv = (dbUrl: string) => {
@@ -91,12 +91,20 @@ const truncateTables = async (client: Client) => {
     'role',
   ];
 
+  const errors: { table: string; error: unknown }[] = [];
+
   for (const table of tables) {
     try {
       await client.query(`TRUNCATE TABLE "${table}" CASCADE;`);
     } catch (e) {
       console.error(`Error truncating table "${table}":`, e);
+      errors.push({ table, error: e });
     }
+  }
+
+  if (errors.length > 0) {
+    console.error('FATAL: Failed to truncate tables', errors);
+    throw new Error('Table truncation failed');
   }
 };
 
@@ -114,27 +122,7 @@ const seedRBAC = async (
     [ids.owner, ids.admin, ids.member],
   );
 
-  const perms = [
-    'users:read',
-    'users:create',
-    'users:update',
-    'users:delete',
-    'users:manage',
-    'tenants:read',
-    'tenants:create',
-    'tenants:update',
-    'tenants:delete',
-    'tenants:manage',
-    'dashboard:read',
-    'admin_dashboard:view',
-    'settings:manage',
-    'settings:read',
-    'system_users:read',
-    'system_users:manage',
-    'system_users:invite',
-    'system_tenants:read',
-    'system_tenants:manage',
-  ];
+  const perms = ALL_PERMISSIONS;
 
   // Batch Insert Permissions using UNNEST
   await client.query(
@@ -153,43 +141,54 @@ const seedRBAC = async (
   const rolePermRows: { id: string; r: string; p: string; o: string | null }[] =
     [];
 
-  // Member (Read Only)
-  // Filter for read-scoped non-system permissions
-  const memberPerms = perms.filter(
-    (p) => p.endsWith(':read') && !p.startsWith('system_'),
-  );
+  // Helper to push
+  const add = (r: string, p: string, o: string | null) => {
+    rolePermRows.push({ id: uuidv4(), r, p, o });
+  };
 
+  // 1. Member (Read Only)
+  // Match PermissionSeeder: 'users:read', 'tenants:read'
+  const memberPerms = ['users:read', 'tenants:read'] as const;
   for (const p of memberPerms) {
-    rolePermRows.push({
-      id: uuidv4(),
-      r: ids.member,
-      p,
-      o: null,
-    });
-  }
-
-  for (const p of perms) {
-    if (!p.startsWith('system_')) {
-      // Admin (Global)
-      rolePermRows.push({ id: uuidv4(), r: ids.admin, p, o: null });
-
-      // Owner (Global) - except dashboard override
-      if (p !== 'admin_dashboard:view') {
-        rolePermRows.push({ id: uuidv4(), r: ids.owner, p, o: null });
-      }
-    } else {
-      // System Permissions for Owner (Scoped)
-      rolePermRows.push({ id: uuidv4(), r: ids.owner, p, o: ids.systemTenant });
+    // Only add if it exists in ALL_PERMISSIONS (safety check)
+    if ((perms as readonly string[]).includes(p)) {
+      add(ids.member, p, null);
     }
   }
 
-  // Add back admin_dashboard:view for Owner in System Tenant
-  rolePermRows.push({
-    id: uuidv4(),
-    r: ids.owner,
-    p: 'admin_dashboard:view',
-    o: ids.systemTenant,
-  });
+  // 2. Admin
+  // Global Permissions (non-system, non-dashboard-view) -> Global
+  const adminGlobalPerms = perms.filter(
+    (p) => !p.startsWith('system_') && p !== 'admin_dashboard:view',
+  );
+  for (const p of adminGlobalPerms) {
+    add(ids.admin, p, null);
+  }
+
+  // System Permissions -> System Tenant Scoped
+  const adminSystemPerms = perms.filter(
+    (p) => p.startsWith('system_') || p === 'admin_dashboard:view',
+  );
+  for (const p of adminSystemPerms) {
+    add(ids.admin, p, ids.systemTenant);
+  }
+
+  // 3. Owner
+  // Global Permissions -> Global
+  const ownerGlobalPerms = perms.filter(
+    (p) => !p.startsWith('system_') && p !== 'admin_dashboard:view',
+  );
+  for (const p of ownerGlobalPerms) {
+    add(ids.owner, p, null);
+  }
+
+  // System Permissions -> System Tenant Scoped
+  const ownerSystemPerms = perms.filter(
+    (p) => p.startsWith('system_') || p === 'admin_dashboard:view',
+  );
+  for (const p of ownerSystemPerms) {
+    add(ids.owner, p, ids.systemTenant);
+  }
 
   // Batch Insert Role Permissions
   if (rolePermRows.length > 0) {
@@ -268,7 +267,7 @@ const seedUsersAndTenants = async (
 
 const main = async () => {
   const env = loadEnv();
-  validateEnv(env.DATABASE_URL as string);
+  validateEnv(env.DATABASE_URL);
 
   console.log('Connecting to DB...');
   const client = new Client({ connectionString: env.DATABASE_URL });
@@ -277,14 +276,14 @@ const main = async () => {
     await client.connect();
     await truncateTables(client);
     await seedRBAC(client, {
-      owner: env.OWNER_ROLE_ID as string,
-      admin: env.ADMIN_ROLE_ID as string,
-      member: env.MEMBER_ROLE_ID as string,
-      systemTenant: env.SYSTEM_TENANT_ID as string,
+      owner: env.OWNER_ROLE_ID,
+      admin: env.ADMIN_ROLE_ID,
+      member: env.MEMBER_ROLE_ID,
+      systemTenant: env.SYSTEM_TENANT_ID,
     });
     await seedUsersAndTenants(client, {
-      systemTenant: env.SYSTEM_TENANT_ID as string,
-      owner: env.OWNER_ROLE_ID as string,
+      systemTenant: env.SYSTEM_TENANT_ID,
+      owner: env.OWNER_ROLE_ID,
     });
   } catch (error) {
     console.error('Seed failed:', error);

@@ -13,8 +13,9 @@ type MockDb = {
 };
 
 const mkDb = () => {
+  const insertMock = vi.fn().mockReturnThis();
   return {
-    insert: vi.fn().mockReturnThis(),
+    insert: insertMock,
     values: vi.fn().mockReturnThis(),
     onConflictDoNothing: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +88,11 @@ describe("PermissionSeeder", () => {
     expect(rolePermValues?.length).toBeGreaterThan(10);
     // Verify Member permissions exist
     expect(rolePermValues?.find((rp) => rp.roleId === "member")).toBeDefined();
+
+    // Validate insert() was called with correct table schemas
+    expect(db.insert).toHaveBeenCalledWith(schema.role);
+    expect(db.insert).toHaveBeenCalledWith(schema.permission);
+    expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
 
     expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
   });

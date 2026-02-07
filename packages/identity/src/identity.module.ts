@@ -1,9 +1,4 @@
-import type {
-  DynamicModule,
-  ModuleMetadata,
-  Provider,
-  Type,
-} from "@nestjs/common";
+import type { DynamicModule, ModuleMetadata, Type } from "@nestjs/common";
 import { Global, Module } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -11,6 +6,7 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
+  EMAIL_PROVIDER,
   IDENTITY_OPTIONS,
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
@@ -59,11 +55,6 @@ export class IdentityModule {
       throw new Error("constants are required for synchronous registration");
     }
 
-    const authProvider: Provider = BetterAuthAdapter;
-    const userProvider: Provider = DrizzleUserAdapter;
-    const tenantProvider: Provider = DrizzleTenantAdapter;
-    const permissionProvider: Provider = DrizzlePermissionAdapter;
-
     return {
       module: IdentityModule,
       imports: options.imports || [],
@@ -97,10 +88,6 @@ export class IdentityModule {
           useClass: DrizzlePermissionAdapter,
         },
         PermissionSeeder,
-        authProvider,
-        userProvider,
-        tenantProvider,
-        permissionProvider,
       ],
       exports: [
         AUTH_PROVIDER,
@@ -159,7 +146,7 @@ export class IdentityModule {
           inject: [IDENTITY_OPTIONS],
         },
         {
-          provide: "EMAIL_PROVIDER", // Using string token to match constants.ts
+          provide: EMAIL_PROVIDER,
           useFactory: (identityOptions: IdentityModuleOptions) =>
             identityOptions.email!,
           inject: [IDENTITY_OPTIONS],
@@ -181,11 +168,6 @@ export class IdentityModule {
           useClass: DrizzlePermissionAdapter,
         },
         PermissionSeeder,
-        // Removed duplicate class providers to avoid multiple instances
-        BetterAuthAdapter,
-        DrizzleUserAdapter,
-        DrizzleTenantAdapter,
-        DrizzlePermissionAdapter,
       ],
       exports: [
         AUTH_PROVIDER,

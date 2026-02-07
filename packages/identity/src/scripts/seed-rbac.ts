@@ -33,7 +33,9 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // resource:action
   // Strictly granular for PBAC strategies
   const standardPerms = ALL_PERMISSIONS.map((p) => {
-    const [resource, action] = p.split(":");
+    const colonIdx = p.indexOf(":");
+    const resource = p.substring(0, colonIdx);
+    const action = p.substring(colonIdx + 1);
     return {
       id: p,
       action,
