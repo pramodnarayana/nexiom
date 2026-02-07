@@ -57,6 +57,7 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
 async function elevateToOwner(
   db: NodePgDatabase<typeof schema>,
   email: string,
+  skipSeed?: boolean,
 ): Promise<void> {
   // Get validated env vars (throws if missing)
   const OWNER_ROLE_ID = getRequiredOwnerRoleId();
@@ -90,7 +91,9 @@ async function elevateToOwner(
     })
     .onConflictDoNothing();
 
-  await seedRbac(db);
+  if (!skipSeed) {
+    await seedRbac(db);
+  }
 
   // Find user
   const users = await db

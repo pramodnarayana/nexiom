@@ -117,11 +117,23 @@ describe("PermissionSeeder", () => {
     expect(db.insert).toHaveBeenCalledWith(schema.role);
     expect(db.insert).toHaveBeenCalledWith(schema.permission);
     expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
-
     expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
+
+    // Verify rolePermission onConflict target (3rd call)
+    // The calls are likely: 1. role, 2. permission, 3. rolePermission
+    const onConflictCalls = db.onConflictDoNothing.mock.calls;
+    const lastCall = onConflictCalls[2];
+    expect(lastCall[0]).toEqual({
+      target: [
+        schema.rolePermission.roleId,
+        schema.rolePermission.permissionId,
+        schema.rolePermission.organizationId,
+      ],
+    });
 
     // Assert scoping (User requested check for sys vs null orgId)
     // Reuse rolePermValues from above
+    // ... existing checks ...
 
     // Check for at least one system-scoped permission (admin_dashboard:view or system_*)
     const systemScoped = rolePermValues?.find(

@@ -20,6 +20,13 @@ export async function seedSystemRbac(
   const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } = config;
   const now = new Date();
 
+  // 0. Validate Config
+  if (new Set([ownerRoleId, adminRoleId, memberRoleId]).size !== 3) {
+    throw new Error(
+      `Duplicate Role IDs detected: Owner=${ownerRoleId}, Admin=${adminRoleId}, Member=${memberRoleId}. Roles must be distinct.`,
+    );
+  }
+
   try {
     // 1. Ensure Roles
     const roles = [
@@ -84,30 +91,49 @@ export async function seedSystemRbac(
     const isSystemPerm = (p: string) =>
       p.startsWith("system_") || p === "admin_dashboard:view";
 
-    // Admin: Split assignments
-    const adminGlobal = perms.filter((p) => !isSystemPerm(p));
-    adminGlobal.forEach((p) =>
-      rolePermissionsToInsert.push({
-        id: uuidv4(),
-        roleId: adminRoleId,
-        permissionId: p,
-        organizationId: null,
-      }),
-    );
+    const addPermissionsForRole = (
+      roleId: string,
+      permissions: readonly string[],
+      scopedOrganizationId: string,
+    ) => {
+      for (const p of permissions) {
+        // Deterministically decide scope based on permission type
+        const isSystem = isSystemPerm(p);
+        const orgId = isSystem ? scopedOrganizationId : null;
 
-    const adminSystem = perms.filter(isSystemPerm);
-    adminSystem.forEach((p) =>
-      rolePermissionsToInsert.push({
-        id: uuidv4(),
-        roleId: adminRoleId,
-        permissionId: p,
-        organizationId: systemTenantId,
-      }),
-    );
+        // Push to list
+        rolePermissionsToInsert.push({
+          id: uuidv4(),
+          roleId,
+          permissionId: p,
+          organizationId: orgId,
+        });
+      }
+    };
+
+    // Admin
+    addPermissionsForRole(adminRoleId, perms, systemTenantId);
 
     // Member: curated safe subset
     const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
-    memberPerms.forEach((p) => {
+    // Member permissions are global for non-system perms in this context,
+    // but member logic in original was: "null" for everything.
+    // Original logic:
+    // memberPerms.forEach((p) => {
+    //   if (perms.includes(p)) {
+    //       rolePermissionsToInsert.push({ ..., organizationId: null });
+    //   }
+    // });
+    // This helper logic (isSystem ? sys : null) works for member too
+    // IF member perms are NOT system perms and we pass systemTenantId.
+    // However, member perms "users:read" and "tenants:read" are not "system_" perms,
+    // so they will be null.
+    // But if we ever add a system perm to member, it would get system scope.
+    // Let's use a simpler loop for member to match exact original "always null" behavior if needed,
+    // OR just use the helper if we trust the "isSystem" logic.
+    // The original code used `organizationId: null` hardcoded for Member.
+    // Let's stick to safe iteration for member to avoid accidental system grant.
+    for (const p of memberPerms) {
       if (perms.includes(p)) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -116,28 +142,10 @@ export async function seedSystemRbac(
           organizationId: null,
         });
       }
-    });
+    }
 
-    // Owner: Split assignments (same as admin)
-    const ownerGlobal = perms.filter((p) => !isSystemPerm(p));
-    ownerGlobal.forEach((p) =>
-      rolePermissionsToInsert.push({
-        id: uuidv4(),
-        roleId: ownerRoleId,
-        permissionId: p,
-        organizationId: null,
-      }),
-    );
-
-    const ownerSystem = perms.filter(isSystemPerm);
-    ownerSystem.forEach((p) =>
-      rolePermissionsToInsert.push({
-        id: uuidv4(),
-        roleId: ownerRoleId,
-        permissionId: p,
-        organizationId: systemTenantId,
-      }),
-    );
+    // Owner (Same as Admin)
+    addPermissionsForRole(ownerRoleId, perms, systemTenantId);
 
     await db
       .insert(schema.rolePermission)

@@ -1,6 +1,11 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
-import { getOwnerRoleId, getAdminRoleId, getMemberRoleId } from "../constants";
+import {
+  getOwnerRoleId,
+  getAdminRoleId,
+  getMemberRoleId,
+  getSystemTenantId,
+} from "../constants";
 import { seedSystemRbac } from "../utils/rbac-seeding";
 import { Logger } from "@nestjs/common";
 
@@ -15,11 +20,7 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
 
   // Note: seed-rbac.ts typically runs in contexts where SYSTEM_TENANT_ID might not be strictly required
   // if not scoping. But canonical seeder requires it.
-  // We'll try to get it from env or throw.
-  const systemTenantId = process.env.SYSTEM_TENANT_ID;
-  if (!systemTenantId) {
-    throw new Error("Missing required environment variable: SYSTEM_TENANT_ID");
-  }
+  const systemTenantId = getSystemTenantId();
 
   const config = {
     ownerRoleId: getOwnerRoleId(),
