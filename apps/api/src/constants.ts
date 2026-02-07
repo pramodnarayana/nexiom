@@ -3,37 +3,15 @@
 
 // Lazy accessors to avoid forcing env vars at module load time
 // Use these getters in runtime code (main.ts, services, etc.)
-export const getSystemTenantId = (): string => {
-  const value = process.env.SYSTEM_TENANT_ID;
-  if (!value) {
-    throw new Error('Missing required environment variable: SYSTEM_TENANT_ID');
-  }
-  return value;
-};
+// Re-export from identity package to avoid duplication
+import {
+  getSystemTenantId,
+  getOwnerRoleId,
+  getAdminRoleId,
+  getMemberRoleId,
+} from '@nexiom/identity';
 
-export const getOwnerRoleId = (): string => {
-  const value = process.env.OWNER_ROLE_ID;
-  if (!value) {
-    throw new Error('Missing required environment variable: OWNER_ROLE_ID');
-  }
-  return value;
-};
-
-export const getAdminRoleId = (): string => {
-  const value = process.env.ADMIN_ROLE_ID;
-  if (!value) {
-    throw new Error('Missing required environment variable: ADMIN_ROLE_ID');
-  }
-  return value;
-};
-
-export const getMemberRoleId = (): string => {
-  const value = process.env.MEMBER_ROLE_ID;
-  if (!value) {
-    throw new Error('Missing required environment variable: MEMBER_ROLE_ID');
-  }
-  return value;
-};
+export { getSystemTenantId, getOwnerRoleId, getAdminRoleId, getMemberRoleId };
 
 // For scripts that need immediate validation (manage.ts, reset-e2e.ts, etc.)
 // Call this function explicitly to throw early if env vars are missing
@@ -44,33 +22,11 @@ export const validateRequiredEnv = (): void => {
   getMemberRoleId();
 };
 
-// REQUIRED_* getters - throw if env vars are missing (safer than defaults)
-export const getRequiredSystemTenantId = (): string => {
-  const value = process.env.SYSTEM_TENANT_ID;
-  if (!value)
-    throw new Error('Missing required environment variable: SYSTEM_TENANT_ID');
-  return value;
-};
-
-export const getRequiredOwnerRoleId = (): string => {
-  const value = process.env.OWNER_ROLE_ID;
-  if (!value)
-    throw new Error('Missing required environment variable: OWNER_ROLE_ID');
-  return value;
-};
-
-export const getRequiredAdminRoleId = (): string => {
-  const value = process.env.ADMIN_ROLE_ID;
-  if (!value)
-    throw new Error('Missing required environment variable: ADMIN_ROLE_ID');
-  return value;
-};
-
-export const getRequiredMemberRoleId = (): string => {
-  const value = process.env.MEMBER_ROLE_ID;
-  if (!value)
-    throw new Error('Missing required environment variable: MEMBER_ROLE_ID');
-  return value;
-};
+// REQUIRED_* getters - aliases for backward compatibility and semantic clarity
+// These throw if env vars are missing (same behavior as identity getters)
+export const getRequiredSystemTenantId = getSystemTenantId;
+export const getRequiredOwnerRoleId = getOwnerRoleId;
+export const getRequiredAdminRoleId = getAdminRoleId;
+export const getRequiredMemberRoleId = getMemberRoleId;
 
 export { ALL_PERMISSIONS } from '@nexiom/identity/src/constants';

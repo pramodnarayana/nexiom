@@ -47,14 +47,30 @@ describe("PermissionSeeder", () => {
     vi.spyOn(Logger.prototype, "error").mockImplementation(() => {});
   });
 
-  it("onModuleInit calls seed", async () => {
-    // Mock db.query.role to return empty (triggering seed)
+  it("onModuleInit calls seed if no permissions exist", async () => {
+    // Mock db.query.rolePermission to return empty (triggering seed)
     db.query = {
-      role: { findMany: vi.fn().mockResolvedValue([]) },
+      rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as typeof db.query;
     const spy = vi.spyOn(seeder, "seed").mockResolvedValue(undefined);
     await seeder.onModuleInit();
     expect(spy).toHaveBeenCalled();
+  });
+
+  it("onModuleInit skips seed if permissions exist", async () => {
+    // Mock db.query.rolePermission to return data (skipping seed)
+    db.query = {
+      rolePermission: { findMany: vi.fn().mockResolvedValue([{ id: "1" }]) },
+    } as unknown as typeof db.query;
+    const seedSpy = vi.spyOn(seeder, "seed");
+    const logSpy = vi.spyOn(Logger.prototype, "log");
+
+    await seeder.onModuleInit();
+
+    expect(seedSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(
+      "RBAC data already exists, skipping seed",
+    );
   });
 
   it("seed inserts roles, permissions, and rolePermissions", async () => {

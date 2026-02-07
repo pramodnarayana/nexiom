@@ -505,7 +505,10 @@ async function resetDb() {
                 "account",
                 "verification",
                 "organization",
-                "user"
+                "user",
+                "role",
+                "permission",
+                "role_permission"
             CASCADE;
         `);
     console.log('✅ Database Cleaned.');

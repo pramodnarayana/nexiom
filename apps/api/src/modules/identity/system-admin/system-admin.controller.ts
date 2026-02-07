@@ -30,8 +30,11 @@ import {
   UpdateTenantValidation,
   UpdateUserValidation,
   CreateUserValidation,
-  CreateSystemInvitationValidation,
+  buildCreateSystemInvitationSchema,
+  CreateSystemInvitationDto,
 } from './system-admin.validation';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { UsePipes } from '@nestjs/common';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -79,8 +82,9 @@ export class SystemAdminController {
 
   @Post('invitations')
   @RequirePermission('system_users', 'invite')
+  @UsePipes(new ZodValidationPipe(buildCreateSystemInvitationSchema()))
   async createSystemInvitation(
-    @Body() body: CreateSystemInvitationValidation,
+    @Body() body: CreateSystemInvitationDto,
     @RequestHeaders() headers: Record<string, string>,
   ) {
     const webHeaders = this.toWebHeaders(headers);

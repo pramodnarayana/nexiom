@@ -48,14 +48,17 @@ export const CreateUserSchema = z.object({
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 
-export const CreateSystemInvitationSchema = z.object({
-  email: z.string().email(),
-  role: z
-    .enum([getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as const)
-    .optional()
-    .default(getRequiredAdminRoleId()),
-});
+// Factory function to create schema lazily (avoids eager env access)
+export const buildCreateSystemInvitationSchema = () =>
+  z.object({
+    email: z.string().email(),
+    role: z
+      .enum([getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as const)
+      .optional()
+      .default(getRequiredAdminRoleId()),
+  });
 
-export class CreateSystemInvitationValidation extends createZodDto(
-  CreateSystemInvitationSchema,
-) {}
+// Type inference from schema
+export type CreateSystemInvitationDto = z.infer<
+  ReturnType<typeof buildCreateSystemInvitationSchema>
+>;
