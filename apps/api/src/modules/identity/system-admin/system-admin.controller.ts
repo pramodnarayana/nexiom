@@ -12,6 +12,7 @@ import {
   BadRequestException,
   NotFoundException,
   Headers as RequestHeaders,
+  UsePipes,
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
@@ -34,7 +35,6 @@ import {
   CreateSystemInvitationDto,
 } from './system-admin.validation';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { UsePipes } from '@nestjs/common';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { AuthGuard } from '../auth/auth.guard';

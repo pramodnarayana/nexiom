@@ -137,9 +137,9 @@ export class PermissionSeeder implements OnModuleInit {
       // Member: Read-only permissions
       // INTENTIONAL: Only 'users:read' and 'tenants:read' are allowed for security.
       // This is a curated, safe subset - not derived dynamically from ALL_PERMISSIONS.
-      const memberPerms = ["users:read", "tenants:read"];
+      const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
       for (const p of memberPerms) {
-        if (perms.includes(p as PermissionType)) {
+        if (perms.includes(p)) {
           rolePermissionsToInsert.push({
             id: uuidv4(),
             roleId: memberRoleId,

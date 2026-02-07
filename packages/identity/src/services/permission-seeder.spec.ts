@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { PermissionSeeder } from "./permission-seeder";
 import { Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -45,6 +45,10 @@ describe("PermissionSeeder", () => {
     // Suppress logs
     vi.spyOn(Logger.prototype, "log").mockImplementation(() => {});
     vi.spyOn(Logger.prototype, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("onModuleInit calls seed if no permissions exist", async () => {
