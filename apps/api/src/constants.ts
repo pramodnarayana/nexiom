@@ -18,3 +18,5 @@ export const REQUIRED_SYSTEM_TENANT_ID = SYSTEM_TENANT_ID;
 export const REQUIRED_OWNER_ROLE_ID = OWNER_ROLE_ID;
 export const REQUIRED_ADMIN_ROLE_ID = ADMIN_ROLE_ID;
 export const REQUIRED_MEMBER_ROLE_ID = MEMBER_ROLE_ID;
+
+export { ALL_PERMISSIONS } from '../../../packages/identity/src/constants';

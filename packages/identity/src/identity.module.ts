@@ -159,6 +159,12 @@ export class IdentityModule {
           inject: [IDENTITY_OPTIONS],
         },
         {
+          provide: "EMAIL_PROVIDER", // Using string token to match constants.ts
+          useFactory: (identityOptions: IdentityModuleOptions) =>
+            identityOptions.email!,
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
           provide: AUTH_PROVIDER,
           useClass: BetterAuthAdapter,
         },

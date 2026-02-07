@@ -8,6 +8,30 @@ export const DATABASE_CONNECTION = "DATABASE_CONNECTION";
 export const IDENTITY_DB = "IDENTITY_DB";
 export const BETTER_AUTH_CONFIG = "BETTER_AUTH_CONFIG";
 
+export const ALL_PERMISSIONS = [
+  "users:read",
+  "users:create",
+  "users:update",
+  "users:delete",
+  "users:manage",
+  "tenants:read",
+  "tenants:create",
+  "tenants:update",
+  "tenants:delete",
+  "tenants:manage",
+  "dashboard:read",
+  "admin_dashboard:view",
+  "settings:manage",
+  "settings:read",
+  "system_users:read",
+  "system_users:manage",
+  "system_users:invite",
+  "system_tenants:read",
+  "system_tenants:manage",
+] as const;
+
+export type PermissionType = (typeof ALL_PERMISSIONS)[number];
+
 // Environment Variables - Strictly required
 // Use Dependency Injection via IDENTITY_OPTIONS where possible.
 const getEnv = (key: string): string => {

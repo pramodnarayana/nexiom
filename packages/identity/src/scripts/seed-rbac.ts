@@ -1,7 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
-import { getOwnerRoleId, getAdminRoleId, getMemberRoleId } from "../constants";
+import {
+  getOwnerRoleId,
+  getAdminRoleId,
+  getMemberRoleId,
+  ALL_PERMISSIONS,
+} from "../constants";
 
 export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   console.log("Seeding RBAC...");
@@ -27,28 +32,14 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // 1. Define Standard Permissions
   // resource:action
   // Strictly granular for PBAC strategies
-  const standardPerms = [
-    // Users
-    { id: "users:read", action: "read", resource: "users" },
-    { id: "users:create", action: "create", resource: "users" },
-    { id: "users:update", action: "update", resource: "users" },
-    { id: "users:delete", action: "delete", resource: "users" },
-    { id: "users:manage", action: "manage", resource: "users" },
-
-    // Tenants
-    { id: "tenants:read", action: "read", resource: "tenants" },
-    { id: "tenants:create", action: "create", resource: "tenants" },
-    { id: "tenants:update", action: "update", resource: "tenants" },
-    { id: "tenants:delete", action: "delete", resource: "tenants" },
-    { id: "tenants:manage", action: "manage", resource: "tenants" },
-
-    // Dashboard
-    { id: "dashboard:read", action: "read", resource: "dashboard" },
-
-    // Settings
-    { id: "settings:manage", action: "manage", resource: "settings" },
-    { id: "settings:read", action: "read", resource: "settings" },
-  ];
+  const standardPerms = ALL_PERMISSIONS.map((p) => {
+    const [resource, action] = p.split(":");
+    return {
+      id: p,
+      action,
+      resource,
+    };
+  });
 
   await db
     .insert(schema.permission)

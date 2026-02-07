@@ -1,7 +1,12 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
-import { IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
+import {
+  IDENTITY_OPTIONS,
+  IDENTITY_DB,
+  ALL_PERMISSIONS,
+  PermissionType,
+} from "../constants";
 import type { IdentityModuleOptions } from "../identity.module";
 import { v4 as uuidv4 } from "uuid";
 
@@ -59,27 +64,7 @@ export class PermissionSeeder implements OnModuleInit {
         .onConflictDoNothing();
 
       // 2. Ensure Permissions
-      const perms = [
-        "users:read",
-        "users:create",
-        "users:update",
-        "users:delete",
-        "users:manage",
-        "tenants:read",
-        "tenants:create",
-        "tenants:update",
-        "tenants:delete",
-        "tenants:manage",
-        "dashboard:read",
-        "admin_dashboard:view",
-        "settings:manage",
-        "settings:read",
-        "system_users:read",
-        "system_users:manage",
-        "system_users:invite",
-        "system_tenants:read",
-        "system_tenants:manage",
-      ];
+      const perms = ALL_PERMISSIONS;
 
       const permissionsToInsert = perms.map((p) => {
         // Map to permission objects (split permission string at the first ':'
@@ -112,13 +97,31 @@ export class PermissionSeeder implements OnModuleInit {
         organizationId?: string | null;
       }[] = [];
 
-      // Admin: All non-system
-      const adminPerms = perms.filter((p) => !p.startsWith("system_"));
-      for (const p of adminPerms) {
+      // Admin: Split assignments
+      // 1. Global Tenant Permissions (All non-system) -> orgId: null (Global)
+      //    Explicitly exclude admin_dashboard:view so it can be scoped to System Tenant
+      const adminGlobalPerms = perms.filter(
+        (p) => !p.startsWith("system_") && p !== "admin_dashboard:view",
+      );
+      for (const p of adminGlobalPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
           roleId: adminRoleId,
           permissionId: p,
+          organizationId: null, // Explicit null
+        });
+      }
+
+      // 2. System Permissions -> orgId: SYSTEM_TENANT_ID (Scoped)
+      const adminSystemPerms = perms.filter(
+        (p) => p.startsWith("system_") || p === "admin_dashboard:view",
+      );
+      for (const p of adminSystemPerms) {
+        rolePermissionsToInsert.push({
+          id: uuidv4(),
+          roleId: adminRoleId,
+          permissionId: p,
+          organizationId: systemTenantId, // Scoped
         });
       }
 
@@ -126,7 +129,7 @@ export class PermissionSeeder implements OnModuleInit {
       // We explicitly select 'users:read' and 'tenants:read' or similar safe subsets
       const memberPerms = ["users:read", "tenants:read"];
       for (const p of memberPerms) {
-        if (perms.includes(p)) {
+        if (perms.includes(p as PermissionType)) {
           rolePermissionsToInsert.push({
             id: uuidv4(),
             roleId: memberRoleId,
@@ -151,7 +154,7 @@ export class PermissionSeeder implements OnModuleInit {
       }
 
       // 2. System Permissions -> orgId: SYSTEM_TENANT_ID (Scoped)
-      // This means a User is ONLY an "Admin" of the system if they are in the System Tenant Context.
+      // This means a User is ONLY an "Owner" of the system if they are in the System Tenant Context.
       const systemPerms = perms.filter(
         (p) => p.startsWith("system_") || p === "admin_dashboard:view",
       );

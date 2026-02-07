@@ -17,7 +17,7 @@ const mkDb = () => {
     insert: vi.fn().mockReturnThis(),
     values: vi.fn().mockReturnThis(),
     onConflictDoNothing: vi.fn().mockReturnThis(),
-    execute: vi.fn(),
+    execute: vi.fn().mockResolvedValue(undefined),
   } as unknown as NodePgDatabase<typeof schema> & MockDb;
 };
 
@@ -59,28 +59,34 @@ describe("PermissionSeeder", () => {
 
     // Check Roles insert
 
-    // const rolesCall = db.insert.mock.calls[0]; // First call
-    // We can't easily check args if the mock chain is complex (insert -> values)
-    // But we CAN check values() calls if we spy on the chain return.
+    // Find calls by content shape
+    const calls = db.values.mock.calls.map(
+      (c) => c[0] as Record<string, unknown>[],
+    );
 
-    expect(db.values).toHaveBeenCalledTimes(3);
-
-    const roleValues = db.values.mock.calls[0][0] as Record<string, unknown>[];
+    // 1. Roles: should have 'name' property
+    const roleValues = calls.find(
+      (rows) => rows.length > 0 && "name" in rows[0],
+    );
+    expect(roleValues).toBeDefined();
     expect(roleValues).toHaveLength(3);
-    expect(roleValues.find((r) => r.name === "Owner")).toBeDefined();
+    expect(roleValues?.find((r) => r.name === "Owner")).toBeDefined();
 
-    const permValues = db.values.mock.calls[1][0] as Record<string, unknown>[];
-    expect(permValues.length).toBeGreaterThan(10);
-    expect(permValues[0]).toHaveProperty("resource");
+    // 2. Permissions: should have 'resource' property
+    const permValues = calls.find(
+      (rows) => rows.length > 0 && "resource" in rows[0],
+    );
+    expect(permValues).toBeDefined();
+    expect(permValues?.length).toBeGreaterThan(10);
 
-    // 3. Role Permissions
-    const rolePermValues = db.values.mock.calls[2][0] as Record<
-      string,
-      unknown
-    >[];
-    expect(rolePermValues.length).toBeGreaterThan(10);
+    // 3. Role Permissions: should have 'roleId' property
+    const rolePermValues = calls.find(
+      (rows) => rows.length > 0 && "roleId" in rows[0],
+    );
+    expect(rolePermValues).toBeDefined();
+    expect(rolePermValues?.length).toBeGreaterThan(10);
     // Verify Member permissions exist
-    expect(rolePermValues.find((rp) => rp.roleId === "member")).toBeDefined();
+    expect(rolePermValues?.find((rp) => rp.roleId === "member")).toBeDefined();
 
     expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
   });

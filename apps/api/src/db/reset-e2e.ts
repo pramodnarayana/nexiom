@@ -16,14 +16,17 @@ const loadEnv = () => {
     MEMBER_ROLE_ID,
   } = process.env;
 
-  if (
-    !DATABASE_URL ||
-    !SYSTEM_TENANT_ID ||
-    !OWNER_ROLE_ID ||
-    !ADMIN_ROLE_ID ||
-    !MEMBER_ROLE_ID
-  ) {
-    console.error('FATAL: Missing required environment variables.');
+  const missing = [];
+  if (!DATABASE_URL) missing.push('DATABASE_URL');
+  if (!SYSTEM_TENANT_ID) missing.push('SYSTEM_TENANT_ID');
+  if (!OWNER_ROLE_ID) missing.push('OWNER_ROLE_ID');
+  if (!ADMIN_ROLE_ID) missing.push('ADMIN_ROLE_ID');
+  if (!MEMBER_ROLE_ID) missing.push('MEMBER_ROLE_ID');
+
+  if (missing.length > 0) {
+    console.error(
+      `FATAL: Missing required environment variables: ${missing.join(', ')}`,
+    );
     process.exit(1);
   }
 
@@ -151,18 +154,19 @@ const seedRBAC = async (
     [];
 
   // Member (Read Only)
-  rolePermRows.push({
-    id: uuidv4(),
-    r: ids.member,
-    p: 'users:read',
-    o: null,
-  });
-  rolePermRows.push({
-    id: uuidv4(),
-    r: ids.member,
-    p: 'tenants:read',
-    o: null,
-  });
+  // Filter for read-scoped non-system permissions
+  const memberPerms = perms.filter(
+    (p) => p.endsWith(':read') && !p.startsWith('system_'),
+  );
+
+  for (const p of memberPerms) {
+    rolePermRows.push({
+      id: uuidv4(),
+      r: ids.member,
+      p,
+      o: null,
+    });
+  }
 
   for (const p of perms) {
     if (!p.startsWith('system_')) {
@@ -264,7 +268,7 @@ const seedUsersAndTenants = async (
 
 const main = async () => {
   const env = loadEnv();
-  validateEnv(env.DATABASE_URL);
+  validateEnv(env.DATABASE_URL as string);
 
   console.log('Connecting to DB...');
   const client = new Client({ connectionString: env.DATABASE_URL });
@@ -273,14 +277,14 @@ const main = async () => {
     await client.connect();
     await truncateTables(client);
     await seedRBAC(client, {
-      owner: env.OWNER_ROLE_ID,
-      admin: env.ADMIN_ROLE_ID,
-      member: env.MEMBER_ROLE_ID,
-      systemTenant: env.SYSTEM_TENANT_ID,
+      owner: env.OWNER_ROLE_ID as string,
+      admin: env.ADMIN_ROLE_ID as string,
+      member: env.MEMBER_ROLE_ID as string,
+      systemTenant: env.SYSTEM_TENANT_ID as string,
     });
     await seedUsersAndTenants(client, {
-      systemTenant: env.SYSTEM_TENANT_ID,
-      owner: env.OWNER_ROLE_ID,
+      systemTenant: env.SYSTEM_TENANT_ID as string,
+      owner: env.OWNER_ROLE_ID as string,
     });
   } catch (error) {
     console.error('Seed failed:', error);
