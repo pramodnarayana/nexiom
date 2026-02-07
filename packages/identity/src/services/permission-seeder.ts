@@ -97,12 +97,14 @@ export class PermissionSeeder implements OnModuleInit {
         organizationId?: string | null;
       }[] = [];
 
+      // Shared filter predicate for system/scoped permissions
+      const isSystemPerm = (p: string) =>
+        p.startsWith("system_") || p === "admin_dashboard:view";
+
       // Admin: Split assignments
       // 1. Global Tenant Permissions (All non-system) -> orgId: null (Global)
       //    Explicitly exclude admin_dashboard:view so it can be scoped to System Tenant
-      const adminGlobalPerms = perms.filter(
-        (p) => !p.startsWith("system_") && p !== "admin_dashboard:view",
-      );
+      const adminGlobalPerms = perms.filter((p) => !isSystemPerm(p));
       for (const p of adminGlobalPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -113,9 +115,7 @@ export class PermissionSeeder implements OnModuleInit {
       }
 
       // 2. System Permissions -> orgId: SYSTEM_TENANT_ID (Scoped)
-      const adminSystemPerms = perms.filter(
-        (p) => p.startsWith("system_") || p === "admin_dashboard:view",
-      );
+      const adminSystemPerms = perms.filter(isSystemPerm);
       for (const p of adminSystemPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -142,9 +142,7 @@ export class PermissionSeeder implements OnModuleInit {
 
       // Owner: Split assignments
       // 1. Global Tenant Permissions (All non-system) -> orgId: null (Global)
-      const tenantPerms = perms.filter(
-        (p) => !p.startsWith("system_") && p !== "admin_dashboard:view",
-      );
+      const tenantPerms = perms.filter((p) => !isSystemPerm(p));
       for (const p of tenantPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -156,9 +154,7 @@ export class PermissionSeeder implements OnModuleInit {
 
       // 2. System Permissions -> orgId: SYSTEM_TENANT_ID (Scoped)
       // This means a User is ONLY an "Owner" of the system if they are in the System Tenant Context.
-      const systemPerms = perms.filter(
-        (p) => p.startsWith("system_") || p === "admin_dashboard:view",
-      );
+      const systemPerms = perms.filter(isSystemPerm);
       for (const p of systemPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),

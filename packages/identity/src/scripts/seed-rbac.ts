@@ -34,6 +34,11 @@ export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
   // Strictly granular for PBAC strategies
   const standardPerms = ALL_PERMISSIONS.map((p) => {
     const colonIdx = p.indexOf(":");
+    if (colonIdx === -1) {
+      throw new Error(
+        `Malformed permission: "${p}" - must contain exactly one colon to separate resource:action`,
+      );
+    }
     const resource = p.substring(0, colonIdx);
     const action = p.substring(colonIdx + 1);
     return {

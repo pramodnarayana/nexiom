@@ -17,7 +17,11 @@ import {
   REQUIRED_MEMBER_ROLE_ID,
   REQUIRED_SYSTEM_TENANT_ID,
   ALL_PERMISSIONS,
+  validateRequiredEnv,
 } from '../constants';
+
+// Validate env vars early (scripts need them immediately)
+validateRequiredEnv();
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
@@ -46,7 +50,7 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   const ROLES = [
     {
       id: REQUIRED_OWNER_ROLE_ID,
-      name: 'System Owner',
+      name: 'Owner',
       isSystem: true,
       description: 'Full access',
     },
@@ -77,7 +81,9 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
 
   // --- 2. Ensure Permissions Exist ---
   const permissionsToInsert = ALL_DEFINED_PERMISSIONS.map((p) => {
-    const [resource, action] = p.split(':');
+    const colonIdx = p.indexOf(':');
+    const resource = colonIdx === -1 ? p : p.substring(0, colonIdx);
+    const action = colonIdx === -1 ? '' : p.substring(colonIdx + 1);
     return {
       id: p,
       resource,
@@ -91,31 +97,26 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
     .values(permissionsToInsert)
     .onConflictDoNothing();
 
-  // --- 3. Assign Permissions to Roles ---
+  // --- 3. Assign Permissions to Roles (Batch Insert) ---
 
-  // Helper to assign
-  const assign = async (
-    roleId: string,
-    permId: string,
-    orgId: string | null = null,
-  ) => {
-    await db
-      .insert(schema.rolePermission)
-      .values({
-        id: uuidv4(),
-        roleId,
-        permissionId: permId,
-        organizationId: orgId,
-      })
-      .onConflictDoNothing();
-  };
+  const rolePermissionsToInsert: Array<{
+    id: string;
+    roleId: string;
+    permissionId: string;
+    organizationId: string | null;
+  }> = [];
 
   // A. OWNER
   // Owners have system permissions SCOPED to the System Tenant, and global permissions elsewhere.
   for (const p of OWNER_PERMISSIONS) {
     const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
     const orgId = isSystem ? REQUIRED_SYSTEM_TENANT_ID : null;
-    await assign(REQUIRED_OWNER_ROLE_ID, p, orgId);
+    rolePermissionsToInsert.push({
+      id: uuidv4(),
+      roleId: REQUIRED_OWNER_ROLE_ID,
+      permissionId: p,
+      organizationId: orgId,
+    });
   }
 
   // B. ADMIN
@@ -123,14 +124,30 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   for (const p of ADMIN_PERMISSIONS) {
     const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
     const orgId = isSystem ? REQUIRED_SYSTEM_TENANT_ID : null;
-    await assign(REQUIRED_ADMIN_ROLE_ID, p, orgId);
+    rolePermissionsToInsert.push({
+      id: uuidv4(),
+      roleId: REQUIRED_ADMIN_ROLE_ID,
+      permissionId: p,
+      organizationId: orgId,
+    });
   }
 
   // C. MEMBER
   // Members have global read-only permissions.
   for (const p of MEMBER_PERMISSIONS) {
-    await assign(REQUIRED_MEMBER_ROLE_ID, p, null);
+    rolePermissionsToInsert.push({
+      id: uuidv4(),
+      roleId: REQUIRED_MEMBER_ROLE_ID,
+      permissionId: p,
+      organizationId: null,
+    });
   }
+
+  // Single batch insert for all role permissions
+  await db
+    .insert(schema.rolePermission)
+    .values(rolePermissionsToInsert)
+    .onConflictDoNothing();
 
   console.log('   ✅ RBAC (Owner, Admin, Member) Seeded Successfully.');
 }
@@ -479,6 +496,7 @@ async function resetDb() {
     console.log('✅ Database Cleaned.');
   } catch (err) {
     console.error('Error resetting DB:', err);
+    throw err; // Re-throw to propagate to CLI's .catch() handler
   } finally {
     await client.end();
   }

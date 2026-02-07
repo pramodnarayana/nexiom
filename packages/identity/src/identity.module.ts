@@ -90,6 +90,10 @@ export class IdentityModule {
         PermissionSeeder,
       ],
       exports: [
+        IDENTITY_OPTIONS,
+        IDENTITY_DB,
+        BETTER_AUTH_CONFIG,
+        EMAIL_PROVIDER,
         AUTH_PROVIDER,
         USER_PROVIDER,
         TENANT_PROVIDER,
@@ -141,14 +145,18 @@ export class IdentityModule {
         },
         {
           provide: IDENTITY_DB,
-          useFactory: (identityOptions: IdentityModuleOptions) =>
-            identityOptions.db!,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validation above ensures db is defined
+            return identityOptions.db;
+          },
           inject: [IDENTITY_OPTIONS],
         },
         {
           provide: EMAIL_PROVIDER,
-          useFactory: (identityOptions: IdentityModuleOptions) =>
-            identityOptions.email!,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validation above ensures email is defined
+            return identityOptions.email;
+          },
           inject: [IDENTITY_OPTIONS],
         },
         {
