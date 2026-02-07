@@ -16,8 +16,8 @@ import {
   getRequiredAdminRoleId,
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
-  ALL_PERMISSIONS,
 } from '../constants';
+import { seedSystemRbac } from '@nexiom/identity';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
@@ -43,120 +43,14 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
   console.log('3️⃣  Seeding RBAC (Roles & Permissions)...');
 
   // Get validated env vars (throws if missing)
-  const OWNER_ROLE_ID = getRequiredOwnerRoleId();
-  const ADMIN_ROLE_ID = getRequiredAdminRoleId();
-  const MEMBER_ROLE_ID = getRequiredMemberRoleId();
-  const SYSTEM_TENANT_ID = getRequiredSystemTenantId();
+  const config = {
+    ownerRoleId: getRequiredOwnerRoleId(),
+    adminRoleId: getRequiredAdminRoleId(),
+    memberRoleId: getRequiredMemberRoleId(),
+    systemTenantId: getRequiredSystemTenantId(),
+  };
 
-  // --- Definitions ---
-  const ROLES = [
-    {
-      id: OWNER_ROLE_ID,
-      name: 'Owner',
-      isSystem: true,
-      description: 'Full access',
-    },
-    {
-      id: ADMIN_ROLE_ID,
-      name: 'Admin',
-      isSystem: true,
-      description: 'Manage users and settings',
-    },
-    {
-      id: MEMBER_ROLE_ID,
-      name: 'Member',
-      isSystem: true,
-      description: 'Read only access',
-    },
-  ];
-
-  // Master list of all available permissions in the system
-  const ALL_DEFINED_PERMISSIONS = ALL_PERMISSIONS;
-
-  // Explicit Role Assignments
-  const OWNER_PERMISSIONS = ALL_DEFINED_PERMISSIONS; // Owner gets everything
-  const ADMIN_PERMISSIONS = ALL_DEFINED_PERMISSIONS; // Admin gets everything too (Differentiation is via text/scope)
-  const MEMBER_PERMISSIONS = ['users:read', 'tenants:read']; // Member gets read-only
-
-  // --- 1. Ensure Roles Exist ---
-  await db.insert(schema.role).values(ROLES).onConflictDoNothing();
-
-  // --- 2. Ensure Permissions Exist ---
-  const permissionsToInsert = ALL_DEFINED_PERMISSIONS.map((p) => {
-    const colonIdx = p.indexOf(':');
-    if (colonIdx === -1) {
-      throw new Error(
-        `Malformed permission: "${p}" - must contain a colon to separate resource and action`,
-      );
-    }
-    const resource = p.substring(0, colonIdx);
-    const action = p.substring(colonIdx + 1);
-    return {
-      id: p,
-      resource,
-      action,
-      createdAt: new Date(),
-    };
-  });
-
-  await db
-    .insert(schema.permission)
-    .values(permissionsToInsert)
-    .onConflictDoNothing();
-
-  // --- 3. Assign Permissions to Roles (Batch Insert) ---
-
-  const rolePermissionsToInsert: Array<{
-    id: string;
-    roleId: string;
-    permissionId: string;
-    organizationId: string | null;
-  }> = [];
-
-  // A. OWNER
-  // Owners have system permissions SCOPED to the System Tenant, and global permissions elsewhere.
-  for (const p of OWNER_PERMISSIONS) {
-    const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
-    const orgId = isSystem ? SYSTEM_TENANT_ID : null;
-    rolePermissionsToInsert.push({
-      id: uuidv4(),
-      roleId: OWNER_ROLE_ID,
-      permissionId: p,
-      organizationId: orgId,
-    });
-  }
-
-  // B. ADMIN
-  // Admins also have system permissions if scoped to System Tenant.
-  for (const p of ADMIN_PERMISSIONS) {
-    const isSystem = p.startsWith('system_') || p === 'admin_dashboard:view';
-    const orgId = isSystem ? SYSTEM_TENANT_ID : null;
-    rolePermissionsToInsert.push({
-      id: uuidv4(),
-      roleId: ADMIN_ROLE_ID,
-      permissionId: p,
-      organizationId: orgId,
-    });
-  }
-
-  // C. MEMBER
-  // Members have global read-only permissions.
-  for (const p of MEMBER_PERMISSIONS) {
-    rolePermissionsToInsert.push({
-      id: uuidv4(),
-      roleId: MEMBER_ROLE_ID,
-      permissionId: p,
-      organizationId: null,
-    });
-  }
-
-  // Single batch insert for all role permissions
-  await db
-    .insert(schema.rolePermission)
-    .values(rolePermissionsToInsert)
-    .onConflictDoNothing();
-
-  console.log('   ✅ RBAC (Owner, Admin, Member) Seeded Successfully.');
+  await seedSystemRbac(db, config, console);
 }
 
 // Shared helper to elevate a user to System Owner

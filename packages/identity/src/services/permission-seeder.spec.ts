@@ -119,6 +119,23 @@ describe("PermissionSeeder", () => {
     expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
 
     expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
+
+    // Assert scoping (User requested check for sys vs null orgId)
+    // Reuse rolePermValues from above
+
+    // Check for at least one system-scoped permission (admin_dashboard:view or system_*)
+    const systemScoped = rolePermValues?.find(
+      (rp) => rp.organizationId === "sys", // systemTenantId from mock
+    );
+    expect(systemScoped).toBeDefined();
+    expect(systemScoped?.organizationId).toBe("sys");
+
+    // Check for at least one global permission
+    const globalScoped = rolePermValues?.find(
+      (rp) => rp.organizationId === null,
+    );
+    expect(globalScoped).toBeDefined();
+    expect(globalScoped?.organizationId).toBeNull();
   });
 
   it("handles errors gracefully", async () => {

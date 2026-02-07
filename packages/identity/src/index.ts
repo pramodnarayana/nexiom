@@ -38,3 +38,4 @@ export * from "./adapters/drizzle-permission.adapter";
 
 export * from "./identity.module";
 export * from "./constants";
+export * from "./utils/rbac-seeding";

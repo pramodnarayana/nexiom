@@ -34,7 +34,7 @@ import {
   buildCreateSystemInvitationSchema,
   CreateSystemInvitationDto,
 } from './system-admin.validation';
-import { ZodValidationPipe } from 'nestjs-zod';
+import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -82,7 +82,7 @@ export class SystemAdminController {
 
   @Post('invitations')
   @RequirePermission('system_users', 'invite')
-  @UsePipes(new ZodValidationPipe(buildCreateSystemInvitationSchema()))
+  @UsePipes(new LazyZodValidationPipe(buildCreateSystemInvitationSchema))
   async createSystemInvitation(
     @Body() body: CreateSystemInvitationDto,
     @RequestHeaders() headers: Record<string, string>,
