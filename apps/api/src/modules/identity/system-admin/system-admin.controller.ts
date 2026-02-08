@@ -12,6 +12,7 @@ import {
   BadRequestException,
   NotFoundException,
   Headers as RequestHeaders,
+  UsePipes,
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
@@ -20,16 +21,20 @@ import {
   IUserProvider,
   TENANT_PROVIDER,
   ITenantProvider,
-  DEFAULT_SYSTEM_ROLE_ID,
-  SYSTEM_TENANT_ID,
 } from '@nexiom/identity';
+import {
+  getRequiredAdminRoleId,
+  getRequiredSystemTenantId,
+} from '../../../constants';
 import {
   CreateTenantValidation,
   UpdateTenantValidation,
   UpdateUserValidation,
   CreateUserValidation,
-  CreateSystemInvitationValidation,
+  buildCreateSystemInvitationSchema,
+  CreateSystemInvitationDto,
 } from './system-admin.validation';
+import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -67,7 +72,7 @@ export class SystemAdminController {
     // Create System Invitation (OrgId = null)
     await this.authProvider.createInvitation({
       email: user.email,
-      role: DEFAULT_SYSTEM_ROLE_ID,
+      role: getRequiredAdminRoleId(),
       organizationId: null, // System Invite
       inviterId: session.user.id,
     });
@@ -77,8 +82,9 @@ export class SystemAdminController {
 
   @Post('invitations')
   @RequirePermission('system_users', 'invite')
+  @UsePipes(new LazyZodValidationPipe(buildCreateSystemInvitationSchema))
   async createSystemInvitation(
-    @Body() body: CreateSystemInvitationValidation,
+    @Body() body: CreateSystemInvitationDto,
     @RequestHeaders() headers: Record<string, string>,
   ) {
     const webHeaders = this.toWebHeaders(headers);
@@ -197,6 +203,7 @@ export class SystemAdminController {
   async listUsers(
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '10',
+    @Query('search') search?: string,
   ) {
     const MAX_PAGE_SIZE = 100;
     // Basic pagination (Convert to Number safely)
@@ -209,7 +216,8 @@ export class SystemAdminController {
     const result = await this.userProvider.findAll({
       page: p,
       limit,
-      tenantId: SYSTEM_TENANT_ID, // Scope to System Tenant (Platform Admins only)
+      search,
+      tenantId: getRequiredSystemTenantId(), // Scope to System Tenant (Platform Admins only)
     });
 
     return result; // Envelope { data, total } matches

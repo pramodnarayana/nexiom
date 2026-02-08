@@ -1,257 +1,282 @@
 import { Client } from 'pg';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import * as dotenv from 'dotenv';
+import * as dotEnv from 'dotenv';
 import * as path from 'node:path';
+import { ALL_PERMISSIONS, isSystemPermission } from '../constants';
 
 // Load .env from apps/api root
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotEnv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const main = async () => {
-  if (!process.env.DATABASE_URL) {
-    console.error('DATABASE_URL is not defined in environment');
+const assertEnv = (val: string | undefined, name: string): string => {
+  if (!val) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return val;
+};
+
+const loadEnv = () => {
+  const {
+    DATABASE_URL,
+    SYSTEM_TENANT_ID,
+    OWNER_ROLE_ID,
+    ADMIN_ROLE_ID,
+    MEMBER_ROLE_ID,
+  } = process.env;
+
+  try {
+    return {
+      DATABASE_URL: assertEnv(DATABASE_URL, 'DATABASE_URL'),
+      SYSTEM_TENANT_ID: assertEnv(SYSTEM_TENANT_ID, 'SYSTEM_TENANT_ID'),
+      OWNER_ROLE_ID: assertEnv(OWNER_ROLE_ID, 'OWNER_ROLE_ID'),
+      ADMIN_ROLE_ID: assertEnv(ADMIN_ROLE_ID, 'ADMIN_ROLE_ID'),
+      MEMBER_ROLE_ID: assertEnv(MEMBER_ROLE_ID, 'MEMBER_ROLE_ID'),
+    };
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error(`FATAL: ${errorMsg}`);
     process.exit(1);
   }
+};
 
-  // Production safeguard
-  if (
-    process.env.NODE_ENV === 'production' ||
-    process.env.DATABASE_URL.includes('prod') ||
-    process.env.DATABASE_URL.includes('rds.amazonaws.com')
-  ) {
+const validateEnv = (dbUrl: string) => {
+  let isProduction = false;
+  let hostname = '';
+
+  if (process.env.IS_PRODUCTION === 'true') {
+    isProduction = true;
+  } else {
+    try {
+      const url = new URL(dbUrl);
+      hostname = url.hostname;
+      // Strict allowed hostnames for non-production
+      const allowedHosts = ['localhost', '127.0.0.1', 'postgres', 'db'];
+      if (!allowedHosts.includes(hostname)) {
+        // Any other host is considered production-candidate if not strictly allowed
+        isProduction = true;
+      }
+    } catch (_error) {
+      // If URL parsing fails, allow only if explicit force or known safe
+      // We set isProduction true here to trigger the guard below
+      isProduction = true;
+    }
+  }
+
+  if (isProduction) {
     if (process.env.FORCE_RESET !== 'true') {
       console.error(
-        'FATAL: Attempting to run reset-e2e against production database!',
+        `FATAL: Attempting to run reset-e2e against detected production database (${hostname || 'unknown'})!`,
       );
-      console.error('This operation would destroy all production data.');
-      console.error('If you absolutely must proceed, set FORCE_RESET=true');
+      console.error('To bypass, set FORCE_RESET=true');
       process.exit(1);
     }
     console.warn(
       'WARNING: FORCE_RESET=true detected, proceeding with production reset...',
     );
   }
+};
+
+const truncateTables = async (client: Client) => {
+  console.log('--- 1. Truncating Tables ---');
+  const tables = [
+    'role_permission',
+    'permission',
+    'member',
+    'invitation',
+    'account',
+    'session',
+    'verification',
+    'organization',
+    'user',
+    'role',
+  ];
+
+  const errors: { table: string; error: unknown }[] = [];
+
+  for (const table of tables) {
+    try {
+      await client.query(`TRUNCATE TABLE "${table}" CASCADE;`);
+    } catch (e) {
+      console.error(`Error truncating table "${table}":`, e);
+      errors.push({ table, error: e });
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error('FATAL: Failed to truncate tables', errors);
+    throw new Error('Table truncation failed');
+  }
+};
+
+const seedRBAC = async (
+  client: Client,
+  ids: { owner: string; admin: string; member: string; systemTenant: string },
+) => {
+  console.log('--- 2. Seeding RBAC ---');
+  await client.query(
+    `INSERT INTO "role" (id, name, "isSystem", description, "createdAt") VALUES
+        ($1, 'Owner', true, 'Full access', NOW()),
+        ($2, 'Admin', true, 'Manage users', NOW()),
+        ($3, 'Member', true, 'Read only', NOW())
+        ON CONFLICT (id) DO NOTHING;`,
+    [ids.owner, ids.admin, ids.member],
+  );
+
+  const perms = ALL_PERMISSIONS;
+
+  // Batch Insert Permissions using UNNEST
+  await client.query(
+    `INSERT INTO "permission" (id, resource, action, "createdAt")
+        SELECT
+          p as id,
+          split_part(p, ':', 1) as resource,
+          substring(p from position(':' in p) + 1) as action,
+          NOW()
+        FROM UNNEST($1::text[]) as pt(p)
+     ON CONFLICT (id) DO NOTHING;`,
+    [perms],
+  );
+
+  // Prepare Role Permissions in memory
+  const rolePermRows: { id: string; r: string; p: string; o: string | null }[] =
+    [];
+
+  // Helper to push
+  const add = (r: string, p: string, o: string | null) => {
+    rolePermRows.push({ id: uuidv4(), r, p, o });
+  };
+
+  // 1. Member (Read Only)
+  // Match PermissionSeeder: 'users:read', 'tenants:read'
+  const memberPerms = ['users:read', 'tenants:read'] as const;
+  for (const p of memberPerms) {
+    // Only add if it exists in ALL_PERMISSIONS (safety check)
+    if ((perms as readonly string[]).includes(p)) {
+      add(ids.member, p, null);
+    }
+  }
+
+  // 2. Admin
+  // Global Permissions (non-system, non-dashboard-view) -> Global
+  const adminGlobalPerms = perms.filter((p) => !isSystemPermission(p));
+  for (const p of adminGlobalPerms) {
+    add(ids.admin, p, null);
+  }
+
+  // System Permissions -> System Tenant Scoped
+  const adminSystemPerms = perms.filter((p) => isSystemPermission(p));
+  for (const p of adminSystemPerms) {
+    add(ids.admin, p, ids.systemTenant);
+  }
+
+  // 3. Owner
+  // Global Permissions -> Global
+  const ownerGlobalPerms = perms.filter((p) => !isSystemPermission(p));
+  for (const p of ownerGlobalPerms) {
+    add(ids.owner, p, null);
+  }
+
+  // System Permissions -> System Tenant Scoped
+  const ownerSystemPerms = perms.filter((p) => isSystemPermission(p));
+  for (const p of ownerSystemPerms) {
+    add(ids.owner, p, ids.systemTenant);
+  }
+
+  // Batch Insert Role Permissions
+  if (rolePermRows.length > 0) {
+    const rpIds = rolePermRows.map((row) => row.id);
+    const roles = rolePermRows.map((row) => row.r);
+    const permissions = rolePermRows.map((row) => row.p);
+    const orgs = rolePermRows.map((row) => row.o);
+
+    await client.query(
+      `INSERT INTO "role_permission" (id, "roleId", "permissionId", "organizationId")
+       SELECT i, r, p, o
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) as t(i, r, p, o)
+       ON CONFLICT (id) DO NOTHING;`,
+      [rpIds, roles, permissions, orgs],
+    );
+  }
+};
+
+const seedUsersAndTenants = async (
+  client: Client,
+  ids: {
+    systemTenant: string;
+    owner: string;
+  },
+) => {
+  console.log('--- 3. Seeding Organizations ---');
+  await client.query(
+    `INSERT INTO "organization" (id, name, status, "isSystem", "createdAt", "updatedAt") VALUES ($1, 'Nexiom Platform', 'active', true, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;`,
+    [ids.systemTenant],
+  );
+
+  const demoTenantId = uuidv4();
+  await client.query(
+    `INSERT INTO "organization" (id, name, status, "createdAt", "updatedAt") VALUES ($1, 'Acme Corp', 'active', NOW(), NOW());`,
+    [demoTenantId],
+  );
+
+  console.log('--- 4. Seeding User ---');
+  const userId = uuidv4();
+  const email = 'test.user+e2e@example.com';
+  await client.query(
+    `INSERT INTO "user" (id, email, "emailVerified", name, "createdAt", "updatedAt") VALUES ($1, $2, true, 'Test User', NOW(), NOW());`,
+    [userId, email],
+  );
+
+  const hash = await bcrypt.hash('password123', 10);
+  await client.query(
+    `INSERT INTO "account" (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt") VALUES ($1, $2, $3, 'credential', $4, NOW(), NOW());`,
+    [uuidv4(), userId, email, hash],
+  );
+
+  // System Membership
+  await client.query(
+    `INSERT INTO "member" (id, "organizationId", "userId", "roleId", "createdAt") VALUES ($1, $2, $3, $4, NOW());`,
+    [uuidv4(), ids.systemTenant, userId, ids.owner],
+  );
+
+  console.log('--- 5. Seeding Customer User ---');
+  const customerUserId = uuidv4();
+  const customerEmail = 'customer@example.com';
+  await client.query(
+    `INSERT INTO "user" (id, email, "emailVerified", name, "createdAt", "updatedAt") VALUES ($1, $2, true, 'Acme Customer', NOW(), NOW());`,
+    [customerUserId, customerEmail],
+  );
+  await client.query(
+    `INSERT INTO "account" (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt") VALUES ($1, $2, $3, 'credential', $4, NOW(), NOW());`,
+    [uuidv4(), customerUserId, customerEmail, hash],
+  );
+  await client.query(
+    `INSERT INTO "member" (id, "organizationId", "userId", "roleId", "createdAt") VALUES ($1, $2, $3, $4, NOW());`,
+    [uuidv4(), demoTenantId, customerUserId, ids.owner],
+  );
+
+  console.log('✅ SEED COMPLETE');
+};
+
+const main = async () => {
+  const env = loadEnv();
+  validateEnv(env.DATABASE_URL);
 
   console.log('Connecting to DB...');
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: env.DATABASE_URL });
 
   try {
     await client.connect();
-    console.log('--- 1. Truncating Tables ---');
-    const tables = [
-      'role_permission',
-      'permission',
-      'member',
-      'invitation',
-      'account',
-      'session',
-      'verification',
-      'organization',
-      'user',
-      'role',
-    ];
-
-    for (const table of tables) {
-      try {
-        await client.query(`TRUNCATE TABLE "${table}" CASCADE;`);
-      } catch (e) {
-        console.error(`Error truncating table "${table}":`, e);
-        console.log(`Skipped ${table} - check permissions or table existence`);
-      }
-    }
-
-    console.log('--- 2. Seeding RBAC ---');
-    // Roles
-    await client.query(`
-            INSERT INTO "role" (id, name, "isSystem", description, "createdAt") VALUES
-            ('owner', 'Owner', true, 'Full access', NOW()),
-            ('admin', 'Admin', true, 'Manage users', NOW()),
-            ('member', 'Member', true, 'Read only', NOW()),
-            ('platform_admin', 'Platform Admin', true, 'System Root Access', NOW())
-            ON CONFLICT DO NOTHING;
-        `);
-
-    // Permissions
-    const perms = [
-      'users:read',
-      'users:create',
-      'users:update',
-      'users:delete',
-      'users:manage',
-      'tenants:read',
-      'tenants:create',
-      'tenants:update',
-      'tenants:delete',
-      'tenants:manage',
-      'dashboard:read',
-      'admin_dashboard:view', // Required for Redirect to /admin
-      'settings:manage',
-      'settings:read',
-      // System Admin Permissions
-      'system_users:read',
-      'system_users:manage',
-      'system_users:invite',
-      'system_tenants:read',
-      'system_tenants:manage',
-    ];
-
-    for (const p of perms) {
-      const resource = p.split(':')[0];
-      const action = p.split(':')[1];
-      await client.query(
-        `
-                INSERT INTO "permission" (id, resource, action, "createdAt")
-                VALUES ($1, $2, $3, NOW())
-                ON CONFLICT DO NOTHING;
-            `,
-        [p, resource, action],
-      );
-    }
-
-    // Role Permissions
-    // Owner & Platform Admin: All
-    for (const p of perms) {
-      await client.query(
-        `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('owner', $1) ON CONFLICT DO NOTHING`,
-        [p],
-      );
-      await client.query(
-        `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('platform_admin', $1) ON CONFLICT DO NOTHING`,
-        [p],
-      );
-    }
-
-    // Member: Read
-    await client.query(
-      `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('member', 'users:read') ON CONFLICT DO NOTHING`,
-    );
-    await client.query(
-      `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('member', 'tenants:read') ON CONFLICT DO NOTHING`,
-    );
-
-    // Admin: All non-system permissions
-    for (const p of perms) {
-      if (!p.startsWith('system_')) {
-        await client.query(
-          `INSERT INTO "role_permission" ("roleId", "permissionId") VALUES ('admin', $1) ON CONFLICT DO NOTHING`,
-          [p],
-        );
-      }
-    }
-
-    console.log('--- 3. Seeding User ---');
-    const userId = uuidv4();
-    const email = 'test.user+e2e@example.com';
-
-    await client.query(
-      `
-            INSERT INTO "user" (id, email, "emailVerified", name, "createdAt", "updatedAt")
-            VALUES ($1, $2, true, 'Test User', NOW(), NOW());
-        `,
-      [userId, email],
-    );
-
-    console.log('--- 4. Seeding Account (Password) ---');
-    const passwordStart = 'password123';
-    const hash = await bcrypt.hash(passwordStart, 10);
-    const accountId = uuidv4();
-
-    await client.query(
-      `
-            INSERT INTO "account" (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
-            VALUES ($1, $2, $3, 'credential', $4, NOW(), NOW());
-        `,
-      [accountId, userId, email, hash],
-    );
-
-    console.log('--- 5. Seeding Organizations ---');
-
-    // 5a. System Tenant (Nexiom)
-    const systemTenantId = '00000000-0000-0000-0000-000000000000';
-    await client.query(
-      `
-            INSERT INTO "organization" (id, name, status, "isSystem", "createdAt", "updatedAt")
-            VALUES ($1, 'Nexiom Platform', 'active', true, NOW(), NOW())
-            ON CONFLICT (id) DO NOTHING;
-        `,
-      [systemTenantId],
-    );
-
-    // 5b. Demo Customer Tenant
-    const demoTenantId = uuidv4();
-    await client.query(
-      `
-            INSERT INTO "organization" (id, name, status, "createdAt", "updatedAt")
-            VALUES ($1, 'Acme Corp', 'active', NOW(), NOW());
-        `,
-      [demoTenantId],
-    );
-
-    console.log('--- 6. Seeding Membership ---');
-
-    // 6a. Platform Admin Access (System Context)
-    const sysMemberId = uuidv4();
-    // Note: platform_admin role already seeded in step 2 (roles: owner, admin, member, platform_admin)
-
-    await client.query(
-      `
-            INSERT INTO "member" (id, "organizationId", "userId", "roleId", "createdAt")
-            VALUES ($1, $2, $3, 'platform_admin', NOW());
-        `,
-      [sysMemberId, systemTenantId, userId],
-    );
-
-    // 6b. Customer Tenant Access (Business Context)
-    // STRICT: One User One Org. Pramod is Platform Admin ONLY.
-    // We create a separate user for the customer tenant.
-    const customerUserId = uuidv4();
-    const customerEmail = 'customer@example.com';
-
-    await client.query(
-      `
-            INSERT INTO "user" (id, email, "emailVerified", name, "createdAt", "updatedAt")
-            VALUES ($1, $2, true, 'Acme Customer', NOW(), NOW());
-        `,
-      [customerUserId, customerEmail],
-    );
-
-    const customerHash = await bcrypt.hash('password123', 10);
-    await client.query(
-      `
-            INSERT INTO "account" (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
-            VALUES ($1, $2, $3, 'credential', $4, NOW(), NOW());
-        `,
-      [uuidv4(), customerUserId, customerEmail, customerHash],
-    );
-
-    const memberId = uuidv4();
-    await client.query(
-      `
-            INSERT INTO "member" (id, "organizationId", "userId", "roleId", "createdAt")
-            VALUES ($1, $2, $3, 'owner', NOW());
-        `,
-      [memberId, demoTenantId, customerUserId],
-    );
-
-    console.log('✅ SEED COMPLETE');
-    // Security: Do not log full credentials in CI/Production logs
-    const showCreds = process.env.SHOW_CREDENTIALS === 'true';
-    if (showCreds) {
-      console.log(
-        `[Platform Admin] ${email} / ${passwordStart} (Org: Nexiom Platform)`,
-      );
-      console.log(
-        `[Customer User]  ${customerEmail} / password123 (Org: Acme Corp)`,
-      );
-    } else {
-      console.log(
-        `[Platform Admin] ${email} / ******** (Org: Nexiom Platform)`,
-      );
-      console.log(
-        `[Customer User]  ${customerEmail} / ******** (Org: Acme Corp)`,
-      );
-      console.log('(Set SHOW_CREDENTIALS=true to view passwords)');
-    }
+    await truncateTables(client);
+    await seedRBAC(client, {
+      owner: env.OWNER_ROLE_ID,
+      admin: env.ADMIN_ROLE_ID,
+      member: env.MEMBER_ROLE_ID,
+      systemTenant: env.SYSTEM_TENANT_ID,
+    });
+    await seedUsersAndTenants(client, {
+      systemTenant: env.SYSTEM_TENANT_ID,
+      owner: env.OWNER_ROLE_ID,
+    });
   } catch (error) {
     console.error('Seed failed:', error);
     process.exit(1);

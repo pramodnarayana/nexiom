@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import {
-  PLATFORM_ADMIN_ROLE_ID,
-  DEFAULT_SYSTEM_ROLE_ID,
-} from '@nexiom/identity';
+  getRequiredAdminRoleId,
+  getRequiredOwnerRoleId,
+} from '../../../constants';
 
 export const CreateTenantSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -48,13 +48,17 @@ export const CreateUserSchema = z.object({
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 
-export const CreateSystemInvitationSchema = z.object({
-  email: z.string().email(),
-  role: z
-    .enum([PLATFORM_ADMIN_ROLE_ID, DEFAULT_SYSTEM_ROLE_ID])
-    .default(DEFAULT_SYSTEM_ROLE_ID),
-});
+// Factory function to create schema lazily (avoids eager env access)
+export const buildCreateSystemInvitationSchema = () =>
+  z.object({
+    email: z.string().email(),
+    role: z
+      .enum([getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as const)
+      .optional()
+      .default(getRequiredAdminRoleId()),
+  });
 
-export class CreateSystemInvitationValidation extends createZodDto(
-  CreateSystemInvitationSchema,
-) {}
+// Type inference from schema
+export type CreateSystemInvitationDto = z.infer<
+  ReturnType<typeof buildCreateSystemInvitationSchema>
+>;

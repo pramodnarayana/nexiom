@@ -8,7 +8,11 @@ import {
   IDENTITY_OPTIONS,
 } from "./constants";
 
-import type { DynamicModule, FactoryProvider } from "@nestjs/common";
+import type {
+  DynamicModule,
+  FactoryProvider,
+  ClassProvider,
+} from "@nestjs/common";
 
 const mkOptions = () => ({
   betterAuthConfig: {
@@ -17,13 +21,21 @@ const mkOptions = () => ({
   },
   dbToken: Symbol("DB"),
   emailToken: Symbol("EMAIL"),
+  constants: {
+    systemTenantId: "system",
+    ownerRoleId: "owner",
+    adminRoleId: "admin",
+    memberRoleId: "member",
+  },
 });
 
 describe("IdentityModule.register", () => {
   it("throws if tokens missing", () => {
     const opts = mkOptions();
     expect(() =>
-      IdentityModule.register({ betterAuthConfig: opts.betterAuthConfig }),
+      IdentityModule.register({
+        betterAuthConfig: opts.betterAuthConfig,
+      } as unknown as IdentityModuleOptions),
     ).toThrow("required");
   });
 
@@ -33,7 +45,10 @@ describe("IdentityModule.register", () => {
 
     expect(mod.module).toBe(IdentityModule);
     // Verify all expected providers are registered
-    const providers = (mod.providers || []) as FactoryProvider[];
+    const providers = (mod.providers || []) as (
+      | FactoryProvider
+      | ClassProvider
+    )[];
 
     const tokens = providers.map((p) => p.provide);
     expect(tokens).toContain(AUTH_PROVIDER);
@@ -48,20 +63,26 @@ describe("IdentityModule.register", () => {
     expect(mod.exports).toContain(PERMISSION_PROVIDER);
 
     // factories inject requested tokens
-    const authProv = providers.find((p) => p.provide === AUTH_PROVIDER);
-    // AUTH_PROVIDER now needs TENANT_PROVIDER injected
-    expect(authProv?.inject).toEqual([
-      opts.dbToken,
-      opts.emailToken,
-      TENANT_PROVIDER,
-    ]);
+    // Verify providers use correct classes
+    const authProv = providers.find(
+      (p) => p.provide === AUTH_PROVIDER,
+    ) as ClassProvider;
+    expect(authProv.useClass).toBeDefined();
 
-    const userProv = providers.find((p) => p.provide === USER_PROVIDER);
-    expect(userProv?.inject).toEqual([opts.dbToken, AUTH_PROVIDER]);
-    const tenantProv = providers.find((p) => p.provide === TENANT_PROVIDER);
-    expect(tenantProv?.inject).toEqual([opts.dbToken]);
-    const permProv = providers.find((p) => p.provide === PERMISSION_PROVIDER);
-    expect(permProv?.inject).toEqual([opts.dbToken]);
+    const userProv = providers.find(
+      (p) => p.provide === USER_PROVIDER,
+    ) as ClassProvider;
+    expect(userProv.useClass).toBeDefined();
+
+    const tenantProv = providers.find(
+      (p) => p.provide === TENANT_PROVIDER,
+    ) as ClassProvider;
+    expect(tenantProv.useClass).toBeDefined();
+
+    const permProv = providers.find(
+      (p) => p.provide === PERMISSION_PROVIDER,
+    ) as ClassProvider;
+    expect(permProv.useClass).toBeDefined();
   });
 
   it("registerAsync wires providers correctly", () => {

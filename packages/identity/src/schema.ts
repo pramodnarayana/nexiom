@@ -6,9 +6,9 @@ import {
   pgEnum,
   unique,
   index,
-  primaryKey,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // --- User Schema ---
 export const user = pgTable("user", {
@@ -118,14 +118,33 @@ export const role = pgTable("role", {
 export const rolePermission = pgTable(
   "role_permission",
   {
+    id: text("id").primaryKey(), // Surrogate PK
     roleId: text("roleId")
       .notNull()
       .references(() => role.id, { onDelete: "cascade" }),
     permissionId: text("permissionId")
       .notNull()
       .references(() => permission.id, { onDelete: "cascade" }),
+    organizationId: text("organizationId").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
   },
-  (t) => [primaryKey({ columns: [t.roleId, t.permissionId] })],
+  (t) => [
+    // Surrogate PK
+    // Note: Use 'unique().nullsNotDistinct()' for simpler unique constraints if on PG15+,
+    // OR use the sql implementation for robustness across versions/drivers as suggested.
+    // User requested "unique index on (roleId, permissionId, COALESCE(organizationId, '__global__'))"
+    // Also requested "index for fast lookup" on organizationId.
+    index("idx_role_permission_org_id").on(t.organizationId),
+    // Advisory unique index for nullable organizationId to prevent duplicates in code-logic
+    // Sentinel value '__NULL__' chosen to avoid collision with real UUIDs/IDs.
+    // Invariant: No organization shall ever have the ID '__NULL__'.
+    uniqueIndex("idx_role_permission_unique").on(
+      t.roleId,
+      t.permissionId,
+      sql`COALESCE("organizationId", '__NULL__')`,
+    ),
+  ],
 );
 
 // --- RBAC Relations ---

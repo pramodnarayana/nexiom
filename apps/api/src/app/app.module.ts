@@ -39,6 +39,12 @@ import * as schema from '../db/schema';
           googleClientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
           nodeEnv: configService.get<string>('NODE_ENV'),
         },
+        constants: {
+          systemTenantId: configService.getOrThrow<string>('SYSTEM_TENANT_ID'),
+          ownerRoleId: configService.getOrThrow<string>('OWNER_ROLE_ID'),
+          adminRoleId: configService.getOrThrow<string>('ADMIN_ROLE_ID'),
+          memberRoleId: configService.getOrThrow<string>('MEMBER_ROLE_ID'),
+        },
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         db: db as any,
         email: emailService,

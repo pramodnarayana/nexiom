@@ -5,13 +5,24 @@ import {
   AUTH_PROVIDER,
   USER_PROVIDER,
   TENANT_PROVIDER,
-  PLATFORM_ADMIN_ROLE_ID,
-  DEFAULT_SYSTEM_ROLE_ID,
 } from '@nexiom/identity';
+import {
+  getRequiredAdminRoleId,
+  getRequiredOwnerRoleId,
+} from '../../../constants';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { PlatformGuard } from '../auth/platform.guard';
+
+vi.mock('../../../constants', () => ({
+  getRequiredAdminRoleId: vi.fn(() => 'admin-role-id'),
+  getRequiredOwnerRoleId: vi.fn(() => 'owner-role-id'),
+  getRequiredSystemTenantId: vi.fn(
+    () => '00000000-0000-0000-0000-000000000000',
+  ),
+  getRequiredMemberRoleId: vi.fn(() => 'member-role-id'),
+}));
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
@@ -103,7 +114,7 @@ describe('SystemAdminController', () => {
 
       await expect(
         controller.createSystemInvitation(
-          { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
+          { email: 'test@example.com', role: getRequiredOwnerRoleId() },
           mockHeaders,
         ),
       ).rejects.toThrow(BadRequestException);
@@ -118,7 +129,7 @@ describe('SystemAdminController', () => {
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
 
       const result = await controller.createSystemInvitation(
-        { email: 'test@example.com', role: PLATFORM_ADMIN_ROLE_ID },
+        { email: 'test@example.com', role: getRequiredOwnerRoleId() },
         mockHeaders,
       );
 
@@ -126,7 +137,7 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: PLATFORM_ADMIN_ROLE_ID,
+        role: getRequiredOwnerRoleId(),
         organizationId: null,
         inviterId: 'admin1',
       });
@@ -377,7 +388,7 @@ describe('SystemAdminController', () => {
 
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
-        role: DEFAULT_SYSTEM_ROLE_ID, // Use constant!
+        role: getRequiredAdminRoleId(),
         organizationId: null, // System invite
         inviterId: 'admin1',
       });

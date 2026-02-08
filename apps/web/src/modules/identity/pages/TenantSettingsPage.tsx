@@ -113,7 +113,7 @@ function GeneralSettingsTab({ orgId }: Readonly<{ orgId: string }>) {
                             name="name"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Name</FormLabel>
+                                    <FormLabel>Company Name</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Acme Corp" {...field} />
                                     </FormControl>

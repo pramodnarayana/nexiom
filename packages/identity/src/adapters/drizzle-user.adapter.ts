@@ -1,3 +1,4 @@
+import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
 import type {
@@ -8,14 +9,15 @@ import type {
   IAuthProvider,
 } from "../interfaces";
 import * as schema from "../schema";
+import { AUTH_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
+import type { IdentityModuleOptions } from "../identity.module";
 
-// Role name constant to match database value
-const ADMIN_ROLE_NAME = "Admin";
-
+@Injectable()
 export class DrizzleUserAdapter implements IUserProvider {
   constructor(
-    private readonly db: NodePgDatabase<typeof schema>,
-    private readonly authProvider: IAuthProvider,
+    @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
+    @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
+    @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
   ) {}
 
   async create(input: CreateUserInput): Promise<UserInterface> {
@@ -24,7 +26,6 @@ export class DrizzleUserAdapter implements IUserProvider {
 
     return user;
   }
-
   async update(id: string, input: UpdateUserInput): Promise<UserInterface> {
     // If password is being updated, handle it via AuthProvider
     if (input.password) {
@@ -209,7 +210,6 @@ export class DrizzleUserAdapter implements IUserProvider {
       .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(schema.user.id, userId));
   }
-
   /**
    * Atomically remove a user's membership from an organization, ensuring the user is not the last admin.
    * This does NOT delete the user account itself, only the membership record.
@@ -231,7 +231,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const membershipWithRole = await tx
         .select({
           memberId: schema.member.id,
-          roleName: schema.role.name,
+          roleId: schema.role.id,
         })
         .from(schema.member)
         .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
@@ -247,10 +247,10 @@ export class DrizzleUserAdapter implements IUserProvider {
         throw new Error("User is not a member of this organization");
       }
 
-      const userRole = membershipWithRole[0].roleName;
+      const userRole = membershipWithRole[0].roleId;
 
       // 2. If user is an admin, count total admins
-      if (userRole === ADMIN_ROLE_NAME) {
+      if (userRole === this.options.constants.adminRoleId) {
         // Count admins by joining member with role table
         const adminCountResult = await tx
           .select({ count: count(schema.member.id) })
@@ -259,7 +259,7 @@ export class DrizzleUserAdapter implements IUserProvider {
           .where(
             and(
               eq(schema.member.organizationId, tenantId),
-              eq(schema.role.name, ADMIN_ROLE_NAME),
+              eq(schema.role.id, this.options.constants.adminRoleId),
             ),
           );
 

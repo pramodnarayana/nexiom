@@ -19,10 +19,18 @@ import type {
   User as UserInterface,
 } from "../interfaces";
 import type { CreateUserInput } from "../interfaces/user-provider.interface";
-import { SYSTEM_TENANT_ID } from "../constants";
+import {
+  EMAIL_PROVIDER,
+  IDENTITY_OPTIONS,
+  IDENTITY_DB,
+  BETTER_AUTH_CONFIG,
+  TENANT_PROVIDER,
+} from "../constants";
+import type { IdentityModuleOptions } from "../identity.module";
 import type { IEmailProvider } from "../interfaces/email-provider.interface";
 import * as schema from "../schema";
 import type { IncomingHttpHeaders } from "node:http";
+import { Inject, Injectable } from "@nestjs/common";
 
 export interface BetterAuthAdapterConfig {
   allowedOrigins: string[];
@@ -69,14 +77,17 @@ interface BetterAuthApi {
   }): Promise<{ status: boolean; error?: { message: string } } | Response>;
 }
 
+@Injectable()
 export class BetterAuthAdapter implements IAuthProvider {
   private readonly auth: ReturnType<typeof betterAuth>;
 
   constructor(
-    private readonly db: NodePgDatabase<typeof schema>,
-    private readonly emailService: IEmailProvider,
+    @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
+    @Inject(EMAIL_PROVIDER) private readonly emailService: IEmailProvider,
+    @Inject(BETTER_AUTH_CONFIG)
     private readonly config: BetterAuthAdapterConfig,
-    private readonly tenantProvider: ITenantProvider, // Injected Dependency
+    @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider, // Injected Dependency
+    @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
   ) {
     if (!config.allowedOrigins || config.allowedOrigins.length === 0) {
       throw new Error("BetterAuthAdapter: allowedOrigins config is missing");
@@ -611,14 +622,17 @@ export class BetterAuthAdapter implements IAuthProvider {
         const existingMember = await tx.query.member.findFirst({
           where: and(
             eq(schema.member.userId, userId),
-            eq(schema.member.organizationId, SYSTEM_TENANT_ID),
+            eq(
+              schema.member.organizationId,
+              this.options.constants.systemTenantId,
+            ),
           ),
         });
 
         if (!existingMember) {
           await tx.insert(schema.member).values({
             id: uuidv4(),
-            organizationId: SYSTEM_TENANT_ID,
+            organizationId: this.options.constants.systemTenantId,
             userId: userId,
             roleId: inv.role || "member",
             createdAt: new Date(),

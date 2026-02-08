@@ -5,7 +5,51 @@ export const TENANT_PROVIDER = "TENANT_PROVIDER";
 export const PERMISSION_PROVIDER = "PERMISSION_PROVIDER";
 export const EMAIL_PROVIDER = "EMAIL_PROVIDER";
 export const DATABASE_CONNECTION = "DATABASE_CONNECTION";
+export const IDENTITY_DB = "IDENTITY_DB";
+export const BETTER_AUTH_CONFIG = "BETTER_AUTH_CONFIG";
 
-export const SYSTEM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
-export const PLATFORM_ADMIN_ROLE_ID = "platform_admin";
-export const DEFAULT_SYSTEM_ROLE_ID = "member";
+export const ALL_PERMISSIONS = [
+  "users:read",
+  "users:create",
+  "users:update",
+  "users:delete",
+  "users:manage",
+  "tenants:read",
+  "tenants:create",
+  "tenants:update",
+  "tenants:delete",
+  "tenants:manage",
+  "dashboard:read",
+  "admin_dashboard:view",
+  "settings:manage",
+  "settings:read",
+  "system_users:read",
+  "system_users:manage",
+  "system_users:invite",
+  "system_tenants:read",
+  "system_tenants:manage",
+] as const;
+
+export type PermissionType = (typeof ALL_PERMISSIONS)[number];
+
+export const isSystemPermission = (permission: string): boolean =>
+  permission.startsWith("system_") || permission === "admin_dashboard:view";
+
+// Environment Variables - Strictly required
+// Use Dependency Injection via IDENTITY_OPTIONS where possible.
+const getEnv = (key: string): string => {
+  const val = process.env[key];
+  if (!val) {
+    throw new Error(
+      `Environment variable ${key} is missing in Identity constants`,
+    );
+  }
+  return val;
+};
+
+export const getSystemTenantId = () => getEnv("SYSTEM_TENANT_ID");
+export const getOwnerRoleId = () => getEnv("OWNER_ROLE_ID");
+export const getAdminRoleId = () => getEnv("ADMIN_ROLE_ID");
+export const getMemberRoleId = () => getEnv("MEMBER_ROLE_ID");
+
+// Runtime check removed to allow library usage without env vars (e.g. testing)

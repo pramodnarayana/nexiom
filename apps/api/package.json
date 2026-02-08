@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "docker:build": "docker build -t nexiom-api:latest -f Dockerfile ../..",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
@@ -19,7 +20,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push:unsafe": "drizzle-kit push",
     "db:studio": "drizzle-kit studio --port 4984",
-    "db:seed": "ts-node src/schema/seed.ts",
+    "db:seed": "ts-node src/scripts/manage.ts bootstrap",
+    "db:reset": "ts-node src/scripts/manage.ts reset-db",
+    "db:admin:reset": "ts-node src/scripts/manage.ts reset-admin",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --inspect --logHeapUsage --pool=forks",
@@ -37,7 +40,9 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
     "nestjs-zod": "^5.0.1",
     "nodemailer": "^7.0.12",
     "pg": "^8.16.3",
@@ -52,6 +57,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@nx/webpack": "^22.4.5",
     "@swc/core": "^1.15.11",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
@@ -62,7 +68,6 @@
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^11.0.0",
     "@vitest/coverage-istanbul": "^2.1.9",
-    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
@@ -77,6 +82,7 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0",
     "unplugin-swc": "^1.5.9",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "webpack-node-externals": "^3.0.0"
   }
 }

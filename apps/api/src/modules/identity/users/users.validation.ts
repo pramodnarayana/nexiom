@@ -12,12 +12,17 @@ export const ROLES = {
 } as const;
 
 /**
- * Shared role enum for consistent validation across schemas
- * Derived from ROLES constant to ensure single source of truth
+ * Shared role validation
+ * Changed to string to support dynamic DB-driven roles.
  */
-const RoleEnum = z.enum(Object.values(ROLES) as [string, ...string[]], {
-  message: 'Role must be admin, editor, viewer, or user',
-});
+const RoleEnum = z
+  .string()
+  .min(1, 'Role is required')
+  .max(50, 'Role too long')
+  .regex(
+    /^[a-z0-9-_]+$/,
+    'Role must be lowercase alphanumeric with hyphens/underscores',
+  );
 
 /**
  * Zod Schema to validate the Create User Request.

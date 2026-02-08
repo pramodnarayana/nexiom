@@ -11,8 +11,8 @@ import {
   ITenantProvider,
   PERMISSION_PROVIDER,
   IPermissionProvider,
-  SYSTEM_TENANT_ID,
 } from '@nexiom/identity';
+import { getRequiredSystemTenantId } from '../../../constants';
 
 @Injectable()
 export class AuthService {
@@ -101,7 +101,7 @@ export class AuthService {
     try {
       const systemPerms = await this.permissionProvider.getPermissions(
         user,
-        SYSTEM_TENANT_ID,
+        getRequiredSystemTenantId(),
       );
       for (const p of systemPerms) {
         permissionsSet.add(p);
@@ -150,7 +150,7 @@ export class AuthService {
     try {
       const perms = await this.permissionProvider.getPermissions(
         user,
-        SYSTEM_TENANT_ID,
+        getRequiredSystemTenantId(),
       );
       // 'manage' implies full access, 'view' implies read access.
       // We check if the user has specific permission OR wildcard.

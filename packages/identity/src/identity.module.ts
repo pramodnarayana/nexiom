@@ -1,9 +1,4 @@
-import type {
-  DynamicModule,
-  ModuleMetadata,
-  Provider,
-  Type,
-} from "@nestjs/common";
+import type { DynamicModule, ModuleMetadata, Type } from "@nestjs/common";
 import { Global, Module } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -11,7 +6,10 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
+  EMAIL_PROVIDER,
   IDENTITY_OPTIONS,
+  IDENTITY_DB,
+  BETTER_AUTH_CONFIG,
 } from "./constants";
 import {
   BetterAuthAdapter,
@@ -20,15 +18,20 @@ import {
 import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
 import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
-import type {
-  IAuthProvider,
-  IEmailProvider,
-  ITenantProvider,
-} from "./interfaces";
+import type { IEmailProvider } from "./interfaces";
 import * as schema from "./schema";
+import { PermissionSeeder } from "./services/permission-seeder";
+
+export interface IdentityConstants {
+  systemTenantId: string;
+  ownerRoleId: string;
+  adminRoleId: string;
+  memberRoleId: string;
+}
 
 export interface IdentityModuleOptions {
   betterAuthConfig: BetterAuthAdapterConfig;
+  constants: IdentityConstants;
   dbToken?: string | symbol | Type<any>;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   emailToken?: string | symbol | Type<any> | Function;
@@ -48,65 +51,54 @@ export class IdentityModule {
         "dbToken and emailToken are required for synchronous registration",
       );
     }
-
-    const authProvider: Provider = {
-      provide: AUTH_PROVIDER,
-      useFactory: (
-        db: NodePgDatabase<typeof schema>,
-        emailService: IEmailProvider,
-        tenantProvider: ITenantProvider,
-      ) => {
-        return new BetterAuthAdapter(
-          db,
-          emailService,
-          options.betterAuthConfig,
-          tenantProvider,
-        );
-      },
-      inject: [options.dbToken, options.emailToken, TENANT_PROVIDER],
-    };
-
-    const userProvider: Provider = {
-      provide: USER_PROVIDER,
-      useFactory: (
-        db: NodePgDatabase<typeof schema>,
-        authProvider: IAuthProvider,
-      ) => {
-        return new DrizzleUserAdapter(db, authProvider);
-      },
-      inject: [options.dbToken, AUTH_PROVIDER],
-    };
-
-    const tenantProvider: Provider = {
-      provide: TENANT_PROVIDER,
-      useFactory: (db: NodePgDatabase<typeof schema>) => {
-        return new DrizzleTenantAdapter(db);
-      },
-      inject: [options.dbToken],
-    };
-
-    const permissionProvider: Provider = {
-      provide: PERMISSION_PROVIDER,
-      useFactory: (db: NodePgDatabase<typeof schema>) => {
-        return new DrizzlePermissionAdapter(db);
-      },
-      inject: [options.dbToken],
-    };
+    if (!options.constants) {
+      throw new Error("constants are required for synchronous registration");
+    }
 
     return {
       module: IdentityModule,
       imports: options.imports || [],
       providers: [
-        authProvider,
-        userProvider,
-        tenantProvider,
-        permissionProvider,
+        {
+          provide: IDENTITY_OPTIONS,
+          useValue: options,
+        },
+        {
+          provide: BETTER_AUTH_CONFIG,
+          useValue: options.betterAuthConfig,
+        },
+        {
+          provide: IDENTITY_DB,
+          useExisting: options.dbToken,
+        },
+        {
+          provide: AUTH_PROVIDER,
+          useClass: BetterAuthAdapter,
+        },
+        {
+          provide: USER_PROVIDER,
+          useClass: DrizzleUserAdapter,
+        },
+        {
+          provide: TENANT_PROVIDER,
+          useClass: DrizzleTenantAdapter,
+        },
+        {
+          provide: PERMISSION_PROVIDER,
+          useClass: DrizzlePermissionAdapter,
+        },
+        PermissionSeeder,
       ],
       exports: [
+        IDENTITY_OPTIONS,
+        IDENTITY_DB,
+        BETTER_AUTH_CONFIG,
+        EMAIL_PROVIDER,
         AUTH_PROVIDER,
         USER_PROVIDER,
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
+        PermissionSeeder,
       ],
     };
   }
@@ -136,59 +128,61 @@ export class IdentityModule {
                 "db and email instances must be provided in IdentityModuleOptions for registerAsync",
               );
             }
+            if (!identityOptions.constants) {
+              throw new Error(
+                "constants must be provided in IdentityModuleOptions for registerAsync",
+              );
+            }
             return identityOptions;
           },
           inject: options.inject || [],
         },
         {
-          provide: AUTH_PROVIDER,
-          useFactory: (
-            identityOptions: IdentityModuleOptions,
-            tenantProvider: ITenantProvider,
-          ) => {
-            // Validated in IDENTITY_OPTIONS factory
-            return new BetterAuthAdapter(
-              identityOptions.db!,
-              identityOptions.email!,
-              identityOptions.betterAuthConfig,
-              tenantProvider,
-            );
+          provide: BETTER_AUTH_CONFIG,
+          useFactory: (identityOptions: IdentityModuleOptions) =>
+            identityOptions.betterAuthConfig,
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
+          provide: IDENTITY_DB,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validation above ensures db is defined
+            return identityOptions.db;
           },
-          inject: [IDENTITY_OPTIONS, TENANT_PROVIDER],
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
+          provide: EMAIL_PROVIDER,
+          useFactory: (identityOptions: IdentityModuleOptions) => {
+            // Validation above ensures email is defined
+            return identityOptions.email;
+          },
+          inject: [IDENTITY_OPTIONS],
+        },
+        {
+          provide: AUTH_PROVIDER,
+          useClass: BetterAuthAdapter,
         },
         {
           provide: USER_PROVIDER,
-          useFactory: (
-            identityOptions: IdentityModuleOptions,
-            authProvider: IAuthProvider,
-          ) => {
-            // Validated in IDENTITY_OPTIONS factory
-            return new DrizzleUserAdapter(identityOptions.db!, authProvider);
-          },
-          inject: [IDENTITY_OPTIONS, AUTH_PROVIDER],
+          useClass: DrizzleUserAdapter,
         },
         {
           provide: TENANT_PROVIDER,
-          useFactory: (identityOptions: IdentityModuleOptions) => {
-            // Validated in IDENTITY_OPTIONS factory
-            return new DrizzleTenantAdapter(identityOptions.db!);
-          },
-          inject: [IDENTITY_OPTIONS],
+          useClass: DrizzleTenantAdapter,
         },
         {
           provide: PERMISSION_PROVIDER,
-          useFactory: (identityOptions: IdentityModuleOptions) => {
-            // Validated in IDENTITY_OPTIONS factory
-            return new DrizzlePermissionAdapter(identityOptions.db!);
-          },
-          inject: [IDENTITY_OPTIONS],
+          useClass: DrizzlePermissionAdapter,
         },
+        PermissionSeeder,
       ],
       exports: [
         AUTH_PROVIDER,
         USER_PROVIDER,
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
+        PermissionSeeder,
       ],
     };
   }

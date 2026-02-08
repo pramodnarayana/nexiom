@@ -1,4 +1,6 @@
+import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { IDENTITY_DB } from "../constants";
 import { eq, and } from "drizzle-orm";
 import type {
   IPermissionProvider,
@@ -8,8 +10,11 @@ import type {
 } from "../interfaces";
 import * as schema from "../schema";
 
+@Injectable()
 export class DrizzlePermissionAdapter implements IPermissionProvider {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  constructor(
+    @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
+  ) {}
 
   async can(
     user: User,
@@ -21,10 +26,6 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
 
     const context = await this.fetchMemberContext(user.id, tenantId);
     if (!context) return false;
-
-    // Owner override
-    // Safe check for roleName
-    if (this.isPrivilegedRole(context.roleName)) return true;
 
     // Check permissions
     // 1. Global Wildcard
@@ -64,12 +65,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // 2. Owner/Admin Wildcard
-        if (this.isPrivilegedRole(context.roleName)) {
-          perms.push("*");
-        }
-
-        // 3. Explicit Permissions
+        // 3. Explicit Permissions (Scoped by fetchMemberContext logic)
         context.permissions.forEach((p) => {
           if (p.resource === "*" && p.action === "*") {
             perms.push("*");
@@ -92,6 +88,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
         permId: schema.permission.id,
         resource: schema.permission.resource,
         action: schema.permission.action,
+        permOrgId: schema.rolePermission.organizationId,
       })
       .from(schema.member)
       .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
@@ -119,7 +116,12 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
     >();
 
     rows.forEach((r) => {
-      if (r.permId && !permissionsMap.has(r.permId)) {
+      // Permission filtering logic:
+      // Include if permission is Global (permOrgId is null)
+      // OR if permission is Scoped to current Tenant (permOrgId === tenantId)
+      const isScopedCorrectly = !r.permOrgId || r.permOrgId === tenantId;
+
+      if (r.permId && isScopedCorrectly && !permissionsMap.has(r.permId)) {
         permissionsMap.set(r.permId, {
           id: r.permId,
           resource: r.resource!,
@@ -135,10 +137,5 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       roleName: first.roleName,
       permissions,
     };
-  }
-
-  private isPrivilegedRole(roleName: string | null | undefined): boolean {
-    const normalize = roleName ? roleName.toLowerCase() : "";
-    return normalize === "owner" || normalize === "system admin";
   }
 }

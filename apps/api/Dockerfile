@@ -8,6 +8,7 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/identity ./packages/identity
 COPY apps/api ./apps/api
 
 RUN pnpm install --frozen-lockfile
@@ -40,4 +41,4 @@ USER nodejs
 # Expose API port (Implicit via docker-compose)
 # EXPOSE 3000
 
-CMD ["node", "apps/api/dist/src/main"]
+CMD ["node", "apps/api/dist/main"]

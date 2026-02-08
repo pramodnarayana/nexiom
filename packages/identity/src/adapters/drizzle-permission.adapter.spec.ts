@@ -3,8 +3,20 @@ import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { User } from "../interfaces";
-import { SYSTEM_TENANT_ID } from "../constants";
+import { getSystemTenantId } from "../constants";
 
+vi.mock("../constants", async () => {
+  return {
+    ...(await vi.importActual("../constants")),
+    getSystemTenantId: () => "sys-tenant-id",
+    getOwnerRoleId: () => "owner-role-id",
+    getAdminRoleId: () => "admin-role-id",
+    getMemberRoleId: () => "member-role-id",
+    IDENTITY_DB: "IDENTITY_DB",
+  };
+});
+
+// Helper for generic mocked DB
 const mockChainedQuery = (result: unknown) => {
   const p = Promise.resolve(result);
 
@@ -86,9 +98,10 @@ describe("DrizzlePermissionAdapter", () => {
         {
           roleId: "owner",
           roleName: "Owner",
-          permId: null,
-          resource: null,
-          action: null,
+          permId: "super_admin",
+          resource: "*",
+          action: "*",
+          permOrgId: null, // Global
         },
       ]),
     );
@@ -103,6 +116,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "p1",
           resource: "organization",
           action: "read",
+          permOrgId: "o1", // Scoped to o1
         },
       ]),
     );
@@ -117,6 +131,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "p1",
           resource: "other", // mismatch
           action: "read",
+          permOrgId: "o1",
         },
       ]),
     );
@@ -136,6 +151,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "all",
           resource: "*",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
@@ -155,6 +171,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "org_all",
           resource: "organization",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
@@ -173,6 +190,7 @@ describe("DrizzlePermissionAdapter", () => {
           roleId: "admin",
           roleName: "Admin",
           permId: null,
+          permOrgId: null,
         },
       ]),
     );
@@ -184,6 +202,7 @@ describe("DrizzlePermissionAdapter", () => {
           roleId: "user",
           roleName: "User",
           permId: null,
+          permOrgId: null,
         },
       ]),
     );
@@ -203,6 +222,7 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "users:read",
           resource: "users",
           action: "read",
+          permOrgId: "o1",
         },
       ]),
     );
@@ -226,13 +246,14 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "*",
           resource: "*",
           action: "*",
+          permOrgId: getSystemTenantId(),
         },
       ]),
     );
 
-    expect(await adapter.getPermissions(mkUser(), SYSTEM_TENANT_ID)).toEqual([
-      "*",
-    ]);
+    expect(await adapter.getPermissions(mkUser(), getSystemTenantId())).toEqual(
+      ["*"],
+    );
   });
 
   it("getPermissions: returns resource wildcard (e.g. organization:*)", async () => {
@@ -245,21 +266,34 @@ describe("DrizzlePermissionAdapter", () => {
           permId: "org_all",
           resource: "organization",
           action: "*",
+          permOrgId: null,
         },
       ]),
     );
 
-    // Should collapse to "organization:*" because the implementation maps
-    // existing matched permissions by id. If db returns action='*', we expect result to be 'resource:*' unless
-    // resource is also '*', which is covered in the previous test.
-    // wait, existing implementation logic:
-    // context.permissions.forEach((p) => {
-    //  if (p.resource === "*" && p.action === "*") { perms.push("*"); }
-    //  else { perms.push(`${p.resource}:${p.action}`); }
-    // });
-    // So "organization" + "*" -> "organization:*"
     expect(await adapter.getPermissions(mkUser(), "o1")).toEqual([
       "organization:*",
     ]);
+  });
+
+  it("can: denies permission if scope mismatch", async () => {
+    const db = mkDb();
+    const adapter = new DrizzlePermissionAdapter(db);
+    const user = mkUser();
+
+    // User has 'admin:read' but scoped to 'other_tenant'
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        {
+          roleId: "owner",
+          roleName: "Owner",
+          permId: "p1",
+          resource: "admin",
+          action: "read",
+          permOrgId: getSystemTenantId(), // Mismatch with requested 'o1'
+        },
+      ]),
+    );
+    expect(await adapter.can(user, "read", "admin", "o1")).toBe(false);
   });
 });
