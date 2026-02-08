@@ -29,7 +29,4 @@ export const getRequiredOwnerRoleId = getOwnerRoleId;
 export const getRequiredAdminRoleId = getAdminRoleId;
 export const getRequiredMemberRoleId = getMemberRoleId;
 
-export {
-  ALL_PERMISSIONS,
-  isSystemPermission,
-} from '@nexiom/identity/src/constants';
+export { ALL_PERMISSIONS, isSystemPermission } from '@nexiom/identity';
