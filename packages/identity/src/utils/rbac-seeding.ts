@@ -2,7 +2,11 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Logger } from "@nestjs/common";
 import { v4 as uuidv4 } from "uuid";
 import * as schema from "../schema";
-import { ALL_PERMISSIONS, PermissionType } from "../constants";
+import {
+  ALL_PERMISSIONS,
+  isSystemPermission,
+  PermissionType,
+} from "../constants";
 
 export interface RbacConfig {
   ownerRoleId: string;
@@ -88,9 +92,6 @@ export async function seedSystemRbac(
       organizationId?: string | null;
     }[] = [];
 
-    const isSystemPerm = (p: string) =>
-      p.startsWith("system_") || p === "admin_dashboard:view";
-
     const addPermissionsForRole = (
       roleId: string,
       permissions: readonly string[],
@@ -98,7 +99,7 @@ export async function seedSystemRbac(
     ) => {
       for (const p of permissions) {
         // Deterministically decide scope based on permission type
-        const isSystem = isSystemPerm(p);
+        const isSystem = isSystemPermission(p);
         const orgId = isSystem ? scopedOrganizationId : null;
 
         // Push to list
@@ -116,23 +117,7 @@ export async function seedSystemRbac(
 
     // Member: curated safe subset
     const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
-    // Member permissions are global for non-system perms in this context,
-    // but member logic in original was: "null" for everything.
-    // Original logic:
-    // memberPerms.forEach((p) => {
-    //   if (perms.includes(p)) {
-    //       rolePermissionsToInsert.push({ ..., organizationId: null });
-    //   }
-    // });
-    // This helper logic (isSystem ? sys : null) works for member too
-    // IF member perms are NOT system perms and we pass systemTenantId.
-    // However, member perms "users:read" and "tenants:read" are not "system_" perms,
-    // so they will be null.
-    // But if we ever add a system perm to member, it would get system scope.
-    // Let's use a simpler loop for member to match exact original "always null" behavior if needed,
-    // OR just use the helper if we trust the "isSystem" logic.
-    // The original code used `organizationId: null` hardcoded for Member.
-    // Let's stick to safe iteration for member to avoid accidental system grant.
+    // Member role always receives organizationId: null per RBAC design (see ADR)
     for (const p of memberPerms) {
       if (perms.includes(p)) {
         rolePermissionsToInsert.push({

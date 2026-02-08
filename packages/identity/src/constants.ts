@@ -32,6 +32,9 @@ export const ALL_PERMISSIONS = [
 
 export type PermissionType = (typeof ALL_PERMISSIONS)[number];
 
+export const isSystemPermission = (permission: string): boolean =>
+  permission.startsWith("system_") || permission === "admin_dashboard:view";
+
 // Environment Variables - Strictly required
 // Use Dependency Injection via IDENTITY_OPTIONS where possible.
 const getEnv = (key: string): string => {

@@ -133,7 +133,6 @@ describe("PermissionSeeder", () => {
 
     // Assert scoping (User requested check for sys vs null orgId)
     // Reuse rolePermValues from above
-    // ... existing checks ...
 
     // Check for at least one system-scoped permission (admin_dashboard:view or system_*)
     const systemScoped = rolePermValues?.find(

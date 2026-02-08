@@ -3,7 +3,7 @@ import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as dotEnv from 'dotenv';
 import * as path from 'node:path';
-import { ALL_PERMISSIONS } from '../constants';
+import { ALL_PERMISSIONS, isSystemPermission } from '../constants';
 
 // Load .env from apps/api root
 dotEnv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -158,34 +158,26 @@ const seedRBAC = async (
 
   // 2. Admin
   // Global Permissions (non-system, non-dashboard-view) -> Global
-  const adminGlobalPerms = perms.filter(
-    (p) => !p.startsWith('system_') && p !== 'admin_dashboard:view',
-  );
+  const adminGlobalPerms = perms.filter((p) => !isSystemPermission(p));
   for (const p of adminGlobalPerms) {
     add(ids.admin, p, null);
   }
 
   // System Permissions -> System Tenant Scoped
-  const adminSystemPerms = perms.filter(
-    (p) => p.startsWith('system_') || p === 'admin_dashboard:view',
-  );
+  const adminSystemPerms = perms.filter((p) => isSystemPermission(p));
   for (const p of adminSystemPerms) {
     add(ids.admin, p, ids.systemTenant);
   }
 
   // 3. Owner
   // Global Permissions -> Global
-  const ownerGlobalPerms = perms.filter(
-    (p) => !p.startsWith('system_') && p !== 'admin_dashboard:view',
-  );
+  const ownerGlobalPerms = perms.filter((p) => !isSystemPermission(p));
   for (const p of ownerGlobalPerms) {
     add(ids.owner, p, null);
   }
 
   // System Permissions -> System Tenant Scoped
-  const ownerSystemPerms = perms.filter(
-    (p) => p.startsWith('system_') || p === 'admin_dashboard:view',
-  );
+  const ownerSystemPerms = perms.filter((p) => isSystemPermission(p));
   for (const p of ownerSystemPerms) {
     add(ids.owner, p, ids.systemTenant);
   }

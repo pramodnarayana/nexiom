@@ -313,9 +313,9 @@ async function resetDb() {
 
   console.log('⚠️  Resetting Database (Truncating Data)...');
   const client = getDbClient();
-  await client.connect();
 
   try {
+    await client.connect();
     await client.query(`
             TRUNCATE TABLE 
                 "invitation",
