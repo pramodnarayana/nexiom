@@ -38,10 +38,7 @@ interface MockDb {
   orderBy: MockFunc;
 }
 const mockChainedQuery = (result: unknown) => {
-  const chain: Record<string, any> = {
-    then: (onfulfilled: (value: unknown) => unknown) =>
-      Promise.resolve(result).then(onfulfilled),
-  };
+  const chain: Record<string, any> = Promise.resolve(result);
   const methods = [
     "from",
     "innerJoin",
@@ -108,6 +105,7 @@ const mkAuth = (over?: Partial<IAuthProvider>): IAuthProvider =>
       }),
     ),
     setPassword: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn().mockResolvedValue({ id: "u1" }),
     ...over,
   }) as unknown as IAuthProvider;
 
@@ -218,11 +216,13 @@ describe("DrizzleUserAdapter", () => {
     const auth = mkAuth();
     const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
-    db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
+    // db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
+    // Adapter delegates to auth provider for findById
+    auth.findById = vi.fn().mockResolvedValue(mkUser({ id: "u1" }));
     const byId = await adapter.findById("u1");
     expect(byId?.id).toBe("u1");
 
-    db.query.user.findFirst.mockResolvedValueOnce(null);
+    auth.findById = vi.fn().mockRejectedValue(new Error("Not found"));
     expect(await adapter.findById("x")).toBeNull();
 
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ email: "z@y.com" }));
@@ -348,6 +348,12 @@ describe("DrizzleUserAdapter", () => {
           from: vi.fn().mockReturnThis(),
           innerJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockResolvedValueOnce([{ count: 2 }]), // returns promise of array
+        });
+
+        // 4. Remaining memberships call (for orphan cleanup)
+        tx.select.mockReturnValueOnce({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValueOnce([{ count: 0 }]),
         });
 
         return await fn(tx);

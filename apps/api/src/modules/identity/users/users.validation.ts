@@ -67,7 +67,7 @@ export const CompleteInviteSchema = z.object({
     .min(8, { message: 'Password must be at least 8 characters' }),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  invitationId: z.string().uuid(),
+  invitationId: z.string().min(1),
 });
 
 export class CompleteInvite extends createZodDto(CompleteInviteSchema) {}

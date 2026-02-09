@@ -10,6 +10,7 @@ import {
   IDENTITY_OPTIONS,
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
+  ROLE_PROVIDER,
 } from "./constants";
 import {
   BetterAuthAdapter,
@@ -18,6 +19,7 @@ import {
 import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
 import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
+import { DrizzleRoleAdapter } from "./adapters/drizzle-role.adapter";
 import type { IEmailProvider } from "./interfaces";
 import * as schema from "./schema";
 import { PermissionSeeder } from "./services/permission-seeder";
@@ -87,6 +89,10 @@ export class IdentityModule {
           provide: PERMISSION_PROVIDER,
           useClass: DrizzlePermissionAdapter,
         },
+        {
+          provide: ROLE_PROVIDER,
+          useClass: DrizzleRoleAdapter,
+        },
         PermissionSeeder,
       ],
       exports: [
@@ -98,6 +104,7 @@ export class IdentityModule {
         USER_PROVIDER,
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
+        ROLE_PROVIDER,
         PermissionSeeder,
       ],
     };
@@ -175,6 +182,10 @@ export class IdentityModule {
           provide: PERMISSION_PROVIDER,
           useClass: DrizzlePermissionAdapter,
         },
+        {
+          provide: ROLE_PROVIDER,
+          useClass: DrizzleRoleAdapter,
+        },
         PermissionSeeder,
       ],
       exports: [
@@ -182,6 +193,7 @@ export class IdentityModule {
         USER_PROVIDER,
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
+        ROLE_PROVIDER,
         PermissionSeeder,
       ],
     };

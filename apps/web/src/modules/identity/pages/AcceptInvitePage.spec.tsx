@@ -109,7 +109,7 @@ describe('AcceptInvitePage', () => {
         });
     });
 
-    it('proceeds to dashboard even if silent accept fails (idempotency)', async () => {
+    it('shows error if silent accept fails', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
@@ -130,8 +130,10 @@ describe('AcceptInvitePage', () => {
 
             // Still navigates
             await waitFor(() => {
-                expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+                expect(screen.getByText('Network Error')).toBeInTheDocument();
             });
+
+            expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard', expect.anything());
         } finally {
             consoleErrorSpy.mockRestore();
             consoleWarnSpy.mockRestore();

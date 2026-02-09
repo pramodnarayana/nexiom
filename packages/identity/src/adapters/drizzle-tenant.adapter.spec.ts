@@ -250,8 +250,8 @@ describe("DrizzleTenantAdapter", () => {
     );
 
     const rows = [
-      { org: mkOrg({ id: "org-1", name: "A" }), roleId: "admin" },
-      { org: mkOrg({ id: "org-2", name: "B" }), roleId: "member" },
+      { org: mkOrg({ id: "org-1", name: "A" }), role: "admin" },
+      { org: mkOrg({ id: "org-2", name: "B" }), role: "member" },
     ];
 
     db.select.mockReturnValueOnce({

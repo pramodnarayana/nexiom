@@ -10,10 +10,9 @@ export const CreateTenantSchema = z.object({
   slug: z
     .string()
     .min(3, 'Slug must be at least 3 characters')
-    .regex(
-      /^[a-z0-9-]+$/,
-      'Slug must contain only lowercase letters, numbers, and hyphens',
-    ),
+    .regex(/^[a-z0-9-]+$/, {
+      message: 'Slug must contain only lowercase letters, numbers, and hyphens',
+    }),
   logo: z.string().url().optional().or(z.literal('')),
 });
 
@@ -42,8 +41,9 @@ export const UpdateUserSchema = z.object({
 export class UpdateUserValidation extends createZodDto(UpdateUserSchema) {}
 
 export const CreateUserSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email address'),
+  name: z.string().min(1, { message: 'Name is required' }),
+  email: z.string().email({ message: 'Invalid email address' }),
+  role: z.string().optional().default('user'), // Default to 'user' for System Admin created users
 });
 
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}

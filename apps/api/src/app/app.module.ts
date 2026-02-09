@@ -8,6 +8,7 @@ import { AuthModule } from '../modules/identity/auth/auth.module';
 import { DbModule } from '../db/db.module';
 import { InvitationsModule } from '../modules/identity/invitations/invitations.module';
 import { SystemAdminModule } from '../modules/identity/system-admin/system-admin.module';
+import { RolesModule } from '../modules/identity/roles/roles.module';
 import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from '../modules/email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -56,6 +57,7 @@ import * as schema from '../db/schema';
     InvitationsModule,
     DbModule,
     SystemAdminModule,
+    RolesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -47,6 +47,7 @@ describe('AuthProvider', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         // Default optimistic success for API calls usually, specific tests will override
+        (apiClient.get as Mock).mockResolvedValue({ data: {} });
     });
 
     it('should start in loading state', () => {
@@ -102,7 +103,7 @@ describe('AuthProvider', () => {
         expect(screen.getByTestId('user-name')).toHaveTextContent('Test User');
         expect(screen.getByTestId('org-name')).toHaveTextContent('Test Org');
         // Should NOT fetch tenants
-        expect(apiClient.get).not.toHaveBeenCalled();
+        expect(apiClient.get).not.toHaveBeenCalledWith('/tenants');
     });
 
     it('should fetch tenants and hydrate if organizationId is missing', async () => {
@@ -143,53 +144,7 @@ describe('AuthProvider', () => {
         expect(screen.getByTestId('org-name')).toHaveTextContent('Latest Org');
     });
 
-    it('should fallback to auto-provisioning if no tenants found', async () => {
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
-        // 1. Initial Session: No Org
-        (authClient.getSession as Mock)
-            .mockResolvedValueOnce({
-                data: {
-                    user: { id: 'u1', email: 'test@example.com' },
-                    session: { token: 't1' }
-                },
-                error: null
-            })
-            // 2. Second Session Check (after provision)
-            .mockResolvedValueOnce({
-                data: {
-                    user: { id: 'u1', email: 'test@example.com' },
-                    session: { token: 't1' }
-                },
-                error: null
-            });
 
-
-        // 1. Tenant Fetch: Empty
-        (apiClient.get as Mock)
-            .mockResolvedValueOnce({ data: [] })
-            // 2. Tenant Fetch (after provision): Success
-            .mockResolvedValueOnce({
-                data: [{ id: 'newOrg', name: 'New Org', createdAt: '2024-01-01' }]
-            });
-
-        // Mock Provision Call
-        (apiClient.post as Mock).mockResolvedValue({});
-
-        render(
-            <AuthProvider>
-                <TestConsumer />
-            </AuthProvider>
-        );
-
-        await waitFor(() => {
-            expect(apiClient.post).toHaveBeenCalledWith('/auth/provision-tenant');
-        });
-
-        await waitFor(() => {
-            expect(screen.getByTestId('org-name')).toHaveTextContent('New Org');
-        });
-        consoleSpy.mockRestore();
-    });
 
     it('should handle logout correctly', async () => {
         const originalLocation = globalThis.location;

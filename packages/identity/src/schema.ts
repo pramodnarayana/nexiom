@@ -206,7 +206,7 @@ export const member = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    roleId: text("roleId")
+    role: text("role")
       .notNull()
       .references(() => role.id, { onDelete: "restrict" }),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -229,7 +229,7 @@ export const memberRelations = relations(member, ({ one }) => ({
     references: [user.id],
   }),
   role: one(role, {
-    fields: [member.roleId],
+    fields: [member.role],
     references: [role.id],
   }),
 }));

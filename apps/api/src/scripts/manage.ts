@@ -130,16 +130,16 @@ async function elevateToOwner(
       id: uuidv4(),
       userId: user.id,
       organizationId: SYSTEM_TENANT_ID,
-      roleId: OWNER_ROLE_ID,
+      role: OWNER_ROLE_ID,
       createdAt: new Date(),
     });
     console.log(`✅ User assigned to System Tenant as Owner.`);
   } else {
     // Force update role to Owner if it's different
-    if (existingMember[0].roleId !== OWNER_ROLE_ID) {
+    if (existingMember[0].role !== OWNER_ROLE_ID) {
       await db
         .update(schema.member)
-        .set({ roleId: OWNER_ROLE_ID })
+        .set({ role: OWNER_ROLE_ID })
         .where(eq(schema.member.id, existingMember[0].id));
       console.log(`✅ User role updated to System Owner.`);
     } else {

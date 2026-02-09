@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/react"
+import { adminClient, organizationClient } from "better-auth/client/plugins"
 
 const apiURL = import.meta.env.VITE_API_URL;
 if (!apiURL) {
@@ -22,5 +23,9 @@ export const authClient = createAuthClient({
     baseURL: getAuthBaseURL(apiURL),
     fetchOptions: {
         credentials: "include"
-    }
+    },
+    plugins: [
+        organizationClient(),
+        adminClient()
+    ]
 })

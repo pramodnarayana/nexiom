@@ -22,12 +22,19 @@ export class InvitationsController {
     @Body() createInvitation: CreateInvitation,
     @Req() req: Request & { user: { id: string; organizationId?: string } },
   ) {
-    // Strict Enforcement: Invites are ALWAYS for the current user's organization.
-    // No explicit override allowed via API body.
-    createInvitation.organizationId = req.user.organizationId;
+    // If specific organization context exists (Tenant Admin), enforce it.
+    if (req.user.organizationId) {
+      createInvitation.organizationId = req.user.organizationId;
+    }
+    // Otherwise (System Admin), usage of organizationId from body is allowed.
 
-    // Pass headers to propagate auth context to BetterAuth client
-    return this.invitationsService.create(createInvitation, req.user.id);
+    // Otherwise (System Admin), usage of organizationId from body is allowed.
+
+    return this.invitationsService.create(
+      createInvitation,
+      req.user.id,
+      req.headers,
+    );
   }
 
   @Get(':id')

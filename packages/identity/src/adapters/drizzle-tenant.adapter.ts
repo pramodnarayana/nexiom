@@ -47,7 +47,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             id: uuidv4(),
             organizationId: orgId,
             userId: userId,
-            roleId: "owner",
+            role: "owner",
             createdAt: new Date(),
           });
 
@@ -191,7 +191,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const rows = await this.db
       .select({
         org: schema.organization,
-        roleId: schema.member.roleId,
+        role: schema.member.role,
       })
       .from(schema.organization)
       .innerJoin(
@@ -202,7 +202,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
     return rows.map((r) => ({
       ...this.mapTenant(r.org),
-      memberRole: r.roleId,
+      memberRole: r.role,
     }));
   }
 
@@ -218,7 +218,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
     const [row] = await this.db
       .select({
         org: schema.organization,
-        roleId: schema.member.roleId,
+        role: schema.member.role,
       })
       .from(schema.organization)
       .innerJoin(
@@ -236,7 +236,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
     return {
       ...this.mapTenant(row.org),
-      memberRole: row.roleId,
+      memberRole: row.role,
     };
   }
 
@@ -323,6 +323,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
       logo: dbOrg.logo,
       status: dbOrg.status,
       createdAt: dbOrg.createdAt,
+      updatedAt: dbOrg.updatedAt,
       metadata: (() => {
         if (!dbOrg.metadata) return undefined;
         try {

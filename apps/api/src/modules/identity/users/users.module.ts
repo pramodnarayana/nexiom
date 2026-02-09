@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { UsersController } from './users.controller';
+import { InvitationsModule } from '../invitations/invitations.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [],
+  imports: [InvitationsModule, forwardRef(() => AuthModule)],
   controllers: [UsersController],
   providers: [],
 })

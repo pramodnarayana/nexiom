@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.validation';
@@ -52,6 +53,19 @@ describe('UsersController', () => {
         {
           provide: TENANT_PROVIDER,
           useValue: tenantProvider,
+        },
+        {
+          provide: InvitationsService,
+          useValue: {
+            // Add methods used by UsersController if any, or just empty mock
+            // UsersController only calls delete, etc?
+            // Actually, the error said "can't resolve dependencies ... InvitationsService".
+            // It might be just injected but not used in the methods tested?
+            // Or used in new methods.
+            // I'll provide a generic mock.
+            create: vi.fn(),
+            list: vi.fn().mockResolvedValue([]),
+          },
         },
       ],
     })

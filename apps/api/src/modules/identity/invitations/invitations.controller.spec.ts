@@ -59,7 +59,7 @@ describe('InvitationsController', () => {
 
       await controller.create(dto, req);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(service.create).toHaveBeenCalledWith(dto, 'user-123');
+      expect(service.create).toHaveBeenCalledWith(dto, 'user-123', req.headers);
     });
   });
 

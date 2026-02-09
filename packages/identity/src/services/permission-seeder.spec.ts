@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { PermissionSeeder } from "./permission-seeder";
 import { Logger } from "@nestjs/common";
@@ -5,21 +6,50 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
 import { IdentityModuleOptions } from "../identity.module";
 
+// Mock constants removed (using vi.doMock in test instead)
+
 type MockDb = {
   insert: Mock;
   values: Mock;
   onConflictDoNothing: Mock;
   execute: Mock;
+  select: Mock;
+};
+
+const mockChainedQuery = (result: unknown) => {
+  const chain: Record<string, any> = {
+    then: (onfulfilled: (value: unknown) => unknown) =>
+      Promise.resolve(result).then(onfulfilled),
+  };
+  const methods = ["from", "where", "innerJoin", "select", "limit", "offset"];
+  methods.forEach((m) => {
+    chain[m] = vi.fn().mockReturnValue(chain);
+  });
+  return chain;
 };
 
 const mkDb = () => {
   const insertMock = vi.fn().mockReturnThis();
-  return {
+  const db = {
     insert: insertMock,
     values: vi.fn().mockReturnThis(),
     onConflictDoNothing: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn(),
+    query: {
+      organization: { findFirst: vi.fn().mockResolvedValue({ id: "sys" }) },
+      rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
+    },
   } as unknown as NodePgDatabase<typeof schema> & MockDb;
+
+  // Mock data for select (RolePermissions) to allow rolePermission seeding AND test deduplication
+  db.select.mockReturnValue(
+    mockChainedQuery([
+      // This should match one of the generated permissions for Member role
+      { roleId: "member", permissionId: "users:read", organizationId: null },
+    ]),
+  );
+  return db;
 };
 
 const mkOptions = (): IdentityModuleOptions =>
@@ -117,19 +147,19 @@ describe("PermissionSeeder", () => {
     expect(db.insert).toHaveBeenCalledWith(schema.role);
     expect(db.insert).toHaveBeenCalledWith(schema.permission);
     expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
-    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
+    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(2);
 
-    // Verify rolePermission onConflict target (3rd call)
-    // The calls are likely: 1. role, 2. permission, 3. rolePermission
-    const onConflictCalls = db.onConflictDoNothing.mock.calls;
-    const lastCall = onConflictCalls[2];
-    expect(lastCall[0]).toEqual({
-      target: [
-        schema.rolePermission.roleId,
-        schema.rolePermission.permissionId,
-        schema.rolePermission.organizationId,
-      ],
-    });
+    // Verify rolePermission insert (which does NOT use onConflictDoNothing in rbac-seeding.ts)
+    // It manually filters and inserts
+    const rolePermissionInsertCall = db.values.mock.calls.find(
+      (args) =>
+        args[0] &&
+        Array.isArray(args[0]) &&
+        args[0].length > 0 &&
+        "roleId" in args[0][0],
+    );
+    expect(rolePermissionInsertCall).toBeDefined();
+    expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
 
     // Assert scoping (User requested check for sys vs null orgId)
     // Reuse rolePermValues from above
@@ -159,5 +189,65 @@ describe("PermissionSeeder", () => {
       "Failed to seed RBAC",
       expect.any(Error),
     );
+  });
+
+  it("seed skips rolePermission insertion if all exist", async () => {
+    vi.resetModules();
+    vi.doMock("../constants", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../constants")>();
+      return {
+        ...actual,
+        ALL_PERMISSIONS: ["users:read"],
+        isSystemPermission: () => false,
+      };
+    });
+
+    // Re-import to pickup mock
+    const { seedSystemRbac } = await import("../utils/rbac-seeding");
+
+    // We need a fresh db mock because mkDb is defined in this file but we need to pass it to seedSystemRbac
+    const db = mkDb();
+
+    // Mock select to return the EXISTING token matching "users:read" for all roles
+    db.select.mockReturnValue(
+      mockChainedQuery([
+        { roleId: "member", permissionId: "users:read", organizationId: null },
+        { roleId: "admin", permissionId: "users:read", organizationId: null },
+        { roleId: "owner", permissionId: "users:read", organizationId: null },
+      ]),
+    );
+
+    const logger = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const options = mkOptions();
+
+    await seedSystemRbac(db, options.constants, logger);
+
+    expect(logger.log).toHaveBeenCalledWith(
+      "No new role permissions to insert.",
+    );
+
+    vi.doUnmock("../constants");
+  });
+
+  it("seed throws error on invalid permission format", async () => {
+    vi.resetModules();
+    vi.doMock("../constants", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../constants")>();
+      return {
+        ...actual,
+        ALL_PERMISSIONS: ["invalid-format"],
+      };
+    });
+
+    const { seedSystemRbac } = await import("../utils/rbac-seeding");
+    const db = mkDb();
+    const logger = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const options = mkOptions();
+
+    await expect(seedSystemRbac(db, options.constants, logger)).rejects.toThrow(
+      "Invalid permission format: invalid-format",
+    );
+
+    vi.doUnmock("../constants");
   });
 });

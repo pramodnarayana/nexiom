@@ -5,9 +5,6 @@ import { authClient } from '../auth-client';
 import { apiClient } from '../api-client';
 import { AuthContext } from './context';
 
-// Constants
-const MAX_RETRIES = 3;
-
 interface Tenant {
     id: string;
     name: string;
@@ -32,6 +29,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const [token, setToken] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
     const provisionAttemptsRef = useRef(0);
+
+    // Debug Lifecycle - Cleaned up
 
     const hydrateUser = useCallback((data: { user: unknown; session: { token: string } }, orgContext?: Tenant) => {
         const apiUser = data.user as Record<string, unknown>;
@@ -71,101 +70,69 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             // Renaming _error to sessionError to check status
             const { data, error: sessionError } = await authClient.getSession();
 
+
             if (data) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const apiUser = data.user as any;
+                let apiUser = data.user as any;
+
+                // CRITICAL FIX: Always fetch full profile to ensure permissions are present
+                // This bypasses Better-Auth client stripping and ensures we have the DB state
+                try {
+                    const { data: fullUser } = await apiClient.get('/users/me');
+                    // Merge full user data immediately
+                    apiUser = { ...apiUser, ...fullUser };
+                    data.user = apiUser; // Update local reference
+                } catch (e) {
+                    console.error("[AuthProvider] Failed to fetch full user profile:", e);
+                }
 
                 // 2. Check for Organization Context in Session (Fast Path)
                 if (apiUser.organizationId) {
+                    // We already have the full user, just hydrate
                     hydrateUser(data);
                     setIsLoading(false);
                 } else {
                     // 3. Explicitly Fetch Tenants
-                    let tenantsFound = false;
-                    let fetchSucceeded = false;
                     try {
                         const res = await apiClient.get<Tenant[]>('/tenants');
-                        fetchSucceeded = true;
-                        const tenants = res.data;
 
+                        const tenants = res.data;
                         if (tenants.length > 0) {
-                            // Found tenants! Pick the first one (or recently active if we tracked it)
+                            // Find most recently created tenant
                             const sorted = [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                             const activeTenant = sorted[0];
 
                             hydrateUser(data, activeTenant);
                             setIsLoading(false);
-                            tenantsFound = true;
-                            provisionAttemptsRef.current = 0; // Reset on success
                             return;
+                        } else {
+                            // No tenants found - fallback
+                            console.warn('[AuthProvider] No tenants found, hydrating with base user');
+                            hydrateUser(data);
+                            setIsLoading(false);
                         }
                     } catch (error_) {
-                        // Don't fail completely, try provisioning if really needed
-                        // Log error but continue to allow fallback if logic permits
                         console.warn("[AuthProvider] Failed to fetch tenants:", error_);
+                        // Fallback on error
+                        hydrateUser(data);
+                        setIsLoading(false);
                     }
-
-                    // 4. Fallback: Auto-Provisioning (Only if NO tenants found AND fetch succeeded)
-                    // If fetch failed, we shouldn't auto-provision because we don't know if tenants exist.
-                    if (!tenantsFound && fetchSucceeded && provisionAttemptsRef.current < MAX_RETRIES) {
-                        provisionAttemptsRef.current += 1;
-                        try {
-                            await apiClient.post('/auth/provision-tenant');
-
-                            // Immediately re-check session after provisioning success
-                            // This avoids recursive call issues in useCallback
-                            const { data: newData } = await authClient.getSession();
-                            if (newData) {
-                                // Try fetching tenants one last time
-                                try {
-                                    const res = await apiClient.get<Tenant[]>('/tenants');
-                                    if (res.data.length > 0) {
-                                        // Sort by createdAt (newest first) to match tenant selection logic
-                                        // Handle parsing date string from API vs Date object in type
-                                        const sorted = [...res.data].sort((a, b) =>
-                                            new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()
-                                        ); hydrateUser(newData, sorted[0]);
-                                        setIsLoading(false);
-                                        provisionAttemptsRef.current = 0; // Reset on success
-                                        return;
-                                    }
-                                } catch (e) {
-                                    console.error('Failed to refetch tenants after provisioning:', e);
-                                }
-
-                                // Or at least hydrate what we have
-                                hydrateUser(newData);
-                                setIsLoading(false);
-                                provisionAttemptsRef.current = 0; // Reset on success
-                                return;
-                            }
-                        } catch (provError) {
-                            console.error("[AuthProvider] Auto-Provisioning Failed:", provError);
-                        }
-                    }
-
-                    // If exhausted retries or provisioning failed:
-                    hydrateUser(data);
-                    setIsLoading(false);
                 }
             } else {
-                // Handle Session Error / Null Data
+                // No Data from Session -> Valid Logout/Guest State
                 if (sessionError) {
-                    // Start of Review Fix: Only clear state on 401
+                    // Only clear check state on 401
                     if (sessionError.status === 401) {
-                        setToken(undefined);
-                        setUser(null);
+                        // Valid 401
                     } else {
-                        // Log transient error but keep state (optimistic) or just stop loading
                         console.warn("[AuthProvider] Session error (not 401):", sessionError);
                     }
-                } else {
-                    // No error but no data -> valid logout/unauthenticated state
-                    setToken(undefined);
-                    setUser(null);
                 }
+                setToken(undefined);
+                setUser(null);
                 setIsLoading(false);
             }
+
         } catch (err) {
             console.error("[AuthProvider] refreshSession Failure", err);
 
@@ -199,7 +166,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setToken(data.accessToken);
 
         // ... (Basic hydration) ...
-        const fullName = typeof apiUser.name === 'string' ? apiUser.name : `${apiUser.firstName || ''} ${apiUser.lastName || ''}`.trim();
+        const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName : '';
+        const lastName = typeof apiUser.lastName === 'string' ? apiUser.lastName : '';
+        const fullName = typeof apiUser.name === 'string' ? apiUser.name : `${firstName} ${lastName}`.trim();
         setUser({
             id: String(apiUser.id),
             email: String(apiUser.email),

@@ -59,6 +59,18 @@ export default defineConfig({
     },
     plugins: [
         // Essential for NestJS DI to work correctly
-        swc.vite(),
+        swc.vite({
+            jsc: {
+                parser: {
+                    syntax: 'typescript',
+                    decorators: true,
+                    tsx: false,
+                },
+                transform: {
+                    legacyDecorator: true,
+                    decoratorMetadata: true,
+                },
+            },
+        }),
     ],
 });

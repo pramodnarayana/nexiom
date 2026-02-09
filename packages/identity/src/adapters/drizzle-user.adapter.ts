@@ -77,10 +77,12 @@ export class DrizzleUserAdapter implements IUserProvider {
   }
 
   async findById(id: string): Promise<UserInterface | null> {
-    const user = await this.db.query.user.findFirst({
-      where: eq(schema.user.id, id),
-    });
-    return user ? this.mapUser(user) : null;
+    // Delegate to AuthProvider to ensure consistent permission mapping logic
+    try {
+      return await this.authProvider.findById(id);
+    } catch {
+      return null;
+    }
   }
 
   async findByEmail(email: string): Promise<UserInterface | null> {
@@ -111,7 +113,7 @@ export class DrizzleUserAdapter implements IUserProvider {
       const dataQuery = this.db
         .select({
           user: schema.user,
-          memberRole: schema.member.roleId,
+          memberRole: schema.member.role,
         })
         .from(schema.user)
         .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
@@ -234,7 +236,7 @@ export class DrizzleUserAdapter implements IUserProvider {
           roleId: schema.role.id,
         })
         .from(schema.member)
-        .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+        .innerJoin(schema.role, eq(schema.member.role, schema.role.id))
         .where(
           and(
             eq(schema.member.userId, userId),
@@ -255,7 +257,7 @@ export class DrizzleUserAdapter implements IUserProvider {
         const adminCountResult = await tx
           .select({ count: count(schema.member.id) })
           .from(schema.member)
-          .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+          .innerJoin(schema.role, eq(schema.member.role, schema.role.id))
           .where(
             and(
               eq(schema.member.organizationId, tenantId),
@@ -280,6 +282,31 @@ export class DrizzleUserAdapter implements IUserProvider {
             eq(schema.member.organizationId, tenantId),
           ),
         );
+
+      // 5. Check if user has any other memberships
+      const remainingMemberships = await tx
+        .select({ count: count(schema.member.id) })
+        .from(schema.member)
+        .where(eq(schema.member.userId, userId));
+
+      const membershipCount = Number(remainingMemberships[0]?.count || 0);
+
+      // 6. If no memberships remain, HARD DELETE the user account (Orphan Cleanup)
+      if (membershipCount === 0) {
+        // Cascade delete user data (same as delete method)
+        await tx
+          .delete(schema.invitation)
+          .where(eq(schema.invitation.inviterId, userId));
+        await tx
+          .delete(schema.session)
+          .where(eq(schema.session.userId, userId));
+        await tx
+          .delete(schema.account)
+          .where(eq(schema.account.userId, userId));
+        await tx.delete(schema.user).where(eq(schema.user.id, userId));
+        // Note: We don't delete invitations *received* by them as those are linked by email, not ID (usually)
+        // But if we did, checking email would be needed.
+      }
 
       return true; // Successfully deleted
     });

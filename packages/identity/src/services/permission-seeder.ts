@@ -35,6 +35,25 @@ export class PermissionSeeder implements OnModuleInit {
     const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
       this.options.constants;
 
+    // Ensure System Tenant exists to avoid FK violations
+    const systemTenant = await this.db.query.organization.findFirst({
+      where: (org, { eq }) => eq(org.id, systemTenantId),
+    });
+
+    if (!systemTenant) {
+      this.logger.log(`Creating System Tenant (${systemTenantId})...`);
+      await this.db
+        .insert(schema.organization)
+        .values({
+          id: systemTenantId,
+          name: "Nexiom Platform",
+          slug: "system",
+          isSystem: true,
+          status: "active",
+        })
+        .onConflictDoNothing();
+    }
+
     await seedSystemRbac(
       this.db,
       { ownerRoleId, adminRoleId, memberRoleId, systemTenantId },

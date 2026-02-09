@@ -18,6 +18,7 @@ import {
   TENANT_PROVIDER,
   ITenantProvider,
 } from '@nexiom/identity';
+import { InvitationsService } from '../invitations/invitations.service';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
@@ -35,7 +36,28 @@ export class UsersController {
   constructor(
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
+    private readonly invitationsService: InvitationsService,
   ) {}
+
+  /**
+   * Endpoint to get the current user's profile with full permissions.
+   * Useful for frontend hydration when standard auth response is sanitized.
+   */
+  @Get('me')
+  async getMe(@Req() req: Request & { user: { id: string } }) {
+    console.log('[UsersController] getMe called for user:', req.user?.id);
+    // AuthGuard ensures req.user is populated
+    const user = await this.userProvider.findById(req.user.id);
+    if (!user) {
+      console.warn('[UsersController] User not found for ID:', req.user.id);
+      throw new NotFoundException('User not found');
+    }
+    console.log(
+      '[UsersController] Returning user with permissions:',
+      user.permissions,
+    );
+    return user;
+  }
 
   /**
    * Endpoint to create a new user directly (Admin only).
@@ -65,8 +87,33 @@ export class UsersController {
       return [];
     }
 
-    const result = await this.userProvider.findAll({ tenantId });
-    return result;
+    const { data: users, total: userTotal } = await this.userProvider.findAll({
+      tenantId,
+    });
+    const invitations = await this.invitationsService.list(tenantId);
+
+    // Map invitations to User structure for unified UI list
+    const invitedUsers = invitations.map((inv) => ({
+      id: inv.id, // Use invitation ID temporarily
+      email: inv.email,
+      name: '', // Name might not be known yet
+      role: inv.role,
+      status: 'pending', // Explicit status for UI (vs 'active')
+      emailVerified: false,
+      createdAt: inv.createdAt,
+      updatedAt: inv.createdAt,
+      // Helper field to distinguish in UI if needed
+      isInvitation: true,
+    }));
+
+    // Merge: Users first, then Pending Invites (or sort by date)
+    const combinedData = [...users, ...invitedUsers];
+
+    // Return Refine-compatible pagination structure
+    return {
+      data: combinedData,
+      total: userTotal + invitations.length,
+    };
   }
 
   /**

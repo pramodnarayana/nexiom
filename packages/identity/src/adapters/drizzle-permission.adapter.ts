@@ -91,7 +91,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
         permOrgId: schema.rolePermission.organizationId,
       })
       .from(schema.member)
-      .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+      .innerJoin(schema.role, eq(schema.member.role, schema.role.id))
       .leftJoin(
         schema.rolePermission,
         eq(schema.role.id, schema.rolePermission.roleId),

@@ -132,16 +132,42 @@ export async function seedSystemRbac(
     // Owner (Same as Admin)
     addPermissionsForRole(ownerRoleId, perms, systemTenantId);
 
-    await db
-      .insert(schema.rolePermission)
-      .values(rolePermissionsToInsert)
-      .onConflictDoNothing({
-        target: [
-          schema.rolePermission.roleId,
-          schema.rolePermission.permissionId,
-          schema.rolePermission.organizationId,
-        ],
+    // 3. Assign Permissions (Read-Filter-Insert to avoid ON CONFLICT issues)
+    if (rolePermissionsToInsert.length > 0) {
+      // Fetch existing to dedupe in memory
+      const existing = await db
+        .select({
+          roleId: schema.rolePermission.roleId,
+          permissionId: schema.rolePermission.permissionId,
+          organizationId: schema.rolePermission.organizationId,
+        })
+        .from(schema.rolePermission);
+
+      const existingSet = new Set(
+        existing.map(
+          (e) =>
+            `${e.roleId}|${e.permissionId}|${e.organizationId ?? "__NULL__"}`,
+        ),
+      );
+
+      const toInsert = rolePermissionsToInsert.filter((rp) => {
+        const key = `${rp.roleId}|${rp.permissionId}|${rp.organizationId ?? "__NULL__"}`;
+        if (existingSet.has(key)) {
+          return false;
+        }
+        // Also dedupe internally within the batch
+        existingSet.add(key);
+        return true;
       });
+
+      if (toInsert.length > 0) {
+        // Batch insert in chunks if needed, but Drizzle handles it reasonably
+        await db.insert(schema.rolePermission).values(toInsert);
+        logger.log(`Inserted ${toInsert.length} new role permissions.`);
+      } else {
+        logger.log("No new role permissions to insert.");
+      }
+    }
 
     logger.log("RBAC Seeding Complete (Canonical)");
   } catch (error) {
