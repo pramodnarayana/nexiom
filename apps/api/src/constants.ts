@@ -4,9 +4,6 @@
 // Lazy accessors to avoid forcing env vars at module load time
 // Use these getters in runtime code (main.ts, services, etc.)
 // Re-export from identity package to avoid duplication
-// Lazy accessors to avoid forcing env vars at module load time
-// Use these getters in runtime code (main.ts, services, etc.)
-// Re-export from identity package to avoid duplication
 import {
   getSystemTenantId,
   getOwnerRoleId,

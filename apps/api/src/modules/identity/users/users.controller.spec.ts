@@ -57,12 +57,6 @@ describe('UsersController', () => {
         {
           provide: InvitationsService,
           useValue: {
-            // Add methods used by UsersController if any, or just empty mock
-            // UsersController only calls delete, etc?
-            // Actually, the error said "can't resolve dependencies ... InvitationsService".
-            // It might be just injected but not used in the methods tested?
-            // Or used in new methods.
-            // I'll provide a generic mock.
             create: vi.fn(),
             list: vi.fn().mockResolvedValue([]),
           },
@@ -104,7 +98,7 @@ describe('UsersController', () => {
       } as unknown as Request & { user: { organizationId?: string } };
 
       const result = await controller.findAll(req);
-      expect(result).toEqual([]);
+      expect(result).toEqual({ data: [], total: 0 });
 
       expect(userProvider.findAll).not.toHaveBeenCalled();
     });
@@ -115,7 +109,7 @@ describe('UsersController', () => {
       };
 
       const result = await controller.findAll(req);
-      expect(result).toEqual([]);
+      expect(result).toEqual({ data: [], total: 0 });
 
       expect(userProvider.findAll).not.toHaveBeenCalled();
     });
@@ -125,7 +119,7 @@ describe('UsersController', () => {
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
-      const users = [{ id: '1', permissions: [] }];
+      const users = [{ id: '1', email: 'test@example.com', permissions: [] }];
 
       userProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
@@ -257,11 +251,14 @@ describe('UsersController', () => {
       };
 
       // Atomic operation succeeds
-      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: true,
+        hardDeleted: true,
+      });
 
       const result = await controller.remove(id, req);
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, hardDeleted: true });
       expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
         id,
         tenantId,

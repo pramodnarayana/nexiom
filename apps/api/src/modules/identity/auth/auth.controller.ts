@@ -128,13 +128,15 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     this.logger.log(`[CompleteInvite] Received request for ${body.email}`);
-    this.logger.debug(`[CompleteInvite] Payload: ${JSON.stringify(body)}`);
+    this.logger.debug(
+      `[CompleteInvite] Payload: invitationId=${body.invitationId}, firstName=${body.firstName}, lastName=${body.lastName}`,
+    );
 
     // Race Condition Fix: Validate Invitation BEFORE creating user
     const invitation = await this.invitationsService.get(body.invitationId);
 
     if (!invitation) {
-      this.logger.error(
+      this.logger.warn(
         `[CompleteInvite] Invalid Invitation ID: ${body.invitationId}`,
       );
       throw new BadRequestException('Invalid Invitation ID');
@@ -145,16 +147,15 @@ export class AuthController {
     );
 
     if (invitation.status !== 'pending') {
-      this.logger.error(
+      this.logger.warn(
         `[CompleteInvite] Invitation not pending: ${invitation.status}`,
       );
       throw new BadRequestException('Invitation is no longer pending/valid');
     }
 
     if (new Date(invitation.expiresAt) < new Date()) {
-      this.logger.error(
-        `[CompleteInvite] Invitation expired: ${invitation.expiresAt.toISOString()}`,
-      );
+      const expiryLog = new Date(invitation.expiresAt).toISOString();
+      this.logger.warn(`[CompleteInvite] Invitation expired: ${expiryLog}`);
       throw new BadRequestException('Invitation has expired');
     }
 

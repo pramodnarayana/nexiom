@@ -40,23 +40,43 @@ export const UpdateUserSchema = z.object({
 
 export class UpdateUserValidation extends createZodDto(UpdateUserSchema) {}
 
-export const CreateUserSchema = z.object({
-  name: z.string().min(1, { message: 'Name is required' }),
-  email: z.string().email({ message: 'Invalid email address' }),
-  role: z.string().optional().default('user'), // Default to 'user' for System Admin created users
-});
+export const buildCreateUserSchema = () => {
+  // We need to assert this is a non-empty array of strings for Zod enum
+  const roles = [getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as [
+    string,
+    ...string[],
+  ];
 
+  return z.object({
+    name: z.string().min(1, { message: 'Name is required' }),
+    email: z.string().email({ message: 'Invalid email address' }),
+    role: z.enum(roles).optional().default(getRequiredAdminRoleId()),
+  });
+};
+
+// Getter to access the schema (built lazily on first access and cached)
+let _cachedCreateUserSchema: ReturnType<typeof buildCreateUserSchema> | null =
+  null;
+
+export const getCreateUserSchema = () => {
+  _cachedCreateUserSchema ??= buildCreateUserSchema();
+  return _cachedCreateUserSchema;
+};
+
+// For backward compatibility where a static schema is expected, use z.lazy
+// This defers the actual building until validation time
+export const CreateUserSchema = z.lazy(() => getCreateUserSchema());
+
+// Export the DTO class for NestJS validation
 export class CreateUserValidation extends createZodDto(CreateUserSchema) {}
 
-// Factory function to create schema lazily (avoids eager env access)
-export const buildCreateSystemInvitationSchema = () =>
-  z.object({
-    email: z.string().email(),
-    role: z
-      .enum([getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as const)
-      .optional()
-      .default(getRequiredAdminRoleId()),
-  });
+// Export the inferred type for TypeScript usage
+export type CreateUserDto = z.infer<ReturnType<typeof buildCreateUserSchema>>;
+
+// Reuse the same schema logic for system invitations
+export const buildCreateSystemInvitationSchema = () => {
+  return buildCreateUserSchema().pick({ email: true, role: true });
+};
 
 // Type inference from schema
 export type CreateSystemInvitationDto = z.infer<

@@ -26,15 +26,33 @@ export const ALL_PERMISSIONS = [
   "settings:read",
   "system_users:read",
   "system_users:manage",
-  "system_users:invite",
   "system_tenants:read",
   "system_tenants:manage",
+  "roles:read",
 ] as const;
+
+export enum RoleScope {
+  System = "system",
+  Organization = "organization",
+}
+
+export enum Role {
+  Owner = "owner",
+  Admin = "admin",
+  Member = "member",
+  User = "user",
+}
 
 export type PermissionType = (typeof ALL_PERMISSIONS)[number];
 
+const SYSTEM_PERMISSIONS = new Set(
+  ALL_PERMISSIONS.filter(
+    (p) => p.startsWith("system_") || p.startsWith("admin_dashboard:"),
+  ),
+);
+
 export const isSystemPermission = (permission: string): boolean =>
-  permission.startsWith("system_") || permission === "admin_dashboard:view";
+  SYSTEM_PERMISSIONS.has(permission as PermissionType);
 
 // Environment Variables - Strictly required
 // Use Dependency Injection via IDENTITY_OPTIONS where possible.

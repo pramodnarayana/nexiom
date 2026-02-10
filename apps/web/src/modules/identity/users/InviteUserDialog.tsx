@@ -171,7 +171,7 @@ export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) 
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Role</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                    <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select a role" />
@@ -180,6 +180,8 @@ export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) 
                                         <SelectContent>
                                             {isLoadingRoles ? (
                                                 <SelectItem value="loading" disabled>Loading roles...</SelectItem>
+                                            ) : roles.length === 0 ? (
+                                                <SelectItem value="no-roles" disabled>No roles available</SelectItem>
                                             ) : (
                                                 roles.map((role) => (
                                                     <SelectItem key={String(role.id)} value={String(role.id)}>
@@ -197,7 +199,7 @@ export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) 
                         <DialogFooter>
                             <Button
                                 type="submit"
-                                disabled={isLoading}
+                                disabled={isLoading || isLoadingRoles}
                                 className="w-full sm:w-auto"
                             >
                                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -207,6 +209,6 @@ export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) 
                     </form>
                 </Form>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }

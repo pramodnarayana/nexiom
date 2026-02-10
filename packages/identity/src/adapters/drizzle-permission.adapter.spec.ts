@@ -281,7 +281,7 @@ describe("DrizzlePermissionAdapter", () => {
     const adapter = new DrizzlePermissionAdapter(db);
     const user = mkUser();
 
-    // User has 'admin:read' but scoped to 'other_tenant'
+    // User has 'admin:read' but scoped to system tenant, not 'o1'
     db.select.mockReturnValue(
       mockChainedQuery([
         {

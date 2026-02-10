@@ -29,8 +29,9 @@ import {
 import {
   CreateTenantValidation,
   UpdateTenantValidation,
-  UpdateUserValidation,
   CreateUserValidation,
+  CreateUserDto,
+  UpdateUserValidation,
   buildCreateSystemInvitationSchema,
   CreateSystemInvitationDto,
 } from './system-admin.validation';
@@ -138,8 +139,11 @@ export class SystemAdminController {
   @Post('users')
   @RequirePermission('system_users', 'manage')
   async createUser(@Body() input: CreateUserValidation) {
+    // Type the validated input properly
+    const data: CreateUserDto = input as CreateUserDto;
+
     // Check if email already exists
-    const existing = await this.userProvider.findByEmail(input.email);
+    const existing = await this.userProvider.findByEmail(data.email);
 
     if (existing) {
       throw new BadRequestException('User with this email already exists');
@@ -147,7 +151,7 @@ export class SystemAdminController {
 
     // Now uses single-step creation via Adapter logic
     const user = await this.userProvider.create({
-      ...input,
+      ...data,
     });
 
     return user;

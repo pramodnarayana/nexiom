@@ -81,25 +81,22 @@ export function SignupPage() {
                     console.error('[SignupPage] URL Parsing Error:', e);
                 }
 
-                console.log('[SignupPage] Extraction Debug:', {
-                    redirectUrl,
-                    inviteIdParam,
-                });
-
                 if (!inviteIdParam) {
-                    console.error('[SignupPage] Invalid Invitation Link - missing ID');
                     throw new Error("Invalid Invitation Link");
                 }
 
                 const payload = {
-                    firstName: firstName,
-                    lastName: lastName,
+                    firstName: derivedFirstName,
+                    lastName: derivedLastName,
                     email,
                     password,
                     invitationId: inviteIdParam
                 };
 
-                console.log('[SignupPage] Sending Payload:', JSON.stringify(payload, null, 2));
+                // Remove logging or redact sensitive fields
+                if (import.meta.env.DEV) {
+                    console.log('[SignupPage] Sending Payload:', { ...payload, password: '[REDACTED]' });
+                }
 
                 const res = await fetch(`${API_URL}/auth/complete-invite`, {
                     method: 'POST',
@@ -114,7 +111,10 @@ export function SignupPage() {
                 }
 
                 const sessionData = await res.json(); // { session: ..., user: ... }
-                console.log('[SignupPage] Response Data:', JSON.stringify(sessionData, null, 2));
+                // Remove in production or redact sensitive data
+                if (import.meta.env.DEV) {
+                    console.log('[SignupPage] Response received for user:', sessionData?.user?.email);
+                }
 
                 if (sessionData?.session) {
                     // Update Auth Context with new Session
@@ -181,7 +181,13 @@ export function SignupPage() {
                             variant="outline"
                             size="sm"
                             className="w-full mt-1 border-primary text-primary hover:bg-primary/10"
-                            onClick={() => navigate(`/login?to=${encodeURIComponent(redirectUrl || '')}${email ? `&email=${encodeURIComponent(email)}` : ''}`)}
+                            onClick={() => {
+                                const params = new URLSearchParams();
+                                if (redirectUrl) params.set('to', redirectUrl);
+                                if (email) params.set('email', email);
+                                const search = params.toString();
+                                navigate(`/login${search ? `?${search}` : ''}`);
+                            }}
                         >
                             Log in to Accept Invite
                         </Button>
@@ -220,7 +226,7 @@ export function SignupPage() {
                                     id="firstName"
                                     placeholder="First Name"
                                     type="text"
-                                    autoCapitalize="none"
+                                    autoCapitalize="words"
                                     autoCorrect="off"
                                     disabled={loading}
                                     value={firstName}
@@ -233,7 +239,7 @@ export function SignupPage() {
                                     id="lastName"
                                     placeholder="Last Name"
                                     type="text"
-                                    autoCapitalize="none"
+                                    autoCapitalize="words"
                                     autoCorrect="off"
                                     disabled={loading}
                                     value={lastName}

@@ -26,14 +26,20 @@ export class InvitationsController {
     if (req.user.organizationId) {
       createInvitation.organizationId = req.user.organizationId;
     }
-    // Otherwise (System Admin), usage of organizationId from body is allowed.
-
-    // Otherwise (System Admin), usage of organizationId from body is allowed.
+    // If specific organization context exists (Tenant Admin), enforce it.
+    if (req.user.organizationId) {
+      createInvitation.organizationId = req.user.organizationId;
+    }
+    // Extract only necessary headers for downstream propagation
+    const forwardedHeaders = {
+      'x-request-id': req.headers['x-request-id'],
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+    };
 
     return this.invitationsService.create(
       createInvitation,
       req.user.id,
-      req.headers,
+      forwardedHeaders,
     );
   }
 

@@ -40,6 +40,7 @@ const mkDb = () => {
       organization: { findFirst: vi.fn().mockResolvedValue({ id: "sys" }) },
       rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
     },
+    transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(db)),
   } as unknown as NodePgDatabase<typeof schema> & MockDb;
 
   // Mock data for select (RolePermissions) to allow rolePermission seeding AND test deduplication
@@ -197,7 +198,8 @@ describe("PermissionSeeder", () => {
       const actual = await importOriginal<typeof import("../constants")>();
       return {
         ...actual,
-        ALL_PERMISSIONS: ["users:read"],
+        ALL_PERMISSIONS: ["users:read", "tenants:read"],
+        MEMBER_PERMISSIONS: ["users:read", "tenants:read"],
         isSystemPermission: () => false,
       };
     });
@@ -206,23 +208,30 @@ describe("PermissionSeeder", () => {
     const { seedSystemRbac } = await import("../utils/rbac-seeding");
 
     // We need a fresh db mock because mkDb is defined in this file but we need to pass it to seedSystemRbac
-    const db = mkDb();
+    const dbMock = mkDb();
 
     // Mock select to return the EXISTING token matching "users:read" for all roles
-    db.select.mockReturnValue(
+    dbMock.select.mockReturnValue(
       mockChainedQuery([
         { roleId: "member", permissionId: "users:read", organizationId: null },
         { roleId: "admin", permissionId: "users:read", organizationId: null },
         { roleId: "owner", permissionId: "users:read", organizationId: null },
+        {
+          roleId: "member",
+          permissionId: "tenants:read",
+          organizationId: null,
+        },
+        { roleId: "admin", permissionId: "tenants:read", organizationId: null },
+        { roleId: "owner", permissionId: "tenants:read", organizationId: null },
       ]),
     );
 
-    const logger = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
-    const options = mkOptions();
+    const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const optionsMock = mkOptions();
 
-    await seedSystemRbac(db, options.constants, logger);
+    await seedSystemRbac(dbMock, optionsMock.constants, loggerMock);
 
-    expect(logger.log).toHaveBeenCalledWith(
+    expect(loggerMock.log).toHaveBeenCalledWith(
       "No new role permissions to insert.",
     );
 
@@ -240,13 +249,13 @@ describe("PermissionSeeder", () => {
     });
 
     const { seedSystemRbac } = await import("../utils/rbac-seeding");
-    const db = mkDb();
-    const logger = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
-    const options = mkOptions();
+    const dbMock = mkDb();
+    const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const optionsMock = mkOptions();
 
-    await expect(seedSystemRbac(db, options.constants, logger)).rejects.toThrow(
-      "Invalid permission format: invalid-format",
-    );
+    await expect(
+      seedSystemRbac(dbMock, optionsMock.constants, loggerMock),
+    ).rejects.toThrow("Invalid permission format: invalid-format");
 
     vi.doUnmock("../constants");
   });

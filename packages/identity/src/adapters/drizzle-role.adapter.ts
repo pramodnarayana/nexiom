@@ -1,12 +1,15 @@
-import { Injectable, Inject } from "@nestjs/common";
+import { Injectable, Inject, NotFoundException } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, desc } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 import * as schema from "../schema";
 import { IDENTITY_DB } from "../constants";
 import {
   IRoleProvider,
-  Role,
+  RoleEntity,
   FindRolesOptions,
+  CreateRoleInput,
+  UpdateRoleInput,
 } from "../interfaces/role-provider.interface";
 
 @Injectable()
@@ -15,26 +18,21 @@ export class DrizzleRoleAdapter implements IRoleProvider {
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
-  async findAll(options?: FindRolesOptions): Promise<Role[]> {
+  /**
+   * Finds all roles, optionally filtering by scope.
+   * - system -> isSystem = true
+   * - organization -> isSystem = false
+   * - undefined -> return all
+   */
+  async findAll(options?: FindRolesOptions): Promise<RoleEntity[]> {
     const roles = await this.db.query.role.findMany({
       where: (role, { eq }) => {
         if (options?.scope === "system") {
-          // System Admin context: return system roles + global roles that make sense (like 'user' on platform level)
-          // Actually, 'isSystem' flag distinguishes.
-          // If scope is system, we might want ALL roles or just system roles?
-          // The requirement is:
-          // System Admin -> ['admin', 'user'] (Platform Admin, Platform User)
-          // Tenant Admin -> ['admin', 'member', 'viewer'] (Tenant Roles)
-
-          // In our schema, `isSystem` boolean exists.
-          // If scope is system, we return roles where isSystem = true (plus maybe 'user' if it's dual purpose?)
-          // Let's rely on `isSystem` flag.
           return eq(role.isSystem, true);
         } else if (options?.scope === "organization") {
-          // Organization context: return roles where isSystem = false
           return eq(role.isSystem, false);
         }
-        return undefined; // Return all if no scope
+        return undefined;
       },
       orderBy: [desc(schema.role.createdAt)],
     });
@@ -42,10 +40,48 @@ export class DrizzleRoleAdapter implements IRoleProvider {
     return roles;
   }
 
-  async findById(id: string): Promise<Role | null> {
+  async findById(id: string): Promise<RoleEntity | null> {
     const role = await this.db.query.role.findFirst({
       where: eq(schema.role.id, id),
     });
     return role || null;
+  }
+
+  async create(input: CreateRoleInput): Promise<RoleEntity> {
+    const [role] = await this.db
+      .insert(schema.role)
+      .values({
+        id: uuidv4(),
+        name: input.name,
+        description: input.description,
+        isSystem: input.isSystem ?? false,
+      })
+      .returning();
+    return role;
+  }
+
+  async update(id: string, input: UpdateRoleInput): Promise<RoleEntity> {
+    const [role] = await this.db
+      .update(schema.role)
+      .set({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined
+          ? { description: input.description }
+          : {}),
+      })
+      .where(eq(schema.role.id, id))
+      .returning();
+
+    if (!role) throw new NotFoundException("Role not found");
+    return role;
+  }
+
+  async delete(id: string): Promise<void> {
+    const [deleted] = await this.db
+      .delete(schema.role)
+      .where(eq(schema.role.id, id))
+      .returning();
+
+    if (!deleted) throw new NotFoundException("Role not found");
   }
 }

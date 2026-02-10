@@ -152,14 +152,35 @@ async function elevateToOwner(
 
 // --- Commands ---
 
+// ------------------------------------------------------------------
+// Environment Variable Strategy
+// ------------------------------------------------------------------
+// We support two sets of environment variables for admin credentials:
+// 1. ADMIN_* (Preferred): Standard naming convention for current admin ops.
+// 2. BOOTSTRAP_ADMIN_* (Legacy/Fallback): Often used in initial setup scripts.
+//
+// The script prioritizes ADMIN_* variables but falls back to BOOTSTRAP_ADMIN_*
+// to ensure backward compatibility with existing CI/CD pipelines.
+// ------------------------------------------------------------------
+
 async function bootstrapAdmin() {
-  const EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL;
-  const PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD;
-  const NAME = process.env.BOOTSTRAP_ADMIN_NAME ?? 'Platform Admin';
+  const EMAIL = process.env.ADMIN_EMAIL || process.env.BOOTSTRAP_ADMIN_EMAIL;
+  const PASSWORD =
+    process.env.ADMIN_PASSWORD || process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  // Handle flexible name inputs
+  const FULL_NAME =
+    process.env.ADMIN_NAME ||
+    process.env.BOOTSTRAP_ADMIN_NAME ||
+    'Platform Admin';
+  const FIRST_NAME = process.env.ADMIN_FIRST_NAME || FULL_NAME.split(' ')[0];
+  const LAST_NAME =
+    process.env.ADMIN_LAST_NAME ||
+    FULL_NAME.split(' ').slice(1).join(' ') ||
+    'User';
 
   if (!EMAIL || !PASSWORD) {
     console.error(
-      'Error: BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set',
+      'Error: ADMIN_EMAIL/PASSWORD (or BOOTSTRAP_ADMIN_*) must be set',
     );
     process.exit(1);
   }
@@ -177,8 +198,8 @@ async function bootstrapAdmin() {
         body: JSON.stringify({
           email: EMAIL,
           password: PASSWORD,
-          firstName: NAME.split(' ')[0],
-          lastName: NAME.split(' ')[1] || '',
+          firstName: FIRST_NAME,
+          lastName: LAST_NAME,
           companyName: 'Nexiom Platform',
           role: 'admin',
         }),
@@ -187,13 +208,22 @@ async function bootstrapAdmin() {
       if (signupRes.ok) {
         console.log('✅ User Account Created via API.');
       } else {
-        const err = await signupRes.text();
-        if (err.includes('already exists') || signupRes.status === 400) {
+        const errBody = (await signupRes
+          .json()
+          .catch(() => ({ message: '' }))) as {
+          message?: string;
+          error?: string;
+        };
+        const errText = errBody.message || errBody.error || '';
+        if (signupRes.status === 409 || errText.includes('already exists')) {
           console.log(
             'ℹ️  User likely already exists, proceeding to elevation...',
           );
         } else {
-          console.error('❌ API Signup Failed:', err);
+          console.error(
+            '❌ API Signup Failed:',
+            errText || signupRes.statusText,
+          );
           process.exit(1);
         }
       }
@@ -217,16 +247,24 @@ async function bootstrapAdmin() {
 }
 
 async function forceResetAdmin() {
-  const EMAIL = process.env.ADMIN_EMAIL;
-  const PASSWORD = process.env.ADMIN_PASSWORD;
-  const FIRST_NAME = process.env.ADMIN_FIRST_NAME ?? 'Admin';
-  const LAST_NAME = process.env.ADMIN_LAST_NAME ?? 'User';
+  const EMAIL = process.env.ADMIN_EMAIL || process.env.BOOTSTRAP_ADMIN_EMAIL;
+  const PASSWORD =
+    process.env.ADMIN_PASSWORD || process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  const FULL_NAME =
+    process.env.ADMIN_NAME ||
+    process.env.BOOTSTRAP_ADMIN_NAME ||
+    'Platform Admin';
+  const FIRST_NAME = process.env.ADMIN_FIRST_NAME || FULL_NAME.split(' ')[0];
+  const LAST_NAME =
+    process.env.ADMIN_LAST_NAME ||
+    FULL_NAME.split(' ').slice(1).join(' ') ||
+    'User';
   const COMPANY_NAME = process.env.ADMIN_COMPANY_NAME ?? 'Nexiom Platform';
   const ROLE = process.env.ADMIN_ROLE ?? 'admin';
 
   if (!EMAIL || !PASSWORD) {
     console.error(
-      'Error: ADMIN_EMAIL and ADMIN_PASSWORD must be set for reset',
+      'Error: ADMIN_EMAIL/PASSWORD (or BOOTSTRAP_ADMIN_*) must be set for reset',
     );
     process.exit(1);
   }
@@ -246,56 +284,114 @@ async function forceResetAdmin() {
     await client.connect();
     const db = drizzle(client, { schema });
 
-    // 1. Delete Existing
-    console.log('1️⃣  Deleting existing user record...');
+    // 1. Safe Reset Logic: Rename -> Signup -> Delete Logic
+    // This ensures we don't lose the admin if the API is down
+    console.log('1️⃣  Initiating Safe Reset...');
+
+    // Check if user exists
     const existing = await db
       .select()
       .from(schema.user)
       .where(eq(schema.user.email, EMAIL));
+
     if (existing.length > 0) {
       const userId = existing[0].id;
-      // Cascade delete manually in transaction for atomicity
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(schema.session)
-          .where(eq(schema.session.userId, userId));
-        await tx
-          .delete(schema.account)
-          .where(eq(schema.account.userId, userId));
-        await tx.delete(schema.member).where(eq(schema.member.userId, userId));
-        await tx
-          .delete(schema.invitation)
-          .where(eq(schema.invitation.inviterId, userId));
-        await tx
-          .delete(schema.invitation)
-          .where(eq(schema.invitation.email, existing[0].email));
-        await tx.delete(schema.user).where(eq(schema.user.id, userId));
+      const tempEmail = `archived_${Date.now()}_${EMAIL}`;
+
+      console.log(
+        `   Detailed: Renaming existing user to ${tempEmail} to clear namespace...`,
+      );
+
+      // Start transaction to Rename -> Try Create
+      // We can't do the API call IN the transaction effectively for rollback,
+      // but we can manually revert the rename if API fails.
+
+      await db
+        .update(schema.user)
+        .set({ email: tempEmail })
+        .where(eq(schema.user.id, userId));
+
+      try {
+        console.log('2️⃣  Creating User via API...');
+        const res = await fetch(`${API_URL}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: EMAIL,
+            password: PASSWORD,
+            firstName: FIRST_NAME,
+            lastName: LAST_NAME,
+            companyName: COMPANY_NAME,
+            role: ROLE,
+          }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`API Signup Failed: ${text}`);
+        }
+        console.log('   ✅ User Re-created successfully via API.');
+
+        // Success! Now we delete the old (archived) user data
+        console.log('3️⃣  Cleaning up old user data...');
+        await db.transaction(async (tx) => {
+          await tx
+            .delete(schema.session)
+            .where(eq(schema.session.userId, userId));
+          await tx
+            .delete(schema.account)
+            .where(eq(schema.account.userId, userId));
+          // Handle related data with care - cascading usually handles it but explicit is safer for script
+          await tx
+            .delete(schema.member)
+            .where(eq(schema.member.userId, userId));
+          await tx
+            .delete(schema.invitation)
+            .where(eq(schema.invitation.inviterId, userId));
+          await tx
+            .delete(schema.invitation)
+            .where(eq(schema.invitation.email, existing[0].email)); // Use original email for invites
+
+          // Finally delete the user
+          await tx.delete(schema.user).where(eq(schema.user.id, userId));
+        });
+        console.log('   ✅ cleanup complete.');
+      } catch (error) {
+        console.error(
+          '❌ Reset Failed during API signup. Rolling back user state...',
+        );
+        // Rollback: Restore email
+        await db
+          .update(schema.user)
+          .set({ email: EMAIL })
+          .where(eq(schema.user.id, userId));
+        console.log('   ✅ Rollback successful. Original user restored.');
+        throw error;
+      }
+    } else {
+      // User doesn't exist, simple create
+      console.log('   User not found, proceeding to creation...');
+      const res = await fetch(`${API_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: EMAIL,
+          password: PASSWORD,
+          firstName: FIRST_NAME,
+          lastName: LAST_NAME,
+          companyName: COMPANY_NAME,
+          role: ROLE,
+        }),
       });
-      console.log('   ✅ User and related data deleted.');
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API Signup Failed: ${text}`);
+      }
+      console.log('   ✅ User Created.');
     }
 
-    // 2. Re-create via API
-    console.log('2️⃣  Creating User via API...');
-    const res = await fetch(`${API_URL}/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: EMAIL,
-        password: PASSWORD,
-        firstName: FIRST_NAME,
-        lastName: LAST_NAME,
-        companyName: COMPANY_NAME,
-        role: ROLE,
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`API Signup Failed: ${text}`);
-    }
-    console.log('   ✅ User Re-created successfully.');
-
-    // 3. Elevate to System Owner
+    // 4. Elevate to System Owner
     await elevateToOwner(db, EMAIL);
     console.log(`   Credentials: ${EMAIL} / ********`);
   } finally {

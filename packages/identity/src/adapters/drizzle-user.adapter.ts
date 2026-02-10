@@ -1,12 +1,13 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
-import type {
+import {
   IUserProvider,
   CreateUserInput,
   UpdateUserInput,
   User as UserInterface,
   IAuthProvider,
+  UserNotFoundError,
 } from "../interfaces";
 import * as schema from "../schema";
 import { AUTH_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
@@ -14,6 +15,8 @@ import type { IdentityModuleOptions } from "../identity.module";
 
 @Injectable()
 export class DrizzleUserAdapter implements IUserProvider {
+  private readonly logger = new Logger(DrizzleUserAdapter.name);
+
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
@@ -79,9 +82,47 @@ export class DrizzleUserAdapter implements IUserProvider {
   async findById(id: string): Promise<UserInterface | null> {
     // Delegate to AuthProvider to ensure consistent permission mapping logic
     try {
-      return await this.authProvider.findById(id);
-    } catch {
-      return null;
+      if (this.authProvider.findById) {
+        return await this.authProvider.findById(id);
+      }
+
+      // Fallback to local DB if AuthProvider doesn't support findById
+      const user = await this.db.query.user.findFirst({
+        where: eq(schema.user.id, id),
+      });
+      return user ? this.mapUser(user) : null;
+    } catch (error) {
+      // Only return null for "not found" errors from authProvider
+      // All other errors (connection, query syntax, etc.) should propagate
+
+      if (error instanceof UserNotFoundError) {
+        return null;
+      }
+
+      // Check for provider-specific "not found" error properties if available
+      // Using strict regex matching to avoid swallowing unrelated errors
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      // Match user/entity not-found errors while avoiding infrastructure errors
+      // Accepts: "User not found", "Entity not found", "Record not found", "Not found"
+      // Rejects: "User session not found", "User token not found", "connection not found"
+      // Only allow whitespace between entity type and "not found"
+      const isUserNotFoundError =
+        /\b(user|entity|record)\s+not\s+found\b/i.test(errorMessage) ||
+        /^not found$/i.test(errorMessage);
+      if (isUserNotFoundError) {
+        return null;
+      }
+
+      // Log and rethrow unexpected errors
+      // NestJS Logger.error(message, stack, context)
+      this.logger.error(
+        `findById failed for user ${id}: ${errorMessage}`,
+        error instanceof Error ? error.stack : undefined,
+        "DrizzleUserAdapter.findById",
+      );
+      throw error;
     }
   }
 
@@ -220,7 +261,14 @@ export class DrizzleUserAdapter implements IUserProvider {
   async deleteIfNotLastAdmin(
     userId: string,
     tenantId: string,
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean; hardDeleted?: boolean }> {
+    // Validate configuration before entering transaction
+    if (!this.options.constants?.adminRoleId) {
+      throw new Error(
+        "IdentityModuleOptions.constants.adminRoleId is undefined",
+      );
+    }
+
     return await this.db.transaction(async (tx) => {
       // 0. Acquire lock on organization row to prevent write-skew (concurrent admin deletions)
       await tx
@@ -269,7 +317,7 @@ export class DrizzleUserAdapter implements IUserProvider {
 
         // 3. Prevent deletion if last admin
         if (adminCount <= 1) {
-          return false; // Signal that deletion was prevented
+          return { success: false }; // Signal that deletion was prevented
         }
       }
 
@@ -290,6 +338,7 @@ export class DrizzleUserAdapter implements IUserProvider {
         .where(eq(schema.member.userId, userId));
 
       const membershipCount = Number(remainingMemberships[0]?.count || 0);
+      let hardDeleted = false;
 
       // 6. If no memberships remain, HARD DELETE the user account (Orphan Cleanup)
       if (membershipCount === 0) {
@@ -304,11 +353,11 @@ export class DrizzleUserAdapter implements IUserProvider {
           .delete(schema.account)
           .where(eq(schema.account.userId, userId));
         await tx.delete(schema.user).where(eq(schema.user.id, userId));
-        // Note: We don't delete invitations *received* by them as those are linked by email, not ID (usually)
-        // But if we did, checking email would be needed.
+
+        hardDeleted = true;
       }
 
-      return true; // Successfully deleted
+      return { success: true, hardDeleted };
     });
   }
 

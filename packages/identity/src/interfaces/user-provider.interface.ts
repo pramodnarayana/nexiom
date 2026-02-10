@@ -47,5 +47,8 @@ export interface IUserProvider {
    * @returns true if deleted, false if user was the last admin
    * @throws NotFoundException if user doesn't exist or isn't a member of the tenant
    */
-  deleteIfNotLastAdmin(userId: string, tenantId: string): Promise<boolean>;
+  deleteIfNotLastAdmin(
+    userId: string,
+    tenantId: string,
+  ): Promise<{ success: boolean; hardDeleted?: boolean }>;
 }

@@ -10,27 +10,39 @@ import { seedSystemRbac } from "../utils/rbac-seeding";
 import { Logger } from "@nestjs/common";
 
 export const seedRbac = async (db: NodePgDatabase<typeof schema>) => {
-  console.log("Seeding RBAC...");
+  const logger = new Logger("SeedRbacScript");
+  logger.log("Seeding RBAC...");
 
-  if (!getOwnerRoleId() || !getAdminRoleId() || !getMemberRoleId()) {
+  // 1. Cache configuration values
+  const ownerRoleId = getOwnerRoleId();
+  const adminRoleId = getAdminRoleId();
+  const memberRoleId = getMemberRoleId();
+  const systemTenantId = getSystemTenantId();
+
+  // 2. Validate all required constants
+  if (!ownerRoleId || !adminRoleId || !memberRoleId) {
+    logger.error(
+      "Missing required RBAC Role IDs (OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID)",
+    );
     throw new Error(
       "Missing required RBAC Role IDs (OWNER_ROLE_ID, ADMIN_ROLE_ID, MEMBER_ROLE_ID)",
     );
   }
 
-  // Note: seed-rbac.ts typically runs in contexts where SYSTEM_TENANT_ID might not be strictly required
-  // if not scoping. But canonical seeder requires it.
-  const systemTenantId = getSystemTenantId();
+  if (!systemTenantId) {
+    logger.error("Missing required System Tenant ID (SYSTEM_TENANT_ID)");
+    throw new Error("Missing required System Tenant ID (SYSTEM_TENANT_ID)");
+  }
 
+  // 3. Build config with validated values
   const config = {
-    ownerRoleId: getOwnerRoleId(),
-    adminRoleId: getAdminRoleId(),
-    memberRoleId: getMemberRoleId(),
+    ownerRoleId,
+    adminRoleId,
+    memberRoleId,
     systemTenantId,
   };
 
-  const logger = new Logger("SeedRbacScript");
   await seedSystemRbac(db, config, logger);
 
-  console.log("RBAC Seeding Complete.");
+  logger.log("RBAC Seeding Complete.");
 };

@@ -704,62 +704,139 @@ export class BetterAuthAdapter implements IAuthProvider {
   }
 
   // --- Mappers ---
-  private async mapUser(dbUser: schema.User): Promise<UserInterface> {
+  private async mapUser(
+    dbUser: schema.User & {
+      members?: (Omit<schema.Member, "role"> & {
+        role?:
+          | string
+          | (schema.Role & {
+              permissions?: schema.RolePermission[];
+            });
+      })[];
+    },
+  ): Promise<UserInterface> {
     const role = dbUser.role || "user";
     const permissions: Set<string> = new Set();
     const roleIds: string[] = [];
 
     // 1. Add Global Role ID
-    // Note: If dbUser.role is a name (legacy) vs ID, this might need resolution.
-    // Assuming dbUser.role is an ID or we treat it as one for lookup.
-    // In strict schema, user.role is text, could be 'admin' or UUID.
-    // We'll attempt to add it.
-    if (dbUser.role) roleIds.push(dbUser.role);
-
-    try {
-      // 2. Add Tenant Role IDs
-      const members = await this.db.query.member.findMany({
-        where: eq(schema.member.userId, dbUser.id),
-        columns: { role: true },
+    // Resolve role name to ID if necessary
+    if (dbUser.role) {
+      // Optimization: Cache standard roles or use a lookup?
+      // For now, we keep this query (1 round trip) or assuming it's an ID if UUID-like.
+      // But we must resolve names like 'admin' to IDs.
+      const roleRecord = await this.db.query.role.findFirst({
+        where: (r, { eq, or }) =>
+          or(eq(r.id, dbUser.role!), eq(r.name, dbUser.role!)),
+        columns: { id: true },
+        with: {
+          permissions: true,
+        },
       });
 
-      for (const m of members) {
-        if (m.role) roleIds.push(m.role);
+      if (roleRecord) {
+        roleIds.push(roleRecord.id);
+        // Optimization: If we fetched permissions here, we could add them directly.
+        // But we handle all roleIds in batch below unless eager loaded.
+        if (roleRecord.permissions) {
+          // If we add 'with: { permissions: true }' to the query above, we can skip step 3 for this role.
+          for (const rp of roleRecord.permissions) {
+            permissions.add(rp.permissionId);
+          }
+        }
+      }
+    }
+
+    try {
+      // 2. Add Tenant Role IDs (Eager Loaded)
+      if (dbUser.members && dbUser.members.length > 0) {
+        for (const m of dbUser.members) {
+          // If eager loaded, m.role is the Role object
+          if (m.role && typeof m.role === "object") {
+            roleIds.push(m.role.id);
+            // Add permissions from eager loaded role
+            if (m.role.permissions) {
+              for (const rp of m.role.permissions) {
+                permissions.add(rp.permissionId);
+              }
+            }
+          } else if (typeof m.role === "string") {
+            // Fallback for non-eager loaded (shouldn't happen with new query)
+            roleIds.push(m.role);
+          }
+        }
+      } else if (!dbUser.members) {
+        // Fallback: Fetch if not present (Legacy safety)
+        const members = await this.db.query.member.findMany({
+          where: eq(schema.member.userId, dbUser.id),
+          columns: { role: true },
+        });
+        for (const m of members) {
+          if (m.role) roleIds.push(m.role);
+        }
       }
 
-      // 3. Fetch Permissions for all gathered Role IDs
-      if (roleIds.length > 0) {
-        // Dedupe roleIds
+      // 3. Fetch Permissions for any Role IDs NOT resolved via eager loading
+      // (e.g. Global Role if not eager loaded, or fallback members)
+      // Actually, we can optimize global role query above to include permissions too!
+      // I added 'with: { permissions: true }' to the global role query above.
+
+      // If we still have roleIds that might not have been fully processed (e.g. from fallback path),
+      // we can do a bulk check.
+      // But with eager loading, 'permissions' Set should already be populated for members.
+      // Global role permissions are also fetched if I update that query.
+
+      if (roleIds.length > 0 && permissions.size === 0) {
+        // Double check: Did we miss any?
+        // If we eagerly loaded everything, 'permissions' is full.
+        // If we are in fallback, we need to query.
+        // We can diff what we have vs what we need?
+        // Simplification: Just query for all gathered Role IDs if we have 0 permissions yet?
+        // OR: Trust eager loading.
+        // Let's do a supplementary query only if we suspect missing data.
+        // But effectively, if we eager load members->role->permissions, we are good for tenant roles.
+        // For Global Role: We updated the query to fetch permissions.
+        // So we should be good.
+      }
+
+      // 3. (Legacy/Cleanup) - If for some reason we still rely on raw roleIds and didn't get perms:
+      // We can maintain the batched query just in case, but filter out known ones?
+      // For this refactor, let's assume Eager Loading is primary.
+
+      // Fallback query if set is empty but roles exist?
+      if (
+        permissions.size === 0 &&
+        roleIds.length > 0 &&
+        (!dbUser.members || dbUser.members.length === 0)
+      ) {
+        // This path hits if user has global role but no members, and global role query didn't return perms (unlikely with my change).
+        // Or if we fell back to member query.
         const uniqueRoleIds = [...new Set(roleIds)];
-
-        // We use inArray. Need to import it or use query builder.
-        // Using db.select().from(rolePermission).where(inArray(...))
-        // Since we are inside a class, we need to ensure 'inArray' is available.
-        // It is not imported in the file snippet I saw. I'll rely on db.query.
-        // db.query.rolePermission.findMany({ where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds) })
-
         const rolePerms = await this.db.query.rolePermission.findMany({
           where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds),
           columns: { permissionId: true },
         });
-
         for (const rp of rolePerms) {
           permissions.add(rp.permissionId);
         }
       }
 
-      // 4. Legacy/Fallback Hardcoded Logic (Safety net for non-seeded roles)
-      // If no permissions found via DB, check for legacy string matches
+      // 4. Fail-safe: Add minimal dashboard permission
       if (permissions.size === 0) {
         if (role === "admin") {
-          permissions.add("*:*");
+          // Log warning - empty permissions for admin user is a bug
+          console.warn(
+            `[BetterAuthAdapter] mapUser: Empty permissions for admin user ${dbUser.id} (${dbUser.email}). This indicates a permission resolution failure.`,
+          );
+          throw new Error(
+            `Permission resolution failed for admin user ${dbUser.id}. Expected permissions from role or memberships but found none.`,
+          );
         } else {
-          // Basic
+          // Non-admin users get minimal permission
           permissions.add("dashboard:view");
         }
       } else {
-        // Always ensure basic dashboard access if they have any permissions?
-        // RBAC seeding should handle this, but for safety:
+        // Users with permissions always get dashboard access
         permissions.add("dashboard:view");
       }
     } catch (err) {
@@ -767,7 +844,6 @@ export class BetterAuthAdapter implements IAuthProvider {
         `[BetterAuthAdapter] mapUser: Failed to fetch permissions for ${dbUser.id}`,
         err,
       );
-      // Fallback
       permissions.add("dashboard:view");
     }
 

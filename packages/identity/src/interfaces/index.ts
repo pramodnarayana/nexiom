@@ -5,3 +5,4 @@ export * from "./tenant-provider.interface";
 export * from "./permission-provider.interface";
 export * from "./email-provider.interface";
 export * from "./role-provider.interface";
+export * from "./errors";

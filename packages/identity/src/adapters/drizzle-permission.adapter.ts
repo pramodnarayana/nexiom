@@ -65,7 +65,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // 3. Explicit Permissions (Scoped by fetchMemberContext logic)
+        // Explicit Permissions (Scoped by fetchMemberContext logic)
         context.permissions.forEach((p) => {
           if (p.resource === "*" && p.action === "*") {
             perms.push("*");

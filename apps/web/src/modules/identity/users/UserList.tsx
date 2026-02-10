@@ -40,16 +40,6 @@ export const UserList = ({
 
     const { data, isLoading } = tableQuery;
 
-    // Transform data to match shared component interface
-    const users: UserTableItem[] = data?.data?.map((user) => ({
-        id: user.id,
-        name: user.name || (user.status === 'pending' ? 'Invited User' : ''),
-        email: user.email,
-        role: user.memberRole || user.role, // Use memberRole if available (tenant view), fallback to global role
-        emailVerified: user.emailVerified,
-        status: user.status || "active" // Use API status (pending/active), fallback to active for legacy
-    })) || [];
-
     if (tableQuery?.error) {
         console.error("Error loading users:", tableQuery.error);
 
@@ -59,6 +49,16 @@ export const UserList = ({
             </div>
         );
     }
+
+    // Transform data to match shared component interface
+    const users: UserTableItem[] = data?.data?.map((user) => ({
+        id: user.id,
+        name: user.name ?? (user.status === 'pending' ? 'Invited User' : ''),
+        email: user.email,
+        role: user.memberRole ?? user.role, // Use memberRole if available (tenant view), fallback to global role
+        emailVerified: user.emailVerified,
+        status: user.status ?? "active" // Use API status (pending/active), fallback to active for legacy
+    })) || [];
 
     return (
         <div className="space-y-4">

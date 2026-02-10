@@ -128,7 +128,7 @@ describe('AcceptInvitePage', () => {
                 expect(globalThis.fetch).toHaveBeenCalled();
             });
 
-            // Still navigates
+            // Should show error and NOT navigate
             await waitFor(() => {
                 expect(screen.getByText('Network Error')).toBeInTheDocument();
             });

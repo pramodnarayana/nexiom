@@ -17,47 +17,52 @@ export class PermissionSeeder implements OnModuleInit {
   async onModuleInit() {
     // Only seed if RBAC data is missing (performance optimization)
     // Check for existence of any role assignments to ensure complete seeding
-    const existingAssignments = await this.db.query.rolePermission.findMany({
-      limit: 1,
-    });
-    if (existingAssignments.length === 0) {
-      await this.seed();
-    } else {
-      this.logger.log("RBAC data already exists, skipping seed");
+    try {
+      const existingAssignments = await this.db.query.rolePermission.findMany({
+        limit: 1,
+      });
+      if (existingAssignments.length === 0) {
+        await this.seed();
+      } else {
+        this.logger.log("RBAC data already exists, skipping seed");
+      }
+    } catch (error) {
+      this.logger.error("Failed to check existing RBAC data", error);
+      throw error;
     }
   }
 
   async seed() {
-    this.logger.log(
-      "Checking RBAC consistency (Delegated to canonical utility)...",
-    );
+    this.logger.log("Seeding RBAC data...");
 
     const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
       this.options.constants;
 
-    // Ensure System Tenant exists to avoid FK violations
-    const systemTenant = await this.db.query.organization.findFirst({
-      where: (org, { eq }) => eq(org.id, systemTenantId),
+    await this.db.transaction(async (tx) => {
+      // Ensure System Tenant exists to avoid FK violations
+      const systemTenant = await tx.query.organization.findFirst({
+        where: (org, { eq }) => eq(org.id, systemTenantId),
+      });
+
+      if (!systemTenant) {
+        this.logger.log(`Creating System Tenant (${systemTenantId})...`);
+        await tx
+          .insert(schema.organization)
+          .values({
+            id: systemTenantId,
+            name: "Nexiom Platform",
+            slug: "system",
+            isSystem: true,
+            status: "active",
+          })
+          .onConflictDoNothing();
+      }
+
+      await seedSystemRbac(
+        tx,
+        { ownerRoleId, adminRoleId, memberRoleId, systemTenantId },
+        this.logger,
+      );
     });
-
-    if (!systemTenant) {
-      this.logger.log(`Creating System Tenant (${systemTenantId})...`);
-      await this.db
-        .insert(schema.organization)
-        .values({
-          id: systemTenantId,
-          name: "Nexiom Platform",
-          slug: "system",
-          isSystem: true,
-          status: "active",
-        })
-        .onConflictDoNothing();
-    }
-
-    await seedSystemRbac(
-      this.db,
-      { ownerRoleId, adminRoleId, memberRoleId, systemTenantId },
-      this.logger,
-    );
   }
 }

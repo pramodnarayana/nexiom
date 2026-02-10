@@ -49,8 +49,6 @@ async function bootstrap() {
 }
 
 // Top-level await is not available in CommonJS.
-
-// Top-level await is not available in CommonJS.
 const start = async () => {
   try {
     await bootstrap();

@@ -11,12 +11,14 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Delete,
+  Logger,
 } from '@nestjs/common';
 import {
   USER_PROVIDER,
   IUserProvider,
   TENANT_PROVIDER,
   ITenantProvider,
+  User,
 } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
 import { CreateUser } from './users.validation';
@@ -24,6 +26,33 @@ import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
+
+// Union type to support both real Users and Pending Invitations in the same list
+export type UserListItem =
+  | (User & { kind?: 'user' }) // Optional discriminator for backwards compat if needed, or strict: { kind: 'user' }
+  | {
+      kind: 'invitation';
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      status: 'pending';
+      emailVerified: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+      isInvitation: true;
+      // Optional fields from User to satisfy strict typing if needed by consumers
+      permissions?: string[];
+      image?: string;
+      banned?: boolean;
+      banReason?: string | null;
+      banExpires?: Date | null;
+    };
+
+export interface UserListResponse {
+  data: UserListItem[];
+  total: number;
+}
 
 /**
  * Controller for handling User Management HTTP requests.
@@ -33,6 +62,8 @@ import { RequirePermission } from '../auth/require-permission.decorator';
 @Controller('users')
 @UseGuards(AuthGuard, PermissionsGuard)
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
@@ -45,17 +76,14 @@ export class UsersController {
    */
   @Get('me')
   async getMe(@Req() req: Request & { user: { id: string } }) {
-    console.log('[UsersController] getMe called for user:', req.user?.id);
+    this.logger.debug(`getMe called for user: ${req.user?.id}`);
     // AuthGuard ensures req.user is populated
     const user = await this.userProvider.findById(req.user.id);
     if (!user) {
-      console.warn('[UsersController] User not found for ID:', req.user.id);
+      this.logger.warn(`User not found for ID: ${req.user.id}`);
       throw new NotFoundException('User not found');
     }
-    console.log(
-      '[UsersController] Returning user with permissions:',
-      user.permissions,
-    );
+    this.logger.debug(`Returning user profile for: ${req.user.id}`);
     return user;
   }
 
@@ -75,7 +103,9 @@ export class UsersController {
    */
   @Get()
   @RequirePermission('users', 'read')
-  async findAll(@Req() req: Request & { user: { organizationId?: string } }) {
+  async findAll(
+    @Req() req: Request & { user: { organizationId?: string } },
+  ): Promise<UserListResponse> {
     // AuthGuard guarantees session is valid and populates user info
     // We use 'organizationId' (mapped in getSessionWithOrg)
     const tenantId = req.user?.organizationId;
@@ -84,7 +114,7 @@ export class UsersController {
       // STRICT ISOLATION: Admin users must belong to an organization to see users.
       // Returning empty list is safer than throwing error for UI handling,
       // but for security transparency, let's return empty.
-      return [];
+      return { data: [], total: 0 };
     }
 
     const { data: users, total: userTotal } = await this.userProvider.findAll({
@@ -92,8 +122,14 @@ export class UsersController {
     });
     const invitations = await this.invitationsService.list(tenantId);
 
+    // Filter out invitations for users that already exist
+    const existingEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    const pendingInvitations = invitations.filter(
+      (inv) => !existingEmails.has(inv.email.toLowerCase()),
+    );
+
     // Map invitations to User structure for unified UI list
-    const invitedUsers = invitations.map((inv) => ({
+    const invitedUsers: UserListItem[] = pendingInvitations.map((inv) => ({
       id: inv.id, // Use invitation ID temporarily
       email: inv.email,
       name: '', // Name might not be known yet
@@ -102,8 +138,11 @@ export class UsersController {
       emailVerified: false,
       createdAt: inv.createdAt,
       updatedAt: inv.createdAt,
-      // Helper field to distinguish in UI if needed
       isInvitation: true,
+      // Ensure other fields are undefined or compatible
+      permissions: undefined,
+      image: undefined,
+      banned: false,
     }));
 
     // Merge: Users first, then Pending Invites (or sort by date)
@@ -177,18 +216,15 @@ export class UsersController {
     try {
       // Use atomic operation to prevent TOCTOU race condition
       // This combines membership verification, last-admin check, and deletion in a single transaction
-      const deleted = await this.userProvider.deleteIfNotLastAdmin(
-        id,
-        tenantId,
-      );
+      const result = await this.userProvider.deleteIfNotLastAdmin(id, tenantId);
 
-      if (!deleted) {
+      if (!result.success) {
         throw new BadRequestException(
           'Cannot delete the last admin of the organization',
         );
       }
 
-      return { success: true };
+      return { success: true, hardDeleted: result.hardDeleted };
     } catch (error) {
       // Translate provider-specific errors to HTTP exceptions
       if (
@@ -205,7 +241,8 @@ export class UsersController {
 
       // Handle unexpected errors
       // Log full details for debugging (in real app utilize a logger)
-      console.error('User deletion failed:', error);
+      const err = error as Error;
+      this.logger.error(`User deletion failed: ${err.message}`, err.stack);
 
       // Return generic message to client to avoid leaking internals
       throw new InternalServerErrorException('Failed to delete user');

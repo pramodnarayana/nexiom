@@ -51,8 +51,10 @@ const mkDb = () => {
     user: { findFirst: vi.fn() },
     session: { findFirst: vi.fn() },
     invitation: { findFirst: vi.fn(), findMany: vi.fn() },
-    member: { findFirst: vi.fn() },
+    member: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     account: { findFirst: vi.fn() },
+    role: { findFirst: vi.fn() },
+    rolePermission: { findMany: vi.fn() },
   };
   const db: any = {
     query: q,

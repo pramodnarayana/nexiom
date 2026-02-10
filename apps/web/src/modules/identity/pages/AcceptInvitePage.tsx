@@ -16,8 +16,8 @@ export const AcceptInvitePage = () => {
     const inviteId = id || urlToken;
 
     // Derived State
-
     const [error, setError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // Auto-validate/redirection logic
     useEffect(() => {
@@ -40,8 +40,14 @@ export const AcceptInvitePage = () => {
                     });
 
                     if (!res.ok) {
-                        const data = await res.json();
-                        throw new Error(data.message || "Failed to accept");
+                        let message = "Failed to accept invitation";
+                        try {
+                            const data = await res.json();
+                            message = data.message || message;
+                        } catch {
+                            // Response wasn't JSON, use default message
+                        }
+                        throw new Error(message);
                     }
 
                     // Success -> Dashboard
@@ -64,7 +70,7 @@ export const AcceptInvitePage = () => {
         const target = `/signup?to=${encodeURIComponent(`/invite/accept?id=${inviteId}`)}&email=${encodeURIComponent(email)}`;
         navigate(target, { replace: true });
 
-    }, [inviteId, user, isLoading, navigate, searchParams, token]);
+    }, [inviteId, user, isLoading, navigate, searchParams, token, retryCount]);
 
     // Polished UI matching LoginPage
     return (
@@ -88,7 +94,16 @@ export const AcceptInvitePage = () => {
                                 {error}
                             </p>
                             <div className="flex gap-2 justify-center">
-                                <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Retry</Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setError(null);
+                                        setRetryCount(prev => prev + 1);
+                                    }}
+                                >
+                                    Retry
+                                </Button>
                                 <Button variant="default" size="sm" onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
                             </div>
                         </div>

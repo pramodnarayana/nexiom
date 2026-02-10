@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { apiClient } from '../api-client';
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
-    const provisionAttemptsRef = useRef(0);
+
 
     // Debug Lifecycle - Cleaned up
 
@@ -77,13 +77,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
                 // CRITICAL FIX: Always fetch full profile to ensure permissions are present
                 // This bypasses Better-Auth client stripping and ensures we have the DB state
+                // We let this throw to safe-guard against partial sessions
+                // Attempt to fetch full profile, but fall back to session data on non-auth errors
                 try {
                     const { data: fullUser } = await apiClient.get('/users/me');
-                    // Merge full user data immediately
                     apiUser = { ...apiUser, ...fullUser };
-                    data.user = apiUser; // Update local reference
-                } catch (e) {
-                    console.error("[AuthProvider] Failed to fetch full user profile:", e);
+                    data.user = apiUser;
+                } catch (profileError) {
+                    const errorMessage = profileError instanceof Error ? profileError.message : 'Unknown error';
+                    const status = (profileError as { response?: { status?: number } })?.response?.status;
+                    if (status === 401) {
+                        throw profileError; // Re-throw auth errors
+                    }
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn('[AuthProvider] Failed to fetch full profile, using session data:', profileError);
+                    } else {
+                        console.warn('[AuthProvider] Failed to fetch full profile, using session data:', errorMessage);
+                    }
+                    // Continue with partial session data rather than failing entirely
                 }
 
                 // 2. Check for Organization Context in Session (Fast Path)
@@ -96,7 +107,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
                     try {
                         const res = await apiClient.get<Tenant[]>('/tenants');
 
-                        const tenants = res.data;
+                        const tenants = res.data ?? [];
                         if (tenants.length > 0) {
                             // Find most recently created tenant
                             const sorted = [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -121,15 +132,19 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             } else {
                 // No Data from Session -> Valid Logout/Guest State
                 if (sessionError) {
-                    // Only clear check state on 401
                     if (sessionError.status === 401) {
                         // Valid 401
+                        setToken(undefined);
+                        setUser(null);
                     } else {
                         console.warn("[AuthProvider] Session error (not 401):", sessionError);
+                        // Keep existing state for non-401 errors (network issues, etc.)
                     }
+                } else {
+                    // No error but no data - genuine unauthenticated state
+                    setToken(undefined);
+                    setUser(null);
                 }
-                setToken(undefined);
-                setUser(null);
                 setIsLoading(false);
             }
 
@@ -193,7 +208,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         }
         setToken(undefined);
         setUser(null);
-        provisionAttemptsRef.current = 0; // Reset on logout
         globalThis.location.href = '/';
     }, []);
 

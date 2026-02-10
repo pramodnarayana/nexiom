@@ -43,6 +43,5 @@ export interface IAuthProvider {
   setPassword?(userId: string, password: string): Promise<void>;
 
   resendVerificationEmail?(email: string): Promise<void>;
-
-  findById(userId: string): Promise<User>;
+  findById?(userId: string): Promise<User>;
 }

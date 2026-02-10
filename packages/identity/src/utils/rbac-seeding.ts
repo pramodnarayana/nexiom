@@ -7,6 +7,7 @@ import {
   isSystemPermission,
   PermissionType,
 } from "../constants";
+import { inArray } from "drizzle-orm";
 
 export interface RbacConfig {
   ownerRoleId: string;
@@ -32,94 +33,104 @@ export async function seedSystemRbac(
   }
 
   try {
-    // 1. Ensure Roles
-    const roles = [
-      {
-        id: ownerRoleId,
-        name: "Owner",
-        isSystem: true,
-        description: "Full access",
-      },
-      {
-        id: adminRoleId,
-        name: "Admin",
-        isSystem: true,
-        description: "Manage users and settings",
-      },
-      {
-        id: memberRoleId,
-        name: "Member",
-        isSystem: true,
-        description: "Read only access",
-      },
-    ];
+    // Wrap entire operation in a transaction for atomicity
+    await db.transaction(async (tx) => {
+      // 1. Ensure Roles
+      const roles = [
+        {
+          id: ownerRoleId,
+          name: "Owner",
+          isSystem: true,
+          description: "Full access",
+        },
+        {
+          id: adminRoleId,
+          name: "Admin",
+          isSystem: true,
+          description: "Manage users and settings",
+        },
+        {
+          id: memberRoleId,
+          name: "Member",
+          isSystem: true,
+          description: "Read only access",
+        },
+      ];
 
-    await db
-      .insert(schema.role)
-      .values(
-        roles.map((r) => ({
-          ...r,
+      await tx
+        .insert(schema.role)
+        .values(
+          roles.map((r) => ({
+            ...r,
+            createdAt: now,
+          })),
+        )
+        .onConflictDoNothing();
+
+      // 2. Ensure Permissions
+      const perms = ALL_PERMISSIONS;
+      const permissionsToInsert = perms.map((p) => {
+        const separatorIndex = p.indexOf(":");
+        if (separatorIndex === -1) {
+          throw new Error(`Invalid permission format: ${p}`);
+        }
+        return {
+          id: p,
+          resource: p.substring(0, separatorIndex),
+          action: p.substring(separatorIndex + 1),
           createdAt: now,
-        })),
-      )
-      .onConflictDoNothing();
+        };
+      });
 
-    // 2. Ensure Permissions
-    const perms = ALL_PERMISSIONS;
-    const permissionsToInsert = perms.map((p) => {
-      const separatorIndex = p.indexOf(":");
-      if (separatorIndex === -1) {
-        throw new Error(`Invalid permission format: ${p}`);
-      }
-      return {
-        id: p,
-        resource: p.substring(0, separatorIndex),
-        action: p.substring(separatorIndex + 1),
-        createdAt: now,
+      await tx
+        .insert(schema.permission)
+        .values(permissionsToInsert)
+        .onConflictDoNothing();
+
+      // 3. Build Role-Permission Mappings
+      const rolePermissionsToInsert: {
+        id: string;
+        roleId: string;
+        permissionId: string;
+        organizationId?: string | null;
+      }[] = [];
+
+      const addPermissionsForRole = (
+        roleId: string,
+        permissions: readonly string[],
+        scopedOrganizationId: string,
+      ) => {
+        for (const p of permissions) {
+          // Deterministically decide scope based on permission type
+          const isSystem = isSystemPermission(p);
+          const orgId = isSystem ? scopedOrganizationId : null;
+
+          // Push to list
+          rolePermissionsToInsert.push({
+            id: uuidv4(),
+            roleId,
+            permissionId: p,
+            organizationId: orgId,
+          });
+        }
       };
-    });
 
-    await db
-      .insert(schema.permission)
-      .values(permissionsToInsert)
-      .onConflictDoNothing();
+      // Admin
+      addPermissionsForRole(adminRoleId, perms, systemTenantId);
 
-    // 3. Assign Permissions
-    const rolePermissionsToInsert: {
-      id: string;
-      roleId: string;
-      permissionId: string;
-      organizationId?: string | null;
-    }[] = [];
+      // Member: curated safe subset
+      const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
 
-    const addPermissionsForRole = (
-      roleId: string,
-      permissions: readonly string[],
-      scopedOrganizationId: string,
-    ) => {
-      for (const p of permissions) {
-        // Deterministically decide scope based on permission type
-        const isSystem = isSystemPermission(p);
-        const orgId = isSystem ? scopedOrganizationId : null;
-
-        // Push to list
-        rolePermissionsToInsert.push({
-          id: uuidv4(),
-          roleId,
-          permissionId: p,
-          organizationId: orgId,
-        });
+      // Validate configuration fail-fast
+      const invalidPerms = memberPerms.filter((p) => !perms.includes(p));
+      if (invalidPerms.length > 0) {
+        throw new Error(
+          `Invalid member permissions configured: ${invalidPerms.join(", ")}. Must be in ALL_PERMISSIONS.`,
+        );
       }
-    };
 
-    // Admin
-    addPermissionsForRole(adminRoleId, perms, systemTenantId);
-
-    // Member: curated safe subset
-    const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
-    // Member role always receives organizationId: null per RBAC design (see ADR)
-    for (const p of memberPerms) {
-      if (perms.includes(p)) {
+      // Member role always receives organizationId: null per RBAC design (see ADR)
+      for (const p of memberPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
           roleId: memberRoleId,
@@ -127,47 +138,54 @@ export async function seedSystemRbac(
           organizationId: null,
         });
       }
-    }
 
-    // Owner (Same as Admin)
-    addPermissionsForRole(ownerRoleId, perms, systemTenantId);
+      // Owner (Same as Admin)
+      addPermissionsForRole(ownerRoleId, perms, systemTenantId);
 
-    // 3. Assign Permissions (Read-Filter-Insert to avoid ON CONFLICT issues)
-    if (rolePermissionsToInsert.length > 0) {
-      // Fetch existing to dedupe in memory
-      const existing = await db
-        .select({
-          roleId: schema.rolePermission.roleId,
-          permissionId: schema.rolePermission.permissionId,
-          organizationId: schema.rolePermission.organizationId,
-        })
-        .from(schema.rolePermission);
+      // 4. Assign Permissions (Read-Filter-Insert to avoid ON CONFLICT issues)
+      if (rolePermissionsToInsert.length > 0) {
+        // Fetch existing logic: restricted to the relevant system roles
+        const existing = await tx
+          .select({
+            roleId: schema.rolePermission.roleId,
+            permissionId: schema.rolePermission.permissionId,
+            organizationId: schema.rolePermission.organizationId,
+          })
+          .from(schema.rolePermission)
+          .where(
+            inArray(schema.rolePermission.roleId, [
+              ownerRoleId,
+              adminRoleId,
+              memberRoleId,
+            ]),
+          );
 
-      const existingSet = new Set(
-        existing.map(
-          (e) =>
-            `${e.roleId}|${e.permissionId}|${e.organizationId ?? "__NULL__"}`,
-        ),
-      );
+        const existingSet = new Set(
+          existing.map(
+            (e) =>
+              `${e.roleId}|${e.permissionId}|${e.organizationId ?? "__NULL__"}`,
+          ),
+        );
 
-      const toInsert = rolePermissionsToInsert.filter((rp) => {
-        const key = `${rp.roleId}|${rp.permissionId}|${rp.organizationId ?? "__NULL__"}`;
-        if (existingSet.has(key)) {
-          return false;
+        const toInsert = rolePermissionsToInsert.filter((rp) => {
+          const key = `${rp.roleId}|${rp.permissionId}|${rp.organizationId ?? "__NULL__"}`;
+          if (existingSet.has(key)) {
+            return false;
+          }
+          // Also dedupe internally within the batch
+          existingSet.add(key);
+          return true;
+        });
+
+        if (toInsert.length > 0) {
+          // Batch insert using transaction
+          await tx.insert(schema.rolePermission).values(toInsert);
+          logger.log(`Inserted ${toInsert.length} new role permissions.`);
+        } else {
+          logger.log("No new role permissions to insert.");
         }
-        // Also dedupe internally within the batch
-        existingSet.add(key);
-        return true;
-      });
-
-      if (toInsert.length > 0) {
-        // Batch insert in chunks if needed, but Drizzle handles it reasonably
-        await db.insert(schema.rolePermission).values(toInsert);
-        logger.log(`Inserted ${toInsert.length} new role permissions.`);
-      } else {
-        logger.log("No new role permissions to insert.");
       }
-    }
+    });
 
     logger.log("RBAC Seeding Complete (Canonical)");
   } catch (error) {

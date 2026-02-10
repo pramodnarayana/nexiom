@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { IDENTITY_DB } from "../constants";
+import { IDENTITY_DB, Role } from "../constants";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
@@ -47,7 +47,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             id: uuidv4(),
             organizationId: orgId,
             userId: userId,
-            role: "owner",
+            role: Role.Owner,
             createdAt: new Date(),
           });
 

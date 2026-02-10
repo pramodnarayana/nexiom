@@ -74,6 +74,10 @@ export class IdentityModule {
           useExisting: options.dbToken,
         },
         {
+          provide: EMAIL_PROVIDER,
+          useExisting: options.emailToken,
+        },
+        {
           provide: AUTH_PROVIDER,
           useClass: BetterAuthAdapter,
         },
@@ -189,6 +193,10 @@ export class IdentityModule {
         PermissionSeeder,
       ],
       exports: [
+        IDENTITY_OPTIONS,
+        IDENTITY_DB,
+        BETTER_AUTH_CONFIG,
+        EMAIL_PROVIDER,
         AUTH_PROVIDER,
         USER_PROVIDER,
         TENANT_PROVIDER,
