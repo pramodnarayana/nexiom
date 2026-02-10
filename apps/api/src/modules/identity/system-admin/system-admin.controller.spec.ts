@@ -185,7 +185,7 @@ describe('SystemAdminController', () => {
         controller.createUser({
           name: 'Test',
           email: 'taken@example.com',
-          role: getRequiredAdminRoleId(),
+          role: 'user',
         }),
       ).rejects.toThrow(BadRequestException);
     });
