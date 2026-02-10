@@ -618,7 +618,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           id: uuidv4(),
           organizationId: inv.organizationId,
           userId: userId,
-          role: inv.role === "user" ? "member" : inv.role || "member",
+          role: inv.role || "member",
           createdAt: new Date(),
         });
       } else {
@@ -715,7 +715,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       })[];
     },
   ): Promise<UserInterface> {
-    const role = dbUser.role || "user";
+    const role = dbUser.role || "member";
     const permissions: Set<string> = new Set();
     const roleIds: string[] = [];
 
@@ -900,7 +900,7 @@ export class BetterAuthAdapter implements IAuthProvider {
     return {
       id: dbInv.id,
       email: dbInv.email,
-      role: dbInv.role || "user",
+      role: dbInv.role || "member",
       organizationId: dbInv.organizationId,
       inviterId: dbInv.inviterId,
       status: status,

@@ -91,7 +91,7 @@ describe('Users Validation', () => {
       const result = CreateUserSchema.safeParse(user);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.role).toBe('user');
+        expect(result.data.role).toBe('member');
       }
     });
   });

@@ -184,7 +184,7 @@ export class AuthController {
         password: body.password,
         firstName: body.firstName,
         lastName: body.lastName,
-        role: 'user',
+        role: 'member',
       });
     }
 

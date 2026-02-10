@@ -162,7 +162,7 @@ describe("BetterAuthAdapter", () => {
       image: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      role: "user",
+      role: "member",
       systemRole: null,
       banned: null,
       banReason: null,
@@ -223,7 +223,7 @@ describe("BetterAuthAdapter", () => {
       image: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      role: "user",
+      role: "member",
       systemRole: null,
       banned: null,
       banReason: null,
@@ -355,7 +355,7 @@ describe("BetterAuthAdapter", () => {
       image: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      role: "user",
+      role: "member",
       systemRole: null,
       banned: null,
       banReason: null,
@@ -388,7 +388,7 @@ describe("BetterAuthAdapter", () => {
       image: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      role: "user",
+      role: "member",
       systemRole: null,
       banned: null,
       banReason: null,
@@ -468,7 +468,7 @@ describe("BetterAuthAdapter", () => {
       invitation: {
         id: "x",
         email: "x@y.com",
-        role: "user",
+        role: "member",
         organizationId: "o1",
         inviterId: "u1",
         status: "pending",
@@ -509,7 +509,7 @@ describe("BetterAuthAdapter", () => {
     const inv = mkInv();
     db.query.invitation.findFirst.mockResolvedValueOnce(inv);
     const gi = await adapter.getInvitation("i1");
-    expect(gi?.role).toBe("user");
+    expect(gi?.role).toBe("member");
 
     // Test unknown status fallback to pending
     const weirdInv = mkInv({ status: "weird" });

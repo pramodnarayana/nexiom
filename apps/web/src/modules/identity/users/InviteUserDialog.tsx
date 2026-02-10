@@ -82,7 +82,7 @@ export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) 
     useEffect(() => {
         if (open && roles.length > 0) {
             // Default to 'member' or first available
-            const def = (roles.find(r => r.id === 'user' || r.id === 'member')?.id as string) || (roles[0]?.id as string);
+            const def = (roles.find(r => r.id === 'member')?.id as string) || (roles[0]?.id as string);
             if (def && !form.getValues('role')) {
                 form.setValue('role', def);
             }

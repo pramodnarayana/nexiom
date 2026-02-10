@@ -47,7 +47,7 @@ describe('InvitationsController', () => {
     it('should call service.create', async () => {
       const dto: CreateInvitation = {
         email: 'test@example.com',
-        role: 'user',
+        role: 'member',
         organizationId: 'org-123',
       };
       const req = {

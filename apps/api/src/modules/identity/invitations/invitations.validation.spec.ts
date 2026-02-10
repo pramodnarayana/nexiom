@@ -8,7 +8,7 @@ describe('InvitationsValidation', () => {
     it('should validate valid invitation request', () => {
       const valid = {
         email: 'test@example.com',
-        role: 'user',
+        role: 'member',
         organizationId: 'org-123',
       };
       expect(CreateInvitationSchema.safeParse(valid).success).toBe(true);
@@ -17,7 +17,7 @@ describe('InvitationsValidation', () => {
     it('should require valid email', () => {
       const invalid = {
         email: 'invalid',
-        role: 'user',
+        role: 'member',
         organizationId: 'org-123',
       };
       expect(CreateInvitationSchema.safeParse(invalid).success).toBe(false);
@@ -26,7 +26,7 @@ describe('InvitationsValidation', () => {
     it('should allow optional organizationId', () => {
       const validWithoutOrg = {
         email: 'test@example.com',
-        role: 'user',
+        role: 'member',
       };
       expect(CreateInvitationSchema.safeParse(validWithoutOrg).success).toBe(
         true,

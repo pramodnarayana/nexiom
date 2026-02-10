@@ -80,7 +80,7 @@ describe('UsersController', () => {
     it('should call userProvider.create with correct parameters', async () => {
       const createUser: CreateUser = {
         email: 'test@example.com',
-        role: 'user',
+        role: 'member',
       };
       const result = { id: '1', ...createUser };
       userProvider.create.mockResolvedValue(result);
