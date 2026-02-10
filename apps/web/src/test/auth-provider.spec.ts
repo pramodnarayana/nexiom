@@ -91,7 +91,7 @@ describe('authProvider', () => {
 
         it('should return access denied error when user is not admin', async () => {
             (authClient.getSession as unknown as Mock).mockResolvedValue({
-                data: { user: { id: '123', role: 'user' } },
+                data: { user: { id: '123', role: 'member' } },
                 error: null,
             });
 

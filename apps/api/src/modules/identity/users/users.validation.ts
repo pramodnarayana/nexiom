@@ -8,7 +8,7 @@ export const ROLES = {
   ADMIN: 'admin',
   EDITOR: 'editor',
   VIEWER: 'viewer',
-  USER: 'user',
+  MEMBER: 'member',
 } as const;
 
 /**
@@ -36,7 +36,7 @@ export const CreateUserSchema = z.object({
     .string()
     .min(2, { message: 'Company name is required' })
     .optional(), // Optional on CreateUser (e.g. invites), required on Signup
-  role: RoleEnum.optional().default('user'),
+  role: RoleEnum.optional().default('member'),
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters' })
@@ -74,7 +74,7 @@ export class CompleteInvite extends createZodDto(CompleteInviteSchema) {}
 
 export const InviteUserSchema = z.object({
   email: z.string().email(),
-  role: RoleEnum.default('user'),
+  role: RoleEnum.default('member'),
 });
 
 export class InviteUser extends createZodDto(InviteUserSchema) {}

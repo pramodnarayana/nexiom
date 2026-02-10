@@ -73,7 +73,7 @@ const mkUser = (over?: Partial<User>): User => ({
   image: undefined,
   createdAt: new Date(),
   updatedAt: new Date(),
-  role: "user",
+  role: "member",
   banned: false,
   banReason: null,
   banExpires: null,

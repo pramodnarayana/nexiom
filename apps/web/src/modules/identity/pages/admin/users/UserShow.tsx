@@ -133,7 +133,7 @@ export const UserShow = ({
                         </div>
                         <div className="space-y-1">
                             <p className="text-sm font-medium text-muted-foreground">Role</p>
-                            <Badge variant="secondary">{record?.role || "user"}</Badge>
+                            <Badge variant="secondary">{record?.role || "member"}</Badge>
                         </div>
                         <div className="space-y-1">
                             <p className="text-sm font-medium text-muted-foreground">Organization ID</p>

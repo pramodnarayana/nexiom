@@ -40,7 +40,6 @@ export enum Role {
   Owner = "owner",
   Admin = "admin",
   Member = "member",
-  User = "user",
 }
 
 export type PermissionType = (typeof ALL_PERMISSIONS)[number];

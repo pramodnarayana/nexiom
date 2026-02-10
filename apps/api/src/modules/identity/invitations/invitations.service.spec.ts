@@ -38,7 +38,7 @@ describe('InvitationsService', () => {
     it('should call authProvider.createInvitation', async () => {
       const dto = {
         email: 'test@example.com',
-        role: 'user',
+        role: 'member',
         organizationId: 'org-123',
       };
       await service.create(dto, 'user-123');

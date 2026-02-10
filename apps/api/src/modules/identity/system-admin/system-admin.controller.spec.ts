@@ -185,7 +185,7 @@ describe('SystemAdminController', () => {
         controller.createUser({
           name: 'Test',
           email: 'taken@example.com',
-          role: 'user',
+          role: 'member',
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -201,14 +201,14 @@ describe('SystemAdminController', () => {
       const result = await controller.createUser({
         name: 'Test',
         email: 'new@example.com',
-        role: 'user',
+        role: 'member',
       });
 
       expect(result).toEqual(mockUser);
       expect(mockUserProvider.create).toHaveBeenCalledWith({
         name: 'Test',
         email: 'new@example.com',
-        role: 'user',
+        role: 'member',
       });
       expect(mockUserProvider.update).not.toHaveBeenCalled();
     });
