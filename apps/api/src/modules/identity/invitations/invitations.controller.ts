@@ -26,10 +26,6 @@ export class InvitationsController {
     if (req.user.organizationId) {
       createInvitation.organizationId = req.user.organizationId;
     }
-    // If specific organization context exists (Tenant Admin), enforce it.
-    if (req.user.organizationId) {
-      createInvitation.organizationId = req.user.organizationId;
-    }
     // Extract only necessary headers for downstream propagation
     const forwardedHeaders = {
       'x-request-id': req.headers['x-request-id'],
