@@ -14,6 +14,7 @@ export class InvitationsService {
   async create(
     createInvitation: CreateInvitation,
     inviterId: string,
+    headers?: Record<string, string | string[] | undefined>,
   ): Promise<Invitation> {
     this.logger.log(
       `Creating invitation for organization ${createInvitation.organizationId || 'system'}`,
@@ -24,6 +25,7 @@ export class InvitationsService {
       organizationId: createInvitation.organizationId || null,
       inviterId,
       expiresIn: InvitationsService.INVITATION_EXPIRES_IN_SECONDS,
+      headers,
     });
   }
 

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.validation';
@@ -53,6 +54,13 @@ describe('UsersController', () => {
           provide: TENANT_PROVIDER,
           useValue: tenantProvider,
         },
+        {
+          provide: InvitationsService,
+          useValue: {
+            create: vi.fn(),
+            list: vi.fn().mockResolvedValue([]),
+          },
+        },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -90,7 +98,7 @@ describe('UsersController', () => {
       } as unknown as Request & { user: { organizationId?: string } };
 
       const result = await controller.findAll(req);
-      expect(result).toEqual([]);
+      expect(result).toEqual({ data: [], total: 0 });
 
       expect(userProvider.findAll).not.toHaveBeenCalled();
     });
@@ -101,7 +109,7 @@ describe('UsersController', () => {
       };
 
       const result = await controller.findAll(req);
-      expect(result).toEqual([]);
+      expect(result).toEqual({ data: [], total: 0 });
 
       expect(userProvider.findAll).not.toHaveBeenCalled();
     });
@@ -111,7 +119,7 @@ describe('UsersController', () => {
       const req = {
         user: { organizationId: tenantId },
       } as unknown as Request & { user: { organizationId?: string } };
-      const users = [{ id: '1', permissions: [] }];
+      const users = [{ id: '1', email: 'test@example.com', permissions: [] }];
 
       userProvider.findAll.mockResolvedValue({ data: users, total: 1 });
 
@@ -243,11 +251,14 @@ describe('UsersController', () => {
       };
 
       // Atomic operation succeeds
-      userProvider.deleteIfNotLastAdmin.mockResolvedValue(true);
+      userProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: true,
+        hardDeleted: true,
+      });
 
       const result = await controller.remove(id, req);
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({ success: true, hardDeleted: true });
       expect(userProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
         id,
         tenantId,

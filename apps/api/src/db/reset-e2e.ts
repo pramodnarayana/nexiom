@@ -156,30 +156,22 @@ const seedRBAC = async (
     }
   }
 
-  // 2. Admin
-  // Global Permissions (non-system, non-dashboard-view) -> Global
-  const adminGlobalPerms = perms.filter((p) => !isSystemPermission(p));
-  for (const p of adminGlobalPerms) {
-    add(ids.admin, p, null);
-  }
+  // 2. Admin & Owner
+  // Both share same logic: Global perms -> global scope; System perms -> system tenant scope
+  const targetRoles = [ids.admin, ids.owner];
 
-  // System Permissions -> System Tenant Scoped
-  const adminSystemPerms = perms.filter((p) => isSystemPermission(p));
-  for (const p of adminSystemPerms) {
-    add(ids.admin, p, ids.systemTenant);
-  }
+  for (const roleId of targetRoles) {
+    // Global Permissions
+    const globalPerms = perms.filter((p) => !isSystemPermission(p));
+    for (const p of globalPerms) {
+      add(roleId, p, null);
+    }
 
-  // 3. Owner
-  // Global Permissions -> Global
-  const ownerGlobalPerms = perms.filter((p) => !isSystemPermission(p));
-  for (const p of ownerGlobalPerms) {
-    add(ids.owner, p, null);
-  }
-
-  // System Permissions -> System Tenant Scoped
-  const ownerSystemPerms = perms.filter((p) => isSystemPermission(p));
-  for (const p of ownerSystemPerms) {
-    add(ids.owner, p, ids.systemTenant);
+    // System Permissions
+    const systemPerms = perms.filter((p) => isSystemPermission(p));
+    for (const p of systemPerms) {
+      add(roleId, p, ids.systemTenant);
+    }
   }
 
   // Batch Insert Role Permissions
@@ -266,6 +258,7 @@ const main = async () => {
 
   try {
     await client.connect();
+    await client.query('BEGIN');
     await truncateTables(client);
     await seedRBAC(client, {
       owner: env.OWNER_ROLE_ID,
@@ -277,7 +270,9 @@ const main = async () => {
       systemTenant: env.SYSTEM_TENANT_ID,
       owner: env.OWNER_ROLE_ID,
     });
+    await client.query('COMMIT');
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Seed failed:', error);
     process.exit(1);
   } finally {

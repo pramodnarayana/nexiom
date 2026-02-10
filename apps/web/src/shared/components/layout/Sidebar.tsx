@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link as SidebarLink, useLocation, type NavigateFunction } from 'react-router-dom';
+import { Link, useLocation, type NavigateFunction } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { hasPermission } from '@/shared/lib/auth/utils';
@@ -45,7 +45,7 @@ export function Sidebar({
     const location = useLocation();
     const isAdminView = location.pathname.startsWith('/admin');
     const isTenantView = location.pathname.startsWith('/dashboard');
-    const hasAdminRole = hasPermission(user?.permissions, 'admin_dashboard', 'view');
+    const canViewAdminDashboard = hasPermission(user?.permissions, 'admin_dashboard', 'view');
 
     return (
         <div className="flex flex-col h-full bg-card/50 backdrop-blur-md border-r border-border">
@@ -69,7 +69,7 @@ export function Sidebar({
                                     ? location.pathname === item.href
                                     : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
                                 return (
-                                    <SidebarLink key={item.href} to={item.href}>
+                                    <Link key={item.href} to={item.href}>
                                         <Button
                                             variant="ghost"
                                             className={cn(
@@ -82,7 +82,7 @@ export function Sidebar({
                                             <item.icon className={cn("mr-3 h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} />
                                             {item.label}
                                         </Button>
-                                    </SidebarLink>
+                                    </Link>
                                 );
                             })}
                         </div>
@@ -127,7 +127,7 @@ export function Sidebar({
                             </DropdownMenuItem>
                         )}
 
-                        {isTenantView && hasAdminRole && (
+                        {isTenantView && canViewAdminDashboard && (
                             <DropdownMenuItem onClick={() => navigate('/admin')}>
                                 Switch to Admin View
                             </DropdownMenuItem>

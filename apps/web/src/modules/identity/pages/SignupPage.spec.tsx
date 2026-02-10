@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { SignupPage } from './SignupPage';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { useNavigate, MemoryRouter } from 'react-router-dom';
@@ -72,6 +73,7 @@ describe('SignupPage', () => {
     });
 
     it('handles standard signup submission', async () => {
+        const user = userEvent.setup();
         // Mock alert to prevent JSDOM issues or unhandled output
         const alertMock = vi.spyOn(globalThis, 'alert').mockImplementation(() => { });
 
@@ -82,11 +84,13 @@ describe('SignupPage', () => {
             </MemoryRouter>
         );
 
-        fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'john@acme.com' } });
-        fireEvent.change(screen.getByPlaceholderText('Password (min 8 chars)'), { target: { value: 'password123' } });
-        fireEvent.change(screen.getByPlaceholderText('Confirm Password'), { target: { value: 'password123' } });
+        await user.type(screen.getByPlaceholderText('First Name'), 'John');
+        await user.type(screen.getByPlaceholderText('Last Name'), 'Doe');
+        await user.type(screen.getByPlaceholderText('Email'), 'john@acme.com');
+        await user.type(screen.getByPlaceholderText('Password (min 8 chars)'), 'password123');
+        await user.type(screen.getByPlaceholderText('Confirm Password'), 'password123');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Sign Up' }));
+        await user.click(screen.getByRole('button', { name: 'Sign Up' }));
 
         await waitFor(() => {
             expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -107,6 +111,9 @@ describe('SignupPage', () => {
     });
 
     it('handles invite flow submission (auto-login)', async () => {
+        const user = userEvent.setup();
+        console.log('Starting invite flow test');
+
         const inviteUrl = `/signup?to=${encodeURIComponent('/invite/accept?id=123')}&email=invitee@example.com`;
 
         (globalThis.fetch as Mock).mockResolvedValue({
@@ -120,14 +127,20 @@ describe('SignupPage', () => {
             </MemoryRouter>
         );
 
+        console.log('Form rendered');
 
-        fireEvent.change(screen.getByPlaceholderText('Password (min 8 chars)'), { target: { value: 'securepass' } });
-        fireEvent.change(screen.getByPlaceholderText('Confirm Password'), { target: { value: 'securepass' } });
+        await user.type(screen.getByPlaceholderText('First Name'), 'John');
+        await user.type(screen.getByPlaceholderText('Last Name'), 'Doe');
+        await user.type(screen.getByPlaceholderText('Password (min 8 chars)'), 'securepass');
+        await user.type(screen.getByPlaceholderText('Confirm Password'), 'securepass');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Join & Accept' }));
+        console.log('Clicking button');
+        const button = screen.getByRole('button', { name: 'Join & Accept' });
+        await user.click(button);
+        console.log('Button clicked');
 
         await waitFor(() => {
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 expect.stringContaining('/auth/complete-invite'),
                 expect.objectContaining({
                     method: 'POST',

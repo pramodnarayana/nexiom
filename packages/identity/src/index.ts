@@ -35,6 +35,7 @@ export * from "./adapters/better-auth.adapter";
 export * from "./adapters/drizzle-user.adapter";
 export * from "./adapters/drizzle-tenant.adapter";
 export * from "./adapters/drizzle-permission.adapter";
+export * from "./adapters/drizzle-role.adapter";
 
 export * from "./identity.module";
 export * from "./constants";

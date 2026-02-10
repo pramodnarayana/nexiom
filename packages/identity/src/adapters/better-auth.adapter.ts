@@ -69,6 +69,7 @@ interface BetterAuthApi {
 
   createInvitation(params: {
     body: CreateInvitationInput;
+    headers?: Headers;
   }): Promise<{ invitation: Invitation } | Invitation>;
 
   sendVerificationEmail(params: {
@@ -111,11 +112,9 @@ export class BetterAuthAdapter implements IAuthProvider {
             matcher: (context: { path?: string }) => {
               const path = context.path;
               if (!path) return false;
-              return (
-                path.endsWith("/sign-up/email") ||
-                path.endsWith("/sign-in/email") ||
-                path.startsWith("/callback/")
-              );
+              // Only trigger on Social Login Callback
+              // Standard Email Signup is now handled via AuthService.registerUser
+              return path.startsWith("/callback/");
             },
             // NOTE: ctx is typed as 'any' because better-auth does not export typed middleware context.
             // The middleware context structure is internal and may change between versions.
@@ -129,12 +128,7 @@ export class BetterAuthAdapter implements IAuthProvider {
               let user: UserInterface | undefined;
 
               if (returned && typeof returned === "object") {
-                if ("user" in returned) {
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                  user = returned.user as UserInterface;
-                } else if ("token" in returned) {
-                  // Login response often mimics the same shape or we assume getting user from it
-                  // However, let's just unify the access if possible
+                if ("user" in returned || "token" in returned) {
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                   user = returned.user as UserInterface;
                 }
@@ -163,7 +157,7 @@ export class BetterAuthAdapter implements IAuthProvider {
                 }
               }
 
-              return; // Void return, do not modify response
+              // Void return, do not modify response
             }),
           },
         ],
@@ -321,8 +315,16 @@ export class BetterAuthAdapter implements IAuthProvider {
       );
     }
 
-    // Rehydrate from DB to ensure consistent Date objects
+    // Role Assignment: If a role is provided, update the user record
+    // Better Auth's signUpEmail might not map custom fields by default depending on config
+    if (input.role) {
+      await this.db
+        .update(schema.user)
+        .set({ role: input.role })
+        .where(eq(schema.user.id, result.user.id));
+    }
 
+    // Rehydrate from DB to ensure consistent Date objects
     const dbUser = await this.db.query.user.findFirst({
       where: eq(schema.user.id, result.user.id),
     });
@@ -331,7 +333,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       throw new Error("User created but not found in database");
     }
 
-    return this.mapUser(dbUser);
+    return await this.mapUser(dbUser);
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResult> {
@@ -396,7 +398,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     return {
       session: this.mapSession(dbSession),
-      user: this.mapUser(dbUser),
+      user: await this.mapUser(dbUser),
       cookie: cookieHeader || undefined,
     };
   }
@@ -419,7 +421,7 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     return {
       session: this.mapSession(session),
-      user: this.mapUser(user),
+      user: await this.mapUser(user),
     };
   }
 
@@ -428,20 +430,20 @@ export class BetterAuthAdapter implements IAuthProvider {
   ): Promise<{ session: Session; user: UserInterface } | null> {
     const headerObj =
       headers instanceof Headers
-        ? fromNodeHeaders(
-            Object.fromEntries(headers.entries()) as IncomingHttpHeaders,
-          )
+        ? headers
         : fromNodeHeaders(headers as IncomingHttpHeaders);
 
     const result = await this.api.getSession({
       headers: headerObj,
     });
 
-    if (!result?.session?.token) return null;
+    if (!result?.session?.token) {
+      return null;
+    }
 
     // Rehydrate and validate from DB to ensure consistent object shape (dates etc)
-
-    return this.validateSession(result.session.token);
+    const validSession = await this.validateSession(result.session.token);
+    return validSession;
   }
 
   async createInvitation(input: CreateInvitationInput): Promise<Invitation> {
@@ -450,31 +452,44 @@ export class BetterAuthAdapter implements IAuthProvider {
       return this.createSystemInvitation(input);
     }
 
-    // Org Invite via Better Auth API
+    try {
+      const result = await this.api.createInvitation({
+        body: {
+          email: input.email,
+          role: input.role,
+          organizationId: input.organizationId,
+          expiresIn: input.expiresIn,
+          inviterId: input.inviterId,
+        },
+        headers: this.resolveHeaders(input.headers),
+      });
 
-    const result = await this.api.createInvitation({
-      body: {
-        email: input.email,
-        role: input.role,
-        organizationId: input.organizationId,
-        expiresIn: input.expiresIn,
-        inviterId: input.inviterId,
-      },
-    });
+      const invData = ("invitation" in result
+        ? result.invitation
+        : result) as unknown as Record<string, unknown>;
 
-    const invData = ("invitation" in result
-      ? result.invitation
-      : result) as unknown as Record<string, unknown>;
+      return this.validateInvitationResponse(invData);
+    } catch (error) {
+      console.error("[BetterAuthAdapter] api.createInvitation failed:", error);
+      throw error;
+    }
+  }
 
-    // Validate that invData is an object
+  private resolveHeaders(headers: CreateInvitationInput["headers"]) {
+    if (!headers) return undefined;
+    if (headers instanceof Headers) return headers;
+    return fromNodeHeaders(headers as IncomingHttpHeaders);
+  }
 
+  private validateInvitationResponse(
+    invData: Record<string, unknown>,
+  ): Invitation {
     if (!invData || typeof invData !== "object") {
       throw new Error(
         "Invalid response from createInvitation: Missing invitation data",
       );
     }
 
-    // List of required fields to check
     const requiredFields = [
       "id",
       "email",
@@ -490,29 +505,19 @@ export class BetterAuthAdapter implements IAuthProvider {
       const value = invData[field];
 
       if (field === "role") {
-        // Role is nullable/optional in some contexts, but if it exists it must be valid.
-        // If invData has the key, we check if it is explicitly undefined (missing).
-        // If the key is present but null, that's allowed by schema if nullable.
-        // Wait, schema.invitation has role: text("role"), so it IS nullable.
         if (value === undefined) {
           throw new Error(
             `Invalid response from createInvitation: Missing field "${field}"`,
           );
         }
-      } else {
-        // Non-nullable fields
-        if (value === undefined || value === null || value === "") {
-          throw new Error(
-            `Invalid response from createInvitation: Missing field "${field}"`,
-          );
-        }
+      } else if (value === undefined || value === null || value === "") {
+        throw new Error(
+          `Invalid response from createInvitation: Missing field "${field}"`,
+        );
       }
     }
 
-    // Validate Date fields
-
     const expiresAt = new Date(invData.expiresAt as string);
-
     const createdAt = new Date(invData.createdAt as string);
 
     if (Number.isNaN(expiresAt.getTime())) {
@@ -613,7 +618,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           id: uuidv4(),
           organizationId: inv.organizationId,
           userId: userId,
-          roleId: inv.role === "user" ? "member" : inv.role || "member",
+          role: inv.role === "user" ? "member" : inv.role || "member",
           createdAt: new Date(),
         });
       } else {
@@ -634,7 +639,7 @@ export class BetterAuthAdapter implements IAuthProvider {
             id: uuidv4(),
             organizationId: this.options.constants.systemTenantId,
             userId: userId,
-            roleId: inv.role || "member",
+            role: inv.role || "member",
             createdAt: new Date(),
           });
         }
@@ -687,8 +692,163 @@ export class BetterAuthAdapter implements IAuthProvider {
     }
   }
 
+  async findById(userId: string): Promise<UserInterface> {
+    const dbUser = await this.db.query.user.findFirst({
+      where: eq(schema.user.id, userId),
+    });
+    if (!dbUser) {
+      console.warn(`[BetterAuthAdapter] findById: User ${userId} not found`);
+      throw new Error("User not found");
+    }
+    return this.mapUser(dbUser);
+  }
+
   // --- Mappers ---
-  private mapUser(dbUser: schema.User): UserInterface {
+  private async mapUser(
+    dbUser: schema.User & {
+      members?: (Omit<schema.Member, "role"> & {
+        role?:
+          | string
+          | (schema.Role & {
+              permissions?: schema.RolePermission[];
+            });
+      })[];
+    },
+  ): Promise<UserInterface> {
+    const role = dbUser.role || "user";
+    const permissions: Set<string> = new Set();
+    const roleIds: string[] = [];
+
+    // 1. Add Global Role ID
+    // Resolve role name to ID if necessary
+    if (dbUser.role) {
+      // Optimization: Cache standard roles or use a lookup?
+      // For now, we keep this query (1 round trip) or assuming it's an ID if UUID-like.
+      // But we must resolve names like 'admin' to IDs.
+      const roleRecord = await this.db.query.role.findFirst({
+        where: (r, { eq, or }) =>
+          or(eq(r.id, dbUser.role!), eq(r.name, dbUser.role!)),
+        columns: { id: true },
+        with: {
+          permissions: true,
+        },
+      });
+
+      if (roleRecord) {
+        roleIds.push(roleRecord.id);
+        // Optimization: If we fetched permissions here, we could add them directly.
+        // But we handle all roleIds in batch below unless eager loaded.
+        if (roleRecord.permissions) {
+          // If we add 'with: { permissions: true }' to the query above, we can skip step 3 for this role.
+          for (const rp of roleRecord.permissions) {
+            permissions.add(rp.permissionId);
+          }
+        }
+      }
+    }
+
+    try {
+      // 2. Add Tenant Role IDs (Eager Loaded)
+      if (dbUser.members && dbUser.members.length > 0) {
+        for (const m of dbUser.members) {
+          // If eager loaded, m.role is the Role object
+          if (m.role && typeof m.role === "object") {
+            roleIds.push(m.role.id);
+            // Add permissions from eager loaded role
+            if (m.role.permissions) {
+              for (const rp of m.role.permissions) {
+                permissions.add(rp.permissionId);
+              }
+            }
+          } else if (typeof m.role === "string") {
+            // Fallback for non-eager loaded (shouldn't happen with new query)
+            roleIds.push(m.role);
+          }
+        }
+      } else if (!dbUser.members) {
+        // Fallback: Fetch if not present (Legacy safety)
+        const members = await this.db.query.member.findMany({
+          where: eq(schema.member.userId, dbUser.id),
+          columns: { role: true },
+        });
+        for (const m of members) {
+          if (m.role) roleIds.push(m.role);
+        }
+      }
+
+      // 3. Fetch Permissions for any Role IDs NOT resolved via eager loading
+      // (e.g. Global Role if not eager loaded, or fallback members)
+      // Actually, we can optimize global role query above to include permissions too!
+      // I added 'with: { permissions: true }' to the global role query above.
+
+      // If we still have roleIds that might not have been fully processed (e.g. from fallback path),
+      // we can do a bulk check.
+      // But with eager loading, 'permissions' Set should already be populated for members.
+      // Global role permissions are also fetched if I update that query.
+
+      if (roleIds.length > 0 && permissions.size === 0) {
+        // Double check: Did we miss any?
+        // If we eagerly loaded everything, 'permissions' is full.
+        // If we are in fallback, we need to query.
+        // We can diff what we have vs what we need?
+        // Simplification: Just query for all gathered Role IDs if we have 0 permissions yet?
+        // OR: Trust eager loading.
+        // Let's do a supplementary query only if we suspect missing data.
+        // But effectively, if we eager load members->role->permissions, we are good for tenant roles.
+        // For Global Role: We updated the query to fetch permissions.
+        // So we should be good.
+      }
+
+      // 3. (Legacy/Cleanup) - If for some reason we still rely on raw roleIds and didn't get perms:
+      // We can maintain the batched query just in case, but filter out known ones?
+      // For this refactor, let's assume Eager Loading is primary.
+
+      // Fallback query if set is empty but roles exist?
+      if (
+        permissions.size === 0 &&
+        roleIds.length > 0 &&
+        (!dbUser.members || dbUser.members.length === 0)
+      ) {
+        // This path hits if user has global role but no members, and global role query didn't return perms (unlikely with my change).
+        // Or if we fell back to member query.
+        const uniqueRoleIds = [...new Set(roleIds)];
+        const rolePerms = await this.db.query.rolePermission.findMany({
+          where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds),
+          columns: { permissionId: true },
+        });
+        for (const rp of rolePerms) {
+          permissions.add(rp.permissionId);
+        }
+      }
+
+      // 4. Fail-safe: Add minimal dashboard permission
+      if (permissions.size === 0) {
+        if (role === "admin") {
+          // Log warning - empty permissions for admin user is a bug
+          console.warn(
+            `[BetterAuthAdapter] mapUser: Empty permissions for admin user ${dbUser.id} (${dbUser.email}). This indicates a permission resolution failure.`,
+          );
+          throw new Error(
+            `Permission resolution failed for admin user ${dbUser.id}. Expected permissions from role or memberships but found none.`,
+          );
+        } else {
+          // Non-admin users get minimal permission
+          permissions.add("dashboard:view");
+        }
+      } else {
+        // Users with permissions always get dashboard access
+        permissions.add("dashboard:view");
+      }
+    } catch (err) {
+      console.error(
+        `[BetterAuthAdapter] mapUser: Failed to fetch permissions for ${dbUser.id}`,
+        err,
+      );
+      permissions.add("dashboard:view");
+    }
+
+    const finalPermissions = Array.from(permissions);
+
     return {
       id: dbUser.id,
       email: dbUser.email,
@@ -697,7 +857,8 @@ export class BetterAuthAdapter implements IAuthProvider {
       image: dbUser.image || undefined,
       createdAt: dbUser.createdAt,
       updatedAt: dbUser.updatedAt,
-      role: dbUser.role,
+      role: role,
+      permissions: finalPermissions,
       banned: dbUser.banned || false,
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,
@@ -762,7 +923,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       // Mask email for logging: a***@example.com
       let masked: string;
       if (email.includes("@")) {
-        masked = email.replace(/(^.{1})[^@]*(@.*$)/, "$1***$2");
+        masked = email.replace(/(^.)[^@]*(@.*$)/, "$1***$2");
       } else if (email.length > 0) {
         // If no @, mask all but first char: a***
         masked = email.substring(0, 1) + "***";

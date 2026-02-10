@@ -71,7 +71,7 @@ describe('Users Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should accept all valid roles', () => {
+    it('should accept standard predefined roles', () => {
       const roles = ['admin', 'editor', 'viewer', 'user'];
 
       roles.forEach((role) => {

@@ -27,7 +27,7 @@ import { useToast } from "@/shared/hooks/use-toast";
 import slugify from "slugify";
 
 const CreateTenantSchema = z.object({
-    name: z.string().min(1, "Name is required"),
+    name: z.string().min(1, "Company Name is required"),
     slug: z.string().min(3, "Slug must be at least 3 chars").regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
     logo: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 });

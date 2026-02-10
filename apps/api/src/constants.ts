@@ -24,9 +24,11 @@ export const validateRequiredEnv = (): void => {
 
 // REQUIRED_* getters - aliases for backward compatibility and semantic clarity
 // These throw if env vars are missing (same behavior as identity getters)
-export const getRequiredSystemTenantId = getSystemTenantId;
-export const getRequiredOwnerRoleId = getOwnerRoleId;
-export const getRequiredAdminRoleId = getAdminRoleId;
-export const getRequiredMemberRoleId = getMemberRoleId;
+export {
+  getSystemTenantId as getRequiredSystemTenantId,
+  getOwnerRoleId as getRequiredOwnerRoleId,
+  getAdminRoleId as getRequiredAdminRoleId,
+  getMemberRoleId as getRequiredMemberRoleId,
+} from '@nexiom/identity';
 
 export { ALL_PERMISSIONS, isSystemPermission } from '@nexiom/identity';

@@ -3,9 +3,12 @@ import { generateFancyTenantName } from "./name-generator";
 
 describe("NameGenerator", () => {
   it("generateFancyTenantName returns a 2-word string", () => {
-    const name = generateFancyTenantName();
-    expect(name).toBeTypeOf("string");
-    // Expect Two Words, Capitalized. e.g. "Workable Santa"
-    expect(name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    // Run multiple times to verify consistency of random output
+    for (let i = 0; i < 10; i++) {
+      const name = generateFancyTenantName();
+      expect(name).toBeTypeOf("string");
+      // Expect Two Words, Capitalized. e.g. "Workable Santa"
+      expect(name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
+    }
   });
 });

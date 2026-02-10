@@ -35,8 +35,22 @@ describe("IdentityModule.register", () => {
     expect(() =>
       IdentityModule.register({
         betterAuthConfig: opts.betterAuthConfig,
+        constants: opts.constants,
+        // missing tokens
       } as unknown as IdentityModuleOptions),
     ).toThrow("required");
+  });
+
+  it("throws if constants missing", () => {
+    const opts = mkOptions();
+    expect(() =>
+      IdentityModule.register({
+        betterAuthConfig: opts.betterAuthConfig,
+        dbToken: opts.dbToken,
+        emailToken: opts.emailToken,
+        // missing constants
+      } as unknown as IdentityModuleOptions),
+    ).toThrow("constants are required");
   });
 
   it("wires providers and exports tokens", () => {
@@ -64,24 +78,31 @@ describe("IdentityModule.register", () => {
 
     // factories inject requested tokens
     // Verify providers use correct classes
-    const authProv = providers.find(
-      (p) => p.provide === AUTH_PROVIDER,
-    ) as ClassProvider;
+    const assertClassProvider = (
+      token: string | symbol,
+      name: string,
+    ): ClassProvider => {
+      const prov = providers.find((p) => p.provide === token);
+      if (!prov || !("useClass" in prov)) {
+        throw new Error(`${name} should be a ClassProvider`);
+      }
+      return prov;
+    };
+
+    // Verify providers use correct classes with safe type narrowing
+    const authProv = assertClassProvider(AUTH_PROVIDER, "AUTH_PROVIDER");
     expect(authProv.useClass).toBeDefined();
 
-    const userProv = providers.find(
-      (p) => p.provide === USER_PROVIDER,
-    ) as ClassProvider;
+    const userProv = assertClassProvider(USER_PROVIDER, "USER_PROVIDER");
     expect(userProv.useClass).toBeDefined();
 
-    const tenantProv = providers.find(
-      (p) => p.provide === TENANT_PROVIDER,
-    ) as ClassProvider;
+    const tenantProv = assertClassProvider(TENANT_PROVIDER, "TENANT_PROVIDER");
     expect(tenantProv.useClass).toBeDefined();
 
-    const permProv = providers.find(
-      (p) => p.provide === PERMISSION_PROVIDER,
-    ) as ClassProvider;
+    const permProv = assertClassProvider(
+      PERMISSION_PROVIDER,
+      "PERMISSION_PROVIDER",
+    );
     expect(permProv.useClass).toBeDefined();
   });
 
@@ -126,6 +147,30 @@ describe("IdentityModule.register", () => {
     // We expect the factory to throw
     await expect(optionsProvider!.useFactory()).rejects.toThrow(
       "must be provided",
+    );
+  });
+
+  it("registerAsync throws if constants missing", async () => {
+    const mod = IdentityModule.registerAsync({
+      imports: [],
+      useFactory: () =>
+        ({
+          betterAuthConfig: mkOptions().betterAuthConfig,
+          db: {} as unknown,
+          email: {} as unknown,
+          // Missing constants
+        }) as unknown as IdentityModuleOptions,
+      inject: [],
+    });
+
+    const providers = mod.providers as FactoryProvider[];
+    const optionsProvider = providers.find(
+      (p) => p.provide === IDENTITY_OPTIONS,
+    );
+
+    expect(optionsProvider).toBeDefined();
+    await expect(optionsProvider!.useFactory()).rejects.toThrow(
+      "constants must be provided",
     );
   });
 

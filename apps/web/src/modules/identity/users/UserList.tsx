@@ -2,7 +2,7 @@ import { useTable, useCan } from "@refinedev/core";
 
 import { Users } from "./Users";
 import { type UserTableItem } from "./types";
-import { CreateUserDialog } from "./CreateUserDialog";
+import { InviteUserDialog } from "./InviteUserDialog";
 
 interface UserListProps {
     basePath: string;
@@ -15,44 +15,56 @@ export const UserList = ({
 }: UserListProps) => {
     // Permission Check: Can create users?
     const { data: canCreate } = useCan({
-        resource: "admin/users", // Explicitly targeting the admin resource
+        resource: resource,
         action: "create",
     });
 
     // HEADLESS MAGIC: Refine handles fetching, pagination, sorting
     const table = useTable<UserTableItem>({
         resource: resource,
+
+        // Initial sorting
+        initialSorter: [
+            {
+                field: "createdAt",
+                order: "desc",
+            },
+        ],
+        // Fetch users based on resource (admin vs tenant is handled by resource + auth)
         syncWithLocation: true,
     });
 
-    const { tableQueryResult } = table;
-    const { data, isLoading } = tableQueryResult || {};
+    const {
+        tableQuery,
+    } = table;
+
+    const { data, isLoading } = tableQuery;
+
+    if (tableQuery?.error) {
+        console.error("Error loading users:", tableQuery.error);
+
+        return (
+            <div className="p-4 text-sm text-destructive-foreground bg-destructive/10 border border-destructive/20 rounded">
+                Error loading users: {tableQuery?.error?.message || "Unable to load users"}
+            </div>
+        );
+    }
 
     // Transform data to match shared component interface
     const users: UserTableItem[] = data?.data?.map((user) => ({
         id: user.id,
-        name: user.name,
+        name: user.name ?? (user.status === 'pending' ? 'Invited User' : ''),
         email: user.email,
-        role: user.memberRole || user.role, // Use memberRole if available (tenant view), fallback to global role
+        role: user.memberRole ?? user.role, // Use memberRole if available (tenant view), fallback to global role
         emailVerified: user.emailVerified,
-        status: "active"
+        status: user.status ?? "active" // Use API status (pending/active), fallback to active for legacy
     })) || [];
-
-    if (tableQueryResult?.error) {
-        console.error("Error loading users:", tableQueryResult.error);
-
-        return (
-            <div className="p-4 text-sm text-destructive-foreground bg-destructive/10 border border-destructive/20 rounded">
-                Error loading users: {tableQueryResult?.error?.message || "Unable to load users"}
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-4">
             {canCreate?.can && (
                 <div className="flex items-center justify-end">
-                    <CreateUserDialog />
+                    <InviteUserDialog resource={resource} />
                 </div>
             )}
 

@@ -65,7 +65,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
       const context = await this.fetchMemberContext(user.id, tenantId);
 
       if (context) {
-        // 3. Explicit Permissions (Scoped by fetchMemberContext logic)
+        // Explicit Permissions (Scoped by fetchMemberContext logic)
         context.permissions.forEach((p) => {
           if (p.resource === "*" && p.action === "*") {
             perms.push("*");
@@ -91,7 +91,7 @@ export class DrizzlePermissionAdapter implements IPermissionProvider {
         permOrgId: schema.rolePermission.organizationId,
       })
       .from(schema.member)
-      .innerJoin(schema.role, eq(schema.member.roleId, schema.role.id))
+      .innerJoin(schema.role, eq(schema.member.role, schema.role.id))
       .leftJoin(
         schema.rolePermission,
         eq(schema.role.id, schema.rolePermission.roleId),

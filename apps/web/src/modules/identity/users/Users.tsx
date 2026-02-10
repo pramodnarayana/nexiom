@@ -33,6 +33,8 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
     // PBAC: Check if user can manage users
     const canManageUsers = hasPermission(currentUser?.permissions, Resources.USERS, Actions.MANAGE);
 
+
+
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
 

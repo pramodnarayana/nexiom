@@ -251,7 +251,7 @@ describe('AuthService', () => {
         id: 'org1',
       });
 
-      const result = await service.createUser(input);
+      const result = await service.registerUser(input);
 
       expect(mockAuthProvider.createUser).toHaveBeenCalledWith(input);
       expect(mockTenantProvider.provisionTenantForUser).toHaveBeenCalledWith(
@@ -269,7 +269,7 @@ describe('AuthService', () => {
       );
 
       // Should not throw
-      const result = await service.createUser(input);
+      const result = await service.registerUser(input);
 
       expect(result).toEqual(expectedUser);
     });

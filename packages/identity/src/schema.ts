@@ -7,6 +7,7 @@ import {
   unique,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -37,6 +38,13 @@ export const session = pgTable("session", {
   token: text("token").notNull().unique(),
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
+  // PII / Retention Policy:
+  // IP Address and User Agent containing PII should be anonymized or retained only for
+  // a limited period (e.g., 30 days) for security auditing, then purged.
+  // TASK: Implement scheduled PII cleanup (Issue #TRACK-142)
+  // - Criteria: Run daily, older than 30d, anonymize fields, audit log
+  // - Owner: Security Team
+  // - Implementation: Create `runPIICleanup` job in background module
   ipAddress: text("ipAddress"),
   userAgent: text("userAgent"),
   userId: text("userId")
@@ -63,6 +71,8 @@ export const account = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // Security: Tokens typically should be encrypted at rest if they provide offline access.
+    // Passwords must be hashed (handled by BetterAuth adapter config).
     accessToken: text("accessToken"),
     refreshToken: text("refreshToken"),
     idToken: text("idToken"),
@@ -99,21 +109,35 @@ export const verification = pgTable("verification", {
 });
 
 // --- RBAC Tables ---
-export const permission = pgTable("permission", {
-  id: text("id").primaryKey(), // e.g., 'users:read'
-  resource: text("resource").notNull(), // e.g., 'users'
-  action: text("action").notNull(), // e.g., 'read'
-  description: text("description"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+export const permission = pgTable(
+  "permission",
+  {
+    id: text("id").primaryKey(), // e.g., 'users:read'
+    resource: text("resource").notNull(), // e.g., 'users'
+    action: text("action").notNull(), // e.g., 'read'
+    description: text("description"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => [
+    // Enforce unique (resource, action) pair to prevent duplicate definitions
+    unique("permission_resource_action_unique").on(t.resource, t.action),
+  ],
+);
 
-export const role = pgTable("role", {
-  id: text("id").primaryKey(), // e.g., 'admin', 'user'
-  name: text("name").notNull(), // e.g., 'Admin', 'User'
-  description: text("description"),
-  isSystem: boolean("isSystem").default(false).notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+export const role = pgTable(
+  "role",
+  {
+    id: text("id").primaryKey(), // e.g., 'admin', 'user'
+    name: text("name").notNull(), // e.g., 'Admin', 'User'
+    description: text("description"),
+    isSystem: boolean("isSystem").default(false).notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => [
+    // Enforce unique role name
+    unique("role_name_unique").on(t.name),
+  ],
+);
 
 export const rolePermission = pgTable(
   "role_permission",
@@ -133,7 +157,7 @@ export const rolePermission = pgTable(
     // Surrogate PK
     // Note: Use 'unique().nullsNotDistinct()' for simpler unique constraints if on PG15+,
     // OR use the sql implementation for robustness across versions/drivers as suggested.
-    // User requested "unique index on (roleId, permissionId, COALESCE(organizationId, '__global__'))"
+    // User requested "unique index on (roleId, permissionId, COALESCE(organizationId, '__NULL__'))"
     // Also requested "index for fast lookup" on organizationId.
     index("idx_role_permission_org_id").on(t.organizationId),
     // Advisory unique index for nullable organizationId to prevent duplicates in code-logic
@@ -175,21 +199,27 @@ export const organizationStatusEnum = pgEnum("organization_status", [
   "suspended",
 ]);
 
-export const organization = pgTable("organization", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  slug: text("slug").unique(),
-  logo: text("logo"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  metadata: text("metadata"),
-  status: organizationStatusEnum("status").default("active").notNull(),
-  isSystem: boolean("isSystem").default(false).notNull(),
-  deletedAt: timestamp("deletedAt"),
-});
+export const organization = pgTable(
+  "organization",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").unique(),
+    logo: text("logo"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    metadata: text("metadata"),
+    status: organizationStatusEnum("status").default("active").notNull(),
+    isSystem: boolean("isSystem").default(false).notNull(),
+    deletedAt: timestamp("deletedAt"),
+  },
+  (table) => [
+    check("organization_id_not_sentinel", sql`${table.id} <> '__NULL__'`),
+  ],
+);
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   members: many(member),
@@ -205,8 +235,10 @@ export const member = pgTable(
     }),
     userId: text("userId")
       .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
-    roleId: text("roleId")
+      .references(() => user.id, { onDelete: "cascade" }),
+    // NOTE: Column is named "role" (not "roleId") to match better-auth's organization plugin expectation.
+    // Do not rename to roleId without configuring better-auth to map it.
+    role: text("role")
       .notNull()
       .references(() => role.id, { onDelete: "restrict" }),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -229,14 +261,16 @@ export const memberRelations = relations(member, ({ one }) => ({
     references: [user.id],
   }),
   role: one(role, {
-    fields: [member.roleId],
+    fields: [member.role],
     references: [role.id],
   }),
 }));
 
 export const invitation = pgTable("invitation", {
   id: text("id").primaryKey(),
-  organizationId: text("organizationId").references(() => organization.id),
+  organizationId: text("organizationId").references(() => organization.id, {
+    onDelete: "cascade",
+  }),
   email: text("email").notNull(),
   role: text("role"),
   status: text("status").notNull(),
@@ -263,3 +297,5 @@ export type Session = typeof session.$inferSelect;
 export type Organization = typeof organization.$inferSelect;
 export type Member = typeof member.$inferSelect;
 export type Invitation = typeof invitation.$inferSelect;
+export type Role = typeof role.$inferSelect;
+export type RolePermission = typeof rolePermission.$inferSelect;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { authClient } from '@/shared/lib/auth-client';
@@ -20,9 +20,11 @@ if (!API_URL) throw new Error("VITE_API_URL is missing");
  */
 export function SignupPage() {
     const [email, setEmail] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [error, setError] = useState('');
+    const [error, setError] = useState<ReactNode>('');
     const [loading, setLoading] = useState(false);
 
     // Parse Query Params (for Invitation Flow)
@@ -56,10 +58,9 @@ export function SignupPage() {
         setLoading(true);
 
         try {
-            // Derive names from email for streamlined signup
-            const derivedName = email.split('@')[0];
-            const derivedFirstName = derivedName; // Valid default
-            const derivedLastName = "";
+            // Use provided names or derive names from email for streamlined signup (only if empty)
+            const derivedFirstName = firstName || email.split('@')[0];
+            const derivedLastName = lastName || "";
             const domain = email.split('@')[1];
             const derivedCompany = domain
                 ? domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1)
@@ -69,9 +70,16 @@ export function SignupPage() {
                 // --- INVITE FLOW (User Only + Auto Login + Auto Accept) ---
                 // We utilize the dedicated Atomic Endpoint for this.
 
-                const inviteIdParam = redirectUrl?.includes('id=')
-                    ? new URLSearchParams(redirectUrl.split('?')[1]).get('id')
-                    : null;
+                // Robust extraction using URL API
+                let inviteIdParam: string | null = null;
+                try {
+                    if (redirectUrl) {
+                        const urlObj = new URL(redirectUrl, window.location.origin);
+                        inviteIdParam = urlObj.searchParams.get('id');
+                    }
+                } catch (e) {
+                    console.error('[SignupPage] URL Parsing Error:', e);
+                }
 
                 if (!inviteIdParam) {
                     throw new Error("Invalid Invitation Link");
@@ -85,9 +93,15 @@ export function SignupPage() {
                     invitationId: inviteIdParam
                 };
 
+                // Remove logging or redact sensitive fields
+                if (import.meta.env.DEV) {
+                    console.log('[SignupPage] Sending Payload:', { ...payload, password: '[REDACTED]' });
+                }
+
                 const res = await fetch(`${API_URL}/auth/complete-invite`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify(payload),
                 });
 
@@ -97,6 +111,10 @@ export function SignupPage() {
                 }
 
                 const sessionData = await res.json(); // { session: ..., user: ... }
+                // Remove in production or redact sensitive data
+                if (import.meta.env.DEV) {
+                    console.log('[SignupPage] Response received for user:', sessionData?.user?.email);
+                }
 
                 if (sessionData?.session) {
                     // Update Auth Context with new Session
@@ -149,10 +167,34 @@ export function SignupPage() {
 
         } catch (err: unknown) {
             console.error(err);
+            let errorMessage = "An unknown error occurred";
             if (err instanceof Error) {
-                setError(err.message);
+                errorMessage = err.message;
+            }
+
+            // SMART ERROR HANDLING: User already exists (e.g. was soft-deleted or re-invited)
+            if (errorMessage.toLowerCase().includes("already registered") || errorMessage.toLowerCase().includes("already exists")) {
+                setError(
+                    <div className="flex flex-col gap-2 items-center">
+                        <span>It looks like you already have an account.</span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-1 border-primary text-primary hover:bg-primary/10"
+                            onClick={() => {
+                                const params = new URLSearchParams();
+                                if (redirectUrl) params.set('to', redirectUrl);
+                                if (email) params.set('email', email);
+                                const search = params.toString();
+                                navigate(`/login${search ? `?${search}` : ''}`);
+                            }}
+                        >
+                            Log in to Accept Invite
+                        </Button>
+                    </div>
+                );
             } else {
-                setError("An unknown error occurred");
+                setError(errorMessage);
             }
         } finally {
             setLoading(false);
@@ -169,7 +211,7 @@ export function SignupPage() {
                     <div className="text-sm text-muted-foreground mt-2">
                         Already have an account?{' '}
                         <Link
-                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl)}` : "/login"}
+                            to={isInviteFlow ? `/login?to=${encodeURIComponent(redirectUrl || '')}` : "/login"}
                             className="underline underline-offset-4 hover:text-primary"
                         >
                             Sign In
@@ -178,6 +220,35 @@ export function SignupPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Input
+                                    id="firstName"
+                                    placeholder="First Name"
+                                    type="text"
+                                    autoCapitalize="words"
+                                    autoCorrect="off"
+                                    disabled={loading}
+                                    value={firstName}
+                                    onChange={(e) => setFirstName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Input
+                                    id="lastName"
+                                    placeholder="Last Name"
+                                    type="text"
+                                    autoCapitalize="words"
+                                    autoCorrect="off"
+                                    disabled={loading}
+                                    value={lastName}
+                                    onChange={(e) => setLastName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+
                         <div className="grid gap-2">
                             <Input
                                 type="email"
@@ -218,9 +289,9 @@ export function SignupPage() {
                     </form>
 
                     {error && (
-                        <p className="mt-4 text-sm text-center text-destructive font-medium">
+                        <div className="mt-4 text-sm text-center text-destructive font-medium">
                             {error}
-                        </p>
+                        </div>
                     )}
 
                     <div className="relative">

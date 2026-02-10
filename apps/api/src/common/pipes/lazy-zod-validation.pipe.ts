@@ -1,21 +1,16 @@
 import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { ZodSchema } from 'zod';
+import { ZodType } from 'zod';
 
 @Injectable()
 export class LazyZodValidationPipe implements PipeTransform {
-  private schema: ZodSchema | undefined;
+  private pipe: PipeTransform | undefined;
 
-  private pipe: any;
-
-  constructor(private readonly schemaFactory: () => ZodSchema) {}
+  constructor(private readonly schemaFactory: () => ZodType) {}
 
   transform(value: any, metadata: ArgumentMetadata) {
-    if (!this.schema) {
-      this.schema = this.schemaFactory();
-      this.pipe = new ZodValidationPipe(this.schema);
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    this.pipe ??= new ZodValidationPipe(this.schemaFactory());
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.pipe.transform(value, metadata);
   }
 }

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
@@ -8,6 +9,9 @@ async function bootstrap() {
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT || 3000;
+
+  // Validate DTOs
+  app.useGlobalPipes(new ZodValidationPipe());
 
   // Enable CORS
   app.enableCors({
@@ -45,12 +49,13 @@ async function bootstrap() {
 }
 
 // Top-level await is not available in CommonJS.
-
-void (async () => {
+const start = async () => {
   try {
     await bootstrap();
   } catch (err) {
     Logger.error('Bootstrap failed', err);
     process.exit(1);
   }
-})();
+};
+
+void start();

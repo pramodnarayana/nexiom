@@ -77,7 +77,7 @@ export class AuthController {
 
   @Post('signup')
   async signup(@Body() body: Signup): Promise<User> {
-    return this.authService.createUser(body);
+    return this.authService.registerUser(body);
   }
 
   /**
@@ -127,18 +127,35 @@ export class AuthController {
     @Body() body: CompleteInvite,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.logger.log(`[CompleteInvite] Received request for ${body.email}`);
+    this.logger.debug(
+      `[CompleteInvite] Payload: invitationId=${body.invitationId}, firstName=${body.firstName}, lastName=${body.lastName}`,
+    );
+
     // Race Condition Fix: Validate Invitation BEFORE creating user
     const invitation = await this.invitationsService.get(body.invitationId);
 
     if (!invitation) {
+      this.logger.warn(
+        `[CompleteInvite] Invalid Invitation ID: ${body.invitationId}`,
+      );
       throw new BadRequestException('Invalid Invitation ID');
     }
-    // ...
+
+    this.logger.debug(
+      `[CompleteInvite] Found invitation: ${invitation.id}, status: ${invitation.status}`,
+    );
+
     if (invitation.status !== 'pending') {
+      this.logger.warn(
+        `[CompleteInvite] Invitation not pending: ${invitation.status}`,
+      );
       throw new BadRequestException('Invitation is no longer pending/valid');
     }
 
     if (new Date(invitation.expiresAt) < new Date()) {
+      const expiryLog = new Date(invitation.expiresAt).toISOString();
+      this.logger.warn(`[CompleteInvite] Invitation expired: ${expiryLog}`);
       throw new BadRequestException('Invitation has expired');
     }
 
@@ -158,8 +175,10 @@ export class AuthController {
       });
       await this.authService.setPassword(user.id, body.password);
     } else {
-      // Create new user (standard flow)
+      // Create new user (PURE FLOW - No Auto Provisioning)
       isNewUser = true;
+      // We use createUser (Identity Only) because the Invite flow handles organization membership separately.
+      // This prevents the "Double Organization" bug.
       user = await this.authService.createUser({
         email: body.email,
         password: body.password,

@@ -52,7 +52,9 @@ export class AuthService {
     };
   }
 
-  async getSessionFromHeaders(headers: Headers) {
+  async getSessionFromHeaders(
+    headers: Headers | Record<string, string | string[] | undefined>,
+  ) {
     const result = await this.authProvider.getSessionFromHeaders(headers);
     if (!result) return null;
     return {
@@ -181,10 +183,20 @@ export class AuthService {
 
   // Delegated methods
 
+  // Pure User Creation (Identity Only)
   async createUser(input: CreateUserInput) {
+    // 1. Create User via Adapter (Pure)
     const user = await this.authProvider.createUser(input);
+    return user;
+  }
 
-    // Auto-provision tenant with fancy name + admin role
+  // Orchestrated Registration (Identity + Tenant + Emails)
+  // Used for: Public Signups
+  async registerUser(input: CreateUserInput) {
+    // 1. Create User
+    const user = await this.createUser(input);
+
+    // 2. Provision Tenant (App Policy)
     try {
       await this.tenantProvider.provisionTenantForUser(user.id);
     } catch (error) {
@@ -192,10 +204,8 @@ export class AuthService {
         `Failed to auto-provision tenant for user ${user.id}`,
         error,
       );
-      // We don't fail the signup if tenant provisioning fails,
-      // but we should probably alert or retry.
-      // For now, logging effectively "swallows" the error but preserves the user account.
-      // Ideally, transaction should be used, but AuthProvider is separate.
+      // Swallow error to preserve user account?
+      // Or we could rollback. For now, we swallow as per original logic.
     }
 
     return user;

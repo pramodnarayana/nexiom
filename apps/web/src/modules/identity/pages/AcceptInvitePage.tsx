@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { Loader2, XCircle } from "lucide-react";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { Button } from "@/shared/components/ui/button";
 
 export const AcceptInvitePage = () => {
     const [searchParams] = useSearchParams();
@@ -15,14 +16,12 @@ export const AcceptInvitePage = () => {
     const inviteId = id || urlToken;
 
     // Derived State
+    const [error, setError] = useState<string | null>(null);
+    const [retryCount, setRetryCount] = useState(0);
 
     // Auto-validate/redirection logic
     useEffect(() => {
-        if (!inviteId) {
-            // Error state handled by render
-            return;
-        }
-
+        if (!inviteId) return;
         if (isLoading) return; // Wait for auth check
 
         // 1. Logged In -> Silent Accept (Idempotent) then Redirect
@@ -30,10 +29,7 @@ export const AcceptInvitePage = () => {
             const silentAccept = async () => {
                 try {
                     const API_URL = import.meta.env.VITE_API_URL;
-                    // Attempt to accept using the active session.
-                    // If already a member, backend will likely throw or return success.
-                    // Ideally backend should be idempotent.
-                    await fetch(`${API_URL}/invitations/accept`, {
+                    const res = await fetch(`${API_URL}/invitations/accept`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -42,13 +38,26 @@ export const AcceptInvitePage = () => {
                         credentials: 'include',
                         body: JSON.stringify({ invitationId: inviteId }),
                     });
-                    // We intentionally ignore potential errors (e.g. "Already member")
-                    // and proceed to dashboard.
-                } catch (e) {
-                    // Ignore errors (Idempotency)
-                    console.warn("Silent accept failed or already member", e);
-                } finally {
+
+                    if (!res.ok) {
+                        let message = "Failed to accept invitation";
+                        try {
+                            const data = await res.json();
+                            message = data.message || message;
+                        } catch {
+                            // Response wasn't JSON, use default message
+                        }
+                        throw new Error(message);
+                    }
+
+                    // Success -> Dashboard
                     navigate('/dashboard', { replace: true });
+
+                } catch (e: unknown) {
+                    console.error("Silent accept failed:", e);
+                    // CRITICAL FIX: Do NOT auto-redirect on failure. Show error.
+                    const message = e instanceof Error ? e.message : "Failed to accept invitation";
+                    setError(message);
                 }
             };
 
@@ -57,12 +66,11 @@ export const AcceptInvitePage = () => {
         }
 
         // 2. Not Logged In -> Direct Redirect to Signup (One-Click Join)
-        // We pass the invite context via 'to' param so SignupPage can auto-accept.
         const email = searchParams.get('email') ?? '';
         const target = `/signup?to=${encodeURIComponent(`/invite/accept?id=${inviteId}`)}&email=${encodeURIComponent(email)}`;
         navigate(target, { replace: true });
 
-    }, [inviteId, user, isLoading, navigate, searchParams, token]);
+    }, [inviteId, user, isLoading, navigate, searchParams, token, retryCount]);
 
     // Polished UI matching LoginPage
     return (
@@ -77,7 +85,29 @@ export const AcceptInvitePage = () => {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center py-6 gap-4">
-                    {!inviteId ? (
+                    {error ? (
+                        <div className="text-center space-y-4">
+                            <div className="flex justify-center text-destructive mb-2">
+                                <XCircle className="h-10 w-10" />
+                            </div>
+                            <p className="text-sm font-medium text-destructive">
+                                {error}
+                            </p>
+                            <div className="flex gap-2 justify-center">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setError(null);
+                                        setRetryCount(prev => prev + 1);
+                                    }}
+                                >
+                                    Retry
+                                </Button>
+                                <Button variant="default" size="sm" onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+                            </div>
+                        </div>
+                    ) : !inviteId ? (
                         <div className="text-center space-y-2">
                             <div className="flex justify-center text-destructive mb-2">
                                 <XCircle className="h-10 w-10" />

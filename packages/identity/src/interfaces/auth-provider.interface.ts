@@ -15,6 +15,7 @@ export interface CreateInvitationInput {
    * Expiration duration in seconds.
    */
   expiresIn?: number;
+  headers?: Headers | Record<string, string | string[] | undefined>;
 }
 
 export interface IAuthProvider {
@@ -42,4 +43,5 @@ export interface IAuthProvider {
   setPassword?(userId: string, password: string): Promise<void>;
 
   resendVerificationEmail?(email: string): Promise<void>;
+  findById?(userId: string): Promise<User>;
 }
