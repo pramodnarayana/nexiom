@@ -20,6 +20,28 @@ export const user = pgTable("user", {
   image: text("image"),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
+  /**
+   * LEGACY FIELD: Global platform role designation (non-authoritative)
+   *
+   * **IMPORTANT**: This field is a TRANSIENT fallback only and should NOT be used for
+   * permission checks. The authoritative role for RBAC is `member.role` (FK to role table).
+   *
+   * **Architecture**:
+   * - `user.role`: Legacy global label, defaults to 'member'. Not tied to RBAC system.
+   * - `member.role`: Authoritative organization-scoped role (FK to role table) used for
+   *   all permission checks via RBAC.
+   *
+   * **When to use**:
+   * - `user.role`: ONLY as migration fallback in UI (e.g., `member.role ?? user.role`)
+   *   when member record doesn't exist yet. Do NOT use for authorization.
+   * - `member.role`: ALWAYS use for permission checks and authorization logic.
+   *
+   * **Migration Path**: This field exists for backward compatibility during migration from
+   * global roles to organization-scoped RBAC. Once all users have member records, this field
+   * can be deprecated and removed.
+   *
+   * @deprecated Use member.role for all authorization and permission checks
+   */
   role: text("role").default("member"),
   banned: boolean("banned"),
   banReason: text("banReason"),

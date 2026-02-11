@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import path from 'node:path';
 import type { Client } from 'pg';
 
 /**
@@ -10,6 +11,9 @@ import type { Client } from 'pg';
 export class DatabaseManager {
   private readonly ALLOWED_ENVS = ['development', 'test', 'local'];
 
+  // Cache pg module to avoid repeated dynamic imports
+  private static cachedPg: typeof import('pg') | null = null;
+
   /**
    * Helper to execute database operations with optional client reuse
    * If client is provided, reuses it; otherwise creates and closes a new one
@@ -18,7 +22,9 @@ export class DatabaseManager {
     client: Client | undefined,
     fn: (c: Client) => Promise<T>,
   ): Promise<T> {
-    const { Client: PgClient } = await import('pg');
+    // Use cached pg module or load it once
+    DatabaseManager.cachedPg ??= await import('pg');
+    const { Client: PgClient } = DatabaseManager.cachedPg;
     const dbUrl = process.env.DATABASE_URL;
 
     if (!dbUrl) {
@@ -139,9 +145,11 @@ export class DatabaseManager {
    */
   migrate(): void {
     console.log('🔨 Running migrations...');
+    const cwd = path.resolve(__dirname, '../..');
     // Drizzle Kit is a CLI tool, so we still use execSync here (local execution, not docker)
     execSync('pnpm drizzle-kit migrate', {
       stdio: 'inherit',
+      cwd,
       env: { ...process.env, FORCE_COLOR: '1' },
     });
 
@@ -153,6 +161,7 @@ export class DatabaseManager {
    * Creates system organization and seeds RBAC data
    */
   async seed(): Promise<void> {
+    this.assertSafeEnvironment();
     console.log('🌱 Seeding database...');
 
     const { drizzle } = await import('drizzle-orm/node-postgres');
@@ -217,10 +226,17 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log('🧹 Truncating all tables...');
 
+    const { Client } = await import('pg');
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) throw new Error('DATABASE_URL is not defined');
+    const client = new Client({ connectionString: dbUrl });
+    await client.connect();
+
     // Dynamically discover all tables from Postgres catalog
     // This is more robust than iterating schema exports which can have symbol/version mismatches
     const tables = await this.querySql<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
+      client,
     );
 
     if (tables.length === 0) {
@@ -229,13 +245,17 @@ export class DatabaseManager {
     }
 
     try {
-      const quotedTables = tables.map((t) => `"${t.table_name}"`).join(', ');
+      const quotedTables = tables
+        .map((t) => `"${t.table_name.replace(/"/g, '""')}"`)
+        .join(', ');
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
       await this.execSql(sql);
       console.log(`  ✓ Truncated ${tables.length} tables`);
     } catch (error) {
       console.log(`  ⚠️  Truncate failed: ${String(error)}`);
       throw error;
+    } finally {
+      await client.end();
     }
   }
 
