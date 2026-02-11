@@ -1,5 +1,37 @@
 // Central schema re-export for Drizzle ORM
 // This file aggregates all schema definitions from different modules
 
-// Modules
-export * from '@nexiom/identity';
+// Import directly from schema source file to avoid pulling in adapters/decorators from package index
+export {
+  user,
+  session,
+  account,
+  verification,
+  organization,
+  member,
+  invitation,
+  role,
+  permission,
+  rolePermission,
+  userRelations,
+  sessionRelations,
+  accountRelations,
+  organizationRelations,
+  memberRelations,
+  invitationRelations,
+  roleRelations,
+  permissionRelations,
+  rolePermissionRelations,
+  organizationStatusEnum,
+} from '@nexiom/identity/src/schema';
+
+export type {
+  User,
+  Session,
+  Organization,
+  Member,
+  Invitation,
+  Role,
+  Permission,
+  RolePermission,
+} from '@nexiom/identity/src/schema';

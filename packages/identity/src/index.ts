@@ -39,4 +39,3 @@ export * from "./adapters/drizzle-role.adapter";
 
 export * from "./identity.module";
 export * from "./constants";
-export * from "./utils/rbac-seeding";

@@ -11,8 +11,7 @@
     "test:cov": "vitest run --coverage",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "seed": "tsx src/scripts/seed-rbac.ts"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
