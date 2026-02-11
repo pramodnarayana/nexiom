@@ -28,6 +28,9 @@
     "paths": {
       "@nexiom/identity": [
         "../../packages/identity/src"
+      ],
+      "@nexiom/identity/*": [
+        "../../packages/identity/src/*"
       ]
     }
   },

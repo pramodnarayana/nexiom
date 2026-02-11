@@ -7,12 +7,12 @@ CREATE TABLE "account" (
 	"accessToken" text,
 	"refreshToken" text,
 	"idToken" text,
-	"accessTokenExpiresAt" timestamp,
-	"refreshTokenExpiresAt" timestamp,
+	"accessTokenExpiresAt" timestamp with time zone,
+	"refreshTokenExpiresAt" timestamp with time zone,
 	"scope" text,
 	"password" text,
-	"createdAt" timestamp NOT NULL,
-	"updatedAt" timestamp NOT NULL,
+	"createdAt" timestamp with time zone NOT NULL,
+	"updatedAt" timestamp with time zone NOT NULL,
 	CONSTRAINT "account_user_provider_unique" UNIQUE("userId","providerId"),
 	CONSTRAINT "account_provider_account_unique" UNIQUE("providerId","accountId")
 );
@@ -23,9 +23,9 @@ CREATE TABLE "invitation" (
 	"email" text NOT NULL,
 	"role" text,
 	"status" text NOT NULL,
-	"expiresAt" timestamp NOT NULL,
+	"expiresAt" timestamp with time zone NOT NULL,
 	"inviterId" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "member" (
@@ -33,9 +33,8 @@ CREATE TABLE "member" (
 	"organizationId" text,
 	"userId" text NOT NULL,
 	"role" text NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"deletedAt" timestamp,
-	CONSTRAINT "member_org_user_unique" UNIQUE("organizationId","userId")
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"deletedAt" timestamp with time zone
 );
 --> statement-breakpoint
 CREATE TABLE "organization" (
@@ -43,12 +42,12 @@ CREATE TABLE "organization" (
 	"name" text NOT NULL,
 	"slug" text,
 	"logo" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
 	"metadata" text,
 	"status" "organization_status" DEFAULT 'active' NOT NULL,
 	"isSystem" boolean DEFAULT false NOT NULL,
-	"deletedAt" timestamp,
+	"deletedAt" timestamp with time zone,
 	CONSTRAINT "organization_slug_unique" UNIQUE("slug"),
 	CONSTRAINT "organization_id_not_sentinel" CHECK ("organization"."id" <> '__NULL__')
 );
@@ -58,7 +57,7 @@ CREATE TABLE "permission" (
 	"resource" text NOT NULL,
 	"action" text NOT NULL,
 	"description" text,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "permission_resource_action_unique" UNIQUE("resource","action")
 );
 --> statement-breakpoint
@@ -67,7 +66,7 @@ CREATE TABLE "role" (
 	"name" text NOT NULL,
 	"description" text,
 	"isSystem" boolean DEFAULT false NOT NULL,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "role_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
@@ -80,10 +79,10 @@ CREATE TABLE "role_permission" (
 --> statement-breakpoint
 CREATE TABLE "session" (
 	"id" text PRIMARY KEY NOT NULL,
-	"expiresAt" timestamp NOT NULL,
+	"expiresAt" timestamp with time zone NOT NULL,
 	"token" text NOT NULL,
-	"createdAt" timestamp NOT NULL,
-	"updatedAt" timestamp NOT NULL,
+	"createdAt" timestamp with time zone NOT NULL,
+	"updatedAt" timestamp with time zone NOT NULL,
 	"ipAddress" text,
 	"userAgent" text,
 	"userId" text NOT NULL,
@@ -97,13 +96,13 @@ CREATE TABLE "user" (
 	"email" text NOT NULL,
 	"emailVerified" boolean NOT NULL,
 	"image" text,
-	"createdAt" timestamp NOT NULL,
-	"updatedAt" timestamp NOT NULL,
+	"createdAt" timestamp with time zone NOT NULL,
+	"updatedAt" timestamp with time zone NOT NULL,
 	"role" text DEFAULT 'member',
 	"banned" boolean,
 	"banReason" text,
-	"banExpires" timestamp,
-	"deletedAt" timestamp,
+	"banExpires" timestamp with time zone,
+	"deletedAt" timestamp with time zone,
 	CONSTRAINT "user_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
@@ -111,9 +110,9 @@ CREATE TABLE "verification" (
 	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
-	"expiresAt" timestamp NOT NULL,
-	"createdAt" timestamp,
-	"updatedAt" timestamp
+	"expiresAt" timestamp with time zone NOT NULL,
+	"createdAt" timestamp with time zone,
+	"updatedAt" timestamp with time zone
 );
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -127,7 +126,7 @@ ALTER TABLE "role_permission" ADD CONSTRAINT "role_permission_permissionId_permi
 ALTER TABLE "role_permission" ADD CONSTRAINT "role_permission_organizationId_organization_id_fk" FOREIGN KEY ("organizationId") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_impersonatedBy_user_id_fk" FOREIGN KEY ("impersonatedBy") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "member_user_idx" ON "member" USING btree ("userId");--> statement-breakpoint
+CREATE UNIQUE INDEX "member_null_org_user_idx" ON "member" USING btree ("userId",COALESCE("organizationId", '__NULL__'));--> statement-breakpoint
 CREATE INDEX "member_org_idx" ON "member" USING btree ("organizationId");--> statement-breakpoint
 CREATE INDEX "idx_role_permission_org_id" ON "role_permission" USING btree ("organizationId");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_role_permission_unique" ON "role_permission" USING btree ("roleId","permissionId",COALESCE("organizationId", '__NULL__'));

@@ -10,16 +10,46 @@ export class DatabaseManager {
   private readonly ALLOWED_ENVS = ['development', 'test', 'local'];
 
   /**
-   * Execute psql command via Docker
+   * Execute SQL query via direct PG connection
    */
-  private execPsql(sqlCommand: string): void {
-    const containerName = 'nexiom-postgres-1';
-    const command = String.raw`docker exec ${containerName} psql -U user -d nexiom_local -c "${sqlCommand.replaceAll('"', '\\"')}"`;
+  private async execSql(sql: string): Promise<void> {
+    const { Client } = await import('pg');
+    const dbUrl = process.env.DATABASE_URL;
 
-    execSync(command, {
-      stdio: 'inherit',
-      env: { ...process.env, FORCE_COLOR: '1' },
-    });
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    const client = new Client({ connectionString: dbUrl });
+    await client.connect();
+
+    try {
+      await client.query(sql);
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
+   * Execute SQL query and return rows
+   */
+  private async querySql<T = any>(sql: string): Promise<T[]> {
+    const { Client } = await import('pg');
+    const dbUrl = process.env.DATABASE_URL;
+
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    const client = new Client({ connectionString: dbUrl });
+    await client.connect();
+
+    try {
+      const res = await client.query(sql);
+      return res.rows as T[];
+    } finally {
+      await client.end();
+    }
   }
 
   /**
@@ -38,22 +68,22 @@ export class DatabaseManager {
    * Drop all database schemas (drizzle + public)
    * Completely wipes the database
    */
-  dropAll(): void {
+  async dropAll(): Promise<void> {
     this.assertSafeEnvironment();
     console.log('🗑️  Dropping all schemas...');
 
     try {
       // Drop drizzle schema (migration tracking)
-      this.execPsql('DROP SCHEMA IF EXISTS drizzle CASCADE;');
+      await this.execSql('DROP SCHEMA IF EXISTS drizzle CASCADE;');
       console.log('  ✓ Dropped drizzle schema');
 
       // Drop public schema (all tables)
-      this.execPsql('DROP SCHEMA IF EXISTS public CASCADE;');
+      await this.execSql('DROP SCHEMA IF EXISTS public CASCADE;');
       console.log('  ✓ Dropped public schema');
 
       // Recreate public schema
-      this.execPsql('CREATE SCHEMA public;');
-      this.execPsql('GRANT ALL ON SCHEMA public TO PUBLIC;');
+      await this.execSql('CREATE SCHEMA public;');
+      await this.execSql('GRANT ALL ON SCHEMA public TO PUBLIC;');
       console.log('  ✓ Recreated public schema');
     } catch (error) {
       throw new Error(
@@ -67,7 +97,7 @@ export class DatabaseManager {
    */
   migrate(): void {
     console.log('🔨 Running migrations...');
-
+    // Drizzle Kit is a CLI tool, so we still use execSync here (local execution, not docker)
     execSync('pnpm drizzle-kit migrate', {
       stdio: 'inherit',
       env: { ...process.env, FORCE_COLOR: '1' },
@@ -88,7 +118,7 @@ export class DatabaseManager {
     const schema = await import('./schema');
     const { eq } = await import('drizzle-orm');
     const { seedSystemRbac } =
-      await import('@nexiom/identity/src/utils/rbac-seeding');
+      await import('@nexiom/identity/utils/rbac-seeding');
     const {
       getRequiredOwnerRoleId,
       getRequiredAdminRoleId,
@@ -141,53 +171,28 @@ export class DatabaseManager {
   /**
    * Truncate all tables (preserves schema)
    */
-  truncateAll(): void {
+  async truncateAll(): Promise<void> {
     this.assertSafeEnvironment();
     console.log('🧹 Truncating all tables...');
 
-    // List of all known tables
-    const allTables = [
-      'invitation',
-      'member',
-      'session',
-      'account',
-      'verification',
-      'organization',
-      'user',
-      'role',
-      'permission',
-      'role_permission',
-    ];
+    // Dynamically discover all tables from Postgres catalog
+    // This is more robust than iterating schema exports which can have symbol/version mismatches
+    const tables = await this.querySql<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
+    );
 
-    // Try truncating all tables first
-    try {
-      const quotedTables = allTables.map((t) => `"${t}"`).join(', ');
-      const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
-      this.execPsql(sql);
-      console.log(`  ✓ Truncated ${allTables.length} tables`);
-      return; // Success, exit early
-    } catch {
-      // Some tables don't exist, continue to fallback
+    if (tables.length === 0) {
+      console.log('  ℹ️  No tables found in public schema to truncate');
+      return;
     }
 
-    // Fallback: truncate only core tables (RBAC tables may not exist yet)
-    const coreTables = [
-      'account',
-      'member',
-      'session',
-      'organization',
-      'user',
-      'verification',
-    ];
-
     try {
-      const quotedCore = coreTables.map((t) => `"${t}"`).join(', ');
-      const sql = `TRUNCATE TABLE ${quotedCore} CASCADE;`;
-      this.execPsql(sql);
-      console.log(`  ✓ Truncated ${coreTables.length} core tables`);
-    } catch {
-      // Even core tables don't exist - database is likely empty
-      console.log('  ℹ️  No tables to truncate (database may be empty)');
+      const quotedTables = tables.map((t) => `"${t.table_name}"`).join(', ');
+      const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
+      await this.execSql(sql);
+      console.log(`  ✓ Truncated ${tables.length} tables`);
+    } catch (error) {
+      console.log(`  ⚠️  Truncate failed: ${String(error)}`);
     }
   }
 
@@ -199,7 +204,7 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log('🆕 Fresh database install...\n');
 
-    this.dropAll();
+    await this.dropAll();
     console.log();
 
     this.migrate();
@@ -219,7 +224,7 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log('🔄 Resetting database...\n');
 
-    this.truncateAll();
+    await this.truncateAll();
     console.log();
 
     await this.seed();

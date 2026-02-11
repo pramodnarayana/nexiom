@@ -30,7 +30,7 @@ async function main() {
   try {
     switch (command) {
       case 'drop':
-        manager.dropAll();
+        await manager.dropAll();
         break;
       case 'migrate':
         manager.migrate();

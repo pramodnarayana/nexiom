@@ -34,4 +34,6 @@ export type {
   Role,
   Permission,
   RolePermission,
+  Account,
+  Verification,
 } from '@nexiom/identity/src/schema';

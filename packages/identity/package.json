@@ -3,6 +3,12 @@
   "version": "0.0.1",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./utils/rbac-seeding": "./src/utils/rbac-seeding.ts",
+    "./src/schema": "./src/schema.ts",
+    "./src/constants": "./src/constants.ts"
+  },
   "scripts": {
     "clean": "rimraf dist",
     "prebuild": "npm run clean",

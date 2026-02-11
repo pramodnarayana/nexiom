@@ -1,8 +1,52 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseManager } from './database-manager';
 import { execSync } from 'node:child_process';
 
+// Hoisted mocks for dynamic imports
+const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
+  drizzleMocks: {
+    insert: vi.fn(),
+    query: {
+      organization: {
+        findFirst: vi.fn(),
+      },
+    },
+  },
+  rbacMocks: {
+    seedSystemRbac: vi.fn(),
+  },
+  constantMocks: {
+    getRequiredOwnerRoleId: vi.fn(() => 'owner-role'),
+    getRequiredAdminRoleId: vi.fn(() => 'admin-role'),
+    getRequiredMemberRoleId: vi.fn(() => 'member-role'),
+    getRequiredSystemTenantId: vi.fn(() => 'system-tenant'),
+  },
+}));
+
+// Mock dependencies
 vi.mock('node:child_process');
+vi.mock('pg', () => {
+  const mClient = {
+    connect: vi.fn(),
+    query: vi.fn(),
+    end: vi.fn(),
+  };
+  return { Client: vi.fn(() => mClient) };
+});
+
+vi.mock('drizzle-orm/node-postgres', () => ({
+  drizzle: vi.fn(() => ({
+    insert: drizzleMocks.insert,
+    query: drizzleMocks.query,
+  })),
+}));
+
+vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
+  seedSystemRbac: rbacMocks.seedSystemRbac,
+}));
+
+vi.mock('../constants', () => constantMocks);
 
 describe('DatabaseManager', () => {
   let manager: DatabaseManager;
@@ -10,8 +54,16 @@ describe('DatabaseManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
     process.env.NODE_ENV = 'test';
+    process.env.DATABASE_URL = 'postgres://test:test@localhost:5432/test';
     manager = new DatabaseManager();
+
+    // Default mock behaviors
+    drizzleMocks.insert.mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
+    drizzleMocks.query.organization.findFirst.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -19,21 +71,21 @@ describe('DatabaseManager', () => {
   });
 
   describe('Environment Safety', () => {
-    it('should allow operations in test environment', () => {
+    it('should allow operations in test environment', async () => {
       process.env.NODE_ENV = 'test';
-      expect(() => manager.dropAll()).not.toThrow();
+      await expect(manager.dropAll()).resolves.not.toThrow();
     });
 
-    it('should allow operations in development environment', () => {
+    it('should allow operations in development environment', async () => {
       process.env.NODE_ENV = 'development';
-      expect(() => new DatabaseManager().dropAll()).not.toThrow();
+      await expect(new DatabaseManager().dropAll()).resolves.not.toThrow();
     });
 
-    it('should block destructive operations in production', () => {
+    it('should block destructive operations in production', async () => {
       process.env.NODE_ENV = 'production';
       const prodManager = new DatabaseManager();
 
-      expect(() => prodManager.dropAll()).toThrow(
+      await expect(prodManager.dropAll()).rejects.toThrow(
         'Destructive database operations only allowed',
       );
     });
@@ -45,99 +97,178 @@ describe('DatabaseManager', () => {
       await expect(stagingManager.fresh()).rejects.toThrow(
         'Destructive database operations only allowed in',
       );
+      await expect(stagingManager.dropAll()).rejects.toThrow(
+        'Destructive database operations only allowed in',
+      );
+      await expect(stagingManager.truncateAll()).rejects.toThrow(
+        'Destructive database operations only allowed in',
+      );
+      await expect(stagingManager.reset()).rejects.toThrow(
+        'Destructive database operations only allowed in',
+      );
     });
   });
 
   describe('dropAll()', () => {
-    it('should drop drizzle and public schemas', () => {
-      manager.dropAll();
+    it('should execute drop and create schema queries', async () => {
+      await manager.dropAll();
 
-      expect(execSync).toHaveBeenCalledWith(
+      const { Client } = await import('pg');
+      const clientInstance = new Client();
+
+      expect(clientInstance.connect).toHaveBeenCalled();
+      expect(clientInstance.query).toHaveBeenCalledWith(
         expect.stringContaining('DROP SCHEMA IF EXISTS drizzle CASCADE'),
-        expect.any(Object),
       );
-      expect(execSync).toHaveBeenCalledWith(
+      expect(clientInstance.query).toHaveBeenCalledWith(
         expect.stringContaining('DROP SCHEMA IF EXISTS public CASCADE'),
-        expect.any(Object),
       );
-    });
-
-    it('should recreate public schema', () => {
-      manager.dropAll();
-
-      expect(execSync).toHaveBeenCalledWith(
+      expect(clientInstance.query).toHaveBeenCalledWith(
         expect.stringContaining('CREATE SCHEMA public'),
-        expect.any(Object),
       );
-      expect(execSync).toHaveBeenCalledWith(
-        expect.stringContaining('GRANT ALL ON SCHEMA public TO PUBLIC'),
-        expect.any(Object),
-      );
+      expect(clientInstance.end).toHaveBeenCalled();
     });
 
-    it('should throw error if drop fails', () => {
-      vi.mocked(execSync).mockImplementationOnce(() => {
-        throw new Error('Connection failed');
-      });
+    it('should throw error if query fails', async () => {
+      const { Client } = await import('pg');
+      const clientInstance = new Client();
+      vi.mocked(clientInstance.query).mockRejectedValueOnce(
+        new Error('Connection failed'),
+      );
 
-      expect(() => manager.dropAll()).toThrow('Failed to drop schemas');
-
-      // Reset mock for subsequent tests
-      vi.mocked(execSync).mockImplementation(() => Buffer.from(''));
+      await expect(manager.dropAll()).rejects.toThrow('Failed to drop schemas');
     });
   });
 
   describe('migrate()', () => {
-    it('should run drizzle-kit migrate', () => {
+    it('should run drizzle-kit migrate via execSync', () => {
       manager.migrate();
 
       expect(execSync).toHaveBeenCalledWith(
         'pnpm drizzle-kit migrate',
         expect.objectContaining({
           stdio: 'inherit',
-          env: expect.objectContaining({ FORCE_COLOR: '1' }), // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          env: expect.objectContaining({ FORCE_COLOR: '1' }),
         }),
       );
     });
   });
 
   describe('truncateAll()', () => {
-    it('should truncate all tables', () => {
-      manager.truncateAll();
+    it('should truncate all tables found in schema', async () => {
+      const { Client } = await import('pg');
+      const clientInstance = new Client();
 
-      const call = vi
-        .mocked(execSync)
-        .mock.calls.find((call) =>
-          call[0].toString().includes('TRUNCATE TABLE'),
-        );
+      // Mock SELECT query response
+      vi.mocked(clientInstance.query).mockImplementation(
+        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
+        async (sql: unknown) => {
+          if (
+            typeof sql === 'string' &&
+            sql.includes('information_schema.tables')
+          ) {
+            return {
+              rows: [{ table_name: 'user' }, { table_name: 'session' }],
+            };
+          }
+          return { rows: [] };
+        },
+      );
 
-      expect(call).toBeDefined();
-      expect(call![0]).toContain('TRUNCATE TABLE');
-      expect(call![0]).toContain('CASCADE');
+      await manager.truncateAll();
+
+      // Verify TRUNCATE call was made with found tables
+      expect(clientInstance.query).toHaveBeenCalledWith(
+        expect.stringMatching(/TRUNCATE TABLE "user", "session" CASCADE;/),
+      );
+    });
+  });
+
+  describe('seed()', () => {
+    it('should seed database with system org and rbac', async () => {
+      await manager.seed();
+
+      // Verify db connection
+      const { Client } = await import('pg');
+      expect(Client).toHaveBeenCalled();
+
+      // Verify system org creation
+      expect(drizzleMocks.insert).toHaveBeenCalled();
+
+      // Verify RBAC seeding
+      expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
     });
 
-    it('should handle missing RBAC tables gracefully', () => {
-      vi.mocked(execSync)
-        .mockImplementationOnce(() => {
-          throw new Error('relation "role" does not exist');
-        })
-        .mockImplementationOnce(() => Buffer.from('TRUNCATE TABLE'));
-
-      expect(() => manager.truncateAll()).not.toThrow();
-    });
-
-    it('should handle empty database gracefully', () => {
-      vi.mocked(execSync).mockImplementation(() => {
-        throw new Error('relation does not exist');
+    it('should skip creating system org if it exists', async () => {
+      // Mock db to return existing org
+      drizzleMocks.query.organization.findFirst.mockResolvedValueOnce({
+        id: 'system-tenant',
       });
 
-      expect(() => manager.truncateAll()).not.toThrow();
+      await manager.seed();
+
+      expect(drizzleMocks.insert).not.toHaveBeenCalled();
+      expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should throw if DATABASE_URL is missing', async () => {
+      delete process.env.DATABASE_URL;
+      await expect(manager.dropAll()).rejects.toThrow(
+        'DATABASE_URL is not defined',
+      );
+    });
+
+    it('should handle truncate errors gracefully', async () => {
+      const { Client } = await import('pg');
+      const clientInstance = new Client();
+
+      // Mock successful table discovery
+      vi.mocked(clientInstance.query).mockImplementationOnce(
+        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
+        async () => ({ rows: [{ table_name: 'test_table' }] }),
+      );
+
+      // Mock truncate failure
+      vi.mocked(clientInstance.query).mockImplementationOnce(
+        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
+        async () => {
+          throw new Error('Truncate error');
+        },
+      );
+
+      const logSpy = vi.spyOn(console, 'log');
+      await manager.truncateAll();
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Truncate failed'),
+      );
+    });
+
+    it('should handle empty tables list in truncateAll', async () => {
+      const { Client } = await import('pg');
+      const clientInstance = new Client();
+
+      // Mock empty tables
+      vi.mocked(clientInstance.query).mockImplementationOnce(
+        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
+        async () => ({ rows: [] }),
+      );
+
+      const logSpy = vi.spyOn(console, 'log');
+      await manager.truncateAll();
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('No tables found'),
+      );
     });
   });
 
   describe('fresh()', () => {
     it('should call dropAll, migrate, and seed in order', async () => {
-      const dropSpy = vi.spyOn(manager, 'dropAll').mockImplementation(() => {});
+      const dropSpy = vi.spyOn(manager, 'dropAll').mockResolvedValue(undefined);
       const migrateSpy = vi
         .spyOn(manager, 'migrate')
         .mockImplementation(() => {});
@@ -148,6 +279,8 @@ describe('DatabaseManager', () => {
       expect(dropSpy).toHaveBeenCalledTimes(1);
       expect(migrateSpy).toHaveBeenCalledTimes(1);
       expect(seedSpy).toHaveBeenCalledTimes(1);
+
+      // Verify order
       expect(dropSpy.mock.invocationCallOrder[0]).toBeLessThan(
         migrateSpy.mock.invocationCallOrder[0],
       );
@@ -161,13 +294,14 @@ describe('DatabaseManager', () => {
     it('should call truncateAll and seed in order', async () => {
       const truncateSpy = vi
         .spyOn(manager, 'truncateAll')
-        .mockImplementation(() => {});
+        .mockResolvedValue(undefined);
       const seedSpy = vi.spyOn(manager, 'seed').mockResolvedValue(undefined);
 
       await manager.reset();
 
       expect(truncateSpy).toHaveBeenCalledTimes(1);
       expect(seedSpy).toHaveBeenCalledTimes(1);
+
       expect(truncateSpy.mock.invocationCallOrder[0]).toBeLessThan(
         seedSpy.mock.invocationCallOrder[0],
       );

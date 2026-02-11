@@ -17,7 +17,7 @@ import {
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
 } from '../constants';
-import { seedSystemRbac } from '@nexiom/identity/src/utils/rbac-seeding';
+import { seedSystemRbac } from '@nexiom/identity/utils/rbac-seeding';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
