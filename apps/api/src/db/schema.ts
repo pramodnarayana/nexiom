@@ -23,7 +23,7 @@ export {
   permissionRelations,
   rolePermissionRelations,
   organizationStatusEnum,
-} from '@nexiom/identity/src/schema';
+} from '@nexiom/identity/schema';
 
 export type {
   User,

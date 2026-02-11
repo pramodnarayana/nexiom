@@ -221,7 +221,7 @@ describe('DatabaseManager', () => {
       );
     });
 
-    it('should handle truncate errors gracefully', async () => {
+    it('should handle truncate errors gracefully and rethrow', async () => {
       const { Client } = await import('pg');
       const clientInstance = new Client();
 
@@ -240,7 +240,9 @@ describe('DatabaseManager', () => {
       );
 
       const logSpy = vi.spyOn(console, 'log');
-      await manager.truncateAll();
+
+      // Expect error to be rethrown after logging
+      await expect(manager.truncateAll()).rejects.toThrow('Truncate error');
 
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('Truncate failed'),

@@ -6,8 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./utils/rbac-seeding": "./src/utils/rbac-seeding.ts",
-    "./src/schema": "./src/schema.ts",
-    "./src/constants": "./src/constants.ts"
+    "./schema": "./src/schema.ts",
+    "./constants": "./src/constants.ts"
   },
   "scripts": {
     "clean": "rimraf dist",

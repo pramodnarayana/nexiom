@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import type { Client } from 'pg';
 
 /**
  * Enterprise-grade database management utility
@@ -10,46 +11,56 @@ export class DatabaseManager {
   private readonly ALLOWED_ENVS = ['development', 'test', 'local'];
 
   /**
-   * Execute SQL query via direct PG connection
+   * Helper to execute database operations with optional client reuse
+   * If client is provided, reuses it; otherwise creates and closes a new one
    */
-  private async execSql(sql: string): Promise<void> {
-    const { Client } = await import('pg');
+  private async withClient<T>(
+    client: Client | undefined,
+    fn: (c: Client) => Promise<T>,
+  ): Promise<T> {
+    const { Client: PgClient } = await import('pg');
     const dbUrl = process.env.DATABASE_URL;
 
     if (!dbUrl) {
       throw new Error('DATABASE_URL is not defined');
     }
 
-    const client = new Client({ connectionString: dbUrl });
-    await client.connect();
+    // Use provided client or create new one
+    const dbClient = client || new PgClient({ connectionString: dbUrl });
+    const shouldClose = !client; // Only close if we created it
+
+    if (shouldClose) {
+      await dbClient.connect();
+    }
 
     try {
-      await client.query(sql);
+      return await fn(dbClient);
     } finally {
-      await client.end();
+      if (shouldClose) {
+        await dbClient.end();
+      }
     }
   }
 
   /**
-   * Execute SQL query and return rows
+   * Execute SQL query via direct PG connection
+   * Optionally accepts a client for connection reuse
    */
-  private async querySql<T = any>(sql: string): Promise<T[]> {
-    const { Client } = await import('pg');
-    const dbUrl = process.env.DATABASE_URL;
+  private async execSql(sql: string, client?: Client): Promise<void> {
+    await this.withClient(client, async (c) => {
+      await c.query(sql);
+    });
+  }
 
-    if (!dbUrl) {
-      throw new Error('DATABASE_URL is not defined');
-    }
-
-    const client = new Client({ connectionString: dbUrl });
-    await client.connect();
-
-    try {
-      const res = await client.query(sql);
+  /**
+   * Execute SQL query and return rows
+   * Optionally accepts a client for connection reuse
+   */
+  private async querySql<T = any>(sql: string, client?: Client): Promise<T[]> {
+    return this.withClient(client, async (c) => {
+      const res = await c.query(sql);
       return res.rows as T[];
-    } finally {
-      await client.end();
-    }
+    });
   }
 
   /**
@@ -65,30 +76,61 @@ export class DatabaseManager {
   }
 
   /**
-   * Drop all database schemas (drizzle + public)
-   * Completely wipes the database
+   * Drop all database schemas (drizzle + public) and recreate public schema
+   *
+   * **WARNING**: This operation is destructive and sequential. If any intermediate
+   * step fails (particularly after dropping schemas but before recreating public),
+   * the database may be left without a public schema.
+   *
+   * **Recovery**: If dropAll() fails partway through:
+   * 1. Re-run dropAll() to complete the operation, OR
+   * 2. Manually recreate the public schema:
+   *    ```sql
+   *    CREATE SCHEMA public;
+   *    GRANT ALL ON SCHEMA public TO PUBLIC;
+   *    ```
+   *
+   * **Note**: This method is intended for local development and CLI use only.
+   * It reuses a single database connection across all execSql() calls to minimize
+   * connection overhead.
+   *
+   * @throws {Error} If not running in safe environment (development/test/local)
+   * @throws {Error} If database operations fail
    */
   async dropAll(): Promise<void> {
     this.assertSafeEnvironment();
     console.log('🗑️  Dropping all schemas...');
 
+    // Reuse single connection for all operations
+    const { Client } = await import('pg');
+    const dbUrl = process.env.DATABASE_URL;
+
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    const client = new Client({ connectionString: dbUrl });
+    await client.connect();
+
     try {
       // Drop drizzle schema (migration tracking)
-      await this.execSql('DROP SCHEMA IF EXISTS drizzle CASCADE;');
+      await this.execSql('DROP SCHEMA IF EXISTS drizzle CASCADE;', client);
       console.log('  ✓ Dropped drizzle schema');
 
       // Drop public schema (all tables)
-      await this.execSql('DROP SCHEMA IF EXISTS public CASCADE;');
+      await this.execSql('DROP SCHEMA IF EXISTS public CASCADE;', client);
       console.log('  ✓ Dropped public schema');
 
       // Recreate public schema
-      await this.execSql('CREATE SCHEMA public;');
-      await this.execSql('GRANT ALL ON SCHEMA public TO PUBLIC;');
+      await this.execSql('CREATE SCHEMA public;', client);
+      await this.execSql('GRANT ALL ON SCHEMA public TO PUBLIC;', client);
       console.log('  ✓ Recreated public schema');
     } catch (error) {
       throw new Error(
         `Failed to drop schemas: ${error instanceof Error ? error.message : error}`,
       );
+    } finally {
+      await client.end();
     }
   }
 
@@ -193,6 +235,7 @@ export class DatabaseManager {
       console.log(`  ✓ Truncated ${tables.length} tables`);
     } catch (error) {
       console.log(`  ⚠️  Truncate failed: ${String(error)}`);
+      throw error;
     }
   }
 
