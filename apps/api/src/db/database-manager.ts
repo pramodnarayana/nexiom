@@ -49,6 +49,25 @@ export class DatabaseManager {
   }
 
   /**
+   * Get a connected PostgreSQL client using the cached pg module
+   * @private
+   */
+  private async getPgClient(): Promise<Client> {
+    // Use cached pg module or load it once
+    DatabaseManager.cachedPg ??= await import('pg');
+    const { Client: PgClient } = DatabaseManager.cachedPg;
+
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    const client = new PgClient({ connectionString: dbUrl });
+    await client.connect();
+    return client;
+  }
+
+  /**
    * Execute SQL query via direct PG connection
    * Optionally accepts a client for connection reuse
    */
@@ -108,15 +127,7 @@ export class DatabaseManager {
     console.log('🗑️  Dropping all schemas...');
 
     // Reuse single connection for all operations
-    const { Client } = await import('pg');
-    const dbUrl = process.env.DATABASE_URL;
-
-    if (!dbUrl) {
-      throw new Error('DATABASE_URL is not defined');
-    }
-
-    const client = new Client({ connectionString: dbUrl });
-    await client.connect();
+    const client = await this.getPgClient();
 
     try {
       // Drop drizzle schema (migration tracking)
@@ -165,7 +176,6 @@ export class DatabaseManager {
     console.log('🌱 Seeding database...');
 
     const { drizzle } = await import('drizzle-orm/node-postgres');
-    const { Client } = await import('pg');
     const schema = await import('./schema');
     const { eq } = await import('drizzle-orm');
     const { seedSystemRbac } =
@@ -177,13 +187,7 @@ export class DatabaseManager {
       getRequiredSystemTenantId,
     } = await import('../constants');
 
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      throw new Error('DATABASE_URL not found');
-    }
-
-    const client = new Client({ connectionString: dbUrl });
-    await client.connect();
+    const client = await this.getPgClient();
 
     try {
       const db = drizzle(client, { schema });
@@ -226,30 +230,24 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log('🧹 Truncating all tables...');
 
-    const { Client } = await import('pg');
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) throw new Error('DATABASE_URL is not defined');
-    const client = new Client({ connectionString: dbUrl });
-    await client.connect();
-
-    // Dynamically discover all tables from Postgres catalog
-    // This is more robust than iterating schema exports which can have symbol/version mismatches
-    const tables = await this.querySql<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
-      client,
-    );
-
-    if (tables.length === 0) {
-      console.log('  ℹ️  No tables found in public schema to truncate');
-      return;
-    }
+    const client = await this.getPgClient();
 
     try {
+      const tables = await this.querySql<{ table_name: string }>(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
+        client,
+      );
+
+      if (tables.length === 0) {
+        console.log('  ℹ️  No tables found in public schema to truncate');
+        return;
+      }
+
       const quotedTables = tables
         .map((t) => `"${t.table_name.replace(/"/g, '""')}"`)
         .join(', ');
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
-      await this.execSql(sql);
+      await this.execSql(sql, client);
       console.log(`  ✓ Truncated ${tables.length} tables`);
     } catch (error) {
       console.log(`  ⚠️  Truncate failed: ${String(error)}`);
