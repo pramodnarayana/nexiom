@@ -15,6 +15,26 @@ export class DatabaseManager {
   private static cachedPg: typeof import('pg') | null = null;
 
   /**
+   * Resolve pg module and database URL (single source of truth)
+   * @private
+   */
+  private async resolvePgModule(): Promise<{
+    PgClient: typeof import('pg').Client;
+    dbUrl: string;
+  }> {
+    // Use cached pg module or load it once
+    DatabaseManager.cachedPg ??= await import('pg');
+    const { Client: PgClient } = DatabaseManager.cachedPg;
+
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    return { PgClient, dbUrl };
+  }
+
+  /**
    * Helper to execute database operations with optional client reuse
    * If client is provided, reuses it; otherwise creates and closes a new one
    */
@@ -22,14 +42,7 @@ export class DatabaseManager {
     client: Client | undefined,
     fn: (c: Client) => Promise<T>,
   ): Promise<T> {
-    // Use cached pg module or load it once
-    DatabaseManager.cachedPg ??= await import('pg');
-    const { Client: PgClient } = DatabaseManager.cachedPg;
-    const dbUrl = process.env.DATABASE_URL;
-
-    if (!dbUrl) {
-      throw new Error('DATABASE_URL is not defined');
-    }
+    const { PgClient, dbUrl } = await this.resolvePgModule();
 
     // Use provided client or create new one
     const dbClient = client || new PgClient({ connectionString: dbUrl });
@@ -53,15 +66,7 @@ export class DatabaseManager {
    * @private
    */
   private async getPgClient(): Promise<Client> {
-    // Use cached pg module or load it once
-    DatabaseManager.cachedPg ??= await import('pg');
-    const { Client: PgClient } = DatabaseManager.cachedPg;
-
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      throw new Error('DATABASE_URL is not defined');
-    }
-
+    const { PgClient, dbUrl } = await this.resolvePgModule();
     const client = new PgClient({ connectionString: dbUrl });
     await client.connect();
     return client;
@@ -145,6 +150,7 @@ export class DatabaseManager {
     } catch (error) {
       throw new Error(
         `Failed to drop schemas: ${error instanceof Error ? error.message : error}`,
+        { cause: error },
       );
     } finally {
       await client.end();

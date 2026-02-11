@@ -234,7 +234,7 @@ export const organization = pgTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    slug: text("slug").unique(),
+    slug: text("slug"),
     logo: text("logo"),
     createdAt: timestamp("createdAt", { withTimezone: true })
       .notNull()
@@ -250,6 +250,10 @@ export const organization = pgTable(
   },
   (table) => [
     check("organization_id_not_sentinel", sql`${table.id} <> '__NULL__'`),
+    // Partial unique index: enforce slug uniqueness only for non-deleted orgs
+    uniqueIndex("organization_slug_unique_idx")
+      .on(table.slug)
+      .where(sql`"deletedAt" IS NULL`),
   ],
 );
 
