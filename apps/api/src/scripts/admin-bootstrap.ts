@@ -17,7 +17,7 @@ import {
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
 } from '../constants';
-import { seedSystemRbac } from '@nexiom/identity';
+import { seedSystemRbac } from '@nexiom/identity/utils/rbac-seeding';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
@@ -399,42 +399,6 @@ async function forceResetAdmin() {
   }
 }
 
-async function resetDb() {
-  if (!isAllowedEnv()) {
-    console.error(
-      `❌ Cannot reset database in ${process.env.NODE_ENV || 'unset'} environment! Only allowed in: ${ALLOWED_ENVS.join(', ')}`,
-    );
-    process.exit(1);
-  }
-
-  console.log('⚠️  Resetting Database (Truncating Data)...');
-  const client = getDbClient();
-
-  try {
-    await client.connect();
-    await client.query(`
-            TRUNCATE TABLE 
-                "invitation",
-                "member",
-                "session",
-                "account",
-                "verification",
-                "organization",
-                "user",
-                "role",
-                "permission",
-                "role_permission"
-            CASCADE;
-        `);
-    console.log('✅ Database Cleaned.');
-  } catch (err) {
-    console.error('Error resetting DB:', err);
-    throw err; // Re-throw to propagate to CLI's .catch() handler
-  } finally {
-    await client.end();
-  }
-}
-
 // --- Main CLI ---
 
 const command = process.argv[2];
@@ -452,17 +416,11 @@ switch (command) {
       process.exit(1);
     });
     break;
-  case 'reset-db':
-    resetDb().catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
-    break;
   default:
-    console.log('Usage: ts-node manage.ts <command>');
+    console.log('Usage: tsx src/scripts/admin-bootstrap.ts <command>');
     console.log('Commands:');
     console.log('  bootstrap    - Safely create admin user if missing');
     console.log('  reset-admin  - Delete and recreate admin user');
-    console.log('  reset-db     - Truncate all data (Dev only)');
+    console.log('Note: For database reset, use: pnpm --filter api db:reset');
     process.exit(1);
 }

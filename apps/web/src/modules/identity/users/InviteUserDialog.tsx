@@ -44,7 +44,7 @@ interface InviteUserDialogProps {
     resource?: string; // context resource (admin/users or users)
 }
 
-export function InviteUserDialog({ resource = "users" }: InviteUserDialogProps) {
+export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDialogProps>) {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
     const { mutate: create, isLoading } = useCreate();

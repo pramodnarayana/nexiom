@@ -18,13 +18,35 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
   image: text("image"),
-  createdAt: timestamp("createdAt").notNull(),
-  updatedAt: timestamp("updatedAt").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
+  /**
+   * LEGACY FIELD: Global platform role designation (non-authoritative)
+   *
+   * **IMPORTANT**: This field is a TRANSIENT fallback only and should NOT be used for
+   * permission checks. The authoritative role for RBAC is `member.role` (FK to role table).
+   *
+   * **Architecture**:
+   * - `user.role`: Legacy global label, defaults to 'member'. Not tied to RBAC system.
+   * - `member.role`: Authoritative organization-scoped role (FK to role table) used for
+   *   all permission checks via RBAC.
+   *
+   * **When to use**:
+   * - `user.role`: ONLY as migration fallback in UI (e.g., `member.role ?? user.role`)
+   *   when member record doesn't exist yet. Do NOT use for authorization.
+   * - `member.role`: ALWAYS use for permission checks and authorization logic.
+   *
+   * **Migration Path**: This field exists for backward compatibility during migration from
+   * global roles to organization-scoped RBAC. Once all users have member records, this field
+   * can be deprecated and removed.
+   *
+   * @deprecated Use member.role for all authorization and permission checks
+   */
   role: text("role").default("member"),
   banned: boolean("banned"),
   banReason: text("banReason"),
-  banExpires: timestamp("banExpires"),
-  deletedAt: timestamp("deletedAt"),
+  banExpires: timestamp("banExpires", { withTimezone: true }),
+  deletedAt: timestamp("deletedAt", { withTimezone: true }),
 });
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -34,10 +56,10 @@ export const userRelations = relations(user, ({ many }) => ({
 // --- Auth Tables ---
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
-  expiresAt: timestamp("expiresAt").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
   token: text("token").notNull().unique(),
-  createdAt: timestamp("createdAt").notNull(),
-  updatedAt: timestamp("updatedAt").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
   // PII / Retention Policy:
   // IP Address and User Agent containing PII should be anonymized or retained only for
   // a limited period (e.g., 30 days) for security auditing, then purged.
@@ -76,12 +98,16 @@ export const account = pgTable(
     accessToken: text("accessToken"),
     refreshToken: text("refreshToken"),
     idToken: text("idToken"),
-    accessTokenExpiresAt: timestamp("accessTokenExpiresAt"),
-    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt"),
+    accessTokenExpiresAt: timestamp("accessTokenExpiresAt", {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt", {
+      withTimezone: true,
+    }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: timestamp("createdAt").notNull(),
-    updatedAt: timestamp("updatedAt").notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
   },
   (table) => [
     unique("account_user_provider_unique").on(table.userId, table.providerId),
@@ -103,9 +129,9 @@ export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
-  expiresAt: timestamp("expiresAt").notNull(),
-  createdAt: timestamp("createdAt"),
-  updatedAt: timestamp("updatedAt"),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }),
 });
 
 // --- RBAC Tables ---
@@ -116,7 +142,9 @@ export const permission = pgTable(
     resource: text("resource").notNull(), // e.g., 'users'
     action: text("action").notNull(), // e.g., 'read'
     description: text("description"),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     // Enforce unique (resource, action) pair to prevent duplicate definitions
@@ -131,7 +159,9 @@ export const role = pgTable(
     name: text("name").notNull(), // e.g., 'Admin', 'User'
     description: text("description"),
     isSystem: boolean("isSystem").default(false).notNull(),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     // Enforce unique role name
@@ -204,20 +234,26 @@ export const organization = pgTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    slug: text("slug").unique(),
+    slug: text("slug"),
     logo: text("logo"),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt")
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
     metadata: text("metadata"),
     status: organizationStatusEnum("status").default("active").notNull(),
     isSystem: boolean("isSystem").default(false).notNull(),
-    deletedAt: timestamp("deletedAt"),
+    deletedAt: timestamp("deletedAt", { withTimezone: true }),
   },
   (table) => [
     check("organization_id_not_sentinel", sql`${table.id} <> '__NULL__'`),
+    // Partial unique index: enforce slug uniqueness only for non-deleted orgs
+    uniqueIndex("organization_slug_unique_idx")
+      .on(table.slug)
+      .where(sql`"deletedAt" IS NULL`),
   ],
 );
 
@@ -241,12 +277,15 @@ export const member = pgTable(
     role: text("role")
       .notNull()
       .references(() => role.id, { onDelete: "restrict" }),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
-    deletedAt: timestamp("deletedAt"),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deletedAt", { withTimezone: true }),
   },
   (table) => [
-    unique("member_org_user_unique").on(table.organizationId, table.userId),
-    index("member_user_idx").on(table.userId),
+    uniqueIndex("member_null_org_user_idx")
+      .on(table.userId, sql`COALESCE("organizationId", '__NULL__')`)
+      .where(sql`"deletedAt" IS NULL`),
     index("member_org_idx").on(table.organizationId),
   ],
 );
@@ -274,11 +313,13 @@ export const invitation = pgTable("invitation", {
   email: text("email").notNull(),
   role: text("role"),
   status: text("status").notNull(),
-  expiresAt: timestamp("expiresAt").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
   inviterId: text("inviterId")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  createdAt: timestamp("createdAt", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const invitationRelations = relations(invitation, ({ one }) => ({
@@ -299,3 +340,6 @@ export type Member = typeof member.$inferSelect;
 export type Invitation = typeof invitation.$inferSelect;
 export type Role = typeof role.$inferSelect;
 export type RolePermission = typeof rolePermission.$inferSelect;
+export type Account = typeof account.$inferSelect;
+export type Verification = typeof verification.$inferSelect;
+export type Permission = typeof permission.$inferSelect;

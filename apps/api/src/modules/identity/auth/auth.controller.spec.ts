@@ -284,6 +284,11 @@ describe('AuthController', () => {
     });
 
     it('should throw when service receives empty email', async () => {
+      // Mock console.error to keep test output clean
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
       // Mock service to throw if email is missing (simulating service validation)
       mockAuthService.resendVerificationEmail = vi
         .fn()
@@ -295,6 +300,8 @@ describe('AuthController', () => {
       await expect(
         controller.resendVerification({ email: '' }),
       ).rejects.toThrow();
+
+      consoleSpy.mockRestore();
     });
   });
 

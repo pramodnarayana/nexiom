@@ -5,71 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1767856546135,
-      "tag": "0000_cold_eddie_brock",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1767868333905,
-      "tag": "0001_fluffy_taskmaster",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1767964717619,
-      "tag": "0002_futuristic_cammi",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1768129026246,
-      "tag": "0003_ambitious_triathlon",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1768130058955,
-      "tag": "0004_safe_tattoo",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1768134003172,
-      "tag": "0005_skinny_the_anarchist",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1768219032473,
-      "tag": "0006_flat_spencer_smythe",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1768316405454,
-      "tag": "0007_special_vivisector",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1768376741854,
-      "tag": "0008_real_terrax",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1768742122475,
-      "tag": "0009_daffy_the_twelve",
+      "when": 1770805598812,
+      "tag": "0000_initial_schema",
       "breakpoints": true
     }
   ]

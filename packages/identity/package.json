@@ -3,6 +3,12 @@
   "version": "0.0.1",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./utils/rbac-seeding": "./src/utils/rbac-seeding.ts",
+    "./schema": "./src/schema.ts",
+    "./constants": "./src/constants.ts"
+  },
   "scripts": {
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
@@ -11,8 +17,7 @@
     "test:cov": "vitest run --coverage",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "seed": "tsx src/scripts/seed-rbac.ts"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
