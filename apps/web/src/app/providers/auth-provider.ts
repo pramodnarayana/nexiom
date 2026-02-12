@@ -92,12 +92,11 @@ export const authProvider: AuthProvider = {
             });
 
             if (!response.ok) {
-                console.log('[AuthProvider] Failed to fetch /users/me:', response.status);
+                console.error('[AuthProvider] Failed to fetch /users/me:', response.status);
                 return [];
             }
 
             const user = await response.json();
-            console.log('[AuthProvider] Permissions loaded from /users/me:', user.permissions);
             return user.permissions || [];
         } catch (error) {
             console.error('[AuthProvider] Error fetching permissions:', error);
