@@ -2,17 +2,6 @@ import { useAppScope } from '@/shared/contexts/useAppScope';
 import { type ResourceType, RESOURCES } from '@/shared/constants/resources';
 
 /**
- * Derive base resource names from RESOURCES constant.
- * Extracts the base name (e.g., 'users' from 'admin/users' or 'users').
- * Module-scoped to avoid re-creation on every render.
- */
-const RESOURCE_BASE_NAMES: Record<ResourceType, string> = {
-    USERS: RESOURCES.ORGANIZATION.USERS,           // 'users'
-    INVITATIONS: RESOURCES.ORGANIZATION.INVITATIONS, // 'invitations'
-    TENANTS: RESOURCES.ORGANIZATION.TENANTS,       // 'tenants'
-} as const;
-
-/**
  * Custom hook to get the base path for a resource based on the current scope.
  * 
  * Paths are derived from RESOURCES constant ensuring single source of truth.
@@ -31,7 +20,7 @@ const RESOURCE_BASE_NAMES: Record<ResourceType, string> = {
 export function useBasePath(resourceType: ResourceType): string {
     const { scope } = useAppScope();
 
-    // Derive path from single source of truth (RESOURCES)
-    const baseName = RESOURCE_BASE_NAMES[resourceType];
-    return scope === 'system' ? `/admin/${baseName}` : `/dashboard/${baseName}`;
+    return scope === 'system'
+        ? `/${RESOURCES.SYSTEM[resourceType]}`
+        : `/dashboard/${RESOURCES.ORGANIZATION[resourceType]}`;
 }
