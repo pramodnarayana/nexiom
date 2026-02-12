@@ -91,7 +91,7 @@ export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDial
 
     const onSubmit = (data: InviteUserFormValues) => {
         // Detect if we're in admin context (System Owner)
-        const isAdminContext = window.location.pathname.startsWith('/admin');
+        const isAdminContext = resource === "admin/users";
 
         create(
             {
