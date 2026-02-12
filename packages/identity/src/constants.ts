@@ -24,9 +24,17 @@ export const ALL_PERMISSIONS = [
   "admin_dashboard:view",
   "settings:manage",
   "settings:read",
+  // System-level user management (for admin/users resource)
   "system_users:read",
+  "system_users:create",
+  "system_users:update",
+  "system_users:delete",
   "system_users:manage",
+  // System-level tenant management (for admin/tenants resource)
   "system_tenants:read",
+  "system_tenants:create",
+  "system_tenants:update",
+  "system_tenants:delete",
   "system_tenants:manage",
   "roles:read",
 ] as const;
