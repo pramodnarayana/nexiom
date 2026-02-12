@@ -1,5 +1,6 @@
 import { useShow, useCustomMutation, useCan } from "@refinedev/core";
-import { useResourceName, useAppScope } from "@/shared/contexts/useAppScope";
+import { useResourceName } from "@/shared/contexts/useAppScope";
+import { useBasePath } from "@/shared/contexts/useBasePath";
 import {
     Card,
     CardContent,
@@ -14,8 +15,7 @@ import { Badge } from "@/shared/components/ui/badge";
 export const UserShow = () => {
     // Get scope-aware resource and basePath from context
     const resource = useResourceName('USERS');
-    const { scope } = useAppScope();
-    const basePath = scope === 'system' ? '/admin/users' : '/dashboard/users';
+    const basePath = useBasePath('USERS');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const start = useShow<any>({

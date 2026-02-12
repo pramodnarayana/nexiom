@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/shared/lib/auth/context";
 import { hasPermission } from "@/shared/lib/auth/utils";
 import { Actions, Resources } from "@/shared/lib/auth/constants";
-import { useAppScope } from "@/shared/contexts/useAppScope";
+import { useBasePath } from "@/shared/contexts/useBasePath";
 import {
     Table,
     TableBody,
@@ -28,10 +28,9 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
     const { mutate: sendInvite } = useCustomMutation();
     const { user: currentUser } = useAuth();
-    const { scope } = useAppScope();
 
-    // Generate basePath from scope
-    const basePath = scope === 'system' ? '/admin/users' : '/dashboard/users';
+    // Get scope-aware basePath from centralized hook
+    const basePath = useBasePath('USERS');
 
     // Check if user is platform_admin (can perform write operations)
     // PBAC: Check if user can manage users

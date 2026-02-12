@@ -68,5 +68,10 @@ const _assertResourceKeysMatch: AssertKeysMatch<
     typeof RESOURCES.ORGANIZATION
 > = true;
 
-// Prevent unused variable warning
+/**
+ * Re-exported to prevent tree-shaking of the compile-time type guard.
+ * Without this export, TypeScript might remove _assertResourceKeysMatch,
+ * allowing SYSTEM and ORGANIZATION keys to drift without compile errors.
+ * DO NOT REMOVE - keeps AssertKeysMatch type check active.
+ */
 export { _assertResourceKeysMatch as __resourceKeyGuard };
