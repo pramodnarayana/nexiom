@@ -34,6 +34,13 @@ export function AdminRoutes() {
                         }
                     },
                     {
+                        name: "admin/invitations",
+                        create: "/admin/invitations",
+                        meta: {
+                            canDelete: false,
+                        },
+                    },
+                    {
                         name: "admin/tenants",
                         list: "/admin/tenants",
                         edit: "/admin/tenants/:id",
