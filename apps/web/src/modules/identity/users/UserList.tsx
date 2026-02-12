@@ -64,7 +64,7 @@ export const UserList = ({
         <div className="space-y-4">
             {canCreate?.can && (
                 <div className="flex items-center justify-end">
-                    <InviteUserDialog resource={resource} />
+                    <InviteUserDialog />
                 </div>
             )}
 

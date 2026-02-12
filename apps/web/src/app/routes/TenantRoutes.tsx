@@ -13,6 +13,7 @@ import { UserShow } from '../../modules/identity/pages/admin/users/UserShow';
 import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
 import { TenantSettingsPage } from '../../modules/identity/pages/TenantSettingsPage';
 import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
+import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -28,41 +29,43 @@ export function TenantRoutes() {
 
     return (
         <Route path={`${AppRoutes.TENANT.ROOT}/*`} element={
-            <Refine
-                authProvider={tenantAuthProvider}
-                dataProvider={dataProvider}
-                routerProvider={routerProvider}
-                resources={[
-                    {
-                        name: "dashboard",
-                        list: "/dashboard",
-                    },
-                    {
-                        name: "users",
-                        list: "/dashboard/users",
-                        show: "/dashboard/users/show/:id",
-                        edit: "/dashboard/users/edit/:id",
-                        meta: {
-                            label: "Users",
+            <AppScopeProvider scope="organization">
+                <Refine
+                    authProvider={tenantAuthProvider}
+                    dataProvider={dataProvider}
+                    routerProvider={routerProvider}
+                    resources={[
+                        {
+                            name: "dashboard",
+                            list: "/dashboard",
+                        },
+                        {
+                            name: "users",
+                            list: "/dashboard/users",
+                            show: "/dashboard/users/show/:id",
+                            edit: "/dashboard/users/edit/:id",
+                            meta: {
+                                label: "Users",
+                            }
                         }
-                    }
-                ]}
-                options={{
-                    syncWithLocation: true,
-                    warnWhenUnsavedChanges: true,
-                }}
-            >
-                <Routes>
-                    <Route element={<TenantLayout navGroups={navGroups} />}>
-                        <Route index element={<DashboardPage />} />
-                        <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" />} />
-                        <Route path="users/show/:id" element={<UserShow basePath="/dashboard/users" resource="users" />} />
-                        <Route path="users/edit/:id" element={<UserEdit basePath="/dashboard/users" resource="users" />} />
-                        <Route path="settings" element={<TenantSettingsPage />} />
-                        <Route path="profile" element={<UserProfilePage />} />
-                    </Route>
-                </Routes>
-            </Refine>
+                    ]}
+                    options={{
+                        syncWithLocation: true,
+                        warnWhenUnsavedChanges: true,
+                    }}
+                >
+                    <Routes>
+                        <Route element={<TenantLayout navGroups={navGroups} />}>
+                            <Route index element={<DashboardPage />} />
+                            <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" />} />
+                            <Route path="users/show/:id" element={<UserShow basePath="/dashboard/users" resource="users" />} />
+                            <Route path="users/edit/:id" element={<UserEdit basePath="/dashboard/users" resource="users" />} />
+                            <Route path="settings" element={<TenantSettingsPage />} />
+                            <Route path="profile" element={<UserProfilePage />} />
+                        </Route>
+                    </Routes>
+                </Refine>
+            </AppScopeProvider>
         } />
     );
 }

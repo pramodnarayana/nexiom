@@ -2,8 +2,8 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { authClient } from '@/shared/lib/auth-client';
-import { hasPermission } from '@/shared/lib/auth/utils';
 import { AppRoutes } from '@/shared/lib/auth/constants';
+import { getHomePathForUser } from '@/shared/lib/auth/utils';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -74,7 +74,7 @@ export function SignupPage() {
                 let inviteIdParam: string | null = null;
                 try {
                     if (redirectUrl) {
-                        const urlObj = new URL(redirectUrl, window.location.origin);
+                        const urlObj = new URL(redirectUrl, globalThis.location.origin);
                         inviteIdParam = urlObj.searchParams.get('id');
                     }
                 } catch (e) {
@@ -125,16 +125,10 @@ export function SignupPage() {
 
 
                     // --- PERMISSION BASED REDIRECT ---
-                    // System Owner has admin_dashboard:view or system_* permissions
-                    // Regular users have dashboard:read permission
+                    // Redirect user to their home page based on role/permissions
                     const user = sessionData.user as { permissions?: string[] };
-
-                    if (hasPermission(user.permissions, 'admin_dashboard', 'view') ||
-                        hasPermission(user.permissions, 'system_users', 'read')) {
-                        navigate('/admin');
-                    } else {
-                        navigate('/dashboard');
-                    }
+                    const homePath = getHomePathForUser(user);
+                    navigate(homePath);
                 } else {
                     // Fallback (Should not happen with new endpoint)
                     alert("Account created, but auto-login failed. Please log in.");
