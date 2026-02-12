@@ -123,12 +123,14 @@ export function SignupPage() {
                         accessToken: sessionData.session.token // Using 'token' from session
                     });
 
+
                     // --- PERMISSION BASED REDIRECT ---
-                    // We check if the user has admin capabilities
-                    // Note: ensure your sessions endpoint returns permissions
+                    // System Owner has admin_dashboard:view or system_* permissions
+                    // Regular users have dashboard:read permission
                     const user = sessionData.user as { permissions?: string[] };
 
-                    if (hasPermission(user.permissions, 'dashboard', 'view')) {
+                    if (hasPermission(user.permissions, 'admin_dashboard', 'view') ||
+                        hasPermission(user.permissions, 'system_users', 'read')) {
                         navigate('/admin');
                     } else {
                         navigate('/dashboard');

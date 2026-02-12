@@ -50,7 +50,7 @@ export class SystemAdminController {
   ) {}
 
   @Post('users/:id/invite')
-  @RequirePermission('system_users', 'invite')
+  @RequirePermission('system_users', 'create')
   async inviteUser(
     @Param('id') id: string,
     @RequestHeaders() headers: Record<string, string>,
@@ -82,7 +82,7 @@ export class SystemAdminController {
   }
 
   @Post('invitations')
-  @RequirePermission('system_users', 'invite')
+  @RequirePermission('system_users', 'create')
   @UsePipes(new LazyZodValidationPipe(buildCreateSystemInvitationSchema))
   async createSystemInvitation(
     @Body() body: CreateSystemInvitationDto,
@@ -100,8 +100,9 @@ export class SystemAdminController {
     const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
-      organizationId: null, // System invitation
+      organizationId: getRequiredSystemTenantId(), // System tenant (Nexiom Platform)
       inviterId: session.user.id,
+      headers: webHeaders, // Required by Better Auth
     });
 
     return invitation;

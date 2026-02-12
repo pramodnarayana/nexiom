@@ -9,6 +9,7 @@ import {
 import {
   getRequiredAdminRoleId,
   getRequiredOwnerRoleId,
+  getRequiredSystemTenantId,
 } from '../../../constants';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
@@ -138,8 +139,9 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
         role: getRequiredOwnerRoleId(),
-        organizationId: null,
+        organizationId: getRequiredSystemTenantId(), // Changed from null
         inviterId: 'admin1',
+        headers: expect.any(Headers) as Headers, // Added headers
       });
     });
   });

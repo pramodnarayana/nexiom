@@ -90,9 +90,13 @@ export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDial
     }, [open, roles, form]);
 
     const onSubmit = (data: InviteUserFormValues) => {
+        // Detect if we're in admin context (System Owner)
+        const isAdminContext = window.location.pathname.startsWith('/admin');
+
         create(
             {
-                resource: "invitations", // Explicitly call invitations endpoint
+                // System Owner uses admin endpoint, Tenant Admin uses regular endpoint
+                resource: isAdminContext ? "admin/invitations" : "invitations",
                 values: {
                     ...data,
                     // The backend handles organizationId injection based on user token.
