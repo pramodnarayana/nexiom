@@ -3,6 +3,7 @@ import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { LayoutDashboard, Users, Settings } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
+import { RESOURCES } from '@/shared/constants/resources';
 
 import { dataProvider } from "../providers/data-provider";
 import { tenantAuthProvider } from "../providers/tenant-auth-provider";
@@ -36,11 +37,13 @@ export function TenantRoutes() {
                     routerProvider={routerProvider}
                     resources={[
                         {
+                            // Dashboard is intentionally not part of RESOURCES.ORGANIZATION
+                            // It's a special tenant-level route, not a managed resource
                             name: "dashboard",
                             list: "/dashboard",
                         },
                         {
-                            name: "users",
+                            name: RESOURCES.ORGANIZATION.USERS,
                             list: "/dashboard/users",
                             show: "/dashboard/users/show/:id",
                             edit: "/dashboard/users/edit/:id",
@@ -57,9 +60,9 @@ export function TenantRoutes() {
                     <Routes>
                         <Route element={<TenantLayout navGroups={navGroups} />}>
                             <Route index element={<DashboardPage />} />
-                            <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" />} />
-                            <Route path="users/show/:id" element={<UserShow basePath="/dashboard/users" resource="users" />} />
-                            <Route path="users/edit/:id" element={<UserEdit basePath="/dashboard/users" resource="users" />} />
+                            <Route path="users" element={<UserList />} />
+                            <Route path="users/show/:id" element={<UserShow />} />
+                            <Route path="users/edit/:id" element={<UserEdit />} />
                             <Route path="settings" element={<TenantSettingsPage />} />
                             <Route path="profile" element={<UserProfilePage />} />
                         </Route>

@@ -1,4 +1,5 @@
 import { useShow, useCustomMutation, useCan } from "@refinedev/core";
+import { useResourceName, useAppScope } from "@/shared/contexts/useAppScope";
 import {
     Card,
     CardContent,
@@ -10,15 +11,12 @@ import { ArrowLeft, Edit, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/shared/components/ui/badge";
 
-interface UserShowProps {
-    basePath?: string;
-    resource?: string;
-}
+export const UserShow = () => {
+    // Get scope-aware resource and basePath from context
+    const resource = useResourceName('USERS');
+    const { scope } = useAppScope();
+    const basePath = scope === 'system' ? '/admin/users' : '/dashboard/users';
 
-export const UserShow = ({
-    basePath = "/admin/users",
-    resource = "admin/users",
-}: UserShowProps) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const start = useShow<any>({
         resource,

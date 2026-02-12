@@ -62,7 +62,7 @@ describe('AppScopeContext', () => {
             expect(result.current).toBe('invitations');
         });
 
-        it('works for all resource types', () => {
+        it('works for all resource types in system scope', () => {
             const wrapper = createWrapper('system');
 
             const { result: users } = renderHook(() => useResourceName('USERS'), { wrapper });
@@ -72,6 +72,18 @@ describe('AppScopeContext', () => {
             expect(users.current).toBe('admin/users');
             expect(invitations.current).toBe('admin/invitations');
             expect(tenants.current).toBe('admin/tenants');
+        });
+
+        it('works for all resource types in organization scope', () => {
+            const wrapper = createWrapper('organization');
+
+            const { result: users } = renderHook(() => useResourceName('USERS'), { wrapper });
+            const { result: invitations } = renderHook(() => useResourceName('INVITATIONS'), { wrapper });
+            const { result: tenants } = renderHook(() => useResourceName('TENANTS'), { wrapper });
+
+            expect(users.current).toBe('users');
+            expect(invitations.current).toBe('invitations');
+            expect(tenants.current).toBe('tenants');
         });
     });
 

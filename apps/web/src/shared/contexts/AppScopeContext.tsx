@@ -1,15 +1,10 @@
 import { createContext, useMemo, type ReactNode } from 'react';
-import { RESOURCES } from '@/shared/constants/resources';
+import { RESOURCES, type ResourceType } from '@/shared/constants/resources';
 
 /**
  * Application scope type - either 'system' (admin) or 'organization' (tenant)
  */
 export type AppScope = 'system' | 'organization';
-
-/**
- * Resource type keys from RESOURCES constant
- */
-export type ResourceType = keyof typeof RESOURCES.SYSTEM;
 
 /**
  * Resource mappings for a specific scope

@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/shared/lib/auth/context";
 import { hasPermission } from "@/shared/lib/auth/utils";
 import { Actions, Resources } from "@/shared/lib/auth/constants";
+import { useAppScope } from "@/shared/contexts/useAppScope";
 import {
     Table,
     TableBody,
@@ -20,14 +21,17 @@ import { type UserTableItem } from "./types";
 interface UsersProps {
     data: UserTableItem[] | undefined;
     isLoading: boolean;
-    basePath: string; // e.g. "/admin/users" or "/dashboard/members"
     resource?: string; // Optional override for the delete resource
 }
 
-export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
+export const Users = ({ data, isLoading, resource }: UsersProps) => {
     const { mutate: deleteUser } = useDelete();
     const { mutate: sendInvite } = useCustomMutation();
     const { user: currentUser } = useAuth();
+    const { scope } = useAppScope();
+
+    // Generate basePath from scope
+    const basePath = scope === 'system' ? '/admin/users' : '/dashboard/users';
 
     // Check if user is platform_admin (can perform write operations)
     // PBAC: Check if user can manage users
@@ -92,6 +96,20 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
         });
     };
 
+    /**
+     * Render email verification status badge
+     * Extracted to avoid nested ternary (SonarQube S3358)
+     */
+    const renderEmailStatus = (user: UserTableItem) => {
+        if (user.status === 'pending') {
+            return <span className="text-muted-foreground text-xs">Waiting for acceptance</span>;
+        }
+        if (user.emailVerified) {
+            return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Verified</Badge>;
+        }
+        return <span className="text-muted-foreground text-xs">Unverified</span>;
+    };
+
     if (isLoading) {
         return <div className="p-4 text-sm text-muted-foreground">Loading users...</div>;
     }
@@ -152,15 +170,7 @@ export const Users = ({ data, isLoading, basePath, resource }: UsersProps) => {
                                     })()}
                                 </TableCell>
                                 <TableCell>
-                                    {user.status === 'pending' ? (
-                                        <span className="text-muted-foreground text-xs">Waiting for acceptance</span>
-                                    ) : (
-                                        user.emailVerified ? (
-                                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">Verified</Badge>
-                                        ) : (
-                                            <span className="text-muted-foreground text-xs">Unverified</span>
-                                        )
-                                    )}
+                                    {renderEmailStatus(user)}
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-2">

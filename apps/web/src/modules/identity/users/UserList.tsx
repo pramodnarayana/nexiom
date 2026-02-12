@@ -1,18 +1,14 @@
 import { useTable, useCan } from "@refinedev/core";
+import { useResourceName } from "@/shared/contexts/useAppScope";
 
 import { Users } from "./Users";
 import { type UserTableItem } from "./types";
 import { InviteUserDialog } from "./InviteUserDialog";
 
-interface UserListProps {
-    basePath: string;
-    resource?: string;
-}
+export const UserList = () => {
+    // Get scope-aware resource name from context
+    const resource = useResourceName('USERS');
 
-export const UserList = ({
-    basePath,
-    resource = "users",
-}: UserListProps) => {
     // Permission Check: Can create users?
     const { data: canCreate } = useCan({
         resource: resource,
@@ -71,7 +67,6 @@ export const UserList = ({
             <Users
                 data={users}
                 isLoading={isLoading}
-                basePath={basePath}
                 resource={resource}
             />
 

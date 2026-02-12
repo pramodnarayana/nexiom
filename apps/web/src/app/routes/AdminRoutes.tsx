@@ -15,6 +15,7 @@ import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
 import { TenantListPage } from '../../modules/tenants/pages/TenantListPage';
 import { TenantEdit } from '../../modules/tenants/pages/TenantEdit';
 import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
+import { RESOURCES } from '@/shared/constants/resources';
 
 export function AdminRoutes() {
     return (
@@ -27,7 +28,7 @@ export function AdminRoutes() {
                     accessControlProvider={accessControlProvider}
                     resources={[
                         {
-                            name: "admin/users",
+                            name: RESOURCES.SYSTEM.USERS,
                             list: "/admin/users",
                             edit: "/admin/users/edit/:id",
                             show: "/admin/users/show/:id",
@@ -36,14 +37,14 @@ export function AdminRoutes() {
                             }
                         },
                         {
-                            name: "admin/invitations",
+                            name: RESOURCES.SYSTEM.INVITATIONS,
                             create: "/admin/invitations",
                             meta: {
                                 canDelete: false,
                             },
                         },
                         {
-                            name: "admin/tenants",
+                            name: RESOURCES.SYSTEM.TENANTS,
                             list: "/admin/tenants",
                             edit: "/admin/tenants/:id",
                             show: "/admin/tenants/:id",
@@ -61,9 +62,9 @@ export function AdminRoutes() {
                     <Routes>
                         <Route element={<AdminLayout />}>
                             <Route index element={<AdminDashboardPage />} />
-                            <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" />} />
-                            <Route path="users/show/:id" element={<UserShow basePath="/admin/users" resource="admin/users" />} />
-                            <Route path="users/edit/:id" element={<UserEdit basePath="/admin/users" resource="admin/users" />} />
+                            <Route path="users" element={<UserList />} />
+                            <Route path="users/show/:id" element={<UserShow />} />
+                            <Route path="users/edit/:id" element={<UserEdit />} />
                             <Route path="tenants" element={<TenantListPage />} />
                             <Route path="tenants/:id" element={<TenantEdit />} />
                             <Route path="settings" element={<div>Settings Placeholder</div>} />

@@ -30,22 +30,36 @@ export function hasPermission(
 /**
  * User type with permissions
  */
-interface UserWithPermissions {
+export interface UserWithPermissions {
     permissions?: string[];
 }
 
 /**
+ * System owner permissions that grant admin-level access.
+ * Users with any of these permissions are considered system owners.
+ */
+const SYSTEM_OWNER_PERMISSIONS = [
+    'admin_dashboard:view',
+    'system_users:read',
+] as const;
+
+/**
  * Check if user is a System Owner based on their permissions.
- * System Owners have admin-level permissions like admin_dashboard:view or system_*:read
+ * 
+ * System Owners have specific admin-level permissions defined in SYSTEM_OWNER_PERMISSIONS.
+ * This approach uses explicit permission checks rather than wildcard matching for better
+ * security and maintainability.
  * 
  * @param permissions - Array of permission strings
- * @returns true if user has system owner permissions
+ * @returns true if user has any system owner permission
  */
 export function isSystemOwner(permissions?: string[]): boolean {
-    return (
-        hasPermission(permissions, 'admin_dashboard', 'view') ||
-        hasPermission(permissions, 'system_users', 'read')
-    );
+    if (!permissions) return false;
+
+    return SYSTEM_OWNER_PERMISSIONS.some(perm => {
+        const [resource, action] = perm.split(':');
+        return hasPermission(permissions, resource, action);
+    });
 }
 
 /**

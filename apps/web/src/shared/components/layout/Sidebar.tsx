@@ -42,10 +42,10 @@ export function Sidebar({
     logout,
     navigate,
     headerContent
-}: SidebarProps) {
+}: Readonly<SidebarProps>) {
     const location = useLocation();
     const isAdminView = location.pathname.startsWith(AppRoutes.ADMIN.ROOT);
-    const isTenantView = location.pathname.startsWith(AppRoutes.TENANT.ROOT);
+    const isTenantView = !isAdminView;
     const canViewAdminDashboard = hasPermission(user?.permissions, 'admin_dashboard', 'view');
 
     return (
