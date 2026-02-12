@@ -78,13 +78,31 @@ export const authProvider: AuthProvider = {
         return null;
     },
     getPermissions: async () => {
-        const { data } = await authClient.getSession();
-        if (data?.user) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const user = data.user as any;
+        try {
+            // Fetch enriched user from backend /api/users/me endpoint
+            // This includes permissions that are loaded by the backend
+            const apiURL = import.meta.env.VITE_API_URL;
+            if (!apiURL) {
+                console.error('[AuthProvider] VITE_API_URL not defined');
+                return [];
+            }
+
+            const response = await fetch(`${apiURL}/users/me`, {
+                credentials: 'include', // Include cookies for session
+            });
+
+            if (!response.ok) {
+                console.log('[AuthProvider] Failed to fetch /users/me:', response.status);
+                return [];
+            }
+
+            const user = await response.json();
+            console.log('[AuthProvider] Permissions loaded from /users/me:', user.permissions);
             return user.permissions || [];
+        } catch (error) {
+            console.error('[AuthProvider] Error fetching permissions:', error);
+            return [];
         }
-        return [];
     },
     onError: async (error: Error) => {
         console.error(error);
