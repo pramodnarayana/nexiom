@@ -18,8 +18,10 @@ describe('RolesController', () => {
   };
 
   const mockContext = {
+    headers: new Headers(),
     user: { memberRole: 'owner' },
-  } as RequestAuthContext;
+    session: { id: 'test-session' },
+  } as unknown as RequestAuthContext;
 
   beforeEach(async () => {
     roleProvider = {

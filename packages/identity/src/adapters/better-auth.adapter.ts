@@ -738,21 +738,42 @@ export class BetterAuthAdapter implements IAuthProvider {
     let members = dbUser.members;
 
     // Fallback: Lazy fetch if members weren't included in the initial query.
+    // We define the type to match the expected structure of dbUser.members
+    // The error "Type 'null' is not assignable" suggests that schema.Role allows nulls that weren't accounted for
+    type MemberWithRole = Omit<schema.Member, "role"> & {
+      role:
+        | string
+        | null
+        | (schema.Role & {
+            permissions?: schema.RolePermission[];
+          });
+    };
 
-    members ??= (await this.db.query.member.findMany({
-      where: eq(schema.member.userId, dbUser.id),
-      with: {
-        role: {
-          with: { permissions: true },
+    let fetchedMembers: MemberWithRole[] | undefined;
+
+    if (!members) {
+      fetchedMembers = await this.db.query.member.findMany({
+        where: eq(schema.member.userId, dbUser.id),
+        with: {
+          role: {
+            with: { permissions: true },
+          },
         },
-      },
-    })) as any;
+      });
+      // We know fetchedMembers matches the shape, but to satisfy the exact inferred type of dbUser.members
+      // (which comes from Drizzle's query builder inference), we use an intermediate cast to unknown
+      // to bypass the "no overlap" error (since typeof members includes undefined).
+      members = fetchedMembers as unknown as typeof members;
+    }
 
     const hasMembership = members && members.length > 0;
 
     if (hasMembership) {
       // Enforce Single-Membership Invariant
       if (members!.length > 1) {
+        console.error(
+          `[BetterAuthAdapter] User ${dbUser.id} has ${members!.length} memberships; expected at most 1.`,
+        );
         throw new Error(
           "BetterAuthAdapter: Multiple memberships detected for user in strict single-tenant application.",
         );

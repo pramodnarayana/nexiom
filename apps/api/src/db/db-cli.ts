@@ -24,12 +24,7 @@ async function main() {
   if (!command || !COMMANDS.includes(command)) {
     console.error('Usage: tsx db-cli.ts <command>');
     console.error('Commands:');
-    console.error('  drop        - Drop all schemas (destructive)');
-    console.error('  migrate     - Run pending migrations');
-    console.error('  seed        - Seed database with initial data');
-    console.error('  fresh       - Drop + Migrate + Seed (complete rebuild)');
-    console.error('  reset       - Truncate + Seed (preserve schema)');
-    console.error('  check-user  - Debug permissions for a user (email or ID)');
+    COMMANDS.forEach((cmd) => console.error(`  ${cmd}`));
     process.exit(1);
   }
 

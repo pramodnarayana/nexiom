@@ -33,12 +33,7 @@ describe('AuthController Coverage', () => {
     accept: Mock;
   };
 
-  const mockResponse = {
-    setHeader: vi.fn(),
-    status: vi.fn().mockReturnThis(),
-    json: vi.fn().mockReturnThis(),
-    cookie: vi.fn(),
-  } as unknown as Response;
+  let mockResponse: Response;
 
   const mockCompleteInvite: CompleteInvite = {
     invitationId: 'inv-1',
@@ -49,6 +44,12 @@ describe('AuthController Coverage', () => {
   };
 
   beforeEach(async () => {
+    mockResponse = {
+      setHeader: vi.fn(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis(),
+      cookie: vi.fn(),
+    } as unknown as Response;
     authService = {
       login: vi.fn(),
       registerUser: vi.fn(),
