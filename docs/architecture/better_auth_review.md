@@ -172,9 +172,9 @@ export class OrganizationAccessGuard {
 
 Add headers to system invitation creation
 
-### 2. **Short-term** (This Sprint)
+### 2. **Short-term** (Completed)
 
-Create wrapper service to centralize Better Auth calls
+Implemented Option A: centralized `AuthContext` and updated Guards/Controllers.
 
 ### 3. **Medium-term** (Next Quarter)
 
@@ -195,12 +195,12 @@ Document "Always pass headers to Better Auth" in developer guide
 | Coupling | High (to Better Auth) | Low (own abstractions) |
 | New developer onboarding | Requires tribal knowledge | Self-documenting |
 
-## Decision Required
+## Decision Implemented
 
-Which approach do you prefer?
+**Option A (Middleware + Context)** has been implemented.
 
-- **Option A**: Middleware + Context (Best practices, medium effort)
-- **Option B**: Wrapper Service (Good balance, lower effort)  
-- **Option C**: Replace Better Auth plugin (Most control, highest effort)
+- **`@AuthContext()`** decorator provides type-safe access to headers, user, and session.
+- **`AuthGuard`** (and `SystemAdminGuard`, `PlatformGuard`) populates the context automatically.
+- Controllers inject context instead of manual header extraction.
 
-I recommend **Option B** for next sprint to stop the bleeding, then evaluate Option C long-term.
+This approach resolves the "Leaky Abstraction" by handling Better Auth requirements centrally in the infrastructure layer.

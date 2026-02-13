@@ -306,17 +306,15 @@ describe('AuthController', () => {
   });
 
   describe('refreshSession', () => {
-    it('should return enriched session', async () => {
-      const enriched = { user: { id: 'u1', hasTenant: true } };
-      mockAuthService.getEnrichedSession.mockResolvedValue(enriched);
+    it('should return enriched session directly from context', () => {
+      const mockSession = {
+        user: { id: 'u1', hasTenant: true },
+      } as unknown as Session;
 
-      const sessionParam = { token: 'tok-123' } as Session;
-      const result = await controller.refreshSession(sessionParam);
+      const result = controller.refreshSession(mockSession);
 
-      expect(mockAuthService.getEnrichedSession).toHaveBeenCalledWith(
-        'tok-123',
-      );
-      expect(result).toEqual(enriched);
+      expect(result).toEqual(mockSession);
+      expect(mockAuthService.getEnrichedSession).not.toHaveBeenCalled();
     });
   });
 });

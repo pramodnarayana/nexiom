@@ -25,7 +25,7 @@
 
 ## Directory Structure
 
-```
+```text
 apps/api/          - NestJS backend (modules/identity/{auth,users,tenants,invitations,system-admin,roles})
 apps/web/          - React frontend (modules/{identity,dashboard,tenants,marketing}, shared/{components,lib,contexts})
 packages/identity/ - Shared identity library (adapters, interfaces, schema, services, utils)

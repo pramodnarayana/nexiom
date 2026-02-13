@@ -219,8 +219,9 @@ export class AuthController {
    */
   @Post('refresh-session')
   @UseGuards(AuthGuard)
-  async refreshSession(@AuthContext('session') session: Session) {
-    return this.authService.getEnrichedSession(session.token);
+  refreshSession(@AuthContext('session') session: Session) {
+    // Session is already enriched by AuthGuard
+    return session;
   }
 
   /**
