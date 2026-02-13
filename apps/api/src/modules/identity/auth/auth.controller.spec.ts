@@ -308,8 +308,15 @@ describe('AuthController', () => {
   describe('refreshSession', () => {
     it('should return enriched session directly from context', () => {
       const mockSession = {
-        user: { id: 'u1', hasTenant: true },
-      } as unknown as Session;
+        id: 'session-123',
+        userId: 'u1',
+        token: 'tok-123',
+        expiresAt: new Date(),
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Session;
 
       const result = controller.refreshSession(mockSession);
 
