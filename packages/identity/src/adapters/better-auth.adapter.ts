@@ -715,8 +715,6 @@ export class BetterAuthAdapter implements IAuthProvider {
     return this.mapUser(dbUser);
   }
 
-  // ... (imports)
-
   // --- Mappers ---
   private async mapUser(
     dbUser: schema.User & {

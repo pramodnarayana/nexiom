@@ -55,7 +55,7 @@ describe('RolesController', () => {
   describe('findAll', () => {
     const mockCtx = {
       headers: new Headers(),
-      user: { id: 'u1', role: 'admin' },
+      user: { id: 'u1', role: 'admin', memberRole: 'admin' },
       session: { id: 's1', token: 't1' },
     } as unknown as RequestAuthContext;
 

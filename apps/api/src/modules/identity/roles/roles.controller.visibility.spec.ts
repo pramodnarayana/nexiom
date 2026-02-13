@@ -52,7 +52,7 @@ describe('RolesController - Visibility Logic', () => {
 
   it('should filter out Owner role for a Member requester', async () => {
     const mockContext = {
-      user: { role: 'member' },
+      user: { role: 'member', memberRole: 'member' },
       headers: new Headers(),
       session: { id: 'test-session' },
     } as unknown as RequestAuthContext;

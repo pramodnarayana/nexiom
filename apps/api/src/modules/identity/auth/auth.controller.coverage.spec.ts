@@ -96,6 +96,21 @@ describe('AuthController Coverage', () => {
         controller.resendVerification({ email: 'test@example.com' }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should send verification email successfully', async () => {
+      authService.resendVerificationEmail.mockResolvedValue(undefined);
+
+      const result = await controller.resendVerification({
+        email: 'test@example.com',
+      });
+
+      expect(result).toEqual({
+        message: 'Verification email sent successfully',
+      });
+      expect(authService.resendVerificationEmail).toHaveBeenCalledWith(
+        'test@example.com',
+      );
+    });
   });
 
   describe('completeInvite', () => {
@@ -174,6 +189,20 @@ describe('AuthController Coverage', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(userProvider.delete).toHaveBeenCalledWith('u1');
+    });
+
+    it('should create and login a new user when invite is valid', async () => {
+      invitationsService.get.mockResolvedValue(mockInviteData);
+      userProvider.findByEmail.mockResolvedValue(null);
+      authService.createUser.mockResolvedValue({ id: 'u-new' });
+      invitationsService.accept.mockResolvedValue(undefined);
+      authService.login.mockResolvedValue({ session: 's' });
+
+      await controller.completeInvite(mockCompleteInvite, mockResponse);
+
+      expect(authService.createUser).toHaveBeenCalled();
+      expect(invitationsService.accept).toHaveBeenCalled();
+      expect(authService.login).toHaveBeenCalled();
     });
   });
 });

@@ -340,14 +340,14 @@ export class DatabaseManager {
       console.log(`  Permissions (${perms.length}):`);
       const permIds = perms.map((p) => p.permissionId).sort();
 
-      permIds.forEach((p) => console.log(`    - ${p}`));
+      for (const p of permIds) console.log(`    - ${p}`);
 
       const critical = DatabaseManager.CRITICAL_PERMISSIONS;
       console.log('\n  Critical Check:');
-      critical.forEach((c) => {
+      for (const c of critical) {
         const has = permIds.includes(c);
         console.log(`    ${has ? '✅' : '❌'} ${c}`);
-      });
+      }
     } finally {
       await client.end();
     }
@@ -408,10 +408,8 @@ export class DatabaseManager {
           const roleName = normalized.name;
           const roleId = normalized.id;
 
-          if (normalized.permissions) {
-            normalized.permissions.forEach((p) =>
-              allPermissions.add(p.permissionId),
-            );
+          for (const p of normalized.permissions) {
+            allPermissions.add(p.permissionId);
           }
 
           console.log(
@@ -426,14 +424,14 @@ export class DatabaseManager {
       const sortedPerms = Array.from(allPermissions).sort((a, b) =>
         a.localeCompare(b),
       );
-      sortedPerms.forEach((p) => console.log(`    - ${p}`));
+      for (const p of sortedPerms) console.log(`    - ${p}`);
 
       const critical = DatabaseManager.CRITICAL_PERMISSIONS;
       console.log('\n  Critical Capability Check:');
-      critical.forEach((c) => {
+      for (const c of critical) {
         const has = allPermissions.has(c);
         console.log(`    ${has ? '✅' : '❌'} ${c}`);
-      });
+      }
     } finally {
       await client.end();
     }

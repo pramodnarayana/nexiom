@@ -370,7 +370,7 @@ describe('DatabaseManager', () => {
       );
     });
 
-    it('should handle legacy string roles in membership causing fallback query', async () => {
+    it('should handle legacy string roles in membership with zero effective permissions', async () => {
       const logSpy = vi.spyOn(console, 'log');
 
       // Mock user with legacy string role in member

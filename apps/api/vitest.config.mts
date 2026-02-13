@@ -21,7 +21,7 @@ export default defineConfig({
             MEMBER_ROLE_ID: 'member',
         },
         coverage: {
-            provider: 'istanbul',
+            provider: 'v8',
             exclude: [
                 'node_modules/**',
                 'dist/**',
