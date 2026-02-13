@@ -4,6 +4,7 @@ import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import type { RequestAuthContext } from '../auth/auth-context.decorator';
 
 describe('RolesController', () => {
   let controller: RolesController;
@@ -47,11 +48,17 @@ describe('RolesController', () => {
   });
 
   describe('findAll', () => {
+    const mockCtx = {
+      headers: new Headers(),
+      user: { id: 'u1', role: 'admin' },
+      session: { id: 's1', token: 't1' },
+    } as unknown as RequestAuthContext;
+
     it('should return roles from provider', async () => {
       const roles = [{ id: 'admin', name: 'Admin' }];
       roleProvider.findAll.mockResolvedValue(roles);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll(mockCtx);
 
       expect(result).toEqual({ data: roles });
       expect(roleProvider.findAll).toHaveBeenCalledWith({ scope: undefined });
@@ -69,7 +76,7 @@ describe('RolesController', () => {
       ];
       roleProvider.findAll.mockResolvedValue(roles);
 
-      const result = await controller.findAll(RoleScope.System);
+      const result = await controller.findAll(mockCtx, RoleScope.System);
 
       expect(result).toEqual({ data: roles });
       expect(roleProvider.findAll).toHaveBeenCalledWith({
@@ -77,18 +84,54 @@ describe('RolesController', () => {
       });
     });
 
+    it('should filter out Owner role for non-owner users', async () => {
+      const roles = [
+        { id: 'owner', name: 'owner' },
+        { id: 'admin', name: 'admin' },
+        { id: 'member', name: 'member' },
+      ];
+      roleProvider.findAll.mockResolvedValue(roles);
+
+      const result = await controller.findAll(mockCtx);
+
+      expect(result).toEqual({
+        data: [
+          { id: 'admin', name: 'admin' },
+          { id: 'member', name: 'member' },
+        ],
+      });
+    });
+
+    it('should include Owner role for owner users', async () => {
+      const ownerCtx = {
+        ...mockCtx,
+        user: { id: 'u1', role: 'owner' },
+      } as unknown as RequestAuthContext;
+      const roles = [
+        { id: 'owner', name: 'owner' },
+        { id: 'admin', name: 'admin' },
+      ];
+      roleProvider.findAll.mockResolvedValue(roles);
+
+      const result = await controller.findAll(ownerCtx);
+
+      expect(result).toEqual({ data: roles });
+    });
+
     it('should handle provider errors', async () => {
       roleProvider.findAll.mockRejectedValue(new Error('Provider Error'));
 
-      await expect(controller.findAll()).rejects.toThrow('Provider Error');
+      await expect(controller.findAll(mockCtx)).rejects.toThrow(
+        'Provider Error',
+      );
     });
 
     it('should handle provider errors with scope', async () => {
       roleProvider.findAll.mockRejectedValue(new Error('Provider Error'));
 
-      await expect(controller.findAll(RoleScope.System)).rejects.toThrow(
-        'Provider Error',
-      );
+      await expect(
+        controller.findAll(mockCtx, RoleScope.System),
+      ).rejects.toThrow('Provider Error');
     });
   });
 

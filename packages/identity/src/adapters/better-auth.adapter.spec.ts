@@ -642,4 +642,87 @@ describe("BetterAuthAdapter", () => {
       }),
     );
   });
+
+  it("findById returns user with permissions from eager-loaded members", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+
+    db.query.user.findFirst.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      role: "member", // Legacy field — ignored by mapUser
+      members: [
+        {
+          id: "m1",
+          userId: "u1",
+          organizationId: "org1",
+          role: {
+            id: "admin",
+            name: "Admin",
+            permissions: [
+              { permissionId: "users:create" },
+              { permissionId: "users:read" }
+            ]
+          }
+        }
+      ],
+    });
+
+    const user = await adapter.findById("u1");
+
+    expect(user.id).toBe("u1");
+    expect(user.role).toBe("admin"); // Lowercased from "Admin"
+    expect(user.permissions).toContain("users:create");
+    expect(user.permissions).toContain("users:read");
+    expect(user.hasTenant).toBe(true);
+    // Verify no lazy-fetch fallback was triggered
+    expect(db.query.member.findMany).not.toHaveBeenCalled();
+    // Verify no redundant permission query (permissions were preloaded)
+    expect(db.query.rolePermission.findMany).not.toHaveBeenCalled();
+  });
+
+  it("createUser inherits permissions from member role, not legacy user.role", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+    const auth: any = (adapter as any).auth;
+
+    auth.api.signUpEmail.mockResolvedValue({ user: { id: "u_admin" } });
+
+    // Rehydration returns eager-loaded user with members
+    db.query.user.findFirst.mockResolvedValueOnce({
+      id: "u_admin",
+      email: "admin@test.com",
+      role: "member", // Legacy — ignored by mapUser
+      members: [
+        {
+          id: "m_admin",
+          userId: "u_admin",
+          organizationId: "sys_org",
+          role: {
+            id: "admin",
+            name: "Admin",
+            permissions: [
+              { permissionId: "users:create" },
+              { permissionId: "users:delete" }
+            ]
+          }
+        }
+      ]
+    });
+
+    const user = await adapter.createUser({
+      email: "admin@test.com",
+      password: "password",
+      role: "admin",
+    });
+
+    expect(user.id).toBe("u_admin");
+    expect(user.role).toBe("admin"); // Lowercased from "Admin"
+    expect(user.permissions).toContain("users:create");
+    expect(user.permissions).toContain("users:delete");
+    // Legacy user.role field should NOT be written to
+    expect(db.update).not.toHaveBeenCalled();
+  });
 });

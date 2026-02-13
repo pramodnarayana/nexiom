@@ -299,4 +299,152 @@ export class DatabaseManager {
 
     console.log('✅ Reset complete!');
   }
+
+  /**
+   * Debug RBAC permissions for a role
+   */
+  async debugPermissions(roleName: string): Promise<void> {
+    console.log(`🔍 Debugging permissions for role: ${roleName}...`);
+
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { eq } = await import('drizzle-orm');
+    const schema = await import('./schema');
+
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema });
+
+      const role = await db.query.role.findFirst({
+        where: eq(schema.role.name, roleName),
+      });
+
+      if (!role) {
+        console.error(`❌ Role '${roleName}' not found`);
+        return;
+      }
+
+      console.log(`  Found Role: ${role.name} (${role.id})`);
+
+      const perms = await db.query.rolePermission.findMany({
+        where: eq(schema.rolePermission.roleId, role.id),
+      });
+
+      console.log(`  Permissions (${perms.length}):`);
+      const permIds = perms.map((p) => p.permissionId).sort();
+
+      permIds.forEach((p) => console.log(`    - ${p}`));
+
+      const critical = ['system_users:create', 'users:create'];
+      console.log('\n  Critical Check:');
+      critical.forEach((c) => {
+        const has = permIds.includes(c);
+        console.log(`    ${has ? '✅' : '❌'} ${c}`);
+      });
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
+   * Check permissions for a specific user (by ID or Email)
+   */
+  async checkUserPermissions(identifier: string): Promise<void> {
+    console.log(`🔍 Checking permissions for user: ${identifier}...`);
+
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { eq, or } = await import('drizzle-orm');
+    const schema = await import('./schema');
+
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema });
+
+      // Find user by ID or Email
+      const user = await db.query.user.findFirst({
+        where: or(
+          eq(schema.user.id, identifier),
+          eq(schema.user.email, identifier),
+        ),
+        with: {
+          members: {
+            with: {
+              role: {
+                with: { permissions: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        console.error(`❌ User '${identifier}' not found`);
+        return;
+      }
+
+      console.log(`  Found User: ${user.email} (${user.id})`);
+      console.log(
+        `  Global Role (LEGACY - ignored by app): ${user.role || 'None'}`,
+      );
+
+      const allPermissions = new Set<string>();
+
+      // Resolve Member Role Permissions (this is what the app actually uses)
+      if (user.members && user.members.length > 0) {
+        console.log(`  Memberships (${user.members.length}):`);
+        for (const member of user.members) {
+          const memberRole = member.role as unknown;
+
+          let roleName =
+            typeof memberRole === 'string' ? memberRole : 'unknown';
+          let roleId = typeof memberRole === 'string' ? memberRole : 'unknown';
+
+          if (
+            memberRole &&
+            typeof memberRole === 'object' &&
+            'name' in memberRole &&
+            'id' in memberRole
+          ) {
+            const roleObj = memberRole as {
+              id: string;
+              name: string;
+              permissions: { permissionId: string }[];
+            };
+            roleName = roleObj.name;
+            roleId = roleObj.id;
+
+            if (Array.isArray(roleObj.permissions)) {
+              roleObj.permissions.forEach((p) =>
+                allPermissions.add(p.permissionId),
+              );
+            }
+          }
+
+          console.log(
+            `    - Org: ${member.organizationId}, Role: ${roleName} (${roleId})`,
+          );
+        }
+      } else {
+        console.log(`  Memberships: None`);
+      }
+
+      console.log(`\n  Effective Permissions (${allPermissions.size}):`);
+      const sortedPerms = Array.from(allPermissions).sort();
+      sortedPerms.forEach((p) => console.log(`    - ${p}`));
+
+      const critical = [
+        'system_users:create',
+        'users:create',
+        'dashboard:view',
+      ];
+      console.log('\n  Critical Capability Check:');
+      critical.forEach((c) => {
+        const has = allPermissions.has(c);
+        console.log(`    ${has ? '✅' : '❌'} ${c}`);
+      });
+    } finally {
+      await client.end();
+    }
+  }
 }

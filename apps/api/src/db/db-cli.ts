@@ -8,7 +8,14 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 import { DatabaseManager } from './database-manager';
 
-const COMMANDS = ['drop', 'migrate', 'seed', 'fresh', 'reset'] as const;
+const COMMANDS = [
+  'drop',
+  'migrate',
+  'seed',
+  'fresh',
+  'reset',
+  'check-user',
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 async function main() {
@@ -17,11 +24,12 @@ async function main() {
   if (!command || !COMMANDS.includes(command)) {
     console.error('Usage: tsx db-cli.ts <command>');
     console.error('Commands:');
-    console.error('  drop     - Drop all schemas (destructive)');
-    console.error('  migrate  - Run pending migrations');
-    console.error('  seed     - Seed database with initial data');
-    console.error('  fresh    - Drop + Migrate + Seed (complete rebuild)');
-    console.error('  reset    - Truncate + Seed (preserve schema)');
+    console.error('  drop        - Drop all schemas (destructive)');
+    console.error('  migrate     - Run pending migrations');
+    console.error('  seed        - Seed database with initial data');
+    console.error('  fresh       - Drop + Migrate + Seed (complete rebuild)');
+    console.error('  reset       - Truncate + Seed (preserve schema)');
+    console.error('  check-user  - Debug permissions for a user (email or ID)');
     process.exit(1);
   }
 
@@ -44,6 +52,15 @@ async function main() {
       case 'reset':
         await manager.reset();
         break;
+      case 'check-user': {
+        const identifier = process.argv[3];
+        if (!identifier) {
+          console.error('Usage: check-user <userId | email>');
+          process.exit(1);
+        }
+        await manager.checkUserPermissions(identifier);
+        break;
+      }
     }
   } catch (error) {
     console.error(

@@ -11,6 +11,18 @@ const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
       organization: {
         findFirst: vi.fn(),
       },
+      user: {
+        findFirst: vi.fn(),
+      },
+      role: {
+        findFirst: vi.fn(),
+      },
+      member: {
+        findMany: vi.fn(),
+      },
+      rolePermission: {
+        findMany: vi.fn(),
+      },
     },
   },
   rbacMocks: {
@@ -306,6 +318,82 @@ describe('DatabaseManager', () => {
 
       expect(truncateSpy.mock.invocationCallOrder[0]).toBeLessThan(
         seedSpy.mock.invocationCallOrder[0],
+      );
+    });
+  });
+  describe('checkUserPermissions()', () => {
+    it('should log error if user not found', async () => {
+      const consoleSpy = vi.spyOn(console, 'error');
+      drizzleMocks.query.user.findFirst.mockResolvedValue(null);
+
+      await manager.checkUserPermissions('missing-id');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("User 'missing-id' not found"),
+      );
+    });
+
+    it('should list permissions from memberships', async () => {
+      const logSpy = vi.spyOn(console, 'log');
+
+      const mockUser = {
+        id: 'u1',
+        email: 'test@example.com',
+        role: 'member',
+        members: [
+          {
+            organizationId: 'org1',
+            role: {
+              id: 'role1',
+              name: 'Admin',
+              permissions: [{ permissionId: 'users:create' }],
+            },
+          },
+        ],
+      };
+
+      drizzleMocks.query.user.findFirst.mockResolvedValue(mockUser);
+
+      await manager.checkUserPermissions('u1');
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Found User: test@example.com'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Role: Admin (role1)'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('users:create'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('✅ users:create'),
+      );
+    });
+
+    it('should handle legacy string roles in membership causing fallback query', async () => {
+      const logSpy = vi.spyOn(console, 'log');
+
+      // Mock user with legacy string role in member
+      const mockUser = {
+        id: 'u2',
+        email: 'legacy@example.com',
+        role: 'admin',
+        members: [{ organizationId: 'org2', role: 'legacy-role-id' }],
+        // logic in manager handles string roles by printing them but typically expects object for permission extraction unless resolved
+        // Actually current implementation ONLY extracts permissions if role is object and has permissions array.
+        // It does NOT perform extra query for permissions in checkUserPermissions (unlike BetterAuthAdapter).
+        // It just prints the role ID.
+      };
+
+      drizzleMocks.query.user.findFirst.mockResolvedValue(mockUser);
+
+      await manager.checkUserPermissions('u2');
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Role: legacy-role-id (legacy-role-id)'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Effective Permissions (0)'),
       );
     });
   });
