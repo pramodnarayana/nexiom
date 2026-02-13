@@ -5,10 +5,10 @@ import {
   Res,
   All,
   Req,
-  UnauthorizedException,
   Inject,
   Logger,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -25,7 +25,8 @@ import { Signup, CompleteInvite } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { InvitationsService } from '../invitations/invitations.service';
-import { toWebHeaders } from '../../../common/utils/headers.util';
+import { AuthGuard } from './auth.guard';
+import { AuthContext } from './auth-context.decorator';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -85,17 +86,9 @@ export class AuthController {
    * This is called by the frontend if the user is detected to have no organization.
    */
   @Post('provision-tenant')
-  async provisionTenant(@Req() req: Request): Promise<unknown> {
-    // FIX: use getSessionFromHeaders to handle signed cookies correctly
-    const sessionData = await this.authService.getSessionFromHeaders(
-      toWebHeaders(req.headers),
-    );
-
-    if (!sessionData) {
-      throw new UnauthorizedException('No Session Found');
-    }
-
-    return this.tenantProvider.provisionTenantForUser(sessionData.user.id);
+  @UseGuards(AuthGuard)
+  async provisionTenant(@AuthContext('user') user: User): Promise<unknown> {
+    return this.tenantProvider.provisionTenantForUser(user.id);
   }
 
   /**
@@ -225,22 +218,10 @@ export class AuthController {
    * Bypasses the standard /auth/get-session which might ignore custom hooks.
    */
   @Post('refresh-session')
-  async refreshSession(@Req() req: Request) {
-    // Delegate session extraction to the provider (handles signed cookies/headers)
-    // We pass the native Headers object
-    const sessionData = await this.authService.getSessionFromHeaders(
-      toWebHeaders(req.headers),
-    );
-
-    if (!sessionData) {
-      throw new UnauthorizedException('Invalid Session');
-    }
-
-    // Now Enrich it (we have the valid session object)
-    // We can use getEnrichedSession, but we already have the session object.
-    // Let's refactor getEnrichedSession to accept an OBJECT or ID?
-    // Or just call getEnrichedSession with the now-valid session ID.
-    return this.authService.getEnrichedSession(sessionData.session.token);
+  @UseGuards(AuthGuard)
+  refreshSession(@AuthContext('session') session: Session) {
+    // Session is already enriched by AuthGuard
+    return session;
   }
 
   /**

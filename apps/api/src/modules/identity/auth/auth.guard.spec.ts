@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
+import type { RequestAuthContext } from './auth-context.decorator';
 
 describe('AuthGuard', () => {
   let guard: AuthGuard;
@@ -76,10 +77,16 @@ describe('AuthGuard', () => {
       session: mockSession,
     });
 
-    const mockRequest = {
+    const mockRequest: {
+      headers: Record<string, string>;
+      user: unknown;
+      session: unknown;
+      authContext: RequestAuthContext | undefined;
+    } = {
       headers: {},
       user: undefined,
       session: undefined,
+      authContext: undefined,
     };
 
     const mockContext = {
@@ -95,6 +102,10 @@ describe('AuthGuard', () => {
     expect(authService.getEnrichedSession).toHaveBeenCalledWith('valid-token');
     expect(mockRequest.user).toEqual(mockUser);
     expect(mockRequest.session).toEqual(mockSession);
+    expect(mockRequest.authContext).toBeDefined();
+    expect(mockRequest.authContext!.user).toEqual(mockUser);
+    expect(mockRequest.authContext!.session).toEqual(mockSession);
+    expect(mockRequest.authContext!.headers).toBeInstanceOf(Headers);
   });
 
   it('should throw UnauthorizedException if session is invalid via headers', async () => {

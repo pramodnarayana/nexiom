@@ -1,16 +1,12 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitation, AcceptInvitation } from './invitations.validation';
 import { AuthGuard } from '../auth/auth.guard';
-import { Request } from 'express';
+import { User } from '@nexiom/identity';
+import {
+  AuthContext,
+  RequestAuthContext,
+} from '../auth/auth-context.decorator';
 
 @Controller('invitations')
 export class InvitationsController {
@@ -20,21 +16,21 @@ export class InvitationsController {
   @UseGuards(AuthGuard)
   async create(
     @Body() createInvitation: CreateInvitation,
-    @Req() req: Request & { user: { id: string; organizationId?: string } },
+    @AuthContext() ctx: RequestAuthContext,
   ) {
     // If specific organization context exists (Tenant Admin), enforce it.
-    if (req.user.organizationId) {
-      createInvitation.organizationId = req.user.organizationId;
+    if (ctx.user.organizationId) {
+      createInvitation.organizationId = ctx.user.organizationId;
     }
     // Extract only necessary headers for downstream propagation
     const forwardedHeaders = {
-      'x-request-id': req.headers['x-request-id'],
-      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'x-request-id': ctx.headers.get('x-request-id') ?? undefined,
+      'x-forwarded-for': ctx.headers.get('x-forwarded-for') ?? undefined,
     };
 
     return this.invitationsService.create(
       createInvitation,
-      req.user.id,
+      ctx.user.id,
       forwardedHeaders,
     );
   }
@@ -49,23 +45,21 @@ export class InvitationsController {
   @UseGuards(AuthGuard)
   async accept(
     @Body() acceptInvitation: AcceptInvitation,
-    @Req() req: Request & { user: { id: string } },
+    @AuthContext('user') user: User,
   ) {
     return this.invitationsService.accept(
       acceptInvitation.invitationId,
-      req.user.id,
+      user.id,
     );
   }
 
   @Get()
   @UseGuards(AuthGuard)
-  async list(
-    @Req() req: Request & { user: { id: string; organizationId?: string } },
-  ) {
-    if (!req.user.organizationId) {
+  async list(@AuthContext('user') user: User) {
+    if (!user.organizationId) {
       // If no org, return empty or throw. For now empty list.
       return [];
     }
-    return this.invitationsService.list(req.user.organizationId);
+    return this.invitationsService.list(user.organizationId);
   }
 }

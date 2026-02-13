@@ -8,6 +8,8 @@ import {
 import { AuthService } from './auth.service';
 
 import { Request } from 'express';
+import { toWebHeaders } from '../../../common/utils/headers.util';
+import { RequestAuthContext } from './auth-context.decorator';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,9 +18,13 @@ export class AuthGuard implements CanActivate {
   constructor(private readonly authService: AuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<Request & { user: unknown; session: unknown }>();
+    const request = context.switchToHttp().getRequest<
+      Request & {
+        user: unknown;
+        session: unknown;
+        authContext?: RequestAuthContext;
+      }
+    >();
 
     // 1. Validate Session using robust enriched method via Headers (handles Signed Cookies)
     // We pass the raw Node headers to the adapter, which handles conversion safely
@@ -47,8 +53,10 @@ export class AuthGuard implements CanActivate {
 
       // 3. Attach to request
       // We attach the ENRICHED user/session, not the basic one.
+      const webHeaders = toWebHeaders(request.headers);
       request.user = user;
       request.session = session;
+      request.authContext = { headers: webHeaders, user, session };
 
       this.logger.debug(
         `[AuthGuard] Session Validated for User: ${user?.id}, SessionID: ${session?.id}`,

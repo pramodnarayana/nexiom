@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import type { User, Session } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Request, Response } from 'express';
 import { CompleteInvite } from '../users/users.validation';
@@ -9,15 +10,6 @@ import { CompleteInvite } from '../users/users.validation';
 describe('AuthController', () => {
   let controller: AuthController;
   let module: TestingModule;
-
-  const mockSession = {
-    id: 'session-123',
-    userId: '123',
-    expiresAt: new Date(Date.now() + 86400000),
-    token: 'token-123',
-    ipAddress: null,
-    userAgent: null,
-  };
 
   const mockAuthService = {
     login: vi.fn(),
@@ -79,37 +71,18 @@ describe('AuthController', () => {
 
   describe('provisionTenant', () => {
     it('should provision tenant via TenantsService', async () => {
-      const mockRequest = {
-        headers: {},
-        cookies: {
-          'better-auth.session_token': 'valid-token-123',
-        },
-      } as unknown as Request;
+      const mockUser = { id: 'user-123' } as User;
 
-      const mockSessionData = {
-        user: { id: 'user-123' },
-        session: mockSession,
-      };
-
-      mockAuthService.getSessionFromHeaders.mockResolvedValue(mockSessionData);
       mockTenantProvider.provisionTenantForUser.mockResolvedValue({
         id: 'org-123',
         name: 'New Org',
       });
 
-      const result = await controller.provisionTenant(mockRequest);
+      const result = await controller.provisionTenant(mockUser);
 
       expect(result).toBeDefined();
       expect(mockTenantProvider.provisionTenantForUser).toHaveBeenCalledWith(
         'user-123',
-      );
-    });
-
-    it('should throw UnauthorizedException if no session', async () => {
-      mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
-      const mockRequest = { headers: {} } as Request;
-      await expect(controller.provisionTenant(mockRequest)).rejects.toThrow(
-        'No Session Found',
       );
     });
   });
@@ -333,30 +306,22 @@ describe('AuthController', () => {
   });
 
   describe('refreshSession', () => {
-    it('should return enriched session', async () => {
-      const mockSessionData = {
-        session: { token: 'tok-123' },
-        user: { id: 'u1' },
-      };
-      mockAuthService.getSessionFromHeaders.mockResolvedValue(mockSessionData);
+    it('should return enriched session directly from context', () => {
+      const mockSession = {
+        id: 'session-123',
+        userId: 'u1',
+        token: 'tok-123',
+        expiresAt: new Date(),
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as Session;
 
-      const enriched = { user: { id: 'u1', hasTenant: true } };
-      mockAuthService.getEnrichedSession.mockResolvedValue(enriched);
+      const result = controller.refreshSession(mockSession);
 
-      const req = { headers: {} } as Request;
-      const result = await controller.refreshSession(req);
-
-      expect(mockAuthService.getSessionFromHeaders).toHaveBeenCalled();
-      expect(mockAuthService.getEnrichedSession).toHaveBeenCalledWith(
-        'tok-123',
-      );
-      expect(result).toEqual(enriched);
-    });
-
-    it('should throw UnauthorizedException if no session', async () => {
-      mockAuthService.getSessionFromHeaders.mockResolvedValue(null);
-      const req = { headers: {} } as Request;
-      await expect(controller.refreshSession(req)).rejects.toThrow();
+      expect(result).toEqual(mockSession);
+      expect(mockAuthService.getEnrichedSession).not.toHaveBeenCalled();
     });
   });
 });
