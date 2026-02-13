@@ -3,6 +3,7 @@ import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { LayoutDashboard, Users, Settings } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
+import { RESOURCES } from '@/shared/constants/resources';
 
 import { dataProvider } from "../providers/data-provider";
 import { tenantAuthProvider } from "../providers/tenant-auth-provider";
@@ -13,6 +14,7 @@ import { UserShow } from '../../modules/identity/pages/admin/users/UserShow';
 import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
 import { TenantSettingsPage } from '../../modules/identity/pages/TenantSettingsPage';
 import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
+import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -28,41 +30,45 @@ export function TenantRoutes() {
 
     return (
         <Route path={`${AppRoutes.TENANT.ROOT}/*`} element={
-            <Refine
-                authProvider={tenantAuthProvider}
-                dataProvider={dataProvider}
-                routerProvider={routerProvider}
-                resources={[
-                    {
-                        name: "dashboard",
-                        list: "/dashboard",
-                    },
-                    {
-                        name: "users",
-                        list: "/dashboard/users",
-                        show: "/dashboard/users/show/:id",
-                        edit: "/dashboard/users/edit/:id",
-                        meta: {
-                            label: "Users",
+            <AppScopeProvider scope="organization">
+                <Refine
+                    authProvider={tenantAuthProvider}
+                    dataProvider={dataProvider}
+                    routerProvider={routerProvider}
+                    resources={[
+                        {
+                            // Dashboard is intentionally not part of RESOURCES.ORGANIZATION
+                            // It's a special tenant-level route, not a managed resource
+                            name: "dashboard",
+                            list: "/dashboard",
+                        },
+                        {
+                            name: RESOURCES.ORGANIZATION.USERS,
+                            list: "/dashboard/users",
+                            show: "/dashboard/users/show/:id",
+                            edit: "/dashboard/users/edit/:id",
+                            meta: {
+                                label: "Users",
+                            }
                         }
-                    }
-                ]}
-                options={{
-                    syncWithLocation: true,
-                    warnWhenUnsavedChanges: true,
-                }}
-            >
-                <Routes>
-                    <Route element={<TenantLayout navGroups={navGroups} />}>
-                        <Route index element={<DashboardPage />} />
-                        <Route path="users" element={<UserList basePath="/dashboard/users" resource="users" />} />
-                        <Route path="users/show/:id" element={<UserShow basePath="/dashboard/users" resource="users" />} />
-                        <Route path="users/edit/:id" element={<UserEdit basePath="/dashboard/users" resource="users" />} />
-                        <Route path="settings" element={<TenantSettingsPage />} />
-                        <Route path="profile" element={<UserProfilePage />} />
-                    </Route>
-                </Routes>
-            </Refine>
+                    ]}
+                    options={{
+                        syncWithLocation: true,
+                        warnWhenUnsavedChanges: true,
+                    }}
+                >
+                    <Routes>
+                        <Route element={<TenantLayout navGroups={navGroups} />}>
+                            <Route index element={<DashboardPage />} />
+                            <Route path="users" element={<UserList />} />
+                            <Route path="users/show/:id" element={<UserShow />} />
+                            <Route path="users/edit/:id" element={<UserEdit />} />
+                            <Route path="settings" element={<TenantSettingsPage />} />
+                            <Route path="profile" element={<UserProfilePage />} />
+                        </Route>
+                    </Routes>
+                </Refine>
+            </AppScopeProvider>
         } />
     );
 }

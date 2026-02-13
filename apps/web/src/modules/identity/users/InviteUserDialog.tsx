@@ -31,6 +31,7 @@ import { Button } from "@/shared/components/ui/button";
 import { Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
 import { useCreate, useList } from "@refinedev/core";
+import { useResourceName, useAppScope } from "@/shared/contexts/useAppScope";
 
 // Schema matching Backend CreateInvitationSchema
 const inviteUserSchema = z.object({
@@ -40,17 +41,12 @@ const inviteUserSchema = z.object({
 
 type InviteUserFormValues = z.infer<typeof inviteUserSchema>;
 
-interface InviteUserDialogProps {
-    resource?: string; // context resource (admin/users or users)
-}
-
-export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDialogProps>) {
+export function InviteUserDialog() {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
     const { mutate: create, isLoading } = useCreate();
-
-    // Determine scope based on resource
-    const scope = resource === "admin/users" ? "system" : "organization";
+    const invitationResource = useResourceName('INVITATIONS');
+    const { scope } = useAppScope();
 
     // Fetch Roles
     const { data: rolesData, isLoading: isLoadingRoles } = useList({
@@ -90,13 +86,9 @@ export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDial
     }, [open, roles, form]);
 
     const onSubmit = (data: InviteUserFormValues) => {
-        // Detect if we're in admin context (System Owner)
-        const isAdminContext = resource === "admin/users";
-
         create(
             {
-                // System Owner uses admin endpoint, Tenant Admin uses regular endpoint
-                resource: isAdminContext ? "admin/invitations" : "invitations",
+                resource: invitationResource,
                 values: {
                     ...data,
                     // The backend handles organizationId injection based on user token.
@@ -141,6 +133,23 @@ export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDial
         );
     };
 
+    // Render role select options based on loading state and available roles
+    const renderRoleOptions = () => {
+        if (isLoadingRoles) {
+            return <SelectItem value="loading" disabled>Loading roles...</SelectItem>;
+        }
+
+        if (roles.length === 0) {
+            return <SelectItem value="no-roles" disabled>No roles available</SelectItem>;
+        }
+
+        return roles.map((role) => (
+            <SelectItem key={String(role.id)} value={String(role.id)}>
+                {role.name}
+            </SelectItem>
+        ));
+    };
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -182,17 +191,7 @@ export function InviteUserDialog({ resource = "users" }: Readonly<InviteUserDial
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {isLoadingRoles ? (
-                                                <SelectItem value="loading" disabled>Loading roles...</SelectItem>
-                                            ) : roles.length === 0 ? (
-                                                <SelectItem value="no-roles" disabled>No roles available</SelectItem>
-                                            ) : (
-                                                roles.map((role) => (
-                                                    <SelectItem key={String(role.id)} value={String(role.id)}>
-                                                        {role.name}
-                                                    </SelectItem>
-                                                ))
-                                            )}
+                                            {renderRoleOptions()}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

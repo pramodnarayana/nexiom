@@ -3,6 +3,7 @@ import { Link, useLocation, type NavigateFunction } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/lib/utils';
 import { hasPermission } from '@/shared/lib/auth/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import { ThemeSwitcher } from '@/shared/components/ThemeSwitcher';
 import {
     DropdownMenu,
@@ -41,10 +42,10 @@ export function Sidebar({
     logout,
     navigate,
     headerContent
-}: SidebarProps) {
+}: Readonly<SidebarProps>) {
     const location = useLocation();
-    const isAdminView = location.pathname.startsWith('/admin');
-    const isTenantView = location.pathname.startsWith('/dashboard');
+    const isAdminView = location.pathname.startsWith(AppRoutes.ADMIN.ROOT);
+    const isTenantView = !isAdminView;
     const canViewAdminDashboard = hasPermission(user?.permissions, 'admin_dashboard', 'view');
 
     return (
@@ -122,13 +123,13 @@ export function Sidebar({
                         <DropdownMenuSeparator />
 
                         {isAdminView && (
-                            <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                            <DropdownMenuItem onClick={() => navigate(AppRoutes.TENANT.ROOT)}>
                                 Switch to User View
                             </DropdownMenuItem>
                         )}
 
                         {isTenantView && canViewAdminDashboard && (
-                            <DropdownMenuItem onClick={() => navigate('/admin')}>
+                            <DropdownMenuItem onClick={() => navigate(AppRoutes.ADMIN.ROOT)}>
                                 Switch to Admin View
                             </DropdownMenuItem>
                         )}

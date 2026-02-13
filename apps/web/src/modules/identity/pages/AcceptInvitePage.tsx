@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/sha
 import { Loader2, XCircle } from "lucide-react";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { Button } from "@/shared/components/ui/button";
+import { AppRoutes } from "@/shared/lib/auth/constants";
 
 export const AcceptInvitePage = () => {
     const [searchParams] = useSearchParams();
@@ -51,7 +52,7 @@ export const AcceptInvitePage = () => {
                     }
 
                     // Success -> Dashboard
-                    navigate('/dashboard', { replace: true });
+                    navigate(AppRoutes.TENANT.ROOT, { replace: true });
 
                 } catch (e: unknown) {
                     console.error("Silent accept failed:", e);
@@ -72,6 +73,65 @@ export const AcceptInvitePage = () => {
 
     }, [inviteId, user, isLoading, navigate, searchParams, token, retryCount]);
 
+    // Render invitation status UI based on current state
+    const renderInvitationStatus = () => {
+        // Error state
+        if (error) {
+            return (
+                <div className="text-center space-y-4">
+                    <div className="flex justify-center text-destructive mb-2">
+                        <XCircle className="h-10 w-10" />
+                    </div>
+                    <p className="text-sm font-medium text-destructive">
+                        {error}
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                setError(null);
+                                setRetryCount(prev => prev + 1);
+                            }}
+                        >
+                            Retry
+                        </Button>
+                        <Button variant="default" size="sm" onClick={() => navigate(AppRoutes.TENANT.ROOT)}>
+                            Go to Dashboard
+                        </Button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Missing invitation ID
+        if (!inviteId) {
+            return (
+                <div className="text-center space-y-2">
+                    <div className="flex justify-center text-destructive mb-2">
+                        <XCircle className="h-10 w-10" />
+                    </div>
+                    <p className="text-sm font-medium text-destructive">
+                        Invitation Missing
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        No invitation ID found. Please check your link.
+                    </p>
+                </div>
+            );
+        }
+
+        // Loading state
+        return (
+            <>
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">
+                    Please wait while we set up your access.
+                </p>
+            </>
+        );
+    };
+
     // Polished UI matching LoginPage
     return (
         <div className="flex justify-center items-center min-h-[80vh] bg-background">
@@ -85,46 +145,7 @@ export const AcceptInvitePage = () => {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center justify-center py-6 gap-4">
-                    {error ? (
-                        <div className="text-center space-y-4">
-                            <div className="flex justify-center text-destructive mb-2">
-                                <XCircle className="h-10 w-10" />
-                            </div>
-                            <p className="text-sm font-medium text-destructive">
-                                {error}
-                            </p>
-                            <div className="flex gap-2 justify-center">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        setError(null);
-                                        setRetryCount(prev => prev + 1);
-                                    }}
-                                >
-                                    Retry
-                                </Button>
-                                <Button variant="default" size="sm" onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
-                            </div>
-                        </div>
-                    ) : !inviteId ? (
-                        <div className="text-center space-y-2">
-                            <div className="flex justify-center text-destructive mb-2">
-                                <XCircle className="h-10 w-10" />
-                            </div>
-                            <p className="text-sm font-medium text-destructive">
-                                Invitation Missing
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                No invitation ID found. Please check your link.
-                            </p>
-                        </div>
-                    ) : (
-                        <>
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <p className="text-sm text-muted-foreground">Please wait while we set up your access.</p>
-                        </>
-                    )}
+                    {renderInvitationStatus()}
                 </CardContent>
             </Card>
         </div>

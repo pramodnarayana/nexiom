@@ -14,60 +14,64 @@ import { UserShow } from '../../modules/identity/pages/admin/users/UserShow';
 import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
 import { TenantListPage } from '../../modules/tenants/pages/TenantListPage';
 import { TenantEdit } from '../../modules/tenants/pages/TenantEdit';
+import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
+import { RESOURCES } from '@/shared/constants/resources';
 
 export function AdminRoutes() {
     return (
         <Route path={`${AppRoutes.ADMIN.ROOT}/*`} element={
-            <Refine
-                authProvider={authProvider}
-                dataProvider={dataProvider}
-                routerProvider={routerProvider}
-                accessControlProvider={accessControlProvider}
-                resources={[
-                    {
-                        name: "admin/users",
-                        list: "/admin/users",
-                        edit: "/admin/users/edit/:id",
-                        show: "/admin/users/show/:id",
-                        meta: {
-                            canDelete: true,
-                        }
-                    },
-                    {
-                        name: "admin/invitations",
-                        create: "/admin/invitations",
-                        meta: {
-                            canDelete: false,
+            <AppScopeProvider scope="system">
+                <Refine
+                    authProvider={authProvider}
+                    dataProvider={dataProvider}
+                    routerProvider={routerProvider}
+                    accessControlProvider={accessControlProvider}
+                    resources={[
+                        {
+                            name: RESOURCES.SYSTEM.USERS,
+                            list: "/admin/users",
+                            edit: "/admin/users/edit/:id",
+                            show: "/admin/users/show/:id",
+                            meta: {
+                                canDelete: true,
+                            }
                         },
-                    },
-                    {
-                        name: "admin/tenants",
-                        list: "/admin/tenants",
-                        edit: "/admin/tenants/:id",
-                        show: "/admin/tenants/:id",
-                        meta: {
-                            label: "Tenants",
+                        {
+                            name: RESOURCES.SYSTEM.INVITATIONS,
+                            create: "/admin/invitations",
+                            meta: {
+                                canDelete: false,
+                            },
+                        },
+                        {
+                            name: RESOURCES.SYSTEM.TENANTS,
+                            list: "/admin/tenants",
+                            edit: "/admin/tenants/:id",
+                            show: "/admin/tenants/:id",
+                            meta: {
+                                label: "Tenants",
+                            }
                         }
-                    }
-                ]}
-                options={{
-                    syncWithLocation: true,
-                    warnWhenUnsavedChanges: true,
-                }}
-                notificationProvider={notificationProvider}
-            >
-                <Routes>
-                    <Route element={<AdminLayout />}>
-                        <Route index element={<AdminDashboardPage />} />
-                        <Route path="users" element={<UserList basePath="/admin/users" resource="admin/users" />} />
-                        <Route path="users/show/:id" element={<UserShow basePath="/admin/users" resource="admin/users" />} />
-                        <Route path="users/edit/:id" element={<UserEdit basePath="/admin/users" resource="admin/users" />} />
-                        <Route path="tenants" element={<TenantListPage />} />
-                        <Route path="tenants/:id" element={<TenantEdit />} />
-                        <Route path="settings" element={<div>Settings Placeholder</div>} />
-                    </Route>
-                </Routes>
-            </Refine>
+                    ]}
+                    options={{
+                        syncWithLocation: true,
+                        warnWhenUnsavedChanges: true,
+                    }}
+                    notificationProvider={notificationProvider}
+                >
+                    <Routes>
+                        <Route element={<AdminLayout />}>
+                            <Route index element={<AdminDashboardPage />} />
+                            <Route path="users" element={<UserList />} />
+                            <Route path="users/show/:id" element={<UserShow />} />
+                            <Route path="users/edit/:id" element={<UserEdit />} />
+                            <Route path="tenants" element={<TenantListPage />} />
+                            <Route path="tenants/:id" element={<TenantEdit />} />
+                            <Route path="settings" element={<div>Settings Placeholder</div>} />
+                        </Route>
+                    </Routes>
+                </Refine>
+            </AppScopeProvider>
         } />
     );
 }

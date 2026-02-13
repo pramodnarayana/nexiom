@@ -1,4 +1,4 @@
-
+import { AppRoutes } from './constants';
 
 /**
  * Checks if a user has a specific permission.
@@ -8,7 +8,11 @@
  * 3. Resource Wildcard ('resource:*')
  * 4. Action Wildcard ('*:action')
  */
-export function hasPermission(permissions: string[] | undefined, resource: string, action: string): boolean {
+export function hasPermission(
+    permissions: string[] | undefined,
+    resource: string,
+    action: string
+): boolean {
     if (!permissions || permissions.length === 0) return false;
 
     const requiredPermission = `${resource}:${action}`;
@@ -18,7 +22,62 @@ export function hasPermission(permissions: string[] | undefined, resource: strin
     return permissions.some(p =>
         p === '*' ||                 // 1. Super Admin
         p === requiredPermission ||  // 2. Exact Match
-        p === resourceWildcard ||  // 3. Resource Wildcard
+        p === resourceWildcard ||    // 3. Resource Wildcard
         p === actionWildcard         // 4. Action Wildcard
     );
+}
+
+/**
+ * User type with permissions
+ */
+export interface UserWithPermissions {
+    permissions?: string[];
+}
+
+/**
+ * System owner permissions that grant admin-level access.
+ * Users with any of these permissions are considered system owners.
+ */
+const SYSTEM_OWNER_PERMISSIONS = [
+    'admin_dashboard:view',
+    'system_users:read',
+] as const;
+
+/**
+ * Check if user is a System Owner based on their permissions.
+ * 
+ * System Owners have specific admin-level permissions defined in SYSTEM_OWNER_PERMISSIONS.
+ * This approach uses explicit permission checks rather than wildcard matching for better
+ * security and maintainability.
+ * 
+ * @param permissions - Array of permission strings
+ * @returns true if user has any system owner permission
+ */
+export function isSystemOwner(permissions?: string[]): boolean {
+    if (!permissions) return false;
+
+    return SYSTEM_OWNER_PERMISSIONS.some(perm => {
+        const [resource, action] = perm.split(':');
+        return hasPermission(permissions, resource, action);
+    });
+}
+
+/**
+ * Get the home path for a user based on their role/permissions.
+ * System Owners are redirected to /admin, all others to /dashboard
+ * 
+ * @param user - User object with permissions
+ * @returns Appropriate home path for the user
+ * 
+ * @example
+ * ```typescript
+ * const homePath = getHomePathForUser(user);
+ * navigate(homePath);
+ * ```
+ */
+export function getHomePathForUser(user: UserWithPermissions): string {
+    if (isSystemOwner(user.permissions)) {
+        return AppRoutes.ADMIN.ROOT;
+    }
+    return AppRoutes.TENANT.ROOT;
 }

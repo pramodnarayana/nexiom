@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { useOne, useUpdate, useParsed, useCustomMutation } from "@refinedev/core";
+import { useResourceName } from "@/shared/contexts/useAppScope";
+import { useBasePath } from "@/shared/contexts/useBasePath";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -34,15 +36,11 @@ const UserEditSchema = z.object({
 
 type UserEditFormValues = z.infer<typeof UserEditSchema>;
 
-interface UserEditProps {
-    basePath?: string;
-    resource?: string;
-}
+export const UserEdit = () => {
+    // Get scope-aware resource and basePath from context
+    const resource = useResourceName('USERS');
+    const basePath = useBasePath('USERS');
 
-export const UserEdit = ({
-    basePath = "/admin/users",
-    resource = "admin/users",
-}: UserEditProps) => {
     const { id } = useParsed();
     const navigate = useNavigate();
     const { toast } = useToast();
