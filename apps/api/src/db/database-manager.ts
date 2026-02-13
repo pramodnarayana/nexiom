@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
-import type { Client } from 'pg';
+import { Client } from 'pg';
 
 /**
  * Enterprise-grade database management utility
@@ -300,6 +300,13 @@ export class DatabaseManager {
     console.log('✅ Reset complete!');
   }
 
+  /** Critical permissions to verify in debug output. */
+  private static readonly CRITICAL_PERMISSIONS = [
+    'system_users:create',
+    'users:create',
+    'dashboard:view',
+  ];
+
   /**
    * Debug RBAC permissions for a role
    */
@@ -335,7 +342,7 @@ export class DatabaseManager {
 
       permIds.forEach((p) => console.log(`    - ${p}`));
 
-      const critical = ['system_users:create', 'users:create'];
+      const critical = DatabaseManager.CRITICAL_PERMISSIONS;
       console.log('\n  Critical Check:');
       critical.forEach((c) => {
         const has = permIds.includes(c);
@@ -390,35 +397,21 @@ export class DatabaseManager {
 
       const allPermissions = new Set<string>();
 
+      const { normalizeRole } =
+        await import('@nexiom/identity/utils/role-normalization');
+
       // Resolve Member Role Permissions (this is what the app actually uses)
       if (user.members && user.members.length > 0) {
         console.log(`  Memberships (${user.members.length}):`);
         for (const member of user.members) {
-          const memberRole = member.role as unknown;
+          const normalized = normalizeRole(member.role);
+          const roleName = normalized.name;
+          const roleId = normalized.id;
 
-          let roleName =
-            typeof memberRole === 'string' ? memberRole : 'unknown';
-          let roleId = typeof memberRole === 'string' ? memberRole : 'unknown';
-
-          if (
-            memberRole &&
-            typeof memberRole === 'object' &&
-            'name' in memberRole &&
-            'id' in memberRole
-          ) {
-            const roleObj = memberRole as {
-              id: string;
-              name: string;
-              permissions: { permissionId: string }[];
-            };
-            roleName = roleObj.name;
-            roleId = roleObj.id;
-
-            if (Array.isArray(roleObj.permissions)) {
-              roleObj.permissions.forEach((p) =>
-                allPermissions.add(p.permissionId),
-              );
-            }
+          if (normalized.permissions) {
+            normalized.permissions.forEach((p) =>
+              allPermissions.add(p.permissionId),
+            );
           }
 
           console.log(
@@ -430,14 +423,12 @@ export class DatabaseManager {
       }
 
       console.log(`\n  Effective Permissions (${allPermissions.size}):`);
-      const sortedPerms = Array.from(allPermissions).sort();
+      const sortedPerms = Array.from(allPermissions).sort((a, b) =>
+        a.localeCompare(b),
+      );
       sortedPerms.forEach((p) => console.log(`    - ${p}`));
 
-      const critical = [
-        'system_users:create',
-        'users:create',
-        'dashboard:view',
-      ];
+      const critical = DatabaseManager.CRITICAL_PERMISSIONS;
       console.log('\n  Critical Capability Check:');
       critical.forEach((c) => {
         const has = allPermissions.has(c);

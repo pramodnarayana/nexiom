@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, and } from "drizzle-orm";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
+import { normalizeRole } from "../utils/role-normalization";
 
 import type { ITenantProvider } from "../interfaces/tenant-provider.interface";
 import type {
@@ -31,6 +32,8 @@ import type { IEmailProvider } from "../interfaces/email-provider.interface";
 import * as schema from "../schema";
 import type { IncomingHttpHeaders } from "node:http";
 import { Inject, Injectable } from "@nestjs/common";
+
+export const PERMISSION_FALLBACK_DASHBOARD_READ = "dashboard:read";
 
 export interface BetterAuthAdapterConfig {
   allowedOrigins: string[];
@@ -712,6 +715,8 @@ export class BetterAuthAdapter implements IAuthProvider {
     return this.mapUser(dbUser);
   }
 
+  // ... (imports)
+
   // --- Mappers ---
   private async mapUser(
     dbUser: schema.User & {
@@ -730,89 +735,71 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     let role = "member";
     const permissions: Set<string> = new Set();
-    let hasMembership = false;
-    let permissionsPreloaded = false;
 
-    try {
-      // 1. Resolve from eager-loaded members (primary path — all callers should eager-load)
-      if (dbUser.members && dbUser.members.length > 0) {
-        hasMembership = true;
+    // 1. Unify Member Resolution (Eager vs Lazy)
+    let members = dbUser.members;
 
-        for (const m of dbUser.members) {
-          if (m.role && typeof m.role === "object") {
-            if (m.role.name) {
-              role = m.role.name;
-            }
-            if (m.role.permissions) {
-              permissionsPreloaded = true;
-              for (const rp of m.role.permissions) {
-                permissions.add(rp.permissionId);
-              }
-            }
-          }
+    // Fallback: Lazy fetch if members weren't included in the initial query.
+
+    members ??= (await this.db.query.member.findMany({
+      where: eq(schema.member.userId, dbUser.id),
+      with: {
+        role: {
+          with: { permissions: true },
+        },
+      },
+    })) as any;
+
+    const hasMembership = members && members.length > 0;
+
+    if (hasMembership) {
+      // Enforce Single-Membership Invariant
+      if (members!.length > 1) {
+        throw new Error(
+          "BetterAuthAdapter: Multiple memberships detected for user in strict single-tenant application.",
+        );
+      }
+
+      const m = members![0];
+      const normalized = normalizeRole(m.role);
+
+      if (normalized.name !== "unknown") {
+        role = normalized.name;
+      }
+
+      if (normalized.permissions && normalized.permissions.length > 0) {
+        for (const rp of normalized.permissions) {
+          permissions.add(rp.permissionId);
         }
-      } else if (!dbUser.members) {
-        // Fallback: Lazy fetch if members weren't included in the initial query.
-        // This should not happen in normal operation — all callers use USER_WITH_MEMBERS.
-        const members = await this.db.query.member.findMany({
-          where: eq(schema.member.userId, dbUser.id),
-          with: {
-            role: {
-              with: { permissions: true },
-            },
-          },
+      }
+    }
+
+    // 2. Supplementary permission query
+    //    We check for string role IDs and fetch their permissions if needed.
+    //    We do this regardless of preloaded permissions to ensure we don't drop legacy role data.
+    if (hasMembership) {
+      const roleIds = members!
+        .map((m) => {
+          const normalized = normalizeRole(m.role);
+          return normalized.id !== "unknown" ? normalized.id : undefined;
+        })
+        .filter((id): id is string => !!id);
+
+      if (roleIds.length > 0) {
+        const uniqueRoleIds = [...new Set(roleIds)];
+        const rolePerms = await this.db.query.rolePermission.findMany({
+          where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds),
+          columns: { permissionId: true },
         });
-
-        hasMembership = members.length > 0;
-
-        for (const m of members) {
-          if (m.role && typeof m.role === "object") {
-            const memberRole = m.role as schema.Role & {
-              permissions?: schema.RolePermission[];
-            };
-            if (memberRole.name) {
-              role = memberRole.name;
-            }
-            if (memberRole.permissions) {
-              permissionsPreloaded = true;
-              for (const rp of memberRole.permissions) {
-                permissions.add(rp.permissionId);
-              }
-            }
-          }
+        for (const rp of rolePerms) {
+          permissions.add(rp.permissionId);
         }
       }
+    }
 
-      // 2. Supplementary permission query — only when permissions were NOT already resolved
-      //    via the Drizzle `with` clause (e.g. string-only role IDs from a legacy path).
-      if (!permissionsPreloaded && hasMembership) {
-        const memberRows = dbUser.members ?? [];
-        const roleIds = memberRows
-          .map((m) => (typeof m.role === "string" ? m.role : undefined))
-          .filter((id): id is string => !!id);
-
-        if (roleIds.length > 0) {
-          const uniqueRoleIds = [...new Set(roleIds)];
-          const rolePerms = await this.db.query.rolePermission.findMany({
-            where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds),
-            columns: { permissionId: true },
-          });
-          for (const rp of rolePerms) {
-            permissions.add(rp.permissionId);
-          }
-        }
-      }
-
-      // 3. Fail-safe: ensure minimal access
-      if (permissions.size === 0) {
-        permissions.add("dashboard:read");
-      }
-    } catch (err) {
-      console.error(
-        `[BetterAuthAdapter] mapUser: Failed to fetch permissions for ${dbUser.id}`,
-        err,
-      );
-      permissions.add("dashboard:read");
+    // 3. Fallback / Default Permissions
+    if (permissions.size === 0) {
+      permissions.add(PERMISSION_FALLBACK_DASHBOARD_READ);
     }
 
     return {
@@ -829,6 +816,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,
       hasTenant: hasMembership,
+      memberRole: role,
     };
   }
 

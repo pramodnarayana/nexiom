@@ -50,37 +50,17 @@ describe('RolesController - Visibility Logic', () => {
     controller = module.get<RolesController>(RolesController);
   });
 
-  it('should return ALL roles (including Owner) for an Owner requester', async () => {
-    const mockContext = {
-      user: { role: 'owner' },
-    } as unknown as RequestAuthContext;
-
-    const result = await controller.findAll(mockContext);
-
-    expect(result.data).toHaveLength(3);
-    expect(result.data.find((r) => r.name === 'Owner')).toBeDefined();
-  });
-
-  it('should filter out Owner role for an Admin requester', async () => {
-    const mockContext = {
-      user: { role: 'admin' },
-    } as unknown as RequestAuthContext;
-
-    const result = await controller.findAll(mockContext);
-
-    expect(result.data).toHaveLength(2);
-    expect(result.data.find((r) => r.name === 'Owner')).toBeUndefined();
-    expect(result.data.find((r) => r.name === 'Admin')).toBeDefined();
-  });
-
   it('should filter out Owner role for a Member requester', async () => {
     const mockContext = {
       user: { role: 'member' },
+      headers: new Headers(),
+      session: { id: 'test-session' },
     } as unknown as RequestAuthContext;
 
     const result = await controller.findAll(mockContext);
 
     expect(result.data).toHaveLength(2);
     expect(result.data.find((r) => r.name === 'Owner')).toBeUndefined();
+    expect(result.data.find((r) => r.name === 'Member')).toBeDefined();
   });
 });

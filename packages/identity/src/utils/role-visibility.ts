@@ -15,23 +15,10 @@ export function filterRolesForRequester<T extends { name: string }>(
   roles: T[],
   requesterRole: string,
 ): T[] {
-  // Enterprise-Grade Check:
-  // Use the defined Role enum for comparison to avoid magic strings.
-  // Ensure case-insensitive comparison to handle legacy/mixed casing (e.g., 'Owner' vs 'owner').
-  // Handle empty or undefined requesterRole safely
-  if (!requesterRole) {
-    return roles.filter(
-      (r) => r.name.toLowerCase() !== Role.Owner.toLowerCase(),
-    );
-  }
+  const isOwner =
+    !!requesterRole && requesterRole.toLowerCase() === Role.Owner.toLowerCase();
 
-  const isOwner = requesterRole.toLowerCase() === Role.Owner.toLowerCase();
-
-  if (!isOwner) {
-    return roles.filter(
-      (r) => r.name.toLowerCase() !== Role.Owner.toLowerCase(),
-    );
-  }
-
-  return roles;
+  return isOwner
+    ? roles
+    : roles.filter((r) => r.name.toLowerCase() !== Role.Owner.toLowerCase());
 }

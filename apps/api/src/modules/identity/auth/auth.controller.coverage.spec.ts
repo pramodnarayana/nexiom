@@ -35,6 +35,9 @@ describe('AuthController Coverage', () => {
 
   const mockResponse = {
     setHeader: vi.fn(),
+    status: vi.fn().mockReturnThis(),
+    json: vi.fn().mockReturnThis(),
+    cookie: vi.fn(),
   } as unknown as Response;
 
   const mockCompleteInvite: CompleteInvite = {
@@ -99,7 +102,7 @@ describe('AuthController Coverage', () => {
     const mockInviteData = {
       id: 'inv-1',
       status: 'pending',
-      expiresAt: new Date(Date.now() + 10000).toISOString(),
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
     };
 
     it('should throw if invitation not found', async () => {
@@ -153,6 +156,11 @@ describe('AuthController Coverage', () => {
 
       expect(userProvider.update).toHaveBeenCalled();
       expect(invitationsService.accept).toHaveBeenCalled();
+
+      // Verify unverified user flow specifics
+      expect(authService.setPassword).toHaveBeenCalledWith('u1', 'p');
+      expect(userProvider.forceVerifyEmail).toHaveBeenCalledWith('u1');
+      expect(authService.login).toHaveBeenCalled();
     });
 
     it('should rollback user creation if accept fails', async () => {

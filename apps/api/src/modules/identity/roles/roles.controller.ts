@@ -10,6 +10,7 @@ import {
   Inject,
   ParseEnumPipe,
   Controller,
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -43,7 +44,7 @@ export class RolesController {
   ) {
     const roles = await this.roleProvider.findAll({ scope });
     return {
-      data: filterRolesForRequester(roles, ctx.user?.role ?? ''),
+      data: filterRolesForRequester(roles, ctx.user?.memberRole ?? ''),
     };
   }
 
@@ -56,21 +57,71 @@ export class RolesController {
 
   @Get(':id')
   @RequirePermission('roles', 'read')
-  async findById(@Param('id') id: string) {
+  async findById(
+    @Param('id') id: string,
+    @AuthContext() ctx: RequestAuthContext,
+  ) {
     const role = await this.roleProvider.findById(id);
+    if (!role) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const visibleRoles = filterRolesForRequester(
+      [role],
+      ctx.user?.memberRole ?? '',
+    );
+    if (visibleRoles.length === 0) {
+      throw new NotFoundException('Role not found');
+    }
+
     return { data: role };
   }
 
   @Put(':id')
   @RequirePermission('roles', 'update')
-  async update(@Param('id') id: string, @Body() body: UpdateRoleInput) {
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateRoleInput,
+    @AuthContext() ctx: RequestAuthContext,
+  ) {
+    // Check visibility before updating
+    const existingRole = await this.roleProvider.findById(id);
+    if (!existingRole) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const visibleRoles = filterRolesForRequester(
+      [existingRole],
+      ctx.user?.memberRole ?? '',
+    );
+    if (visibleRoles.length === 0) {
+      throw new NotFoundException('Role not found'); // Hide restricted roles
+    }
+
     const role = await this.roleProvider.update(id, body);
     return { data: role };
   }
 
   @Delete(':id')
   @RequirePermission('roles', 'delete')
-  async delete(@Param('id') id: string) {
+  async delete(
+    @Param('id') id: string,
+    @AuthContext() ctx: RequestAuthContext,
+  ) {
+    // Check visibility before deleting
+    const existingRole = await this.roleProvider.findById(id);
+    if (!existingRole) {
+      throw new NotFoundException('Role not found');
+    }
+
+    const visibleRoles = filterRolesForRequester(
+      [existingRole],
+      ctx.user?.memberRole ?? '',
+    );
+    if (visibleRoles.length === 0) {
+      throw new NotFoundException('Role not found'); // Hide restricted roles
+    }
+
     await this.roleProvider.delete(id);
     return { data: { deleted: true } };
   }

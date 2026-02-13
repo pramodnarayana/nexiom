@@ -8,7 +8,8 @@
     "./utils/rbac-seeding": "./src/utils/rbac-seeding.ts",
     "./schema": "./src/schema.ts",
     "./constants": "./src/constants.ts",
-    "./utils/role-visibility": "./src/utils/role-visibility.ts"
+    "./utils/role-visibility": "./src/utils/role-visibility.ts",
+    "./utils/role-normalization": "./src/utils/role-normalization.ts"
   },
   "scripts": {
     "clean": "rimraf dist",

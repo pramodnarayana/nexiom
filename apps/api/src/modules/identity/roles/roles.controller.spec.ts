@@ -5,6 +5,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import type { RequestAuthContext } from '../auth/auth-context.decorator';
+import { NotFoundException } from '@nestjs/common';
 
 describe('RolesController', () => {
   let controller: RolesController;
@@ -15,6 +16,10 @@ describe('RolesController', () => {
     update: Mock;
     delete: Mock;
   };
+
+  const mockContext = {
+    user: { memberRole: 'owner' },
+  } as RequestAuthContext;
 
   beforeEach(async () => {
     roleProvider = {
@@ -86,7 +91,7 @@ describe('RolesController', () => {
 
     it('should filter out Owner role for non-owner users', async () => {
       const roles = [
-        { id: 'owner', name: 'owner' },
+        { id: 'owner', name: 'Owner' },
         { id: 'admin', name: 'admin' },
         { id: 'member', name: 'member' },
       ];
@@ -105,10 +110,10 @@ describe('RolesController', () => {
     it('should include Owner role for owner users', async () => {
       const ownerCtx = {
         ...mockCtx,
-        user: { id: 'u1', role: 'owner' },
+        user: { id: 'u1', memberRole: 'owner' },
       } as unknown as RequestAuthContext;
       const roles = [
-        { id: 'owner', name: 'owner' },
+        { id: 'owner', name: 'Owner' },
         { id: 'admin', name: 'admin' },
       ];
       roleProvider.findAll.mockResolvedValue(roles);
@@ -153,7 +158,7 @@ describe('RolesController', () => {
       const role = { id: 'admin', name: 'Admin' };
       roleProvider.findById.mockResolvedValue(role);
 
-      const result = await controller.findById('admin');
+      const result = await controller.findById('admin', mockContext);
 
       expect(result).toEqual({ data: role });
       expect(roleProvider.findById).toHaveBeenCalledWith('admin');
@@ -162,22 +167,25 @@ describe('RolesController', () => {
     it('should handle not found error', async () => {
       roleProvider.findById.mockResolvedValue(null);
 
-      const result = await controller.findById('unknown');
-      expect(result).toEqual({ data: null });
+      await expect(controller.findById('unknown', mockContext)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('update', () => {
     it('should update a role', async () => {
       const updateData = { description: 'Updated' };
+      const existingRole = { id: 'admin', name: 'Admin', description: 'Old' };
       const updatedRole = {
         id: 'admin',
         name: 'Admin',
         description: 'Updated',
       };
+      roleProvider.findById.mockResolvedValue(existingRole); // Mock findById for permission check
       roleProvider.update.mockResolvedValue(updatedRole);
 
-      const result = await controller.update('admin', updateData);
+      const result = await controller.update('admin', updateData, mockContext);
 
       expect(result).toEqual({ data: updatedRole });
       expect(roleProvider.update).toHaveBeenCalledWith('admin', updateData);
@@ -186,19 +194,23 @@ describe('RolesController', () => {
 
   describe('delete', () => {
     it('should delete a role', async () => {
-      roleProvider.delete.mockResolvedValue(undefined);
+      const existingRole = { id: 'admin', name: 'Admin' };
+      roleProvider.findById.mockResolvedValue(existingRole); // Mock findById for permission check
+      roleProvider.delete.mockResolvedValue(undefined); // Provider delete might return void or a success indicator
 
-      const result = await controller.delete('admin');
+      const result = await controller.delete('admin', mockContext);
 
       expect(result).toEqual({ data: { deleted: true } }); // Controller returns this structure
       expect(roleProvider.delete).toHaveBeenCalledWith('admin');
     });
 
     it('should handle delete failure/not found', async () => {
-      roleProvider.delete.mockRejectedValue(new Error('Not found'));
+      roleProvider.findById.mockResolvedValue(null); // Role not found by findById
 
-      await expect(controller.delete('unknown')).rejects.toThrow('Not found');
-      expect(roleProvider.delete).toHaveBeenCalledWith('unknown');
+      await expect(controller.delete('unknown', mockContext)).rejects.toThrow(
+        NotFoundException, // Assuming controller throws NotFoundException if findById returns null
+      );
+      expect(roleProvider.delete).not.toHaveBeenCalled(); // delete is NOT called if findById returns null
     });
   });
 });

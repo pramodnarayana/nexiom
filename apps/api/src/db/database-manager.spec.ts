@@ -397,4 +397,45 @@ describe('DatabaseManager', () => {
       );
     });
   });
+
+  describe('debugPermissions()', () => {
+    it('should log error if role not found', async () => {
+      const consoleSpy = vi.spyOn(console, 'error');
+      drizzleMocks.query.role.findFirst.mockResolvedValue(null);
+
+      await manager.debugPermissions('missing-role');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Role 'missing-role' not found"),
+      );
+    });
+
+    it('should list permissions and check critical ones', async () => {
+      const logSpy = vi.spyOn(console, 'log');
+
+      const mockRole = { id: 'r1', name: 'Admin' };
+      const mockPerms = [{ permissionId: 'users:create' }];
+
+      drizzleMocks.query.role.findFirst.mockResolvedValue(mockRole);
+      drizzleMocks.query.rolePermission.findMany.mockResolvedValue(mockPerms);
+
+      await manager.debugPermissions('Admin');
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Found Role: Admin (r1)'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Permissions (1):'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('    - users:create'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('✅ users:create'),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('❌ system_users:create'),
+      );
+    });
+  });
 });
