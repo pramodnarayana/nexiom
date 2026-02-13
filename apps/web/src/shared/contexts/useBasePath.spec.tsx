@@ -78,7 +78,6 @@ describe('useBasePath', () => {
 
             expect(systemResult.current).toBe('/admin/users');
             expect(orgResult.current).toBe('/dashboard/users');
-            expect(systemResult.current).not.toBe(orgResult.current);
         });
 
         it('always includes leading slash', () => {
@@ -87,13 +86,25 @@ describe('useBasePath', () => {
 
             const { result: systemUsers } = renderHook(() => useBasePath('USERS'), { wrapper: systemWrapper });
             const { result: systemInvites } = renderHook(() => useBasePath('INVITATIONS'), { wrapper: systemWrapper });
+            const { result: systemTenants } = renderHook(() => useBasePath('TENANTS'), { wrapper: systemWrapper });
             const { result: orgUsers } = renderHook(() => useBasePath('USERS'), { wrapper: orgWrapper });
             const { result: orgInvites } = renderHook(() => useBasePath('INVITATIONS'), { wrapper: orgWrapper });
+            const { result: orgTenants } = renderHook(() => useBasePath('TENANTS'), { wrapper: orgWrapper });
 
             expect(systemUsers.current.startsWith('/')).toBe(true);
             expect(systemInvites.current.startsWith('/')).toBe(true);
+            expect(systemTenants.current.startsWith('/')).toBe(true);
             expect(orgUsers.current.startsWith('/')).toBe(true);
             expect(orgInvites.current.startsWith('/')).toBe(true);
+            expect(orgTenants.current.startsWith('/')).toBe(true);
+        });
+    });
+
+    describe('error handling', () => {
+        it('throws error when used outside AppScopeProvider', () => {
+            expect(() => {
+                renderHook(() => useBasePath('USERS'));
+            }).toThrow('useAppScope must be used within AppScopeProvider');
         });
     });
 });
