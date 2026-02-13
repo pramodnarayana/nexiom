@@ -11,7 +11,6 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
-  Headers as RequestHeaders,
   UsePipes,
 } from '@nestjs/common';
 import {
@@ -22,6 +21,10 @@ import {
   TENANT_PROVIDER,
   ITenantProvider,
 } from '@nexiom/identity';
+import {
+  AuthContext,
+  RequestAuthContext,
+} from '../auth/auth-context.decorator';
 import {
   getRequiredAdminRoleId,
   getRequiredSystemTenantId,
@@ -53,7 +56,7 @@ export class SystemAdminController {
   @RequirePermission('system_users', 'create')
   async inviteUser(
     @Param('id') id: string,
-    @RequestHeaders() headers: Record<string, string>,
+    @AuthContext() ctx: RequestAuthContext,
   ) {
     const user = await this.userProvider.findById(id);
 
@@ -61,21 +64,12 @@ export class SystemAdminController {
       throw new NotFoundException('User not found');
     }
 
-    const webHeaders = this.toWebHeaders(headers);
-
-    // Get current admin ID from session (via Headers -> BetterAuth)
-    const session = await this.authProvider.getSessionFromHeaders(webHeaders);
-
-    if (!session?.user) {
-      throw new BadRequestException('Unauthorized');
-    }
-
     // Create System Invitation (OrgId = null)
     await this.authProvider.createInvitation({
       email: user.email,
       role: getRequiredAdminRoleId(),
       organizationId: null, // System Invite
-      inviterId: session.user.id,
+      inviterId: ctx.user.id,
     });
 
     return { success: true };
@@ -86,36 +80,17 @@ export class SystemAdminController {
   @UsePipes(new LazyZodValidationPipe(buildCreateSystemInvitationSchema))
   async createSystemInvitation(
     @Body() body: CreateSystemInvitationDto,
-    @RequestHeaders() headers: Record<string, string>,
+    @AuthContext() ctx: RequestAuthContext,
   ) {
-    const webHeaders = this.toWebHeaders(headers);
-
-    // Get current admin ID from session
-    const session = await this.authProvider.getSessionFromHeaders(webHeaders);
-
-    if (!session?.user) {
-      throw new BadRequestException('Unauthorized');
-    }
-
     const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
       organizationId: getRequiredSystemTenantId(), // System tenant (Nexiom Platform)
-      inviterId: session.user.id,
-      headers: webHeaders, // Required by Better Auth
+      inviterId: ctx.user.id,
+      headers: ctx.headers, // Required by Better Auth
     });
 
     return invitation;
-  }
-
-  private toWebHeaders(headers: Record<string, string>): Headers {
-    const webHeaders = new Headers();
-    Object.entries(headers).forEach(([key, value]) => {
-      if (value) {
-        webHeaders.append(key, value);
-      }
-    });
-    return webHeaders;
   }
 
   @Post('tenants')

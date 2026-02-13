@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Request } from 'express';
+import { toWebHeaders } from '../../../common/utils/headers.util';
+import { RequestAuthContext } from './auth-context.decorator';
 
 @Injectable()
 export class SystemAdminGuard implements CanActivate {
@@ -15,9 +17,8 @@ export class SystemAdminGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
 
-    // 1. Extract Token (Similar to AuthGuard but isolated logic)
     // 1. Validate Session via Headers (Correctly handles Signed Cookies)
-    const headers = new Headers(req.headers as Record<string, string>);
+    const headers = toWebHeaders(req.headers);
     const sessionData = await this.authService.getSessionFromHeaders(headers);
 
     if (!sessionData) {
@@ -39,6 +40,11 @@ export class SystemAdminGuard implements CanActivate {
     // 4. Attach User to Request for Controller usage
     // We explicitly DO NOT attach a "Tenant" here to prevent accidental leakage.
     (req as Request & { user: unknown }).user = user;
+    req.authContext = {
+      headers,
+      user,
+      session: sessionData.session,
+    } satisfies RequestAuthContext;
     return true;
   }
 }

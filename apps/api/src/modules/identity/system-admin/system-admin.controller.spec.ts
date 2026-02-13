@@ -15,6 +15,7 @@ import { SystemAdminGuard } from '../auth/system-admin.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { PlatformGuard } from '../auth/platform.guard';
+import type { RequestAuthContext } from '../auth/auth-context.decorator';
 
 vi.mock('../../../constants', () => ({
   getRequiredAdminRoleId: vi.fn(() => 'admin-role-id'),
@@ -27,7 +28,6 @@ vi.mock('../../../constants', () => ({
 
 describe('SystemAdminController', () => {
   let controller: SystemAdminController;
-  const mockHeaders: Record<string, string> = {};
 
   const mockAuthProvider = {
     getSessionFromHeaders: vi.fn(),
@@ -110,38 +110,31 @@ describe('SystemAdminController', () => {
   });
 
   describe('createSystemInvitation', () => {
-    it('should throw BadRequestException if unauthorized', async () => {
-      mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
-
-      await expect(
-        controller.createSystemInvitation(
-          { email: 'test@example.com', role: getRequiredOwnerRoleId() },
-          mockHeaders,
-        ),
-      ).rejects.toThrow(BadRequestException);
-      expect(mockAuthProvider.createInvitation).not.toHaveBeenCalled();
-    });
-
     it('should create system invitation', async () => {
-      mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
-        user: { id: 'admin1' },
-      });
       const mockInvitation = { id: 'inv1', email: 'test@example.com' };
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
 
+      const mockCtx: RequestAuthContext = {
+        headers: new Headers(),
+        user: { id: 'admin1' } as RequestAuthContext['user'],
+        session: {
+          id: 'sess-1',
+          token: 'tok-1',
+        } as RequestAuthContext['session'],
+      };
+
       const result = await controller.createSystemInvitation(
         { email: 'test@example.com', role: getRequiredOwnerRoleId() },
-        mockHeaders,
+        mockCtx,
       );
 
       expect(result).toEqual(mockInvitation);
-      expect(mockAuthProvider.getSessionFromHeaders).toHaveBeenCalled();
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
         role: getRequiredOwnerRoleId(),
-        organizationId: getRequiredSystemTenantId(), // Changed from null
+        organizationId: getRequiredSystemTenantId(),
         inviterId: 'admin1',
-        headers: expect.any(Headers) as Headers, // Added headers
+        headers: mockCtx.headers,
       });
     });
   });
@@ -363,20 +356,20 @@ describe('SystemAdminController', () => {
   });
 
   describe('inviteUser', () => {
+    const mockCtx: RequestAuthContext = {
+      headers: new Headers(),
+      user: { id: 'admin1' } as RequestAuthContext['user'],
+      session: {
+        id: 'sess-1',
+        token: 'tok-1',
+      } as RequestAuthContext['session'],
+    };
+
     it('should throw NotFoundException if user not found', async () => {
       mockUserProvider.findById.mockResolvedValue(null);
 
-      await expect(
-        controller.inviteUser('missing', mockHeaders),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw BadRequestException if unauthorized', async () => {
-      mockUserProvider.findById.mockResolvedValue({ id: 'u1' });
-      mockAuthProvider.getSessionFromHeaders.mockResolvedValue(null);
-
-      await expect(controller.inviteUser('u1', mockHeaders)).rejects.toThrow(
-        BadRequestException,
+      await expect(controller.inviteUser('missing', mockCtx)).rejects.toThrow(
+        NotFoundException,
       );
     });
 
@@ -385,11 +378,8 @@ describe('SystemAdminController', () => {
         id: 'u1',
         email: 'test@example.com',
       });
-      mockAuthProvider.getSessionFromHeaders.mockResolvedValue({
-        user: { id: 'admin1' },
-      });
 
-      await controller.inviteUser('u1', mockHeaders);
+      await controller.inviteUser('u1', mockCtx);
 
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',

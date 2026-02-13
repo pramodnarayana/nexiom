@@ -3,7 +3,8 @@ import { InvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateInvitation } from './invitations.validation';
-import { Request } from 'express';
+import type { RequestAuthContext } from '../auth/auth-context.decorator';
+import type { User } from '@nexiom/identity';
 
 describe('InvitationsController', () => {
   let controller: InvitationsController;
@@ -50,14 +51,16 @@ describe('InvitationsController', () => {
         role: 'member',
         organizationId: 'org-123',
       };
-      const req = {
-        user: { id: 'user-123' },
-        headers: { 'user-agent': 'jest' },
-      } as unknown as Request & {
-        user: { id: string };
+      const mockCtx: RequestAuthContext = {
+        headers: new Headers(),
+        user: { id: 'user-123' } as User,
+        session: {
+          id: 'sess-1',
+          token: 'tok-1',
+        } as RequestAuthContext['session'],
       };
 
-      await controller.create(dto, req);
+      await controller.create(dto, mockCtx);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(service.create).toHaveBeenCalledWith(dto, 'user-123', {
         'x-request-id': undefined,
@@ -76,15 +79,10 @@ describe('InvitationsController', () => {
 
   describe('accept', () => {
     it('should call service.accept', async () => {
-      const req = {
-        user: { id: 'user-123' },
-        headers: { 'user-agent': 'jest' },
-      } as unknown as Request & {
-        user: { id: string };
-      };
+      const mockUser = { id: 'user-123' } as User;
       const dto = { invitationId: 'inv-123', token: 'token' };
 
-      await controller.accept(dto, req);
+      await controller.accept(dto, mockUser);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123');
     });
@@ -92,25 +90,17 @@ describe('InvitationsController', () => {
 
   describe('list', () => {
     it('should call service.list with organizationId', async () => {
-      const req = {
-        user: { id: 'user-123', organizationId: 'org-123' },
-      } as unknown as Request & {
-        user: { id: string; organizationId: string };
-      };
+      const mockUser = { id: 'user-123', organizationId: 'org-123' } as User;
 
-      await controller.list(req);
+      await controller.list(mockUser);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(service.list).toHaveBeenCalledWith('org-123');
     });
 
     it('should return empty list if no organizationId', async () => {
-      const req = {
-        user: { id: 'user-123' },
-      } as unknown as Request & {
-        user: { id: string; organizationId?: string };
-      };
+      const mockUser = { id: 'user-123' } as User;
 
-      const result = await controller.list(req);
+      const result = await controller.list(mockUser);
       expect(result).toEqual([]);
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(service.list).not.toHaveBeenCalled();

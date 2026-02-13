@@ -83,13 +83,14 @@ describe('SystemAdminGuard', () => {
 
   it('should allow access if user has manage privileges', async () => {
     const mockUser = { id: 'admin1' };
+    const mockSession = { id: 'sess-1', token: 'tok-1' };
     authService.getSessionFromHeaders.mockResolvedValue({
-      session: {} as unknown,
+      session: mockSession as unknown,
       user: mockUser as unknown,
     });
     authService.hasSystemPermission.mockResolvedValue(true);
 
-    const mockRequest = { headers: {} };
+    const mockRequest: Record<string, unknown> = { headers: {} };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => mockRequest,
@@ -99,8 +100,16 @@ describe('SystemAdminGuard', () => {
     const result = await guard.canActivate(mockContext);
 
     expect(result).toBe(true);
-    expect((mockRequest as unknown as { user: unknown }).user).toEqual(
+    expect(mockRequest.user).toEqual(mockUser);
+    expect(mockRequest.authContext).toBeDefined();
+    expect(
+      (mockRequest.authContext as { headers: Headers }).headers,
+    ).toBeInstanceOf(Headers);
+    expect((mockRequest.authContext as { user: unknown }).user).toEqual(
       mockUser,
+    );
+    expect((mockRequest.authContext as { session: unknown }).session).toEqual(
+      mockSession,
     );
     expect(authService.hasSystemPermission).toHaveBeenCalledWith(
       mockUser,

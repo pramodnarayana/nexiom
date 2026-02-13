@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PlatformGuard } from './platform.guard';
@@ -92,13 +91,14 @@ describe('PlatformGuard', () => {
 
   it('should allow access if user has system view privileges', async () => {
     const mockUser = { id: 'admin1' };
+    const mockSession = { id: 'sess-1', token: 'tok-1' };
     authService.getSessionFromHeaders.mockResolvedValue({
-      session: {} as any,
+      session: mockSession as any,
       user: mockUser as any,
     });
     authService.hasSystemPermission.mockResolvedValue(true);
 
-    const mockRequest = { headers: {} };
+    const mockRequest: Record<string, unknown> = { headers: {} };
     const mockContext = {
       switchToHttp: () => ({
         getRequest: () => mockRequest,
@@ -108,7 +108,17 @@ describe('PlatformGuard', () => {
     const result = await guard.canActivate(mockContext);
 
     expect(result).toBe(true);
-    expect((mockRequest as any).user).toEqual(mockUser);
+    expect(mockRequest.user).toEqual(mockUser);
+    expect(mockRequest.authContext).toBeDefined();
+    expect(
+      (mockRequest.authContext as { headers: Headers }).headers,
+    ).toBeInstanceOf(Headers);
+    expect((mockRequest.authContext as { user: unknown }).user).toEqual(
+      mockUser,
+    );
+    expect((mockRequest.authContext as { session: unknown }).session).toEqual(
+      mockSession,
+    );
     expect(authService.hasSystemPermission).toHaveBeenCalledWith(
       mockUser,
       'view',
