@@ -24,6 +24,16 @@ export const Actions = {
 } as const;
 
 /**
+ * Role Constants
+ * Used for UI logic and permission checks.
+ */
+export const ROLES = {
+    OWNER: 'owner',
+    ADMIN: 'admin',
+    MEMBER: 'member',
+} as const;
+
+/**
  * Application Route Constants
  * Single source of truth for navigation paths.
  */

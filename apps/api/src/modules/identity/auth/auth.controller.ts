@@ -26,7 +26,7 @@ import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { InvitationsService } from '../invitations/invitations.service';
 import { AuthGuard } from './auth.guard';
-import { AuthContext } from './auth-context.decorator';
+import { AuthContext, RequestAuthContext } from './auth-context.decorator';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -219,9 +219,11 @@ export class AuthController {
    */
   @Post('refresh-session')
   @UseGuards(AuthGuard)
-  refreshSession(@AuthContext('session') session: Session) {
-    // Session is already enriched by AuthGuard
-    return session;
+  refreshSession(@AuthContext() context: RequestAuthContext) {
+    return {
+      session: context.session,
+      user: context.user,
+    };
   }
 
   /**

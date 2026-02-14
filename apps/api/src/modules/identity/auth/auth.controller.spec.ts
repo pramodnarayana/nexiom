@@ -5,6 +5,7 @@ import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 import type { User, Session } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Request, Response } from 'express';
+import { RequestAuthContext } from './auth-context.decorator';
 import { CompleteInvite } from '../users/users.validation';
 
 describe('AuthController', () => {
@@ -318,9 +319,22 @@ describe('AuthController', () => {
         updatedAt: new Date(),
       } as Session;
 
-      const result = controller.refreshSession(mockSession);
+      const mockUser = {
+        id: 'u1',
+        email: 'test@example.com',
+      } as User;
 
-      expect(result).toEqual(mockSession);
+      const mockContext = {
+        session: mockSession,
+        user: mockUser,
+      } as unknown as RequestAuthContext;
+
+      const result = controller.refreshSession(mockContext);
+
+      expect(result).toEqual({
+        session: mockSession,
+        user: mockUser,
+      });
       expect(mockAuthService.getEnrichedSession).not.toHaveBeenCalled();
     });
   });

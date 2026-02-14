@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { apiClient } from '../api-client';
-import { AuthContext } from './context';
+import { AuthContext, AccessControlContext } from './context';
+import { defineAccessControlFor } from './access-control';
 
 interface Tenant {
     id: string;
@@ -223,5 +224,21 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         refreshSession: async () => { await refreshSession(); },
     }), [user, token, isLoading, logout, login, refreshSession]);
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    const accessControl = useMemo(() => {
+        if (!user) return undefined;
+        // Map user to shape expected by defineAccessControlFor
+        // We use the first role for now, or 'user' if none
+        const userRole = user.roles && user.roles.length > 0 ? user.roles[0] : 'user';
+        // Ensure permissions are passed. Our user object from useAuth might need to be updated to include permissions if not already.
+        // Assuming user object has permissions from the adapter.
+        return defineAccessControlFor({ role: userRole, permissions: user.permissions });
+    }, [user]);
+
+    return (
+        <AuthContext.Provider value={value}>
+            <AccessControlContext.Provider value={accessControl}>
+                {children}
+            </AccessControlContext.Provider>
+        </AuthContext.Provider>
+    );
 }

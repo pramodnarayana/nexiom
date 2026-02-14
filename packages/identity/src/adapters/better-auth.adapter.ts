@@ -788,7 +788,27 @@ export class BetterAuthAdapter implements IAuthProvider {
 
       if (normalized.permissions && normalized.permissions.length > 0) {
         for (const rp of normalized.permissions) {
-          permissions.add(rp.permissionId);
+          // Enterprise ABAC: Return full rule object (Action, Subject, Conditions)
+          // Format expected by Frontend Ability: { action, subject, conditions }
+          // We serialize this to a string or keep it as object if interface allows.
+          // Currently UserInterface.permissions is likely string[].
+          // We will use a convention: "resource:action" OR JSON string for complex rules.
+
+          if (rp.permission) {
+            if (rp.conditions) {
+              const rule = {
+                action: rp.permission.action,
+                subject: rp.permission.resource,
+                conditions: rp.conditions,
+              };
+              permissions.add(JSON.stringify(rule));
+            } else {
+              // Backward compatibility / Simple PBAC
+              permissions.add(
+                `${rp.permission.resource}:${rp.permission.action}`,
+              );
+            }
+          }
         }
       }
     }
@@ -838,7 +858,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,
       hasTenant: hasMembership,
-      memberRole: role.toLocaleLowerCase(),
+      memberRole: role.toLowerCase(),
     };
   }
 

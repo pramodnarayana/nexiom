@@ -2,9 +2,10 @@ import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuth } from "@/shared/lib/auth/context";
-import { hasPermission } from "@/shared/lib/auth/utils";
 import { Actions, Resources } from "@/shared/lib/auth/constants";
+import { useAuth, Can } from "@/shared/lib/auth/context";
+import { hasPermission } from "@/shared/lib/auth/utils";
+import type { UserSubject } from "@/shared/lib/auth/access-control";
 import { useBasePath } from "@/shared/contexts/useBasePath";
 import {
     Table,
@@ -201,15 +202,17 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
                                                     </Link>
                                                 </Button>
                                                 {!isSelf && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                        onClick={() => handleDelete(user.id, displayName)}
-                                                        aria-label={`Delete ${displayName}`}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    <Can I="delete" this={{ __typename: 'User', role: user.role } as UserSubject}>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => handleDelete(user.id, displayName)}
+                                                            aria-label={`Delete ${displayName}`}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
                                                 )}
                                             </>
                                         )}

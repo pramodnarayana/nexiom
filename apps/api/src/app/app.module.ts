@@ -18,7 +18,11 @@ import * as schema from '../db/schema';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: [
+        '.env', // local to execution if in api dir
+        'apps/api/.env', // from root
+        '../../.env', // from src/app
+      ],
     }),
     IdentityModule.registerAsync({
       imports: [ConfigModule, DbModule, AuthModule], // Ensure DbModule is here

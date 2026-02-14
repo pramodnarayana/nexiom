@@ -661,8 +661,8 @@ describe("BetterAuthAdapter", () => {
             id: "admin",
             name: "Admin",
             permissions: [
-              { permissionId: "users:create" },
-              { permissionId: "users:read" }
+              { permissionId: "users:create", permission: { resource: "users", action: "create" } },
+              { permissionId: "users:read", permission: { resource: "users", action: "read" } }
             ]
           }
         }
@@ -704,8 +704,8 @@ describe("BetterAuthAdapter", () => {
             id: "admin",
             name: "Admin",
             permissions: [
-              { permissionId: "users:create" },
-              { permissionId: "users:delete" }
+              { permissionId: "users:create", permission: { resource: "users", action: "create" } },
+              { permissionId: "users:delete", permission: { resource: "users", action: "delete" } }
             ]
           }
         }
@@ -751,7 +751,7 @@ describe("BetterAuthAdapter", () => {
         role: {
           id: "editor",
           name: "Editor",
-          permissions: [{ permissionId: "content:write" }]
+          permissions: [{ permissionId: "content:write", permission: { resource: "content", action: "write" } }]
         }
       }
     ]);

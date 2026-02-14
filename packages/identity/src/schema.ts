@@ -8,6 +8,7 @@ import {
   index,
   uniqueIndex,
   check,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -182,6 +183,12 @@ export const rolePermission = pgTable(
     organizationId: text("organizationId").references(() => organization.id, {
       onDelete: "cascade",
     }),
+    /**
+     * ABAC Conditions (JSON)
+     * Stores dynamic conditions for this permission assignment.
+     * Example: { "department": "engineering", "public": true }
+     */
+    conditions: jsonb("conditions"),
   },
   (t) => [
     // Surrogate PK
