@@ -15,6 +15,7 @@ const COMMANDS = [
   'fresh',
   'reset',
   'check-user',
+  'debug-role',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -24,7 +25,7 @@ async function main() {
   if (!command || !COMMANDS.includes(command)) {
     console.error('Usage: tsx db-cli.ts <command>');
     console.error('Commands:');
-    COMMANDS.forEach((cmd) => console.error(`  ${cmd}`));
+    for (const cmd of COMMANDS) console.error(`  ${cmd}`);
     process.exit(1);
   }
 
@@ -54,6 +55,15 @@ async function main() {
           process.exit(1);
         }
         await manager.checkUserPermissions(identifier);
+        break;
+      }
+      case 'debug-role': {
+        const roleName = process.argv[3];
+        if (!roleName) {
+          console.error('Usage: debug-role <roleName>');
+          process.exit(1);
+        }
+        await manager.debugPermissions(roleName);
         break;
       }
     }

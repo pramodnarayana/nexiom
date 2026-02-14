@@ -818,6 +818,9 @@ export class BetterAuthAdapter implements IAuthProvider {
 
     // 3. Fallback / Default Permissions
     if (permissions.size === 0) {
+      console.warn(
+        `[BetterAuthAdapter] No permissions resolved for user ${dbUser.id}; applying fallback: ${PERMISSION_FALLBACK_DASHBOARD_READ}`,
+      );
       permissions.add(PERMISSION_FALLBACK_DASHBOARD_READ);
     }
 
@@ -835,7 +838,7 @@ export class BetterAuthAdapter implements IAuthProvider {
       banReason: dbUser.banReason || null,
       banExpires: dbUser.banExpires || null,
       hasTenant: hasMembership,
-      memberRole: role,
+      memberRole: role.toLocaleLowerCase(),
     };
   }
 

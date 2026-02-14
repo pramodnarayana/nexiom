@@ -427,12 +427,6 @@ export class DatabaseManager {
 
         // Supplementary lookup for legacy string roles if no relation or permissions found
         // This handles cases like 'owner' role which might not be fully seeded with permission relations yet
-        if (!member.role?.permissions && typeof member.role === 'string') {
-          console.log(
-            '  ⚠️ Legacy role string detected, performing supplementary lookup...',
-          );
-          // (Supplementary lookup logic could go here if needed, but for debug tool we stick to relations)
-        }
       } else {
         console.log('  Memberships: None');
       }
