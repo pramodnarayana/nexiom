@@ -1,6 +1,8 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
-import type { Client } from 'pg';
+import { Client } from 'pg';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import * as schema from './schema';
 
 /**
  * Enterprise-grade database management utility
@@ -14,10 +16,39 @@ export class DatabaseManager {
   // Cache pg module to avoid repeated dynamic imports
   private static cachedPg: typeof import('pg') | null = null;
 
+  // ... (truncating internal methods for brevity, assuming they are unchanged in this block selection) ...
+
+  // Reset method omitted from replacement range to focus on withDrizzle and imports
+
+  /** Critical permissions to verify in debug output. */
+  private static readonly CRITICAL_PERMISSIONS = [
+    'system_users:create',
+    'users:create',
+    'dashboard:view',
+  ];
+
   /**
-   * Resolve pg module and database URL (single source of truth)
-   * @private
+   * Helper to initialize Drizzle with the correct schema and client,
+   * run a callback, and ensure the client is closed.
    */
+  private async withDrizzle<T>(
+    callback: (
+      db: NodePgDatabase<typeof schema>,
+      _schema: typeof schema,
+    ) => Promise<T>,
+  ): Promise<T> {
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const dbSchema = await import('./schema');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      return await callback(db, dbSchema);
+    } finally {
+      await client.end();
+    }
+  }
+
   private async resolvePgModule(): Promise<{
     PgClient: typeof import('pg').Client;
     dbUrl: string;
@@ -298,5 +329,120 @@ export class DatabaseManager {
     console.log();
 
     console.log('✅ Reset complete!');
+  }
+
+  /**
+   * Debug RBAC permissions for a role
+   */
+  async debugPermissions(roleName: string): Promise<void> {
+    console.log(`🔍 Debugging permissions for role: ${roleName}...`);
+
+    await this.withDrizzle(async (db, schema) => {
+      const { eq } = await import('drizzle-orm');
+
+      const role = await db.query.role.findFirst({
+        where: eq(schema.role.name, roleName),
+      });
+
+      if (!role) {
+        console.error(`❌ Role '${roleName}' not found`);
+        return;
+      }
+
+      console.log(`  Found Role: ${role.name} (${role.id})`);
+
+      const perms = await db.query.rolePermission.findMany({
+        where: eq(schema.rolePermission.roleId, role.id),
+      });
+
+      console.log(`  Permissions (${perms.length}):`);
+      const permIds = perms.map((p) => p.permissionId).sort();
+
+      for (const p of permIds) console.log(`    - ${p}`);
+
+      const critical = DatabaseManager.CRITICAL_PERMISSIONS;
+      console.log('\n  Critical Check:');
+      for (const c of critical) {
+        const has = permIds.includes(c);
+        console.log(`    ${has ? '✅' : '❌'} ${c}`);
+      }
+    });
+  }
+
+  /**
+   * Check permissions for a specific user (by ID or Email)
+   */
+  async checkUserPermissions(identifier: string): Promise<void> {
+    console.log(`🔍 Checking permissions for user: ${identifier}...`);
+
+    await this.withDrizzle(async (db, schema) => {
+      const { eq, or } = await import('drizzle-orm');
+
+      // Find user by ID or Email
+      const user = await db.query.user.findFirst({
+        where: or(
+          eq(schema.user.id, identifier),
+          eq(schema.user.email, identifier),
+        ),
+        with: {
+          members: {
+            with: {
+              role: {
+                with: {
+                  permissions: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        console.error(`❌ User '${identifier}' not found`);
+        return;
+      }
+
+      console.log(`  Found User: ${user.email} (${user.id})`);
+
+      const allPermissions = new Set<string>();
+
+      const { normalizeRole } =
+        await import('@nexiom/identity/utils/role-normalization');
+
+      // Resolve Member Role Permissions (this is what the app actually uses)
+      if (user.members && user.members.length > 0) {
+        // Enforce Single-Tenant Rule: Use only the first member record
+        const member = user.members[0];
+        const normalized = normalizeRole(member.role);
+        const roleName = normalized.name;
+        const roleId = normalized.id;
+
+        console.log(
+          `    - Org: ${member.organizationId}, Role: ${roleName} (${roleId})`,
+        );
+
+        for (const p of normalized.permissions) {
+          allPermissions.add(p.permissionId);
+        }
+
+        // Supplementary lookup for legacy string roles if no relation or permissions found
+        // This handles cases like 'owner' role which might not be fully seeded with permission relations yet
+      } else {
+        console.log('  Memberships: None');
+      }
+
+      console.log(`\n  Effective Permissions (${allPermissions.size}):`);
+      const sortedPerms = Array.from(allPermissions).sort((a, b) =>
+        a.localeCompare(b),
+      );
+      for (const p of sortedPerms) console.log(`    - ${p}`);
+
+      const critical = DatabaseManager.CRITICAL_PERMISSIONS;
+      console.log('\n  Critical Capability Check:');
+      for (const c of critical) {
+        const has = allPermissions.has(c);
+        console.log(`    ${has ? '✅' : '❌'} ${c}`);
+      }
+    });
   }
 }

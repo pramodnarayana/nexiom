@@ -1,0 +1,133 @@
+
+> nexiom-monorepo@1.0.0 lint /Users/apple/engineering/nexiom
+> turbo lint
+
+• turbo 2.7.3
+• Packages in scope: @nexiom/identity, api, web
+• Running lint in 3 packages
+• Remote caching disabled
+@nexiom/identity:lint: cache hit, replaying logs 70cff815fd617888
+@nexiom/identity:lint: 
+@nexiom/identity:lint: 
+@nexiom/identity:lint: > @nexiom/identity@0.0.1 lint /Users/apple/engineering/nexiom/packages/identity
+@nexiom/identity:lint: > eslint "src/**/*.ts" --fix
+@nexiom/identity:lint: 
+web:lint: cache hit, replaying logs 3f83b7623647e21c
+web:lint: 
+web:lint: 
+web:lint: > web@0.0.0 lint /Users/apple/engineering/nexiom/apps/web
+web:lint: > eslint .
+web:lint: 
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/block-navigation.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/prettify.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[4m/Users/apple/engineering/nexiom/apps/web/coverage/sorter.js[24m[0m
+web:lint: [0m  [2m1:1[22m  [33mwarning[39m  Unused eslint-disable directive (no problems were reported)[0m
+web:lint: [0m[0m
+web:lint: [0m[33m[1m✖ 3 problems (0 errors, 3 warnings)[22m[39m[0m
+web:lint: [0m[33m[1m[22m[39m[33m[1m  0 errors and 3 warnings potentially fixable with the `--fix` option.[22m[39m[0m
+web:lint: [0m[33m[1m[22m[39m[0m
+@nexiom/identity:build: cache hit, replaying logs 27f91d3c779d573f
+@nexiom/identity:build: 
+@nexiom/identity:build: 
+@nexiom/identity:build: > @nexiom/identity@0.0.1 prebuild /Users/apple/engineering/nexiom/packages/identity
+@nexiom/identity:build: > npm run clean
+@nexiom/identity:build: 
+@nexiom/identity:build: 
+@nexiom/identity:build: > @nexiom/identity@0.0.1 clean
+@nexiom/identity:build: > rimraf dist
+@nexiom/identity:build: 
+@nexiom/identity:build: [1G[0K[1G[0K⠙[1G[0K
+@nexiom/identity:build: > @nexiom/identity@0.0.1 build /Users/apple/engineering/nexiom/packages/identity
+@nexiom/identity:build: > tsc -p tsconfig.build.json
+@nexiom/identity:build: 
+api:lint: cache miss, executing c2b582d466381ace
+api:lint: 
+api:lint: > api@0.0.1 lint /Users/apple/engineering/nexiom/apps/api
+api:lint: > eslint "{src,apps,libs,test}/**/*.ts" --fix
+api:lint: 
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/db/database-manager.ts
+api:lint:   398:17  error    Unsafe assignment of an `any` value                                     @typescript-eslint/no-unsafe-assignment
+api:lint:   400:17  error    Unsafe assignment of an `any` value                                     @typescript-eslint/no-unsafe-assignment
+api:lint:   402:28  error    Unsafe member access .name on an `any` value                            @typescript-eslint/no-unsafe-member-access
+api:lint:   404:17  error    Unsafe assignment of an `any` value                                     @typescript-eslint/no-unsafe-assignment
+api:lint:   406:28  error    Unsafe member access .id on an `any` value                              @typescript-eslint/no-unsafe-member-access
+api:lint:   415:38  error    Unsafe member access .permissions on an `any` value                     @typescript-eslint/no-unsafe-member-access
+api:lint:   417:13  error    Unsafe call of a(n) `any` typed value                                   @typescript-eslint/no-unsafe-call
+api:lint:   417:24  error    Unsafe member access .permissions on an `any` value                     @typescript-eslint/no-unsafe-member-access
+api:lint:   418:34  warning  Unsafe argument of type `any` assigned to a parameter of type `string`  @typescript-eslint/no-unsafe-argument
+api:lint:   418:36  error    Unsafe member access .permissionId on an `any` value                    @typescript-eslint/no-unsafe-member-access
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/db/db-cli.ts
+api:lint:   56:9  error  Unexpected lexical declaration in case block  no-case-declarations
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/modules/identity/auth/auth.controller.coverage.spec.ts
+api:lint:    43:33  error    Unsafe assignment of an `any` value                                                                 @typescript-eslint/no-unsafe-assignment
+api:lint:    44:35  error    Unsafe assignment of an `any` value                                                                 @typescript-eslint/no-unsafe-assignment
+api:lint:    45:37  error    Unsafe assignment of an `any` value                                                                 @typescript-eslint/no-unsafe-assignment
+api:lint:    46:40  error    Unsafe assignment of an `any` value                                                                 @typescript-eslint/no-unsafe-assignment
+api:lint:    58:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:    58:19  error    Unsafe member access .resendVerificationEmail on an `any` value                                     @typescript-eslint/no-unsafe-member-access
+api:lint:    75:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:    75:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:    78:11  warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:    85:11  warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:    91:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:    91:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:    97:11  warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:   104:11  warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:   110:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   110:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:   116:11  warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:   123:11  warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:   129:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   129:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:   130:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   130:20  error    Unsafe member access .findByEmail on an `any` value                                                 @typescript-eslint/no-unsafe-member-access
+api:lint:   136:11  warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:   143:11  warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:   149:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   149:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:   150:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   150:20  error    Unsafe member access .findByEmail on an `any` value                                                 @typescript-eslint/no-unsafe-member-access
+api:lint:   154:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   154:20  error    Unsafe member access .update on an `any` value                                                      @typescript-eslint/no-unsafe-member-access
+api:lint:   155:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   155:19  error    Unsafe member access .login on an `any` value                                                       @typescript-eslint/no-unsafe-member-access
+api:lint:   158:9   warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:   165:9   warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:   168:27  error    Unsafe member access .update on an `any` value                                                      @typescript-eslint/no-unsafe-member-access
+api:lint:   169:33  error    Unsafe member access .accept on an `any` value                                                      @typescript-eslint/no-unsafe-member-access
+api:lint:   173:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   173:26  error    Unsafe member access .get on an `any` value                                                         @typescript-eslint/no-unsafe-member-access
+api:lint:   174:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   174:20  error    Unsafe member access .findByEmail on an `any` value                                                 @typescript-eslint/no-unsafe-member-access
+api:lint:   175:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   175:19  error    Unsafe member access .createUser on an `any` value                                                  @typescript-eslint/no-unsafe-member-access
+api:lint:   176:7   error    Unsafe call of a(n) `any` typed value                                                               @typescript-eslint/no-unsafe-call
+api:lint:   176:26  error    Unsafe member access .accept on an `any` value                                                      @typescript-eslint/no-unsafe-member-access
+api:lint:   180:11  warning  Unsafe argument of type `any` assigned to a parameter of type `CompleteInvite`                      @typescript-eslint/no-unsafe-argument
+api:lint:   187:11  warning  Unsafe argument of type `any` assigned to a parameter of type `Response<any, Record<string, any>>`  @typescript-eslint/no-unsafe-argument
+api:lint:   191:27  error    Unsafe member access .delete on an `any` value                                                      @typescript-eslint/no-unsafe-member-access
+api:lint: 
+api:lint: /Users/apple/engineering/nexiom/apps/api/src/modules/identity/roles/roles.controller.visibility.spec.ts
+api:lint:   32:11  error  Unsafe assignment of an `any` value  @typescript-eslint/no-unsafe-assignment
+api:lint: 
+api:lint: ✖ 59 problems (46 errors, 13 warnings)
+api:lint: 
+api:lint:  ELIFECYCLE  Command failed with exit code 1.
+api:lint: ERROR: command finished with error: command (/Users/apple/engineering/nexiom/apps/api) /usr/local/bin/pnpm run lint exited (1)
+api#lint: command (/Users/apple/engineering/nexiom/apps/api) /usr/local/bin/pnpm run lint exited (1)
+
+ Tasks:    3 successful, 4 total
+Cached:    3 cached, 4 total
+  Time:    12.71s 
+Failed:    api#lint
+
+ ERROR  run failed: command  exited (1)
+ ELIFECYCLE  Command failed with exit code 1.

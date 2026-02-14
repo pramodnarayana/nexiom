@@ -54,7 +54,7 @@ const mkDb = () => {
     member: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     account: { findFirst: vi.fn() },
     role: { findFirst: vi.fn() },
-    rolePermission: { findMany: vi.fn() },
+    rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
   };
   const db: any = {
     query: q,
@@ -641,5 +641,180 @@ describe("BetterAuthAdapter", () => {
         subject: expect.stringContaining("invited to join"),
       }),
     );
+  });
+
+  it("findById returns user with permissions from eager-loaded members", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+
+    db.query.user.findFirst.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      role: "member", // Legacy field — ignored by mapUser
+      members: [
+        {
+          id: "m1",
+          userId: "u1",
+          organizationId: "org1",
+          role: {
+            id: "admin",
+            name: "Admin",
+            permissions: [
+              { permissionId: "users:create" },
+              { permissionId: "users:read" }
+            ]
+          }
+        }
+      ],
+    });
+
+    const user = await adapter.findById("u1");
+
+    expect(user.id).toBe("u1");
+    expect(user.role).toBe("admin"); // Lowercased from "Admin"
+    expect(user.permissions).toContain("users:create");
+    expect(user.permissions).toContain("users:read");
+    expect(user.hasTenant).toBe(true);
+    // Verify no lazy-fetch fallback was triggered
+    expect(db.query.member.findMany).not.toHaveBeenCalled();
+    // Supplementary query runs anyway to catch any missed permissions
+    expect(db.query.rolePermission.findMany).toHaveBeenCalled();
+  });
+
+  it("createUser inherits permissions from member role, not legacy user.role", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+    const auth: any = (adapter as any).auth;
+
+    auth.api.signUpEmail.mockResolvedValue({ user: { id: "u_admin" } });
+
+    // Rehydration returns eager-loaded user with members
+    db.query.user.findFirst.mockResolvedValueOnce({
+      id: "u_admin",
+      email: "admin@test.com",
+      role: "member", // Legacy — ignored by mapUser
+      members: [
+        {
+          id: "m_admin",
+          userId: "u_admin",
+          organizationId: "sys_org",
+          role: {
+            id: "admin",
+            name: "Admin",
+            permissions: [
+              { permissionId: "users:create" },
+              { permissionId: "users:delete" }
+            ]
+          }
+        }
+      ]
+    });
+
+    const user = await adapter.createUser({
+      email: "admin@test.com",
+      password: "password",
+      role: "admin",
+    });
+
+    expect(user.id).toBe("u_admin");
+    expect(user.role).toBe("admin"); // Lowercased from "Admin"
+    expect(user.permissions).toContain("users:create");
+    expect(user.permissions).toContain("users:delete");
+    // Legacy user.role field should NOT be written to
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("createUser handles lazy member fetch when eager load fails (defensive)", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+    const auth: any = (adapter as any).auth;
+
+    auth.api.signUpEmail.mockResolvedValue({ user: { id: "u_lazy" } });
+
+    // 1. Initial rehydration returns user WITHOUT members (simulating failed eager load)
+    db.query.user.findFirst.mockResolvedValueOnce({
+      id: "u_lazy",
+      email: "lazy@test.com",
+      role: "member",
+      // members is undefined
+    });
+
+    // 2. Adapter should fall back to lazy fetch
+    db.query.member.findMany.mockResolvedValueOnce([
+      {
+        id: "m_lazy",
+        userId: "u_lazy",
+        organizationId: "sys_org",
+        role: {
+          id: "editor",
+          name: "Editor",
+          permissions: [{ permissionId: "content:write" }]
+        }
+      }
+    ]);
+
+    const user = await adapter.createUser({
+      email: "lazy@test.com",
+      password: "password",
+      role: "editor",
+    });
+
+    // Assertions
+    expect(user.id).toBe("u_lazy");
+    expect(user.role).toBe("editor");
+    expect(user.permissions).toContain("content:write");
+
+    // Verify fallback query was made
+    expect(db.query.member.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.anything() })
+    );
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("createUser performs supplementary permission lookup for legacy string roles", async () => {
+    const db = mkDb();
+    const email = mkEmail();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
+    const auth: any = (adapter as any).auth;
+
+    auth.api.signUpEmail.mockResolvedValue({ user: { id: "u_str" } });
+
+    // 1. Rehydration returns user with string role ID (not full object)
+    db.query.user.findFirst.mockResolvedValueOnce({
+      id: "u_str",
+      email: "str@test.com",
+      role: "member",
+      members: [
+        {
+          id: "m_str",
+          userId: "u_str",
+          organizationId: "sys_org",
+          role: "legacy-admin" // String ID
+        }
+      ]
+    });
+
+    // 2. Adapter should identify string role and fetch permissions
+    db.query.rolePermission.findMany.mockResolvedValueOnce([
+      { permissionId: "legacy:perm" }
+    ]);
+
+    const user = await adapter.createUser({
+      email: "str@test.com",
+      password: "password",
+      role: "legacy-admin",
+    });
+
+    // Assertions
+    expect(user.id).toBe("u_str");
+    expect(user.role).toBe("legacy-admin"); // Normalized from ID if name not found in map, or assumes name=id
+    expect(user.permissions).toContain("legacy:perm");
+
+    // Verify supplementary query
+    expect(db.query.rolePermission.findMany).toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
   });
 });
