@@ -16,6 +16,7 @@ const COMMANDS = [
   'reset',
   'check-user',
   'debug-role',
+  'seed:abac',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -28,6 +29,10 @@ async function main() {
     for (const cmd of COMMANDS) console.error(`  ${cmd}`);
     process.exit(1);
   }
+
+  const dbUrl = process.env.DATABASE_URL || '';
+  const maskedUrl = dbUrl.replace(/:[^:@]+@/, ':***@');
+  console.log(`🔌 Database: ${maskedUrl}`);
 
   const manager = new DatabaseManager();
 
@@ -66,6 +71,9 @@ async function main() {
         await manager.debugPermissions(roleName);
         break;
       }
+      case 'seed:abac':
+        await manager.seedAbac();
+        break;
     }
   } catch (error) {
     console.error(

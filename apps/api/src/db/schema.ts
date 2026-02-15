@@ -36,4 +36,5 @@ export type {
   RolePermission,
   Account,
   Verification,
+  AbacConditions,
 } from '@nexiom/identity/src/schema';

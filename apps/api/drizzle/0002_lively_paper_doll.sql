@@ -1,0 +1,1 @@
+ALTER TABLE "role_permission" ADD COLUMN "conditions" jsonb;

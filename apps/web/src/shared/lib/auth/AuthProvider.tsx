@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react
 import type { AuthContextType, AuthUser } from './types';
 import { authClient } from '../auth-client';
 import { apiClient } from '../api-client';
-import { AuthContext } from './context';
+import { AuthContext, AccessControlContext } from './context';
+import { defineAccessControlFor } from './access-control';
 
 interface Tenant {
     id: string;
@@ -223,5 +224,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         refreshSession: async () => { await refreshSession(); },
     }), [user, token, isLoading, logout, login, refreshSession]);
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    const accessControl = useMemo(() => {
+        return defineAccessControlFor({ permissions: user?.permissions || [] });
+    }, [user?.permissions]);
+
+    return (
+        <AuthContext.Provider value={value}>
+            <AccessControlContext.Provider value={accessControl}>
+                {children}
+            </AccessControlContext.Provider>
+        </AuthContext.Provider>
+    );
 }

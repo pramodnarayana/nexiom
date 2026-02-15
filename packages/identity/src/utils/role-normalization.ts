@@ -4,7 +4,14 @@
 export interface NormalizedRole {
   id: string;
   name: string;
-  permissions: { permissionId: string }[];
+  permissions: {
+    permissionId: string;
+    conditions?: unknown; // JSONB
+    permission?: {
+      action: string;
+      resource: string;
+    };
+  }[];
 }
 
 /**
@@ -19,7 +26,7 @@ export interface NormalizedRole {
 export function normalizeRole(rawRole: unknown): NormalizedRole {
   let roleName = "unknown";
   let roleId = "unknown";
-  let permissions: { permissionId: string }[] = [];
+  let permissions: NormalizedRole["permissions"] = [];
 
   if (typeof rawRole === "string") {
     roleName = rawRole;
@@ -33,13 +40,16 @@ export function normalizeRole(rawRole: unknown): NormalizedRole {
     const roleObj = rawRole as {
       id: string;
       name: string;
-      permissions?: { permissionId: string }[];
+      permissions?: Record<string, unknown>[];
     };
     roleName = roleObj.name;
     roleId = roleObj.id;
 
     if (Array.isArray(roleObj.permissions)) {
-      permissions = roleObj.permissions;
+      permissions = roleObj.permissions.filter(
+        (p): p is NormalizedRole["permissions"][number] =>
+          typeof p === "object" && p !== null && "permissionId" in p,
+      );
     }
   }
 

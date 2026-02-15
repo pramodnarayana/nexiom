@@ -18,7 +18,10 @@ import * as schema from '../db/schema';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: [
+        'apps/api/.env', // api-specific overrides (from monorepo root)
+        '.env', // shared root env (from monorepo root)
+      ],
     }),
     IdentityModule.registerAsync({
       imports: [ConfigModule, DbModule, AuthModule], // Ensure DbModule is here

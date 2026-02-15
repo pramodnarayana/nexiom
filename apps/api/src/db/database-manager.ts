@@ -254,10 +254,164 @@ export class DatabaseManager {
       };
 
       await seedSystemRbac(db, config, console);
+
+      // 3. Seed Bootstrap Owner (User Request)
+      const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
+      const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+      const name = process.env.BOOTSTRAP_ADMIN_NAME;
+
+      if (email && password && name) {
+        const maskedEmail = email.replace(/(.{2}).*(@.*)/, '$1***$2');
+        console.log(`  👤 Seeding bootstrap owner: ${maskedEmail}`);
+        const bcrypt = await import('bcryptjs');
+        const { v4: uuidv4 } = await import('uuid');
+
+        // Check if user exists
+        let user = await db.query.user.findFirst({
+          where: eq(schema.user.email, email),
+        });
+
+        // Stable ID for transaction compatibility
+        const userId = user?.id || uuidv4();
+        const now = new Date();
+
+        if (!user) {
+          const hashedPassword = await bcrypt.hash(password, 10);
+
+          await db.transaction(async (tx) => {
+            // Create User
+            await tx.insert(schema.user).values({
+              id: userId,
+              email,
+              name,
+              emailVerified: true,
+              createdAt: now,
+              updatedAt: now,
+              role: 'member', // Legacy fallback
+            });
+
+            // Create Account (Credential)
+            await tx.insert(schema.account).values({
+              id: uuidv4(),
+              userId: userId,
+              accountId: email,
+              providerId: 'credential',
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            // Ensure System Membership (Owner) - Atomic with User Creation
+            await tx.insert(schema.member).values({
+              id: uuidv4(),
+              userId: userId,
+              organizationId: systemTenantId,
+              role: config.ownerRoleId,
+              createdAt: now,
+            });
+            console.log('    ✓ System Owner membership created');
+
+            user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+          });
+          console.log('    ✓ User and Account created');
+        } else {
+          console.log('    ℹ️  User already exists');
+
+          // Ensure System Membership (Owner) for existing user
+          const existingMember = await db.query.member.findFirst({
+            where: (m, { and, eq }) =>
+              and(eq(m.userId, userId), eq(m.organizationId, systemTenantId)),
+          });
+
+          if (!existingMember) {
+            await db.insert(schema.member).values({
+              id: uuidv4(),
+              userId: userId,
+              organizationId: systemTenantId,
+              role: config.ownerRoleId,
+              createdAt: now,
+            });
+            console.log('    ✓ System Owner membership created');
+          }
+        }
+      } else {
+        console.log('  ⚠️  Skipping bootstrap user: Missing env vars');
+      }
+
       console.log('  ✓ Seeding complete');
     } finally {
       await client.end();
     }
+  }
+
+  /**
+   * Seed ABAC data for manual verification
+   * Creates restricted_admin role with conditional permissions
+   */
+  async seedAbac(): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log('🌱 Seeding ABAC data for verification...');
+
+    await this.withDrizzle(async (db, schema) => {
+      // 1. Ensure permissions exist
+      await db
+        .insert(schema.permission)
+        .values([
+          {
+            id: 'users:read',
+            resource: 'users',
+            action: 'read',
+            description: 'Read users',
+          },
+          {
+            id: 'users:delete',
+            resource: 'users',
+            action: 'delete',
+            description: 'Delete users',
+          },
+        ])
+        .onConflictDoNothing();
+      console.log('  ✓ Permissions "users:read", "users:delete" ensured');
+
+      // 2. Create "restricted_admin" role
+      await db
+        .insert(schema.role)
+        .values({
+          id: 'restricted_admin',
+          name: 'Restricted Admin',
+          description: 'Can manage users but cannot delete Owners',
+          isSystem: false,
+        })
+        .onConflictDoNothing();
+      console.log('  ✓ Role "restricted_admin" created');
+
+      // 3. Grant "users:read" (Global access)
+      await db
+        .insert(schema.rolePermission)
+        .values({
+          id: 'rp_restricted_read',
+          roleId: 'restricted_admin',
+          permissionId: 'users:read',
+        })
+        .onConflictDoNothing();
+      console.log('  ✓ Granted "users:read"');
+
+      // 4. Grant "users:delete" WITH ABAC CONDITION
+      await db
+        .insert(schema.rolePermission)
+        .values({
+          id: 'rp_restricted_delete',
+          roleId: 'restricted_admin',
+          permissionId: 'users:delete',
+          conditions: {
+            role: { $ne: 'owner' },
+          } satisfies schema.AbacConditions,
+        })
+        .onConflictDoNothing();
+      console.log(
+        '  ✓ Granted "users:delete" with condition { role: { $ne: "owner" } }',
+      );
+    });
   }
 
   /**
@@ -281,7 +435,7 @@ export class DatabaseManager {
       }
 
       const quotedTables = tables
-        .map((t) => `"${t.table_name.replace(/"/g, '""')}"`)
+        .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
         .join(', ');
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
       await this.execSql(sql, client);
@@ -356,7 +510,9 @@ export class DatabaseManager {
       });
 
       console.log(`  Permissions (${perms.length}):`);
-      const permIds = perms.map((p) => p.permissionId).sort();
+      const permIds = perms
+        .map((p) => p.permissionId)
+        .sort((a: string, b: string) => a.localeCompare(b));
 
       for (const p of permIds) console.log(`    - ${p}`);
 
