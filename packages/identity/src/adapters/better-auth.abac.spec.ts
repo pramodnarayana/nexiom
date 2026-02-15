@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, type Mock } from "vitest";
 import { BetterAuthAdapter } from "./better-auth.adapter";
+import type { IdentityModuleOptions } from "../identity.module";
+import type { IEmailProvider, ITenantProvider } from "../interfaces";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema";
 
@@ -30,9 +32,6 @@ const mkDb = () => {
       member: { findMany: vi.fn() },
       rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
     },
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    onConflictDoNothing: vi.fn(),
   } as unknown as NodePgDatabase<typeof schema>;
 };
 
@@ -42,8 +41,8 @@ const mkConfig = () => ({
   nodeEnv: "test" as const,
 });
 
-const mkOptions = () => ({
-  dbToken: "TEST",
+const mkOptions = (): IdentityModuleOptions => ({
+  betterAuthConfig: mkConfig(),
   constants: {
     systemTenantId: "sys",
     ownerRoleId: "owner",
@@ -55,12 +54,16 @@ const mkOptions = () => ({
 describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
   it("should serialize permissions with conditions as JSON strings", async () => {
     const db = mkDb();
+    const mockEmail = { sendEmail: vi.fn() } as unknown as IEmailProvider;
+    const mockTenantProvider = {} as unknown as ITenantProvider;
+    const options = mkOptions();
+
     const adapter = new BetterAuthAdapter(
       db,
-      {} as any, // valid cast for test mock
+      mockEmail,
       mkConfig(),
-      {} as any, // valid cast for test mock
-      mkOptions() as any, // valid cast for test mock
+      mockTenantProvider,
+      options,
     );
 
     // Mock DB User with Role containing Conditional Permission

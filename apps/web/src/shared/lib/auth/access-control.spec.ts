@@ -63,6 +63,8 @@ describe('AccessControlFactory', () => {
                 'invalid-string',
                 '{bad json',
                 '',
+                undefined as unknown as string,
+                null as unknown as object,
                 ''
             ]
         });

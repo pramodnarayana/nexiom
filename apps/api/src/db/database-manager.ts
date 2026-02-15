@@ -285,13 +285,16 @@ export class DatabaseManager {
           });
 
           if (!existingMember) {
-            await db.insert(schema.member).values({
-              id: uuidv4(),
-              userId: userId,
-              organizationId: systemTenantId,
-              role: config.ownerRoleId,
-              createdAt: now,
-            });
+            await db
+              .insert(schema.member)
+              .values({
+                id: uuidv4(),
+                userId: userId,
+                organizationId: systemTenantId,
+                role: config.ownerRoleId,
+                createdAt: now,
+              })
+              .onConflictDoNothing();
             console.log('    ✓ System Owner membership created');
           }
         } else {

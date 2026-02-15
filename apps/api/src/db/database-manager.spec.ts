@@ -232,9 +232,7 @@ describe('DatabaseManager', () => {
         onConflictDoNothing: onConflictDoNothingMock,
       });
       drizzleMocks.insert.mockReturnValue({ values: valuesMock });
-
       await manager.seedAbac();
-
       // Verify Permission creation (users:read, users:delete)
       expect(valuesMock).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -242,7 +240,6 @@ describe('DatabaseManager', () => {
           expect.objectContaining({ id: 'users:delete' }),
         ]),
       );
-
       // Verify Role creation (restricted_admin)
       expect(valuesMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -250,7 +247,6 @@ describe('DatabaseManager', () => {
           name: 'Restricted Admin',
         }),
       );
-
       // Verify Conditional Permission (rp_restricted_delete)
       expect(valuesMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -262,6 +258,16 @@ describe('DatabaseManager', () => {
           },
         }),
       );
+      // Verify unconditional permission grant (rp_restricted_read)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'rp_restricted_read',
+          roleId: 'restricted_admin',
+          permissionId: 'users:read',
+        }),
+      );
+      // Verify idempotent upserts
+      expect(onConflictDoNothingMock).toHaveBeenCalledTimes(4);
     });
   });
 
