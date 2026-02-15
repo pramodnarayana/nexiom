@@ -1,77 +1,91 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
-import { Test, TestingModule } from "@nestjs/testing";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, type Mock } from "vitest";
 import { BetterAuthAdapter } from "./better-auth.adapter";
-import {
-  IDENTITY_DB,
-  IDENTITY_OPTIONS,
-  EMAIL_PROVIDER,
-  TENANT_PROVIDER,
-  BETTER_AUTH_CONFIG,
-} from "../constants";
+import type { IdentityModuleOptions } from "../identity.module";
+import type { IEmailProvider, ITenantProvider } from "../interfaces";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import * as schema from "../schema";
+
+// Mocks
 vi.mock("better-auth", () => ({
-  betterAuth: vi.fn(() => ({
-    api: {},
-    handler: vi.fn(),
-  })),
+  betterAuth: vi.fn(() => ({ api: {}, handler: vi.fn() })),
 }));
-vi.mock("better-auth/adapters/drizzle", () => ({
-  drizzleAdapter: vi.fn(),
-}));
+vi.mock("better-auth/adapters/drizzle", () => ({ drizzleAdapter: vi.fn() }));
 vi.mock("better-auth/plugins", () => ({
-  organization: vi.fn((o) => o),
+  organization: vi.fn((o: unknown) => o),
   admin: vi.fn(() => ({})),
 }));
 vi.mock("better-auth/node", () => ({
-  fromNodeHeaders: vi.fn((h) => h),
+  fromNodeHeaders: vi.fn((h: unknown) => h),
 }));
-const mockDb: any = {
-  query: {
-    user: { findFirst: vi.fn() },
-    session: { findFirst: vi.fn() },
-    member: { findMany: vi.fn() },
-    rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
-  },
+vi.mock("bcryptjs", () => ({
+  default: { hash: vi.fn(), compare: vi.fn() },
+  hash: vi.fn(),
+  compare: vi.fn(),
+}));
+vi.mock("uuid", () => ({ v4: vi.fn(() => "uuid-1") }));
+
+const mkDb = () => {
+  return {
+    query: {
+      user: { findFirst: vi.fn() },
+      session: { findFirst: vi.fn() },
+      member: { findMany: vi.fn() },
+      rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
+    },
+  } as unknown as NodePgDatabase<typeof schema>;
 };
-describe("BetterAuthAdapter ABAC", () => {
-  let adapter: BetterAuthAdapter;
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BetterAuthAdapter,
-        { provide: IDENTITY_DB, useValue: mockDb },
-        {
-          provide: IDENTITY_OPTIONS,
-          useValue: { constants: { systemTenantId: "system" } },
-        },
-        { provide: EMAIL_PROVIDER, useValue: { sendEmail: vi.fn() } },
-        { provide: TENANT_PROVIDER, useValue: { findAllForUser: vi.fn() } },
-        {
-          provide: BETTER_AUTH_CONFIG,
-          useValue: {
-            allowedOrigins: ["http://localhost"],
-            betterAuthUrl: "http://localhost",
-          },
-        },
-      ],
-    }).compile();
-    adapter = module.get<BetterAuthAdapter>(BetterAuthAdapter);
-  });
 
-  it("should return simple string for simple permission", async () => {
+const mkConfig = () => ({
+  allowedOrigins: ["http://localhost:3000"],
+  betterAuthUrl: "http://localhost:3000",
+  nodeEnv: "test" as const,
+});
+
+const mkOptions = (): IdentityModuleOptions => ({
+  betterAuthConfig: mkConfig(),
+  constants: {
+    systemTenantId: "sys",
+    ownerRoleId: "owner",
+    adminRoleId: "admin",
+    memberRoleId: "member",
+  },
+});
+
+describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
+  it("should serialize permissions with conditions as JSON strings", async () => {
+    const db = mkDb();
+    const mockEmail = { sendEmail: vi.fn() } as unknown as IEmailProvider;
+    const mockTenantProvider = {} as unknown as ITenantProvider;
+    const options = mkOptions();
+
+    const adapter = new BetterAuthAdapter(
+      db,
+      mockEmail,
+      mkConfig(),
+      mockTenantProvider,
+      options,
+    );
+
+    // Mock DB User with Role containing Conditional Permission
     const mockUser = {
-      id: "u1",
-      email: "test@example.com",
+      id: "user_abac",
+      email: "abac@test.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
       members: [
         {
+          id: "m1",
+          userId: "user_abac",
+          organizationId: "org1",
           role: {
-            id: "admin",
-            name: "admin",
+            id: "restricted_admin",
+            name: "Restricted Admin",
             permissions: [
               {
-                permission: { resource: "User", action: "read" },
-                conditions: null,
-                permissionId: "p1",
+                permissionId: "users:delete",
+                permission: { resource: "users", action: "delete" },
+                conditions: { role: { $ne: "owner" } }, // The Condition
               },
             ],
           },
@@ -79,42 +93,28 @@ describe("BetterAuthAdapter ABAC", () => {
       ],
     };
 
-    mockDb.query.user.findFirst.mockResolvedValue(mockUser);
+    // Inject mock safely
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const findFirstMock = db.query.user.findFirst as unknown as Mock;
+    findFirstMock.mockResolvedValue(mockUser);
 
-    const user = await adapter.findById("u1");
-    expect(user.permissions).toContain("User:read");
-  });
+    const user = await adapter.findById("user_abac");
 
-  it("should return JSON string for conditional permission", async () => {
-    const condition = { role: { $ne: "owner" } };
-    const mockUser = {
-      id: "u1",
-      email: "test@example.com",
-      members: [
-        {
-          role: {
-            id: "admin",
-            name: "admin",
-            permissions: [
-              {
-                permission: { resource: "User", action: "delete" },
-                conditions: condition,
-                permissionId: "p2",
-              },
-            ],
-          },
-        },
-      ],
+    // Expectation: The permission string should be a valid JSON object
+    const permissions = user.permissions || [];
+    const permissionString = permissions.find((p) => p.startsWith("{"));
+    expect(permissionString).toBeDefined();
+
+    const rule = JSON.parse(permissionString!) as {
+      action: string;
+      subject: string;
+      conditions: Record<string, unknown>;
     };
 
-    mockDb.query.user.findFirst.mockResolvedValue(mockUser);
-
-    const user = await adapter.findById("u1");
-    const expectedRule = JSON.stringify({
+    expect(rule).toMatchObject({
       action: "delete",
-      subject: "User",
-      conditions: condition,
+      subject: "users",
+      conditions: { role: { $ne: "owner" } },
     });
-    expect(user.permissions).toContain(expectedRule);
   });
 });

@@ -225,6 +225,67 @@ describe('DatabaseManager', () => {
     });
   });
 
+  describe('seedAbac()', () => {
+    it('should seed restricted_admin role and conditional permissions', async () => {
+      const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
+      const valuesMock = vi.fn().mockReturnValue({
+        onConflictDoNothing: onConflictDoNothingMock,
+      });
+
+      // Capture arguments passed to insert()
+      const insertSpy = drizzleMocks.insert.mockReturnValue({
+        values: valuesMock,
+      });
+
+      // We need to import schema to compare against
+      const { permission, role, rolePermission } = await import('./schema');
+
+      await manager.seedAbac();
+
+      // 1. Verify Permission Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(permission);
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'users:read' }),
+          expect.objectContaining({ id: 'users:delete' }),
+        ]),
+      );
+
+      // 2. Verify Role Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(role);
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'restricted_admin',
+          name: 'Restricted Admin',
+        }),
+      );
+
+      // 3. Verify RolePermission Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(rolePermission);
+      // Verify Conditional Permission (rp_restricted_delete)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'rp_restricted_delete',
+          roleId: 'restricted_admin',
+          permissionId: 'users:delete',
+          conditions: {
+            role: { $ne: 'owner' },
+          },
+        }),
+      );
+      // Verify unconditional permission grant (rp_restricted_read)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'rp_restricted_read',
+          roleId: 'restricted_admin',
+          permissionId: 'users:read',
+        }),
+      );
+      // Verify idempotent upserts
+      expect(onConflictDoNothingMock).toHaveBeenCalledTimes(4);
+    });
+  });
+
   describe('Error Handling', () => {
     it('should throw if DATABASE_URL is missing', async () => {
       delete process.env.DATABASE_URL;
