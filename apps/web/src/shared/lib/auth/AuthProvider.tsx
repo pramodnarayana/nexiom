@@ -226,7 +226,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
     const accessControl = useMemo(() => {
         return defineAccessControlFor({ permissions: user?.permissions || [] });
-    }, [user]);
+    }, [user?.permissions]);
 
     return (
         <AuthContext.Provider value={value}>

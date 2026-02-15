@@ -59,6 +59,17 @@ describe('AccessControlFactory', () => {
         expect(ability.can('read', 'User')).toBe(false);
     });
 
+    it('ignores malformed object permissions', () => {
+        const ability = defineAccessControlFor({
+            permissions: [
+                { foo: 'bar' },
+                { action: 'read' }, // Missing subject
+                { subject: 'User' } // Missing action
+            ]
+        });
+        expect(ability.can('read', 'User')).toBe(false);
+    });
+
     it('denies all when no permissions provided', () => {
         const ability = defineAccessControlFor({});
         expect(ability.can('read', 'User')).toBe(false);

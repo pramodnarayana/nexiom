@@ -26,7 +26,7 @@ export async function seedOwnerPermissions(db: NodePgDatabase<typeof schema>) {
   const [ownerRole] = await db
     .select()
     .from(role)
-    .where(eq(role.name, "owner"));
+    .where(eq(role.name, "Owner"));
 
   if (ownerRole) {
     // 3. Assign Permission to Role

@@ -1,7 +1,7 @@
 import { AbilityBuilder, type CreateAbility, createMongoAbility, type MongoAbility, type MongoQuery, type ExtractSubjectType } from '@casl/ability';
 
 
-export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete';
+export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete' | 'view';
 export type UserSubject = { __typename: 'User'; role?: string };
 export type Subjects = 'User' | UserSubject | 'all';
 
@@ -48,7 +48,11 @@ export const defineAccessControlFor = (user: { permissions?: (string | object)[]
                     }
                 }
             } else {
-                rule = p as CaslRule;
+                if (p && typeof p === 'object' && 'action' in p && 'subject' in p) {
+                    rule = p as CaslRule;
+                } else {
+                    console.error('Invalid permission object shape', p);
+                }
             }
 
             if (rule) {

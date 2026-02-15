@@ -271,10 +271,12 @@ export class DatabaseManager {
           where: eq(schema.user.email, email),
         });
 
+        // Stable ID for transaction compatibility
+        const userId = user?.id || uuidv4();
+        const now = new Date();
+
         if (!user) {
-          const userId = uuidv4();
           const hashedPassword = await bcrypt.hash(password, 10);
-          const now = new Date();
 
           await db.transaction(async (tx) => {
             // Create User
@@ -309,16 +311,16 @@ export class DatabaseManager {
         // Ensure System Membership (Owner)
         const existingMember = await db.query.member.findFirst({
           where: (m, { and, eq }) =>
-            and(eq(m.userId, user!.id), eq(m.organizationId, systemTenantId)),
+            and(eq(m.userId, userId), eq(m.organizationId, systemTenantId)),
         });
 
         if (!existingMember) {
           await db.insert(schema.member).values({
             id: uuidv4(),
-            userId: user!.id,
+            userId: userId,
             organizationId: systemTenantId,
             role: config.ownerRoleId,
-            createdAt: new Date(),
+            createdAt: now,
           });
           console.log('    ✓ System Owner membership created');
         }

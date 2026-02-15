@@ -349,5 +349,17 @@ export type Role = typeof role.$inferSelect;
 export type RolePermission = typeof rolePermission.$inferSelect;
 export type Account = typeof account.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
-export type AbacConditions = Record<string, unknown>;
+export type AbacValue = string | number | boolean | null | string[];
+export type AbacOperator = {
+  $eq?: AbacValue;
+  $ne?: AbacValue;
+  $in?: AbacValue[];
+  $nin?: AbacValue[];
+  $lt?: number;
+  $lte?: number;
+  $gt?: number;
+  $gte?: number;
+  $exists?: boolean;
+};
+export type AbacConditions = Record<string, AbacValue | AbacOperator>;
 export type Permission = typeof permission.$inferSelect;
