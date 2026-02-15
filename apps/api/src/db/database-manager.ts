@@ -275,7 +275,26 @@ export class DatabaseManager {
         const userId = user?.id || uuidv4();
         const now = new Date();
 
-        if (!user) {
+        if (user) {
+          console.log('    ℹ️  User already exists');
+
+          // Ensure System Membership (Owner) for existing user
+          const existingMember = await db.query.member.findFirst({
+            where: (m, { and, eq }) =>
+              and(eq(m.userId, userId), eq(m.organizationId, systemTenantId)),
+          });
+
+          if (!existingMember) {
+            await db.insert(schema.member).values({
+              id: uuidv4(),
+              userId: userId,
+              organizationId: systemTenantId,
+              role: config.ownerRoleId,
+              createdAt: now,
+            });
+            console.log('    ✓ System Owner membership created');
+          }
+        } else {
           const hashedPassword = await bcrypt.hash(password, 10);
 
           await db.transaction(async (tx) => {
@@ -314,25 +333,6 @@ export class DatabaseManager {
             user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
           });
           console.log('    ✓ User and Account created');
-        } else {
-          console.log('    ℹ️  User already exists');
-
-          // Ensure System Membership (Owner) for existing user
-          const existingMember = await db.query.member.findFirst({
-            where: (m, { and, eq }) =>
-              and(eq(m.userId, userId), eq(m.organizationId, systemTenantId)),
-          });
-
-          if (!existingMember) {
-            await db.insert(schema.member).values({
-              id: uuidv4(),
-              userId: userId,
-              organizationId: systemTenantId,
-              role: config.ownerRoleId,
-              createdAt: now,
-            });
-            console.log('    ✓ System Owner membership created');
-          }
         }
       } else {
         console.log('  ⚠️  Skipping bootstrap user: Missing env vars');

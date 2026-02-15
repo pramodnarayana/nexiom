@@ -225,6 +225,46 @@ describe('DatabaseManager', () => {
     });
   });
 
+  describe('seedAbac()', () => {
+    it('should seed restricted_admin role and conditional permissions', async () => {
+      const onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
+      const valuesMock = vi.fn().mockReturnValue({
+        onConflictDoNothing: onConflictDoNothingMock,
+      });
+      drizzleMocks.insert.mockReturnValue({ values: valuesMock });
+
+      await manager.seedAbac();
+
+      // Verify Permission creation (users:read, users:delete)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'users:read' }),
+          expect.objectContaining({ id: 'users:delete' }),
+        ]),
+      );
+
+      // Verify Role creation (restricted_admin)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'restricted_admin',
+          name: 'Restricted Admin',
+        }),
+      );
+
+      // Verify Conditional Permission (rp_restricted_delete)
+      expect(valuesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'rp_restricted_delete',
+          roleId: 'restricted_admin',
+          permissionId: 'users:delete',
+          conditions: {
+            role: { $ne: 'owner' },
+          },
+        }),
+      );
+    });
+  });
+
   describe('Error Handling', () => {
     it('should throw if DATABASE_URL is missing', async () => {
       delete process.env.DATABASE_URL;
