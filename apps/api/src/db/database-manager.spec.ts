@@ -231,22 +231,37 @@ describe('DatabaseManager', () => {
       const valuesMock = vi.fn().mockReturnValue({
         onConflictDoNothing: onConflictDoNothingMock,
       });
-      drizzleMocks.insert.mockReturnValue({ values: valuesMock });
+
+      // Capture arguments passed to insert()
+      const insertSpy = drizzleMocks.insert.mockReturnValue({
+        values: valuesMock,
+      });
+
+      // We need to import schema to compare against
+      const { permission, role, rolePermission } = await import('./schema');
+
       await manager.seedAbac();
-      // Verify Permission creation (users:read, users:delete)
+
+      // 1. Verify Permission Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(permission);
       expect(valuesMock).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ id: 'users:read' }),
           expect.objectContaining({ id: 'users:delete' }),
         ]),
       );
-      // Verify Role creation (restricted_admin)
+
+      // 2. Verify Role Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(role);
       expect(valuesMock).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'restricted_admin',
           name: 'Restricted Admin',
         }),
       );
+
+      // 3. Verify RolePermission Table Insert
+      expect(insertSpy).toHaveBeenCalledWith(rolePermission);
       // Verify Conditional Permission (rp_restricted_delete)
       expect(valuesMock).toHaveBeenCalledWith(
         expect.objectContaining({
