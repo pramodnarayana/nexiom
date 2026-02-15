@@ -4,8 +4,12 @@ import { role, permission, rolePermission } from "../schema";
 import { eq } from "drizzle-orm";
 
 export async function seedOwnerPermissions(db: NodePgDatabase<typeof schema>) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("🛑 Seeding is not allowed in production environment");
+  const ALLOWED_ENVS = ["development", "test", "local"];
+  const env = process.env.NODE_ENV;
+  if (!env || !ALLOWED_ENVS.includes(env)) {
+    throw new Error(
+      `🛑 Seeding is not allowed in '${env || "unset"}' environment`,
+    );
   }
 
   console.log("Seeding Owner Permissions...");
