@@ -35,4 +35,33 @@ describe('AccessControlFactory', () => {
         expect(ability.can('manage', 'all')).toBe(true);
         expect(ability.can('delete', 'User')).toBe(true);
     });
+
+    it('hydrates JSON string permissions', () => {
+        const ability = defineAccessControlFor({
+            permissions: [JSON.stringify({ action: 'read', subject: 'User' })]
+        });
+        expect(ability.can('read', 'User')).toBe(true);
+    });
+
+    it('handles malformed input safely', () => {
+        const ability = defineAccessControlFor({
+            permissions: [
+                'invalid-string',
+                '{bad json',
+                '',
+                // @ts-expect-error Testing invalid input
+                undefined,
+                // @ts-expect-error Testing invalid input
+                null
+            ]
+        });
+        // Should result in no grants, so everything is denied
+        expect(ability.can('read', 'User')).toBe(false);
+    });
+
+    it('denies all when no permissions provided', () => {
+        const ability = defineAccessControlFor({});
+        expect(ability.can('read', 'User')).toBe(false);
+        expect(ability.cannot('read', 'User')).toBe(true);
+    });
 });

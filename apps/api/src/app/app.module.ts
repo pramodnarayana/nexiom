@@ -19,9 +19,8 @@ import * as schema from '../db/schema';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [
-        '.env', // local to execution if in api dir
-        'apps/api/.env', // from root
-        '../../.env', // from src/app
+        'apps/api/.env', // api-specific overrides (from monorepo root)
+        '.env', // shared root env (from monorepo root)
       ],
     }),
     IdentityModule.registerAsync({

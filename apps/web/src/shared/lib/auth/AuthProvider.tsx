@@ -225,13 +225,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }), [user, token, isLoading, logout, login, refreshSession]);
 
     const accessControl = useMemo(() => {
-        if (!user) return undefined;
-        // Map user to shape expected by defineAccessControlFor
-        // We use the first role for now, or 'user' if none
-        const userRole = user.roles && user.roles.length > 0 ? user.roles[0] : 'user';
-        // Ensure permissions are passed. Our user object from useAuth might need to be updated to include permissions if not already.
-        // Assuming user object has permissions from the adapter.
-        return defineAccessControlFor({ role: userRole, permissions: user.permissions });
+        return defineAccessControlFor({ permissions: user?.permissions || [] });
     }, [user]);
 
     return (

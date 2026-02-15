@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { BetterAuthAdapter } from "./better-auth.adapter";
@@ -9,7 +9,22 @@ import {
   TENANT_PROVIDER,
   BETTER_AUTH_CONFIG,
 } from "../constants";
-
+vi.mock("better-auth", () => ({
+  betterAuth: vi.fn(() => ({
+    api: {},
+    handler: vi.fn(),
+  })),
+}));
+vi.mock("better-auth/adapters/drizzle", () => ({
+  drizzleAdapter: vi.fn(),
+}));
+vi.mock("better-auth/plugins", () => ({
+  organization: vi.fn((o) => o),
+  admin: vi.fn(() => ({})),
+}));
+vi.mock("better-auth/node", () => ({
+  fromNodeHeaders: vi.fn((h) => h),
+}));
 const mockDb: any = {
   query: {
     user: { findFirst: vi.fn() },
@@ -18,10 +33,8 @@ const mockDb: any = {
     rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
   },
 };
-
 describe("BetterAuthAdapter ABAC", () => {
   let adapter: BetterAuthAdapter;
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,7 +55,6 @@ describe("BetterAuthAdapter ABAC", () => {
         },
       ],
     }).compile();
-
     adapter = module.get<BetterAuthAdapter>(BetterAuthAdapter);
   });
 

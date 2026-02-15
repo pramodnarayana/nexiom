@@ -4,6 +4,10 @@ import { role, permission, rolePermission } from "../schema";
 import { eq } from "drizzle-orm";
 
 export async function seedOwnerPermissions(db: NodePgDatabase<typeof schema>) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("🛑 Seeding is not allowed in production environment");
+  }
+
   console.log("Seeding Owner Permissions...");
 
   // 1. Ensure 'all:manage' permission exists
@@ -45,7 +49,7 @@ export async function seedOwnerPermissions(db: NodePgDatabase<typeof schema>) {
           permissionId: permissionId,
         })
         .onConflictDoNothing();
-      console.log("Owner role granted manage:all");
+      console.log("Owner role granted all:manage");
     }
   } else {
     console.error("Owner role not found! Please seed roles first.");

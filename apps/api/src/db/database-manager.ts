@@ -261,7 +261,8 @@ export class DatabaseManager {
       const name = process.env.BOOTSTRAP_ADMIN_NAME;
 
       if (email && password && name) {
-        console.log(`  👤 Seeding bootstrap owner: ${email}`);
+        const maskedEmail = email.replace(/(.{2}).*(@.*)/, '$1***$2');
+        console.log(`  👤 Seeding bootstrap owner: ${maskedEmail}`);
         const bcrypt = await import('bcryptjs');
         const { v4: uuidv4 } = await import('uuid');
 
@@ -275,29 +276,31 @@ export class DatabaseManager {
           const hashedPassword = await bcrypt.hash(password, 10);
           const now = new Date();
 
-          // Create User
-          await db.insert(schema.user).values({
-            id: userId,
-            email,
-            name,
-            emailVerified: true,
-            createdAt: now,
-            updatedAt: now,
-            role: 'member', // Legacy fallback
-          });
+          await db.transaction(async (tx) => {
+            // Create User
+            await tx.insert(schema.user).values({
+              id: userId,
+              email,
+              name,
+              emailVerified: true,
+              createdAt: now,
+              updatedAt: now,
+              role: 'member', // Legacy fallback
+            });
 
-          // Create Account (Credential)
-          await db.insert(schema.account).values({
-            id: uuidv4(),
-            userId: userId,
-            accountId: email,
-            providerId: 'credential',
-            password: hashedPassword,
-            createdAt: now,
-            updatedAt: now,
-          });
+            // Create Account (Credential)
+            await tx.insert(schema.account).values({
+              id: uuidv4(),
+              userId: userId,
+              accountId: email,
+              providerId: 'credential',
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            });
 
-          user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+            user = { id: userId } as any; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+          });
           console.log('    ✓ User and Account created');
         } else {
           console.log('    ℹ️  User already exists');
@@ -338,8 +341,6 @@ export class DatabaseManager {
     console.log('🌱 Seeding ABAC data for verification...');
 
     await this.withDrizzle(async (db, schema) => {
-      // const { eq } = await import('drizzle-orm'); // Unused
-
       // 1. Ensure permissions exist
       await db
         .insert(schema.permission)
@@ -390,7 +391,7 @@ export class DatabaseManager {
           id: 'rp_restricted_delete',
           roleId: 'restricted_admin',
           permissionId: 'users:delete',
-          conditions: { role: { $ne: 'owner' } } as unknown,
+          conditions: { role: { $ne: 'owner' } } as schema.AbacConditions,
         })
         .onConflictDoNothing();
       console.log(
@@ -420,7 +421,7 @@ export class DatabaseManager {
       }
 
       const quotedTables = tables
-        .map((t) => `"${t.table_name.replace(/"/g, '""')}"`)
+        .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
         .join(', ');
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
       await this.execSql(sql, client);
@@ -495,7 +496,9 @@ export class DatabaseManager {
       });
 
       console.log(`  Permissions (${perms.length}):`);
-      const permIds = perms.map((p) => p.permissionId).sort();
+      const permIds = perms
+        .map((p) => p.permissionId)
+        .sort((a: string, b: string) => a.localeCompare(b));
 
       for (const p of permIds) console.log(`    - ${p}`);
 

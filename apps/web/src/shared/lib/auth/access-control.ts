@@ -1,4 +1,4 @@
-import { AbilityBuilder, type CreateAbility, createMongoAbility, type MongoAbility, type MongoQuery } from '@casl/ability';
+import { AbilityBuilder, type CreateAbility, createMongoAbility, type MongoAbility, type MongoQuery, type ExtractSubjectType } from '@casl/ability';
 
 
 export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete';
@@ -15,7 +15,7 @@ interface CaslRule {
     conditions?: MongoQuery;
 }
 
-export const defineAccessControlFor = (user: { role?: string; permissions?: (string | object)[] }) => {
+export const defineAccessControlFor = (user: { permissions?: (string | object)[] }) => {
     const { can, build } = new AbilityBuilder(createAppAccessControl);
 
     // Pure Database-Driven ABAC
@@ -29,9 +29,15 @@ export const defineAccessControlFor = (user: { role?: string; permissions?: (str
 
             if (typeof p === 'string') {
                 // Simple PBAC: "resource:action" (backward compatibility)
-                if (p.startsWith('{')) {
+                const trimmed = p.trim();
+                if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
                     try {
-                        rule = JSON.parse(p);
+                        const parsed = JSON.parse(trimmed);
+                        if (parsed && typeof parsed === 'object' && 'action' in parsed && 'subject' in parsed) {
+                            rule = parsed as CaslRule;
+                        } else {
+                            console.error('Invalid permission rule shape', parsed);
+                        }
                     } catch {
                         console.error('Failed to parse permission rule', p);
                     }
@@ -66,8 +72,13 @@ export const defineAccessControlFor = (user: { role?: string; permissions?: (str
         // Read https://casl.js.org/v6/en/guide/subject-type-detection
         detectSubjectType: (item) => {
             if (typeof item === 'string') return item;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return (item as any).__typename || 'User'; // Default to User or use a property
+            const typeName = (item as Record<string, unknown>).__typename;
+            if (typeof typeName !== 'string') {
+                console.warn('Subject missing __typename, cannot determine type', item);
+                // Return a non-existent subject so no rules match
+                return '__unknown__' as ExtractSubjectType<Subjects>;
+            }
+            return typeName as ExtractSubjectType<Subjects>;
         }
     });
 };

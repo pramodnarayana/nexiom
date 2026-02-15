@@ -40,13 +40,16 @@ export function normalizeRole(rawRole: unknown): NormalizedRole {
     const roleObj = rawRole as {
       id: string;
       name: string;
-      permissions?: any[];
+      permissions?: Record<string, unknown>[];
     };
     roleName = roleObj.name;
     roleId = roleObj.id;
 
     if (Array.isArray(roleObj.permissions)) {
-      permissions = roleObj.permissions as NormalizedRole["permissions"];
+      permissions = roleObj.permissions.filter(
+        (p): p is NormalizedRole["permissions"][number] =>
+          typeof p === "object" && p !== null && "permissionId" in p,
+      );
     }
   }
 

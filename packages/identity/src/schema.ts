@@ -188,7 +188,7 @@ export const rolePermission = pgTable(
      * Stores dynamic conditions for this permission assignment.
      * Example: { "department": "engineering", "public": true }
      */
-    conditions: jsonb("conditions"),
+    conditions: jsonb("conditions").$type<AbacConditions>(),
   },
   (t) => [
     // Surrogate PK
@@ -349,4 +349,5 @@ export type Role = typeof role.$inferSelect;
 export type RolePermission = typeof rolePermission.$inferSelect;
 export type Account = typeof account.$inferSelect;
 export type Verification = typeof verification.$inferSelect;
+export type AbacConditions = Record<string, unknown>;
 export type Permission = typeof permission.$inferSelect;
