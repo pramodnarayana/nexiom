@@ -390,13 +390,25 @@ export class BetterAuthAdapter implements IAuthProvider {
       return this.validateInvitationResponse(invData);
     } catch (error) {
       console.error("[BetterAuthAdapter] api.createInvitation failed:", error);
-      // Log additional details if available
-      if (typeof error === "object" && error !== null && "body" in error) {
-        console.error(
-          "[BetterAuthAdapter] Failure Body:",
-          (error as { body: unknown }).body,
-        );
-      }
+      // Redact PII: Log only safe structural fields
+      const errorDetails =
+        typeof error === "object" && error !== null
+          ? {
+              name: (error as Error).name,
+              message: (error as Error).message, // Message usually safe, but be cautious
+              stack: (error as Error).stack,
+              // Extract status if available (common in HTTP errors)
+              status:
+                (error as { status?: number; statusCode?: number }).status ||
+                (error as { status?: number; statusCode?: number }).statusCode,
+              code: (error as { code?: string }).code,
+            }
+          : String(error);
+
+      console.error(
+        "[BetterAuthAdapter] api.createInvitation failed (Details Redacted):",
+        errorDetails,
+      );
       throw error;
     }
   }

@@ -8,10 +8,7 @@ import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.in
 import type { User as UserInterface } from "./interfaces";
 // ... (existing imports)
 
-/**
- * Factory to configure Better Auth plugins.
- * Separation of concerns: Adapter handles execution, Factory handles configuration.
- */
+import type { HookEndpointContext } from "better-auth";
 
 /**
  * Factory to configure Better Auth plugins.
@@ -59,7 +56,7 @@ export const getBetterAuthPlugins = (
     hooks: {
       after: [
         {
-          matcher: (context: { path?: string }) => {
+          matcher: (context: HookEndpointContext) => {
             const path = context.path;
             if (!path) return false;
             // Only trigger on Social Login Callback
