@@ -5,6 +5,7 @@ import {
   AUTH_PROVIDER,
   USER_PROVIDER,
   TENANT_PROVIDER,
+  ROLE_PROVIDER,
 } from '@nexiom/identity';
 import {
   getRequiredAdminRoleId,
@@ -53,6 +54,14 @@ describe('SystemAdminController', () => {
     delete: vi.fn(),
   };
 
+  const mockRoleProvider = {
+    findById: vi.fn(),
+    findByName: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  };
+
   beforeEach(async () => {
     vi.clearAllMocks();
 
@@ -62,6 +71,7 @@ describe('SystemAdminController', () => {
         { provide: AUTH_PROVIDER, useValue: mockAuthProvider },
         { provide: USER_PROVIDER, useValue: mockUserProvider },
         { provide: TENANT_PROVIDER, useValue: mockTenantProvider },
+        { provide: ROLE_PROVIDER, useValue: mockRoleProvider },
       ],
     })
       .overrideGuard(SystemAdminGuard)
@@ -113,6 +123,7 @@ describe('SystemAdminController', () => {
     it('should create system invitation', async () => {
       const mockInvitation = { id: 'inv1', email: 'test@example.com' };
       mockAuthProvider.createInvitation.mockResolvedValue(mockInvitation);
+      mockRoleProvider.findById.mockResolvedValue({ id: 'owner-role-id' });
 
       const mockCtx: RequestAuthContext = {
         headers: new Headers(),

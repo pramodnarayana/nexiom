@@ -20,6 +20,8 @@ import {
   IUserProvider,
   TENANT_PROVIDER,
   ITenantProvider,
+  ROLE_PROVIDER,
+  IRoleProvider,
 } from '@nexiom/identity';
 import {
   AuthContext,
@@ -50,6 +52,7 @@ export class SystemAdminController {
     @Inject(AUTH_PROVIDER) private readonly authProvider: IAuthProvider,
     @Inject(USER_PROVIDER) private readonly userProvider: IUserProvider,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider,
+    @Inject(ROLE_PROVIDER) private readonly roleProvider: IRoleProvider,
   ) {}
 
   @Post('users/:id/invite')
@@ -82,6 +85,12 @@ export class SystemAdminController {
     @Body() body: CreateSystemInvitationDto,
     @AuthContext() ctx: RequestAuthContext,
   ) {
+    // Validate Role Existence
+    const roleExists = await this.roleProvider.findById(body.role);
+    if (!roleExists) {
+      throw new BadRequestException(`Role '${body.role}' not found`);
+    }
+
     const invitation = await this.authProvider.createInvitation({
       email: body.email,
       role: body.role, // Zod handles default
@@ -123,6 +132,14 @@ export class SystemAdminController {
 
     if (existing) {
       throw new BadRequestException('User with this email already exists');
+    }
+
+    // Validate Role Existence
+    if (data.role) {
+      const roleExists = await this.roleProvider.findById(data.role);
+      if (!roleExists) {
+        throw new BadRequestException(`Role '${data.role}' not found`);
+      }
     }
 
     // Now uses single-step creation via Adapter logic

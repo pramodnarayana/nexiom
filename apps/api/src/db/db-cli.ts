@@ -15,7 +15,7 @@ const COMMANDS = [
   'fresh',
   'reset',
   'check-user',
-  'debug-role',
+  'check-role',
   'seed:abac',
 ] as const;
 type Command = (typeof COMMANDS)[number];
@@ -62,10 +62,10 @@ async function main() {
         await manager.checkUserPermissions(identifier);
         break;
       }
-      case 'debug-role': {
+      case 'check-role': {
         const roleName = process.argv[3];
         if (!roleName) {
-          console.error('Usage: debug-role <roleName>');
+          console.error('Usage: check-role <roleName>');
           process.exit(1);
         }
         await manager.debugPermissions(roleName);

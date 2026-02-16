@@ -6,7 +6,10 @@ import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { CreateUser } from './users.validation';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { NotFoundException } from '@nestjs/common';
+import {
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 describe('UsersController', () => {
@@ -175,9 +178,40 @@ describe('UsersController', () => {
         NotFoundException,
       );
     });
+    it('should throw NotFoundException if user does not exist', async () => {
+      const id = '1';
+      const req = {
+        user: { organizationId: 'org-123' },
+      } as unknown as Request & { user: { organizationId?: string } };
+
+      userProvider.findById.mockResolvedValue(null);
+
+      await expect(controller.findOne(id, req)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
   });
 
   describe('remove', () => {
+    // ... existing tests ...
+
+    it('should throw InternalServerErrorException on unexpected error', async () => {
+      const id = 'user-123';
+      const tenantId = 'org-123';
+      const req = {
+        user: { id: 'current-user', organizationId: tenantId },
+      } as unknown as Request & {
+        user: { id: string; organizationId?: string };
+      };
+
+      userProvider.deleteIfNotLastAdmin.mockRejectedValue(
+        new Error('Unexpected DB error'),
+      );
+
+      await expect(controller.remove(id, req)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
     it('should throw BadRequestException if no organizationId (no context)', async () => {
       const id = 'user-123';
       const req = {

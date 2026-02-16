@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   BetterAuthAdapter,
-  BetterAuthAdapterConfig,
 } from "./better-auth.adapter";
+import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 

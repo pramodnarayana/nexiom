@@ -12,10 +12,8 @@ import {
   BETTER_AUTH_CONFIG,
   ROLE_PROVIDER,
 } from "./constants";
-import {
-  BetterAuthAdapter,
-  type BetterAuthAdapterConfig,
-} from "./adapters/better-auth.adapter";
+import { BetterAuthAdapter } from "./adapters/better-auth.adapter";
+import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface";
 import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
 import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
 import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";

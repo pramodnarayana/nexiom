@@ -39,19 +39,19 @@ export async function seedSystemRbac(
       const roles = [
         {
           id: ownerRoleId,
-          name: "Owner",
+          name: "owner",
           isSystem: true,
           description: "Full access",
         },
         {
           id: adminRoleId,
-          name: "Admin",
+          name: "admin",
           isSystem: true,
           description: "Manage users and settings",
         },
         {
           id: memberRoleId,
-          name: "Member",
+          name: "member",
           isSystem: true,
           description: "Read only access",
         },

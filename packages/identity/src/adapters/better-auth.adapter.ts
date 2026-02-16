@@ -1,13 +1,13 @@
 import { betterAuth } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization, admin } from "better-auth/plugins";
 import * as bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { eq, and } from "drizzle-orm";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeRole } from "../utils/role-normalization";
+import { getBetterAuthPlugins } from "../better-auth.config";
+import { validateFrontendUrl } from "../utils/url.util";
 
 import type { ITenantProvider } from "../interfaces/tenant-provider.interface";
 import type {
@@ -29,20 +29,12 @@ import {
 } from "../constants";
 import type { IdentityModuleOptions } from "../identity.module";
 import type { IEmailProvider } from "../interfaces/email-provider.interface";
+import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface";
 import * as schema from "../schema";
 import type { IncomingHttpHeaders } from "node:http";
 import { Inject, Injectable } from "@nestjs/common";
 
 export const PERMISSION_FALLBACK_DASHBOARD_READ = "dashboard:read";
-
-export interface BetterAuthAdapterConfig {
-  allowedOrigins: string[];
-  betterAuthUrl: string;
-  frontendUrl?: string; // For invite links
-  googleClientId?: string;
-  googleClientSecret?: string;
-  nodeEnv?: string;
-}
 
 // Local Interface to type dynamic Better Auth API methods
 interface BetterAuthApi {
@@ -111,73 +103,6 @@ export class BetterAuthAdapter implements IAuthProvider {
       throw new Error("BetterAuthAdapter: betterAuthUrl config is missing");
     }
 
-    if (config.nodeEnv !== "production") {
-      console.log(
-        "Better Auth Adapter Initializing with Password Reset Enabled",
-      );
-    }
-
-    // Enterprise Plugin for Tenant Auto-Provisioning
-    const tenantProvisioningPlugin = {
-      id: "tenant-provisioning",
-      hooks: {
-        after: [
-          {
-            matcher: (context: { path?: string }) => {
-              const path = context.path;
-              if (!path) return false;
-              // Only trigger on Social Login Callback
-              // Standard Email Signup is now handled via AuthService.registerUser
-              return path.startsWith("/callback/");
-            },
-            // NOTE: ctx is typed as 'any' because better-auth does not export typed middleware context.
-            // The middleware context structure is internal and may change between versions.
-            // See: https://github.com/better-auth/better-auth/issues (tracking typed middleware support)
-            handler: createAuthMiddleware(async (ctx: any) => {
-              // Context returned contains the user info from the original action
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-              const returned = ctx.context.returned;
-
-              // Helper to parse response if needed (Better Auth inner API returns typed objects usually)
-              let user: UserInterface | undefined;
-
-              if (returned && typeof returned === "object") {
-                if ("user" in returned || "token" in returned) {
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                  user = returned.user as UserInterface;
-                }
-              }
-
-              if (user?.id) {
-                try {
-                  // Idempotent Check: Handled by provisionTenantForUser logic
-                  // We check existence to avoid redundant DB calls/logs
-                  const existing = await this.tenantProvider.findAllForUser(
-                    user.id,
-                  );
-                  if (existing.length === 0) {
-                    try {
-                      await this.tenantProvider.provisionTenantForUser(user.id);
-                    } catch (err) {
-                      console.error(
-                        `[BetterAuth Hook] Failed to provision tenant for ${user.id}`,
-                        err,
-                      );
-                    }
-                  }
-                } catch (error) {
-                  // Suppress error to avoid failing the auth flow
-                  console.error(`[BetterAuth Hook] verification failed`, error);
-                }
-              }
-
-              // Void return, do not modify response
-            }),
-          },
-        ],
-      },
-    };
-
     this.auth = betterAuth({
       trustedOrigins: config.allowedOrigins,
       // Use betterAuthUrl as baseURL (API URL)
@@ -214,7 +139,10 @@ export class BetterAuthAdapter implements IAuthProvider {
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
           // Enterprise pattern: Explicitly construct the URL using URL object for robustness
-          const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+          const frontendUrl = validateFrontendUrl(
+            this.config.frontendUrl,
+            this.config.allowedOrigins,
+          );
 
           // Use URL API to safely join paths and prevent double slashes
           const callbackTargetUrl = new URL(
@@ -253,25 +181,11 @@ export class BetterAuthAdapter implements IAuthProvider {
           });
         },
       },
-      plugins: [
-        organization({
-          sendInvitationEmail: async (data) => {
-            const frontendUrl = this.validateFrontendUrl(
-              this.config.frontendUrl,
-            );
-            const inviteUrl = `${frontendUrl}/invite/accept?id=${data.invitation.id}&email=${encodeURIComponent(data.email)}`;
-
-            await this.emailService.sendEmail({
-              to: data.email,
-              subject: "You have been invited to join an organization",
-              text: `You have been invited to join ${data.organization.name}. Click here to accept: ${inviteUrl}`,
-              html: `<p>You have been invited to join <strong>${data.organization.name}</strong>.</p><p><a href="${inviteUrl}">Click here to accept</a></p>`,
-            });
-          },
-        }),
-        admin(),
-        tenantProvisioningPlugin, // Register our hook
-      ],
+      plugins: getBetterAuthPlugins(
+        this.emailService,
+        config,
+        this.tenantProvider,
+      ),
       advanced: {
         defaultCookieAttributes: {
           secure: config.nodeEnv === "production",
@@ -300,13 +214,6 @@ export class BetterAuthAdapter implements IAuthProvider {
   // Helper getter to access typed API
   private get api(): BetterAuthApi {
     return this.auth.api as unknown as BetterAuthApi;
-  }
-
-  private validateFrontendUrl(url?: string): string {
-    if (url && this.config.allowedOrigins.includes(url)) {
-      return url;
-    }
-    return this.config.allowedOrigins[0];
   }
 
   async createUser(input: CreateUserInput): Promise<UserInterface> {
@@ -482,7 +389,23 @@ export class BetterAuthAdapter implements IAuthProvider {
 
       return this.validateInvitationResponse(invData);
     } catch (error) {
-      console.error("[BetterAuthAdapter] api.createInvitation failed:", error);
+      // Redact PII: Log only safe structural fields
+      const errorDetails =
+        typeof error === "object" && error !== null
+          ? {
+              name: (error as Error).name,
+              message: (error as Error).message,
+              status:
+                (error as { status?: number; statusCode?: number }).status ||
+                (error as { status?: number; statusCode?: number }).statusCode,
+              code: (error as { code?: string }).code,
+            }
+          : String(error);
+
+      console.error(
+        "[BetterAuthAdapter] api.createInvitation failed:",
+        errorDetails,
+      );
       throw error;
     }
   }
@@ -584,7 +507,10 @@ export class BetterAuthAdapter implements IAuthProvider {
       .returning();
 
     // Send Email
-    const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+    const frontendUrl = validateFrontendUrl(
+      this.config.frontendUrl,
+      this.config.allowedOrigins,
+    );
     const inviteUrl = `${frontendUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
     await this.emailService.sendEmail({
       to: input.email,
