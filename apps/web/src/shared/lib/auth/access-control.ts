@@ -1,9 +1,11 @@
 import { AbilityBuilder, type CreateAbility, createMongoAbility, type MongoAbility, type MongoQuery, type ExtractSubjectType } from '@casl/ability';
 
 
+import { Resources } from './constants';
+
 export type Actions = 'manage' | 'create' | 'read' | 'update' | 'delete' | 'view';
-export type UserSubject = { __typename: 'User'; role?: string };
-export type Subjects = 'User' | UserSubject | 'all';
+export type UserSubject = { __typename: typeof Resources.USERS; role?: string };
+export type Subjects = typeof Resources.USERS | UserSubject | 'all';
 
 export type AppAccessControl = MongoAbility<[Actions, Subjects]>;
 
@@ -56,9 +58,8 @@ export const defineAccessControlFor = (user: { permissions?: (string | object)[]
             }
 
             if (rule) {
-                // Map DB Resource names (often lowercase/plural) to CASL Subjects (often PascalCase)
-                // In our case, 'User' is already correct in some places, but let's be safe.
-                // ideally backend sends "User", "Organization" etc.
+                // Map DB Resource names (often lowercase/plural) to CASL Subjects.
+                // We now align Subjects directly with Resources to avoid mapping.
                 const subject = rule.subject as Subjects;
 
                 if (rule.conditions) {
