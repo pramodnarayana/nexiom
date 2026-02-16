@@ -43,4 +43,10 @@ export interface ITenantProvider {
 
   // High-level orchestration
   provisionTenantForUser(userId: string): Promise<Tenant>;
+
+  /**
+   * Checks for a pending invitation for the given email.
+   * Used to suppress verification emails if the user is accepting an invite.
+   */
+  findPendingInvitation(email: string): Promise<boolean>;
 }

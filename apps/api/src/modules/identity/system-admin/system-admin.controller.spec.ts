@@ -395,7 +395,7 @@ describe('SystemAdminController', () => {
       expect(mockAuthProvider.createInvitation).toHaveBeenCalledWith({
         email: 'test@example.com',
         role: getRequiredAdminRoleId(),
-        organizationId: null, // System invite
+        organizationId: getRequiredSystemTenantId(), // System invite
         inviterId: 'admin1',
       });
     });

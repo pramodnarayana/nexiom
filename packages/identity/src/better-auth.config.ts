@@ -25,7 +25,7 @@ export const getBetterAuthPlugins = (
     member: ["create", "update", "delete"],
     invitation: ["create", "cancel"],
     team: ["create", "update", "delete"],
-  };
+  } as const;
 
   const ac = createAccessControl(statement);
 
@@ -134,5 +134,82 @@ export const getBetterAuthPlugins = (
     }),
     admin(),
     tenantProvisioningPlugin,
+    {
+      id: "signup-orchestration",
+      hooks: {
+        after: [
+          {
+            matcher: (context: HookEndpointContext) => {
+              return context.path === "/sign-up/email";
+            },
+            handler: createAuthMiddleware(async (ctx) => {
+              const response = (ctx.context as { returned?: unknown }).returned;
+
+              // Ensure we have a successful response with a user
+              if (
+                response &&
+                typeof response === "object" &&
+                "user" in response &&
+                (response as { user: UserInterface }).user
+              ) {
+                const user = (response as { user: UserInterface }).user;
+                const email = user.email;
+
+                // Check for pending invite
+                const hasPendingInvite =
+                  await tenantProvider.findPendingInvitation(email);
+
+                if (!hasPendingInvite) {
+                  // If NO invite, we must manually trigger verification email
+                  // because we disabled sendOnSignUp globally.
+                  const { emailVerification } = ctx.context.options;
+                  if (emailVerification?.sendVerificationEmail) {
+                    await ctx.context.runInBackgroundOrAwait(async () => {
+                      // We need to generate a token manually since we are outside the flow
+                      // Luckily better-auth exposes utilities, but accessing them here requires
+                      // using the internal API context tools available.
+
+                      // Actually, we can just call the endpoint "send-verification-email" internally?
+                      // Or reuse the logic.
+                      // For simplicity and correctness, invoking the internal endpoint is best.
+                      // But accessing internal router is hard.
+
+                      // We can use the 'sendVerificationEmail' FUNCTION from options simply:
+                      // But we need a TOKEN and URL.
+                      // The `signUpEmail` logic usually creates these.
+
+                      // Let's use the adapter's emailService or similar? NO.
+                      // We should use the context's internal helper `createEmailVerificationToken` import?
+                      // We can't easily import internal functions here.
+
+                      // Alternative: We can call the API endpoint for sending verification email!
+                      // This hook runs on the server.
+                      // `ctx.context.api` usually exposes the API.
+                      if (ctx.request) {
+                        const api = (
+                          ctx.context as unknown as {
+                            api: {
+                              sendVerificationEmail: (opts: {
+                                body: { email: string };
+                                headers: Headers;
+                              }) => Promise<void>;
+                            };
+                          }
+                        ).api;
+
+                        await api.sendVerificationEmail({
+                          body: { email: user.email },
+                          headers: ctx.request.headers,
+                        });
+                      }
+                    });
+                  }
+                }
+              }
+            }),
+          },
+        ],
+      },
+    },
   ];
 };
