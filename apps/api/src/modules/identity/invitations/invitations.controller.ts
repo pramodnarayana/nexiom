@@ -23,9 +23,15 @@ export class InvitationsController {
       createInvitation.organizationId = ctx.user.organizationId;
     }
     // Extract only necessary headers for downstream propagation
+    // Verify Context
+    // Extract only necessary headers for downstream propagation
+    // Verify Context
+
     const forwardedHeaders = {
       'x-request-id': ctx.headers.get('x-request-id') ?? undefined,
       'x-forwarded-for': ctx.headers.get('x-forwarded-for') ?? undefined,
+      cookie: ctx.headers.get('cookie') ?? undefined,
+      authorization: ctx.headers.get('authorization') ?? undefined,
     };
 
     return this.invitationsService.create(

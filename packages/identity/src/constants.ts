@@ -37,6 +37,10 @@ export const ALL_PERMISSIONS = [
   "system_tenants:delete",
   "system_tenants:manage",
   "roles:read",
+  "invitations:read",
+  "invitations:create",
+  "invitation:read",
+  "invitation:create",
 ] as const;
 
 export enum RoleScope {

@@ -7,6 +7,7 @@ import { RESOURCES } from '@/shared/constants/resources';
 
 import { dataProvider } from "../providers/data-provider";
 import { tenantAuthProvider } from "../providers/tenant-auth-provider";
+import { accessControlProvider } from "../providers/access-control-provider";
 import { TenantLayout } from '../layouts/TenantLayout';
 import { DashboardPage } from '../../modules/dashboard/pages/DashboardPage';
 import { UserList } from '../../modules/identity/users/UserList';
@@ -35,6 +36,7 @@ export function TenantRoutes() {
                     authProvider={tenantAuthProvider}
                     dataProvider={dataProvider}
                     routerProvider={routerProvider}
+                    accessControlProvider={accessControlProvider}
                     resources={[
                         {
                             // Dashboard is intentionally not part of RESOURCES.ORGANIZATION

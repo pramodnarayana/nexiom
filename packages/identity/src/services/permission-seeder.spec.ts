@@ -126,7 +126,7 @@ describe("PermissionSeeder", () => {
     );
     expect(roleValues).toBeDefined();
     expect(roleValues).toHaveLength(3);
-    expect(roleValues?.find((r) => r.name === "Owner")).toBeDefined();
+    expect(roleValues?.find((r) => r.name === "owner")).toBeDefined();
 
     // 2. Permissions: should have 'resource' property
     const permValues = calls.find(

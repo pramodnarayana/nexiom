@@ -1,9 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import {
-  getRequiredAdminRoleId,
-  getRequiredOwnerRoleId,
-} from '../../../constants';
+import { getRequiredAdminRoleId } from '../../../constants';
 
 export const CreateTenantSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -41,16 +38,10 @@ export const UpdateUserSchema = z.object({
 export class UpdateUserValidation extends createZodDto(UpdateUserSchema) {}
 
 export const buildCreateUserSchema = () => {
-  // We need to assert this is a non-empty array of strings for Zod enum
-  const roles = [getRequiredOwnerRoleId(), getRequiredAdminRoleId()] as [
-    string,
-    ...string[],
-  ];
-
   return z.object({
     name: z.string().min(1, { message: 'Name is required' }),
     email: z.string().email({ message: 'Invalid email address' }),
-    role: z.enum(roles).optional().default(getRequiredAdminRoleId()),
+    role: z.string().min(1).optional().default(getRequiredAdminRoleId()),
   });
 };
 

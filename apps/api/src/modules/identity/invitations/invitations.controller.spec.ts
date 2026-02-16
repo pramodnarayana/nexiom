@@ -52,7 +52,10 @@ describe('InvitationsController', () => {
         organizationId: 'org-123',
       };
       const mockCtx: RequestAuthContext = {
-        headers: new Headers(),
+        headers: new Headers({
+          cookie: 'session=123',
+          authorization: 'Bearer token',
+        }),
         user: { id: 'user-123' } as User,
         session: {
           id: 'sess-1',
@@ -65,6 +68,8 @@ describe('InvitationsController', () => {
       expect(service.create).toHaveBeenCalledWith(dto, 'user-123', {
         'x-request-id': undefined,
         'x-forwarded-for': undefined,
+        cookie: 'session=123',
+        authorization: 'Bearer token',
       });
     });
   });
