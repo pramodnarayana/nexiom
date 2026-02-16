@@ -14,6 +14,47 @@ import type { HookEndpointContext } from "better-auth";
  * Factory to configure Better Auth plugins.
  * Separation of concerns: Adapter handles execution, Factory handles configuration.
  */
+
+// Define SafeContext for type-safe property access
+interface SafeContext {
+  request?: {
+    headers: Headers;
+  };
+  context?: {
+    api?: {
+      sendVerificationEmail?: unknown;
+    };
+  };
+}
+
+const getApiFromContext = (
+  ctx: unknown,
+): {
+  sendVerificationEmail: (opts: {
+    body: { email: string };
+    headers: Headers;
+  }) => Promise<void>;
+} | null => {
+  const safeCtx = ctx as SafeContext;
+  if (
+    safeCtx.context &&
+    safeCtx.context.api &&
+    typeof safeCtx.context.api.sendVerificationEmail === "function"
+  ) {
+    return (
+      safeCtx.context as {
+        api: {
+          sendVerificationEmail: (opts: {
+            body: { email: string };
+            headers: Headers;
+          }) => Promise<void>;
+        };
+      }
+    ).api;
+  }
+  return null;
+};
+
 export const getBetterAuthPlugins = (
   emailService: IEmailProvider,
   config: BetterAuthAdapterConfig,
@@ -25,7 +66,7 @@ export const getBetterAuthPlugins = (
     member: ["create", "update", "delete"],
     invitation: ["create", "cancel"],
     team: ["create", "update", "delete"],
-  };
+  } as const;
 
   const ac = createAccessControl(statement);
 
@@ -134,5 +175,75 @@ export const getBetterAuthPlugins = (
     }),
     admin(),
     tenantProvisioningPlugin,
+    {
+      id: "signup-orchestration",
+      hooks: {
+        after: [
+          {
+            matcher: (context: HookEndpointContext) => {
+              if (!context.path) return false;
+              return context.path === "/sign-up/email";
+            },
+            handler: createAuthMiddleware(async (ctx) => {
+              const response = (ctx.context as { returned?: unknown }).returned;
+
+              // Ensure we have a successful response with a user
+              if (
+                response &&
+                typeof response === "object" &&
+                "user" in response &&
+                (response as { user: UserInterface }).user
+              ) {
+                const user = (response as { user: UserInterface }).user;
+                const email = user.email;
+
+                const { emailVerification } = ctx.context.options;
+                if (emailVerification?.sendVerificationEmail) {
+                  await ctx.context.runInBackgroundOrAwait(async () => {
+                    try {
+                      // Check for pending invite
+                      const hasPendingInvite =
+                        await tenantProvider.findPendingInvitation(email);
+
+                      if (!hasPendingInvite) {
+                        const api = getApiFromContext(ctx);
+
+                        if (api && ctx.request) {
+                          await api.sendVerificationEmail({
+                            body: { email },
+                            headers: ctx.request.headers,
+                          });
+                        } else {
+                          const reason = !ctx.request
+                            ? "Request context not available"
+                            : "Internal API sendVerificationEmail not available";
+                          console.error(
+                            JSON.stringify({
+                              event: "signup_orchestration_failure",
+                              error: reason,
+                              userId: user.id,
+                              timestamp: new Date().toISOString(),
+                            }),
+                          );
+                        }
+                      }
+                    } catch (error) {
+                      console.error(
+                        JSON.stringify({
+                          event: "signup_orchestration_error",
+                          error: error instanceof Error ? error.message : error,
+                          userId: user.id,
+                          timestamp: new Date().toISOString(),
+                        }),
+                      );
+                    }
+                  });
+                }
+              }
+            }),
+          },
+        ],
+      },
+    },
   ];
 };

@@ -71,7 +71,7 @@ export class SystemAdminController {
     await this.authProvider.createInvitation({
       email: user.email,
       role: getRequiredAdminRoleId(),
-      organizationId: null, // System Invite
+      organizationId: getRequiredSystemTenantId(), // System Tenant ID
       inviterId: ctx.user.id,
     });
 

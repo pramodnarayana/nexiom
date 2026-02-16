@@ -135,7 +135,7 @@ export class BetterAuthAdapter implements IAuthProvider {
         },
       },
       emailVerification: {
-        sendOnSignUp: true,
+        sendOnSignUp: false, // Orchestrated by config hooks
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
           // Enterprise pattern: Explicitly construct the URL using URL object for robustness
@@ -366,11 +366,6 @@ export class BetterAuthAdapter implements IAuthProvider {
   }
 
   async createInvitation(input: CreateInvitationInput): Promise<Invitation> {
-    if (!input.organizationId) {
-      // System invite
-      return this.createSystemInvitation(input);
-    }
-
     try {
       const result = await this.api.createInvitation({
         body: {
@@ -480,46 +475,6 @@ export class BetterAuthAdapter implements IAuthProvider {
       expiresAt: expiresAt,
       createdAt: createdAt,
     };
-  }
-
-  private async createSystemInvitation(
-    input: CreateInvitationInput,
-  ): Promise<Invitation> {
-    const id = uuidv4();
-    const expiresAt = new Date();
-    // Convert expiresIn (seconds) to hours - default 48h
-    expiresAt.setHours(
-      expiresAt.getHours() + (input.expiresIn ? input.expiresIn / 3600 : 48),
-    );
-
-    const [invitation] = await this.db
-      .insert(schema.invitation)
-      .values({
-        id,
-        email: input.email,
-        role: input.role,
-        organizationId: null,
-        inviterId: input.inviterId,
-        status: "pending",
-        expiresAt,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    // Send Email
-    const frontendUrl = validateFrontendUrl(
-      this.config.frontendUrl,
-      this.config.allowedOrigins,
-    );
-    const inviteUrl = `${frontendUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
-    await this.emailService.sendEmail({
-      to: input.email,
-      subject: "You have been invited to join Nexiom",
-      text: `You have been invited to join Nexiom. Click here to accept: ${inviteUrl}`,
-      html: `<p>You have been invited to join <strong>Nexiom</strong>.</p><p><a href="${inviteUrl}">Click here to accept</a></p>`,
-    });
-
-    return this.mapInvitation(invitation);
   }
 
   async getInvitation(id: string): Promise<Invitation | null> {

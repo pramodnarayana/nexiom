@@ -6,6 +6,7 @@ import {
 import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface";
 import * as schema from "../schema";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { getBetterAuthPlugins } from "../better-auth.config";
 
 vi.mock("better-auth", () => ({
   betterAuth: vi.fn((opts: any) => ({
@@ -33,6 +34,10 @@ vi.mock("better-auth/plugins", () => ({
 
 vi.mock("better-auth/node", () => ({
   fromNodeHeaders: vi.fn((h) => h),
+}));
+
+vi.mock("better-auth/api", () => ({
+  createAuthMiddleware: vi.fn((fn) => fn),
 }));
 
 vi.mock("bcryptjs", () => ({
@@ -85,6 +90,7 @@ const mkTenantProvider = () => ({
   findAllForUser: vi.fn(async () => []),
   provisionTenantForUser: vi.fn(),
   findOneForUser: vi.fn(),
+  findPendingInvitation: vi.fn(),
 });
 
 const cfg = (
@@ -407,27 +413,7 @@ describe("BetterAuthAdapter", () => {
     const email = mkEmail();
     const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
 
-    // System
-    db.returning.mockResolvedValueOnce([
-      {
-        id: "inv1",
-        email: "a@b.com",
-        role: "admin",
-        organizationId: null,
-        inviterId: "u1",
-        status: "pending",
-        expiresAt: new Date(),
-        createdAt: new Date(),
-      },
-    ]);
 
-    const inv1 = await adapter.createInvitation({
-      email: "a@b.com",
-      role: "admin",
-      inviterId: "u1",
-    } as any);
-    expect(inv1.id).toBe("inv1");
-    expect(email.sendEmail).toHaveBeenCalled();
 
     // Org
     const auth: any = (adapter as any).auth;
@@ -565,15 +551,37 @@ describe("BetterAuthAdapter", () => {
     await adapter.acceptInvitation("i1", "u1");
     expect(db.insert).toHaveBeenCalled();
 
-    // system role path
-    const sysInv = { ...validInv, organizationId: null };
+    // System Tenant Acceptance (organizationId: null)
+    const sysInv = { ...validInv, id: "sys1", organizationId: null };
     db.query.invitation.findFirst.mockResolvedValueOnce(sysInv);
-    db.query.user.findFirst.mockResolvedValueOnce({
-      id: "u1",
-      email: "a@b.com",
-    });
-    await adapter.acceptInvitation("i1", "u1");
-    expect(db.update).toHaveBeenCalled();
+    db.query.user.findFirst.mockResolvedValueOnce({ id: "u1", email: "a@b.com" });
+
+    // Mock existing membership check to return nothing (success path)
+    db.query.member.findFirst.mockResolvedValueOnce(null);
+
+    await adapter.acceptInvitation("sys1", "u1");
+    // Verify it used system tenant ID from config
+    expect(db.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "system-tenant-id",
+        role: "admin", // Passed through directly from invitation
+      })
+    );
+
+    // Clear mocks to track calls for this step specifically
+    vi.clearAllMocks();
+
+    // System Tenant Duplicate Membership Check
+    db.query.invitation.findFirst.mockResolvedValueOnce(sysInv);
+    db.query.user.findFirst.mockResolvedValueOnce({ id: "u1", email: "a@b.com" });
+    // Mock existing membership (failure/idempotent path)
+    db.query.member.findFirst.mockResolvedValueOnce({ id: "m1" });
+
+    // Should NOT throw, but also should NOT insert
+    await adapter.acceptInvitation("sys1", "u1");
+    expect(db.insert).not.toHaveBeenCalled();
+
+
   });
 
   it("setPassword upserts credential account", async () => {
@@ -638,8 +646,43 @@ describe("BetterAuthAdapter", () => {
     expect(email.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "invite@test.com",
-        subject: expect.stringContaining("invited to join"),
       }),
+    );
+
+    // 4. Verify Orchestration Hook Logic
+    const controlledProvider = mkTenantProvider();
+    const plugins = getBetterAuthPlugins(email as any, cfg(), controlledProvider as any);
+    const orchPlugin = plugins.find((p: any) => p.id === "signup-orchestration");
+    if (!orchPlugin) throw new Error("Orchestration plugin not found");
+    // @ts-ignore - We know the structure from the config
+    const myHandler = orchPlugin.hooks.after[0].handler;
+
+    const mockCtx = {
+      context: {
+        returned: { user: { email: "test@example.com" } },
+        options: {
+          emailVerification: { sendVerificationEmail: true },
+        },
+        api: {
+          sendVerificationEmail: vi.fn(),
+        },
+        runInBackgroundOrAwait: async (fn: any) => fn(),
+      },
+      request: { headers: {} },
+    };
+
+    // Case A: Pending Invite -> Suppress
+    controlledProvider.findPendingInvitation.mockResolvedValue(true);
+    await myHandler(mockCtx);
+    expect(mockCtx.context.api.sendVerificationEmail).not.toHaveBeenCalled();
+
+    // Case B: No Invite -> Send Email
+    controlledProvider.findPendingInvitation.mockResolvedValue(false);
+    await myHandler(mockCtx);
+    expect(mockCtx.context.api.sendVerificationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { email: "test@example.com" },
+      })
     );
   });
 
