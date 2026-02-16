@@ -7,6 +7,7 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { fromNodeHeaders } from "better-auth/node";
 import { normalizeRole } from "../utils/role-normalization";
 import { getBetterAuthPlugins } from "../better-auth.config";
+import { validateFrontendUrl } from "../utils/url.util";
 
 import type { ITenantProvider } from "../interfaces/tenant-provider.interface";
 import type {
@@ -138,7 +139,10 @@ export class BetterAuthAdapter implements IAuthProvider {
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
           // Enterprise pattern: Explicitly construct the URL using URL object for robustness
-          const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+          const frontendUrl = validateFrontendUrl(
+            this.config.frontendUrl,
+            this.config.allowedOrigins,
+          );
 
           // Use URL API to safely join paths and prevent double slashes
           const callbackTargetUrl = new URL(
@@ -210,13 +214,6 @@ export class BetterAuthAdapter implements IAuthProvider {
   // Helper getter to access typed API
   private get api(): BetterAuthApi {
     return this.auth.api as unknown as BetterAuthApi;
-  }
-
-  private validateFrontendUrl(url?: string): string {
-    if (url && this.config.allowedOrigins.includes(url)) {
-      return url;
-    }
-    return this.config.allowedOrigins[0];
   }
 
   async createUser(input: CreateUserInput): Promise<UserInterface> {
@@ -501,7 +498,10 @@ export class BetterAuthAdapter implements IAuthProvider {
       .returning();
 
     // Send Email
-    const frontendUrl = this.validateFrontendUrl(this.config.frontendUrl);
+    const frontendUrl = validateFrontendUrl(
+      this.config.frontendUrl,
+      this.config.allowedOrigins,
+    );
     const inviteUrl = `${frontendUrl}/invite/accept?id=${invitation.id}&email=${encodeURIComponent(invitation.email)}`;
     await this.emailService.sendEmail({
       to: input.email,

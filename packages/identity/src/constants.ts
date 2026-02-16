@@ -39,8 +39,6 @@ export const ALL_PERMISSIONS = [
   "roles:read",
   "invitations:read",
   "invitations:create",
-  "invitation:read",
-  "invitation:create",
 ] as const;
 
 export enum RoleScope {

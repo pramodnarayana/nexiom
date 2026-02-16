@@ -1,3 +1,4 @@
+import { validateFrontendUrl } from "./utils/url.util";
 import { organization, admin } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { createAuthMiddleware } from "better-auth/api";
@@ -5,6 +6,12 @@ import type { ITenantProvider } from "./interfaces/tenant-provider.interface";
 import type { IEmailProvider } from "./interfaces/email-provider.interface";
 import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface";
 import type { User as UserInterface } from "./interfaces";
+// ... (existing imports)
+
+/**
+ * Factory to configure Better Auth plugins.
+ * Separation of concerns: Adapter handles execution, Factory handles configuration.
+ */
 
 /**
  * Factory to configure Better Auth plugins.
@@ -80,14 +87,26 @@ export const getBetterAuthPlugins = (
                   try {
                     await tenantProvider.provisionTenantForUser(user.id);
                   } catch (err) {
+                    // Structured logs for observability
                     console.error(
-                      `[BetterAuth Hook] Failed to provision tenant for ${user.id}`,
-                      err,
+                      JSON.stringify({
+                        event: "tenant_provisioning_failure",
+                        userId: user.id,
+                        error: err instanceof Error ? err.message : err,
+                        timestamp: new Date().toISOString(),
+                      }),
                     );
                   }
                 }
               } catch (error) {
-                console.error(`[BetterAuth Hook] verification failed`, error);
+                console.error(
+                  JSON.stringify({
+                    event: "tenant_lookup_failure",
+                    userId: user.id,
+                    error: error instanceof Error ? error.message : error,
+                    timestamp: new Date().toISOString(),
+                  }),
+                );
               }
             }
           }),
@@ -122,14 +141,3 @@ export const getBetterAuthPlugins = (
     tenantProvisioningPlugin,
   ];
 };
-
-// Helper to validate frontend URL (Matches Adapter logic)
-function validateFrontendUrl(
-  url: string | undefined,
-  allowedOrigins: string[],
-): string {
-  if (url && allowedOrigins.includes(url)) {
-    return url;
-  }
-  return allowedOrigins[0];
-}

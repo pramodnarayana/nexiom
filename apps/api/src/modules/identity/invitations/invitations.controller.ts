@@ -24,8 +24,6 @@ export class InvitationsController {
     }
     // Extract only necessary headers for downstream propagation
     // Verify Context
-    // Extract only necessary headers for downstream propagation
-    // Verify Context
 
     const forwardedHeaders = {
       'x-request-id': ctx.headers.get('x-request-id') ?? undefined,

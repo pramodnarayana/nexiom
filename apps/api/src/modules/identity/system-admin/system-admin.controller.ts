@@ -134,6 +134,14 @@ export class SystemAdminController {
       throw new BadRequestException('User with this email already exists');
     }
 
+    // Validate Role Existence
+    if (data.role) {
+      const roleExists = await this.roleProvider.findById(data.role);
+      if (!roleExists) {
+        throw new BadRequestException(`Role '${data.role}' not found`);
+      }
+    }
+
     // Now uses single-step creation via Adapter logic
     const user = await this.userProvider.create({
       ...data,
