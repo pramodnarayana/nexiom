@@ -187,7 +187,7 @@ export const getBetterAuthPlugins = (
                           ).api;
 
                           await api.sendVerificationEmail({
-                            body: { email: user.email },
+                            body: { email },
                             headers: ctx.request.headers,
                           });
                         } else {
@@ -196,7 +196,7 @@ export const getBetterAuthPlugins = (
                               event: "signup_orchestration_failure",
                               error:
                                 "Internal API sendVerificationEmail not available",
-                              email: user.email,
+                              userId: user.id,
                               timestamp: new Date().toISOString(),
                             }),
                           );
@@ -207,7 +207,7 @@ export const getBetterAuthPlugins = (
                         JSON.stringify({
                           event: "signup_orchestration_error",
                           error: error instanceof Error ? error.message : error,
-                          email: user.email,
+                          userId: user.id,
                           timestamp: new Date().toISOString(),
                         }),
                       );
