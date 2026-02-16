@@ -202,7 +202,7 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
                                                     </Link>
                                                 </Button>
                                                 {!isSelf && (
-                                                    <Can I="delete" this={{ __typename: 'User', role: user.role } as UserSubject}>
+                                                    <Can I="delete" this={{ __typename: Resources.USERS, role: user.role } as UserSubject}>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

@@ -153,7 +153,7 @@ describe('AuthProvider', () => {
             // Start authenticated
             (authClient.getSession as Mock).mockResolvedValue({
                 data: {
-                    user: { id: 'u1', name: 'User' },
+                    user: { id: 'u1', name: 'Test User' },
                     session: { token: 't1' }
                 },
                 error: null
