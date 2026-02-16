@@ -14,6 +14,48 @@ import type { HookEndpointContext } from "better-auth";
  * Factory to configure Better Auth plugins.
  * Separation of concerns: Adapter handles execution, Factory handles configuration.
  */
+
+// Define SafeContext for type-safe property access
+interface SafeContext {
+  request?: {
+    headers: Headers;
+  };
+  context?: {
+    api?: {
+      sendVerificationEmail?: unknown;
+    };
+  };
+}
+
+const getApiFromContext = (
+  ctx: unknown,
+): {
+  sendVerificationEmail: (opts: {
+    body: { email: string };
+    headers: Headers;
+  }) => Promise<void>;
+} | null => {
+  const safeCtx = ctx as SafeContext;
+  if (
+    safeCtx.request &&
+    safeCtx.context &&
+    safeCtx.context.api &&
+    typeof safeCtx.context.api.sendVerificationEmail === "function"
+  ) {
+    return (
+      safeCtx.context as {
+        api: {
+          sendVerificationEmail: (opts: {
+            body: { email: string };
+            headers: Headers;
+          }) => Promise<void>;
+        };
+      }
+    ).api;
+  }
+  return null;
+};
+
 export const getBetterAuthPlugins = (
   emailService: IEmailProvider,
   config: BetterAuthAdapterConfig,
@@ -164,38 +206,21 @@ export const getBetterAuthPlugins = (
                         await tenantProvider.findPendingInvitation(email);
 
                       if (!hasPendingInvite) {
-                        // Invoke internal sendVerificationEmail endpoint to reuse existing verification token and email logic when running outside the normal signup flow
-                        if (
-                          ctx.request &&
-                          ctx.context &&
-                          "api" in ctx.context &&
-                          typeof (
-                            ctx.context as unknown as {
-                              api: { sendVerificationEmail: unknown };
-                            }
-                          ).api.sendVerificationEmail === "function"
-                        ) {
-                          const api = (
-                            ctx.context as unknown as {
-                              api: {
-                                sendVerificationEmail: (opts: {
-                                  body: { email: string };
-                                  headers: Headers;
-                                }) => Promise<void>;
-                              };
-                            }
-                          ).api;
+                        const api = getApiFromContext(ctx);
 
+                        if (api && ctx.request) {
                           await api.sendVerificationEmail({
                             body: { email },
                             headers: ctx.request.headers,
                           });
                         } else {
+                          const reason = !ctx.request
+                            ? "Request context not available"
+                            : "Internal API sendVerificationEmail not available";
                           console.error(
                             JSON.stringify({
                               event: "signup_orchestration_failure",
-                              error:
-                                "Internal API sendVerificationEmail not available",
+                              error: reason,
                               userId: user.id,
                               timestamp: new Date().toISOString(),
                             }),
