@@ -62,17 +62,14 @@ export const getBetterAuthPlugins = (
             // Only trigger on Social Login Callback
             return path.startsWith("/callback/");
           },
-          handler: createAuthMiddleware(async (ctx: any) => {
-            // Context returned contains the user info from the original action
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-            const returned = ctx.context.returned;
+          handler: createAuthMiddleware(async (ctx) => {
+            const returned = (ctx.context as { returned?: unknown }).returned;
 
             let user: UserInterface | undefined;
 
             if (returned && typeof returned === "object") {
-              if ("user" in returned || "token" in returned) {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                user = returned.user as UserInterface;
+              if ("user" in returned) {
+                user = (returned as { user: unknown }).user as UserInterface;
               }
             }
 
@@ -114,6 +111,7 @@ export const getBetterAuthPlugins = (
 
   return [
     organization({
+      ac: ac,
       roles: {
         owner: ownerRole,
         admin: adminRole,

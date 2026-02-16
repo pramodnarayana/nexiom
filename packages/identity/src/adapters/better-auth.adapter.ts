@@ -389,15 +389,12 @@ export class BetterAuthAdapter implements IAuthProvider {
 
       return this.validateInvitationResponse(invData);
     } catch (error) {
-      console.error("[BetterAuthAdapter] api.createInvitation failed:", error);
       // Redact PII: Log only safe structural fields
       const errorDetails =
         typeof error === "object" && error !== null
           ? {
               name: (error as Error).name,
-              message: (error as Error).message, // Message usually safe, but be cautious
-              stack: (error as Error).stack,
-              // Extract status if available (common in HTTP errors)
+              message: (error as Error).message,
               status:
                 (error as { status?: number; statusCode?: number }).status ||
                 (error as { status?: number; statusCode?: number }).statusCode,
@@ -406,7 +403,7 @@ export class BetterAuthAdapter implements IAuthProvider {
           : String(error);
 
       console.error(
-        "[BetterAuthAdapter] api.createInvitation failed (Details Redacted):",
+        "[BetterAuthAdapter] api.createInvitation failed:",
         errorDetails,
       );
       throw error;
