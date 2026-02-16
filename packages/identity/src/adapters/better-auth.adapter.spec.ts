@@ -36,6 +36,10 @@ vi.mock("better-auth/node", () => ({
   fromNodeHeaders: vi.fn((h) => h),
 }));
 
+vi.mock("better-auth/api", () => ({
+  createAuthMiddleware: vi.fn((fn) => fn),
+}));
+
 vi.mock("bcryptjs", () => ({
   default: {
     hash: vi.fn(async (v: string) => `hashed:${v}`),
@@ -546,6 +550,36 @@ describe("BetterAuthAdapter", () => {
     });
     await adapter.acceptInvitation("i1", "u1");
     expect(db.insert).toHaveBeenCalled();
+
+    // System Tenant Acceptance (organizationId: null)
+    const sysInv = { ...validInv, id: "sys1", organizationId: null };
+    db.query.invitation.findFirst.mockResolvedValueOnce(sysInv);
+    db.query.user.findFirst.mockResolvedValueOnce({ id: "u1", email: "a@b.com" });
+
+    // Mock existing membership check to return nothing (success path)
+    db.query.member.findFirst.mockResolvedValueOnce(null);
+
+    await adapter.acceptInvitation("sys1", "u1");
+    // Verify it used system tenant ID from config
+    expect(db.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "system-tenant-id",
+        role: "admin", // Passed through directly from invitation
+      })
+    );
+
+    // Clear mocks to track calls for this step specifically
+    vi.clearAllMocks();
+
+    // System Tenant Duplicate Membership Check
+    db.query.invitation.findFirst.mockResolvedValueOnce(sysInv);
+    db.query.user.findFirst.mockResolvedValueOnce({ id: "u1", email: "a@b.com" });
+    // Mock existing membership (failure/idempotent path)
+    db.query.member.findFirst.mockResolvedValueOnce({ id: "m1" });
+
+    // Should NOT throw, but also should NOT insert
+    await adapter.acceptInvitation("sys1", "u1");
+    expect(db.insert).not.toHaveBeenCalled();
 
 
   });

@@ -316,10 +316,11 @@ export class DrizzleTenantAdapter implements ITenantProvider {
   }
 
   async findPendingInvitation(email: string): Promise<boolean> {
+    const normalizedEmail = email.toLowerCase().trim();
     const invite = await this.db.query.invitation.findFirst({
       where: (t, { eq, and, gt }) =>
         and(
-          eq(t.email, email),
+          eq(t.email, normalizedEmail),
           eq(t.status, "pending"),
           gt(t.expiresAt, new Date()),
         ),

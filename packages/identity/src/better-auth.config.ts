@@ -155,55 +155,64 @@ export const getBetterAuthPlugins = (
                 const user = (response as { user: UserInterface }).user;
                 const email = user.email;
 
-                // Check for pending invite
-                const hasPendingInvite =
-                  await tenantProvider.findPendingInvitation(email);
+                const { emailVerification } = ctx.context.options;
+                if (emailVerification?.sendVerificationEmail) {
+                  await ctx.context.runInBackgroundOrAwait(async () => {
+                    try {
+                      // Check for pending invite
+                      const hasPendingInvite =
+                        await tenantProvider.findPendingInvitation(email);
 
-                if (!hasPendingInvite) {
-                  // If NO invite, we must manually trigger verification email
-                  // because we disabled sendOnSignUp globally.
-                  const { emailVerification } = ctx.context.options;
-                  if (emailVerification?.sendVerificationEmail) {
-                    await ctx.context.runInBackgroundOrAwait(async () => {
-                      // We need to generate a token manually since we are outside the flow
-                      // Luckily better-auth exposes utilities, but accessing them here requires
-                      // using the internal API context tools available.
+                      if (!hasPendingInvite) {
+                        // Invoke internal sendVerificationEmail endpoint to reuse existing verification token and email logic when running outside the normal signup flow
+                        if (
+                          ctx.request &&
+                          ctx.context &&
+                          "api" in ctx.context &&
+                          typeof (
+                            ctx.context as unknown as {
+                              api: { sendVerificationEmail: unknown };
+                            }
+                          ).api.sendVerificationEmail === "function"
+                        ) {
+                          const api = (
+                            ctx.context as unknown as {
+                              api: {
+                                sendVerificationEmail: (opts: {
+                                  body: { email: string };
+                                  headers: Headers;
+                                }) => Promise<void>;
+                              };
+                            }
+                          ).api;
 
-                      // Actually, we can just call the endpoint "send-verification-email" internally?
-                      // Or reuse the logic.
-                      // For simplicity and correctness, invoking the internal endpoint is best.
-                      // But accessing internal router is hard.
-
-                      // We can use the 'sendVerificationEmail' FUNCTION from options simply:
-                      // But we need a TOKEN and URL.
-                      // The `signUpEmail` logic usually creates these.
-
-                      // Let's use the adapter's emailService or similar? NO.
-                      // We should use the context's internal helper `createEmailVerificationToken` import?
-                      // We can't easily import internal functions here.
-
-                      // Alternative: We can call the API endpoint for sending verification email!
-                      // This hook runs on the server.
-                      // `ctx.context.api` usually exposes the API.
-                      if (ctx.request) {
-                        const api = (
-                          ctx.context as unknown as {
-                            api: {
-                              sendVerificationEmail: (opts: {
-                                body: { email: string };
-                                headers: Headers;
-                              }) => Promise<void>;
-                            };
-                          }
-                        ).api;
-
-                        await api.sendVerificationEmail({
-                          body: { email: user.email },
-                          headers: ctx.request.headers,
-                        });
+                          await api.sendVerificationEmail({
+                            body: { email: user.email },
+                            headers: ctx.request.headers,
+                          });
+                        } else {
+                          console.error(
+                            JSON.stringify({
+                              event: "signup_orchestration_failure",
+                              error:
+                                "Internal API sendVerificationEmail not available",
+                              email: user.email,
+                              timestamp: new Date().toISOString(),
+                            }),
+                          );
+                        }
                       }
-                    });
-                  }
+                    } catch (error) {
+                      console.error(
+                        JSON.stringify({
+                          event: "signup_orchestration_error",
+                          error: error instanceof Error ? error.message : error,
+                          email: user.email,
+                          timestamp: new Date().toISOString(),
+                        }),
+                      );
+                    }
+                  });
                 }
               }
             }),
