@@ -37,7 +37,6 @@ const getApiFromContext = (
 } | null => {
   const safeCtx = ctx as SafeContext;
   if (
-    safeCtx.request &&
     safeCtx.context &&
     safeCtx.context.api &&
     typeof safeCtx.context.api.sendVerificationEmail === "function"
@@ -182,6 +181,7 @@ export const getBetterAuthPlugins = (
         after: [
           {
             matcher: (context: HookEndpointContext) => {
+              if (!context.path) return false;
               return context.path === "/sign-up/email";
             },
             handler: createAuthMiddleware(async (ctx) => {
