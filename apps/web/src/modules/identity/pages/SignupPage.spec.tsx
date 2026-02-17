@@ -39,7 +39,7 @@ describe('SignupPage', () => {
         });
 
         // Default fetch success
-        (globalThis.fetch as Mock).mockResolvedValue({
+        globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({}),
         });

@@ -69,7 +69,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         try {
             // 1. Check Server Session (Cookies) - Source of Truth
             // Renaming _error to sessionError to check status
+            console.log('[AuthProvider] Fetching session...');
             const { data, error: sessionError } = await authClient.getSession();
+            console.log('[AuthProvider] Session result:', { data, sessionError });
 
 
             if (data) {

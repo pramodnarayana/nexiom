@@ -9,9 +9,13 @@ vi.mock('./auth-provider', () => ({
     },
 }));
 
-vi.mock('@/shared/lib/auth/utils', () => ({
-    hasPermission: vi.fn(),
-}));
+vi.mock('@/shared/lib/auth/utils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/shared/lib/auth/utils')>();
+    return {
+        ...actual,
+        hasPermission: vi.fn(),
+    };
+});
 
 describe('accessControlProvider', () => {
     beforeEach(() => {

@@ -29,3 +29,10 @@ coverage
 better-auth-tutorial-eval/
 # Local Scripts
 scripts/local/
+
+# Test Reports and Coverage
+test-results/
+playwright-report/
+
+# Test Runners
+.last-run.json

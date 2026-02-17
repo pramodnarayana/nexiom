@@ -2,9 +2,9 @@ import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Actions, Resources } from "@/shared/lib/auth/constants";
+import { Actions } from "@/shared/lib/auth/constants";
 import { useAuth, Can } from "@/shared/lib/auth/context";
-import { hasPermission } from "@/shared/lib/auth/utils";
+import { hasPermission, normalizeResource } from "@/shared/lib/auth/utils";
 import type { UserSubject } from "@/shared/lib/auth/access-control";
 import { useBasePath } from "@/shared/contexts/useBasePath";
 import {
@@ -35,9 +35,8 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
 
     // Check if user is platform_admin (can perform write operations)
     // PBAC: Check if user can manage users
-    const canManageUsers = hasPermission(currentUser?.permissions, Resources.USERS, Actions.MANAGE);
-
-
+    const normalizedResource = normalizeResource(resource || basePath);
+    const canManageUsers = hasPermission(currentUser?.permissions, normalizedResource, Actions.MANAGE);
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
     const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
@@ -202,7 +201,7 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
                                                     </Link>
                                                 </Button>
                                                 {!isSelf && (
-                                                    <Can I="delete" this={{ __typename: Resources.USERS, role: user.role } as UserSubject}>
+                                                    <Can I="delete" this={{ __typename: normalizedResource, role: user.role } as UserSubject}>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"

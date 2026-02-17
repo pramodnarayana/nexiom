@@ -19,7 +19,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock fetch
-globalThis.fetch = vi.fn();
+// globalThis.fetch = vi.fn(); // Removed global assignment to avoid conflicts
 
 describe('VerifyEmailPage', () => {
     beforeEach(() => {
@@ -27,6 +27,9 @@ describe('VerifyEmailPage', () => {
         // Recreate params per test to ensure isolation
         currentSearchParams = new URLSearchParams();
         currentSearchParams.set('email', 'test@example.com');
+
+        // Setup fetch mock for this test suite
+        globalThis.fetch = vi.fn();
     });
 
     it('renders with email from URL params', () => {

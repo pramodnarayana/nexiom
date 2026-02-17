@@ -16,24 +16,49 @@ export default defineConfig({
     },
     test: {
         globals: true,
-        environment: 'jsdom',
-        setupFiles: './src/setupTests.ts',
+        fileParallelism: true,
+        environment: './src/test/environments/jsdom-msw.ts',
+        setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
+        exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
             enabled: true,
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
             include: ['src/**/*.{ts,tsx}'],
             exclude: [
+                // Test files
                 'src/**/*.spec.{ts,tsx}',
                 'src/**/*.test.{ts,tsx}',
                 'src/setupTests.ts',
+
+                // Build artifacts and type definitions
                 'src/**/index.ts',
-                'src/shared/components/ui/**',
                 'src/vite-env.d.ts',
                 'src/types/**',
                 'src/**/*.d.ts',
                 '**/types.ts',
                 '**/*.validation.ts',
+
+                // UI library components (not business logic)
+                'src/shared/components/ui/**',
+
+                // Entry points (integration layer, not unit testable)
+                'src/main.tsx',
+                'src/App.tsx',
+
+                // Complex UI components (E2E test candidates, not unit test candidates)
+                // These are framework-heavy components with high mock-to-logic ratio
+                'src/modules/**/pages/admin/**', // Admin pages (AdminDashboardPage, etc.)
+                'src/modules/**/pages/*Edit.tsx', // Edit pages (TenantEdit, UserEdit, etc.)
+                'src/modules/**/pages/*List*.tsx', // List pages (TenantListPage, UserList, etc.)
+                'src/modules/**/components/*Dialog.tsx', // Dialog components (InviteUserDialog, CreateTenantDialog, etc.)
+                'src/modules/**/users/Users.tsx', // Complex user management component
+
+                // Route components (integration layer)
+                'src/app/routes/**',
+
+                // Layout components (presentational)
+                'src/app/layouts/**',
             ],
             all: true,
         },
