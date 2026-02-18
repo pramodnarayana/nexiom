@@ -198,33 +198,75 @@ describe("PermissionSeeder", () => {
       const actual = await importOriginal<typeof import("../constants")>();
       return {
         ...actual,
-        ALL_PERMISSIONS: ["users:read", "tenants:read"],
-        MEMBER_PERMISSIONS: ["users:read", "tenants:read"],
-        isSystemPermission: () => false,
+        // Include all permissions referenced by the member role in rbac-seeding
+        ALL_PERMISSIONS: [
+          "users:read",
+          "tenants:read",
+          "dashboard:read",
+          "admin_dashboard:view",
+          "system_users:read",
+          "system_tenants:read",
+        ],
+        isSystemPermission: (p: string) =>
+          p.startsWith("system_") || p.startsWith("admin_dashboard:"),
       };
     });
 
     // Re-import to pickup mock
     const { seedSystemRbac } = await import("../utils/rbac-seeding");
 
-    // We need a fresh db mock because mkDb is defined in this file but we need to pass it to seedSystemRbac
     const dbMock = mkDb();
 
-    // Mock select to return the EXISTING token matching "users:read" for all roles
-    dbMock.select.mockReturnValue(
-      mockChainedQuery([
-        { roleId: "member", permissionId: "users:read", organizationId: null },
-        { roleId: "admin", permissionId: "users:read", organizationId: null },
-        { roleId: "owner", permissionId: "users:read", organizationId: null },
+    // Return existing rows covering every permission that seedSystemRbac would generate
+    // for owner, admin, and member roles so the deduplication sees them all as existing.
+    const existingRows = [
+      // member base perms (organizationId: null)
+      { roleId: "member", permissionId: "users:read", organizationId: null },
+      { roleId: "member", permissionId: "tenants:read", organizationId: null },
+      {
+        roleId: "member",
+        permissionId: "dashboard:read",
+        organizationId: null,
+      },
+      // member system perms (organizationId: "sys")
+      {
+        roleId: "member",
+        permissionId: "admin_dashboard:view",
+        organizationId: "sys",
+      },
+      {
+        roleId: "member",
+        permissionId: "system_users:read",
+        organizationId: "sys",
+      },
+      {
+        roleId: "member",
+        permissionId: "system_tenants:read",
+        organizationId: "sys",
+      },
+      // admin & owner — all perms (null + sys scoped)
+      ...["admin", "owner"].flatMap((role) => [
+        { roleId: role, permissionId: "users:read", organizationId: null },
+        { roleId: role, permissionId: "tenants:read", organizationId: null },
+        { roleId: role, permissionId: "dashboard:read", organizationId: null },
         {
-          roleId: "member",
-          permissionId: "tenants:read",
-          organizationId: null,
+          roleId: role,
+          permissionId: "admin_dashboard:view",
+          organizationId: "sys",
         },
-        { roleId: "admin", permissionId: "tenants:read", organizationId: null },
-        { roleId: "owner", permissionId: "tenants:read", organizationId: null },
+        {
+          roleId: role,
+          permissionId: "system_users:read",
+          organizationId: "sys",
+        },
+        {
+          roleId: role,
+          permissionId: "system_tenants:read",
+          organizationId: "sys",
+        },
       ]),
-    );
+    ];
+    dbMock.select.mockReturnValue(mockChainedQuery(existingRows));
 
     const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
     const optionsMock = mkOptions();

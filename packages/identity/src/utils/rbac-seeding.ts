@@ -119,23 +119,47 @@ export async function seedSystemRbac(
       addPermissionsForRole(adminRoleId, perms, systemTenantId);
 
       // Member: curated safe subset
-      const memberPerms: PermissionType[] = ["users:read", "tenants:read"];
+      // Non-system perms (organizationId: null) — apply in any org context.
+      const memberBasePerms: PermissionType[] = [
+        "users:read",
+        "tenants:read",
+        "dashboard:read",
+      ];
+
+      // System-scoped read-only perms — only visible when member is in the system tenant.
+      // Grants read-only access to the admin dashboard without any write/manage capabilities.
+      const memberSystemPerms: PermissionType[] = [
+        "admin_dashboard:view",
+        "system_users:read",
+        "system_tenants:read",
+      ];
 
       // Validate configuration fail-fast
-      const invalidPerms = memberPerms.filter((p) => !perms.includes(p));
+      const allMemberPerms = [...memberBasePerms, ...memberSystemPerms];
+      const invalidPerms = allMemberPerms.filter((p) => !perms.includes(p));
       if (invalidPerms.length > 0) {
         throw new Error(
           `Invalid member permissions configured: ${invalidPerms.join(", ")}. Must be in ALL_PERMISSIONS.`,
         );
       }
 
-      // Member role always receives organizationId: null per RBAC design (see ADR)
-      for (const p of memberPerms) {
+      // Non-system perms: organizationId null (apply in any tenant)
+      for (const p of memberBasePerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
           roleId: memberRoleId,
           permissionId: p,
           organizationId: null,
+        });
+      }
+
+      // System-scoped perms: only returned when user is in the system tenant
+      for (const p of memberSystemPerms) {
+        rolePermissionsToInsert.push({
+          id: uuidv4(),
+          roleId: memberRoleId,
+          permissionId: p,
+          organizationId: systemTenantId,
         });
       }
 

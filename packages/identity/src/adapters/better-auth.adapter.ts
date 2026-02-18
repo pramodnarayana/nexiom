@@ -695,9 +695,15 @@ export class BetterAuthAdapter implements IAuthProvider {
     }
 
     // 2. Supplementary permission query
-    //    We check for string role IDs and fetch their permissions if needed.
-    //    We do this regardless of preloaded permissions to ensure we don't drop legacy role data.
+    //    Fetch role permissions scoped to the user's organization.
+    //    - Non-system permissions have organizationId = NULL (always included).
+    //    - System permissions have organizationId = systemTenantId (only included
+    //      when the user's membership org IS the system tenant).
     if (hasMembership) {
+      const member = members![0];
+      const userOrgId = member.organizationId;
+      const systemTenantId = this.options.constants.systemTenantId;
+
       const roleIds = members!
         .map((m) => {
           const normalized = normalizeRole(m.role);
@@ -708,7 +714,18 @@ export class BetterAuthAdapter implements IAuthProvider {
       if (roleIds.length > 0) {
         const uniqueRoleIds = [...new Set(roleIds)];
         const rolePerms = await this.db.query.rolePermission.findMany({
-          where: (rp, { inArray }) => inArray(rp.roleId, uniqueRoleIds),
+          where: (rp, { inArray, or, isNull, eq }) =>
+            and(
+              inArray(rp.roleId, uniqueRoleIds),
+              // Include non-system permissions (null org) OR system permissions
+              // only when the user belongs to the system tenant.
+              or(
+                isNull(rp.organizationId),
+                userOrgId === systemTenantId
+                  ? eq(rp.organizationId, systemTenantId)
+                  : isNull(rp.organizationId), // effectively excludes system perms for non-system orgs
+              ),
+            ),
           columns: { permissionId: true },
         });
         for (const rp of rolePerms) {
