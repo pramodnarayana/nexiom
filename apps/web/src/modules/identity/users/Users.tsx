@@ -69,7 +69,7 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
 
         // Derive endpoint from resource prop or default to admin/users
         // Ensure we don't duplicate slashes if resource has them
-        const resourcePath = (resource || "admin/users").replaceAll(/(^\/+)|(\/+$)/g, "");
+        const resourcePath = (resource || basePath).replaceAll(/(^\/+)|(\/+$)/g, "");
         const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;
 
         sendInvite({

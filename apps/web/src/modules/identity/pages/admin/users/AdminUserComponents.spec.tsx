@@ -98,7 +98,7 @@ describe('Admin User Components', () => {
             });
         });
 
-        it('sends invitation when unverified', () => {
+        it('sends invitation when unverified', async () => {
             render(
                 <BrowserRouter>
                     <UserEdit />
@@ -110,12 +110,14 @@ describe('Admin User Components', () => {
 
             fireEvent.click(inviteBtn);
 
-            expect(mockSendInvite).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    method: 'post',
-                    url: expect.stringContaining('/users/1/invite')
-                })
-            );
+            await waitFor(() => {
+                expect(mockSendInvite).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        method: 'post',
+                        url: expect.stringContaining('/users/1/invite')
+                    })
+                );
+            });
         });
     });
 

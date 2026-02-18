@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { EmailVerificationCallbackPage } from './EmailVerificationCallbackPage';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 
 // Mock dependencies
 const mockNavigate = vi.fn();
@@ -57,7 +58,7 @@ describe('EmailVerificationCallbackPage', () => {
         );
 
         // Navigation happens immediately when authenticated
-        expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+        expect(mockNavigate).toHaveBeenCalledWith(AppRoutes.TENANT.ROOT, { replace: true });
     });
 
     it('redirects to login with error after timeout when not authenticated', () => {
@@ -80,12 +81,9 @@ describe('EmailVerificationCallbackPage', () => {
             vi.advanceTimersByTime(1000);
         });
 
+        expect(mockNavigate).toHaveBeenCalledTimes(1);
         expect(mockNavigate).toHaveBeenCalledWith(
-            expect.stringContaining('/login?'),
-            { replace: true }
-        );
-        expect(mockNavigate).toHaveBeenCalledWith(
-            expect.stringContaining('error=Verification+failed+or+session+expired'),
+            expect.stringContaining('/login?error=Verification+failed+or+session+expired'),
             { replace: true }
         );
     });

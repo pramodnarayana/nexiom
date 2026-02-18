@@ -53,7 +53,7 @@ export default defineConfig({
                 // These are framework-heavy components with high mock-to-logic ratio
                 'src/modules/**/pages/admin/**', // Admin pages (AdminDashboardPage, etc.)
                 'src/modules/**/pages/*Edit.tsx', // Edit pages (TenantEdit, UserEdit, etc.)
-                'src/modules/**/pages/*List*.tsx', // List pages (TenantListPage, UserList, etc.)
+                'src/modules/**/pages/*ListPage.tsx', // List pages (TenantListPage, etc.)
                 'src/modules/**/components/*Dialog.tsx', // Dialog components (InviteUserDialog, CreateTenantDialog, etc.)
                 'src/modules/**/users/Users.tsx', // Complex user management component
 
