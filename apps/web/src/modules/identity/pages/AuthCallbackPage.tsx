@@ -1,28 +1,49 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks/useAuth';
-import { hasPermission } from '@/shared/lib/auth/utils';
-import { Resources, Actions, AppRoutes } from '@/shared/lib/auth/constants';
+import { getHomePathForUser } from '@/shared/lib/auth/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
+import { apiClient } from '@/shared/lib/api-client';
 import { Loader2 } from 'lucide-react';
 
 export function AuthCallbackPage() {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, refreshSession } = useAuth();
     const navigate = useNavigate();
+    const provisioningRef = useRef(false);
 
     useEffect(() => {
-        if (!isLoading) {
-            if (user) {
-                // Determine redirect based on permissions
-                const target = hasPermission(user.permissions, Resources.ADMIN_DASHBOARD, Actions.VIEW)
-                    ? AppRoutes.ADMIN.ROOT
-                    : AppRoutes.TENANT.ROOT;
-                navigate(target, { replace: true });
-            } else {
-                // Failed to auth, back to login
-                navigate(`${AppRoutes.AUTH.LOGIN}?error=auth_failed`, { replace: true });
-            }
+        if (isLoading) return;
+
+        if (!user) {
+            navigate(`${AppRoutes.AUTH.LOGIN}?error=auth_failed`, { replace: true });
+            return;
         }
-    }, [user, isLoading, navigate]);
+
+        // First Google sign-in: user has no tenant yet — provision one now.
+        // Guard with a ref to prevent double-invocation in StrictMode.
+        if (!user.hasTenant && !provisioningRef.current) {
+            provisioningRef.current = true;
+            apiClient.post('/auth/provision-tenant')
+                .then(() => refreshSession())
+                .then(() => {
+                    // Navigate only on full success — after session is refreshed.
+                    // New Google users are always regular tenant owners.
+                    navigate(AppRoutes.TENANT.ROOT, { replace: true });
+                })
+                .catch((err: unknown) => {
+                    console.error('[AuthCallbackPage] Tenant provisioning failed:', err);
+                    // Allow retry on next render by resetting the guard.
+                    provisioningRef.current = false;
+                    navigate(`${AppRoutes.AUTH.LOGIN}?error=provisioning_failed`, { replace: true });
+                });
+            return;
+        }
+
+        // Tenant already exists — use permission-based routing.
+        // This branch also handles the post-provisioning re-render once
+        // refreshSession() updates the user state (hasTenant becomes true).
+        navigate(getHomePathForUser(user), { replace: true });
+    }, [user, isLoading, navigate, refreshSession]);
 
     return (
         <div className="flex h-screen w-screen items-center justify-center">
