@@ -44,7 +44,7 @@ describe('EmailVerificationCallbackPage', () => {
         expect(screen.getByText('Verifying your email...')).toBeInTheDocument();
     });
 
-    it('redirects to tenant dashboard on successful verification', async () => {
+    it('redirects to tenant dashboard on successful verification', () => {
         mockUseAuth.mockReturnValue({
             isAuthenticated: true,
             isLoading: false,

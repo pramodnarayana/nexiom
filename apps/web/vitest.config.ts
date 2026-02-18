@@ -31,6 +31,9 @@ export default defineConfig({
                 'src/**/*.test.{ts,tsx}',
                 'src/setupTests.ts',
 
+                // Test infrastructure
+                'src/test/**',
+
                 // Build artifacts and type definitions
                 'src/**/index.ts',
                 'src/vite-env.d.ts',

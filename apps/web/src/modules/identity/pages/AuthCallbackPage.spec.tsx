@@ -19,9 +19,13 @@ vi.mock('@/shared/hooks/useAuth', () => ({
     useAuth: () => mockUseAuth(),
 }));
 
-vi.mock('@/shared/lib/auth/utils', () => ({
-    hasPermission: vi.fn(),
-}));
+vi.mock('@/shared/lib/auth/utils', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/shared/lib/auth/utils')>();
+    return {
+        ...actual,
+        hasPermission: vi.fn(),
+    };
+});
 
 import { hasPermission } from '@/shared/lib/auth/utils';
 import { AppRoutes } from '@/shared/lib/auth/constants';

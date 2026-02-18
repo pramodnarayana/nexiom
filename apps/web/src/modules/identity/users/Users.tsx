@@ -200,23 +200,19 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
                                                         <Edit className="h-4 w-4" />
                                                     </Link>
                                                 </Button>
-                                                {!isSelf && (() => {
-                                                    if (normalizedResource !== Resources.USERS) return null;
-                                                    const subject: UserSubject = { __typename: Resources.USERS, role: user.role };
-                                                    return (
-                                                        <Can I="delete" this={subject}>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                                onClick={() => handleDelete(user.id, displayName)}
-                                                                aria-label={`Delete ${displayName}`}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </Can>
-                                                    );
-                                                })()}
+                                                {!isSelf && normalizedResource === Resources.USERS && (
+                                                    <Can I="delete" this={{ __typename: Resources.USERS, role: user.role } satisfies UserSubject}>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => handleDelete(user.id, displayName)}
+                                                            aria-label={`Delete ${displayName}`}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
+                                                )}
                                             </>
                                         )}
                                     </div>

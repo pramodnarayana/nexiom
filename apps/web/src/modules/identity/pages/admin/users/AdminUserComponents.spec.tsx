@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserEdit } from './UserEdit';
-import { UserShow } from './UserShow'; // Assuming standard export
+import { UserShow } from './UserShow';
 import { useShow } from '@refinedev/core';
 import { BrowserRouter } from 'react-router-dom';
 
@@ -134,7 +134,7 @@ describe('Admin User Components', () => {
         });
 
         it('sends invitation triggers API call', async () => {
-            vi.mocked(useShow).mockReturnValue({
+            vi.mocked(useShow).mockReturnValueOnce({
                 queryResult: {
                     data: { data: { id: '1', name: 'Test User', email: 'test@example.com', role: 'admin', createdAt: '2023-01-01', emailVerified: false } },
                     isLoading: false,

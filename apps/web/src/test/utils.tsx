@@ -7,7 +7,7 @@ export function createTestQueryClient() {
         defaultOptions: {
             queries: {
                 retry: false,
-                gcTime: Infinity,
+                cacheTime: Infinity,
             },
         },
     });

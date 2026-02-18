@@ -1,16 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '@/test/mocks/server';
 import { authorizedFetch } from './api';
 
 describe('api - authorizedFetch', () => {
-    beforeEach(() => {
-        server.resetHandlers();
-    });
-
     it('makes successful GET request and returns JSON', async () => {
         server.use(
-            http.get('http://localhost:3000/api/users', () => {
+            http.get('*/api/users', () => {
                 return HttpResponse.json({ data: 'test' });
             })
         );
@@ -23,7 +19,7 @@ describe('api - authorizedFetch', () => {
         let receivedHeaders: Headers | undefined;
 
         server.use(
-            http.get('http://localhost:3000/api/users', ({ request }) => {
+            http.get('*/api/users', ({ request }) => {
                 receivedHeaders = request.headers;
                 return HttpResponse.json({ success: true });
             })
@@ -39,7 +35,7 @@ describe('api - authorizedFetch', () => {
         let receivedHeaders: Headers | undefined;
 
         server.use(
-            http.get('http://localhost:3000/api/users', ({ request }) => {
+            http.get('*/api/users', ({ request }) => {
                 receivedHeaders = request.headers;
                 return HttpResponse.json({});
             })
@@ -54,7 +50,7 @@ describe('api - authorizedFetch', () => {
         let receivedHeaders: Headers | undefined;
 
         server.use(
-            http.post('http://localhost:3000/api/upload', ({ request }) => {
+            http.post('*/api/upload', ({ request }) => {
                 receivedHeaders = request.headers;
                 return HttpResponse.json({});
             })
@@ -70,7 +66,7 @@ describe('api - authorizedFetch', () => {
 
     it('throws error when response is not ok and has JSON error message', async () => {
         server.use(
-            http.get('http://localhost:3000/api/users', () => {
+            http.get('*/api/users', () => {
                 return HttpResponse.json(
                     { message: 'Invalid input' },
                     { status: 400 }
@@ -83,7 +79,7 @@ describe('api - authorizedFetch', () => {
 
     it('throws error with fallback message when response is not JSON', async () => {
         server.use(
-            http.get('http://localhost:3000/api/users', () => {
+            http.get('*/api/users', () => {
                 return new HttpResponse('Internal Server Error', {
                     status: 500,
                     statusText: 'Internal Server Error',
@@ -98,7 +94,7 @@ describe('api - authorizedFetch', () => {
         let receivedBody: unknown = null;
 
         server.use(
-            http.post('http://localhost:3000/api/users', async ({ request }) => {
+            http.post('*/api/users', async ({ request }) => {
                 receivedBody = await request.json();
                 return HttpResponse.json({ id: '123' });
             })
