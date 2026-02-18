@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
+// Required: jsdom-msw environment deletes native fetch globals before JSDOM
+// initializes; whatwg-fetch re-polyfills Response/Headers/Request/fetch so MSW works.
 import 'whatwg-fetch';
 import { vi } from 'vitest';
 
-// Force polyfill to globalThis to ensure it's available for libraries wrapping fetch
-// consistently before JSDOM or other tools interfere.
-// Stub fetch globals so vi.unstubAllGlobals() can restore the whatwg-fetch polyfill
+// Stub fetch globals so vi.unstubAllGlobals() can restore them after each test suite
 if (globalThis.fetch) {
     vi.stubGlobal('fetch', globalThis.fetch);
     vi.stubGlobal('Headers', globalThis.Headers);

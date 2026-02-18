@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { UserEdit } from './UserEdit';
 import { UserShow } from './UserShow';
 import { useShow } from '@refinedev/core';
@@ -84,11 +85,13 @@ describe('Admin User Components', () => {
                 </BrowserRouter>
             );
 
+            const user = userEvent.setup();
             const nameInput = screen.getByDisplayValue('Test User');
-            fireEvent.change(nameInput, { target: { value: 'Updated Name' } });
+            await user.clear(nameInput);
+            await user.type(nameInput, 'Updated Name');
 
             const submitBtn = screen.getByText('Save Changes');
-            fireEvent.click(submitBtn);
+            await user.click(submitBtn);
 
             await waitFor(() => {
                 expect(mockUpdate).toHaveBeenCalledWith(
@@ -116,10 +119,11 @@ describe('Admin User Components', () => {
                 </BrowserRouter>
             );
 
+            const user = userEvent.setup();
             const inviteBtn = screen.getByText('Send Invite');
             expect(inviteBtn).toBeInTheDocument();
 
-            fireEvent.click(inviteBtn);
+            await user.click(inviteBtn);
 
             await waitFor(() => {
                 expect(mockSendInvite).toHaveBeenCalledWith(
@@ -162,8 +166,9 @@ describe('Admin User Components', () => {
                 </BrowserRouter>
             );
 
+            const user = userEvent.setup();
             const inviteBtn = screen.getByText('Send Invite');
-            fireEvent.click(inviteBtn);
+            await user.click(inviteBtn);
 
             await waitFor(() => {
                 expect(mockSendInvite).toHaveBeenCalledWith(

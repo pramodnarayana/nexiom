@@ -105,7 +105,7 @@ describe('EmailVerificationCallbackPage', () => {
 
         // Fast-forward timers
         act(() => {
-            vi.advanceTimersByTime(1500);
+            vi.advanceTimersByTime(10_000); // well past any plausible verification timeout
         });
 
         // Navigation should not have been called after unmount
