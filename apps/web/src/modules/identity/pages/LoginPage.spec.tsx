@@ -56,7 +56,7 @@ describe('LoginPage', () => {
         });
 
         // Default fetch mock (for refresh-session) to success
-        (globalThis.fetch as Mock).mockResolvedValue({
+        globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({
                 user: {

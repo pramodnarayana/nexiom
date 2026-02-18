@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignupPage } from './SignupPage';
@@ -24,6 +24,7 @@ globalThis.fetch = vi.fn();
 describe('SignupPage', () => {
     const mockNavigate = vi.fn();
     const mockSetAuthState = vi.fn();
+    let originalFetch: typeof globalThis.fetch;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -38,11 +39,16 @@ describe('SignupPage', () => {
             setAuthState: mockSetAuthState,
         });
 
-        // Default fetch success
-        (globalThis.fetch as Mock).mockResolvedValue({
+        // Capture and override fetch
+        originalFetch = globalThis.fetch;
+        globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({}),
         });
+    });
+
+    afterEach(() => {
+        globalThis.fetch = originalFetch;
     });
 
     it('renders standard signup form', () => {

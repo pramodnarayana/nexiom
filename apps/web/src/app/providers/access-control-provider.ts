@@ -1,14 +1,6 @@
 import type { AccessControlProvider, CanParams, CanReturnType } from "@refinedev/core";
 import { authProvider } from "./auth-provider";
-import { hasPermission } from "@/shared/lib/auth/utils";
-
-// Resource Normalization Map
-// Strip 'admin/' prefix to map 'admin/users' -> 'users' automatically.
-const RESOURCE_MAP: Record<string, string> = {
-    // Keep distinct mappings if needed, otherwise normalization handles most
-    "admin/users": "system_users",
-    "admin/tenants": "system_tenants",
-};
+import { hasPermission, normalizeResource } from "@/shared/lib/auth/utils";
 
 // Action Normalization Map
 // Map frontend actions to backend permissions
@@ -23,13 +15,7 @@ export const accessControlProvider: AccessControlProvider = {
         const permissions = (await authProvider.getPermissions?.()) as string[] ?? [];
 
         // Resource Normalization
-        let targetResource = resource ?? "";
-
-        if (RESOURCE_MAP[targetResource]) {
-            targetResource = RESOURCE_MAP[targetResource];
-        } else if (targetResource.startsWith("admin/")) {
-            targetResource = targetResource.replace(/^admin\//, "");
-        }
+        const targetResource = normalizeResource(resource ?? "");
 
         // Action Normalization
         const rawAction = action || "manage";

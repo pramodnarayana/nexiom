@@ -81,3 +81,39 @@ export function getHomePathForUser(user: UserWithPermissions): string {
     }
     return AppRoutes.TENANT.ROOT;
 }
+
+
+/**
+ * Resource Normalization Map
+ * Maps frontend resource paths (e.g. 'admin/users') to backend permission subjects (e.g. 'system_users').
+ */
+export const RESOURCE_MAP: Readonly<Record<string, string>> = {
+    "admin/users": "system_users",
+    "admin/tenants": "system_tenants",
+};
+
+/**
+ * Normalizes a resource string to its permission subject.
+ * Handles 'admin/' prefix removal and explicit mapping.
+ * 
+ * @param resource - The resource string (e.g. 'admin/users' or 'users')
+ * @returns The normalized permission subject (e.g. 'system_users' or 'users')
+ */
+export function normalizeResource(resource: string): string {
+    if (!resource) return "";
+
+    // Strip leading/trailing slashes so '/admin/users' matches 'admin/users' in RESOURCE_MAP
+    const trimmed = resource.replaceAll(/(^\/+)|(\/+$)/g, "");
+
+    // 1. Explicit Mapping
+    if (trimmed in RESOURCE_MAP) {
+        return RESOURCE_MAP[trimmed];
+    }
+
+    // 2. Prefix Stripping (admin/foo -> foo) - Fallback for unmapped admin resources
+    if (trimmed.startsWith("admin/")) {
+        return trimmed.replace(/^admin\//, "");
+    }
+
+    return trimmed;
+}
