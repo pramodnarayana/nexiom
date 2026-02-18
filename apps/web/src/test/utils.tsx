@@ -8,6 +8,7 @@ export function createTestQueryClient() {
             queries: {
                 retry: false,
                 cacheTime: Infinity,
+                staleTime: Infinity,
             },
         },
     });

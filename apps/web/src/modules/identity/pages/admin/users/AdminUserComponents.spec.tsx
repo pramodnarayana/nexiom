@@ -73,7 +73,11 @@ describe('Admin User Components', () => {
             expect(screen.getByDisplayValue('test@example.com')).toBeInTheDocument();
         });
 
-        it('submits form updates', async () => {
+        it('submits form updates and navigates on success', async () => {
+            // Make mockUpdate invoke onSuccess callback synchronously
+            mockUpdate.mockImplementationOnce((_args: unknown, options: { onSuccess?: () => void }) => {
+                options?.onSuccess?.();
+            });
             render(
                 <BrowserRouter>
                     <UserEdit />
@@ -94,6 +98,13 @@ describe('Admin User Components', () => {
                         values: expect.objectContaining({ name: 'Updated Name' })
                     }),
                     expect.anything()
+                );
+                expect(mockNavigate).toHaveBeenCalledWith('/admin/users');
+                expect(mockToast).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        title: 'Success',
+                        description: 'User updated successfully',
+                    })
                 );
             });
         });
