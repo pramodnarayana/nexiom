@@ -50,6 +50,7 @@ describe('DataProvider', () => {
 
     afterEach(() => {
         vi.resetModules();
+        vi.restoreAllMocks();
     });
 
     describe('Configuration', () => {

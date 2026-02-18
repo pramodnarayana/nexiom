@@ -31,14 +31,15 @@ describe('useOrganization', () => {
         vi.clearAllMocks();
     });
 
-    it('should return null (not enabled) when id is undefined', async () => {
-        const { result } = renderHook(() => useOrganization(undefined), {
+    it('should return null (not enabled) when id is undefined', () => {
+        const { result } = renderHook(() => useOrganization(), {
             wrapper: createWrapper(),
         });
 
         expect(result.current.data).toBeUndefined();
         expect(result.current.fetchStatus).toBe('idle'); // Should not be fetching
-        // In RQ v4/v5 enabled: false results in status: 'loading' + fetchStatus: 'idle'
+        // In RQ v4, enabled: false results in status: 'loading' + fetchStatus: 'idle'
+        // Note: In RQ v5 this was renamed to status: 'pending'
         expect(apiClient.get).not.toHaveBeenCalled();
     });
 

@@ -33,11 +33,7 @@ vi.mock('../../modules/identity/users/UserList', () => ({ UserList: () => <div>M
 vi.mock('../../modules/tenants/pages/TenantListPage', () => ({ TenantListPage: () => <div>Mocked TenantListPage</div> }));
 
 // Mock Layouts to avoid heavy rendering
-vi.mock('../layouts/AdminLayout', () => ({ AdminLayout: () => <div>Mocked AdminLayout <div id="outlet-placeholder" /></div> }));
-// TenantLayout might render an Outlet, so we need to mock it in a way that renders children or Outlet
-// Actually simplest is to mock it to render Outlet if it uses one, but strictly mocking route components:
-// In TenantRoutes, TenantLayout is a Layout Route.
-// In TenantRoutes, TenantLayout is a Layout Route.
+// Mock Layouts — both must render <Outlet /> so nested routes resolve
 vi.mock('../layouts/TenantLayout', async () => {
     const { Outlet } = await import('react-router-dom');
     return { TenantLayout: () => <div>Mocked TenantLayout <Outlet /></div> };

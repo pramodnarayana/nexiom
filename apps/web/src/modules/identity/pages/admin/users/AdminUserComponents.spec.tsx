@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserEdit } from './UserEdit';
 import { UserShow } from './UserShow'; // Assuming standard export
+import { useShow } from '@refinedev/core';
 import { BrowserRouter } from 'react-router-dom';
 
 // --- Mocks ---
@@ -11,7 +12,6 @@ const mockSendInvite = vi.fn();
 const mockNavigate = vi.fn();
 const mockToast = vi.fn();
 
-// Mock Refine Core
 // Mock Refine Core
 const mockUseOneResult = { data: { data: { id: '1', name: 'Test User', email: 'test@example.com', emailVerified: false } }, isLoading: false };
 const mockUseShowResult = {
@@ -134,8 +134,14 @@ describe('Admin User Components', () => {
         });
 
         it('sends invitation triggers API call', async () => {
-            // Override mock for this specific case if needed to ensure emailVerified is false
-            mockUseShowResult.queryResult.data.data.emailVerified = false;
+            vi.mocked(useShow).mockReturnValue({
+                queryResult: {
+                    data: { data: { id: '1', name: 'Test User', email: 'test@example.com', role: 'admin', createdAt: '2023-01-01', emailVerified: false } },
+                    isLoading: false,
+                },
+                showLoading: false,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any);
 
             render(
                 <BrowserRouter>

@@ -1,8 +1,8 @@
 import { http, HttpResponse } from 'msw';
 
 export const handlers = [
-    // Auth Handlers
-    http.post('*/api/auth/*', () => {
+    // Auth Handlers — explicit endpoints only (no catch-all to avoid masking missing routes)
+    http.post('*/api/auth/sign-in/email', () => {
         return HttpResponse.json({
             user: {
                 id: 'test-user-id',
@@ -14,6 +14,24 @@ export const handlers = [
                 token: 'test-session-token',
             },
         });
+    }),
+
+    http.post('*/api/auth/sign-up/email', () => {
+        return HttpResponse.json({
+            user: {
+                id: 'test-user-id',
+                email: 'test@example.com',
+                name: 'Test User',
+                role: 'user',
+            },
+            session: {
+                token: 'test-session-token',
+            },
+        });
+    }),
+
+    http.post('*/api/auth/sign-out', () => {
+        return HttpResponse.json({ success: true });
     }),
 
 
@@ -63,19 +81,11 @@ export const handlers = [
 
     // Organization Handlers
     http.get('*/api/tenants/:id', ({ params }) => {
-        console.log('[MSW] Tenant Handler Hit:', params);
-        return new HttpResponse(
-            JSON.stringify({
-                id: params.id,
-                name: 'Test Organization',
-                slug: 'test-org',
-            }),
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
+        return HttpResponse.json({
+            id: params.id,
+            name: 'Test Organization',
+            slug: 'test-org',
+        });
     }),
 
     http.patch('*/api/tenants/:id/details', () => {

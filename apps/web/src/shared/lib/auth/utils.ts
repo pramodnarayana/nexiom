@@ -87,10 +87,9 @@ export function getHomePathForUser(user: UserWithPermissions): string {
  * Resource Normalization Map
  * Maps frontend resource paths (e.g. 'admin/users') to backend permission subjects (e.g. 'system_users').
  */
-export const RESOURCE_MAP: Record<string, string> = {
+export const RESOURCE_MAP: Readonly<Record<string, string>> = {
     "admin/users": "system_users",
     "admin/tenants": "system_tenants",
-    "admin/invitations": "invitations", // System admins also manage invitations
 };
 
 /**
@@ -103,15 +102,18 @@ export const RESOURCE_MAP: Record<string, string> = {
 export function normalizeResource(resource: string): string {
     if (!resource) return "";
 
+    // Strip leading/trailing slashes so '/admin/users' matches 'admin/users' in RESOURCE_MAP
+    const trimmed = resource.replaceAll(/(^\/+)|(\/+$)/g, "");
+
     // 1. Explicit Mapping
-    if (RESOURCE_MAP[resource]) {
-        return RESOURCE_MAP[resource];
+    if (trimmed in RESOURCE_MAP) {
+        return RESOURCE_MAP[trimmed];
     }
 
     // 2. Prefix Stripping (admin/foo -> foo) - Fallback for unmapped admin resources
-    if (resource.startsWith("admin/")) {
-        return resource.replace(/^admin\//, "");
+    if (trimmed.startsWith("admin/")) {
+        return trimmed.replace(/^admin\//, "");
     }
 
-    return resource;
+    return trimmed;
 }

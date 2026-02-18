@@ -2,7 +2,7 @@ import * as React from "react";
 import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Actions } from "@/shared/lib/auth/constants";
+import { Actions, Resources } from "@/shared/lib/auth/constants";
 import { useAuth, Can } from "@/shared/lib/auth/context";
 import { hasPermission, normalizeResource } from "@/shared/lib/auth/utils";
 import type { UserSubject } from "@/shared/lib/auth/access-control";
@@ -39,7 +39,7 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
     const canManageUsers = hasPermission(currentUser?.permissions, normalizedResource, Actions.MANAGE);
 
     // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
-    const deleteResource = (resource || basePath).replace(/^\/+|\/+$/g, '');
+    const deleteResource = (resource || basePath).replaceAll(/(^\/+)|(\/+$)/g, '');
 
     const handleDelete = (id: string, name: string) => {
         if (globalThis.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
@@ -69,7 +69,7 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
 
         // Derive endpoint from resource prop or default to admin/users
         // Ensure we don't duplicate slashes if resource has them
-        const resourcePath = (resource || "admin/users").replace(/^\/+|\/+$/g, "");
+        const resourcePath = (resource || "admin/users").replaceAll(/(^\/+)|(\/+$)/g, "");
         const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;
 
         sendInvite({
@@ -200,19 +200,23 @@ export const Users = ({ data, isLoading, resource }: UsersProps) => {
                                                         <Edit className="h-4 w-4" />
                                                     </Link>
                                                 </Button>
-                                                {!isSelf && (
-                                                    <Can I="delete" this={{ __typename: normalizedResource, role: user.role } as UserSubject}>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => handleDelete(user.id, displayName)}
-                                                            aria-label={`Delete ${displayName}`}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </Can>
-                                                )}
+                                                {!isSelf && (() => {
+                                                    if (normalizedResource !== Resources.USERS) return null;
+                                                    const subject: UserSubject = { __typename: Resources.USERS, role: user.role };
+                                                    return (
+                                                        <Can I="delete" this={subject}>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                onClick={() => handleDelete(user.id, displayName)}
+                                                                aria-label={`Delete ${displayName}`}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </Can>
+                                                    );
+                                                })()}
                                             </>
                                         )}
                                     </div>

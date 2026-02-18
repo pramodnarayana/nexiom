@@ -32,6 +32,7 @@ describe('TenantSettingsPage', () => {
             expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
         });
 
+        // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
         expect(screen.getByDisplayValue('Test Organization')).toBeInTheDocument();
     });
 
@@ -53,6 +54,7 @@ describe('TenantSettingsPage', () => {
         renderWithClient(<TenantSettingsPage />);
 
         await waitFor(() => {
+            // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
             expect(screen.getByDisplayValue('Test Organization')).toBeInTheDocument();
         });
 
@@ -63,6 +65,7 @@ describe('TenantSettingsPage', () => {
         fireEvent.click(saveBtn);
 
         await waitFor(() => {
+            // See handlers.ts for PATCH /api/tenants/:id/details success response
             expect(mockToast).toHaveBeenCalledWith(
                 expect.objectContaining({
                     title: "Organization updated",

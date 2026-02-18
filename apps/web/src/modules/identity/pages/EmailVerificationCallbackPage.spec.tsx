@@ -60,7 +60,7 @@ describe('EmailVerificationCallbackPage', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
     });
 
-    it('redirects to login with error after timeout when not authenticated', async () => {
+    it('redirects to login with error after timeout when not authenticated', () => {
         mockUseAuth.mockReturnValue({
             isAuthenticated: false,
             isLoading: false,

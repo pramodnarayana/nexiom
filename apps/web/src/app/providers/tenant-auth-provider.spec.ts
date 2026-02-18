@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { tenantAuthProvider } from './tenant-auth-provider';
 import { authClient } from '@/shared/lib/auth-client';
 
@@ -199,16 +199,18 @@ describe('tenantAuthProvider', () => {
     });
 
     describe('onError', () => {
+        let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+        afterEach(() => {
+            consoleErrorSpy?.mockRestore();
+        });
         it('console.errors the error and returns it', async () => {
-            const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+            consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
             const error = new Error('Test error');
 
             const result = await tenantAuthProvider.onError(error);
 
             expect(result).toEqual({ error });
             expect(consoleErrorSpy).toHaveBeenCalledWith(error);
-
-            consoleErrorSpy.mockRestore();
         });
     });
 });

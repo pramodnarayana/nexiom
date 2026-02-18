@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { VerifyEmailPage } from './VerifyEmailPage';
@@ -21,6 +21,7 @@ vi.mock('react-router-dom', async () => {
 // Mock fetch
 // globalThis.fetch = vi.fn(); // Removed global assignment to avoid conflicts
 
+let originalFetch: typeof globalThis.fetch;
 describe('VerifyEmailPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -29,7 +30,12 @@ describe('VerifyEmailPage', () => {
         currentSearchParams.set('email', 'test@example.com');
 
         // Setup fetch mock for this test suite
+        originalFetch = globalThis.fetch;
         globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+        globalThis.fetch = originalFetch;
     });
 
     it('renders with email from URL params', () => {

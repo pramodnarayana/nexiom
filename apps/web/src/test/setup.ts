@@ -10,23 +10,22 @@ import axios from 'axios';
 axios.defaults.adapter = 'fetch';
 
 // -----------------------------------------------------------------------------
-// ENVIRONMENT STUBS
-// -----------------------------------------------------------------------------
-vi.stubEnv('VITE_API_URL', 'http://localhost:3000/api');
-vi.stubEnv('DEV', true);
-vi.stubEnv('MODE', 'test');
-vi.stubEnv('SSR', false);
-
-// -----------------------------------------------------------------------------
 // MSW LIFECYCLE
 // -----------------------------------------------------------------------------
 // Start server before all tests
 beforeAll(() => {
+    vi.stubEnv('VITE_API_URL', 'http://localhost:3000/api');
+    vi.stubEnv('DEV', true);
+    vi.stubEnv('MODE', 'test');
+    vi.stubEnv('SSR', false);
     server.listen({ onUnhandledRequest: 'warn' });
 });
 
 // Close server after all tests
-afterAll(() => server.close());
+afterAll(() => {
+    vi.unstubAllGlobals();
+    server.close();
+});
 
 // Reset handlers after each test
 afterEach(() => {

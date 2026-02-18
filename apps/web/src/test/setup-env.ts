@@ -4,14 +4,8 @@ import { vi } from 'vitest';
 
 // Force polyfill to globalThis to ensure it's available for libraries wrapping fetch
 // consistently before JSDOM or other tools interfere.
-Object.assign(globalThis, {
-    fetch: globalThis.fetch,
-    Headers: globalThis.Headers,
-    Request: globalThis.Request,
-    Response: globalThis.Response,
-});
-
-if (typeof globalThis !== 'undefined' && globalThis.fetch) {
+// Stub fetch globals so vi.unstubAllGlobals() can restore the whatwg-fetch polyfill
+if (globalThis.fetch) {
     vi.stubGlobal('fetch', globalThis.fetch);
     vi.stubGlobal('Headers', globalThis.Headers);
     vi.stubGlobal('Request', globalThis.Request);

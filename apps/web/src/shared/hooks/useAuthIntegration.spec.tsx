@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAuth } from './useAuth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../lib/auth/AuthProvider';
@@ -42,6 +42,9 @@ const TestComponent = () => {
 };
 
 describe('useAuth Integration (Mocked Client)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
     it('should authenticate user via mocked authClient', async () => {
         // Setup successful session mock
         vi.mocked(authClient.getSession).mockResolvedValue({

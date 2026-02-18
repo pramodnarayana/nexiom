@@ -24,6 +24,7 @@ vi.mock('@/shared/lib/auth/utils', () => ({
 }));
 
 import { hasPermission } from '@/shared/lib/auth/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 
 describe('AuthCallbackPage', () => {
     beforeEach(() => {
@@ -55,7 +56,7 @@ describe('AuthCallbackPage', () => {
             isLoading: false,
         });
 
-        (hasPermission as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        vi.mocked(hasPermission).mockReturnValue(true);
 
         render(
             <BrowserRouter>
@@ -64,7 +65,7 @@ describe('AuthCallbackPage', () => {
         );
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/admin', { replace: true });
+            expect(mockNavigate).toHaveBeenCalledWith(AppRoutes.ADMIN.ROOT, { replace: true });
         });
     });
 
@@ -78,7 +79,7 @@ describe('AuthCallbackPage', () => {
             isLoading: false,
         });
 
-        (hasPermission as ReturnType<typeof vi.fn>).mockReturnValue(false);
+        vi.mocked(hasPermission).mockReturnValue(false);
 
         render(
             <BrowserRouter>
@@ -87,7 +88,7 @@ describe('AuthCallbackPage', () => {
         );
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
+            expect(mockNavigate).toHaveBeenCalledWith(AppRoutes.TENANT.ROOT, { replace: true });
         });
     });
 
@@ -105,7 +106,7 @@ describe('AuthCallbackPage', () => {
 
         await waitFor(() => {
             expect(mockNavigate).toHaveBeenCalledWith(
-                '/login?error=auth_failed',
+                `${AppRoutes.AUTH.LOGIN}?error=auth_failed`,
                 { replace: true }
             );
         });

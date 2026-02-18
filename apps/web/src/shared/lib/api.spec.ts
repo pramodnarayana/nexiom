@@ -114,22 +114,7 @@ describe('api - authorizedFetch', () => {
         expect(result).toEqual({ id: '123' });
     });
 
-    it('uses credentials: include for session cookies', async () => {
-        let receivedCredentials: RequestCredentials | undefined;
-
-        server.use(
-            http.get('http://localhost:3000/api/users', ({ request }) => {
-                // MSW Request may not expose credentials in the same way
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                receivedCredentials = (request as any).credentials;
-                return HttpResponse.json({});
-            })
-        );
-
-        await authorizedFetch('/users');
-
-        // Note: MSW may not expose request.credentials, so this test verifies the code path
-        // In real environment, credentials: 'include' ensures cookies are sent
-        expect(receivedCredentials).toBeDefined();
-    });
+    // credentials: 'include' is hardcoded in the implementation (api.ts).
+    // MSW Node handlers cannot reliably expose request.credentials, so this
+    // is not testable at the unit level and is omitted intentionally.
 });

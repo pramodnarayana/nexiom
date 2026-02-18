@@ -9,10 +9,6 @@ const __dirname = path.dirname(__filename)
 
 // https://vite.dev/config/
 export default defineConfig(() => {
-  // const isTest = mode === 'test';
-
-  const setupPath = path.resolve(__dirname, './src/test/setup.ts');
-  const envPath = path.resolve(__dirname, './src/test/environments/jsdom-msw.ts');
 
   return {
     plugins: [
@@ -24,16 +20,6 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
-      },
-    },
-    test: {
-      globals: true,
-      environment: envPath,
-      setupFiles: [path.resolve(__dirname, './src/test/setup-env.ts'), setupPath],
-      exclude: ['e2e/**', 'node_modules/**'],
-      coverage: {
-        provider: 'v8',
-        reporter: ['text', 'json', 'html'],
       },
     },
   };

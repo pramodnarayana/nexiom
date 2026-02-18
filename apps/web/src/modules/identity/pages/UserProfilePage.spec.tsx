@@ -14,13 +14,30 @@ describe('UserProfilePage', () => {
     });
 
     it('renders user profile correctly', () => {
-        (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+        vi.mocked(useAuth).mockReturnValue({
             user: {
                 id: '123',
                 email: 'test@example.com',
                 name: 'Test User',
                 roles: ['admin'],
             },
+            isAuthenticated: true,
+            isLoading: false,
+            login: function (): Promise<void> {
+                throw new Error('Function not implemented.');
+            },
+            signup: function (): void {
+                throw new Error('Function not implemented.');
+            },
+            logout: function (): void {
+                throw new Error('Function not implemented.');
+            },
+            setAuthState: function (): void {
+                throw new Error('Function not implemented.');
+            },
+            refreshSession: function (): Promise<void> {
+                throw new Error('Function not implemented.');
+            }
         });
 
         render(<UserProfilePage />);

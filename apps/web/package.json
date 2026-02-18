@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run src/shared",
     "test:integration": "vitest run src/modules",
+    "test:e2e:install": "playwright install --with-deps",
     "test:e2e": "playwright test",
     "test:cov": "vitest run --coverage"
   },
