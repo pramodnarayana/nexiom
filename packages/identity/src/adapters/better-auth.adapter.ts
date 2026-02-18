@@ -717,14 +717,15 @@ export class BetterAuthAdapter implements IAuthProvider {
           where: (rp, { inArray, or, isNull, eq }) =>
             and(
               inArray(rp.roleId, uniqueRoleIds),
-              // Include non-system permissions (null org) OR system permissions
-              // only when the user belongs to the system tenant.
-              or(
-                isNull(rp.organizationId),
-                userOrgId === systemTenantId
-                  ? eq(rp.organizationId, systemTenantId)
-                  : isNull(rp.organizationId), // effectively excludes system perms for non-system orgs
-              ),
+              // Include non-system permissions (null org) always;
+              // additionally include system-tenant-scoped permissions only
+              // when the user belongs to the system tenant.
+              userOrgId === systemTenantId
+                ? or(
+                    isNull(rp.organizationId),
+                    eq(rp.organizationId, systemTenantId),
+                  )
+                : isNull(rp.organizationId),
             ),
           columns: { permissionId: true },
         });

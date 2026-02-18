@@ -1,0 +1,186 @@
+
+> web@0.0.0 test /Users/apple/engineering/nexiom/apps/web
+> vitest run --no-color
+
+
+ RUN  v2.1.9 /Users/apple/engineering/nexiom/apps/web
+      Coverage enabled with v8
+
+ ✓ src/app/providers/notification-provider.spec.ts (8 tests) 19ms
+ ✓ src/test/auth-provider.spec.ts (8 tests) 21ms
+ ✓ src/app/providers/tenant-auth-provider.spec.ts (11 tests) 25ms
+ ✓ src/app/providers/data-provider.spec.ts (7 tests) 247ms
+ ✓ src/shared/contexts/useBasePath.spec.tsx (9 tests) 162ms
+ ✓ src/app/providers/access-control-provider.spec.ts (13 tests) 28ms
+stderr | src/shared/lib/auth/AuthProvider.spec.tsx > AuthProvider > should handle logout correctly
+[AuthProvider] No tenants found, hydrating with base user
+
+ ✓ src/shared/lib/auth/AuthProvider.spec.tsx (5 tests) 328ms
+stderr | src/modules/identity/pages/AuthCallbackPage.spec.tsx > AuthCallbackPage > redirects to login with provisioning_failed error when tenant provisioning fails
+[AuthCallbackPage] Tenant provisioning failed: Error: Provisioning failed
+    at /Users/apple/engineering/nexiom/apps/web/src/modules/identity/pages/AuthCallbackPage.spec.tsx:155:39
+    at file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/apple/engineering/nexiom/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+
+ ✓ src/modules/identity/pages/AuthCallbackPage.spec.tsx (7 tests) 327ms
+ ✓ src/modules/identity/pages/AcceptInvitePage.spec.tsx (6 tests) 285ms
+ ✓ src/app/layouts/AdminLayout.spec.tsx (4 tests) 954ms
+   ✓ AdminLayout > renders content when user is platform_user 456ms
+   ✓ AdminLayout > renders content when user is platform_admin 372ms
+ ✓ src/modules/identity/pages/VerifyEmailPage.spec.tsx (6 tests) 1121ms
+   ✓ VerifyEmailPage > resend button triggers API call 531ms
+ ✓ src/modules/identity/pages/LoginPage.spec.tsx (5 tests) 1307ms
+   ✓ LoginPage > renders login form correctly 713ms
+ ✓ src/modules/identity/pages/admin/users/AdminUserComponents.spec.tsx (5 tests) 1694ms
+   ✓ Admin User Components > UserEdit > submits form updates and navigates on success 973ms
+stdout | src/modules/identity/pages/SignupPage.spec.tsx > SignupPage > handles invite flow submission (auto-login)
+Starting invite flow test
+Form rendered
+
+ ✓ src/modules/identity/tenants/TenantList.spec.tsx (6 tests | 1 skipped) 1854ms
+   ✓ TenantList Component > filters data by search term 1216ms
+stdout | src/modules/identity/pages/SignupPage.spec.tsx > SignupPage > handles invite flow submission (auto-login)
+Clicking button
+
+stdout | src/modules/identity/pages/SignupPage.spec.tsx > SignupPage > handles invite flow submission (auto-login)
+[SignupPage] Sending Payload: {
+  firstName: 'John',
+  lastName: 'Doe',
+  email: 'invitee@example.com',
+  password: '[REDACTED]',
+  invitationId: '123'
+}
+[SignupPage] Response received for user: undefined
+
+stdout | src/modules/identity/pages/SignupPage.spec.tsx > SignupPage > handles invite flow submission (auto-login)
+Button clicked
+
+ ✓ src/modules/identity/pages/SignupPage.spec.tsx (4 tests) 3499ms
+   ✓ SignupPage > renders standard signup form 787ms
+   ✓ SignupPage > handles standard signup submission 1666ms
+   ✓ SignupPage > handles invite flow submission (auto-login) 766ms
+stderr | src/shared/lib/auth/access-control.spec.ts > AccessControlFactory > handles malformed input safely
+Invalid permission object shape undefined
+Invalid permission object shape null
+
+stderr | src/shared/lib/auth/access-control.spec.ts > AccessControlFactory > ignores malformed object permissions
+Invalid permission object shape { foo: 'bar' }
+Invalid permission object shape { action: 'read' }
+Invalid permission object shape { subject: 'users' }
+
+ ✓ src/shared/lib/auth/access-control.spec.ts (8 tests) 164ms
+ ✓ src/shared/lib/api.spec.ts (7 tests) 150ms
+ ✓ src/shared/contexts/AppScopeContext.spec.tsx (9 tests) 170ms
+ ✓ src/modules/identity/pages/EmailVerificationCallbackPage.spec.tsx (5 tests) 305ms
+ ✓ src/app/layouts/TenantLayout.spec.tsx (4 tests) 275ms
+stderr | src/shared/hooks/useAuthIntegration.spec.tsx > useAuth Integration (Mocked Client) > should authenticate user via mocked authClient
+[AuthProvider] No tenants found, hydrating with base user
+
+ ✓ src/shared/hooks/useAuthIntegration.spec.tsx (1 test) 301ms
+ ✓ src/modules/identity/pages/ResetPasswordPage.spec.tsx (4 tests) 1457ms
+   ✓ ResetPasswordPage > renders form if token is present 845ms
+ ✓ src/app/routes/routes.spec.tsx (7 tests) 320ms
+ ✓ src/modules/identity/pages/TenantSettingsPage.spec.tsx (3 tests) 548ms
+ ✓ src/modules/identity/pages/UserProfilePage.spec.tsx (3 tests) 146ms
+stderr | src/modules/identity/hooks/useOrganization.spec.tsx > useOrganization > should handle API errors
+Error: Failed to fetch
+    at /Users/apple/engineering/nexiom/apps/web/src/modules/identity/hooks/useOrganization.spec.tsx:61:23
+    at file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:146:14
+    at file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:533:11
+    at runWithTimeout (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:39:7)
+    at runTest (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1056:17)
+    at runSuite (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runSuite (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1205:15)
+    at runFiles (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1262:5)
+    at startTests (file:///Users/apple/engineering/nexiom/node_modules/@vitest/runner/dist/index.js:1271:3)
+    at file:///Users/apple/engineering/nexiom/node_modules/vitest/dist/chunks/runBaseTests.3qpJUEJM.js:126:11
+
+ ✓ src/modules/identity/hooks/useOrganization.spec.tsx (3 tests) 178ms
+ ✓ src/modules/identity/pages/ForgotPasswordPage.spec.tsx (3 tests) 639ms
+   ✓ ForgotPasswordPage > renders the form correctly 478ms
+ ✓ src/modules/dashboard/pages/DashboardPage.spec.tsx (1 test) 267ms
+ ✓ src/modules/marketing/pages/LandingPage.spec.tsx (3 tests) 631ms
+   ✓ LandingPage > renders landing page content 541ms
+ ✓ src/shared/hooks/useAuth.spec.ts (1 test) 11ms
+ ✓ src/test/integration/msw-check.spec.ts (1 test) 53ms
+
+ Test Files  31 passed (31)
+      Tests  166 passed | 1 skipped (167)
+   Start at  22:48:51
+   Duration  13.00s (transform 4.18s, setup 40.55s, collect 16.03s, tests 17.49s, environment 59.75s, prepare 6.61s)
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   80.93 |    76.65 |   68.96 |   80.93 |                   
+ app               |       0 |        0 |       0 |       0 |                   
+  App.tsx          |       0 |        0 |       0 |       0 | 1-14              
+ app/providers     |   89.17 |    87.93 |   86.66 |   89.17 |                   
+  ...l-provider.ts |     100 |     87.5 |     100 |     100 | 18                
+  auth-provider.ts |      75 |    84.61 |   66.66 |      75 | 81-105,107-109    
+  data-provider.ts |   94.59 |       75 |     100 |   94.59 | 9-10              
+  ...n-provider.ts |     100 |    88.88 |     100 |     100 | 9                 
+  ...h-provider.ts |     100 |      100 |     100 |     100 |                   
+ ...ashboard/pages |     100 |    71.42 |     100 |     100 |                   
+  ...boardPage.tsx |     100 |    71.42 |     100 |     100 | 77-78             
+ ...identity/hooks |     100 |       75 |     100 |     100 |                   
+  ...ganization.ts |     100 |       75 |     100 |     100 | 15                
+ ...identity/pages |   88.12 |    75.51 |    87.8 |   88.12 |                   
+  ...nvitePage.tsx |      90 |    86.36 |      60 |      90 | 44-52,93-95       
+  ...lbackPage.tsx |     100 |      100 |     100 |     100 |                   
+  ...lbackPage.tsx |     100 |      100 |     100 |     100 |                   
+  ...swordPage.tsx |   90.69 |    83.33 |     100 |   90.69 | 31-37,44-45       
+  LoginPage.tsx    |   89.58 |    59.37 |     100 |   89.58 | ...18-119,151-153 
+  ...swordPage.tsx |   90.47 |    83.33 |     100 |   90.47 | 24-26,42-43,49-53 
+  SignupPage.tsx   |   76.98 |    62.85 |   77.77 |   76.98 | ...88-290,307-319 
+  ...tingsPage.tsx |   85.71 |    83.33 |    87.5 |   85.71 | 80-85,93-101      
+  ...ofilePage.tsx |     100 |      100 |     100 |     100 |                   
+  ...EmailPage.tsx |   95.52 |    65.62 |     100 |   95.52 | 11-12,66-67,74-75 
+ ...entity/tenants |   81.62 |       65 |   16.66 |   81.62 |                   
+  TenantList.tsx   |   81.62 |       65 |   16.66 |   81.62 | ...16-218,233-242 
+ ...identity/users |       0 |        0 |       0 |       0 |                   
+  ...serDialog.tsx |       0 |        0 |       0 |       0 | 1-217             
+  UserList.tsx     |       0 |        0 |       0 |       0 | 1-81              
+ ...arketing/pages |      80 |    85.71 |     100 |      80 |                   
+  LandingPage.tsx  |      80 |    85.71 |     100 |      80 | 21-29             
+ shared/components |   69.44 |       50 |      50 |   69.44 |                   
+  ...ctedRoute.tsx |       0 |        0 |       0 |       0 | 1-16              
+  ...eSwitcher.tsx |     100 |    66.66 |     100 |     100 | 18                
+  icons.tsx        |     100 |      100 |     100 |     100 |                   
+ ...ponents/layout |   98.52 |    78.94 |      50 |   98.52 |                   
+  Navbar.tsx       |     100 |       80 |     100 |     100 | 63                
+  Sidebar.tsx      |   97.87 |    78.57 |   33.33 |   97.87 | 132-134           
+ shared/constants  |     100 |      100 |     100 |     100 |                   
+  resources.ts     |     100 |      100 |     100 |     100 |                   
+ shared/contexts   |     100 |      100 |     100 |     100 |                   
+  ...peContext.tsx |     100 |      100 |     100 |     100 |                   
+  useAppScope.ts   |     100 |      100 |     100 |     100 |                   
+  useBasePath.ts   |     100 |      100 |     100 |     100 |                   
+ shared/hooks      |   22.31 |      100 |   14.28 |   22.31 |                   
+  use-toast.ts     |   21.66 |      100 |   14.28 |   21.66 | ...73-125,131-167 
+  useAuth.ts       |     100 |      100 |     100 |     100 |                   
+ shared/lib        |   79.74 |    56.25 |     100 |   79.74 |                   
+  api-client.ts    |   58.33 |       50 |     100 |   58.33 | 7-14,28-29        
+  api.ts           |   92.59 |       60 |     100 |   92.59 | 6-7               
+  auth-client.ts   |   83.33 |    33.33 |     100 |   83.33 | 6-7,18-19         
+  utils.ts         |     100 |      100 |     100 |     100 |                   
+ shared/lib/auth   |   80.95 |    79.06 |      80 |   80.95 |                   
+  AuthProvider.tsx |   67.51 |     73.8 |   33.33 |   67.51 | ...83-202,210-211 
+  ...ss-control.ts |   87.27 |    81.81 |     100 |   87.27 | 41-42,44-45,82-85 
+  constants.ts     |     100 |      100 |     100 |     100 |                   
+  context.ts       |   81.81 |       50 |     100 |   81.81 | 14-15             
+  utils.ts         |     100 |       90 |     100 |     100 | 57,103            
+ shared/lib/theme  |   97.79 |    68.42 |     100 |   97.79 |                   
+  ThemeContext.ts  |     100 |      100 |     100 |     100 |                   
+  ...eProvider.tsx |   81.33 |    70.58 |     100 |   81.33 | ...56-57,66,72-79 
+  themes.ts        |     100 |      100 |     100 |     100 |                   
+  useTheme.ts      |     100 |       50 |     100 |     100 | 8                 
+-------------------|---------|----------|---------|---------|-------------------

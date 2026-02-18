@@ -139,6 +139,38 @@ describe('AuthCallbackPage', () => {
         });
     });
 
+    it('redirects to login with provisioning_failed error when tenant provisioning fails', async () => {
+        mockUseAuth.mockReturnValue({
+            user: {
+                id: '3',
+                email: 'newgoogle@test.com',
+                permissions: [],
+                hasTenant: false,
+            },
+            isLoading: false,
+            refreshSession: mockRefreshSession,
+        });
+
+        // Mock API failure
+        mockApiPost.mockRejectedValue(new Error('Provisioning failed'));
+
+        render(
+            <BrowserRouter>
+                <AuthCallbackPage />
+            </BrowserRouter>
+        );
+
+        await waitFor(() => {
+            expect(mockApiPost).toHaveBeenCalledWith('/auth/provision-tenant');
+            expect(mockNavigate).toHaveBeenCalledWith(
+                `${AppRoutes.AUTH.LOGIN}?error=provisioning_failed`,
+                { replace: true }
+            );
+        });
+        // refreshSession should NOT be called on failure
+        expect(mockRefreshSession).not.toHaveBeenCalled();
+    });
+
     it('redirects to login with error when authentication fails', async () => {
         mockUseAuth.mockReturnValue({
             user: null,

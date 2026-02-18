@@ -25,17 +25,23 @@ export function AuthCallbackPage() {
             provisioningRef.current = true;
             apiClient.post('/auth/provision-tenant')
                 .then(() => refreshSession())
+                .then(() => {
+                    // Navigate only on full success — after session is refreshed.
+                    // New Google users are always regular tenant owners.
+                    navigate(AppRoutes.TENANT.ROOT, { replace: true });
+                })
                 .catch((err: unknown) => {
                     console.error('[AuthCallbackPage] Tenant provisioning failed:', err);
-                })
-                .finally(() => {
-                    // New Google users are always regular tenant owners — send to tenant dashboard.
-                    navigate(AppRoutes.TENANT.ROOT, { replace: true });
+                    // Allow retry on next render by resetting the guard.
+                    provisioningRef.current = false;
+                    navigate(`${AppRoutes.AUTH.LOGIN}?error=provisioning_failed`, { replace: true });
                 });
             return;
         }
 
         // Tenant already exists — use permission-based routing.
+        // This branch also handles the post-provisioning re-render once
+        // refreshSession() updates the user state (hasTenant becomes true).
         navigate(getHomePathForUser(user), { replace: true });
     }, [user, isLoading, navigate, refreshSession]);
 
