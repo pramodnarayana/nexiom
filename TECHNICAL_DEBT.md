@@ -46,6 +46,25 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 - [Permission Architecture Pattern](file:///.gemini/antigravity/brain/d18e0ee0-ce96-4db3-9e9a-041242a6c761/permission_architecture_pattern.md)
 
+### 2. CI Integration for E2E Tests
+
+**Location**: `apps/web/e2e`  
+**Added**: 2026-02-19  
+**Impact**: Reliability, Automation  
+**Effort**: Medium (1-2 days)
+
+**Current State**:
+
+- E2E tests run successfully in local environment with `start-test-env.sh`.
+- Tests rely on a local Mailpit instance (`docker compose up`) and local DB.
+- No automated CI workflow for these tests.
+
+**Recommended Solution**:
+
+- Configure a service container for Mailpit in GitHub Actions.
+- Ensure the database is accessible or service-containerized in CI.
+- Update the CI workflow to enable `VITE_AUTH_GOOGLE_ENABLED=true`.
+
 ---
 
 ## Medium Priority
@@ -54,12 +73,12 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-## Low Priority
+### Low Priority
 
 *No items currently tracked*
 
 ---
 
-## Completed Items
+### Completed Items
 
 *Items resolved will be moved here with completion date*

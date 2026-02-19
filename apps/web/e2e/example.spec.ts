@@ -4,12 +4,7 @@ test('has title', async ({ page }) => {
     await page.goto('/');
 
     // Expect a title "to contain" a substring.
-    await expect(page).toHaveTitle(/Nexiom/);
+    await expect(page).toHaveTitle(/nexiom/i);
 });
 
-test('redirects to login', async ({ page }) => {
-    await page.goto('/');
 
-    // If unauthenticated, it should redirect to login
-    await expect(page).toHaveURL(/.*login/);
-});

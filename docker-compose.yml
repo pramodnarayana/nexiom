@@ -35,6 +35,17 @@ services:
     networks:
       - nexiom-network
 
+  # --- Mailpit (Email Capture) ---
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # UI
+      - "1025:1025" # SMTP
+    networks:
+      - nexiom-network
+
   # --- Backend ---
   api:
     build:
@@ -46,6 +57,10 @@ services:
     environment:
       <<: *common-env
       # Overrides for Docker Networking
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: false
+      MAIL_MOCK: false
       BETTER_AUTH_URL: http://localhost:3000/api/auth
       ALLOWED_ORIGINS: http://localhost:8080,http://localhost:3001
     ports:
