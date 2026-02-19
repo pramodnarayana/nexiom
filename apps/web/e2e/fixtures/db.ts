@@ -134,7 +134,7 @@ export class DbFixture {
             await client.query('COMMIT');
         } catch (error) {
             await client.query('ROLLBACK');
-            console.warn(`[DB] Failed to cleanup organization ${name}:`, error);
+            throw error;
         } finally {
             client.release();
         }

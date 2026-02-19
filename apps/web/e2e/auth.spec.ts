@@ -34,7 +34,7 @@ test.describe('Authentication Flows', () => {
 
             // Verify redirect - expect to go to verify-email page
             await expect(page).toHaveURL(/\/verify-email/);
-            await expect(page.locator('text=Check your email')).toBeVisible({ timeout: 15000 });
+            await expect(page.getByText('Check your email')).toBeVisible({ timeout: 15000 });
 
             // --- AUTOMATED VERIFICATION (Mailpit) ---
             // Wait for email in Mailpit
