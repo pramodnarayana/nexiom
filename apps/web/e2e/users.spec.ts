@@ -1,52 +1,21 @@
 import { test, expect } from './test';
+import { createVerifiedUser } from './helpers/auth-setup';
 
 test.describe('User Management', () => {
+    test.describe.configure({ mode: 'serial' });
+
     let adminEmail: string;
 
     // Helper to sign up and login before tests
     test.beforeEach(async ({ page, mailpit, db }) => {
-        // Ensure unique email
-        await new Promise(resolve => setTimeout(resolve, 100)); // Delay for unique timestamp
-        adminEmail = `user-admin-${Date.now()}@test.com`;
-        const adminPassword = 'password123';
+        // Targeted cleanup for previous runs if any (best effort)
+        // We rely on unique emails mostly.
 
-        console.log(`[Setup] Creating verified admin for users test: ${adminEmail}`);
-
-        // Cleanup (Safety)
-        await db.cleanupUser(adminEmail);
-        await mailpit.deleteAllMessages();
-
-        // 1. Sign Up
-        await page.goto('/signup');
-        await page.fill('input#firstName', 'User');
-        await page.fill('input#lastName', 'Admin');
-        await page.fill('input[type="email"]', adminEmail);
-        await page.locator('input[type="password"]').first().fill(adminPassword);
-        await page.locator('input[type="password"]').nth(1).fill(adminPassword);
-        await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
-
-        // Wait for redirection
-        await expect(page).toHaveURL(/verify-email/);
-
-        // 2. Promote to System Admin (to access User Management)
-        await db.makeSystemAdmin(adminEmail);
-
-        // 3. Verify Email
-        const email = await mailpit.waitForEmail(adminEmail, 'Verify your email');
-        const verificationUrl = mailpit.extractLink(email, /(http:\/\/localhost:\d+\/api\/auth\/verify-email\?token=[^"\s]+)/);
-        await page.goto(verificationUrl);
-
-        // 4. Force Re-login for Permissions
-        console.log('[Setup] clearing cookies to force fresh login...');
-        await page.context().clearCookies();
-
-        await page.goto('/login');
-        await page.fill('input[type="email"]', adminEmail);
-        await page.fill('input[type="password"]', adminPassword);
-        await page.getByRole('button', { name: /login/i }).click();
-
-        // Wait for dashboard
-        await expect(page.getByText('Dashboard').first()).toBeVisible({ timeout: 20000 });
+        const user = await createVerifiedUser(page, mailpit, db, {
+            role: 'system',
+            emailPrefix: 'user-admin'
+        });
+        adminEmail = user.email;
     });
 
     test.afterEach(async ({ db }) => {
@@ -55,8 +24,6 @@ test.describe('User Management', () => {
             await db.cleanupUser(adminEmail);
         }
     });
-
-    test.describe.configure({ mode: 'serial' });
 
     test('Invite User Flow', async ({ page, mailpit, db }) => {
         const inviteeEmail = `invitee-${Date.now()}@example.com`;

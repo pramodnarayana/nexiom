@@ -135,22 +135,11 @@ export class BetterAuthAdapter implements IAuthProvider {
         },
       },
       emailVerification: {
-        sendOnSignUp: true, // DEBUG: Temporarily enabled to bypass hook
+        sendOnSignUp:
+          process.env.NODE_ENV === "test" ||
+          process.env.TEST_SEND_ON_SIGNUP === "true",
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
-          // Enterprise pattern: Explicitly construct the URL using URL object for robustness
-          // DEBUG: Log token to file to verify it's being generated
-          if (process.env.NODE_ENV !== "production") {
-            try {
-              const fs = await import("fs");
-              fs.appendFileSync(
-                "/tmp/auth-debug.txt",
-                `\n--- ENTRY ---\nToken: ${token}\nURL: ${url}\nUser: ${user.email}\n`,
-              );
-            } catch (e) {
-              console.error("Failed to write debug file", e);
-            }
-          }
           const frontendUrl = validateFrontendUrl(
             this.config.frontendUrl,
             this.config.allowedOrigins,

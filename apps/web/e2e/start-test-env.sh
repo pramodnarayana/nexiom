@@ -1,8 +1,16 @@
 #!/bin/bash
-
+set -e
+# Ensure child processes are killed when this script exits
+cleanup() {
+    echo "Cleaning up test environment..."
+    kill $API_PID $WEB_PID 2>/dev/null
+    wait $API_PID $WEB_PID 2>/dev/null
+}
+trap cleanup EXIT INT TERM
 # Kill any existing processes on ports 3002 and 5174 to ensure clean start
-lsof -ti:3002 | xargs kill -9 2>/dev/null
-lsof -ti:5174 | xargs kill -9 2>/dev/null
+lsof -ti:3002 | xargs kill -15 2>/dev/null || true
+lsof -ti:5174 | xargs kill -15 2>/dev/null || true
+sleep 1
 
 # Start API in background
 # Force Mailpit config and Test Port
@@ -12,16 +20,27 @@ SMTP_HOST=localhost \
 SMTP_PORT=1025 \
 SMTP_SECURE=false \
 MAIL_MOCK=false \
+TEST_SEND_ON_SIGNUP=true \
 BETTER_AUTH_URL=http://localhost:3002/api/auth \
 FRONTEND_URL=http://localhost:5174 \
 ALLOWED_ORIGINS=http://localhost:5174 \
 pnpm --filter api start:dev > apps/web/e2e/api.log 2>&1 &
 API_PID=$!
 
-# Wait for API to be ready (simple sleep or health check)
+# Wait for API to be ready
 echo "Waiting for API to start..."
-# In a real script, we'd loop curling /health
-sleep 10
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:3002/api > /dev/null 2>&1; then
+        echo "API is ready."
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "ERROR: API failed to start within 30s"
+        cat apps/web/e2e/api.log
+        exit 1
+    fi
+    sleep 1
+done
 
 # Start Web in background
 echo "Starting Web on port 5174..."
@@ -33,7 +52,18 @@ WEB_PID=$!
 
 # Wait for Web to be ready
 echo "Waiting for Web to start..."
-sleep 5
+for i in $(seq 1 20); do
+    if curl -sf http://localhost:5174 > /dev/null 2>&1; then
+        echo "Web is ready."
+        break
+    fi
+    if [ "$i" -eq 20 ]; then
+        echo "ERROR: Web failed to start within 20s"
+        cat apps/web/e2e/web.log
+        exit 1
+    fi
+    sleep 1
+done
 
 echo "Test Environment Started."
 echo "API PID: $API_PID"

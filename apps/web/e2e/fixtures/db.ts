@@ -52,38 +52,42 @@ export class DbFixture {
         // IDs from apps/api/src/constants.ts / admin-bootstrap.ts
         const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
         const OWNER_ROLE_ID = 'owner';
-
         console.log(`[DB] Promoting user to System Admin: ${email}`);
-
-        // 1. Get User ID
-        const userRes = await this.pool.query('SELECT id FROM "user" WHERE email = $1', [email]);
-        if (userRes.rows.length === 0) throw new Error(`User not found: ${email}`);
-        const userId = userRes.rows[0].id;
-
-        // 2. Check if System Tenant exists (create if not)
-        await this.pool.query(`
-            INSERT INTO "organization" (id, name, slug, status, "isSystem")
-            VALUES ($1, 'Nexiom Platform', 'system', 'active', true)
-            ON CONFLICT (id) DO NOTHING
-        `, [SYSTEM_TENANT_ID]);
-
-        // 3. Ensure Owner Role exists
-        await this.pool.query(`
-            INSERT INTO "role" (id, name, "isSystem", description)
-            VALUES ($1, 'Owner', true, 'Full access')
-            ON CONFLICT (id) DO NOTHING
-        `, [OWNER_ROLE_ID]);
-
-        // 4. Enforce Single Tenant Policy: Remove existing memberships
-        // The app is strict single-tenant, and signup likely created a default tenant/member.
-        await this.pool.query('DELETE FROM "member" WHERE "userId" = $1', [userId]);
-
-        // 5. Insert Member Record
-        const memberId = randomUUID();
-        await this.pool.query(`
-            INSERT INTO "member" (id, "userId", "organizationId", role)
-            VALUES ($1, $2, $3, $4)
-        `, [memberId, userId, SYSTEM_TENANT_ID, OWNER_ROLE_ID]);
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // 1. Get User ID
+            const userRes = await client.query('SELECT id FROM "user" WHERE email = $1', [email]);
+            if (userRes.rows.length === 0) throw new Error(`User not found: ${email}`);
+            const userId = userRes.rows[0].id;
+            // 2. Check if System Tenant exists (create if not)
+            await client.query(`
+                INSERT INTO "organization" (id, name, slug, status, "isSystem")
+                VALUES ($1, 'Nexiom Platform', 'system', 'active', true)
+                ON CONFLICT (id) DO NOTHING
+            `, [SYSTEM_TENANT_ID]);
+            // 3. Ensure Owner Role exists
+            await client.query(`
+                INSERT INTO "role" (id, name, "isSystem", description)
+                VALUES ($1, 'Owner', true, 'Full access')
+                ON CONFLICT (id) DO NOTHING
+            `, [OWNER_ROLE_ID]);
+            // 4. Enforce Single Tenant Policy: Remove existing memberships
+            // The app is strict single-tenant, and signup likely created a default tenant/member.
+            await client.query('DELETE FROM "member" WHERE "userId" = $1', [userId]);
+            // 5. Insert Member Record
+            const memberId = randomUUID();
+            await client.query(`
+                INSERT INTO "member" (id, "userId", "organizationId", role)
+                VALUES ($1, $2, $3, $4)
+            `, [memberId, userId, SYSTEM_TENANT_ID, OWNER_ROLE_ID]);
+            await client.query('COMMIT');
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
     }
 
     /**

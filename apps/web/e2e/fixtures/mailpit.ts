@@ -18,14 +18,16 @@ export class MailpitFixture {
     constructor(apiContext: APIRequestContext) {
         this.apiContext = apiContext;
         // Mailpit UI/API port is 8025
-        this.baseUrl = 'http://localhost:8025/api/v1';
+        const rawUrl = process.env.MAILPIT_URL || process.env.MAILPIT_BASE_URL || 'http://localhost:8025';
+        // Ensure no trailing slash, then append /api/v1
+        this.baseUrl = `${rawUrl.replace(/\/$/, '')}/api/v1`;
     }
 
     /**
      * Waits for the latest email for a specific recipient.
      * Polls the Mailpit API until an email is found or timeout is reached.
      */
-    async waitForEmail(recipient: string, subject?: string, timeout = 15000): Promise<EmailMessage> {
+    async waitForEmail(recipient: string, subject?: string, timeout = 30000): Promise<EmailMessage> {
         const startTime = Date.now();
         console.log(`[Mailpit] Waiting for email to ${recipient} (timeout: ${timeout}ms)...`);
 
@@ -61,10 +63,12 @@ export class MailpitFixture {
                         continue;
                     }
 
-                    // Found a match! Fetch full text to be safe/return full object
                     const msgResponse = await this.apiContext.get(`${this.baseUrl}/message/${msgSummary.ID}`);
+                    if (!msgResponse.ok()) {
+                        console.warn(`[Mailpit] Failed to fetch message ${msgSummary.ID}: ${msgResponse.status()}`);
+                        continue;
+                    }
                     const fullMessage = await msgResponse.json() as EmailMessage;
-
                     console.log(`[Mailpit] Email found: "${fullMessage.Subject}"`);
                     return fullMessage;
                 }
@@ -85,19 +89,18 @@ export class MailpitFixture {
      * Extracts a link from the email body matching the provided regex.
      */
     extractLink(email: EmailMessage, pattern: RegExp): string {
-        const body = email.HTML || email.Text;
-        const match = body.match(pattern);
-
-        if (!match || !match[1]) {
-            // Try to see if maybe the link is in the text part if HTML failed or vice versa
-            // Often verifying emails are simple HTML
-            throw new Error(`[Mailpit] Could not find link matching pattern in email body.`);
+        // Try HTML first, then fall back to Text
+        for (const body of [email.HTML, email.Text]) {
+            if (!body) continue;
+            const match = body.match(pattern);
+            if (match?.[1]) {
+                const url = match[1].replaceAll('&amp;', '&');
+                console.log(`[Mailpit] Extracted link: ${url}`);
+                return url;
+            }
         }
 
-        // Decode HTML entities if necessary (basic implementation)
-        const url = match[1].replaceAll('&amp;', '&');
-        console.log(`[Mailpit] Extracted link: ${url}`);
-        return url;
+        throw new Error(`[Mailpit] Could not find link matching pattern in email body.`);
     }
 
     /**

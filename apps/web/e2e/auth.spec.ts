@@ -3,7 +3,7 @@ import { test, expect } from './test';
 
 test.describe('Authentication Flows', () => {
     // Shared user credentials for the suite, generated once per run
-    let userEmail = `auth-test-${Date.now()}@example.com`;
+    let userEmail: string;
     const userPassword = 'password123';
     const userFirstName = 'Playwright';
     const userLastName = 'TestUser';
@@ -48,22 +48,14 @@ test.describe('Authentication Flows', () => {
             console.log(`[Mailpit] Found URL: ${verificationUrl}`);
 
             // Verify user state in DB BEFORE verification (should be unverified)
-            try {
-                // We can check if user exists at least
-                const exists = await db.userExists(userEmail);
-                expect(exists).toBe(true);
-            } catch (e) {
-                console.warn('[DB] User check failed, possibly due to async propagation or different DB', e);
-            }
+            const exists = await db.userExists(userEmail);
+            expect(exists).toBe(true);
 
             // Navigate to verification link
             await page.goto(verificationUrl);
 
-            // Wait for potential redirect completion
-            await page.waitForLoadState('networkidle');
-
-            // Assert we left the verification URL (redirected to / or /dashboard or /login)
-            await expect(page).not.toHaveURL(/\/verify-email\?/);
+            // Assert we were redirected away from the verification URL
+            await expect(page).not.toHaveURL(/\/verify-email\?/, { timeout: 10000 });
 
             // Verify user state in DB AFTER verification (should be verified)
             // Add retry/wait logic as DB update might be slightly async
