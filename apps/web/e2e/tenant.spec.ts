@@ -28,7 +28,7 @@ test.describe('Tenant Management', () => {
 
 
 
-    test('Create Tenant', async ({ page }) => {
+    test('Create Tenant', async ({ page, db }) => {
         // Navigate directly to Tenant Creation via Admin List
         await page.goto('/admin/tenants');
 
@@ -43,18 +43,23 @@ test.describe('Tenant Management', () => {
         // Fill create tenant form using confirmed placeholders/labels
         const tenantName = `Test Tenant ${Date.now()}`;
 
-        // Use exact label if possible, or fallback to known placeholder
-        // Assuming "Name" label exists as per typical form
-        await page.getByLabel('Name').fill(tenantName);
+        try {
+            // Use exact label if possible, or fallback to known placeholder
+            // Assuming "Name" label exists as per typical form
+            await page.getByLabel('Name').fill(tenantName);
 
-        // Submit
-        await page.getByRole('button', { name: 'Create Tenant', exact: true }).click();
+            // Submit
+            await page.getByRole('button', { name: 'Create Tenant', exact: true }).click();
 
-        // Verify success message (handle strict mode matching multiple elements)
-        await expect(page.getByText('Tenant created successfully').first()).toBeVisible();
+            // Verify success message (handle strict mode matching multiple elements)
+            await expect(page.getByText('Tenant created successfully').first()).toBeVisible();
 
-        // Verify list update
-        await expect(page.getByText(tenantName)).toBeVisible();
+            // Verify list update
+            await expect(page.getByText(tenantName)).toBeVisible();
+        } finally {
+            // Clean up the created tenant
+            await db.cleanupOrganization(tenantName);
+        }
     });
 
     test('List Tenants', async ({ page }) => {

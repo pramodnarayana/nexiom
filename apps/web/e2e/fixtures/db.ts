@@ -14,7 +14,7 @@ export class DbFixture {
         });
     }
 
-    async close() {
+    async close(): Promise<void> {
         await this.pool.end();
     }
 
@@ -48,7 +48,7 @@ export class DbFixture {
     /**
      * Promotes a user to System Owner (Super Admin)
      */
-    async makeSystemAdmin(email: string) {
+    async makeSystemAdmin(email: string): Promise<void> {
         // IDs from apps/api/src/constants.ts / admin-bootstrap.ts
         const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
         const OWNER_ROLE_ID = 'owner';
@@ -93,7 +93,7 @@ export class DbFixture {
     /**
      * Hard delete a user for cleanup
      */
-    async cleanupUser(email: string) {
+    async cleanupUser(email: string): Promise<void> {
         console.log(`[DB] Cleaning up user: ${email}`);
 
         const client = await this.pool.connect();
@@ -117,5 +117,26 @@ export class DbFixture {
         // Note: This leaves orphaned Organizations if the user was the sole member.
         // For strict E2E, we might want to clean those too, but it requires more complex logic
         // (checking member counts) which is skipped here for safety.
+    }
+    /**
+     * Delete an organization by name for cleanup
+     */
+    async cleanupOrganization(name: string): Promise<void> {
+        console.log(`[DB] Cleaning up organization: ${name}`);
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // Delete the organization. Cascading rules usually handle members/invitations, 
+            // but if strict FKs exist without cascade, we might need to delete members first.
+            // Assuming ON DELETE CASCADE is set up or we'll wrap in try/catch.
+            // For now, let's try direct delete.
+            await client.query('DELETE FROM "organization" WHERE name = $1', [name]);
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.warn(`[DB] Failed to cleanup organization ${name}:`, error);
+        } finally {
+            client.release();
+        }
     }
 }

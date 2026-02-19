@@ -3,7 +3,6 @@ import { createVerifiedUser } from './helpers/auth-setup';
 
 
 test.describe('Authentication Flows', () => {
-    // Shared user credentials for the suite, generated once per run
     test.describe.configure({ mode: 'serial' });
 
     test('Sign Up with Email/Password', async ({ page, mailpit, db }) => {
@@ -41,15 +40,19 @@ test.describe('Authentication Flows', () => {
             // Wait for email in Mailpit
             const email = await mailpit.waitForEmail(userEmail, 'Verify your email');
 
-            // Extract link
-            // Link pattern: http://localhost:3000/api/auth/verify-email?token=...
-            const verificationUrl = mailpit.extractLink(email, /(http:\/\/localhost:\d+\/api\/auth\/verify-email\?token=[^"\s]+)/);
+            // Extract link - dynamically derive host to support CI/Docker
+            const authUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3002/api/auth';
+            const cleanAuthUrl = authUrl.replace(/\/$/, '');
+            const escapedAuthUrl = cleanAuthUrl.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const verificationUrl = mailpit.extractLink(email, new RegExp(`(${escapedAuthUrl}\\/verify-email\\?token=[^"\\s]+)`));
 
             console.log(`[Mailpit] Found URL: ${verificationUrl}`);
 
             // Verify user state in DB BEFORE verification (should be unverified)
             const exists = await db.userExists(userEmail);
             expect(exists).toBe(true);
+            const verifiedBefore = await db.isEmailVerified(userEmail);
+            expect(verifiedBefore).toBe(false);
 
             // Navigate to verification link
             await page.goto(verificationUrl);

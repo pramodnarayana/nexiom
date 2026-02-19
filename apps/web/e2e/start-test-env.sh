@@ -30,6 +30,11 @@ API_PID=$!
 # Wait for API to be ready
 echo "Waiting for API to start..."
 for i in $(seq 1 30); do
+    if ! kill -0 "$API_PID" 2>/dev/null; then
+        echo "ERROR: API process crashed while starting."
+        cat apps/web/e2e/api.log
+        exit 1
+    fi
     if curl -sf http://localhost:3002/api > /dev/null 2>&1; then
         echo "API is ready."
         break
@@ -53,6 +58,11 @@ WEB_PID=$!
 # Wait for Web to be ready
 echo "Waiting for Web to start..."
 for i in $(seq 1 20); do
+    if ! kill -0 "$WEB_PID" 2>/dev/null; then
+        echo "ERROR: Web process crashed while starting."
+        cat apps/web/e2e/web.log
+        exit 1
+    fi
     if curl -sf http://localhost:5174 > /dev/null 2>&1; then
         echo "Web is ready."
         break

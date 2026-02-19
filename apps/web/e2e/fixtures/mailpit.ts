@@ -43,6 +43,7 @@ export class MailpitFixture {
 
                 if (!response.ok()) {
                     console.warn(`[Mailpit] API error: ${response.status()} ${response.statusText()}`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     continue;
                 }
 

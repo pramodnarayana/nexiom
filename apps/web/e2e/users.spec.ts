@@ -54,7 +54,7 @@ test.describe('User Management', () => {
             expect(inviteEmailObj).toBeDefined();
 
             // Extract join link
-            const inviteLink = mailpit.extractLink(inviteEmailObj, /(http:\/\/localhost:\d+\/invite\/[^"\s]+)/);
+            const inviteLink = mailpit.extractLink(inviteEmailObj, /(https?:\/\/[^/\s"]+\/invite\/[^"\s]+)/);
             expect(inviteLink).toBeTruthy();
 
             // Visit the invite link and verify UI
