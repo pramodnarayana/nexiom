@@ -135,10 +135,11 @@ export class BetterAuthAdapter implements IAuthProvider {
         },
       },
       emailVerification: {
-        sendOnSignUp: false, // Orchestrated by config hooks
+        sendOnSignUp:
+          process.env.NODE_ENV === "test" ||
+          process.env.TEST_SEND_ON_SIGNUP === "true",
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
-          // Enterprise pattern: Explicitly construct the URL using URL object for robustness
           const frontendUrl = validateFrontendUrl(
             this.config.frontendUrl,
             this.config.allowedOrigins,

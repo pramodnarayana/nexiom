@@ -293,6 +293,9 @@ importers:
       '@types/node':
         specifier: ^24.10.1
         version: 24.10.4
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
       '@types/react':
         specifier: ^19.2.5
         version: 19.2.7
@@ -338,6 +341,9 @@ importers:
       msw:
         specifier: ^2.12.10
         version: 2.12.10(@types/node@24.10.4)(typescript@5.9.3)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
@@ -11637,7 +11643,7 @@ snapshots:
 
   '@types/pg@8.16.0':
     dependencies:
-      '@types/node': 24.10.4
+      '@types/node': 25.0.5
       pg-protocol: 1.10.3
       pg-types: 2.2.0
 
@@ -11707,7 +11713,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 22.19.3
+      '@types/node': 25.0.5
 
   '@types/yargs-parser@21.0.3': {}
 
