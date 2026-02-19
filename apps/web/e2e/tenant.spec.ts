@@ -42,14 +42,25 @@ test.describe('Tenant Management', () => {
 
         // Fill create tenant form using confirmed placeholders/labels
         const tenantName = `Test Tenant ${Date.now()}`;
+        let tenantSlug: string | undefined;
 
         try {
+            // Setup response interception to get the slug
+            const responsePromise = page.waitForResponse(resp =>
+                resp.url().includes('admin/tenants') && (resp.status() === 201 || resp.status() === 200)
+            );
+
             // Use exact label if possible, or fallback to known placeholder
             // Assuming "Name" label exists as per typical form
             await page.getByLabel('Name').fill(tenantName);
 
             // Submit
             await page.getByRole('button', { name: 'Create Tenant', exact: true }).click();
+
+            // Wait for response and extract slug
+            const response = await responsePromise;
+            const body = await response.json();
+            tenantSlug = body.slug; // Assuming API returns { id, name, slug, ... }
 
             // Verify success message (handle strict mode matching multiple elements)
             await expect(page.getByText('Tenant created successfully').first()).toBeVisible();
@@ -58,7 +69,9 @@ test.describe('Tenant Management', () => {
             await expect(page.getByText(tenantName)).toBeVisible();
         } finally {
             // Clean up the created tenant
-            await db.cleanupOrganization(tenantName);
+            if (tenantSlug) {
+                await db.cleanupOrganization(tenantSlug);
+            }
         }
     });
 

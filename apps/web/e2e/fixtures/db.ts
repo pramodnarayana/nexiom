@@ -119,10 +119,10 @@ export class DbFixture {
         // (checking member counts) which is skipped here for safety.
     }
     /**
-     * Delete an organization by name for cleanup
+     * Delete an organization by slug for cleanup
      */
-    async cleanupOrganization(name: string): Promise<void> {
-        console.log(`[DB] Cleaning up organization: ${name}`);
+    async cleanupOrganization(slug: string): Promise<void> {
+        console.log(`[DB] Cleaning up organization: ${slug}`);
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
@@ -130,7 +130,7 @@ export class DbFixture {
             // but if strict FKs exist without cascade, we might need to delete members first.
             // Assuming ON DELETE CASCADE is set up or we'll wrap in try/catch.
             // For now, let's try direct delete.
-            await client.query('DELETE FROM "organization" WHERE name = $1', [name]);
+            await client.query('DELETE FROM "organization" WHERE slug = $1', [slug]);
             await client.query('COMMIT');
         } catch (error) {
             await client.query('ROLLBACK');

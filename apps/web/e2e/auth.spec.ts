@@ -59,6 +59,8 @@ test.describe('Authentication Flows', () => {
 
             // Assert we were redirected away from the verification URL
             await expect(page).not.toHaveURL(/\/verify-email\?/, { timeout: 10000 });
+            // Verify landing on a known post-verification destination
+            await expect(page.getByRole('main').getByText('Dashboard')).toBeVisible({ timeout: 10000 });
 
             // Verify user state in DB AFTER verification (should be verified)
             // Add retry/wait logic as DB update might be slightly async
