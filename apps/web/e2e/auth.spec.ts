@@ -1,18 +1,18 @@
 import { test, expect } from './test';
+import { createVerifiedUser } from './helpers/auth-setup';
 
 
 test.describe('Authentication Flows', () => {
     // Shared user credentials for the suite, generated once per run
-    let userEmail: string;
-    const userPassword = 'password123';
-    const userFirstName = 'Playwright';
-    const userLastName = 'TestUser';
-
     test.describe.configure({ mode: 'serial' });
 
     test('Sign Up with Email/Password', async ({ page, mailpit, db }) => {
         // Ensure fresh email for this run
-        userEmail = `auth-test-${Date.now()}@example.com`;
+        const userEmail = `auth-test-${Date.now()}@example.com`;
+        const userPassword = 'password123';
+        const userFirstName = 'Playwright';
+        const userLastName = 'TestUser';
+
         console.log(`Starting Sign Up test for: ${userEmail}`);
 
         // Cleanup before test (just in case)
@@ -73,54 +73,37 @@ test.describe('Authentication Flows', () => {
     });
 
     test('Sign In with Email/Password', async ({ page, mailpit, db }) => {
-        const signInEmail = `auth-signin-${Date.now()}@example.com`;
-        const signInPassword = 'password123';
-        console.log(`Starting Sign In test for: ${signInEmail}`);
-
-        // Cleanup before test (safety)
-        await db.cleanupUser(signInEmail);
-        await mailpit.deleteAllMessages();
+        let authUser: { email: string; password: string } | undefined;
 
         try {
             // --- SETUP: Create a verified user ---
             console.log('[Setup] Creating verified user...');
-            await page.goto('/signup');
-            await page.fill('input#firstName', 'SignIn');
-            await page.fill('input#lastName', 'Tester');
-            await page.fill('input[type="email"]', signInEmail);
-            await page.locator('input[type="password"]').first().fill(signInPassword);
-            await page.locator('input[type="password"]').nth(1).fill(signInPassword);
-            await page.getByRole('button', { name: 'Sign Up', exact: true }).click();
 
-            // Verify
-            const email = await mailpit.waitForEmail(signInEmail, 'Verify your email');
-            const verificationUrl = mailpit.extractLink(email, /(http:\/\/localhost:\d+\/api\/auth\/verify-email\?token=[^"\s]+)/);
-            await page.goto(verificationUrl);
-            await expect.poll(async () => {
-                return await db.isEmailVerified(signInEmail);
-            }, { timeout: 5000 }).toBe(true);
+            // Use helper to create and verify user
+            // This helper also handles logging them in initially
+            authUser = await createVerifiedUser(page, mailpit, db, {
+                emailPrefix: 'auth-signin'
+            });
 
-            // Log out to test Sign In
-            // Assuming verification auto-logs in, we need to logout.
-            // If the UI redirects to dashboard, we can find logout there.
-            // For now, let's just clear cookies/storage or go to login page 
-            // verifying we are logged in first might be good.
-            await expect(page.getByRole('main').getByText('Dashboard')).toBeVisible({ timeout: 10000 });
+            console.log(`Starting Sign In test for: ${authUser.email}`);
 
-            // Perform Logout (Simulate by clearing state or clicking logout if visible)
+            // The helper leaves the user logged in. We need to log out to test explicit Sign In.
             await page.context().clearCookies();
             await page.goto('/login');
 
             // --- TEST: Sign In ---
-            await page.fill('input[type="email"]', signInEmail);
-            await page.fill('input[type="password"]', signInPassword);
+            await page.fill('input[type="email"]', authUser.email);
+            // Re-type the password (helper returns it)
+            await page.fill('input[type="password"]', authUser.password);
             await page.getByRole('button', { name: /login/i }).click();
 
             // Should now see Dashboard
             await expect(page.getByRole('main').getByText('Dashboard')).toBeVisible({ timeout: 15000 });
 
         } finally {
-            await db.cleanupUser(signInEmail);
+            if (authUser?.email) {
+                await db.cleanupUser(authUser.email);
+            }
         }
     });
 });

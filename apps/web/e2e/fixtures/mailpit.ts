@@ -52,7 +52,7 @@ export class MailpitFixture {
                 for (const msgSummary of messages) {
                     // Check recipient in summary first (optimization)
                     // Mailpit summary To is Array of {Name, Address}
-                    const recipientMatch = msgSummary.To.some((t: { Name: string; Address: string }) => t.Address === recipient || t.Name === recipient);
+                    const recipientMatch = msgSummary.To.some((t: { Name: string; Address: string }) => t.Address === recipient);
 
                     if (!recipientMatch) {
                         continue;
@@ -106,7 +106,7 @@ export class MailpitFixture {
     /**
      * Deletes all messages in Mailpit (Global Cleanup)
      */
-    async deleteAllMessages() {
+    async deleteAllMessages(): Promise<void> {
         try {
             await this.apiContext.delete(`${this.baseUrl}/messages`);
             console.log('[Mailpit] Deleted all messages');

@@ -50,7 +50,7 @@ test.describe('Social Authentication', () => {
         await page.goto('/signup');
 
         const googleBtn = page.getByRole('button', { name: /google/i });
-        await expect(googleBtn).toBeVisible();
+        await expect(googleBtn).toBeVisible({ timeout: 5000 });
 
         // Wait for the mock response
         const responsePromise = page.waitForResponse(resp =>

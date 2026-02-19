@@ -1,7 +1,6 @@
-import { type Page } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
 import { type MailpitFixture } from '../fixtures/mailpit';
 import { type DbFixture } from '../fixtures/db';
-import { expect } from '@playwright/test';
 
 export interface AuthSetupOptions {
     role?: 'user' | 'system';
@@ -53,7 +52,16 @@ export async function createVerifiedUser(
     // 3. Verify Email
     // Note: We do NOT delete all messages here. We filter by recipient.
     const emailMsg = await mailpit.waitForEmail(email, 'Verify your email');
-    const verificationUrl = mailpit.extractLink(emailMsg, /(http:\/\/localhost:\d+\/api\/auth\/verify-email\?token=[^"\s]+)/);
+
+    // Dynamically derive host from env or default to localhost
+    // This supports CI/Docker where the URL might be different
+    const authUrl = process.env.BETTER_AUTH_URL || 'http://localhost:3002/api/auth';
+    // Create a regex that matches the full auth URL pattern.
+    // We escape special characters for regex safety
+    const cleanAuthUrl = authUrl.replace(/\/$/, '');
+    const escapedAuthUrl = cleanAuthUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const verificationUrl = mailpit.extractLink(emailMsg, new RegExp(`(${escapedAuthUrl}\\/verify-email\\?token=[^"\\s]+)`));
 
     // Visit verification link
     await page.goto(verificationUrl);

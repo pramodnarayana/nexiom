@@ -96,11 +96,23 @@ export class DbFixture {
     async cleanupUser(email: string) {
         console.log(`[DB] Cleaning up user: ${email}`);
 
-        // 1. Delete verification tokens (No FK cascade)
-        await this.pool.query('DELETE FROM "verification" WHERE identifier = $1', [email]);
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        // 2. Delete user (Cascades to session, account, member, invitation)
-        await this.pool.query('DELETE FROM "user" WHERE email = $1', [email]);
+            // 1. Delete verification tokens (No FK cascade)
+            await client.query('DELETE FROM "verification" WHERE identifier = $1', [email]);
+
+            // 2. Delete user (Cascades to session, account, member, invitation)
+            await client.query('DELETE FROM "user" WHERE email = $1', [email]);
+
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
 
         // Note: This leaves orphaned Organizations if the user was the sole member.
         // For strict E2E, we might want to clean those too, but it requires more complex logic

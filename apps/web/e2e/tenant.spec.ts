@@ -2,6 +2,9 @@ import { test, expect } from './test';
 import { createVerifiedUser } from './helpers/auth-setup';
 
 test.describe('Tenant Management', () => {
+    // Run tests serially to avoid conflicts
+    test.describe.configure({ mode: 'serial' });
+
     let userEmail: string;
 
     // Helper to sign up and login before tests
@@ -23,8 +26,7 @@ test.describe('Tenant Management', () => {
         }
     });
 
-    // Run tests serially to avoid conflicts
-    test.describe.configure({ mode: 'serial' });
+
 
     test('Create Tenant', async ({ page }) => {
         // Navigate directly to Tenant Creation via Admin List

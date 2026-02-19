@@ -56,6 +56,15 @@ test.describe('User Management', () => {
             // Extract join link
             const inviteLink = mailpit.extractLink(inviteEmailObj, /(http:\/\/localhost:\d+\/invite\/[^"\s]+)/);
             expect(inviteLink).toBeTruthy();
+
+            // Visit the invite link and verify UI
+            // Ensure we are logged out to see the public invite page (Signup flow)
+            await page.context().clearCookies();
+            await page.evaluate(() => localStorage.clear());
+            await page.goto(inviteLink);
+
+            // Assert we are on the invite acceptance page (which redirects to Signup with 'Join Organization')
+            await expect(page.getByText('Join Organization')).toBeVisible();
         } finally {
             await db.cleanupUser(inviteeEmail);
         }

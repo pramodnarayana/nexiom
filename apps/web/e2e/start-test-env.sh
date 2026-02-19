@@ -3,8 +3,8 @@ set -e
 # Ensure child processes are killed when this script exits
 cleanup() {
     echo "Cleaning up test environment..."
-    kill $API_PID $WEB_PID 2>/dev/null
-    wait $API_PID $WEB_PID 2>/dev/null
+    if [ -n "$API_PID" ]; then kill "$API_PID" 2>/dev/null; wait "$API_PID" 2>/dev/null; fi
+    if [ -n "$WEB_PID" ]; then kill "$WEB_PID" 2>/dev/null; wait "$WEB_PID" 2>/dev/null; fi
 }
 trap cleanup EXIT INT TERM
 # Kill any existing processes on ports 3002 and 5174 to ensure clean start
