@@ -384,27 +384,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/engine
     devDependencies:
-      '@eslint/js':
-        specifier: ^9.20.0
-        version: 9.39.2
-      eslint:
-        specifier: ^9.20.1
-        version: 9.39.2(jiti@2.6.1)
-      eslint-config-prettier:
-        specifier: ^10.0.1
-        version: 10.1.8(eslint@9.39.2(jiti@2.6.1))
-      eslint-plugin-prettier:
-        specifier: ^5.2.3
-        version: 5.5.4(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(prettier@3.7.4)
-      globals:
-        specifier: ^15.14.0
-        version: 15.15.0
+      '@nexiom/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.24.0
-        version: 8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
   integrations/salesforce:
     dependencies:
@@ -412,27 +397,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/engine
     devDependencies:
-      '@eslint/js':
-        specifier: ^9.20.0
-        version: 9.39.2
-      eslint:
-        specifier: ^9.20.1
-        version: 9.39.2(jiti@2.6.1)
-      eslint-config-prettier:
-        specifier: ^10.0.1
-        version: 10.1.8(eslint@9.39.2(jiti@2.6.1))
-      eslint-plugin-prettier:
-        specifier: ^5.2.3
-        version: 5.5.4(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(prettier@3.7.4)
-      globals:
-        specifier: ^15.14.0
-        version: 15.15.0
+      '@nexiom/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.24.0
-        version: 8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
   packages/database:
     dependencies:
@@ -471,6 +441,27 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+
+  packages/eslint-config:
+    dependencies:
+      '@eslint/js':
+        specifier: ^9.20.0
+        version: 9.39.2
+      eslint:
+        specifier: ^9.20.1
+        version: 9.39.2(jiti@2.6.1)
+      eslint-config-prettier:
+        specifier: ^10.0.1
+        version: 10.1.8(eslint@9.39.2(jiti@2.6.1))
+      eslint-plugin-prettier:
+        specifier: ^5.2.3
+        version: 5.5.4(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.2(jiti@2.6.1)))(eslint@9.39.2(jiti@2.6.1))(prettier@3.7.4)
+      globals:
+        specifier: ^15.14.0
+        version: 15.15.0
+      typescript-eslint:
+        specifier: ^8.24.0
+        version: 8.52.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
   packages/identity:
     dependencies:

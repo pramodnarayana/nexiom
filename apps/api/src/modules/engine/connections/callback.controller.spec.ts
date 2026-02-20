@@ -134,6 +134,29 @@ describe('OAuthCallbackController', () => {
     );
   });
 
+  it('should redirect with invalid_credentials if access_token is missing', async () => {
+    mockEncryptionService.decrypt.mockResolvedValue('tenant-123');
+
+    const req = mockRequest('salesforce', {
+      grant: {
+        response: {
+          raw: { state: 'encrypted-state', expires_in: 3600 },
+          // No access_token provided
+        },
+      },
+    });
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=invalid_credentials',
+    );
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mockEncryptionService.encrypt).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
   it('should successfully store credentials and redirect on success', async () => {
     mockEncryptionService.decrypt.mockResolvedValue('tenant-123');
     mockEncryptionService.encrypt.mockResolvedValue('encrypted-credentials');
@@ -177,6 +200,7 @@ describe('OAuthCallbackController', () => {
     const req = mockRequest('salesforce', {
       grant: {
         response: {
+          access_token: 'acc-123',
           raw: { state: 'encrypted-state', expires_in: 3600 },
         },
       },

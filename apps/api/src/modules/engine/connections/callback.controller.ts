@@ -67,11 +67,20 @@ export class OAuthCallbackController {
       return;
     }
 
-    // 3. Prepare Encrypted Payload
+    // 3. Validate OAuth Payload
+    if (!grantResponse.access_token) {
+      this.logger.warn(
+        `Missing access_token in OAuth response for ${provider}, tenant: ${tenantId}`,
+      );
+      res.redirect(`/app/connections?error=invalid_credentials`);
+      return;
+    }
+
+    // 4. Prepare Encrypted Payload
     const credentials = {
       accessToken: grantResponse.access_token,
       refreshToken: grantResponse.refresh_token,
-      rawResponse: grantResponse.raw,
+      realmId: grantResponse.raw?.realmId, // Store only needed metadata
     };
 
     const encryptedPayload = await this.crypto.encrypt(
@@ -116,8 +125,6 @@ export class OAuthCallbackController {
       res.redirect(`/app/connections?error=internal_error`);
       return;
     }
-    // });
-
     res.redirect(`/app/connections?success=true`);
   }
 }

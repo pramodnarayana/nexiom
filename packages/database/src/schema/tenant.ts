@@ -1,8 +1,8 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull(), // FK to tenants table
+    tenantId: uuid('tenant_id').notNull(), // FK enforced at migration level — tenants table lives in identity/catalog schema (Database-per-Tenant)
     appName: varchar('app_name', { length: 100 }).notNull(), // e.g., 'quickbooks'
     authType: varchar('auth_type', { length: 50 }).notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
 
@@ -21,5 +21,5 @@ export const appConnections = pgTable('app_connection', {
 }, (table) => [
     index('app_name_idx').on(table.appName),
     index('status_idx').on(table.status),
-    index('tenant_app_name_idx').on(table.tenantId, table.appName),
+    uniqueIndex('tenant_app_name_unique_idx').on(table.tenantId, table.appName),
 ]);
