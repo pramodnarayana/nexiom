@@ -1,0 +1,15 @@
+{
+    "name": "@nexiom/salesforce",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc"
+    },
+    "dependencies": {
+        "@nexiom/engine": "workspace:*"
+    },
+    "devDependencies": {
+        "typescript": "^5.3.3"
+    }
+}
