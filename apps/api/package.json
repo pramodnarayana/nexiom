@@ -37,6 +37,8 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nexiom/identity": "workspace:*",
+    "@nexiom/database": "workspace:*",
+    "@nexiom/engine": "workspace:*",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",
     "class-transformer": "^0.5.1",

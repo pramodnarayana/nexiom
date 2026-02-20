@@ -38,3 +38,6 @@ export type {
   Verification,
   AbacConditions,
 } from '@nexiom/identity/src/schema';
+
+// Engine schema — provider catalog and connection tables
+export { providers, appConnections } from '@nexiom/database';
