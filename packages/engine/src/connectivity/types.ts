@@ -10,15 +10,20 @@ export interface ConnectorAuthSchema {
     }>;
 }
 
-interface OAuthConfig {
-    authorizeUrl: string;
-    tokenUrl: string;
-    scope?: string[];
-}
 interface BaseCredentialType {
     name: string;
     uiSchema?: ConnectorAuthSchema;
 }
+
+/** Shape of OAuth config as stored in the `providers` DB table. */
+export interface OAuthConfig {
+    authorizeUrl: string;
+    tokenUrl: string;
+    scopes?: string[];
+}
+
+// GenericCredentialType defines integration-package seed data.
+// OAuth URLs live in the providers table, not in integration configs.
 export type GenericCredentialType =
-    | (BaseCredentialType & { authType: 'OAUTH2'; oauth: OAuthConfig })
+    | (BaseCredentialType & { authType: 'OAUTH2' })
     | (BaseCredentialType & { authType: 'API_KEY' });

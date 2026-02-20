@@ -7,7 +7,8 @@
     "scripts": {
         "build": "tsc",
         "clean": "rm -rf dist",
-        "lint": "eslint \"src/**/*.ts\" --fix"
+        "lint": "eslint \"src/**/*.ts\" --fix",
+        "lint:check": "eslint \"src/**/*.ts\""
     },
     "dependencies": {
         "@nexiom/engine": "workspace:*"

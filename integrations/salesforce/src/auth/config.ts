@@ -1,13 +1,13 @@
 import { GenericCredentialType } from "@nexiom/engine";
 
+/**
+ * Salesforce provider definition — used as seed data for the `providers` table.
+ * OAuth URLs (authorizeUrl, tokenUrl) are stored in the DB and can be
+ * overridden per-tenant for sandbox / custom domains.
+ */
 export const salesforceAuth: GenericCredentialType = {
   name: "salesforce",
   authType: "OAUTH2",
-  oauth: {
-    authorizeUrl: "https://login.salesforce.com/services/oauth2/authorize",
-    tokenUrl: "https://login.salesforce.com/services/oauth2/token",
-    scope: ["api", "refresh_token", "offline_access"],
-  },
   uiSchema: {
     type: "object",
     properties: [
@@ -22,6 +22,14 @@ export const salesforceAuth: GenericCredentialType = {
         label: "Client Secret",
         type: "secretText",
         required: true,
+      },
+      {
+        name: "loginUrl",
+        label: "Login URL",
+        type: "shortText",
+        required: false,
+        description:
+          "Override for sandbox (https://test.salesforce.com) or custom domains. Defaults to https://login.salesforce.com.",
       },
     ],
   },

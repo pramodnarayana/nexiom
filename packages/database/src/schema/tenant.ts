@@ -16,10 +16,14 @@ export const appConnections = pgTable('app_connection', {
     // Public metadata (e.g., connected account email, realmId)
     metadata: jsonb('metadata').default({}),
 
+    // Stable per-connection key for multi-realm providers (e.g., QB realmId).
+    // Defaults to 'default' for single-realm providers like Salesforce.
+    connectionKey: varchar('connection_key', { length: 255 }).default('default').notNull(),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
     index('status_idx').on(table.status),
-    uniqueIndex('tenant_app_name_unique_idx').on(table.tenantId, table.appName),
+    uniqueIndex('tenant_app_connection_unique_idx').on(table.tenantId, table.appName, table.connectionKey),
 ]);

@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, vi, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { OAuthCallbackController } from './callback.controller.js';
-import { EncryptionService } from '@nexiom/engine';
+import { EncryptionService, ProviderRegistryService } from '@nexiom/engine';
 
-const { mockOnConflictDoUpdate, mockInsert } = vi.hoisted(() => {
+const VALID_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+const { mockOnConflictDoUpdate, mockInsert, mockDb } = vi.hoisted(() => {
   // Set DATABASE_URL locally so @nexiom/database client.ts doesn't throw
   // during transitive module resolution through @nexiom/engine
   process.env.DATABASE_URL ??= 'postgres://mock:mock@localhost:5432/mock';
@@ -12,17 +14,19 @@ const { mockOnConflictDoUpdate, mockInsert } = vi.hoisted(() => {
   const onConflictDoUpdate = vi.fn().mockResolvedValue(true);
   const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insert = vi.fn().mockReturnValue({ values });
-  return { mockOnConflictDoUpdate: onConflictDoUpdate, mockInsert: insert };
+  return {
+    mockOnConflictDoUpdate: onConflictDoUpdate,
+    mockInsert: insert,
+    mockDb: { insert },
+  };
 });
 
 // Mock the database module — prevents real Pool/Drizzle connections
 vi.mock('@nexiom/database', () => ({
-  db: {
-    insert: mockInsert,
-  },
   appConnections: {
     tenantId: 'tenantId',
     appName: 'appName',
+    connectionKey: 'connectionKey',
   },
 }));
 
@@ -31,6 +35,7 @@ import { Request, Response } from 'express';
 describe('OAuthCallbackController', () => {
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
+  let mockProviderRegistry: { isAllowed: ReturnType<typeof vi.fn> };
 
   const mockRequest = (
     provider: string,
@@ -51,25 +56,39 @@ describe('OAuthCallbackController', () => {
     mockEncryptionService = {
       encrypt: vi.fn(),
       decrypt: vi.fn(),
-      hash: vi.fn(),
-      verifyHash: vi.fn(),
     } as unknown as Mocked<EncryptionService>;
+
+    mockProviderRegistry = {
+      isAllowed: vi.fn().mockResolvedValue(true),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthCallbackController],
       providers: [
         {
+          provide: 'DRIZZLE_DB',
+          useValue: mockDb,
+        },
+        {
           provide: EncryptionService,
           useValue: mockEncryptionService,
+        },
+        {
+          provide: ProviderRegistryService,
+          useValue: mockProviderRegistry,
         },
       ],
     }).compile();
 
     controller = module.get<OAuthCallbackController>(OAuthCallbackController);
     vi.clearAllMocks();
+    // Re-apply default: known providers are allowed
+    mockProviderRegistry.isAllowed.mockResolvedValue(true);
   });
 
-  it('should redirect with invalid_provider error if provider is not in ALLOWED_PROVIDERS', async () => {
+  it('should redirect with invalid_provider error if provider is not allowed', async () => {
+    mockProviderRegistry.isAllowed.mockResolvedValue(false);
+
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();
 
@@ -135,7 +154,7 @@ describe('OAuthCallbackController', () => {
   });
 
   it('should redirect with invalid_credentials if access_token is missing', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue('tenant-123');
+    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
 
     const req = mockRequest('salesforce', {
       grant: {
@@ -158,7 +177,7 @@ describe('OAuthCallbackController', () => {
   });
 
   it('should successfully store credentials and redirect on success', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue('tenant-123');
+    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
     mockEncryptionService.encrypt.mockResolvedValue('encrypted-credentials');
 
     const req = mockRequest('salesforce', {
@@ -191,7 +210,7 @@ describe('OAuthCallbackController', () => {
   });
 
   it('should redirect with internal_error if database insert fails', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue('tenant-123');
+    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
     mockEncryptionService.encrypt.mockResolvedValue('encrypted-credentials');
 
     // Override the mock to simulate failure

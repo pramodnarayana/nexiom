@@ -1,7 +1,12 @@
-import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { db, appConnections } from '@nexiom/database';
-import { EncryptionService, ALLOWED_PROVIDERS } from '@nexiom/engine';
+import { appConnections } from '@nexiom/database';
+import {
+  EncryptionService,
+  ProviderRegistryService,
+  DrizzleDb,
+} from '@nexiom/engine';
+import { validate as uuidValidate } from 'uuid';
 
 interface GrantResponse {
   error?: string;
@@ -25,14 +30,18 @@ interface GrantSession {
 export class OAuthCallbackController {
   private readonly logger = new Logger(OAuthCallbackController.name);
 
-  constructor(private readonly crypto: EncryptionService) {}
+  constructor(
+    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+    private readonly crypto: EncryptionService,
+    private readonly providerRegistry: ProviderRegistryService,
+  ) {}
 
   @Get()
   async handleCallback(@Req() req: Request, @Res() res: Response) {
     const request = req as Request & { session?: GrantSession };
     const provider = request.params.provider;
 
-    if (!ALLOWED_PROVIDERS.has(provider)) {
+    if (!(await this.providerRegistry.isAllowed(provider))) {
       this.logger.warn(`Rejected unauthorized provider: ${provider}`);
       res.redirect(`/app/connections?error=invalid_provider`);
       return;
@@ -57,6 +66,7 @@ export class OAuthCallbackController {
       if (!rawState) throw new Error('Missing state');
       // Using the real encryption service instead of mocking
       tenantId = await this.crypto.decrypt(rawState);
+      if (!uuidValidate(tenantId)) throw new Error('Invalid tenant ID format');
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -94,20 +104,28 @@ export class OAuthCallbackController {
         : 3600;
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
+    // 5. Derive connectionKey for multi-realm providers (e.g., QuickBooks realmId)
+    const connectionKey = (grantResponse.raw?.realmId as string) ?? 'default';
+
     // 5. Save to Database using Upsert to prevent duplicate tenant+provider rows
     try {
-      await db
+      await this.db
         .insert(appConnections)
         .values({
           tenantId,
           appName: provider,
+          connectionKey,
           authType: 'OAUTH2',
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
-          metadata: { realmId: grantResponse.raw?.realmId }, // App-specific metadata extraction
+          metadata: { realmId: grantResponse.raw?.realmId },
         })
         .onConflictDoUpdate({
-          target: [appConnections.tenantId, appConnections.appName],
+          target: [
+            appConnections.tenantId,
+            appConnections.appName,
+            appConnections.connectionKey,
+          ],
           set: {
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,

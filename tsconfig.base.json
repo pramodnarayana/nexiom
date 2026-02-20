@@ -2,14 +2,13 @@
     "compilerOptions": {
         "target": "ES2022",
         "module": "CommonJS",
+        "moduleResolution": "node",
         "declaration": true,
         "declarationMap": true,
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "composite": true,
-        "experimentalDecorators": true,
-        "emitDecoratorMetadata": true
+        "composite": true
     }
 }
