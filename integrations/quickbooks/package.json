@@ -1,15 +1,24 @@
 {
     "name": "@nexiom/quickbooks",
     "version": "1.0.0",
+    "private": true,
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "build": "tsc"
+        "build": "tsc",
+        "clean": "rm -rf dist",
+        "lint": "eslint \"src/**/*.ts\" --fix"
     },
     "dependencies": {
         "@nexiom/engine": "workspace:*"
     },
     "devDependencies": {
-        "typescript": "^5.3.3"
+        "@eslint/js": "^9.20.0",
+        "eslint": "^9.20.1",
+        "eslint-config-prettier": "^10.0.1",
+        "eslint-plugin-prettier": "^5.2.3",
+        "globals": "^15.14.0",
+        "typescript": "^5.7.3",
+        "typescript-eslint": "^8.24.0"
     }
 }

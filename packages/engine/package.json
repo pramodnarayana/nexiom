@@ -8,10 +8,11 @@
     },
     "dependencies": {
         "@nexiom/database": "workspace:*",
+        "@nestjs/common": "^11.0.1",
         "drizzle-orm": "^0.45.1",
         "ioredis": "^5.3.2"
     },
     "devDependencies": {
-        "typescript": "^5.3.3"
+        "typescript": "^5.7.3"
     }
 }

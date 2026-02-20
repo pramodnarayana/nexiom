@@ -10,13 +10,15 @@ export interface ConnectorAuthSchema {
     }>;
 }
 
-export interface GenericCredentialType {
+interface OAuthConfig {
+    authorizeUrl: string;
+    tokenUrl: string;
+    scope?: string[];
+}
+interface BaseCredentialType {
     name: string;
-    authType: 'OAUTH2' | 'API_KEY';
-    oauth?: {
-        authorizeUrl: string;
-        tokenUrl: string;
-        scope?: string[];
-    };
     uiSchema?: ConnectorAuthSchema;
 }
+export type GenericCredentialType =
+    | (BaseCredentialType & { authType: 'OAUTH2'; oauth: OAuthConfig })
+    | (BaseCredentialType & { authType: 'API_KEY' });

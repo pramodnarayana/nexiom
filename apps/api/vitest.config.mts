@@ -47,7 +47,7 @@ export default defineConfig({
             ],
             reporter: ['text', 'json', 'html'],
             thresholds: {
-                // TODO: Restore to 90% after PBAC refactor stabilizes (Technical Debt: ISSUE-123)
+                // NOTE: Restore to 90% after PBAC refactor stabilizes (Technical Debt: ISSUE-123)
                 // Lowered to 80% temporarily to accommodate rapid changes during the DB-based policy migration.
                 statements: 80,
                 branches: 80,

@@ -1,31 +1,44 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { db, appConnections } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import Redis from 'ioredis';
 
 // Mocks for dependencies that would exist in the real app
-class EncryptionService {
-    async decrypt(val: string) { return Buffer.from(val, 'base64').toString('utf-8'); }
-    async encrypt(val: string) { return Buffer.from(val).toString('base64'); }
+export class EncryptionService {
+    async decrypt(_val: string): Promise<string> {
+        throw new Error('EncryptionService is not implemented. Do not use in production.');
+    }
+    async encrypt(_val: string): Promise<string> {
+        throw new Error('EncryptionService is not implemented. Do not use in production.');
+    }
 }
-class OAuthRefreshClient {
+
+export class OAuthRefreshError extends Error {
+    constructor(message: string, public status?: number) {
+        super(message);
+        this.name = 'OAuthRefreshError';
+    }
+}
+
+export class OAuthRefreshClient {
     async refresh(appName: string, refreshToken: string): Promise<any> {
+        // Mock throwing a typed error if needed
         return { access_token: 'new_access', refresh_token: 'new_refresh', expires_in: 3600 };
     }
 }
 
 @Injectable()
-export class TokenManagerService {
+export class TokenManagerService implements OnModuleDestroy {
     private readonly logger = new Logger(TokenManagerService.name);
-    private redis: Redis;
-    private crypto: EncryptionService;
-    private oauthClient: OAuthRefreshClient;
 
-    constructor() {
-        // Mocking dependency injection for Phase 3 skeleton
-        this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-        this.crypto = new EncryptionService();
-        this.oauthClient = new OAuthRefreshClient();
+    constructor(
+        @Inject('REDIS_CLIENT') private readonly redis: Redis,
+        private readonly crypto: EncryptionService,
+        private readonly oauthClient: OAuthRefreshClient,
+    ) { }
+
+    async onModuleDestroy() {
+        await this.redis.quit();
     }
 
     /**
@@ -54,14 +67,22 @@ export class TokenManagerService {
 
     private async refreshWithLock(connection: any): Promise<Record<string, any>> {
         const lockKey = `lock:refresh:${connection.id}`;
+        const lockValue = Math.random().toString(36).substring(2);
 
         // Acquire Lock (TTL 10 seconds to prevent deadlocks if worker crashes)
-        const lockAcquired = await this.redis.set(lockKey, 'locked', 'PX', 10000, 'NX');
+        const lockAcquired = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');
 
         if (!lockAcquired) {
             this.logger.debug(`Connection ${connection.id} is currently refreshing. Waiting...`);
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            return this.getValidCredentials(connection.id); // Recursive retry
+            const MAX_RETRIES = 3;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                const retryLock = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');
+                if (retryLock) break;
+                if (attempt === MAX_RETRIES - 1) {
+                    throw new Error(`Unable to acquire refresh lock for connection ${connection.id}`);
+                }
+            }
         }
 
         try {
@@ -83,7 +104,10 @@ export class TokenManagerService {
 
             // 4. Encrypt & Calculate Expiry
             const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));
-            const expiresAt = new Date(Date.now() + (newTokens.expires_in * 1000));
+            const expiresInMs = newTokens.expires_in
+                ? newTokens.expires_in * 1000
+                : 3600 * 1000; // default 1-hour fallback
+            const expiresAt = new Date(Date.now() + expiresInMs);
 
             // 5. Save to DB
             await db.update(appConnections)
@@ -95,15 +119,22 @@ export class TokenManagerService {
 
         } catch (error: any) {
             // Handle cases where the user revoked access in the external app
-            if (error?.response?.status === 400 || error?.response?.status === 401) {
+            if (error?.status === 400 || error?.status === 401) {
                 // @ts-ignore
                 await db.update(appConnections).set({ status: 'REVOKED' }).where(eq(appConnections.id, connection.id));
                 this.logger.error(`Token refresh rejected. Marked connection as REVOKED.`);
             }
             throw error;
         } finally {
-            // Always release lock
-            await this.redis.del(lockKey);
+            // Always release lock using Lua script to prevent deleting someone else's lock
+            const luaScript = `
+                if redis.call("get", KEYS[1]) == ARGV[1] then
+                    return redis.call("del", KEYS[1])
+                else
+                    return 0
+                end
+            `;
+            await this.redis.eval(luaScript, 1, lockKey, lockValue);
         }
     }
 }

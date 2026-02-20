@@ -2,6 +2,7 @@ import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-o
 
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
+    tenantId: uuid('tenant_id').notNull(), // FK to tenants table
     appName: varchar('app_name', { length: 100 }).notNull(), // e.g., 'quickbooks'
     authType: varchar('auth_type', { length: 50 }).notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
 
@@ -15,9 +16,10 @@ export const appConnections = pgTable('app_connection', {
     // Public metadata (e.g., connected account email, realmId)
     metadata: jsonb('metadata').default({}),
 
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-    appNameIdx: index('app_name_idx').on(table.appName),
-    statusIdx: index('status_idx').on(table.status)
-}));
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+    index('app_name_idx').on(table.appName),
+    index('status_idx').on(table.status),
+    index('tenant_app_name_idx').on(table.tenantId, table.appName),
+]);
