@@ -20,18 +20,7 @@ export abstract class OAuthRefreshClient {
     abstract refresh(appName: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
-/** Minimal typed interface for the injected Drizzle DB client. */
-export interface DrizzleDb {
-    query: {
-        appConnections: {
-            findFirst(args: Record<string, unknown>): Promise<Record<string, any> | undefined>;
-        };
-    };
-    insert(table: unknown): { values(data: Record<string, unknown>): { onConflictDoUpdate(args: Record<string, unknown>): Promise<unknown> } };
-    update(table: unknown): { set(data: Record<string, unknown>): { where(condition: unknown): Promise<unknown> } };
-    select(fields?: unknown): { from(table: unknown): { where(condition: unknown): { limit(n: number): Promise<Record<string, unknown>[]> } } };
-}
-
+import { DrizzleDb } from './types.js';
 @Injectable()
 export class TokenManagerService implements OnModuleDestroy {
     private readonly logger = new Logger(TokenManagerService.name);
@@ -60,9 +49,17 @@ export class TokenManagerService implements OnModuleDestroy {
         if (connection.status === 'REVOKED') throw new Error(`Connection revoked by user/provider`);
 
         // 1. Check Expiry (with 5-minute buffer to prevent mid-flight expiration)
-        //    Treat null/missing expiresAt as expired for OAUTH2 — forces a refresh to populate it.
+        //    Treat null/missing/invalid expiresAt as expired for OAUTH2 — forces a refresh to populate it.
+        let expiresAtObj: Date | null = null;
+        if (connection.expiresAt) {
+            expiresAtObj = connection.expiresAt instanceof Date
+                ? connection.expiresAt
+                : new Date(connection.expiresAt as string | number);
+            if (Number.isNaN(expiresAtObj.getTime())) expiresAtObj = null;
+        }
+
         const isExpired = connection.authType === 'OAUTH2' &&
-            (!connection.expiresAt || new Date(connection.expiresAt.getTime() - 5 * 60000) < new Date());
+            (!expiresAtObj || new Date(expiresAtObj.getTime() - 5 * 60000) < new Date());
 
         if (isExpired) {
             this.logger.warn(`Token expired or missing expiresAt for ${connection.appName as string}. Refreshing...`);
@@ -161,12 +158,18 @@ export class TokenManagerService implements OnModuleDestroy {
             oldPayload.refreshToken as string,
         );
 
-        // 3. Preserve the old refresh token if the vendor didn't return a new one
-        const updatedPayload = {
+        // 3. Explicitly map known snake_case fields to camelCase and merge unknowns.
+        //    This keeps the persisted payload normalized while preserving custom vendor fields.
+        const updatedPayload: Record<string, unknown> = {
             ...oldPayload,
-            accessToken: newTokens.access_token,
-            refreshToken: newTokens.refresh_token || oldPayload.refreshToken,
+            ...newTokens,
         };
+
+        updatedPayload.accessToken = newTokens.access_token;
+        updatedPayload.refreshToken = newTokens.refresh_token || oldPayload.refreshToken;
+        if ('expires_in' in newTokens) updatedPayload.expiresIn = newTokens.expires_in;
+        if ('id_token' in newTokens) updatedPayload.idToken = newTokens.id_token;
+        if ('token_type' in newTokens) updatedPayload.tokenType = newTokens.token_type;
 
         // 4. Encrypt & Calculate Expiry
         const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));

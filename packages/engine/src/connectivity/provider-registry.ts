@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { providers } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, InferSelectModel } from 'drizzle-orm';
+import { DrizzleDb } from './types.js';
 
 /**
  * Database-backed provider registry.
@@ -10,7 +11,7 @@ import { eq, and } from 'drizzle-orm';
 @Injectable()
 export class ProviderRegistryService {
     constructor(
-        @Inject('DRIZZLE_DB') private readonly db: Record<string, any>,
+        @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
     ) { }
 
     /** Check whether a provider exists and is enabled. */
@@ -24,20 +25,20 @@ export class ProviderRegistryService {
     }
 
     /** Retrieve full provider configuration (returns null if not found). */
-    async getProvider(name: string) {
+    async getProvider(name: string): Promise<InferSelectModel<typeof providers> | null> {
         const rows = await this.db
             .select()
             .from(providers)
             .where(eq(providers.name, name))
             .limit(1);
-        return rows[0] ?? null;
+        return (rows[0] as InferSelectModel<typeof providers>) ?? null;
     }
 
     /** List all enabled providers. */
-    async getAllProviders() {
-        return this.db
+    async getAllProviders(): Promise<InferSelectModel<typeof providers>[]> {
+        return (await this.db
             .select()
             .from(providers)
-            .where(eq(providers.enabled, true));
+            .where(eq(providers.enabled, true))) as InferSelectModel<typeof providers>[];
     }
 }

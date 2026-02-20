@@ -41,9 +41,18 @@ export class OAuthCallbackController {
     const request = req as Request & { session?: GrantSession };
     const provider = request.params.provider;
 
-    if (!(await this.providerRegistry.isAllowed(provider))) {
-      this.logger.warn(`Rejected unauthorized provider: ${provider}`);
-      res.redirect(`/app/connections?error=invalid_provider`);
+    try {
+      if (!(await this.providerRegistry.isAllowed(provider))) {
+        this.logger.warn(`Rejected unauthorized provider: ${provider}`);
+        res.redirect(`/app/connections?error=invalid_provider`);
+        return;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Provider registry check failed for: ${provider}`,
+        error,
+      );
+      res.redirect(`/app/connections?error=internal_error`);
       return;
     }
 
@@ -93,21 +102,30 @@ export class OAuthCallbackController {
       realmId: grantResponse.raw?.realmId, // Store only needed metadata
     };
 
-    const encryptedPayload = await this.crypto.encrypt(
-      JSON.stringify(credentials),
-    );
+    let encryptedPayload: string;
+    try {
+      encryptedPayload = await this.crypto.encrypt(JSON.stringify(credentials));
+    } catch (error) {
+      this.logger.error(
+        `Encryption failed for ${provider}, tenant: ${tenantId}`,
+        error,
+      );
+      res.redirect(`/app/connections?error=internal_error`);
+      return;
+    }
 
-    // 4. Calculate Expiry
+    // 5. Calculate Expiry
     const expiresIn =
-      typeof grantResponse.raw?.expires_in === 'number'
+      typeof grantResponse.raw?.expires_in === 'number' &&
+      grantResponse.raw.expires_in > 0
         ? grantResponse.raw.expires_in
         : 3600;
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // 5. Derive connectionKey for multi-realm providers (e.g., QuickBooks realmId)
-    const connectionKey = (grantResponse.raw?.realmId as string) ?? 'default';
+    // 6. Derive connectionKey for multi-realm providers (e.g., QuickBooks realmId)
+    const connectionKey = grantResponse.raw?.realmId ?? 'default';
 
-    // 5. Save to Database using Upsert to prevent duplicate tenant+provider rows
+    // 7. Save to Database using Upsert to prevent duplicate tenant+provider rows
     try {
       await this.db
         .insert(appConnections)

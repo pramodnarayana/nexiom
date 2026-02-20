@@ -7,10 +7,6 @@ import { EncryptionService, ProviderRegistryService } from '@nexiom/engine';
 const VALID_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 const { mockOnConflictDoUpdate, mockInsert, mockDb } = vi.hoisted(() => {
-  // Set DATABASE_URL locally so @nexiom/database client.ts doesn't throw
-  // during transitive module resolution through @nexiom/engine
-  process.env.DATABASE_URL ??= 'postgres://mock:mock@localhost:5432/mock';
-
   const onConflictDoUpdate = vi.fn().mockResolvedValue(true);
   const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insert = vi.fn().mockReturnValue({ values });
@@ -51,6 +47,21 @@ describe('OAuthCallbackController', () => {
     res.redirect = vi.fn().mockReturnValue(res);
     return res;
   };
+
+  let originalDatabaseUrl: string | undefined;
+
+  beforeAll(() => {
+    originalDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgres://mock:mock@localhost:5432/mock';
+  });
+
+  afterAll(() => {
+    if (originalDatabaseUrl) {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
+  });
 
   beforeEach(async () => {
     mockEncryptionService = {
@@ -206,6 +217,20 @@ describe('OAuthCallbackController', () => {
       expect.stringContaining('"accessToken":"acc-123"'),
     );
     expect(mockInsert).toHaveBeenCalled();
+    // Verify the exact upsert payload
+    const rawValue = mockInsert.mock.results[0].value as {
+      values: typeof vi.fn;
+    };
+    const { values } = rawValue;
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: VALID_TENANT_ID,
+        appName: 'salesforce',
+        connectionKey: 'realm-id',
+        encryptedCredentials: 'encrypted-credentials',
+        authType: 'OAUTH2',
+      }),
+    );
     expect(res.redirect).toHaveBeenCalledWith('/app/connections?success=true');
   });
 
