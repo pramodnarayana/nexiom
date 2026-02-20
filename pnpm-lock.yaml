@@ -460,7 +460,7 @@ importers:
         specifier: ^15.14.0
         version: 15.15.0
       prettier:
-        specifier: ^3.7.4
+        specifier: '>=3.0.0'
         version: 3.7.4
       typescript-eslint:
         specifier: ^8.24.0
