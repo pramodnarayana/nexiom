@@ -18,6 +18,11 @@ export const providers = pgTable('provider', {
     // Dynamic form schema served to the frontend
     uiSchema: jsonb('ui_schema').$type<Record<string, unknown>>().default({}),
 
+    // Frontend UI metadata for the Marketplace app directory
+    description: text('description'),
+    logoUrl: varchar('logo_url', { length: 255 }),
+    category: varchar('category', { length: 100 }),
+
     // Soft-toggle: disable a provider without removing its row
     enabled: boolean('enabled').default(true).notNull(),
 
