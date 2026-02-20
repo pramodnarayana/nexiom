@@ -31,14 +31,14 @@ export class ProviderRegistryService {
             .from(providers)
             .where(eq(providers.name, name))
             .limit(1);
-        return (rows[0] as InferSelectModel<typeof providers>) ?? null;
+        return rows[0] ?? null;
     }
 
     /** List all enabled providers. */
     async getAllProviders(): Promise<InferSelectModel<typeof providers>[]> {
-        return (await this.db
+        return await this.db
             .select()
             .from(providers)
-            .where(eq(providers.enabled, true))) as InferSelectModel<typeof providers>[];
+            .where(eq(providers.enabled, true));
     }
 }

@@ -28,18 +28,7 @@ export type GenericCredentialType =
     | (BaseCredentialType & { authType: 'OAUTH2' })
     | (BaseCredentialType & { authType: 'API_KEY' });
 
-/** Minimal typed interface for the injected Drizzle DB client. */
-export interface DrizzleDb {
-    query: {
-        appConnections: {
-            findFirst(args: Record<string, unknown>): Promise<Record<string, any> | undefined>;
-        };
-    };
-    insert(table: unknown): { values(data: Record<string, unknown>): { onConflictDoUpdate(args: Record<string, unknown>): Promise<unknown> } };
-    update(table: unknown): { set(data: Record<string, unknown>): { where(condition: unknown): Promise<unknown> } };
-    select(fields?: unknown): {
-        from(table: unknown): Promise<Record<string, unknown>[]> & {
-            where(condition: unknown): Promise<Record<string, unknown>[]> & { limit(n: number): Promise<Record<string, unknown>[]> };
-        }
-    };
-}
+import { db } from '@nexiom/database';
+
+/** The actual inferred type of the Drizzle Postgres client. */
+export type DrizzleDb = typeof db;

@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { appConnections } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import Redis from 'ioredis';
+import { DrizzleDb } from './types.js';
 
 // Abstract contracts — consumers must provide real implementations via DI
 export abstract class EncryptionService {
@@ -20,7 +21,12 @@ export abstract class OAuthRefreshClient {
     abstract refresh(appName: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
-import { DrizzleDb } from './types.js';
+function parseExpiresAt(value: unknown): Date | null {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value as string | number);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
 @Injectable()
 export class TokenManagerService implements OnModuleDestroy {
     private readonly logger = new Logger(TokenManagerService.name);
@@ -50,13 +56,7 @@ export class TokenManagerService implements OnModuleDestroy {
 
         // 1. Check Expiry (with 5-minute buffer to prevent mid-flight expiration)
         //    Treat null/missing/invalid expiresAt as expired for OAUTH2 — forces a refresh to populate it.
-        let expiresAtObj: Date | null = null;
-        if (connection.expiresAt) {
-            expiresAtObj = connection.expiresAt instanceof Date
-                ? connection.expiresAt
-                : new Date(connection.expiresAt as string | number);
-            if (Number.isNaN(expiresAtObj.getTime())) expiresAtObj = null;
-        }
+        const expiresAtObj = parseExpiresAt(connection.expiresAt);
 
         const isExpired = connection.authType === 'OAUTH2' &&
             (!expiresAtObj || new Date(expiresAtObj.getTime() - 5 * 60000) < new Date());
@@ -112,11 +112,13 @@ export class TokenManagerService implements OnModuleDestroy {
                 where: eq(appConnections.id, connection.id)
             });
 
-            if (freshConnection?.expiresAt &&
-                new Date(freshConnection.expiresAt.getTime() - 5 * 60000) > new Date()) {
+            const parsedExpiry = parseExpiresAt(freshConnection?.expiresAt);
+
+            if (parsedExpiry &&
+                new Date(parsedExpiry.getTime() - 5 * 60000) > new Date()) {
                 // Token was refreshed by another worker
                 const credentials = JSON.parse(
-                    await this.crypto.decrypt(freshConnection.encryptedCredentials)
+                    await this.crypto.decrypt(freshConnection!.encryptedCredentials)
                 ) as Record<string, unknown>;
                 return { credentials, connection };
             }
@@ -162,14 +164,12 @@ export class TokenManagerService implements OnModuleDestroy {
         //    This keeps the persisted payload normalized while preserving custom vendor fields.
         const updatedPayload: Record<string, unknown> = {
             ...oldPayload,
-            ...newTokens,
+            accessToken: newTokens.access_token ?? oldPayload.accessToken,
+            refreshToken: newTokens.refresh_token || oldPayload.refreshToken,
+            ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
+            ...('id_token' in newTokens && { idToken: newTokens.id_token }),
+            ...('token_type' in newTokens && { tokenType: newTokens.token_type }),
         };
-
-        updatedPayload.accessToken = newTokens.access_token;
-        updatedPayload.refreshToken = newTokens.refresh_token || oldPayload.refreshToken;
-        if ('expires_in' in newTokens) updatedPayload.expiresIn = newTokens.expires_in;
-        if ('id_token' in newTokens) updatedPayload.idToken = newTokens.id_token;
-        if ('token_type' in newTokens) updatedPayload.tokenType = newTokens.token_type;
 
         // 4. Encrypt & Calculate Expiry
         const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));
