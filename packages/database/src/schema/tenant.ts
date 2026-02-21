@@ -1,17 +1,25 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { authTypeEnum } from './provider';
+
+export const AppConnectionStatus = {
+    ACTIVE: 'ACTIVE',
+    EXPIRED: 'EXPIRED',
+    REVOKED: 'REVOKED',
+} as const;
+export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppConnectionStatus];
 
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
     tenantId: uuid('tenant_id').notNull(), // FK enforced at migration level — tenants table lives in identity/catalog schema (Database-per-Tenant)
     appName: varchar('app_name', { length: 100 }).notNull(), // e.g., 'quickbooks'
-    authType: varchar('auth_type', { length: 50 }).notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
+    authType: authTypeEnum('auth_type').notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
 
     // Encrypted Payload (Contains access_token, refresh_token, or api_key)
     encryptedCredentials: text('encrypted_credentials').notNull(),
 
     // Extracted for fast querying without decryption
     expiresAt: timestamp('expires_at', { withTimezone: true }),
-    status: varchar('status', { length: 50 }).default('ACTIVE').notNull(), // ACTIVE, EXPIRED, REVOKED
+    status: varchar('status', { length: 50 }).default(AppConnectionStatus.ACTIVE).notNull(), // ACTIVE, EXPIRED, REVOKED
 
     // Public metadata (e.g., connected account email, realmId)
     metadata: jsonb('metadata').default({}),

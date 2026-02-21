@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '../connectivity/token-manager.service';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
@@ -6,15 +7,28 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 export class AesEncryptionService implements EncryptionService {
     private readonly logger = new Logger(AesEncryptionService.name);
     private readonly algorithm = 'aes-256-gcm';
+    private readonly keyBuffer: Buffer;
 
-    // In production, this must come from ConfigService/Environment Variable.
-    // Length must be exactly 32 bytes for aes-256-gcm
-    private readonly key = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012';
+    /**
+     * @param configService - NestJS ConfigService
+     * Requires ENCRYPTION_KEY to be provided and exactly 32 bytes (raw string)
+     */
+    constructor(private readonly configService: ConfigService) {
+        const key = this.configService.get<string>('ENCRYPTION_KEY');
+        if (!key) {
+            throw new Error('ENCRYPTION_KEY is missing from configuration');
+        }
+
+        this.keyBuffer = Buffer.from(key);
+        if (this.keyBuffer.length !== 32) {
+            throw new Error(`Invalid key length: expected 32 bytes for ${this.algorithm}, got ${this.keyBuffer.length} bytes`);
+        }
+    }
 
     async encrypt(val: string): Promise<string> {
         try {
-            const iv = randomBytes(16);
-            const cipher = createCipheriv(this.algorithm, Buffer.from(this.key), iv);
+            const iv = randomBytes(12);
+            const cipher = createCipheriv(this.algorithm, this.keyBuffer, iv);
 
             let encrypted = cipher.update(val, 'utf8', 'hex');
             encrypted += cipher.final('hex');
@@ -39,7 +53,7 @@ export class AesEncryptionService implements EncryptionService {
             const [ivHex, authTagHex, encryptedHex] = parts;
             const decipher = createDecipheriv(
                 this.algorithm,
-                Buffer.from(this.key),
+                this.keyBuffer,
                 Buffer.from(ivHex, 'hex')
             );
 

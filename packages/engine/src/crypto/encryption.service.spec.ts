@@ -1,14 +1,25 @@
 import { AesEncryptionService } from './encryption.service';
-import { randomBytes } from 'crypto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { ConfigService } from '@nestjs/config';
 
 describe('AesEncryptionService', () => {
     let service: AesEncryptionService;
+    let mockConfigService: Partial<ConfigService>;
 
     beforeEach(() => {
         // Ensure a predictable 32-byte key for testing aes-256-gcm
-        process.env.ENCRYPTION_KEY = randomBytes(32).toString('hex').substring(0, 32);
-        service = new AesEncryptionService();
+        process.env.ENCRYPTION_KEY = 'a'.repeat(32);
+        mockConfigService = {
+            get: vi.fn().mockImplementation((key: string) => {
+                if (key === 'ENCRYPTION_KEY') return process.env.ENCRYPTION_KEY;
+                return undefined;
+            }),
+        };
+        service = new AesEncryptionService(mockConfigService as ConfigService);
+    });
+
+    afterEach(() => {
+        delete process.env.ENCRYPTION_KEY;
     });
 
     it('should successfully encrypt and decrypt a plaintext string (e.g. JSON tokens)', async () => {
@@ -29,9 +40,11 @@ describe('AesEncryptionService', () => {
         const payload = 'sensitive_data';
         const encrypted = await service.encrypt(payload);
 
-        // Tamper with the ciphertext component
+        // Tamper with the ciphertext component: slightly alter a valid hex string
         const parts = encrypted.split(':');
-        parts[2] = 'tampered_data_deadbeef';
+        const firstHexChar = parts[2][0];
+        const newFirstChar = firstHexChar === 'a' ? 'b' : 'a';
+        parts[2] = newFirstChar + parts[2].substring(1);
         const tamperedCiphertext = parts.join(':');
 
         await expect(service.decrypt(tamperedCiphertext)).rejects.toThrow('Decryption failed');
@@ -43,7 +56,7 @@ describe('AesEncryptionService', () => {
         const [iv, authTag, ciphertext] = encrypted.split(':');
 
         expect(iv).toBeDefined();
-        expect(iv.length).toBe(32); // 16 bytes in hex is 32 chars
+        expect(iv.length).toBe(24); // 12 bytes in hex is 24 chars
         expect(authTag).toBeDefined();
         expect(authTag.length).toBe(32); // 16 bytes in hex is 32 chars
         expect(ciphertext).toBeDefined();

@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller';
 import { ProviderRegistryService } from '@nexiom/engine';
+import { appConnections, AppConnectionStatus } from '@nexiom/database';
+import { eq, and } from 'drizzle-orm';
+import { UnauthorizedException } from '@nestjs/common';
 import {
   describe,
   it,
@@ -102,22 +105,39 @@ describe('ConnectorsController', () => {
       const mockReq = {
         user: { tenantId: 'tenant-123' },
       } as unknown as Request;
-      mockDb.where.mockResolvedValue([
-        { id: '1', appName: 'salesforce', status: 'ACTIVE' },
-      ]);
+      const mockDate = new Date();
+      const mockConnectionInfo = {
+        id: '1',
+        appName: 'salesforce',
+        status: AppConnectionStatus.ACTIVE,
+        metadata: { some: 'metadata' },
+        createdAt: mockDate,
+        updatedAt: mockDate,
+      };
+
+      mockDb.where.mockResolvedValue([mockConnectionInfo]);
 
       const result = await controller.getActiveConnections(mockReq);
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.from).toHaveBeenCalled();
-      expect(mockDb.where).toHaveBeenCalled();
-      expect(result).toEqual([
-        { id: '1', appName: 'salesforce', status: 'ACTIVE' },
-      ]);
+
+      const whereArg = mockDb.where.mock.calls[0][0] as unknown;
+      expect(whereArg).toEqual(
+        and(
+          eq(appConnections.tenantId, 'tenant-123'),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
+        ),
+      );
+
+      expect(result).toEqual([mockConnectionInfo]);
     });
 
     it('should throw an error if tenantId is missing from the request', async () => {
       const mockReq = { user: {} } as unknown as Request;
+      await expect(controller.getActiveConnections(mockReq)).rejects.toThrow(
+        UnauthorizedException,
+      );
       await expect(controller.getActiveConnections(mockReq)).rejects.toThrow(
         'Tenant ID missing from request',
       );

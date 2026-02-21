@@ -126,7 +126,8 @@
         },
         "auth_type": {
           "name": "auth_type",
-          "type": "varchar(50)",
+          "type": "auth_type_enum",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },

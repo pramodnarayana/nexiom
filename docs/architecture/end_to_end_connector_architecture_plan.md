@@ -115,7 +115,7 @@ The system must guarantee that stored tokens are always valid for background wor
 * **Mechanism (The `TokenManagerService`):**
   * When a background worker needs to make an API call, it requests credentials via `getValidCredentials(connectionId)`.
   * **Check:** The Token Manager checks `expiresAt`. If `expiresAt` < NOW (with a 5-minute buffer), it triggers a refresh.
-  * **Concurrency Lock:** It uses Redis `SETNX` to acquire a lock for that specific connection ID.
+  * **Concurrency Lock:** It uses Redis `SET` with `NX` and `PX` (e.g., `SET lock_key connection_id NX PX 30000`) to acquire a lock for that specific connection ID with a TTL. This ensures locks auto-expire if a holder crashes. It stores a unique lock value (like the owner ID) to safely verify ownership before releasing it, preventing accidental unlocks.
   * **Refresh:** Only the worker holding the lock makes the HTTP call to the vendor's Token URL to get new tokens.
   * **Wait:** Other concurrent requests for the same connection sleep and retry.
   * **Save:** The new access and refresh tokens are encrypted and saved back to the `app_connection` table, updating `expiresAt`.
@@ -127,8 +127,8 @@ The system must guarantee that stored tokens are always valid for background wor
 
 ### Automated Tests
 
-1. **Token Manager Mocking:** Create Jest unit tests for `TokenManagerService` focusing on the Redis lock `SETNX` mechanism to ensure only *one* promise triggers an outgoing OAuth refresh API call, while subsequent calls wait and receive the updated token.
-2. **Database Insertion Flow:** Build tests mapping a mocked `grant.js` response payload through the `OAuthCallbackController` to ensure it invokes `EncryptionService` and populates `app_connection` accurately.
+1. **Token Manager Mocking:** Create Vitest unit tests for `TokenManagerService` focusing on the Redis lock `SET` with `NX` and `PX` mechanism to ensure only *one* promise triggers an outgoing OAuth refresh API call, while subsequent calls wait and receive the updated token.
+2. **Database Insertion Flow:** Build tests mapping a mocked `grant.js` response payload through the `OAuthCallbackController` to ensure it invokes `EncryptionService` and populates `app_connection` accurately. Ensure test runner configuration uses `vitest.config.ts` and Vitest import usage.
 
 ### Manual End-to-End Verification
 

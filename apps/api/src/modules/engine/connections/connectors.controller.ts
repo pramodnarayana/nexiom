@@ -1,7 +1,14 @@
-import { Controller, Get, Req, UseGuards, Inject } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Req,
+  UseGuards,
+  Inject,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/engine';
-import { appConnections } from '@nexiom/database';
+import { appConnections, AppConnectionStatus } from '@nexiom/database';
 import { eq, and } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
 
@@ -33,7 +40,7 @@ export class ConnectorsController {
   ) {
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
-      throw new Error('Tenant ID missing from request');
+      throw new UnauthorizedException('Tenant ID missing from request');
     }
 
     const activeConnections = await this.db
@@ -49,7 +56,7 @@ export class ConnectorsController {
       .where(
         and(
           eq(appConnections.tenantId, tenantId),
-          eq(appConnections.status, 'ACTIVE'),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
         ),
       );
 

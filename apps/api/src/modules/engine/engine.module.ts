@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleDestroy, Inject } from '@nestjs/common';
 import {
   ProviderRegistryService,
   EncryptionService,
@@ -11,10 +11,10 @@ import { OAuthCallbackController } from './connections/callback.controller';
 import { ConnectorsController } from './connections/connectors.controller';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
 import Redis from 'ioredis';
-import { ConfigService, ConfigModule } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
-  imports: [DbModule, ConfigModule],
+  imports: [DbModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
     ProviderRegistryService,
@@ -32,4 +32,12 @@ import { ConfigService, ConfigModule } from '@nestjs/config';
     },
   ],
 })
-export class EngineModule {}
+export class EngineModule implements OnModuleDestroy {
+  constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
+
+  async onModuleDestroy() {
+    if (this.redis) {
+      await this.redis.quit();
+    }
+  }
+}

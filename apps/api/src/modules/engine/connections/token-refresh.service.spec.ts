@@ -24,11 +24,17 @@ describe('DefaultOAuthRefreshClient', () => {
     );
 
     // Mock the global fetch
-    globalThis.fetch = vi.fn();
+    vi.stubGlobal('fetch', vi.fn());
+
+    // Stub environment variables for Quickbooks (used in tests)
+    vi.stubEnv('QUICKBOOKS_CLIENT_ID', 'test_client_id');
+    vi.stubEnv('QUICKBOOKS_CLIENT_SECRET', 'test_client_secret');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('should throw an error if the provider is not found in the registry', async () => {
@@ -94,7 +100,7 @@ describe('DefaultOAuthRefreshClient', () => {
 
     try {
       await client.refresh('quickbooks', 'bad_refresh');
-      expect.fail('Should have thrown');
+      expect.unreachable('Should have thrown');
     } catch (e) {
       const error = e as Error & { status: number };
       expect(error.message).toContain('OAuth Refresh failed: 401');

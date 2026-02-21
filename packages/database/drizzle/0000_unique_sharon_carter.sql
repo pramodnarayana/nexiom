@@ -19,7 +19,7 @@ CREATE TABLE "app_connection" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"app_name" varchar(100) NOT NULL,
-	"auth_type" varchar(50) NOT NULL,
+	"auth_type" "auth_type_enum" NOT NULL,
 	"encrypted_credentials" text NOT NULL,
 	"expires_at" timestamp with time zone,
 	"status" varchar(50) DEFAULT 'ACTIVE' NOT NULL,
@@ -31,4 +31,7 @@ CREATE TABLE "app_connection" (
 --> statement-breakpoint
 CREATE INDEX "app_name_idx" ON "app_connection" USING btree ("app_name");--> statement-breakpoint
 CREATE INDEX "status_idx" ON "app_connection" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "tenant_app_connection_unique_idx" ON "app_connection" USING btree ("tenant_id","app_name","connection_key");
+CREATE INDEX "tenant_status_idx" ON "app_connection" USING btree ("tenant_id", "status");--> statement-breakpoint
+CREATE UNIQUE INDEX "tenant_app_connection_unique_idx" ON "app_connection" USING btree ("tenant_id","app_name","connection_key");--> statement-breakpoint
+ALTER TABLE "app_connection" ADD CONSTRAINT "fk_app_connection_tenant_id" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
+ALTER TABLE "app_connection" ADD CONSTRAINT "fk_app_connection_provider_name" FOREIGN KEY ("app_name") REFERENCES "provider"("name") ON DELETE CASCADE ON UPDATE CASCADE;

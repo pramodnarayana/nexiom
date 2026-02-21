@@ -23,26 +23,31 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     }
 
     try {
+      const normalizedEnvName = appName
+        .replace(/[^A-Za-z0-9]/g, '_')
+        .toUpperCase();
+      const clientId = process.env[`${normalizedEnvName}_CLIENT_ID`];
+      const clientSecret = process.env[`${normalizedEnvName}_CLIENT_SECRET`];
+
+      if (!clientId || !clientSecret) {
+        throw new Error(`Missing OAuth client credentials for ${appName}`);
+      }
+
       const response = await fetch(provider.tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
-          client_id: process.env[`${appName.toUpperCase()}_CLIENT_ID`] || '',
-          client_secret:
-            process.env[`${appName.toUpperCase()}_CLIENT_SECRET`] || '',
+          client_id: clientId,
+          client_secret: clientSecret,
         }).toString(),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
-        const errorPayload = await response.text();
-        this.logger.error(
-          `OAuth Refresh failed for ${appName}: ${errorPayload}`,
-        );
-        // If 400 or 401, throwing an object with status will trigger REVOKED status in TokenManager
         const err = new Error(
-          `OAuth Refresh failed: ${response.status}`,
+          `OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(),
         ) as Error & { status: number };
         err.status = response.status;
         throw err;
