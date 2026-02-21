@@ -12,6 +12,7 @@ import { ConnectorsController } from './connections/connectors.controller';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 
 @Module({
   imports: [DbModule],
@@ -33,16 +34,16 @@ import { ConfigService } from '@nestjs/config';
   ],
 })
 export class EngineModule implements OnModuleDestroy {
+  private readonly logger = new Logger(EngineModule.name);
+
   constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
 
   async onModuleDestroy() {
-    if (this.redis) {
-      try {
-        await this.redis.quit();
-      } catch (error) {
-        console.error('Redis quit failed, forcefully disconnecting', error);
-        this.redis.disconnect();
-      }
+    try {
+      await this.redis.quit();
+    } catch (error) {
+      this.logger.error('Redis quit failed, forcefully disconnecting', error);
+      this.redis.disconnect();
     }
   }
 }

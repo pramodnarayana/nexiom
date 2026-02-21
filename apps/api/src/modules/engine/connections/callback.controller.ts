@@ -41,8 +41,10 @@ export class OAuthCallbackController {
     const request = req as Request & { session?: GrantSession };
     const provider = request.params.provider;
 
+    let providerData;
     try {
-      if (!(await this.providerRegistry.isAllowed(provider))) {
+      providerData = await this.providerRegistry.getProvider(provider);
+      if (!providerData?.enabled) {
         this.logger.warn(`Rejected unauthorized provider: ${provider}`);
         res.redirect(`/app/connections?error=invalid_provider`);
         return;
@@ -131,6 +133,7 @@ export class OAuthCallbackController {
         .insert(appConnections)
         .values({
           tenantId,
+          providerId: providerData.id,
           appName: provider,
           connectionKey,
           authType: 'OAUTH2',

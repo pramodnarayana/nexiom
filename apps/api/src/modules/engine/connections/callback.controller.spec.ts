@@ -31,7 +31,7 @@ import { Request, Response } from 'express';
 describe('OAuthCallbackController', () => {
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
-  let mockProviderRegistry: { isAllowed: ReturnType<typeof vi.fn> };
+  let mockProviderRegistry: { getProvider: ReturnType<typeof vi.fn> };
 
   const mockRequest = (
     provider: string,
@@ -70,7 +70,9 @@ describe('OAuthCallbackController', () => {
     } as unknown as Mocked<EncryptionService>;
 
     mockProviderRegistry = {
-      isAllowed: vi.fn().mockResolvedValue(true),
+      getProvider: vi
+        .fn()
+        .mockResolvedValue({ id: 'mock-provider-id', enabled: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,11 +96,14 @@ describe('OAuthCallbackController', () => {
     controller = module.get<OAuthCallbackController>(OAuthCallbackController);
     vi.clearAllMocks();
     // Re-apply default: known providers are allowed
-    mockProviderRegistry.isAllowed.mockResolvedValue(true);
+    mockProviderRegistry.getProvider.mockResolvedValue({
+      id: 'mock-provider-id',
+      enabled: true,
+    });
   });
 
   it('should redirect with invalid_provider error if provider is not allowed', async () => {
-    mockProviderRegistry.isAllowed.mockResolvedValue(false);
+    mockProviderRegistry.getProvider.mockResolvedValue({ enabled: false });
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();
@@ -225,6 +230,7 @@ describe('OAuthCallbackController', () => {
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: VALID_TENANT_ID,
+        providerId: 'mock-provider-id',
         appName: 'salesforce',
         connectionKey: 'realm-id',
         encryptedCredentials: 'encrypted-credentials',

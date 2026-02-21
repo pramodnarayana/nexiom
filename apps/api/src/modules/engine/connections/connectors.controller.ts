@@ -46,8 +46,16 @@ export class ConnectorsController {
       throw new UnauthorizedException('Tenant ID missing from request');
     }
 
-    const limit = Math.min(Number.parseInt(limitStr || '50', 10), 100);
-    const offset = Number.parseInt(offsetStr || '0', 10);
+    let limit = Number.parseInt(limitStr || '50', 10);
+    if (Number.isNaN(limit) || !Number.isFinite(limit)) {
+      limit = 50;
+    }
+    limit = Math.max(0, Math.min(limit, 100));
+
+    let offset = Number.parseInt(offsetStr || '0', 10);
+    if (Number.isNaN(offset) || !Number.isFinite(offset) || offset < 0) {
+      offset = 0;
+    }
 
     const activeConnections = await this.db
       .select({
