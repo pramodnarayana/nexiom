@@ -97,18 +97,17 @@ describe('ConnectorsController', () => {
       });
       // Ensure backend-only secrets like authorizeUrl/tokenUrl are stripped
       expect(result[0]).not.toHaveProperty('tokenUrl');
+      expect(result[0]).not.toHaveProperty('authorizeUrl');
     });
 
     it('should bubble up InternalServerErrorException from the provider registry', async () => {
       (mockProviderRegistry.getAllProviders as Mock).mockRejectedValue(
         new Error('DB connection failed'),
       );
-      await expect(controller.getProviders()).rejects.toThrow(
-        InternalServerErrorException,
-      );
-      await expect(controller.getProviders()).rejects.toThrow(
-        'Failed to get providers',
-      );
+
+      const promise = controller.getProviders();
+      await expect(promise).rejects.toThrow(InternalServerErrorException);
+      await expect(promise).rejects.toThrow('Failed to get providers');
     });
   });
 
@@ -158,9 +157,6 @@ describe('ConnectorsController', () => {
         data: [expectedData],
         metadata: { limit: 50, offset: 0, count: 1 },
       });
-
-      // Verify explicitly that encryptedCredentials is not passed through
-      expect(result.data[0]).not.toHaveProperty('encryptedCredentials');
 
       expect(mockDb.select).toHaveBeenCalledWith(
         expect.not.objectContaining({

@@ -40,7 +40,7 @@ import { Request, Response } from 'express';
 describe('OAuthCallbackController', () => {
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
-  let mockProviderRegistry: { getProvider: ReturnType<typeof vi.fn> };
+  let mockProviderRegistry: Mocked<ProviderRegistryService>;
 
   const mockRequest = (
     provider: string,
@@ -81,8 +81,10 @@ describe('OAuthCallbackController', () => {
     mockProviderRegistry = {
       getProvider: vi
         .fn()
-        .mockResolvedValue({ id: 'mock-provider-id', enabled: true }),
-    };
+        .mockResolvedValue({ id: 'mock-provider-id', enabled: true } as any),
+      getAllProviders: vi.fn(),
+      isAllowed: vi.fn(),
+    } as unknown as Mocked<ProviderRegistryService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthCallbackController],
@@ -110,7 +112,7 @@ describe('OAuthCallbackController', () => {
     mockProviderRegistry.getProvider.mockResolvedValue({
       id: 'test-provider',
       enabled: false,
-    });
+    } as any);
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();

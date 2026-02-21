@@ -39,7 +39,11 @@ export class ConnectorsController {
         category: p.category,
       }));
     } catch (error) {
-      this.logger.error('Failed to get providers', (error as Error).stack);
+      if (error instanceof Error) {
+        this.logger.error('Failed to get providers', error.stack);
+      } else {
+        this.logger.error('Failed to get providers', String(error));
+      }
       throw new InternalServerErrorException('Failed to get providers');
     }
   }
@@ -96,11 +100,15 @@ export class ConnectorsController {
           .where(whereClause),
       ]);
     } catch (error) {
-      this.logger.error(
-        `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`,
-        (error as Error).stack,
+      const msg = `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`;
+      if (error instanceof Error) {
+        this.logger.error(msg, error.stack);
+      } else {
+        this.logger.error(msg, String(error));
+      }
+      throw new InternalServerErrorException(
+        'Failed to get active connections',
       );
-      throw error;
     }
 
     const total = Number(countResult?.count ?? 0);
