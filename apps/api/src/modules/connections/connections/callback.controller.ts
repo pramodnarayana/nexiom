@@ -6,7 +6,7 @@ import {
   EncryptionService,
   ProviderRegistryService,
   DrizzleDb,
-} from '@nexiom/engine';
+} from '@nexiom/connections';
 import { validate as uuidValidate } from 'uuid';
 
 interface GrantResponse {

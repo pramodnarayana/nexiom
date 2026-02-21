@@ -5,7 +5,7 @@ import {
   TokenManagerService,
   AesEncryptionService,
   OAuthRefreshClient,
-} from '@nexiom/engine';
+} from '@nexiom/connections';
 import { DbModule } from '../../db/db.module';
 import { OAuthCallbackController } from './connections/callback.controller';
 import { ConnectorsController } from './connections/connectors.controller';
@@ -41,8 +41,8 @@ import { ConfigService } from '@nestjs/config';
     },
   ],
 })
-export class EngineModule implements OnModuleDestroy {
-  private readonly logger = new Logger(EngineModule.name);
+export class ConnectionsModule implements OnModuleDestroy {
+  private readonly logger = new Logger(ConnectionsModule.name);
 
   constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
 

@@ -45,7 +45,7 @@ To ensure this system is truly enterprise-grade and scalable to 500+ integration
    The frontend Marketplace contains **zero** hardcoded integration logic. Instead, when a user clicks an integration, the frontend reads the `ConnectorAuthSchema` JSON payload from the backend. The backend dictates whether to render a generic OAuth redirect button, or dynamically spawn input fields for API Keys and Custom Subdomains.
 
 2. **Decoupled Execution Nodes (`integrations/` folder):**
-   Just like Activepieces, each integration lives in its own isolated package/folder. The core `@nexiom/engine` has no hardcoded knowledge of "Salesforce" or "HubSpot". The registry dynamically loads these "pieces" via database metadata.
+   Just like Activepieces, each integration lives in its own isolated package/folder. The core `@nexiom/connections` has no hardcoded knowledge of "Salesforce" or "HubSpot". The registry dynamically loads these "pieces" via database metadata.
 
 3. **Background Token Resilience:**
    Similar to enterprise systems, the API Gateway does not perform token refreshes on the fly during user requests. Instead, a robust Redis-backed concurrency lock (`TokenManagerService`) silently refreshes OAuth tokens in the background before any data sync worker executes, ensuring 100% token validity without race conditions.
@@ -56,7 +56,7 @@ To ensure this system is truly enterprise-grade and scalable to 500+ integration
 
 Before starting on the Marketplace, the core foundation of the engine has been established:
 
-* `@nexiom/engine` workspace package created.
+* `@nexiom/connections` workspace package created.
 * `EncryptionService` configured for secure credential storage.
 * `TokenManagerService` created with Redis concurrent locks for smart token refresh.
 * `app_connection` standard table established in the database schema.
@@ -101,7 +101,7 @@ Ensure the Tenant Schema uses a unified `app_connection` table.
 * **Fields:** `appName`, `authType` (OAUTH2, API_KEY), `encryptedCredentials` (KMS/AES-256), `expiresAt`, `status` (ACTIVE, EXPIRED, REVOKED), and `metadata`.
 * **Action:** Define this schema within `@nexiom/database/src/schema` explicitly.
 
-## 4. Integration Core Layer: `@nexiom/engine`
+## 4. Integration Core Layer: `@nexiom/connections`
 
 A dedicated workspace package to isolate credential loading and syncing behaviors from the control plane API.
 

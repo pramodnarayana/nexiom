@@ -11,7 +11,10 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { OAuthCallbackController } from './callback.controller.js';
-import { EncryptionService, ProviderRegistryService } from '@nexiom/engine';
+import {
+  EncryptionService,
+  ProviderRegistryService,
+} from '@nexiom/connections';
 
 const VALID_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
