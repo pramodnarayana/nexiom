@@ -112,7 +112,10 @@ describe('OAuthCallbackController', () => {
   });
 
   it('should redirect with invalid_provider error if provider is not allowed', async () => {
-    mockProviderRegistry.getProvider.mockResolvedValue({ enabled: false });
+    mockProviderRegistry.getProvider.mockResolvedValue({
+      id: 'test-provider',
+      enabled: false,
+    });
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();

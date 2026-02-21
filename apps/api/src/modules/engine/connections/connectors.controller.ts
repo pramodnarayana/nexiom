@@ -57,38 +57,37 @@ export class ConnectorsController {
       offset = 0;
     }
 
-    const activeConnections = await this.db
-      .select({
-        id: appConnections.id,
-        appName: appConnections.appName,
-        status: appConnections.status,
-        metadata: appConnections.metadata,
-        createdAt: appConnections.createdAt,
-        updatedAt: appConnections.updatedAt,
-      })
-      .from(appConnections)
-      .where(
-        and(
-          eq(appConnections.tenantId, tenantId),
-          eq(appConnections.status, AppConnectionStatus.ACTIVE),
-        ),
-      )
-      .limit(limit)
-      .offset(offset);
+    const whereClause = and(
+      eq(appConnections.tenantId, tenantId),
+      eq(appConnections.status, AppConnectionStatus.ACTIVE),
+    );
 
-    const [countResult] = await this.db
-      .select({ count: count() })
-      .from(appConnections)
-      .where(
-        and(
-          eq(appConnections.tenantId, tenantId),
-          eq(appConnections.status, AppConnectionStatus.ACTIVE),
-        ),
-      );
+    const [activeConnections, [countResult]] = await Promise.all([
+      this.db
+        .select({
+          id: appConnections.id,
+          appName: appConnections.appName,
+          status: appConnections.status,
+          metadata: appConnections.metadata,
+          createdAt: appConnections.createdAt,
+          updatedAt: appConnections.updatedAt,
+        })
+        .from(appConnections)
+        .where(whereClause)
+        .limit(limit)
+        .offset(offset),
+
+      this.db
+        .select({ count: count() })
+        .from(appConnections)
+        .where(whereClause),
+    ]);
+
+    const total = Number(countResult?.count ?? 0);
 
     return {
       data: activeConnections,
-      metadata: { limit, offset, count: countResult.count },
+      metadata: { limit, offset, count: total },
     };
   }
 }

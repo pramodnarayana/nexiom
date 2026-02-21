@@ -25,9 +25,11 @@ import { ConfigService } from '@nestjs/config';
       provide: 'REDIS_CLIENT',
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        return new Redis(
-          config.get<string>('REDIS_URL') || 'redis://localhost:6379',
-        );
+        const redisUrl = config.get<string>('REDIS_URL');
+        if (!redisUrl && config.get<string>('NODE_ENV') !== 'development') {
+          throw new Error('REDIS_URL environment variable is missing');
+        }
+        return new Redis(redisUrl || 'redis://localhost:6379');
       },
     },
   ],

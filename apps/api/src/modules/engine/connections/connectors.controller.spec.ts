@@ -125,7 +125,26 @@ describe('ConnectorsController', () => {
       // The controller calls where() twice: once for data, once for count.
       const dataChain = {
         limit: vi.fn().mockReturnThis(),
-        offset: vi.fn().mockResolvedValue([mockConnectionInfo]),
+        offset: vi.fn().mockImplementation(() => {
+          const projection = mockDb.select.mock.lastCall?.[0] as
+            | Record<string, unknown>
+            | undefined;
+          if (projection) {
+            const ObjectKeys = Object.keys(projection);
+            const filtered = ObjectKeys.reduce(
+              (acc, key) => {
+                if (key in mockConnectionInfo) {
+                  (acc as Record<string, unknown>)[key] =
+                    mockConnectionInfo[key as keyof typeof mockConnectionInfo];
+                }
+                return acc;
+              },
+              {} as Partial<typeof mockConnectionInfo>,
+            );
+            return Promise.resolve([filtered]);
+          }
+          return Promise.resolve([mockConnectionInfo]);
+        }),
       };
 
       const countPromise = Promise.resolve([{ count: 1 }]);
@@ -145,14 +164,18 @@ describe('ConnectorsController', () => {
 
       expect(mockDb.where).toHaveBeenCalledTimes(2);
 
+      // Remove encryptedCredentials from the expected return object since the DB mock respects the projection
+      const { encryptedCredentials: _encryptedCredentials, ...expectedData } =
+        mockConnectionInfo;
+
       expect(result).toEqual({
-        data: [mockConnectionInfo],
+        data: [expectedData],
         metadata: { limit: 50, offset: 0, count: 1 },
       });
-      // Verify explicitly that encryptedCredentials is not passed through if omitted from projection, or test that the controller stripped it if it received it.
-      // Wait, the test uses mockConnectionInfo which has encryptedCredentials. Since the DB returns it in the mock, the controller just returns activeConnections array directly.
-      // If the controller returns it directly, the test should assert we don't return encryptedCredentials, or that the mockDb.select was explicitly called without it and the result reflects that.
-      // Let's assert on the mockDb.select argument to ensure it doesn't include encryptedCredentials.
+
+      // Verify explicitly that encryptedCredentials is not passed through
+      expect(result.data[0]).not.toHaveProperty('encryptedCredentials');
+
       expect(mockDb.select).toHaveBeenCalledWith(
         expect.not.objectContaining({
           encryptedCredentials: expect.anything() as unknown,
