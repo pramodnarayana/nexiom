@@ -1,16 +1,15 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 import { authTypeEnum, providers } from './provider';
 
-// Since the tenants table physically lives in a different schema/database,
-// we just define a raw FK in the migration or omit it in Drizzle code while keeping the reference loose.
-// But the prompt states: "change the constraint to reference organization(id)".
-// So we define it via foreignKey if the org table is in the same schema, or raw migration. Let's just create a raw FK definition or omit the strict drizzle FK to allow migration SQL to handle it, but we can do a dummy reference here or raw query.
-// Wait, the prompt implies "tenants" was changed to "organization". That happens in the raw SQL.
+// Tenants table and associated identity schema are physically isolated per tenant or live in a separate DB.
+// Drizzle foreign keys pointing to "organization" are handled directly in raw migrations (0000_...sql)
+// rather than strict drizzle-orm foreignKey() constraints here to allow cross-database resolution.
 
 export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED']);
 
 export const AppConnectionStatus = {
     ACTIVE: 'ACTIVE',
+    INACTIVE: 'INACTIVE',
     EXPIRED: 'EXPIRED',
     REVOKED: 'REVOKED',
 } as const;
@@ -41,5 +40,6 @@ export const appConnections = pgTable('app_connection', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
+    index('tenant_status_idx').on(table.tenantId, table.status),
     uniqueIndex('tenant_app_connection_unique_idx').on(table.tenantId, table.appName, table.connectionKey),
 ]);

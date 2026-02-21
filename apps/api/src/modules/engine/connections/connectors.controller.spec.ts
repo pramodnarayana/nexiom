@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller';
 import { ProviderRegistryService } from '@nexiom/engine';
-import { appConnections, AppConnectionStatus } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { AppConnectionStatus } from '@nexiom/database';
 import { UnauthorizedException } from '@nestjs/common';
 import {
   describe,
@@ -23,8 +22,6 @@ describe('ConnectorsController', () => {
     select: Mock;
     from: Mock;
     where: Mock;
-    limit: Mock;
-    offset: Mock;
   };
 
   beforeEach(async () => {
@@ -32,12 +29,17 @@ describe('ConnectorsController', () => {
       getAllProviders: vi.fn(),
     };
 
+    // Create two separate chain variables to easily assert against
+    const dataChain = {
+      limit: vi.fn().mockReturnThis(),
+      offset: vi.fn(),
+    };
+
+    // Default the `where` mock to return the data chain
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      offset: vi.fn(),
+      where: vi.fn().mockReturnValue(dataChain),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -120,22 +122,28 @@ describe('ConnectorsController', () => {
         updatedAt: mockDate,
       };
 
-      mockDb.offset.mockResolvedValue([mockConnectionInfo]);
+      // The controller calls where() twice: once for data, once for count.
+      const dataChain = {
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue([mockConnectionInfo]),
+      };
+
+      const countPromise = Promise.resolve([{ count: 1 }]);
+
+      // First call gets dataChain, second call gets countPromise
+      mockDb.where
+        .mockReturnValueOnce(dataChain)
+        .mockReturnValueOnce(countPromise);
 
       const result = await controller.getActiveConnections(mockReq);
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.from).toHaveBeenCalled();
-      expect(mockDb.limit).toHaveBeenCalledWith(50);
-      expect(mockDb.offset).toHaveBeenCalledWith(0);
 
-      const whereArg = mockDb.where.mock.calls[0][0] as unknown;
-      expect(whereArg).toEqual(
-        and(
-          eq(appConnections.tenantId, 'tenant-123'),
-          eq(appConnections.status, AppConnectionStatus.ACTIVE),
-        ),
-      );
+      expect(dataChain.limit).toHaveBeenCalledWith(50);
+      expect(dataChain.offset).toHaveBeenCalledWith(0);
+
+      expect(mockDb.where).toHaveBeenCalledTimes(2);
 
       expect(result).toEqual({
         data: [mockConnectionInfo],

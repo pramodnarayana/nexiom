@@ -1,6 +1,7 @@
 import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { appConnections } from '@nexiom/database';
+import { appConnections, providers } from '@nexiom/database';
+import { InferSelectModel } from 'drizzle-orm';
 import {
   EncryptionService,
   ProviderRegistryService,
@@ -41,7 +42,7 @@ export class OAuthCallbackController {
     const request = req as Request & { session?: GrantSession };
     const provider = request.params.provider;
 
-    let providerData;
+    let providerData: InferSelectModel<typeof providers> | null;
     try {
       providerData = await this.providerRegistry.getProvider(provider);
       if (!providerData?.enabled) {

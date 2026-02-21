@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, vi, Mocked } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+  vi,
+  Mocked,
+} from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { OAuthCallbackController } from './callback.controller.js';

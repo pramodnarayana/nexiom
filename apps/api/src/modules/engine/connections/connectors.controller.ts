@@ -10,7 +10,7 @@ import {
 import { Request } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/engine';
 import { appConnections, AppConnectionStatus } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, count } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
 
 @Controller('connectors')
@@ -47,10 +47,10 @@ export class ConnectorsController {
     }
 
     let limit = Number.parseInt(limitStr || '50', 10);
-    if (Number.isNaN(limit) || !Number.isFinite(limit)) {
+    if (Number.isNaN(limit) || !Number.isFinite(limit) || limit <= 0) {
       limit = 50;
     }
-    limit = Math.max(0, Math.min(limit, 100));
+    limit = Math.min(limit, 100);
 
     let offset = Number.parseInt(offsetStr || '0', 10);
     if (Number.isNaN(offset) || !Number.isFinite(offset) || offset < 0) {
@@ -76,9 +76,19 @@ export class ConnectorsController {
       .limit(limit)
       .offset(offset);
 
+    const [countResult] = await this.db
+      .select({ count: count() })
+      .from(appConnections)
+      .where(
+        and(
+          eq(appConnections.tenantId, tenantId),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
+        ),
+      );
+
     return {
       data: activeConnections,
-      metadata: { limit, offset, count: activeConnections.length },
+      metadata: { limit, offset, count: countResult.count },
     };
   }
 }

@@ -1,4 +1,4 @@
-import { Module, OnModuleDestroy, Inject } from '@nestjs/common';
+import { Module, OnModuleDestroy, Inject, Logger } from '@nestjs/common';
 import {
   ProviderRegistryService,
   EncryptionService,
@@ -12,7 +12,6 @@ import { ConnectorsController } from './connections/connectors.controller';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
 
 @Module({
   imports: [DbModule],
