@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller';
 import { ProviderRegistryService } from '@nexiom/engine';
 import { AppConnectionStatus } from '@nexiom/database';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import {
   describe,
   it,
@@ -32,7 +35,7 @@ describe('ConnectorsController', () => {
     // Create two separate chain variables to easily assert against
     const dataChain = {
       limit: vi.fn().mockReturnThis(),
-      offset: vi.fn(),
+      offset: vi.fn().mockResolvedValue([]),
     };
 
     // Default the `where` mock to return the data chain
@@ -96,12 +99,15 @@ describe('ConnectorsController', () => {
       expect(result[0]).not.toHaveProperty('tokenUrl');
     });
 
-    it('should bubble up errors from the provider registry', async () => {
+    it('should bubble up InternalServerErrorException from the provider registry', async () => {
       (mockProviderRegistry.getAllProviders as Mock).mockRejectedValue(
         new Error('DB connection failed'),
       );
       await expect(controller.getProviders()).rejects.toThrow(
-        'DB connection failed',
+        InternalServerErrorException,
+      );
+      await expect(controller.getProviders()).rejects.toThrow(
+        'Failed to get providers',
       );
     });
   });

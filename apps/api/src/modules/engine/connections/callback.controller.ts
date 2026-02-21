@@ -149,6 +149,7 @@ export class OAuthCallbackController {
             appConnections.connectionKey,
           ],
           set: {
+            providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
             metadata: { realmId: grantResponse.raw?.realmId },

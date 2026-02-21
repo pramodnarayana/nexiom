@@ -122,6 +122,32 @@ describe('OAuthCallbackController', () => {
     );
   });
 
+  it('should redirect with invalid_provider error if provider is not found', async () => {
+    mockProviderRegistry.getProvider.mockResolvedValue(null);
+
+    const req = mockRequest('unknown-provider');
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=invalid_provider',
+    );
+  });
+
+  it('should redirect with internal_error if provider lookup fails', async () => {
+    mockProviderRegistry.getProvider.mockRejectedValue(new Error('DB error'));
+
+    const req = mockRequest('salesforce');
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=internal_error',
+    );
+  });
+
   it('should redirect with auth_failed if grant session is missing', async () => {
     const req = mockRequest('salesforce');
     const res = mockResponse();

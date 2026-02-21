@@ -5,6 +5,7 @@ import {
   UseGuards,
   Inject,
   UnauthorizedException,
+  InternalServerErrorException,
   Query,
   Logger,
 } from '@nestjs/common';
@@ -26,16 +27,21 @@ export class ConnectorsController {
 
   @Get('providers')
   async getProviders() {
-    const providers = await this.providerRegistry.getAllProviders();
-    // Only return the necessary public info to the frontend
-    return providers.map((p) => ({
-      name: p.name,
-      displayName: p.displayName,
-      description: p.description,
-      logoUrl: p.logoUrl,
-      authType: p.authType,
-      category: p.category,
-    }));
+    try {
+      const providers = await this.providerRegistry.getAllProviders();
+      // Only return the necessary public info to the frontend
+      return providers.map((p) => ({
+        name: p.name,
+        displayName: p.displayName,
+        description: p.description,
+        logoUrl: p.logoUrl,
+        authType: p.authType,
+        category: p.category,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to get providers', (error as Error).stack);
+      throw new InternalServerErrorException('Failed to get providers');
+    }
   }
 
   @Get('active')
@@ -90,11 +96,10 @@ export class ConnectorsController {
           .where(whereClause),
       ]);
     } catch (error) {
-      this.logger.error('Failed to get active connections', error, {
-        tenantId,
-        limit,
-        offset,
-      });
+      this.logger.error(
+        `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`,
+        (error as Error).stack,
+      );
       throw error;
     }
 
