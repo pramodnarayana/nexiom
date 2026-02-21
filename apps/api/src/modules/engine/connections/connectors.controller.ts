@@ -6,6 +6,7 @@ import {
   Inject,
   UnauthorizedException,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/engine';
@@ -16,6 +17,8 @@ import { AuthGuard } from '../../identity/auth/auth.guard';
 @Controller('connectors')
 @UseGuards(AuthGuard)
 export class ConnectorsController {
+  private readonly logger = new Logger(ConnectorsController.name);
+
   constructor(
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
@@ -62,26 +65,38 @@ export class ConnectorsController {
       eq(appConnections.status, AppConnectionStatus.ACTIVE),
     );
 
-    const [activeConnections, [countResult]] = await Promise.all([
-      this.db
-        .select({
-          id: appConnections.id,
-          appName: appConnections.appName,
-          status: appConnections.status,
-          metadata: appConnections.metadata,
-          createdAt: appConnections.createdAt,
-          updatedAt: appConnections.updatedAt,
-        })
-        .from(appConnections)
-        .where(whereClause)
-        .limit(limit)
-        .offset(offset),
+    let activeConnections;
+    let countResult;
 
-      this.db
-        .select({ count: count() })
-        .from(appConnections)
-        .where(whereClause),
-    ]);
+    try {
+      [activeConnections, [countResult]] = await Promise.all([
+        this.db
+          .select({
+            id: appConnections.id,
+            appName: appConnections.appName,
+            status: appConnections.status,
+            metadata: appConnections.metadata,
+            createdAt: appConnections.createdAt,
+            updatedAt: appConnections.updatedAt,
+          })
+          .from(appConnections)
+          .where(whereClause)
+          .limit(limit)
+          .offset(offset),
+
+        this.db
+          .select({ count: count() })
+          .from(appConnections)
+          .where(whereClause),
+      ]);
+    } catch (error) {
+      this.logger.error('Failed to get active connections', error, {
+        tenantId,
+        limit,
+        offset,
+      });
+      throw error;
+    }
 
     const total = Number(countResult?.count ?? 0);
 

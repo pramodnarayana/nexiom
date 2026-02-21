@@ -104,11 +104,6 @@ describe('OAuthCallbackController', () => {
 
     controller = module.get<OAuthCallbackController>(OAuthCallbackController);
     vi.clearAllMocks();
-    // Re-apply default: known providers are allowed
-    mockProviderRegistry.getProvider.mockResolvedValue({
-      id: 'mock-provider-id',
-      enabled: true,
-    });
   });
 
   it('should redirect with invalid_provider error if provider is not allowed', async () => {

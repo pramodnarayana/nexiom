@@ -1,7 +1,7 @@
 import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { appConnections, type providers } from '@nexiom/database';
-import { InferSelectModel } from 'drizzle-orm';
+import type { InferSelectModel } from 'drizzle-orm';
 import {
   EncryptionService,
   ProviderRegistryService,

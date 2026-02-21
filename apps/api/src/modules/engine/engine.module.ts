@@ -24,12 +24,19 @@ import { ConfigService } from '@nestjs/config';
     {
       provide: 'REDIS_CLIENT',
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
+      useFactory: async (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
         if (!redisUrl && config.get<string>('NODE_ENV') !== 'development') {
           throw new Error('REDIS_URL environment variable is missing');
         }
-        return new Redis(redisUrl || 'redis://localhost:6379');
+        const client = new Redis(redisUrl || 'redis://localhost:6379', {
+          connectTimeout: 10000,
+          maxRetriesPerRequest: 3,
+          enableReadyCheck: true,
+          lazyConnect: true,
+        });
+        await client.connect();
+        return client;
       },
     },
   ],

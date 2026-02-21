@@ -122,29 +122,13 @@ describe('ConnectorsController', () => {
         updatedAt: mockDate,
       };
 
+      const { encryptedCredentials: _encryptedCredentials, ...expectedData } =
+        mockConnectionInfo;
+
       // The controller calls where() twice: once for data, once for count.
       const dataChain = {
         limit: vi.fn().mockReturnThis(),
-        offset: vi.fn().mockImplementation(() => {
-          const projection = mockDb.select.mock.lastCall?.[0] as
-            | Record<string, unknown>
-            | undefined;
-          if (projection) {
-            const ObjectKeys = Object.keys(projection);
-            const filtered = ObjectKeys.reduce(
-              (acc, key) => {
-                if (key in mockConnectionInfo) {
-                  (acc as Record<string, unknown>)[key] =
-                    mockConnectionInfo[key as keyof typeof mockConnectionInfo];
-                }
-                return acc;
-              },
-              {} as Partial<typeof mockConnectionInfo>,
-            );
-            return Promise.resolve([filtered]);
-          }
-          return Promise.resolve([mockConnectionInfo]);
-        }),
+        offset: vi.fn().mockResolvedValue([expectedData]),
       };
 
       const countPromise = Promise.resolve([{ count: 1 }]);
@@ -163,10 +147,6 @@ describe('ConnectorsController', () => {
       expect(dataChain.offset).toHaveBeenCalledWith(0);
 
       expect(mockDb.where).toHaveBeenCalledTimes(2);
-
-      // Remove encryptedCredentials from the expected return object since the DB mock respects the projection
-      const { encryptedCredentials: _encryptedCredentials, ...expectedData } =
-        mockConnectionInfo;
 
       expect(result).toEqual({
         data: [expectedData],
