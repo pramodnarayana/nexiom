@@ -1,17 +1,33 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
+import { authTypeEnum, providers } from './provider';
+
+// Tenants table and associated identity schema are physically isolated per tenant or live in a separate DB.
+// Drizzle foreign keys pointing to "organization" are handled directly in raw migrations (0000_...sql)
+// rather than strict drizzle-orm foreignKey() constraints here to allow cross-database resolution.
+
+export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED']);
+
+export const AppConnectionStatus = {
+    ACTIVE: 'ACTIVE',
+    INACTIVE: 'INACTIVE',
+    EXPIRED: 'EXPIRED',
+    REVOKED: 'REVOKED',
+} as const;
+export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppConnectionStatus];
 
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull(), // FK enforced at migration level — tenants table lives in identity/catalog schema (Database-per-Tenant)
-    appName: varchar('app_name', { length: 100 }).notNull(), // e.g., 'quickbooks'
-    authType: varchar('auth_type', { length: 50 }).notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
+    tenantId: uuid('tenant_id').notNull(), // Uses organization(id) in SQL migrations
+    providerId: uuid('provider_id').references(() => providers.id, { onDelete: 'restrict', onUpdate: 'cascade' }).notNull(),
+    appName: varchar('app_name', { length: 100 }).notNull(), // Denormalized 'quickbooks'
+    authType: authTypeEnum('auth_type').notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
 
     // Encrypted Payload (Contains access_token, refresh_token, or api_key)
     encryptedCredentials: text('encrypted_credentials').notNull(),
 
     // Extracted for fast querying without decryption
     expiresAt: timestamp('expires_at', { withTimezone: true }),
-    status: varchar('status', { length: 50 }).default('ACTIVE').notNull(), // ACTIVE, EXPIRED, REVOKED
+    status: connectionStatusEnum('status').default('ACTIVE').notNull(), // ACTIVE, INACTIVE, REVOKED, EXPIRED
 
     // Public metadata (e.g., connected account email, realmId)
     metadata: jsonb('metadata').default({}),
@@ -24,6 +40,6 @@ export const appConnections = pgTable('app_connection', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
-    index('status_idx').on(table.status),
+    index('tenant_status_idx').on(table.tenantId, table.status),
     uniqueIndex('tenant_app_connection_unique_idx').on(table.tenantId, table.appName, table.connectionKey),
 ]);

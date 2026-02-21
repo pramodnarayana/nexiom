@@ -13,6 +13,7 @@ import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from '../modules/email/email.service.abstract';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../db/schema';
+import { EngineModule } from '../modules/engine/engine.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import * as schema from '../db/schema';
     DbModule,
     SystemAdminModule,
     RolesModule,
+    EngineModule,
   ],
   controllers: [AppController],
   providers: [AppService],

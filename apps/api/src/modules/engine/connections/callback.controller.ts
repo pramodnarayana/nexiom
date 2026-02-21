@@ -1,6 +1,7 @@
 import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { appConnections } from '@nexiom/database';
+import { appConnections, type providers } from '@nexiom/database';
+import type { InferSelectModel } from 'drizzle-orm';
 import {
   EncryptionService,
   ProviderRegistryService,
@@ -41,8 +42,10 @@ export class OAuthCallbackController {
     const request = req as Request & { session?: GrantSession };
     const provider = request.params.provider;
 
+    let providerData: InferSelectModel<typeof providers> | null;
     try {
-      if (!(await this.providerRegistry.isAllowed(provider))) {
+      providerData = await this.providerRegistry.getProvider(provider);
+      if (!providerData?.enabled) {
         this.logger.warn(`Rejected unauthorized provider: ${provider}`);
         res.redirect(`/app/connections?error=invalid_provider`);
         return;
@@ -131,6 +134,7 @@ export class OAuthCallbackController {
         .insert(appConnections)
         .values({
           tenantId,
+          providerId: providerData.id,
           appName: provider,
           connectionKey,
           authType: 'OAUTH2',
@@ -145,6 +149,7 @@ export class OAuthCallbackController {
             appConnections.connectionKey,
           ],
           set: {
+            providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
             metadata: { realmId: grantResponse.raw?.realmId },

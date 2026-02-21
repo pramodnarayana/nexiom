@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, vi, Mocked } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+  vi,
+  Mocked,
+} from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { OAuthCallbackController } from './callback.controller.js';
@@ -29,9 +38,12 @@ vi.mock('@nexiom/database', () => ({
 import { Request, Response } from 'express';
 
 describe('OAuthCallbackController', () => {
+  type ProviderResult = Awaited<
+    ReturnType<ProviderRegistryService['getProvider']>
+  >;
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
-  let mockProviderRegistry: { isAllowed: ReturnType<typeof vi.fn> };
+  let mockProviderRegistry: Mocked<ProviderRegistryService>;
 
   const mockRequest = (
     provider: string,
@@ -70,8 +82,12 @@ describe('OAuthCallbackController', () => {
     } as unknown as Mocked<EncryptionService>;
 
     mockProviderRegistry = {
-      isAllowed: vi.fn().mockResolvedValue(true),
-    };
+      getProvider: vi.fn().mockResolvedValue({
+        id: 'mock-provider-id',
+        enabled: true,
+      } as unknown as ProviderResult),
+      getAllProviders: vi.fn(),
+    } as unknown as Mocked<ProviderRegistryService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthCallbackController],
@@ -93,12 +109,13 @@ describe('OAuthCallbackController', () => {
 
     controller = module.get<OAuthCallbackController>(OAuthCallbackController);
     vi.clearAllMocks();
-    // Re-apply default: known providers are allowed
-    mockProviderRegistry.isAllowed.mockResolvedValue(true);
   });
 
   it('should redirect with invalid_provider error if provider is not allowed', async () => {
-    mockProviderRegistry.isAllowed.mockResolvedValue(false);
+    mockProviderRegistry.getProvider.mockResolvedValue({
+      id: 'test-provider',
+      enabled: false,
+    } as unknown as ProviderResult);
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();
@@ -107,6 +124,32 @@ describe('OAuthCallbackController', () => {
 
     expect(res.redirect).toHaveBeenCalledWith(
       '/app/connections?error=invalid_provider',
+    );
+  });
+
+  it('should redirect with invalid_provider error if provider is not found', async () => {
+    mockProviderRegistry.getProvider.mockResolvedValue(null);
+
+    const req = mockRequest('unknown-provider');
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=invalid_provider',
+    );
+  });
+
+  it('should redirect with internal_error if provider lookup fails', async () => {
+    mockProviderRegistry.getProvider.mockRejectedValue(new Error('DB error'));
+
+    const req = mockRequest('salesforce');
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=internal_error',
     );
   });
 
@@ -225,6 +268,7 @@ describe('OAuthCallbackController', () => {
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: VALID_TENANT_ID,
+        providerId: 'mock-provider-id',
         appName: 'salesforce',
         connectionKey: 'realm-id',
         encryptedCredentials: 'encrypted-credentials',

@@ -5,7 +5,10 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "build": "tsc"
+        "build": "tsc",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:cov": "vitest run --coverage"
     },
     "dependencies": {
         "@nexiom/database": "workspace:*",
@@ -14,7 +17,9 @@
     },
     "devDependencies": {
         "@nestjs/common": "^11.0.1",
-        "typescript": "^5.7.3"
+        "@vitest/coverage-v8": "^4.0.18",
+        "typescript": "^5.7.3",
+        "vitest": "^4.0.18"
     },
     "peerDependencies": {
         "@nestjs/common": "^11.0.1"
