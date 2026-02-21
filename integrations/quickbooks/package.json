@@ -11,7 +11,7 @@
         "lint:check": "eslint \"src/**/*.ts\""
     },
     "dependencies": {
-        "@nexiom/engine": "workspace:*"
+        "@nexiom/connections": "workspace:*"
     },
     "devDependencies": {
         "@nexiom/eslint-config": "workspace:*",

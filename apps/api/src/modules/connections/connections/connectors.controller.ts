@@ -10,7 +10,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { ProviderRegistryService, DrizzleDb } from '@nexiom/engine';
+import { ProviderRegistryService, DrizzleDb } from '@nexiom/connections';
 import { appConnections, AppConnectionStatus } from '@nexiom/database';
 import { eq, and, count } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';

@@ -1,4 +1,4 @@
-import { GenericCredentialType } from "@nexiom/engine";
+import { GenericCredentialType } from "@nexiom/connections";
 
 export const quickbooksAuth: GenericCredentialType = {
   name: "quickbooks",

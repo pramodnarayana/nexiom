@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OAuthRefreshClient, ProviderRegistryService } from '@nexiom/engine';
+import {
+  OAuthRefreshClient,
+  ProviderRegistryService,
+} from '@nexiom/connections';
 
 @Injectable()
 export class DefaultOAuthRefreshClient implements OAuthRefreshClient {

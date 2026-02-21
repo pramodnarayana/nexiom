@@ -1,5 +1,5 @@
 import { DefaultOAuthRefreshClient } from './token-refresh.service';
-import { ProviderRegistryService } from '@nexiom/engine';
+import { ProviderRegistryService } from '@nexiom/connections';
 import {
   describe,
   it,

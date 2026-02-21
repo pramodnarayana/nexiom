@@ -1,4 +1,4 @@
-import { GenericCredentialType } from "@nexiom/engine";
+import { GenericCredentialType } from "@nexiom/connections";
 
 /**
  * Salesforce provider definition — used as seed data for the `providers` table.

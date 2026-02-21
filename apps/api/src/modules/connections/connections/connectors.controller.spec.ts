@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
-import { ProviderRegistryService } from '@nexiom/engine';
+import { ProviderRegistryService } from '@nexiom/connections';
 import { AppConnectionStatus } from '@nexiom/database';
 import {
   UnauthorizedException,
