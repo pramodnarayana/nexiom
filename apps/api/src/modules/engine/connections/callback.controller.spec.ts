@@ -38,6 +38,9 @@ vi.mock('@nexiom/database', () => ({
 import { Request, Response } from 'express';
 
 describe('OAuthCallbackController', () => {
+  type ProviderResult = Awaited<
+    ReturnType<ProviderRegistryService['getProvider']>
+  >;
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
@@ -82,11 +85,8 @@ describe('OAuthCallbackController', () => {
       getProvider: vi.fn().mockResolvedValue({
         id: 'mock-provider-id',
         enabled: true,
-      } as unknown as Awaited<
-        ReturnType<ProviderRegistryService['getProvider']>
-      >),
+      } as unknown as ProviderResult),
       getAllProviders: vi.fn(),
-      isAllowed: vi.fn(),
     } as unknown as Mocked<ProviderRegistryService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -115,9 +115,7 @@ describe('OAuthCallbackController', () => {
     mockProviderRegistry.getProvider.mockResolvedValue({
       id: 'test-provider',
       enabled: false,
-    } as unknown as Awaited<
-      ReturnType<ProviderRegistryService['getProvider']>
-    >);
+    } as unknown as ProviderResult);
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();

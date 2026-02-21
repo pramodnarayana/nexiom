@@ -103,7 +103,7 @@ describe('ConnectorsController', () => {
     });
 
     it('should bubble up InternalServerErrorException from the provider registry', async () => {
-      (mockProviderRegistry.getAllProviders as Mock).mockRejectedValue(
+      mockProviderRegistry.getAllProviders.mockRejectedValue(
         new Error('DB connection failed'),
       );
 
@@ -154,6 +154,14 @@ describe('ConnectorsController', () => {
       expect(dataChain.offset).toHaveBeenCalledWith(0);
 
       expect(mockDb.where).toHaveBeenCalledTimes(2);
+      expect(mockDb.where).toHaveBeenNthCalledWith(
+        1,
+        expect.any(Object), // Represents the drizzle 'and' clause for data
+      );
+      expect(mockDb.where).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Object), // Represents the drizzle 'and' clause for count
+      );
 
       expect(result).toEqual({
         data: [expectedData],
