@@ -5,6 +5,7 @@ import {
   UseGuards,
   Inject,
   UnauthorizedException,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/engine';
@@ -37,11 +38,16 @@ export class ConnectorsController {
   @Get('active')
   async getActiveConnections(
     @Req() req: Request & { user?: { tenantId: string } },
+    @Query('limit') limitStr?: string,
+    @Query('offset') offsetStr?: string,
   ) {
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
       throw new UnauthorizedException('Tenant ID missing from request');
     }
+
+    const limit = Math.min(Number.parseInt(limitStr || '50', 10), 100);
+    const offset = Number.parseInt(offsetStr || '0', 10);
 
     const activeConnections = await this.db
       .select({
@@ -58,8 +64,13 @@ export class ConnectorsController {
           eq(appConnections.tenantId, tenantId),
           eq(appConnections.status, AppConnectionStatus.ACTIVE),
         ),
-      );
+      )
+      .limit(limit)
+      .offset(offset);
 
-    return activeConnections;
+    return {
+      data: activeConnections,
+      metadata: { limit, offset, count: activeConnections.length },
+    };
   }
 }

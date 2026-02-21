@@ -98,13 +98,11 @@ describe('DefaultOAuthRefreshClient', () => {
       text: () => Promise.resolve('Unauthorized'),
     });
 
-    try {
-      await client.refresh('quickbooks', 'bad_refresh');
-      expect.unreachable('Should have thrown');
-    } catch (e) {
-      const error = e as Error & { status: number };
-      expect(error.message).toContain('OAuth Refresh failed: 401');
-      expect(error.status).toBe(401);
-    }
+    await expect(
+      client.refresh('quickbooks', 'bad_refresh'),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('OAuth Refresh failed: 401') as unknown,
+      status: 401,
+    });
   });
 });

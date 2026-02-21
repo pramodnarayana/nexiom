@@ -32,6 +32,5 @@ export const appConnections = pgTable('app_connection', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
-    index('status_idx').on(table.status),
     uniqueIndex('tenant_app_connection_unique_idx').on(table.tenantId, table.appName, table.connectionKey),
 ]);

@@ -37,7 +37,12 @@ export class EngineModule implements OnModuleDestroy {
 
   async onModuleDestroy() {
     if (this.redis) {
-      await this.redis.quit();
+      try {
+        await this.redis.quit();
+      } catch (error) {
+        console.error('Redis quit failed, forcefully disconnecting', error);
+        this.redis.disconnect();
+      }
     }
   }
 }

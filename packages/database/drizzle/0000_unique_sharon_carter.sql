@@ -30,7 +30,6 @@ CREATE TABLE "app_connection" (
 );
 --> statement-breakpoint
 CREATE INDEX "app_name_idx" ON "app_connection" USING btree ("app_name");--> statement-breakpoint
-CREATE INDEX "status_idx" ON "app_connection" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "tenant_status_idx" ON "app_connection" USING btree ("tenant_id", "status");--> statement-breakpoint
 CREATE UNIQUE INDEX "tenant_app_connection_unique_idx" ON "app_connection" USING btree ("tenant_id","app_name","connection_key");--> statement-breakpoint
 ALTER TABLE "app_connection" ADD CONSTRAINT "fk_app_connection_tenant_id" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
