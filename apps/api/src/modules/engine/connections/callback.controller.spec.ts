@@ -79,9 +79,12 @@ describe('OAuthCallbackController', () => {
     } as unknown as Mocked<EncryptionService>;
 
     mockProviderRegistry = {
-      getProvider: vi
-        .fn()
-        .mockResolvedValue({ id: 'mock-provider-id', enabled: true } as any),
+      getProvider: vi.fn().mockResolvedValue({
+        id: 'mock-provider-id',
+        enabled: true,
+      } as unknown as Awaited<
+        ReturnType<ProviderRegistryService['getProvider']>
+      >),
       getAllProviders: vi.fn(),
       isAllowed: vi.fn(),
     } as unknown as Mocked<ProviderRegistryService>;
@@ -112,7 +115,9 @@ describe('OAuthCallbackController', () => {
     mockProviderRegistry.getProvider.mockResolvedValue({
       id: 'test-provider',
       enabled: false,
-    } as any);
+    } as unknown as Awaited<
+      ReturnType<ProviderRegistryService['getProvider']>
+    >);
 
     const req = mockRequest('unsupported-provider');
     const res = mockResponse();

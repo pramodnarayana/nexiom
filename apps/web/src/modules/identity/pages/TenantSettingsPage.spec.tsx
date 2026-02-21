@@ -33,7 +33,7 @@ describe('TenantSettingsPage', () => {
         });
 
         // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
-        expect(screen.getByDisplayValue('Test Organization')).toBeInTheDocument();
+        expect(await screen.findByDisplayValue('Test Organization')).toBeInTheDocument();
     });
 
     it('shows error if no organization context', () => {
@@ -53,10 +53,9 @@ describe('TenantSettingsPage', () => {
 
         renderWithClient(<TenantSettingsPage />);
 
-        await waitFor(() => {
-            // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
-            expect(screen.getByDisplayValue('Test Organization')).toBeInTheDocument();
-        });
+        // See handlers.ts for GET /api/tenants/:id handler returning 'Test Organization'
+        const companyInput = await screen.findByDisplayValue('Test Organization');
+        expect(companyInput).toBeInTheDocument();
 
         const input = screen.getByLabelText('Company Name');
         fireEvent.change(input, { target: { value: 'Updated Corp' } });

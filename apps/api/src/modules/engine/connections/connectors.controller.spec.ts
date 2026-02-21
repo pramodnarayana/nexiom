@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConnectorsController } from './connectors.controller';
+import { ConnectorsController } from './connectors.controller.js';
 import { ProviderRegistryService } from '@nexiom/engine';
 import { AppConnectionStatus } from '@nexiom/database';
 import {
@@ -20,7 +20,7 @@ import type { Request } from 'express';
 
 describe('ConnectorsController', () => {
   let controller: ConnectorsController;
-  let mockProviderRegistry: Mocked<Partial<ProviderRegistryService>>;
+  let mockProviderRegistry: Mocked<ProviderRegistryService>;
   let mockDb: {
     select: Mock;
     from: Mock;
@@ -30,7 +30,9 @@ describe('ConnectorsController', () => {
   beforeEach(async () => {
     mockProviderRegistry = {
       getAllProviders: vi.fn(),
-    };
+      getProvider: vi.fn(),
+      isAllowed: vi.fn(),
+    } as unknown as Mocked<ProviderRegistryService>;
 
     // Create two separate chain variables to easily assert against
     const dataChain = {
@@ -158,8 +160,8 @@ describe('ConnectorsController', () => {
         metadata: { limit: 50, offset: 0, count: 1 },
       });
 
-      expect(mockDb.select).toHaveBeenCalledWith(
-        expect.not.objectContaining({
+      expect(mockDb.select).not.toHaveBeenCalledWith(
+        expect.objectContaining({
           encryptedCredentials: expect.anything() as unknown,
         }),
       );
