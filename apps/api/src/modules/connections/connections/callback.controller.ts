@@ -139,13 +139,28 @@ export class OAuthCallbackController {
     req: Request,
     provider: string,
   ): { code: string; rawState: string; rawRealmId?: string } {
-    const code = req.query.code as string | undefined;
-    const rawState = req.query.state as string | undefined;
-    const errorQuery = req.query.error as string | undefined;
-    const rawRealmId = req.query.realmId as string | undefined;
+    // Guard against Express passing repeated query params as arrays
+    const raw = (key: string) => {
+      const val = req.query[key];
+      if (Array.isArray(val)) {
+        this.logger.warn(
+          `Multiple values for query param '${key}' in callback for ${provider}`,
+        );
+        throw new OAuthCallbackError(
+          'invalid_callback',
+          `Duplicate query param: ${key}`,
+        );
+      }
+      return val as string | undefined;
+    };
+
+    const code = raw('code');
+    const rawState = raw('state');
+    const errorQuery = raw('error');
+    const rawRealmId = raw('realmId');
 
     if (errorQuery) {
-      this.logger.error(
+      this.logger.warn(
         `OAuth vendor returned an error for ${provider}`,
         errorQuery,
       );

@@ -167,7 +167,7 @@ export class ConnectorsController {
       }
       this.logger.error(
         `Failed to initiate OAuth connect for ${providerName}`,
-        error,
+        error instanceof Error ? error.stack : error,
       );
       throw new InternalServerErrorException(
         `Failed to initiate OAuth connect for ${providerName}`,

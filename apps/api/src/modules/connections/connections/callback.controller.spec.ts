@@ -198,6 +198,17 @@ describe('OAuthCallbackController', () => {
     );
   });
 
+  it('should redirect with invalid_callback if state is present but code is missing', async () => {
+    const req = mockRequest('salesforce', { state: 'valid-jwt' }); // Missing code
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=invalid_callback',
+    );
+  });
+
   it('should redirect with invalid_state if JWT state verification fails', async () => {
     mockOauthStateService.verifyState.mockImplementation(() => {
       throw new Error('CSRF exception');
