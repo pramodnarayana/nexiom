@@ -31,40 +31,6 @@ export class ConnectorsController {
     private readonly oauthStateService: OauthStateService,
   ) {}
 
-  @Get(':provider')
-  async connect(
-    @Param('provider') providerName: string,
-    @Req() req: Request & { user?: { tenantId: string } },
-    @Res() res: Response,
-  ) {
-    const tenantId = req.user?.tenantId;
-    if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID missing from request');
-    }
-
-    try {
-      const state = this.oauthStateService.generateState(
-        tenantId,
-        providerName,
-      );
-      const url = await this.connectorsService.getAuthorizationUrl(
-        providerName,
-        state,
-      );
-
-      // Redirect the user browser to the vendor's OAuth page
-      return res.redirect(url);
-    } catch (error) {
-      this.logger.error(
-        `Failed to initiate OAuth connect for ${providerName}`,
-        error,
-      );
-      throw new InternalServerErrorException(
-        `Failed to initiate OAuth connect for ${providerName}`,
-      );
-    }
-  }
-
   @Get('providers')
   async getProviders() {
     try {
@@ -157,5 +123,39 @@ export class ConnectorsController {
       data: activeConnections,
       metadata: { limit, offset, count: total },
     };
+  }
+
+  @Get(':provider')
+  async connect(
+    @Param('provider') providerName: string,
+    @Req() req: Request & { user?: { tenantId: string } },
+    @Res() res: Response,
+  ) {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID missing from request');
+    }
+
+    try {
+      const state = this.oauthStateService.generateState(
+        tenantId,
+        providerName,
+      );
+      const url = await this.connectorsService.getAuthorizationUrl(
+        providerName,
+        state,
+      );
+
+      // Redirect the user browser to the vendor's OAuth page
+      return res.redirect(url);
+    } catch (error) {
+      this.logger.error(
+        `Failed to initiate OAuth connect for ${providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        `Failed to initiate OAuth connect for ${providerName}`,
+      );
+    }
   }
 }

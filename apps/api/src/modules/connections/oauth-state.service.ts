@@ -1,15 +1,36 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'node:crypto';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class OauthStateService {
   private readonly logger = new Logger(OauthStateService.name);
+  private readonly jwtSecret: string;
 
-  // In a real production system, this secret MUST be read from ConfigService/Env
-  // Using a hardcoded fallback only for local scaffolding safety.
-  private readonly jwtSecret =
-    process.env.JWT_SECRET ||
-    'nexiom-local-dev-oauth-state-secret-do-not-use-in-prod';
+  constructor(private readonly configService: ConfigService) {
+    const directStateSecret =
+      this.configService.get<string>('OAUTH_STATE_SECRET');
+    const masterJwtSecret = this.configService.get<string>('JWT_SECRET');
+
+    if (directStateSecret) {
+      this.jwtSecret = directStateSecret;
+    } else if (masterJwtSecret) {
+      // Derive a dedicated state signing key from the master JWT secret
+      this.jwtSecret = crypto
+        .createHmac('sha256', masterJwtSecret)
+        .update('oauth_state')
+        .digest('hex');
+    } else {
+      const nodeEnv = this.configService.get<string>('NODE_ENV');
+      if (nodeEnv !== 'development' && nodeEnv !== 'test') {
+        throw new Error(
+          'FATAL: JWT_SECRET or OAUTH_STATE_SECRET must be provided in production',
+        );
+      }
+      this.jwtSecret = 'nexiom-local-dev-oauth-state-secret-do-not-use-in-prod';
+    }
+  }
 
   /**
    * Generates a short-lived JWT containing the tenantId to be used as the OAuth `state` parameter.

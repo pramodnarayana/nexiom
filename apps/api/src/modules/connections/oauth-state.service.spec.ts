@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { OauthStateService } from './oauth-state.service';
 import { UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
@@ -9,8 +10,20 @@ describe('OauthStateService', () => {
   const mockProvider = 'salesforce';
 
   beforeEach(async () => {
+    const mockConfigService = {
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === 'JWT_SECRET') return 'test-master-secret';
+        if (key === 'OAUTH_STATE_SECRET') return undefined; // trigger HMAC branch
+        if (key === 'NODE_ENV') return 'test';
+        return undefined;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [OauthStateService],
+      providers: [
+        OauthStateService,
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
     }).compile();
 
     service = module.get<OauthStateService>(OauthStateService);

@@ -157,6 +157,7 @@ Vendors require different authentication headers (Bearer tokens, API keys in the
 ### D. Why this is Enterprise-Grade
 
 1. **Code Portability:** Because we are adopting the `Piece` and `Action` schema structure used by open-source engines like Activepieces, we can literally copy-paste the `salesforce/actions/create-contact.ts` file from their open-source GitHub repository into our `integrations/salesforce` folder. It will instantly work with our `TokenManagerService`.
+   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into the `integrations/` directory, developers MUST preserve the original MIT license header and attribute Activepieces. Nexiom's `TokenManagerService` and `HttpClient` will execute these actions natively, but strict adherence to upstream licensing at the file level is required.
 2. **Sandboxing:** Actions are stateless functions (`run(context)`). They do not hold database connections or memory. This means they can eventually be executed inside isolated Node.js child processes or Serverless functions (AWS Lambda) if a customer submits untrusted code.
 3. **No Credential Leakage:** The integration code (the `Piece` developer) NEVER sees the raw OAuth token. They just use the `HttpClient`, which injects the token downstream.
 

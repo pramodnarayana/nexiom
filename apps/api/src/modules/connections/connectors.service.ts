@@ -3,14 +3,23 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ProviderRegistryService } from '@nexiom/connections';
 
 @Injectable()
 export class ConnectorsService {
   private readonly logger = new Logger(ConnectorsService.name);
 
-  constructor(private readonly providerRegistry: ProviderRegistryService) {}
+  constructor(
+    private readonly providerRegistry: ProviderRegistryService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private normalizeProviderEnvPrefix(providerName: string): string {
+    return providerName.replace(/[^A-Za-z0-9]/g, '_').toUpperCase();
+  }
 
   /**
    * Generates the fully qualified Authorization URL for the vendor.
@@ -20,6 +29,10 @@ export class ConnectorsService {
     providerName: string,
     state: string,
   ): Promise<string> {
+    if (!/^[a-z0-9-]+$/.test(providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
     const provider = await this.providerRegistry.getProvider(providerName);
 
     if (!provider) {
@@ -38,10 +51,10 @@ export class ConnectorsService {
     }
 
     // Attempt to load client credentials
-    const normalizedEnvName = providerName
-      .replace(/[^A-Za-z0-9]/g, '_')
-      .toUpperCase();
-    const clientId = process.env[`${normalizedEnvName}_CLIENT_ID`];
+    const normalizedEnvName = this.normalizeProviderEnvPrefix(providerName);
+    const clientId = this.configService.get<string>(
+      `${normalizedEnvName}_CLIENT_ID`,
+    );
 
     if (!clientId) {
       this.logger.error(
@@ -65,7 +78,8 @@ export class ConnectorsService {
 
     // Default system callback redirect URI. Depending on environment, we might
     // need a centralized config service for the hostname.
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const baseUrl =
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
     url.searchParams.append(
       'redirect_uri',
       `${baseUrl}/api/connect/${providerName}/callback`,
@@ -81,6 +95,10 @@ export class ConnectorsService {
     providerName: string,
     code: string,
   ): Promise<Record<string, unknown>> {
+    if (!/^[a-z0-9-]+$/.test(providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
     const provider = await this.providerRegistry.getProvider(providerName);
 
     if (!provider) {
@@ -98,11 +116,13 @@ export class ConnectorsService {
       );
     }
 
-    const normalizedEnvName = providerName
-      .replace(/[^A-Za-z0-9]/g, '_')
-      .toUpperCase();
-    const clientId = process.env[`${normalizedEnvName}_CLIENT_ID`];
-    const clientSecret = process.env[`${normalizedEnvName}_CLIENT_SECRET`];
+    const normalizedEnvName = this.normalizeProviderEnvPrefix(providerName);
+    const clientId = this.configService.get<string>(
+      `${normalizedEnvName}_CLIENT_ID`,
+    );
+    const clientSecret = this.configService.get<string>(
+      `${normalizedEnvName}_CLIENT_SECRET`,
+    );
 
     if (!clientId || !clientSecret) {
       this.logger.error(`Missing OAuth client credentials for ${providerName}`);
@@ -111,7 +131,8 @@ export class ConnectorsService {
       );
     }
 
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const baseUrl =
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
     const redirectUri = `${baseUrl}/api/connect/${providerName}/callback`;
 
     try {

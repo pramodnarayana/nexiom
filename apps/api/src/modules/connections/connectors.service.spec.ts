@@ -1,11 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service';
 import { ProviderRegistryService } from '@nexiom/connections';
 import {
   InternalServerErrorException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
-import { vi, describe, it, expect, beforeEach, Mocked } from 'vitest';
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  Mocked,
+} from 'vitest';
 
 type ProviderResult = Awaited<
   ReturnType<ProviderRegistryService['getProvider']>
@@ -14,8 +24,19 @@ type ProviderResult = Awaited<
 describe('ConnectorsService', () => {
   let service: ConnectorsService;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockConfig: Record<string, string>;
 
   beforeEach(async () => {
+    mockConfig = {
+      SALESFORCE_CLIENT_ID: 'test-client-id',
+      SALESFORCE_CLIENT_SECRET: 'test-client-secret',
+      BASE_URL: 'https://tenant.nexiom.app',
+    };
+
+    const mockConfigService = {
+      get: vi.fn().mockImplementation((key: string) => mockConfig[key]),
+    };
+
     mockProviderRegistry = {
       getProvider: vi.fn(),
       getAllProviders: vi.fn(),
@@ -25,18 +46,23 @@ describe('ConnectorsService', () => {
       providers: [
         ConnectorsService,
         { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
     service = module.get<ConnectorsService>(ConnectorsService);
-
-    // Reset env vars cleanly
-    delete process.env.SALESFORCE_CLIENT_ID;
-    delete process.env.SALESFORCE_CLIENT_SECRET;
-    delete process.env.BASE_URL;
   });
 
   describe('getAuthorizationUrl', () => {
+    it('should throw BadRequestException if providerName fails validation', async () => {
+      await expect(
+        service.getAuthorizationUrl(
+          'invalid/provider_name!',
+          'mocked_jwt_state',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should generate a valid OAuth authorization URL with state and scopes', async () => {
       mockProviderRegistry.getProvider.mockResolvedValue({
         id: '1',
@@ -44,9 +70,6 @@ describe('ConnectorsService', () => {
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
         scopes: ['api', 'refresh_token'],
       } as ProviderResult);
-
-      process.env.SALESFORCE_CLIENT_ID = 'test-client-id';
-      process.env.BASE_URL = 'https://tenant.nexiom.app';
 
       const urlString = await service.getAuthorizationUrl(
         'salesforce',
@@ -72,7 +95,8 @@ describe('ConnectorsService', () => {
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
       } as ProviderResult);
 
-      // Deliberately omit env var
+      mockConfig.SALESFORCE_CLIENT_ID = '';
+
       await expect(
         service.getAuthorizationUrl('salesforce', 'state'),
       ).rejects.toThrow(InternalServerErrorException);
@@ -84,15 +108,44 @@ describe('ConnectorsService', () => {
       vi.stubGlobal('fetch', vi.fn());
     });
 
-    it('should successfully exchange a code for tokens', async () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('should throw BadRequestException if providerName fails validation', async () => {
+      await expect(
+        service.exchangeCodeForTokens('invalid/provider_name!', 'auth-code'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if provider does not exist', async () => {
+      mockProviderRegistry.getProvider.mockResolvedValue(null);
+      await expect(
+        service.exchangeCodeForTokens('unknown', 'auth-code'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw InternalServerErrorException if credentials are missing', async () => {
       mockProviderRegistry.getProvider.mockResolvedValue({
         id: '1',
         name: 'salesforce',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as ProviderResult);
 
-      process.env.SALESFORCE_CLIENT_ID = 'client-123';
-      process.env.SALESFORCE_CLIENT_SECRET = 'secret-456';
+      mockConfig.SALESFORCE_CLIENT_ID = '';
+      mockConfig.SALESFORCE_CLIENT_SECRET = '';
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code'),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should successfully exchange a code for tokens', async () => {
+      mockProviderRegistry.getProvider.mockResolvedValue({
+        id: '1',
+        name: 'salesforce',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as ProviderResult);
 
       const mockTokens = { access_token: 'abc', refresh_token: 'def' };
       vi.mocked(fetch).mockResolvedValue({
@@ -126,9 +179,6 @@ describe('ConnectorsService', () => {
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as ProviderResult);
 
-      process.env.SALESFORCE_CLIENT_ID = 'client-123';
-      process.env.SALESFORCE_CLIENT_SECRET = 'secret-456';
-
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
         status: 400,
@@ -137,6 +187,20 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.exchangeCodeForTokens('salesforce', 'bad-code'),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException on network/timeout errors', async () => {
+      mockProviderRegistry.getProvider.mockResolvedValue({
+        id: '1',
+        name: 'salesforce',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as ProviderResult);
+
+      vi.mocked(fetch).mockRejectedValue(new Error('network unreachable'));
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'timeout-code'),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });

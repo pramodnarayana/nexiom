@@ -146,6 +146,7 @@ export class OAuthCallbackController {
           authType: 'OAUTH2',
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
+          metadata: { realmId: req.query.realmId as string | undefined },
         })
         .onConflictDoUpdate({
           target: [
