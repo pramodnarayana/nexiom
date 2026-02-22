@@ -37,6 +37,12 @@ export class OAuthCallbackController {
   async handleCallback(@Req() req: Request, @Res() res: Response) {
     const provider = req.params.provider;
 
+    if (!/^[a-z0-9-]+$/.test(provider)) {
+      this.logger.warn(`Rejected invalid provider path param: ${provider}`);
+      res.redirect(`/app/connections?error=invalid_provider`);
+      return;
+    }
+
     let providerData: InferSelectModel<typeof providers> | null;
     try {
       providerData = await this.providerRegistry.getProvider(provider);

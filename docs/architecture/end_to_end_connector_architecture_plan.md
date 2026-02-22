@@ -141,23 +141,31 @@ To standardize how we talk to 500+ APIs, every Action is defined by a strict Typ
 * `name`: e.g., 'create_contact'
 * `displayName`: e.g., 'Create Contact'
 * `props`: A declarative list of inputs required from the user/workflow (e.g., `email` (string), `firstName` (string)).
-* `run(context)`: The actual TypeScript async function that makes the fetch payload.
+* `run(context)`: The async TypeScript function that executes the vendor API call. It constructs the request, sends it via the injected `HttpClient`, awaits the response, and either returns a standardized result object (e.g., `Promise<ActionResult>`) or throws a typed error on failure. The `run` function never handles authentication directly—it delegates to `HttpClient` for credential injection.
 
 ### C. The Nexiom `HttpClient` Wrapper
 
 Vendors require different authentication headers (Bearer tokens, API keys in the URL, Basic Auth, etc.).
 
-* **The Solution:** We will build a unified `NexiomHttpClient` inside `@nexiom/connections`.
+* **The Solution:** We will build a unified `NexiomHttpClient` inside the `@nexiom/connections` package (see note below on the alias).
+
+> **Note:** `@nexiom/connections` is a workspace alias that maps to `packages/connections`. `NexiomHttpClient` lives at `packages/connections/src/http/nexiom-http-client.ts`.
+
 * **Execution Flow:**
   1. The API or Background Worker calls the engine: `Engine.executeAction('salesforce', 'create_contact', { email: "test@test.com" }, connectionId)`.
-  2. The Engine invokes `TokenManagerService` to get the guaranteed valid tokens.
-  3. The Engine passes the tokens to the `NexiomHttpClient`.
-  4. The `HttpClient` automatically injects the `Authorization: Bearer <token>` header and executes the `run(context)` function defined in the Salesforce `Piece`.
+  2. The Engine invokes `TokenManagerService` to get the guaranteed valid tokens. `TokenManagerService` returns different credential shapes depending on the provider's `authType` (e.g., `{ accessToken }` for OAuth 2.0, `{ apiKey }` for api_key, `{ username, password }` for basic).
+  3. The Engine reads the target `Piece.authType` metadata and passes both the tokens and the `authType` to `NexiomHttpClient`.
+  4. `NexiomHttpClient` switches on `authType` to choose the correct injection strategy:
+     * **Bearer / OAuth 2.0:** Injects `Authorization: Bearer <accessToken>` header.
+     * **API Key:** Appends the key to the URL query string or a designated header, per the provider's convention.
+     * **Basic Auth:** Encodes `username:password` in Base64 and sets `Authorization: Basic <encoded>`.
+  5. `NexiomHttpClient` normalizes the credential shape before injection so `run(context)` always receives a consistent interface regardless of `authType`.
+  6. `NexiomHttpClient` executes the `Piece.run(context)` function with credentials already applied.
 
 ### D. Why this is Enterprise-Grade
 
 1. **Code Portability:** Because we are adopting the `Piece` and `Action` schema structure used by open-source engines like Activepieces, we can literally copy-paste the `salesforce/actions/create-contact.ts` file from their open-source GitHub repository into our `integrations/salesforce` folder. It will instantly work with our `TokenManagerService`.
-   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into the `integrations/` directory, developers MUST preserve the original MIT license header and attribute Activepieces. Nexiom's `TokenManagerService` and `HttpClient` will execute these actions natively, but strict adherence to upstream licensing at the file level is required.
+   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into the `integrations/` directory, developers MUST preserve the original MIT license header and attribute Activepieces. Before merging any copied file, verify attribution against the **project-level compliance checklist** at [`docs/compliance/CHECKLIST.md`](../compliance/CHECKLIST.md) (or the `## Licensing` section in `CONTRIBUTING.md`). Nexiom's `TokenManagerService` and `HttpClient` will execute these actions natively, but strict adherence to upstream licensing at the file level is required.
 2. **Sandboxing:** Actions are stateless functions (`run(context)`). They do not hold database connections or memory. This means they can eventually be executed inside isolated Node.js child processes or Serverless functions (AWS Lambda) if a customer submits untrusted code.
 3. **No Credential Leakage:** The integration code (the `Piece` developer) NEVER sees the raw OAuth token. They just use the `HttpClient`, which injects the token downstream.
 
