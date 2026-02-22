@@ -6,11 +6,17 @@ import {
   Inject,
   UnauthorizedException,
   InternalServerErrorException,
+  BadRequestException,
   Query,
   Logger,
+  Param,
+  Res,
+  HttpException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/connections';
+import { ConnectorsService } from '../connectors.service';
+import { OauthStateService } from '../oauth-state.service';
 import { appConnections, AppConnectionStatus } from '@nexiom/database';
 import { eq, and, count } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
@@ -23,6 +29,8 @@ export class ConnectorsController {
   constructor(
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
+    private readonly connectorsService: ConnectorsService,
+    private readonly oauthStateService: OauthStateService,
   ) {}
 
   @Get('providers')
@@ -117,5 +125,53 @@ export class ConnectorsController {
       data: activeConnections,
       metadata: { limit, offset, count: total },
     };
+  }
+
+  @Get(':provider')
+  async connect(
+    @Param('provider') providerName: string,
+    @Req() req: Request & { user?: { tenantId: string } },
+    @Res() res: Response,
+    @Query('realmId') realmId?: string,
+  ) {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID missing from request');
+    }
+
+    if (realmId) {
+      if (realmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(realmId)) {
+        this.logger.warn(
+          `Invalid realmId format in connect for ${providerName}`,
+        );
+        throw new BadRequestException('Invalid realmId format');
+      }
+    }
+
+    try {
+      const state = this.oauthStateService.generateState(
+        tenantId,
+        providerName,
+        realmId,
+      );
+      const url = await this.connectorsService.getAuthorizationUrl(
+        providerName,
+        state,
+      );
+
+      // Redirect the user browser to the vendor's OAuth page
+      return res.redirect(url);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to initiate OAuth connect for ${providerName}`,
+        error instanceof Error ? error.stack : error,
+      );
+      throw new InternalServerErrorException(
+        `Failed to initiate OAuth connect for ${providerName}`,
+      );
+    }
   }
 }

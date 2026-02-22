@@ -36,3 +36,7 @@ playwright-report/
 
 # Test Runners
 .last-run.json
+
+# Vendor Reference Code
+activepieces-reference/
+n8n-reference/
