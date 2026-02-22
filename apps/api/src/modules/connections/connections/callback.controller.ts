@@ -7,25 +7,9 @@ import {
   ProviderRegistryService,
   DrizzleDb,
 } from '@nexiom/connections';
-import { validate as uuidValidate } from 'uuid';
 
-interface GrantResponse {
-  error?: string;
-  access_token?: string;
-  refresh_token?: string;
-  raw?: {
-    state?: string;
-    expires_in?: number;
-    realmId?: string;
-    [key: string]: unknown;
-  };
-}
-
-interface GrantSession {
-  grant?: {
-    response?: GrantResponse;
-  };
-}
+import { OauthStateService } from '../oauth-state.service';
+import { ConnectorsService } from '../connectors.service';
 
 @Controller('connect/:provider/callback')
 export class OAuthCallbackController {
@@ -35,11 +19,13 @@ export class OAuthCallbackController {
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
     private readonly crypto: EncryptionService,
     private readonly providerRegistry: ProviderRegistryService,
+    private readonly oauthStateService: OauthStateService,
+    private readonly connectorsService: ConnectorsService,
   ) {}
 
   @Get()
   async handleCallback(@Req() req: Request, @Res() res: Response) {
-    const request = req as Request & { session?: GrantSession };
+    const request = req;
     const provider = request.params.provider;
 
     let providerData: InferSelectModel<typeof providers> | null;
@@ -59,26 +45,29 @@ export class OAuthCallbackController {
       return;
     }
 
-    // 1. Grant.js populates req.session.grant.response
-    const grantResponse = request.session?.grant?.response;
-    if (!grantResponse || grantResponse.error) {
+    // 1. Extract and Validate query parameters
+    const code = req.query.code as string;
+    const rawState = req.query.state as string;
+    const errorQuery = req.query.error as string;
+
+    if (errorQuery) {
       this.logger.error(
-        `OAuth failed for ${provider}`,
-        grantResponse?.error ?? 'Unknown error',
+        `OAuth vendor returned an error for ${provider}`,
+        errorQuery,
       );
-      res.redirect(`/app/connections?error=auth_failed`);
-      return;
+      return res.redirect(`/app/connections?error=auth_failed`);
     }
 
-    // 2. Extract and Validate State (Tenant Context)
-    const rawState = grantResponse.raw?.state;
+    if (!code || !rawState) {
+      this.logger.warn(`Missing code or state in callback for ${provider}`);
+      return res.redirect(`/app/connections?error=invalid_callback`);
+    }
 
+    // 2. Validate State (Tenant Context) using stateless JWT
     let tenantId: string;
     try {
-      if (!rawState) throw new Error('Missing state');
-      // Using the real encryption service instead of mocking
-      tenantId = await this.crypto.decrypt(rawState);
-      if (!uuidValidate(tenantId)) throw new Error('Invalid tenant ID format');
+      const stateData = this.oauthStateService.verifyState(rawState, provider);
+      tenantId = stateData.tenantId;
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -89,20 +78,30 @@ export class OAuthCallbackController {
       return;
     }
 
-    // 3. Validate OAuth Payload
-    if (!grantResponse.access_token) {
+    // 3. Exchange code for real tokens
+    let tokenResponse: Record<string, unknown>;
+    try {
+      tokenResponse = await this.connectorsService.exchangeCodeForTokens(
+        provider,
+        code,
+      );
+    } catch (error) {
+      this.logger.error(`Token exchange failed for ${provider}`, error);
+      return res.redirect(`/app/connections?error=internal_error`);
+    }
+
+    if (!tokenResponse.access_token) {
       this.logger.warn(
         `Missing access_token in OAuth response for ${provider}, tenant: ${tenantId}`,
       );
-      res.redirect(`/app/connections?error=invalid_credentials`);
-      return;
+      return res.redirect(`/app/connections?error=invalid_credentials`);
     }
 
     // 4. Prepare Encrypted Payload
     const credentials = {
-      accessToken: grantResponse.access_token,
-      refreshToken: grantResponse.refresh_token,
-      realmId: grantResponse.raw?.realmId, // Store only needed metadata
+      accessToken: tokenResponse.access_token as string,
+      refreshToken: tokenResponse.refresh_token as string | undefined,
+      realmId: req.query.realmId as string | undefined, // Common for QuickBooks/accounting
     };
 
     let encryptedPayload: string;
@@ -118,15 +117,22 @@ export class OAuthCallbackController {
     }
 
     // 5. Calculate Expiry
-    const expiresIn =
-      typeof grantResponse.raw?.expires_in === 'number' &&
-      grantResponse.raw.expires_in > 0
-        ? grantResponse.raw.expires_in
-        : 3600;
+    let expiresIn = 3600; // default 1 hour
+    if (
+      typeof tokenResponse.expires_in === 'number' &&
+      tokenResponse.expires_in > 0
+    ) {
+      expiresIn = tokenResponse.expires_in;
+    } else if (
+      typeof tokenResponse.expires_in === 'string' &&
+      Number.parseInt(tokenResponse.expires_in, 10) > 0
+    ) {
+      expiresIn = Number.parseInt(tokenResponse.expires_in, 10);
+    }
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // 6. Derive connectionKey for multi-realm providers (e.g., QuickBooks realmId)
-    const connectionKey = grantResponse.raw?.realmId ?? 'default';
+    // 6. Derive connectionKey (e.g. for multiple environments)
+    const connectionKey = (req.query.realmId as string) || 'default';
 
     // 7. Save to Database using Upsert to prevent duplicate tenant+provider rows
     try {
@@ -140,7 +146,6 @@ export class OAuthCallbackController {
           authType: 'OAUTH2',
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
-          metadata: { realmId: grantResponse.raw?.realmId },
         })
         .onConflictDoUpdate({
           target: [
@@ -152,7 +157,7 @@ export class OAuthCallbackController {
             providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
-            metadata: { realmId: grantResponse.raw?.realmId },
+            metadata: { realmId: req.query.realmId as string | undefined },
             status: 'ACTIVE',
             updatedAt: new Date(),
           },

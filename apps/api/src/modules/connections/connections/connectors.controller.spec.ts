@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
 import { ProviderRegistryService } from '@nexiom/connections';
+import { ConnectorsService } from '../connectors.service';
+import { OauthStateService } from '../oauth-state.service';
 import { AppConnectionStatus } from '@nexiom/database';
 import {
   UnauthorizedException,
@@ -16,11 +19,13 @@ import {
   type Mock,
 } from 'vitest';
 import { AuthGuard } from '../../identity/auth/auth.guard'; // Assume this is the path based on standard layout
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 describe('ConnectorsController', () => {
   let controller: ConnectorsController;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockConnectorsService: Mocked<ConnectorsService>;
+  let mockOauthStateService: Mocked<OauthStateService>;
   let mockDb: {
     select: Mock;
     from: Mock;
@@ -33,6 +38,16 @@ describe('ConnectorsController', () => {
       getProvider: vi.fn(),
       isAllowed: vi.fn(),
     } as unknown as Mocked<ProviderRegistryService>;
+
+    mockConnectorsService = {
+      getAuthorizationUrl: vi.fn(),
+      exchangeCodeForTokens: vi.fn(),
+    } as unknown as Mocked<ConnectorsService>;
+
+    mockOauthStateService = {
+      generateState: vi.fn(),
+      verifyState: vi.fn(),
+    } as unknown as Mocked<OauthStateService>;
 
     // Create two separate chain variables to easily assert against
     const dataChain = {
@@ -51,6 +66,8 @@ describe('ConnectorsController', () => {
       controllers: [ConnectorsController],
       providers: [
         { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+        { provide: ConnectorsService, useValue: mockConnectorsService },
+        { provide: OauthStateService, useValue: mockOauthStateService },
         { provide: 'DRIZZLE_DB', useValue: mockDb },
         // If AuthGuard is globally applied or injected at controller level, provide a dummy AuthService
         { provide: 'AuthService', useValue: {} },
@@ -61,6 +78,57 @@ describe('ConnectorsController', () => {
       .compile();
 
     controller = module.get<ConnectorsController>(ConnectorsController);
+  });
+
+  describe('connect', () => {
+    it('should generate state, get auth url and redirect', async () => {
+      const mockReq = {
+        user: { tenantId: 'tenant-123' },
+      } as unknown as Request;
+      const mockRes = { redirect: vi.fn() } as unknown as Response;
+
+      mockOauthStateService.generateState.mockReturnValue('mocked_jwt_state');
+      mockConnectorsService.getAuthorizationUrl.mockResolvedValue(
+        'https://vendor.com/auth',
+      );
+
+      await controller.connect('salesforce', mockReq, mockRes);
+
+      expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
+        'tenant-123',
+        'salesforce',
+      );
+      expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
+        'salesforce',
+        'mocked_jwt_state',
+      );
+      expect(mockRes.redirect).toHaveBeenCalledWith('https://vendor.com/auth');
+    });
+
+    it('should throw UnauthorizedException if tenant is missing', async () => {
+      const mockReq = { user: {} } as unknown as Request;
+      const mockRes = { redirect: vi.fn() } as unknown as Response;
+
+      await expect(
+        controller.connect('salesforce', mockReq, mockRes),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should bubble up InternalServerErrorException if service fails', async () => {
+      const mockReq = {
+        user: { tenantId: 'tenant-123' },
+      } as unknown as Request;
+      const mockRes = { redirect: vi.fn() } as unknown as Response;
+
+      mockOauthStateService.generateState.mockReturnValue('state');
+      mockConnectorsService.getAuthorizationUrl.mockRejectedValue(
+        new Error('Config error'),
+      );
+
+      await expect(
+        controller.connect('salesforce', mockReq, mockRes),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
   });
 
   describe('getProviders', () => {

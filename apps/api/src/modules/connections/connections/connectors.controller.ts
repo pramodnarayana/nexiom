@@ -8,9 +8,13 @@ import {
   InternalServerErrorException,
   Query,
   Logger,
+  Param,
+  Res,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/connections';
+import { ConnectorsService } from '../connectors.service';
+import { OauthStateService } from '../oauth-state.service';
 import { appConnections, AppConnectionStatus } from '@nexiom/database';
 import { eq, and, count } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
@@ -23,7 +27,43 @@ export class ConnectorsController {
   constructor(
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
+    private readonly connectorsService: ConnectorsService,
+    private readonly oauthStateService: OauthStateService,
   ) {}
+
+  @Get(':provider')
+  async connect(
+    @Param('provider') providerName: string,
+    @Req() req: Request & { user?: { tenantId: string } },
+    @Res() res: Response,
+  ) {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException('Tenant ID missing from request');
+    }
+
+    try {
+      const state = this.oauthStateService.generateState(
+        tenantId,
+        providerName,
+      );
+      const url = await this.connectorsService.getAuthorizationUrl(
+        providerName,
+        state,
+      );
+
+      // Redirect the user browser to the vendor's OAuth page
+      return res.redirect(url);
+    } catch (error) {
+      this.logger.error(
+        `Failed to initiate OAuth connect for ${providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        `Failed to initiate OAuth connect for ${providerName}`,
+      );
+    }
+  }
 
   @Get('providers')
   async getProviders() {

@@ -10,6 +10,8 @@ import { DbModule } from '../../db/db.module';
 import { OAuthCallbackController } from './connections/callback.controller';
 import { ConnectorsController } from './connections/connectors.controller';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
+import { ConnectorsService } from './connectors.service';
+import { OauthStateService } from './oauth-state.service';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 
@@ -19,6 +21,8 @@ import { ConfigService } from '@nestjs/config';
   providers: [
     ProviderRegistryService,
     TokenManagerService,
+    ConnectorsService,
+    OauthStateService,
     { provide: EncryptionService, useClass: AesEncryptionService },
     { provide: OAuthRefreshClient, useClass: DefaultOAuthRefreshClient },
     {

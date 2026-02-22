@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import {
   describe,
   it,
@@ -15,6 +16,9 @@ import {
   EncryptionService,
   ProviderRegistryService,
 } from '@nexiom/connections';
+import { ConnectorsService } from '../connectors.service';
+import { OauthStateService } from '../oauth-state.service';
+import { Request, Response } from 'express';
 
 const VALID_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -38,8 +42,6 @@ vi.mock('@nexiom/database', () => ({
   },
 }));
 
-import { Request, Response } from 'express';
-
 describe('OAuthCallbackController', () => {
   type ProviderResult = Awaited<
     ReturnType<ProviderRegistryService['getProvider']>
@@ -47,14 +49,16 @@ describe('OAuthCallbackController', () => {
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockConnectorsService: Mocked<ConnectorsService>;
+  let mockOauthStateService: Mocked<OauthStateService>;
 
   const mockRequest = (
     provider: string,
-    session?: Record<string, unknown>,
+    query: Record<string, string> = {},
   ): Partial<Request> =>
     ({
       params: { provider },
-      session,
+      query,
     }) as unknown as Partial<Request>;
 
   const mockResponse = (): Partial<Response> => {
@@ -92,6 +96,14 @@ describe('OAuthCallbackController', () => {
       getAllProviders: vi.fn(),
     } as unknown as Mocked<ProviderRegistryService>;
 
+    mockConnectorsService = {
+      exchangeCodeForTokens: vi.fn(),
+    } as unknown as Mocked<ConnectorsService>;
+
+    mockOauthStateService = {
+      verifyState: vi.fn(),
+    } as unknown as Mocked<OauthStateService>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthCallbackController],
       providers: [
@@ -106,6 +118,14 @@ describe('OAuthCallbackController', () => {
         {
           provide: ProviderRegistryService,
           useValue: mockProviderRegistry,
+        },
+        {
+          provide: ConnectorsService,
+          useValue: mockConnectorsService,
+        },
+        {
+          provide: OauthStateService,
+          useValue: mockOauthStateService,
         },
       ],
     }).compile();
@@ -156,8 +176,8 @@ describe('OAuthCallbackController', () => {
     );
   });
 
-  it('should redirect with auth_failed if grant session is missing', async () => {
-    const req = mockRequest('salesforce');
+  it('should redirect with auth_failed if vendor returns an error in query params', async () => {
+    const req = mockRequest('salesforce', { error: 'access_denied' });
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
@@ -167,40 +187,23 @@ describe('OAuthCallbackController', () => {
     );
   });
 
-  it('should redirect with auth_failed if grant response contains error', async () => {
-    const req = mockRequest('salesforce', {
-      grant: { response: { error: 'invalid_grant' } },
-    });
+  it('should redirect with invalid_callback if code or state is missing', async () => {
+    const req = mockRequest('salesforce', { code: '123' }); // Missing state
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
 
     expect(res.redirect).toHaveBeenCalledWith(
-      '/app/connections?error=auth_failed',
+      '/app/connections?error=invalid_callback',
     );
   });
 
-  it('should redirect with invalid_state if state is missing', async () => {
-    const req = mockRequest('salesforce', {
-      grant: { response: { access_token: '123' } }, // No raw.state
+  it('should redirect with invalid_state if JWT state verification fails', async () => {
+    mockOauthStateService.verifyState.mockImplementation(() => {
+      throw new Error('CSRF exception');
     });
-    const res = mockResponse();
 
-    await controller.handleCallback(req as Request, res as Response);
-
-    expect(res.redirect).toHaveBeenCalledWith(
-      '/app/connections?error=invalid_state',
-    );
-  });
-
-  it('should redirect with invalid_state if decryption fails', async () => {
-    mockEncryptionService.decrypt.mockRejectedValue(
-      new Error('Decryption failed'),
-    );
-
-    const req = mockRequest('salesforce', {
-      grant: { response: { raw: { state: 'bad-encrypted-state' } } },
-    });
+    const req = mockRequest('salesforce', { code: '123', state: 'bad-jwt' });
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
@@ -210,17 +213,35 @@ describe('OAuthCallbackController', () => {
     );
   });
 
-  it('should redirect with invalid_credentials if access_token is missing', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
-
-    const req = mockRequest('salesforce', {
-      grant: {
-        response: {
-          raw: { state: 'encrypted-state', expires_in: 3600 },
-          // No access_token provided
-        },
-      },
+  it('should redirect with internal_error if token exchange fails', async () => {
+    mockOauthStateService.verifyState.mockReturnValue({
+      tenantId: VALID_TENANT_ID,
     });
+    mockConnectorsService.exchangeCodeForTokens.mockRejectedValue(
+      new Error('Network error'),
+    );
+
+    const req = mockRequest('salesforce', { code: '123', state: 'valid-jwt' });
+    const res = mockResponse();
+
+    await controller.handleCallback(req as Request, res as Response);
+
+    expect(res.redirect).toHaveBeenCalledWith(
+      '/app/connections?error=internal_error',
+    );
+  });
+
+  it('should redirect with invalid_credentials if access_token is missing from exchange', async () => {
+    mockOauthStateService.verifyState.mockReturnValue({
+      tenantId: VALID_TENANT_ID,
+    });
+
+    // Simulate successful HTTP call but missing access_token in JSON body
+    mockConnectorsService.exchangeCodeForTokens.mockResolvedValue({
+      id_token: '123',
+    });
+
+    const req = mockRequest('salesforce', { code: '123', state: 'valid-jwt' });
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
@@ -228,74 +249,79 @@ describe('OAuthCallbackController', () => {
     expect(res.redirect).toHaveBeenCalledWith(
       '/app/connections?error=invalid_credentials',
     );
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockEncryptionService.encrypt).not.toHaveBeenCalled();
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it('should successfully store credentials and redirect on success', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
+    mockOauthStateService.verifyState.mockReturnValue({
+      tenantId: VALID_TENANT_ID,
+    });
+    mockConnectorsService.exchangeCodeForTokens.mockResolvedValue({
+      access_token: 'acc-123',
+      refresh_token: 'ref-123',
+      expires_in: 3600,
+    });
     mockEncryptionService.encrypt.mockResolvedValue('encrypted-credentials');
 
     const req = mockRequest('salesforce', {
-      grant: {
-        response: {
-          access_token: 'acc-123',
-          refresh_token: 'ref-123',
-          raw: {
-            state: 'encrypted-state',
-            expires_in: 3600,
-            realmId: 'realm-id',
-          },
-        },
-      },
+      code: '123',
+      state: 'valid-jwt',
+      realmId: 'ext-realm-id',
     });
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(mockEncryptionService.decrypt).toHaveBeenCalledWith(
-      'encrypted-state',
+    expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
+      'valid-jwt',
+      'salesforce',
     );
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
+      'salesforce',
+      '123',
+    );
+
     expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
       expect.stringContaining('"accessToken":"acc-123"'),
     );
+    expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
+      expect.stringContaining('"realmId":"ext-realm-id"'),
+    );
+
     expect(mockInsert).toHaveBeenCalled();
-    // Verify the exact upsert payload
     const rawValue = mockInsert.mock.results[0].value as {
       values: typeof vi.fn;
     };
     const { values } = rawValue;
+
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: VALID_TENANT_ID,
         providerId: 'mock-provider-id',
         appName: 'salesforce',
-        connectionKey: 'realm-id',
+        connectionKey: 'ext-realm-id',
         encryptedCredentials: 'encrypted-credentials',
         authType: 'OAUTH2',
       }),
     );
+
     expect(res.redirect).toHaveBeenCalledWith('/app/connections?success=true');
   });
 
   it('should redirect with internal_error if database insert fails', async () => {
-    mockEncryptionService.decrypt.mockResolvedValue(VALID_TENANT_ID);
+    mockOauthStateService.verifyState.mockReturnValue({
+      tenantId: VALID_TENANT_ID,
+    });
+    mockConnectorsService.exchangeCodeForTokens.mockResolvedValue({
+      access_token: 'acc-123',
+    });
     mockEncryptionService.encrypt.mockResolvedValue('encrypted-credentials');
 
     // Override the mock to simulate failure
     mockOnConflictDoUpdate.mockRejectedValueOnce(new Error('DB Error'));
 
-    const req = mockRequest('salesforce', {
-      grant: {
-        response: {
-          access_token: 'acc-123',
-          raw: { state: 'encrypted-state', expires_in: 3600 },
-        },
-      },
-    });
+    const req = mockRequest('salesforce', { code: '123', state: 'valid-jwt' });
     const res = mockResponse();
 
     await controller.handleCallback(req as Request, res as Response);
