@@ -74,19 +74,19 @@ export class OauthStateService {
       const decoded = jwt.verify(stateToken, this.jwtSecret) as jwt.JwtPayload;
 
       if (decoded.purpose !== 'oauth_state_handshake') {
-        this.logger.error(`Invalid token purpose: ${decoded.purpose}`);
+        this.logger.warn(`Invalid token purpose: ${decoded.purpose}`);
         throw new UnauthorizedException('Invalid OAuth state purpose');
       }
 
       if (decoded.provider !== expectedProvider) {
-        this.logger.error(
+        this.logger.warn(
           `Provider mismatch in state token: Extracted ${decoded.provider}, Expected ${expectedProvider}`,
         );
         throw new UnauthorizedException('OAuth state provider mismatch');
       }
 
       if (!decoded.tenantId) {
-        this.logger.error('No tenantId embedded in the state token');
+        this.logger.warn('No tenantId embedded in the state token');
         throw new UnauthorizedException('Malformed OAuth state token');
       }
 

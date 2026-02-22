@@ -6,6 +6,7 @@ import {
   Inject,
   UnauthorizedException,
   InternalServerErrorException,
+  BadRequestException,
   Query,
   Logger,
   Param,
@@ -143,7 +144,7 @@ export class ConnectorsController {
         this.logger.warn(
           `Invalid realmId format in connect for ${providerName}`,
         );
-        throw new HttpException('Invalid realmId format', 400);
+        throw new BadRequestException('Invalid realmId format');
       }
     }
 

@@ -89,7 +89,7 @@ export class OAuthCallbackController {
       return;
     }
 
-    if (stateRealmId && stateRealmId !== rawRealmId) {
+    if (stateRealmId !== rawRealmId) {
       this.logger.warn(
         `Realm ID mismatch for ${provider}: expected ${stateRealmId}, got ${rawRealmId}`,
       );
@@ -115,14 +115,24 @@ export class OAuthCallbackController {
       return res.redirect(`/app/connections?error=invalid_credentials`);
     }
 
-    await this.persistConnection(
-      provider,
-      providerData,
-      tenantId,
-      rawRealmId,
-      tokenResponse,
-      res,
-    );
+    try {
+      await this.persistConnection(
+        provider,
+        providerData,
+        tenantId,
+        stateRealmId,
+        tokenResponse,
+      );
+    } catch (error) {
+      if (error instanceof OAuthCallbackError) {
+        return res.redirect(
+          `/app/connections?error=${error.redirectErrorPath}`,
+        );
+      }
+      return res.redirect(`/app/connections?error=internal_error`);
+    }
+
+    res.redirect(`/app/connections?success=true`);
   }
 
   private validateQueryParams(
@@ -170,15 +180,14 @@ export class OAuthCallbackController {
     provider: string,
     providerData: InferSelectModel<typeof providers>,
     tenantId: string,
-    rawRealmId: string | undefined,
+    stateRealmId: string | undefined,
     tokenResponse: Record<string, unknown>,
-    res: Response,
   ) {
     // 4. Prepare Encrypted Payload
     const credentials = {
       accessToken: tokenResponse.access_token as string,
       refreshToken: tokenResponse.refresh_token as string | undefined,
-      realmId: rawRealmId, // Common for QuickBooks/accounting
+      realmId: stateRealmId, // Common for QuickBooks/accounting
     };
 
     let encryptedPayload: string;
@@ -189,8 +198,10 @@ export class OAuthCallbackController {
         `Encryption failed for ${provider}, tenant: ${tenantId}`,
         error,
       );
-      res.redirect(`/app/connections?error=internal_error`);
-      return;
+      throw new OAuthCallbackError(
+        'internal_error',
+        'Failed to encrypt credentials',
+      );
     }
 
     // 5. Calculate Expiry
@@ -212,7 +223,7 @@ export class OAuthCallbackController {
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     // 6. Derive connectionKey (e.g. for multiple environments)
-    const connectionKey = rawRealmId || 'default';
+    const connectionKey = stateRealmId || 'default';
 
     // 7. Save to Database using Upsert to prevent duplicate tenant+provider rows
     try {
@@ -226,7 +237,7 @@ export class OAuthCallbackController {
           authType: 'OAUTH2',
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
-          metadata: { realmId: rawRealmId },
+          metadata: { realmId: stateRealmId },
         })
         .onConflictDoUpdate({
           target: [
@@ -238,7 +249,7 @@ export class OAuthCallbackController {
             providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
-            metadata: { realmId: rawRealmId },
+            metadata: { realmId: stateRealmId },
             status: 'ACTIVE',
             updatedAt: new Date(),
           },
@@ -249,10 +260,10 @@ export class OAuthCallbackController {
       );
     } catch (error) {
       this.logger.error(`Failed to store credentials for ${provider}`, error);
-      res.redirect(`/app/connections?error=internal_error`);
-      return;
+      throw new OAuthCallbackError(
+        'internal_error',
+        'Failed to save to database',
+      );
     }
-
-    res.redirect(`/app/connections?success=true`);
   }
 }

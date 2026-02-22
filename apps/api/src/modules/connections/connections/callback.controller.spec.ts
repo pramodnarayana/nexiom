@@ -256,6 +256,7 @@ describe('OAuthCallbackController', () => {
   it('should successfully store credentials and redirect on success', async () => {
     mockOauthStateService.verifyState.mockReturnValue({
       tenantId: VALID_TENANT_ID,
+      realmId: 'ext-realm-id',
     });
     mockConnectorsService.exchangeCodeForTokens.mockResolvedValue({
       access_token: 'acc-123',
