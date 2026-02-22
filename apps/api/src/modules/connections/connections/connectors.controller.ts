@@ -138,6 +138,15 @@ export class ConnectorsController {
       throw new UnauthorizedException('Tenant ID missing from request');
     }
 
+    if (realmId) {
+      if (realmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(realmId)) {
+        this.logger.warn(
+          `Invalid realmId format in connect for ${providerName}`,
+        );
+        throw new HttpException('Invalid realmId format', 400);
+      }
+    }
+
     try {
       const state = this.oauthStateService.generateState(
         tenantId,

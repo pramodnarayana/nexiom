@@ -37,12 +37,20 @@ export class OauthStateService {
    * This provides stateless CSRF protection and context continuity across the redirect boundary.
    */
   generateState(tenantId: string, provider: string, realmId?: string): string {
-    const payload = {
+    const payload: {
+      tenantId: string;
+      provider: string;
+      purpose: string;
+      realmId?: string;
+    } = {
       tenantId,
       provider,
-      realmId,
       purpose: 'oauth_state_handshake',
     };
+
+    if (realmId) {
+      payload.realmId = realmId;
+    }
 
     // State tokens exist simply to bridge the browser redirect.
     // A 10-15 minute expiry is plenty of time for a user to log in to Salesforce/HubSpot.

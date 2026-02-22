@@ -11,6 +11,16 @@ import {
 import { OauthStateService } from '../oauth-state.service';
 import { ConnectorsService } from '../connectors.service';
 
+export class OAuthCallbackError extends Error {
+  constructor(
+    public readonly redirectErrorPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'OAuthCallbackError';
+  }
+}
+
 @Controller('connect/:provider/callback')
 export class OAuthCallbackController {
   private readonly logger = new Logger(OAuthCallbackController.name);
@@ -44,19 +54,29 @@ export class OAuthCallbackController {
       return;
     }
 
-    const { code, rawState, rawRealmId, hasFailed } = this.validateQueryParams(
-      req,
-      provider,
-      res,
-    );
+    let validatedParams: {
+      code: string;
+      rawState: string;
+      rawRealmId?: string;
+    };
+    try {
+      validatedParams = this.validateQueryParams(req, provider);
+    } catch (error) {
+      if (error instanceof OAuthCallbackError) {
+        return res.redirect(
+          `/app/connections?error=${error.redirectErrorPath}`,
+        );
+      }
+      return res.redirect(`/app/connections?error=internal_error`);
+    }
 
-    if (hasFailed) return;
+    const { code, rawState, rawRealmId } = validatedParams;
 
     // 2. Validate State (Tenant Context) using stateless JWT
     let tenantId: string;
     let stateRealmId: string | undefined;
     try {
-      const stateData = this.oauthStateService.verifyState(rawState!, provider);
+      const stateData = this.oauthStateService.verifyState(rawState, provider);
       tenantId = stateData.tenantId;
       stateRealmId = stateData.realmId;
     } catch (error: unknown) {
@@ -81,7 +101,7 @@ export class OAuthCallbackController {
     try {
       tokenResponse = await this.connectorsService.exchangeCodeForTokens(
         provider,
-        code!,
+        code,
       );
     } catch (error) {
       this.logger.error(`Token exchange failed for ${provider}`, error);
@@ -105,10 +125,13 @@ export class OAuthCallbackController {
     );
   }
 
-  private validateQueryParams(req: Request, provider: string, res: Response) {
-    const code = req.query.code as string;
-    const rawState = req.query.state as string;
-    const errorQuery = req.query.error as string;
+  private validateQueryParams(
+    req: Request,
+    provider: string,
+  ): { code: string; rawState: string; rawRealmId?: string } {
+    const code = req.query.code as string | undefined;
+    const rawState = req.query.state as string | undefined;
+    const errorQuery = req.query.error as string | undefined;
     const rawRealmId = req.query.realmId as string | undefined;
 
     if (errorQuery) {
@@ -116,25 +139,31 @@ export class OAuthCallbackController {
         `OAuth vendor returned an error for ${provider}`,
         errorQuery,
       );
-      res.redirect(`/app/connections?error=auth_failed`);
-      return { hasFailed: true };
+      throw new OAuthCallbackError(
+        'auth_failed',
+        `Vendor error: ${errorQuery}`,
+      );
     }
 
     if (!code || !rawState) {
       this.logger.warn(`Missing code or state in callback for ${provider}`);
-      res.redirect(`/app/connections?error=invalid_callback`);
-      return { hasFailed: true };
+      throw new OAuthCallbackError(
+        'invalid_callback',
+        'Missing required OAuth parameters',
+      );
     }
 
     if (rawRealmId) {
       if (rawRealmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(rawRealmId)) {
         this.logger.warn(`Invalid realmId format in callback for ${provider}`);
-        res.redirect(`/app/connections?error=invalid_callback`);
-        return { hasFailed: true };
+        throw new OAuthCallbackError(
+          'invalid_callback',
+          'Invalid realmId format',
+        );
       }
     }
 
-    return { code, rawState, rawRealmId, hasFailed: false };
+    return { code, rawState, rawRealmId };
   }
 
   private async persistConnection(
@@ -165,18 +194,21 @@ export class OAuthCallbackController {
     }
 
     // 5. Calculate Expiry
-    let expiresIn = 3600; // default 1 hour
+    let parsedExpiresIn = 3600; // default 1 hour
     if (
       typeof tokenResponse.expires_in === 'number' &&
       tokenResponse.expires_in > 0
     ) {
-      expiresIn = tokenResponse.expires_in;
+      parsedExpiresIn = tokenResponse.expires_in;
     } else if (
       typeof tokenResponse.expires_in === 'string' &&
       Number.parseInt(tokenResponse.expires_in, 10) > 0
     ) {
-      expiresIn = Number.parseInt(tokenResponse.expires_in, 10);
+      parsedExpiresIn = Number.parseInt(tokenResponse.expires_in, 10);
     }
+
+    const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
+    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     // 6. Derive connectionKey (e.g. for multiple environments)
