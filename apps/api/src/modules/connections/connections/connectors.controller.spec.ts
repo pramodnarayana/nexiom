@@ -97,6 +97,7 @@ describe('ConnectorsController', () => {
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
         'salesforce',
+        undefined,
       );
       expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
         'salesforce',

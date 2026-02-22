@@ -25,8 +25,7 @@ export class OAuthCallbackController {
 
   @Get()
   async handleCallback(@Req() req: Request, @Res() res: Response) {
-    const request = req;
-    const provider = request.params.provider;
+    const provider = req.params.provider;
 
     let providerData: InferSelectModel<typeof providers> | null;
     try {
@@ -45,29 +44,21 @@ export class OAuthCallbackController {
       return;
     }
 
-    // 1. Extract and Validate query parameters
-    const code = req.query.code as string;
-    const rawState = req.query.state as string;
-    const errorQuery = req.query.error as string;
+    const { code, rawState, rawRealmId, hasFailed } = this.validateQueryParams(
+      req,
+      provider,
+      res,
+    );
 
-    if (errorQuery) {
-      this.logger.error(
-        `OAuth vendor returned an error for ${provider}`,
-        errorQuery,
-      );
-      return res.redirect(`/app/connections?error=auth_failed`);
-    }
-
-    if (!code || !rawState) {
-      this.logger.warn(`Missing code or state in callback for ${provider}`);
-      return res.redirect(`/app/connections?error=invalid_callback`);
-    }
+    if (hasFailed) return;
 
     // 2. Validate State (Tenant Context) using stateless JWT
     let tenantId: string;
+    let stateRealmId: string | undefined;
     try {
-      const stateData = this.oauthStateService.verifyState(rawState, provider);
+      const stateData = this.oauthStateService.verifyState(rawState!, provider);
       tenantId = stateData.tenantId;
+      stateRealmId = stateData.realmId;
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -78,12 +69,19 @@ export class OAuthCallbackController {
       return;
     }
 
+    if (stateRealmId && stateRealmId !== rawRealmId) {
+      this.logger.warn(
+        `Realm ID mismatch for ${provider}: expected ${stateRealmId}, got ${rawRealmId}`,
+      );
+      return res.redirect(`/app/connections?error=invalid_state`);
+    }
+
     // 3. Exchange code for real tokens
     let tokenResponse: Record<string, unknown>;
     try {
       tokenResponse = await this.connectorsService.exchangeCodeForTokens(
         provider,
-        code,
+        code!,
       );
     } catch (error) {
       this.logger.error(`Token exchange failed for ${provider}`, error);
@@ -97,11 +95,61 @@ export class OAuthCallbackController {
       return res.redirect(`/app/connections?error=invalid_credentials`);
     }
 
+    await this.persistConnection(
+      provider,
+      providerData,
+      tenantId,
+      rawRealmId,
+      tokenResponse,
+      res,
+    );
+  }
+
+  private validateQueryParams(req: Request, provider: string, res: Response) {
+    const code = req.query.code as string;
+    const rawState = req.query.state as string;
+    const errorQuery = req.query.error as string;
+    const rawRealmId = req.query.realmId as string | undefined;
+
+    if (errorQuery) {
+      this.logger.error(
+        `OAuth vendor returned an error for ${provider}`,
+        errorQuery,
+      );
+      res.redirect(`/app/connections?error=auth_failed`);
+      return { hasFailed: true };
+    }
+
+    if (!code || !rawState) {
+      this.logger.warn(`Missing code or state in callback for ${provider}`);
+      res.redirect(`/app/connections?error=invalid_callback`);
+      return { hasFailed: true };
+    }
+
+    if (rawRealmId) {
+      if (rawRealmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(rawRealmId)) {
+        this.logger.warn(`Invalid realmId format in callback for ${provider}`);
+        res.redirect(`/app/connections?error=invalid_callback`);
+        return { hasFailed: true };
+      }
+    }
+
+    return { code, rawState, rawRealmId, hasFailed: false };
+  }
+
+  private async persistConnection(
+    provider: string,
+    providerData: InferSelectModel<typeof providers>,
+    tenantId: string,
+    rawRealmId: string | undefined,
+    tokenResponse: Record<string, unknown>,
+    res: Response,
+  ) {
     // 4. Prepare Encrypted Payload
     const credentials = {
       accessToken: tokenResponse.access_token as string,
       refreshToken: tokenResponse.refresh_token as string | undefined,
-      realmId: req.query.realmId as string | undefined, // Common for QuickBooks/accounting
+      realmId: rawRealmId, // Common for QuickBooks/accounting
     };
 
     let encryptedPayload: string;
@@ -132,7 +180,7 @@ export class OAuthCallbackController {
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     // 6. Derive connectionKey (e.g. for multiple environments)
-    const connectionKey = (req.query.realmId as string) || 'default';
+    const connectionKey = rawRealmId || 'default';
 
     // 7. Save to Database using Upsert to prevent duplicate tenant+provider rows
     try {
@@ -146,7 +194,7 @@ export class OAuthCallbackController {
           authType: 'OAUTH2',
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
-          metadata: { realmId: req.query.realmId as string | undefined },
+          metadata: { realmId: rawRealmId },
         })
         .onConflictDoUpdate({
           target: [
@@ -158,7 +206,7 @@ export class OAuthCallbackController {
             providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
-            metadata: { realmId: req.query.realmId as string | undefined },
+            metadata: { realmId: rawRealmId },
             status: 'ACTIVE',
             updatedAt: new Date(),
           },
@@ -172,6 +220,7 @@ export class OAuthCallbackController {
       res.redirect(`/app/connections?error=internal_error`);
       return;
     }
+
     res.redirect(`/app/connections?success=true`);
   }
 }

@@ -29,9 +29,58 @@ describe('OauthStateService', () => {
     service = module.get<OauthStateService>(OauthStateService);
   });
 
+  describe('constructor', () => {
+    it('should use OAUTH_STATE_SECRET if provided and not throw', async () => {
+      const explicitConfigService = {
+        get: vi.fn().mockImplementation((key: string) => {
+          if (key === 'OAUTH_STATE_SECRET') return 'explicit-secret';
+          if (key === 'NODE_ENV') return 'test';
+          return undefined;
+        }),
+      };
+
+      const explicitModule = await Test.createTestingModule({
+        providers: [
+          OauthStateService,
+          { provide: ConfigService, useValue: explicitConfigService },
+        ],
+      }).compile();
+
+      const explicitService =
+        explicitModule.get<OauthStateService>(OauthStateService);
+      const token = explicitService.generateState('tenant', 'provider');
+      const verified = explicitService.verifyState(token, 'provider');
+      expect(verified.tenantId).toBe('tenant');
+    });
+
+    it('should throw Error in production if secrets are missing', async () => {
+      const prodConfigService = {
+        get: vi.fn().mockImplementation((key: string) => {
+          if (key === 'NODE_ENV') return 'production';
+          return undefined; // no secrets
+        }),
+      };
+
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            OauthStateService,
+            { provide: ConfigService, useValue: prodConfigService },
+          ],
+        }).compile(),
+      ).rejects.toThrow(
+        'FATAL: JWT_SECRET or OAUTH_STATE_SECRET must be provided in production',
+      );
+    });
+  });
+
   describe('generateState', () => {
-    it('should generate a valid JWT containing the tenantId and provider', () => {
-      const stateToken = service.generateState(mockTenantId, mockProvider);
+    it('should generate a valid JWT containing the tenantId, provider, and realmId', () => {
+      const stateToken = service.generateState(
+        mockTenantId,
+        mockProvider,
+        'realm-456',
+      );
 
       expect(typeof stateToken).toBe('string');
       expect(stateToken.split('.').length).toBe(3); // Header.Payload.Signature
@@ -40,6 +89,7 @@ describe('OauthStateService', () => {
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
       expect(decoded.tenantId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
+      expect(decoded.realmId).toBe('realm-456');
       expect(decoded.purpose).toBe('oauth_state_handshake');
       expect(decoded.exp).toBeDefined();
     });
@@ -47,10 +97,14 @@ describe('OauthStateService', () => {
 
   describe('verifyState', () => {
     it('should successfully verify and extract a valid state token', () => {
-      const validToken = service.generateState(mockTenantId, mockProvider);
+      const validToken = service.generateState(
+        mockTenantId,
+        mockProvider,
+        'realm-456',
+      );
 
       const result = service.verifyState(validToken, mockProvider);
-      expect(result).toEqual({ tenantId: mockTenantId });
+      expect(result).toEqual({ tenantId: mockTenantId, realmId: 'realm-456' });
     });
 
     it('should throw UnauthorizedException if token is completely missing', () => {

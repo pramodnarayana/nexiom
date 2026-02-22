@@ -10,6 +10,7 @@ import {
   Logger,
   Param,
   Res,
+  HttpException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ProviderRegistryService, DrizzleDb } from '@nexiom/connections';
@@ -130,6 +131,7 @@ export class ConnectorsController {
     @Param('provider') providerName: string,
     @Req() req: Request & { user?: { tenantId: string } },
     @Res() res: Response,
+    @Query('realmId') realmId?: string,
   ) {
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
@@ -140,6 +142,7 @@ export class ConnectorsController {
       const state = this.oauthStateService.generateState(
         tenantId,
         providerName,
+        realmId,
       );
       const url = await this.connectorsService.getAuthorizationUrl(
         providerName,
@@ -149,6 +152,9 @@ export class ConnectorsController {
       // Redirect the user browser to the vendor's OAuth page
       return res.redirect(url);
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Failed to initiate OAuth connect for ${providerName}`,
         error,

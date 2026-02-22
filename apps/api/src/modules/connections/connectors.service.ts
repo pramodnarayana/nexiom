@@ -21,6 +21,12 @@ export class ConnectorsService {
     return providerName.replace(/[^A-Za-z0-9]/g, '_').toUpperCase();
   }
 
+  private buildRedirectUri(providerName: string): string {
+    const baseUrl =
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
+    return `${baseUrl}/api/connect/${providerName}/callback`;
+  }
+
   /**
    * Generates the fully qualified Authorization URL for the vendor.
    * Redirects the user's browser to this URL to start the OAuth flow.
@@ -76,13 +82,9 @@ export class ConnectorsService {
       url.searchParams.append('scope', provider.scopes.join(' '));
     }
 
-    // Default system callback redirect URI. Depending on environment, we might
-    // need a centralized config service for the hostname.
-    const baseUrl =
-      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
     url.searchParams.append(
       'redirect_uri',
-      `${baseUrl}/api/connect/${providerName}/callback`,
+      this.buildRedirectUri(providerName),
     );
 
     return url.toString();
@@ -131,9 +133,7 @@ export class ConnectorsService {
       );
     }
 
-    const baseUrl =
-      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
-    const redirectUri = `${baseUrl}/api/connect/${providerName}/callback`;
+    const redirectUri = this.buildRedirectUri(providerName);
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
@@ -159,8 +159,13 @@ export class ConnectorsService {
           /* ignore parsing errors */
         }
 
+        let sanitizedError = errorBody.replace(/[\r\n]+/g, ' ').trim();
+        if (sanitizedError.length > 500) {
+          sanitizedError = sanitizedError.substring(0, 500) + '...(truncated)';
+        }
+
         this.logger.error(
-          `Vendor Token Exchange Failed [${response.status}]: ${errorBody}`,
+          `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`,
         );
         throw new InternalServerErrorException(
           `Failed to exchange code with ${providerName}`,

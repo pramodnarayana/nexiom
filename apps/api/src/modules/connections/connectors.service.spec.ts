@@ -76,8 +76,17 @@ describe('ConnectorsService', () => {
         'mocked_jwt_state',
       );
 
-      expect(urlString).toBe(
-        'https://login.salesforce.com/services/oauth2/authorize?response_type=code&client_id=test-client-id&state=mocked_jwt_state&scope=api+refresh_token&redirect_uri=https%3A%2F%2Ftenant.nexiom.app%2Fapi%2Fconnect%2Fsalesforce%2Fcallback',
+      const parsedUrl = new URL(urlString);
+      expect(parsedUrl.origin).toBe('https://login.salesforce.com');
+      expect(parsedUrl.pathname).toBe('/services/oauth2/authorize');
+
+      const searchParams = parsedUrl.searchParams;
+      expect(searchParams.get('response_type')).toBe('code');
+      expect(searchParams.get('client_id')).toBe('test-client-id');
+      expect(searchParams.get('state')).toBe('mocked_jwt_state');
+      expect(searchParams.get('scope')).toBe('api refresh_token');
+      expect(searchParams.get('redirect_uri')).toBe(
+        'https://tenant.nexiom.app/api/connect/salesforce/callback',
       );
     });
 
