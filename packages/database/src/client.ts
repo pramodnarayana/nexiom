@@ -1,16 +1,18 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as tenantSchema from './schema/tenant';
+import * as appCredentialSchema from './schema/app-credential';
 
-const schemaBundle = { ...tenantSchema };
+const schemaBundle = { ...tenantSchema, ...appCredentialSchema };
 type DbSchema = typeof schemaBundle;
 
-export type DrizzleDb = NodePgDatabase<DbSchema>;
-
 let pool: Pool | undefined;
-let dbInstance: NodePgDatabase<DbSchema> | undefined;
+let tempDbInstance: ReturnType<typeof drizzle> | undefined;
 
-export function getDb(): NodePgDatabase<DbSchema> {
+export type DrizzleDb = ReturnType<typeof drizzle<DbSchema>>;
+let dbInstance: DrizzleDb | undefined;
+
+export function getDb(): DrizzleDb {
     if (dbInstance) return dbInstance;
 
     if (!process.env.DATABASE_URL) {

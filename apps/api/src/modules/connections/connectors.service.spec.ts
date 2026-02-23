@@ -196,9 +196,7 @@ describe('ConnectorsService', () => {
         name: 'salesforce',
         authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<
-        ReturnType<typeof mockProviderRegistry.getProvider>
-      >);
+      } as unknown as NonNullable<ProviderResult>);
 
       const mockTokens = { access_token: 'abc', refresh_token: 'def' };
       vi.mocked(fetch).mockResolvedValue({

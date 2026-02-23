@@ -9,10 +9,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
-  DrizzleDb,
   EncryptionService,
 } from '@nexiom/connections';
-import { appCredentials, withTenantGuard } from '@nexiom/database';
+import {
+  appCredentials,
+  withTenantGuard,
+  type DrizzleDb,
+} from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 
 @Injectable()

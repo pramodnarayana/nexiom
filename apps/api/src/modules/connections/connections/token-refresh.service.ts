@@ -31,12 +31,11 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     }
 
     try {
-      let credential;
       let clientId: string;
       let clientSecret: string;
 
       try {
-        credential = await this.connectorsService.fetchAppCredential(
+        const credential = await this.connectorsService.fetchAppCredential(
           tenantId,
           appName,
         );
@@ -47,7 +46,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
           appName,
           tenantId,
         );
-      } catch (error) {
+      } catch (error: unknown) {
         throw new Error(
           `Failed to retrieve app credential for tenantId/appName: ${error instanceof Error ? error.message : String(error)}`,
         );

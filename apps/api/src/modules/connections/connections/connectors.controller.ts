@@ -14,10 +14,14 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ProviderRegistryService, DrizzleDb } from '@nexiom/connections';
+import { ProviderRegistryService } from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
-import { appConnections, AppConnectionStatus } from '@nexiom/database';
+import {
+  appConnections,
+  AppConnectionStatus,
+  type DrizzleDb,
+} from '@nexiom/database';
 import { eq, and, count } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
 

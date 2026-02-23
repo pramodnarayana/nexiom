@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { appConnections } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import Redis from 'ioredis';
-import { DrizzleDb } from './types.js';
+import type { DrizzleDb } from '@nexiom/database';
 
 // Abstract contracts — consumers must provide real implementations via DI
 export abstract class EncryptionService {
@@ -154,8 +154,8 @@ export class TokenManagerService implements OnModuleDestroy {
             throw new Error('No refresh token available');
         }
 
-        if (typeof connection.tenantId !== 'string') {
-            throw new TypeError('Invalid connection: tenantId is missing or not a string');
+        if (typeof connection.tenantId !== 'string' || !connection.tenantId.trim()) {
+            throw new TypeError('Invalid connection: tenantId is missing, empty or not a string');
         }
 
         // 2. Perform HTTP call to Vendor API

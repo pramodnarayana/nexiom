@@ -1,10 +1,9 @@
 import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { appConnections } from '@nexiom/database';
+import { appConnections, type DrizzleDb } from '@nexiom/database';
 import {
   EncryptionService,
   ProviderRegistryService,
-  DrizzleDb,
   type ProviderDefinition,
 } from '@nexiom/connections';
 

@@ -41,7 +41,6 @@ describe('DefaultOAuthRefreshClient', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
   });
 
   it('should throw an error if the provider is not found in the registry', async () => {
@@ -114,6 +113,30 @@ describe('DefaultOAuthRefreshClient', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result).toEqual(mockResponsePayload);
+  });
+
+  it('should throw an error with specific message if credential retrieval fails', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
+      name: 'quickbooks',
+      displayName: 'QuickBooks',
+      description: 'Accounting',
+      logoUrl: '',
+      category: 'Accounting',
+      authType: 'OAUTH2',
+      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
+      tokenUrl: 'https://oauth.url',
+      scopes: ['com.intuit.quickbooks.accounting'],
+    });
+
+    mockConnectorsService.fetchAppCredential.mockRejectedValue(
+      new Error('Credential not found'),
+    );
+
+    await expect(
+      client.refresh('testTenant', 'quickbooks', 'refresh123'),
+    ).rejects.toThrow(
+      'Failed to retrieve app credential for tenantId/appName: Credential not found',
+    );
   });
 
   it('should throw an error containing the status code if the vendor rejects the refresh', async () => {

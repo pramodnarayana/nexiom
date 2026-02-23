@@ -1,5 +1,3 @@
-export type { DrizzleDb } from '@nexiom/database';
-
 /** Auth types supported by Nexiom providers. */
 export type AuthType = 'OAUTH2' | 'API_KEY' | 'BASIC';
 
