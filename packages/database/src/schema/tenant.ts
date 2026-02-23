@@ -1,5 +1,7 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { authTypeEnum, providers } from './provider';
+
+// Auth type enum — previously in provider.ts, now inlined here since the provider table is dropped
+export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);
 
 // Tenants table and associated identity schema are physically isolated per tenant or live in a separate DB.
 // Drizzle foreign keys pointing to "organization" are handled directly in raw migrations (0000_...sql)
@@ -18,8 +20,7 @@ export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppC
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
     tenantId: uuid('tenant_id').notNull(), // Uses organization(id) in SQL migrations
-    providerId: uuid('provider_id').references(() => providers.id, { onDelete: 'restrict', onUpdate: 'cascade' }).notNull(),
-    appName: varchar('app_name', { length: 100 }).notNull(), // Denormalized 'quickbooks'
+    appName: varchar('app_name', { length: 100 }).notNull(), // 'salesforce', 'quickbooks' — validated against PROVIDER_REGISTRY in code
     authType: authTypeEnum('auth_type').notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
 
     // Encrypted Payload (Contains access_token, refresh_token, or api_key)

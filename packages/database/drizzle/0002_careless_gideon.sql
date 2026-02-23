@@ -1,1 +1,0 @@
-CREATE INDEX "tenant_status_idx" ON "app_connection" USING btree ("tenant_id","status");

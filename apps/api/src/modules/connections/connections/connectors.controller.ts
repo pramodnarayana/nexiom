@@ -34,9 +34,9 @@ export class ConnectorsController {
   ) {}
 
   @Get('providers')
-  async getProviders() {
+  getProviders() {
     try {
-      const providers = await this.providerRegistry.getAllProviders();
+      const providers = this.providerRegistry.getAllProviders();
       // Only return the necessary public info to the frontend
       return providers.map((p) => ({
         name: p.name,
@@ -157,6 +157,7 @@ export class ConnectorsController {
       const url = await this.connectorsService.getAuthorizationUrl(
         providerName,
         state,
+        tenantId,
       );
 
       // Redirect the user browser to the vendor's OAuth page

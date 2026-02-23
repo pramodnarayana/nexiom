@@ -1,9 +1,8 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as tenantSchema from './schema/tenant';
-import * as providerSchema from './schema/provider';
 
-const schemaBundle = { ...tenantSchema, ...providerSchema };
+const schemaBundle = { ...tenantSchema };
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;

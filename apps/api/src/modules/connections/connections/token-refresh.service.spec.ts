@@ -1,5 +1,8 @@
 import { DefaultOAuthRefreshClient } from './token-refresh.service';
-import { ProviderRegistryService } from '@nexiom/connections';
+import {
+  ProviderRegistryService,
+  ProviderDefinition,
+} from '@nexiom/connections';
 import {
   describe,
   it,
@@ -38,21 +41,23 @@ describe('DefaultOAuthRefreshClient', () => {
   });
 
   it('should throw an error if the provider is not found in the registry', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockResolvedValue(null);
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(null);
     await expect(client.refresh('unknown_app', 'refresh123')).rejects.toThrow(
       'Provider not found for refresh: unknown_app',
     );
   });
 
   it('should throw an error if the provider lacks a tokenUrl', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockResolvedValue({
-      name: 'salesforce',
-      tokenUrl: null,
-      displayName: 'Salesforce',
-      authType: 'OAUTH2',
-      enabled: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
+      name: 'quickbooks',
+      displayName: 'QuickBooks Online',
+      description: 'Accounting',
+      logoUrl: '',
+      category: 'Accounting',
+      authType: 'OAUTH2' as const,
+      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
+      tokenUrl: '',
+      scopes: [],
     });
 
     await expect(client.refresh('salesforce', 'refresh123')).rejects.toThrow(
@@ -61,10 +66,10 @@ describe('DefaultOAuthRefreshClient', () => {
   });
 
   it('should successfully call the vendor token URL and return the new mapped payload', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockResolvedValue({
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
       name: 'quickbooks',
       tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
-    });
+    } as unknown as ProviderDefinition);
 
     const mockResponsePayload = {
       access_token: 'new_access',
@@ -87,10 +92,10 @@ describe('DefaultOAuthRefreshClient', () => {
   });
 
   it('should throw an error containing the status code if the vendor rejects the refresh', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockResolvedValue({
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
       name: 'quickbooks',
       tokenUrl: 'https://oauth.url',
-    });
+    } as unknown as ProviderDefinition);
 
     (globalThis.fetch as Mock).mockResolvedValue({
       ok: false,

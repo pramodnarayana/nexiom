@@ -1,34 +1,28 @@
-export interface ConnectorAuthSchema {
-    type: 'object';
-    properties: Array<{
-        name: string;
-        label: string;
-        type: 'shortText' | 'secretText' | 'dropdown' | 'oauth2';
-        required: boolean;
-        description?: string;
-        options?: Array<{ label: string; value: string }>;
-    }>;
-}
-
-interface BaseCredentialType {
-    name: string;
-    uiSchema?: ConnectorAuthSchema;
-}
-
-/** Shape of OAuth config as stored in the `providers` DB table. */
-export interface OAuthConfig {
-    authorizeUrl: string;
-    tokenUrl: string;
-    scopes?: string[];
-}
-
-// GenericCredentialType defines integration-package seed data.
-// OAuth URLs live in the providers table, not in integration configs.
-export type GenericCredentialType =
-    | (BaseCredentialType & { authType: 'OAUTH2' })
-    | (BaseCredentialType & { authType: 'API_KEY' });
-
 import { db } from '@nexiom/database';
 
 /** The actual inferred type of the Drizzle Postgres client. */
 export type DrizzleDb = typeof db;
+
+/** Auth types supported by Nexiom providers. */
+export type AuthType = 'OAUTH2' | 'API_KEY' | 'BASIC';
+
+/**
+ * Code-first provider definition — the single source of truth for
+ * all provider OAuth configuration. No DB table required.
+ * Auth configs are derived from activepieces-reference pieces.
+ */
+export interface ProviderDefinition {
+    /** Unique slug used as the key in PROVIDER_REGISTRY and stored in app_credential.app_name */
+    name: string;
+    displayName: string;
+    description: string;
+    logoUrl: string;
+    category: string;
+    authType: AuthType;
+    /** OAuth2 Authorization endpoint */
+    authorizeUrl: string;
+    /** OAuth2 Token exchange endpoint */
+    tokenUrl: string;
+    /** OAuth2 scopes requested during authorization */
+    scopes: string[];
+}

@@ -14,7 +14,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     appName: string,
     refreshToken: string,
   ): Promise<Record<string, unknown>> {
-    const provider = await this.providerRegistry.getProvider(appName);
+    const provider = this.providerRegistry.getProvider(appName);
     if (!provider) {
       throw new Error(`Provider not found for refresh: ${appName}`);
     }

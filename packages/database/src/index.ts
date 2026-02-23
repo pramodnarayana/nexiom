@@ -1,3 +1,4 @@
 export * from './schema/tenant';
-export * from './schema/provider';
+
+export * from './schema/app-credential';
 export * from './client';

@@ -1,11 +1,11 @@
 import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { appConnections, type providers } from '@nexiom/database';
-import type { InferSelectModel } from 'drizzle-orm';
+import { appConnections } from '@nexiom/database';
 import {
   EncryptionService,
   ProviderRegistryService,
   DrizzleDb,
+  type ProviderDefinition,
 } from '@nexiom/connections';
 
 import { OauthStateService } from '../oauth-state.service';
@@ -43,10 +43,10 @@ export class OAuthCallbackController {
       return;
     }
 
-    let providerData: InferSelectModel<typeof providers> | null;
+    let providerData: ProviderDefinition | null;
     try {
-      providerData = await this.providerRegistry.getProvider(provider);
-      if (!providerData?.enabled) {
+      providerData = this.providerRegistry.getProvider(provider);
+      if (!providerData) {
         this.logger.warn(`Rejected unauthorized provider: ${provider}`);
         res.redirect(`/app/connections?error=invalid_provider`);
         return;
@@ -108,6 +108,7 @@ export class OAuthCallbackController {
       tokenResponse = await this.connectorsService.exchangeCodeForTokens(
         provider,
         code,
+        tenantId,
       );
     } catch (error) {
       this.logger.error(`Token exchange failed for ${provider}`, error);
@@ -199,7 +200,7 @@ export class OAuthCallbackController {
 
   private async persistConnection(
     provider: string,
-    providerData: InferSelectModel<typeof providers>,
+    _providerData: ProviderDefinition,
     tenantId: string,
     stateRealmId: string | undefined,
     tokenResponse: Record<string, unknown>,
@@ -252,7 +253,6 @@ export class OAuthCallbackController {
         .insert(appConnections)
         .values({
           tenantId,
-          providerId: providerData.id,
           appName: provider,
           connectionKey,
           authType: 'OAUTH2',
@@ -267,7 +267,6 @@ export class OAuthCallbackController {
             appConnections.connectionKey,
           ],
           set: {
-            providerId: providerData.id,
             encryptedCredentials: encryptedPayload,
             expiresAt: expiresAt,
             metadata: { realmId: stateRealmId },
