@@ -154,9 +154,13 @@ export class TokenManagerService implements OnModuleDestroy {
             throw new Error('No refresh token available');
         }
 
+        if (typeof connection.tenantId !== 'string') {
+            throw new TypeError('Invalid connection: tenantId is missing or not a string');
+        }
+
         // 2. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
-            connection.tenantId as string,
+            connection.tenantId,
             connection.appName as string,
             oldPayload.refreshToken as string,
         );

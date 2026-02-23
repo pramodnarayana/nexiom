@@ -31,17 +31,27 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     }
 
     try {
-      const credential = await this.connectorsService.fetchAppCredential(
-        tenantId,
-        appName,
-      );
+      let credential;
+      let clientId: string;
+      let clientSecret: string;
 
-      const clientId = credential.clientId;
-      const clientSecret = await this.connectorsService.decryptClientSecret(
-        credential.encryptedClientSecret,
-        appName,
-        tenantId,
-      );
+      try {
+        credential = await this.connectorsService.fetchAppCredential(
+          tenantId,
+          appName,
+        );
+
+        clientId = credential.clientId;
+        clientSecret = await this.connectorsService.decryptClientSecret(
+          credential.encryptedClientSecret,
+          appName,
+          tenantId,
+        );
+      } catch (error) {
+        throw new Error(
+          `Failed to retrieve app credential for tenantId/appName: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       const response = await fetch(provider.tokenUrl, {
         method: 'POST',

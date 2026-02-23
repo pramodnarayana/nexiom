@@ -148,8 +148,6 @@ describe('ConnectorsController', () => {
           uiSchema: {},
           authorizeUrl: '',
           tokenUrl: '',
-          createdAt: new Date(),
-          updatedAt: new Date(),
         },
       ]);
 

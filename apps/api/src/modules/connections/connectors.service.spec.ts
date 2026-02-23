@@ -229,6 +229,7 @@ describe('ConnectorsService', () => {
     it('should throw InternalServerErrorException if the token exchange fails', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as unknown as NonNullable<ProviderResult>);
 
@@ -246,6 +247,7 @@ describe('ConnectorsService', () => {
     it('should throw InternalServerErrorException on network/timeout errors', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as unknown as NonNullable<ProviderResult>);
 

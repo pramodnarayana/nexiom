@@ -17,7 +17,7 @@ export const appCredentials = pgTable('app_credential', {
     setupMetadata: jsonb('setup_metadata').default({}),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
     // A tenant can only have one set of global BYOA credentials per application
     uniqueIndex('tenant_app_credential_unique_idx').on(table.tenantId, table.appName),

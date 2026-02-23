@@ -1,8 +1,6 @@
 import { DefaultOAuthRefreshClient } from './token-refresh.service';
-import {
-  ProviderRegistryService,
-  ProviderDefinition,
-} from '@nexiom/connections';
+import { ProviderRegistryService } from '@nexiom/connections';
+import { ConnectorsService } from '../connectors.service';
 import {
   describe,
   it,
@@ -33,15 +31,11 @@ describe('DefaultOAuthRefreshClient', () => {
 
     client = new DefaultOAuthRefreshClient(
       mockProviderRegistry as ProviderRegistryService,
-      mockConnectorsService as any,
+      mockConnectorsService as unknown as ConnectorsService,
     );
 
     // Mock the global fetch
     vi.stubGlobal('fetch', vi.fn());
-
-    // Stub environment variables for Quickbooks (used in tests)
-    vi.stubEnv('QUICKBOOKS_CLIENT_ID', 'test_client_id');
-    vi.stubEnv('QUICKBOOKS_CLIENT_SECRET', 'test_client_secret');
   });
 
   afterEach(() => {
@@ -80,9 +74,15 @@ describe('DefaultOAuthRefreshClient', () => {
   it('should successfully call the vendor token URL and return the new mapped payload', async () => {
     (mockProviderRegistry.getProvider as Mock).mockReturnValue({
       name: 'quickbooks',
+      displayName: 'QuickBooks',
+      description: 'Accounting',
+      logoUrl: '',
+      category: 'Accounting',
       authType: 'OAUTH2',
+      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
       tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
-    } as unknown as ProviderDefinition);
+      scopes: ['com.intuit.quickbooks.accounting'],
+    });
 
     mockConnectorsService.fetchAppCredential.mockResolvedValue({
       clientId: 'mock-client-id',
@@ -119,9 +119,15 @@ describe('DefaultOAuthRefreshClient', () => {
   it('should throw an error containing the status code if the vendor rejects the refresh', async () => {
     (mockProviderRegistry.getProvider as Mock).mockReturnValue({
       name: 'quickbooks',
+      displayName: 'QuickBooks',
+      description: 'Accounting',
+      logoUrl: '',
+      category: 'Accounting',
       authType: 'OAUTH2',
+      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
       tokenUrl: 'https://oauth.url',
-    } as unknown as ProviderDefinition);
+      scopes: ['com.intuit.quickbooks.accounting'],
+    });
 
     mockConnectorsService.fetchAppCredential.mockResolvedValue({
       clientId: 'mock-client-id',

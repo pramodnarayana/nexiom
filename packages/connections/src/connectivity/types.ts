@@ -1,7 +1,4 @@
-import { db } from '@nexiom/database';
-
-/** The actual inferred type of the Drizzle Postgres client. */
-export type DrizzleDb = typeof db;
+export type { DrizzleDb } from '@nexiom/database';
 
 /** Auth types supported by Nexiom providers. */
 export type AuthType = 'OAUTH2' | 'API_KEY' | 'BASIC';

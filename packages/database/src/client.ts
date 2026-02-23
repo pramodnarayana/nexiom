@@ -5,6 +5,8 @@ import * as tenantSchema from './schema/tenant';
 const schemaBundle = { ...tenantSchema };
 type DbSchema = typeof schemaBundle;
 
+export type DrizzleDb = NodePgDatabase<DbSchema>;
+
 let pool: Pool | undefined;
 let dbInstance: NodePgDatabase<DbSchema> | undefined;
 
