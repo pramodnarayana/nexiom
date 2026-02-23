@@ -56,9 +56,7 @@ export class ConnectorsService {
       this.logger.error(
         `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
       );
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
+      return null;
     }
 
     return credential;
@@ -114,6 +112,12 @@ export class ConnectorsService {
     // Fetch tenant's BYOA credentials
     const credential = await this.fetchAppCredential(tenantId, providerName);
 
+    if (!credential) {
+      throw new NotFoundException(
+        `Platform administrator has not configured ${providerName} integration.`,
+      );
+    }
+
     const clientId = credential.clientId;
 
     const url = new URL(provider.authorizeUrl);
@@ -166,6 +170,12 @@ export class ConnectorsService {
 
     // Fetch tenant's BYOA credentials
     const credential = await this.fetchAppCredential(tenantId, providerName);
+
+    if (!credential) {
+      throw new NotFoundException(
+        `Platform administrator has not configured ${providerName} integration.`,
+      );
+    }
 
     const clientId = credential.clientId;
 

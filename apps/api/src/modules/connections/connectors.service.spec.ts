@@ -20,6 +20,10 @@ import {
   Mocked,
 } from 'vitest';
 
+const safeStringify = (obj: unknown): string =>
+  JSON.stringify(obj, (key: string, value: unknown) =>
+    key === 'table' ? undefined : value,
+  );
 type ProviderResult = ReturnType<ProviderRegistryService['getProvider']>;
 
 describe('ConnectorsService', () => {
@@ -85,32 +89,37 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should generate a valid OAuth authorization URL with state and scopes', async () => {
+    it('should generate a valid OAuth URL with scopes', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
         authType: 'OAUTH2',
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        scopes: ['api', 'refresh_token'],
+        scopes: ['full', 'refresh_token'],
       } as unknown as NonNullable<ProviderResult>);
 
-      const urlString = await service.getAuthorizationUrl(
+      const result = await service.getAuthorizationUrl(
         'salesforce',
-        'mocked_jwt_state',
+        'random-state-123',
         testTenantId,
       );
 
-      const parsedUrl = new URL(urlString);
-      expect(parsedUrl.origin).toBe('https://login.salesforce.com');
-      expect(parsedUrl.pathname).toBe('/services/oauth2/authorize');
-
-      const searchParams = parsedUrl.searchParams;
-      expect(searchParams.get('response_type')).toBe('code');
-      expect(searchParams.get('client_id')).toBe('test-client-id');
-      expect(searchParams.get('state')).toBe('mocked_jwt_state');
-      expect(searchParams.get('scope')).toBe('api refresh_token');
-      expect(searchParams.get('redirect_uri')).toBe(
+      const url = new URL(result);
+      expect(url.origin).toBe('https://login.salesforce.com');
+      expect(url.pathname).toBe('/services/oauth2/authorize');
+      expect(url.searchParams.get('response_type')).toBe('code');
+      expect(url.searchParams.get('client_id')).toBe('test-client-id');
+      expect(url.searchParams.get('state')).toBe('random-state-123');
+      expect(url.searchParams.get('scope')).toBe('full refresh_token');
+      expect(url.searchParams.get('redirect_uri')).toBe(
         'https://tenant.nexiom.app/api/connect/salesforce/callback',
       );
+
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.from).toHaveBeenCalled();
+      expect(mockDbWhere).toHaveBeenCalledWith(expect.any(Object));
+      const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
+      // Asserting Drizzle ORM's shape loosely, omitting table to prevent circular JSON errors
+      expect(safeStringify(whereArg)).toContain('tenant_id');
     });
 
     it('should throw NotFoundException if provider does not exist', async () => {
@@ -182,9 +191,9 @@ describe('ConnectorsService', () => {
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as unknown as NonNullable<ProviderResult>);
 
-      mockEncryptionService.decrypt.mockImplementation(() => {
-        throw new Error('decryption failed');
-      });
+      mockEncryptionService.decrypt.mockRejectedValue(
+        new Error('decryption failed'),
+      );
 
       await expect(
         service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
@@ -211,17 +220,36 @@ describe('ConnectorsService', () => {
       );
 
       expect(result).toEqual(mockTokens);
+
+      // Verify tenant isolation DB call shape
+      expect(mockDbWhere).toHaveBeenCalledWith(expect.any(Object));
+      const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
+      expect(safeStringify(whereArg)).toContain('tenant_id');
+
+      // Verify the decryption is used based off retrieved DB row
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith(
+        'encrypted-secret',
+      );
+
+      // Validate fetch call payload
       expect(fetch).toHaveBeenCalledWith(
         'https://login.salesforce.com/services/oauth2/token',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          body: expect.stringContaining('grant_type=authorization_code'),
+          body: expect.any(String),
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           signal: expect.any(AbortSignal),
         },
       );
+
+      const fetchCallArgs = vi.mocked(fetch).mock.calls[0];
+      const fetchBody = fetchCallArgs?.[1]?.body as string;
+      expect(fetchBody).toContain('grant_type=authorization_code');
+      expect(fetchBody).toContain('client_id=test-client-id');
+      expect(fetchBody).toContain('client_secret=test-client-secret');
     });
 
     it('should throw InternalServerErrorException if the token exchange fails', async () => {

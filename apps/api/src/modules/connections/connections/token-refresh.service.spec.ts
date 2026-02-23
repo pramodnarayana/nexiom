@@ -163,7 +163,7 @@ describe('DefaultOAuthRefreshClient', () => {
     (globalThis.fetch as Mock).mockResolvedValue({
       ok: false,
       status: 401,
-      text: () => Promise.resolve('Unauthorized'),
+      statusText: 'Unauthorized',
     });
 
     await expect(

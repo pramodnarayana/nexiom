@@ -3,6 +3,7 @@ import {
   OAuthRefreshClient,
   ProviderRegistryService,
 } from '@nexiom/connections';
+import { OAuthRefreshError } from '@nexiom/connections/dist/connectivity/token-manager.service';
 import { ConnectorsService } from '../connectors.service';
 
 @Injectable()
@@ -40,6 +41,10 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
           appName,
         );
 
+        if (!credential) {
+          throw new Error(`Credential not found for ${appName}`);
+        }
+
         clientId = credential.clientId;
         clientSecret = await this.connectorsService.decryptClientSecret(
           credential.encryptedClientSecret,
@@ -65,9 +70,9 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       });
 
       if (!response.ok) {
-        const err = new Error(
+        const err = new OAuthRefreshError(
           `OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(),
-        ) as Error & { status: number };
+        ) as OAuthRefreshError & { status: number };
         err.status = response.status;
         throw err;
       }
