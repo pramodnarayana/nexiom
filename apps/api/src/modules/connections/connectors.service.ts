@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
   EncryptionService,
+  AppCredentialError,
 } from '@nexiom/connections';
 import {
   appCredentials,
@@ -73,9 +74,7 @@ export class ConnectorsService {
       this.logger.error(
         `Failed to decrypt client secret for ${providerName} on tenant ${tenantId}`,
       );
-      throw new InternalServerErrorException(
-        'Invalid connector configuration.',
-      );
+      throw new AppCredentialError('Invalid connector configuration.');
     }
   }
 
@@ -226,7 +225,10 @@ export class ConnectorsService {
 
       return (await response.json()) as Record<string, unknown>;
     } catch (error) {
-      if (error instanceof InternalServerErrorException) {
+      if (
+        error instanceof InternalServerErrorException ||
+        error instanceof AppCredentialError
+      ) {
         throw error;
       }
       this.logger.error(

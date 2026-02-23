@@ -17,6 +17,13 @@ export class OAuthRefreshError extends Error {
     }
 }
 
+export class AppCredentialError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AppCredentialError';
+    }
+}
+
 export abstract class OAuthRefreshClient {
     abstract refresh(tenantId: string, appName: string, refreshToken: string): Promise<Record<string, unknown>>;
 }

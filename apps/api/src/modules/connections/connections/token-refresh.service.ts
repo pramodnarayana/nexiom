@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   OAuthRefreshClient,
   ProviderRegistryService,
+  OAuthRefreshError,
 } from '@nexiom/connections';
-import { OAuthRefreshError } from '@nexiom/connections/dist/connectivity/token-manager.service';
 import { ConnectorsService } from '../connectors.service';
 
 @Injectable()
@@ -70,11 +70,10 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       });
 
       if (!response.ok) {
-        const err = new OAuthRefreshError(
+        throw new OAuthRefreshError(
           `OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(),
-        ) as OAuthRefreshError & { status: number };
-        err.status = response.status;
-        throw err;
+          response.status,
+        );
       }
 
       return (await response.json()) as Record<string, unknown>;

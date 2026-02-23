@@ -4,6 +4,7 @@ import { ConnectorsService } from './connectors.service';
 import {
   ProviderRegistryService,
   EncryptionService,
+  AppCredentialError,
 } from '@nexiom/connections';
 import {
   InternalServerErrorException,
@@ -120,6 +121,7 @@ describe('ConnectorsService', () => {
       const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
       // Asserting Drizzle ORM's shape loosely, omitting table to prevent circular JSON errors
       expect(safeStringify(whereArg)).toContain('tenant_id');
+      expect(safeStringify(whereArg)).toContain(testTenantId);
     });
 
     it('should throw NotFoundException if provider does not exist', async () => {
@@ -141,6 +143,29 @@ describe('ConnectorsService', () => {
       await expect(
         service.getAuthorizationUrl('salesforce', 'state', testTenantId),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'API_KEY',
+        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.getAuthorizationUrl('salesforce', 'state', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException if authorizeUrl is missing', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.getAuthorizationUrl('salesforce', 'state', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 
@@ -184,7 +209,30 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw InternalServerErrorException if decryption fails', async () => {
+    it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'API_KEY',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException if tokenUrl is missing', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw AppCredentialError if decryption fails', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
         authType: 'OAUTH2',
@@ -197,7 +245,7 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
-      ).rejects.toThrow(InternalServerErrorException);
+      ).rejects.toThrow(AppCredentialError);
     });
 
     it('should successfully exchange a code for tokens', async () => {
@@ -225,6 +273,7 @@ describe('ConnectorsService', () => {
       expect(mockDbWhere).toHaveBeenCalledWith(expect.any(Object));
       const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
       expect(safeStringify(whereArg)).toContain('tenant_id');
+      expect(safeStringify(whereArg)).toContain(testTenantId);
 
       // Verify the decryption is used based off retrieved DB row
       // eslint-disable-next-line @typescript-eslint/unbound-method

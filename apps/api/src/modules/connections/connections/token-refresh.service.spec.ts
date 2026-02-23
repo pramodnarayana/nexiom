@@ -139,6 +139,35 @@ describe('DefaultOAuthRefreshClient', () => {
     );
   });
 
+  it('should throw an error with specific message if credential decryption fails', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
+      name: 'quickbooks',
+      displayName: 'QuickBooks',
+      description: 'Accounting',
+      logoUrl: '',
+      category: 'Accounting',
+      authType: 'OAUTH2',
+      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
+      tokenUrl: 'https://oauth.url',
+      scopes: ['com.intuit.quickbooks.accounting'],
+    });
+
+    mockConnectorsService.fetchAppCredential.mockResolvedValue({
+      clientId: 'mock-client-id',
+      encryptedClientSecret: 'mock-encrypted-secret',
+    });
+
+    mockConnectorsService.decryptClientSecret.mockRejectedValue(
+      new Error('decryption failed'),
+    );
+
+    await expect(
+      client.refresh('testTenant', 'quickbooks', 'refresh123'),
+    ).rejects.toThrow(
+      'Failed to retrieve app credential for tenantId/appName: decryption failed',
+    );
+  });
+
   it('should throw an error containing the status code if the vendor rejects the refresh', async () => {
     (mockProviderRegistry.getProvider as Mock).mockReturnValue({
       name: 'quickbooks',
