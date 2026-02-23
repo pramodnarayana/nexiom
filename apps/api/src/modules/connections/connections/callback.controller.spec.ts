@@ -154,7 +154,7 @@ describe('OAuthCallbackController', () => {
 
   it('should redirect with internal_error if provider lookup fails', async () => {
     mockProviderRegistry.getProvider.mockImplementation(() => {
-      throw new Error('DB error');
+      throw new Error('Unexpected registry error');
     });
 
     const req = mockRequest('salesforce');

@@ -7,6 +7,10 @@ export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASI
 // Drizzle foreign keys pointing to "organization" are handled directly in raw migrations (0000_...sql)
 // rather than strict drizzle-orm foreignKey() constraints here to allow cross-database resolution.
 
+export const tenants = pgTable('tenant', {
+    id: uuid('id').primaryKey(),
+});
+
 export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED']);
 
 export const AppConnectionStatus = {

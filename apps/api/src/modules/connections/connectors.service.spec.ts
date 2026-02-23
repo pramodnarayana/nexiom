@@ -88,6 +88,7 @@ describe('ConnectorsService', () => {
     it('should generate a valid OAuth authorization URL with state and scopes', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
         scopes: ['api', 'refresh_token'],
       } as unknown as NonNullable<ProviderResult>);
@@ -122,6 +123,7 @@ describe('ConnectorsService', () => {
     it('should throw NotFoundException if credential is missing in db', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
       } as unknown as NonNullable<ProviderResult>);
 
@@ -162,6 +164,7 @@ describe('ConnectorsService', () => {
     it('should throw NotFoundException if credentials are missing in db', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as unknown as NonNullable<ProviderResult>);
 
@@ -175,6 +178,7 @@ describe('ConnectorsService', () => {
     it('should throw InternalServerErrorException if decryption fails', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
       } as unknown as NonNullable<ProviderResult>);
 
@@ -190,8 +194,11 @@ describe('ConnectorsService', () => {
     it('should successfully exchange a code for tokens', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as ProviderResult);
+      } as unknown as NonNullable<
+        ReturnType<typeof mockProviderRegistry.getProvider>
+      >);
 
       const mockTokens = { access_token: 'abc', refresh_token: 'def' };
       vi.mocked(fetch).mockResolvedValue({

@@ -200,7 +200,7 @@ export class OAuthCallbackController {
 
   private async persistConnection(
     provider: string,
-    _providerData: ProviderDefinition,
+    providerData: ProviderDefinition,
     tenantId: string,
     stateRealmId: string | undefined,
     tokenResponse: Record<string, unknown>,
@@ -255,7 +255,7 @@ export class OAuthCallbackController {
           tenantId,
           appName: provider,
           connectionKey,
-          authType: 'OAUTH2',
+          authType: providerData.authType,
           encryptedCredentials: encryptedPayload,
           expiresAt: expiresAt,
           metadata: { realmId: stateRealmId },

@@ -1,4 +1,5 @@
-import { pgTable, uuid, varchar, text, jsonb, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, jsonb, timestamp, uniqueIndex, foreignKey } from 'drizzle-orm/pg-core';
+import { tenants } from './tenant';
 
 // Stores the BYOA (Bring Your Own App) OAuth credentials for a tenant
 export const appCredentials = pgTable('app_credential', {
@@ -20,4 +21,10 @@ export const appCredentials = pgTable('app_credential', {
 }, (table) => [
     // A tenant can only have one set of global BYOA credentials per application
     uniqueIndex('tenant_app_credential_unique_idx').on(table.tenantId, table.appName),
+    // Cascade deletes if a tenant is removed
+    foreignKey({
+        columns: [table.tenantId],
+        foreignColumns: [tenants.id],
+        name: 'app_credential_tenant_id_tenants_id_fk'
+    }).onDelete('cascade'),
 ]);

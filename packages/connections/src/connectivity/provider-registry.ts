@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PROVIDER_REGISTRY } from './providers/index.js';
+import { PROVIDER_REGISTRY, type ProviderName } from './providers/index.js';
 import type { ProviderDefinition } from './types.js';
 
 /**
@@ -11,12 +11,13 @@ import type { ProviderDefinition } from './types.js';
 export class ProviderRegistryService {
     /** Check whether a provider exists and is enabled. */
     isAllowed(name: string): boolean {
-        return name in PROVIDER_REGISTRY;
+        return Object.hasOwn(PROVIDER_REGISTRY, name);
     }
 
     /** Retrieve full provider configuration (returns null if not found). */
     getProvider(name: string): ProviderDefinition | null {
-        return PROVIDER_REGISTRY[name] ?? null;
+        if (!this.isAllowed(name)) return null;
+        return PROVIDER_REGISTRY[name as ProviderName];
     }
 
     /** List all registered providers. */

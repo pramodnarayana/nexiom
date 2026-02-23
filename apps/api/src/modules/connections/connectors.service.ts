@@ -12,8 +12,8 @@ import {
   DrizzleDb,
   EncryptionService,
 } from '@nexiom/connections';
-import { appCredentials } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { appCredentials, withTenantGuard } from '@nexiom/database';
+import { eq } from 'drizzle-orm';
 
 @Injectable()
 export class ConnectorsService {
@@ -30,6 +30,52 @@ export class ConnectorsService {
     const baseUrl =
       this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
     return `${baseUrl}/api/connect/${providerName}/callback`;
+  }
+
+  /**
+   * Fetches the OAuth app credential for a given tenant and provider.
+   * Extracts the database lookup logic into a shared helper to ensure RLS-like
+   * tenant isolation is consistently applied at the application layer.
+   */
+  async fetchAppCredential(tenantId: string, providerName: string) {
+    const [credential] = await this.db
+      .select()
+      .from(appCredentials)
+      .where(
+        withTenantGuard(
+          appCredentials.tenantId,
+          tenantId,
+          eq(appCredentials.appName, providerName),
+        ),
+      );
+
+    if (!credential) {
+      this.logger.error(
+        `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
+      );
+      throw new NotFoundException(
+        `Platform administrator has not configured ${providerName} integration.`,
+      );
+    }
+
+    return credential;
+  }
+
+  async decryptClientSecret(
+    encryptedSecret: string,
+    providerName: string,
+    tenantId: string,
+  ): Promise<string> {
+    try {
+      return await this.crypto.decrypt(encryptedSecret);
+    } catch {
+      this.logger.error(
+        `Failed to decrypt client secret for ${providerName} on tenant ${tenantId}`,
+      );
+      throw new InternalServerErrorException(
+        'Invalid connector configuration.',
+      );
+    }
   }
 
   /**
@@ -53,34 +99,17 @@ export class ConnectorsService {
       );
     }
 
-    if (!provider.authorizeUrl) {
+    if (provider.authType !== 'OAUTH2' || !provider.authorizeUrl) {
       this.logger.error(
-        `Provider ${providerName} does not have an authorizeUrl defined.`,
+        `Provider ${providerName} missing authorizeUrl or not an OAuth provider.`,
       );
       throw new InternalServerErrorException(
-        `Provider ${providerName} configuration is incomplete.`,
+        `Provider ${providerName} configuration is incomplete for OAuth.`,
       );
     }
 
     // Fetch tenant's BYOA credentials
-    const [credential] = await this.db
-      .select()
-      .from(appCredentials)
-      .where(
-        and(
-          eq(appCredentials.tenantId, tenantId),
-          eq(appCredentials.appName, providerName),
-        ),
-      );
-
-    if (!credential) {
-      this.logger.error(
-        `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
-      );
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
-    }
+    const credential = await this.fetchAppCredential(tenantId, providerName);
 
     const clientId = credential.clientId;
 
@@ -123,7 +152,7 @@ export class ConnectorsService {
       );
     }
 
-    if (!provider.tokenUrl) {
+    if (provider.authType !== 'OAUTH2' || !provider.tokenUrl) {
       this.logger.error(
         `Provider ${providerName} does not have a tokenUrl defined.`,
       );
@@ -133,40 +162,15 @@ export class ConnectorsService {
     }
 
     // Fetch tenant's BYOA credentials
-    const [credential] = await this.db
-      .select()
-      .from(appCredentials)
-      .where(
-        and(
-          eq(appCredentials.tenantId, tenantId),
-          eq(appCredentials.appName, providerName),
-        ),
-      );
-
-    if (!credential) {
-      this.logger.error(
-        `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
-      );
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
-    }
+    const credential = await this.fetchAppCredential(tenantId, providerName);
 
     const clientId = credential.clientId;
 
-    let clientSecret: string;
-    try {
-      clientSecret = await this.crypto.decrypt(
-        credential.encryptedClientSecret,
-      );
-    } catch {
-      this.logger.error(
-        `Failed to decrypt client secret for ${providerName} on tenant ${tenantId}`,
-      );
-      throw new InternalServerErrorException(
-        'Invalid connector configuration.',
-      );
-    }
+    const clientSecret = await this.decryptClientSecret(
+      credential.encryptedClientSecret,
+      providerName,
+      tenantId,
+    );
 
     const redirectUri = this.buildRedirectUri(providerName);
 

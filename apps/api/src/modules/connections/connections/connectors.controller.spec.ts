@@ -173,12 +173,16 @@ describe('ConnectorsController', () => {
 
     it('should bubble up InternalServerErrorException from the provider registry', () => {
       mockProviderRegistry.getAllProviders.mockImplementation(() => {
-        throw new Error('DB connection failed');
+        throw new Error('Registry initialization error');
       });
 
-      const action = () => controller.getProviders();
-      expect(action).toThrow(InternalServerErrorException);
-      expect(action).toThrow('Failed to get providers');
+      try {
+        controller.getProviders();
+        expect.unreachable('Should have thrown an exception');
+      } catch (error) {
+        expect(error).toBeInstanceOf(InternalServerErrorException);
+        expect((error as Error).message).toContain('Failed to get providers');
+      }
     });
   });
 

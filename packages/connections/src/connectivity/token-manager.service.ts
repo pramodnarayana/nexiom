@@ -18,7 +18,7 @@ export class OAuthRefreshError extends Error {
 }
 
 export abstract class OAuthRefreshClient {
-    abstract refresh(appName: string, refreshToken: string): Promise<Record<string, unknown>>;
+    abstract refresh(tenantId: string, appName: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
 function parseExpiresAt(value: unknown): Date | null {
@@ -156,6 +156,7 @@ export class TokenManagerService implements OnModuleDestroy {
 
         // 2. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
+            connection.tenantId as string,
             connection.appName as string,
             oldPayload.refreshToken as string,
         );
