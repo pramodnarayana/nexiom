@@ -86,13 +86,14 @@ export function useConnections() {
 
     const connect = useCallback(
         ({ providerName, clientId, clientSecret, displayName, env }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string }) => {
-            pendingCredentials.current = { clientId, clientSecret, displayName, env };
-
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
-                throw new Error('Missing VITE_API_URL environment variable');
+                pendingCredentials.current = null;
+                return;
             }
+
+            pendingCredentials.current = { clientId, clientSecret, displayName, env };
 
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (env) {
@@ -101,7 +102,7 @@ export function useConnections() {
             // Initiate popup with BYOA credentials injected into the URL
             openPopup(popupUrl);
         },
-        [openPopup, user?.organizationId],
+        [openPopup, user?.organizationId, toast],
     );
 
     return { connections, loading, refresh, connect };

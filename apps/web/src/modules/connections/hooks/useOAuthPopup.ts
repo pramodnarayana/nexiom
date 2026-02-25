@@ -35,15 +35,21 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
                 ? new URL(import.meta.env.VITE_API_URL, globalThis.location.origin).origin
                 : globalThis.location.origin;
 
-            if (event.origin !== expectedOrigin) return;
+            if (event.origin !== expectedOrigin || event.source !== popupRef.current) return;
 
             const data = event.data as OAuthPopupMessage;
             if (typeof data !== 'object' || !data || !('status' in data)) return;
 
             if (data.status === 'success') {
-                onSuccessRef.current({ provider: data.provider, code: data.code });
+                if (typeof data.provider === 'string' && typeof data.code === 'string') {
+                    onSuccessRef.current({ provider: data.provider, code: data.code });
+                } else {
+                    onErrorRef.current('invalid_payload');
+                }
             } else if (data.status === 'error') {
-                onErrorRef.current(data.error ?? 'unknown_error');
+                onErrorRef.current(typeof data.error === 'string' ? data.error : 'unknown_error');
+            } else {
+                onErrorRef.current('invalid_payload');
             }
         }
         window.addEventListener('message', handleMessage);

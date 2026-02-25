@@ -61,6 +61,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
               ),
             ),
           )
+          .orderBy(appConnections.updatedAt, appConnections.id) // Ensure deterministic resolution
           .limit(1);
 
         if (!connection) {
@@ -72,6 +73,17 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
         const rawEncryptedValue: string = connection.value;
         const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);
         const valueBlob = JSON.parse(decryptedValue) as ConnectionValueBlob;
+
+        if (
+          typeof valueBlob.clientId !== 'string' ||
+          !valueBlob.clientId.trim() ||
+          typeof valueBlob.clientSecret !== 'string' ||
+          !valueBlob.clientSecret.trim()
+        ) {
+          throw new Error(
+            'Decrypted credentials missing valid clientId or clientSecret',
+          );
+        }
 
         clientId = valueBlob.clientId;
         clientSecret = valueBlob.clientSecret;

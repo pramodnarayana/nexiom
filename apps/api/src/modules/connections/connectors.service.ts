@@ -92,13 +92,20 @@ export class ConnectorsService {
     }
 
     // Attempt to match the requested environment from the provider's defined environments array.
-    const environmentConfig = provider.environments?.find(
-      (envParam: ProviderEnvironment) => envParam.name === env,
-    );
-
-    // If an environment match is found, prefer its authorizeUrl. Otherwise, fallback to the root definition.
-    const authorizeUrl =
-      environmentConfig?.authorizeUrl ?? provider.authorizeUrl;
+    let authorizeUrl: string | undefined;
+    if (env) {
+      const environmentConfig = provider.environments?.find(
+        (envParam: ProviderEnvironment) => envParam.name === env,
+      );
+      if (!environmentConfig) {
+        throw new BadRequestException(
+          `Environment '${env}' is not configured for provider '${providerName}'`,
+        );
+      }
+      authorizeUrl = environmentConfig.authorizeUrl;
+    } else {
+      authorizeUrl = provider.authorizeUrl;
+    }
 
     if (!authorizeUrl) {
       this.logger.error(`Provider ${providerName} missing authorizeUrl.`);
@@ -156,11 +163,21 @@ export class ConnectorsService {
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
-      // Resolve token URL dynamically based on environment, falling back to basic tokenUrl
-      const environmentConfig = provider.environments?.find(
-        (envParam: ProviderEnvironment) => envParam.name === env,
-      );
-      const tokenUrl = environmentConfig?.tokenUrl ?? provider.tokenUrl;
+      // Resolve token URL dynamically based on environment
+      let tokenUrl: string | undefined;
+      if (env) {
+        const environmentConfig = provider.environments?.find(
+          (envParam: ProviderEnvironment) => envParam.name === env,
+        );
+        if (!environmentConfig) {
+          throw new BadRequestException(
+            `Environment '${env}' is not configured for provider '${providerName}'`,
+          );
+        }
+        tokenUrl = environmentConfig.tokenUrl;
+      } else {
+        tokenUrl = provider.tokenUrl;
+      }
 
       if (!tokenUrl) {
         this.logger.error(
@@ -229,6 +246,7 @@ export class ConnectorsService {
     } catch (error) {
       if (
         error instanceof InternalServerErrorException ||
+        error instanceof BadRequestException ||
         error instanceof AppCredentialError
       ) {
         throw error;

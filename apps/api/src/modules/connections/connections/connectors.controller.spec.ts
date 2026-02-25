@@ -230,6 +230,8 @@ describe('ConnectorsController', () => {
         displayName: 'TMS Salesforce',
         authType: 'OAUTH2' as const,
         status: AppConnectionStatus.ACTIVE,
+        value: 'dummy-encrypted-value',
+        encryptedCredentials: 'dummy-encrypted-value',
         metadata: { env: 'sandbox' },
         expiresAt: null,
         createdAt: mockDate,
@@ -253,8 +255,21 @@ describe('ConnectorsController', () => {
       expect(dataChain.limit).toHaveBeenCalledWith(50);
       expect(dataChain.offset).toHaveBeenCalledWith(0);
 
+      const safeMockRow = {
+        id: mockConnectionRow.id,
+        appName: mockConnectionRow.appName,
+        externalId: mockConnectionRow.externalId,
+        displayName: mockConnectionRow.displayName,
+        authType: mockConnectionRow.authType,
+        status: mockConnectionRow.status,
+        metadata: mockConnectionRow.metadata,
+        expiresAt: mockConnectionRow.expiresAt,
+        createdAt: mockConnectionRow.createdAt,
+        updatedAt: mockConnectionRow.updatedAt,
+      };
+
       expect(result).toEqual({
-        data: [mockConnectionRow],
+        data: [safeMockRow],
         metadata: { limit: 50, offset: 0, count: 1 },
       });
 
@@ -316,7 +331,7 @@ describe('ConnectorsController', () => {
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
         tenantId: 'tenant-123',
         providerName: 'salesforce',
-        externalId: 'tms-salesforce', // auto-generated kebab slug
+        externalId: 'salesforce-tms-salesforce', // auto-generated kebab slug (namespaced)
         displayName: 'TMS Salesforce',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
@@ -396,6 +411,22 @@ describe('ConnectorsController', () => {
         new InternalServerErrorException(
           'Failed to save connection to database',
         ),
+      );
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+
+    it('should sanitize generic Errors thrown by storeOAuthConnection into InternalServerErrorException', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockConnectorsService.storeOAuthConnection.mockRejectedValue(
+        new Error('some internal failure'),
       );
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         InternalServerErrorException,

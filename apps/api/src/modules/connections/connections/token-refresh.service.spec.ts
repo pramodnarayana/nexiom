@@ -35,6 +35,7 @@ describe('DefaultOAuthRefreshClient', () => {
     select: Mock;
     from: Mock;
     where: Mock;
+    orderBy: Mock;
     limit: Mock;
   };
 
@@ -60,6 +61,7 @@ describe('DefaultOAuthRefreshClient', () => {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([{ value: encryptedValueBlob }]),
     };
 

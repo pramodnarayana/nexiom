@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Plug2, Copy, Check } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -52,6 +52,11 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const [env, setEnv] = useState(provider.environments?.[0]?.name ?? 'production');
     const [copied, setCopied] = useState(false);
     const [imgError, setImgError] = useState(false);
+
+    const connectionNameId = useId();
+    const clientIdId = useId();
+    const clientSecretId = useId();
+    const envSelectId = useId();
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
@@ -162,11 +167,11 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="connection-name" className="text-right">
+                                <Label htmlFor={connectionNameId} className="text-right">
                                     Name
                                 </Label>
                                 <Input
-                                    id="connection-name"
+                                    id={connectionNameId}
                                     placeholder={`e.g. ${provider.displayName}`}
                                     value={connectionName}
                                     onChange={(e) => setConnectionName(e.target.value)}
@@ -174,22 +179,22 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                                 />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="client-id" className="text-right">
+                                <Label htmlFor={clientIdId} className="text-right">
                                     Client ID
                                 </Label>
                                 <Input
-                                    id="client-id"
+                                    id={clientIdId}
                                     value={clientId}
                                     onChange={(e) => setClientId(e.target.value)}
                                     className="col-span-3"
                                 />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="client-secret" className="text-right">
+                                <Label htmlFor={clientSecretId} className="text-right">
                                     Client Secret
                                 </Label>
                                 <Input
-                                    id="client-secret"
+                                    id={clientSecretId}
                                     type="password"
                                     value={clientSecret}
                                     onChange={(e) => setClientSecret(e.target.value)}
@@ -198,11 +203,11 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             </div>
                             {provider.environments && provider.environments.length > 0 && (
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="env-select" className="text-right">
+                                    <Label htmlFor={envSelectId} className="text-right">
                                         Environment
                                     </Label>
                                     <Select value={env} onValueChange={setEnv}>
-                                        <SelectTrigger id="env-select" className="col-span-3">
+                                        <SelectTrigger id={envSelectId} className="col-span-3">
                                             <SelectValue placeholder="Select environment" />
                                         </SelectTrigger>
                                         <SelectContent>

@@ -141,7 +141,7 @@ describe('ConnectorsService', () => {
       expect(url.pathname).toBe('/services/oauth2/authorize');
     });
 
-    it('should fallback to root authorizeUrl when env parameter is passed but does not match', () => {
+    it('should throw BadRequestException when env parameter is passed but does not match', () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
         authType: 'OAUTH2',
@@ -156,16 +156,14 @@ describe('ConnectorsService', () => {
         ],
       } as unknown as NonNullable<ProviderResult>);
 
-      const result = service.getAuthorizationUrl(
-        'salesforce',
-        'random-state-123',
-        'test-client-id',
-        'production',
-      );
-
-      const url = new URL(result);
-      expect(url.origin).toBe('https://login.salesforce.com');
-      expect(url.pathname).toBe('/services/oauth2/authorize');
+      expect(() =>
+        service.getAuthorizationUrl(
+          'salesforce',
+          'random-state-123',
+          'test-client-id',
+          'production',
+        ),
+      ).toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException if provider does not exist', () => {
@@ -351,7 +349,7 @@ describe('ConnectorsService', () => {
       );
     });
 
-    it('should fallback to root tokenUrl when env is provided but no match is found', async () => {
+    it('should throw BadRequestException when env is provided but no match is found', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
         authType: 'OAUTH2',
@@ -365,23 +363,17 @@ describe('ConnectorsService', () => {
         ],
       } as unknown as NonNullable<ProviderResult>);
 
-      vi.mocked(fetch).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ access_token: 'xyz' }),
-      } as Response);
+      await expect(
+        service.exchangeCodeForTokens(
+          'salesforce',
+          'code',
+          'cl_id',
+          'cl_secret',
+          'unknown',
+        ),
+      ).rejects.toThrow(BadRequestException);
 
-      await service.exchangeCodeForTokens(
-        'salesforce',
-        'code',
-        'cl_id',
-        'cl_secret',
-        'unknown',
-      );
-
-      expect(fetch).toHaveBeenCalledWith(
-        'https://login.salesforce.com/services/oauth2/token',
-        expect.any(Object),
-      );
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('should invoke validateConnectResponse and throw if validation fails', async () => {

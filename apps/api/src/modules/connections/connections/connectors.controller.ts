@@ -160,7 +160,18 @@ export class ConnectorsController {
     const total = Number(countResult?.count ?? 0);
 
     return {
-      data: activeConnections,
+      data: activeConnections.map((conn) => ({
+        id: conn.id,
+        appName: conn.appName,
+        externalId: conn.externalId,
+        displayName: conn.displayName,
+        authType: conn.authType,
+        status: conn.status,
+        metadata: conn.metadata,
+        expiresAt: conn.expiresAt,
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
+      })),
       metadata: { limit, offset, count: total },
     };
   }
@@ -334,24 +345,34 @@ export class ConnectorsController {
     const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // externalId is auto-derived from the user-supplied displayName
-    const externalId = toKebabSlug(displayName);
+    // externalId is auto-derived from the user-supplied displayName and provider
+    const externalId = toKebabSlug(`${restOfBody.providerName}-${displayName}`);
     if (!externalId) {
       throw new BadRequestException(
         'displayName must contain at least one alphanumeric character',
       );
     }
 
-    await this.connectorsService.storeOAuthConnection({
-      tenantId,
-      providerName: restOfBody.providerName,
-      externalId,
-      displayName: displayName.trim(),
-      authType: providerData.authType,
-      value: encryptedValue,
-      expiresAt,
-      metadata: { env },
-    });
+    try {
+      await this.connectorsService.storeOAuthConnection({
+        tenantId,
+        providerName: restOfBody.providerName,
+        externalId,
+        displayName: displayName.trim(),
+        authType: providerData.authType,
+        value: encryptedValue,
+        expiresAt,
+        metadata: { env },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to store connection "${displayName}" (${externalId}) for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to save connection to database',
+      );
+    }
 
     this.logger.log(
       `[OAuth Exchange] Success: ${restOfBody.providerName} "${displayName}" (${externalId}) for tenant ${tenantId}`,
