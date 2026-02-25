@@ -1,34 +1,35 @@
-export interface ConnectorAuthSchema {
-    type: 'object';
-    properties: Array<{
-        name: string;
-        label: string;
-        type: 'shortText' | 'secretText' | 'dropdown' | 'oauth2';
-        required: boolean;
-        description?: string;
-        options?: Array<{ label: string; value: string }>;
-    }>;
-}
+/** Auth types supported by Nexiom providers. */
+export type AuthType = 'OAUTH2' | 'API_KEY' | 'BASIC';
 
-interface BaseCredentialType {
+interface BaseProviderDefinition {
+    /** Unique slug used as the key in PROVIDER_REGISTRY and stored in app_credential.app_name */
     name: string;
-    uiSchema?: ConnectorAuthSchema;
+    displayName: string;
+    description: string;
+    logoUrl: string;
+    category: string;
 }
 
-/** Shape of OAuth config as stored in the `providers` DB table. */
-export interface OAuthConfig {
+export interface OAuth2Provider extends BaseProviderDefinition {
+    authType: 'OAUTH2';
+    /** OAuth2 Authorization endpoint */
     authorizeUrl: string;
+    /** OAuth2 Token exchange endpoint */
     tokenUrl: string;
-    scopes?: string[];
+    /** OAuth2 scopes requested during authorization */
+    scopes: string[];
 }
 
-// GenericCredentialType defines integration-package seed data.
-// OAuth URLs live in the providers table, not in integration configs.
-export type GenericCredentialType =
-    | (BaseCredentialType & { authType: 'OAUTH2' })
-    | (BaseCredentialType & { authType: 'API_KEY' });
+export interface ApiKeyProvider extends BaseProviderDefinition {
+    authType: 'API_KEY';
+}
 
-import { db } from '@nexiom/database';
+export interface BasicProvider extends BaseProviderDefinition {
+    authType: 'BASIC';
+}
 
-/** The actual inferred type of the Drizzle Postgres client. */
-export type DrizzleDb = typeof db;
+/**
+ * Code-first provider definition — the single source of truth for
+ * all provider OAuth configuration. No DB table required.
+ */
+export type ProviderDefinition = OAuth2Provider | ApiKeyProvider | BasicProvider;

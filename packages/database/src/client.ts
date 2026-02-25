@@ -1,15 +1,17 @@
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as tenantSchema from './schema/tenant';
-import * as providerSchema from './schema/provider';
+import * as appCredentialSchema from './schema/app-credential';
 
-const schemaBundle = { ...tenantSchema, ...providerSchema };
+const schemaBundle = { ...tenantSchema, ...appCredentialSchema };
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;
-let dbInstance: NodePgDatabase<DbSchema> | undefined;
 
-export function getDb(): NodePgDatabase<DbSchema> {
+export type DrizzleDb = ReturnType<typeof drizzle<DbSchema>>;
+let dbInstance: DrizzleDb | undefined;
+
+export function getDb(): DrizzleDb {
     if (dbInstance) return dbInstance;
 
     if (!process.env.DATABASE_URL) {
@@ -32,9 +34,9 @@ export function getDb(): NodePgDatabase<DbSchema> {
 
 // For backwards compatibility where `db` was used directly, we can define a proxy
 // that initializes the DB on the first query.
-export const db = new Proxy({} as NodePgDatabase<DbSchema>, {
+export const db = new Proxy({} as DrizzleDb, {
     get(_target, prop) {
-        return getDb()[prop as keyof NodePgDatabase<DbSchema>];
+        return getDb()[prop as keyof DrizzleDb];
     }
 });
 

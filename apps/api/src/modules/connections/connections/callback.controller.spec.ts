@@ -43,9 +43,7 @@ vi.mock('@nexiom/database', () => ({
 }));
 
 describe('OAuthCallbackController', () => {
-  type ProviderResult = Awaited<
-    ReturnType<ProviderRegistryService['getProvider']>
-  >;
+  type ProviderResult = ReturnType<ProviderRegistryService['getProvider']>;
   let controller: OAuthCallbackController;
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
@@ -89,10 +87,17 @@ describe('OAuthCallbackController', () => {
     } as unknown as Mocked<EncryptionService>;
 
     mockProviderRegistry = {
-      getProvider: vi.fn().mockResolvedValue({
-        id: 'mock-provider-id',
-        enabled: true,
-      } as unknown as ProviderResult),
+      getProvider: vi.fn().mockReturnValue({
+        name: 'salesforce',
+        displayName: 'Salesforce',
+        description: 'CRM',
+        logoUrl: '',
+        category: 'CRM',
+        authType: 'OAUTH2',
+        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+        scopes: ['api'],
+      } satisfies ProviderResult),
       getAllProviders: vi.fn(),
     } as unknown as Mocked<ProviderRegistryService>;
 
@@ -134,24 +139,8 @@ describe('OAuthCallbackController', () => {
     vi.clearAllMocks();
   });
 
-  it('should redirect with invalid_provider error if provider is not allowed', async () => {
-    mockProviderRegistry.getProvider.mockResolvedValue({
-      id: 'test-provider',
-      enabled: false,
-    } as unknown as ProviderResult);
-
-    const req = mockRequest('unsupported-provider');
-    const res = mockResponse();
-
-    await controller.handleCallback(req as Request, res as Response);
-
-    expect(res.redirect).toHaveBeenCalledWith(
-      '/app/connections?error=invalid_provider',
-    );
-  });
-
   it('should redirect with invalid_provider error if provider is not found', async () => {
-    mockProviderRegistry.getProvider.mockResolvedValue(null);
+    mockProviderRegistry.getProvider.mockReturnValue(null);
 
     const req = mockRequest('unknown-provider');
     const res = mockResponse();
@@ -164,7 +153,9 @@ describe('OAuthCallbackController', () => {
   });
 
   it('should redirect with internal_error if provider lookup fails', async () => {
-    mockProviderRegistry.getProvider.mockRejectedValue(new Error('DB error'));
+    mockProviderRegistry.getProvider.mockImplementation(() => {
+      throw new Error('Unexpected registry error');
+    });
 
     const req = mockRequest('salesforce');
     const res = mockResponse();
@@ -292,6 +283,7 @@ describe('OAuthCallbackController', () => {
     expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
       'salesforce',
       '123',
+      VALID_TENANT_ID,
     );
 
     expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
@@ -310,7 +302,6 @@ describe('OAuthCallbackController', () => {
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: VALID_TENANT_ID,
-        providerId: 'mock-provider-id',
         appName: 'salesforce',
         connectionKey: 'ext-realm-id',
         encryptedCredentials: 'encrypted-credentials',

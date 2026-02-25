@@ -1,44 +1,27 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { providers } from '@nexiom/database';
-import { eq, and, InferSelectModel } from 'drizzle-orm';
-import { DrizzleDb } from './types.js';
+import { Injectable } from '@nestjs/common';
+import { PROVIDER_REGISTRY, type ProviderName } from './providers/index.js';
+import type { ProviderDefinition } from './types.js';
 
 /**
- * Database-backed provider registry.
- * Replaces the former static ALLOWED_PROVIDERS Set with a queryable catalog
- * so providers can be added/disabled without code changes.
+ * Code-first provider registry.
+ * Provider definitions live in packages/connections/src/connectivity/providers/
+ * — no database queries required. Add new providers to PROVIDER_REGISTRY.
  */
 @Injectable()
 export class ProviderRegistryService {
-    constructor(
-        @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
-    ) { }
-
     /** Check whether a provider exists and is enabled. */
-    async isAllowed(name: string): Promise<boolean> {
-        const row = await this.db
-            .select({ name: providers.name })
-            .from(providers)
-            .where(and(eq(providers.name, name), eq(providers.enabled, true)))
-            .limit(1);
-        return row.length > 0;
+    isAllowed(name: string): boolean {
+        return Object.hasOwn(PROVIDER_REGISTRY, name);
     }
 
     /** Retrieve full provider configuration (returns null if not found). */
-    async getProvider(name: string): Promise<InferSelectModel<typeof providers> | null> {
-        const rows = await this.db
-            .select()
-            .from(providers)
-            .where(eq(providers.name, name))
-            .limit(1);
-        return rows[0] ?? null;
+    getProvider(name: string): ProviderDefinition | null {
+        if (!this.isAllowed(name)) return null;
+        return PROVIDER_REGISTRY[name as ProviderName];
     }
 
-    /** List all enabled providers. */
-    async getAllProviders(): Promise<InferSelectModel<typeof providers>[]> {
-        return await this.db
-            .select()
-            .from(providers)
-            .where(eq(providers.enabled, true));
+    /** List all registered providers. */
+    getAllProviders(): ProviderDefinition[] {
+        return Object.values(PROVIDER_REGISTRY);
     }
 }

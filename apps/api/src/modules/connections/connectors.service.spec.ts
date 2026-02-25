@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service';
-import { ProviderRegistryService } from '@nexiom/connections';
+import {
+  ProviderRegistryService,
+  EncryptionService,
+  AppCredentialError,
+} from '@nexiom/connections';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -17,24 +21,44 @@ import {
   Mocked,
 } from 'vitest';
 
-type ProviderResult = Awaited<
-  ReturnType<ProviderRegistryService['getProvider']>
->;
+const safeStringify = (obj: unknown): string =>
+  JSON.stringify(obj, (key: string, value: unknown) =>
+    key === 'table' ? undefined : value,
+  );
+type ProviderResult = ReturnType<ProviderRegistryService['getProvider']>;
 
 describe('ConnectorsService', () => {
   let service: ConnectorsService;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
-  let mockConfig: Record<string, string>;
+  let mockEncryptionService: Mocked<EncryptionService>;
+  let mockDbWhere: ReturnType<typeof vi.fn>;
+  let mockDb: {
+    select: ReturnType<typeof vi.fn>;
+    from: ReturnType<typeof vi.fn>;
+    where: ReturnType<typeof vi.fn>;
+  };
+  const testTenantId = 'tenant-123';
 
   beforeEach(async () => {
-    mockConfig = {
-      SALESFORCE_CLIENT_ID: 'test-client-id',
-      SALESFORCE_CLIENT_SECRET: 'test-client-secret',
-      BASE_URL: 'https://tenant.nexiom.app',
+    mockDbWhere = vi.fn().mockResolvedValue([
+      {
+        clientId: 'test-client-id',
+        encryptedClientSecret: 'encrypted-secret',
+      },
+    ]);
+    mockDb = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: mockDbWhere,
     };
 
+    mockEncryptionService = {
+      decrypt: vi.fn().mockResolvedValue('test-client-secret'),
+      encrypt: vi.fn(),
+    } as unknown as Mocked<EncryptionService>;
+
     const mockConfigService = {
-      get: vi.fn().mockImplementation((key: string) => mockConfig[key]),
+      get: vi.fn().mockReturnValue('https://tenant.nexiom.app'),
     };
 
     mockProviderRegistry = {
@@ -47,6 +71,8 @@ describe('ConnectorsService', () => {
         ConnectorsService,
         { provide: ProviderRegistryService, useValue: mockProviderRegistry },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: EncryptionService, useValue: mockEncryptionService },
+        { provide: 'DRIZZLE_DB', useValue: mockDb as unknown },
       ],
     }).compile();
 
@@ -59,55 +85,86 @@ describe('ConnectorsService', () => {
         service.getAuthorizationUrl(
           'invalid/provider_name!',
           'mocked_jwt_state',
+          testTenantId,
         ),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should generate a valid OAuth authorization URL with state and scopes', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+    it('should generate a valid OAuth URL with scopes', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        scopes: ['api', 'refresh_token'],
-      } as ProviderResult);
+        scopes: ['full', 'refresh_token'],
+      } as unknown as NonNullable<ProviderResult>);
 
-      const urlString = await service.getAuthorizationUrl(
+      const result = await service.getAuthorizationUrl(
         'salesforce',
-        'mocked_jwt_state',
+        'random-state-123',
+        testTenantId,
       );
 
-      const parsedUrl = new URL(urlString);
-      expect(parsedUrl.origin).toBe('https://login.salesforce.com');
-      expect(parsedUrl.pathname).toBe('/services/oauth2/authorize');
-
-      const searchParams = parsedUrl.searchParams;
-      expect(searchParams.get('response_type')).toBe('code');
-      expect(searchParams.get('client_id')).toBe('test-client-id');
-      expect(searchParams.get('state')).toBe('mocked_jwt_state');
-      expect(searchParams.get('scope')).toBe('api refresh_token');
-      expect(searchParams.get('redirect_uri')).toBe(
+      const url = new URL(result);
+      expect(url.origin).toBe('https://login.salesforce.com');
+      expect(url.pathname).toBe('/services/oauth2/authorize');
+      expect(url.searchParams.get('response_type')).toBe('code');
+      expect(url.searchParams.get('client_id')).toBe('test-client-id');
+      expect(url.searchParams.get('state')).toBe('random-state-123');
+      expect(url.searchParams.get('scope')).toBe('full refresh_token');
+      expect(url.searchParams.get('redirect_uri')).toBe(
         'https://tenant.nexiom.app/api/connect/salesforce/callback',
       );
+
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.from).toHaveBeenCalled();
+      expect(mockDbWhere).toHaveBeenCalledWith(expect.any(Object));
+      const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
+      // Asserting Drizzle ORM's shape loosely, omitting table to prevent circular JSON errors
+      expect(safeStringify(whereArg)).toContain('tenant_id');
+      expect(safeStringify(whereArg)).toContain(testTenantId);
     });
 
     it('should throw NotFoundException if provider does not exist', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue(null);
+      mockProviderRegistry.getProvider.mockReturnValue(null);
       await expect(
-        service.getAuthorizationUrl('unknown', 'state'),
+        service.getAuthorizationUrl('unknown', 'state', testTenantId),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw InternalServerErrorException if clientId is missing in env', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+    it('should throw NotFoundException if credential is missing in db', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-      } as ProviderResult);
+      } as unknown as NonNullable<ProviderResult>);
 
-      mockConfig.SALESFORCE_CLIENT_ID = '';
+      mockDbWhere.mockResolvedValue([]); // No credential found
 
       await expect(
-        service.getAuthorizationUrl('salesforce', 'state'),
+        service.getAuthorizationUrl('salesforce', 'state', testTenantId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'API_KEY',
+        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.getAuthorizationUrl('salesforce', 'state', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException if authorizeUrl is missing', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.getAuthorizationUrl('salesforce', 'state', testTenantId),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });
@@ -123,38 +180,80 @@ describe('ConnectorsService', () => {
 
     it('should throw BadRequestException if providerName fails validation', async () => {
       await expect(
-        service.exchangeCodeForTokens('invalid/provider_name!', 'auth-code'),
+        service.exchangeCodeForTokens(
+          'invalid/provider_name!',
+          'auth-code',
+          testTenantId,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException if provider does not exist', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue(null);
+      mockProviderRegistry.getProvider.mockReturnValue(null);
       await expect(
-        service.exchangeCodeForTokens('unknown', 'auth-code'),
+        service.exchangeCodeForTokens('unknown', 'auth-code', testTenantId),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw InternalServerErrorException if credentials are missing', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+    it('should throw NotFoundException if credentials are missing in db', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as ProviderResult);
+      } as unknown as NonNullable<ProviderResult>);
 
-      mockConfig.SALESFORCE_CLIENT_ID = '';
-      mockConfig.SALESFORCE_CLIENT_SECRET = '';
+      mockDbWhere.mockResolvedValue([]); // No credential found
 
       await expect(
-        service.exchangeCodeForTokens('salesforce', 'auth-code'),
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'API_KEY',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
       ).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should successfully exchange a code for tokens', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+    it('should throw InternalServerErrorException if tokenUrl is missing', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
+      } as unknown as NonNullable<ProviderResult>);
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw AppCredentialError if decryption fails', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as ProviderResult);
+      } as unknown as NonNullable<ProviderResult>);
+
+      mockEncryptionService.decrypt.mockRejectedValue(
+        new Error('decryption failed'),
+      );
+
+      await expect(
+        service.exchangeCodeForTokens('salesforce', 'auth-code', testTenantId),
+      ).rejects.toThrow(AppCredentialError);
+    });
+
+    it('should successfully exchange a code for tokens', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as unknown as NonNullable<ProviderResult>);
 
       const mockTokens = { access_token: 'abc', refresh_token: 'def' };
       vi.mocked(fetch).mockResolvedValue({
@@ -165,28 +264,49 @@ describe('ConnectorsService', () => {
       const result = await service.exchangeCodeForTokens(
         'salesforce',
         'auth-code',
+        testTenantId,
       );
 
       expect(result).toEqual(mockTokens);
+
+      // Verify tenant isolation DB call shape
+      expect(mockDbWhere).toHaveBeenCalledWith(expect.any(Object));
+      const whereArg = mockDbWhere.mock.calls[0]?.[0] as unknown;
+      expect(safeStringify(whereArg)).toContain('tenant_id');
+      expect(safeStringify(whereArg)).toContain(testTenantId);
+
+      // Verify the decryption is used based off retrieved DB row
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith(
+        'encrypted-secret',
+      );
+
+      // Validate fetch call payload
       expect(fetch).toHaveBeenCalledWith(
         'https://login.salesforce.com/services/oauth2/token',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          body: expect.stringContaining('grant_type=authorization_code'),
+          body: expect.any(String),
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           signal: expect.any(AbortSignal),
         },
       );
+
+      const fetchCallArgs = vi.mocked(fetch).mock.calls[0];
+      const fetchBody = fetchCallArgs?.[1]?.body as string;
+      expect(fetchBody).toContain('grant_type=authorization_code');
+      expect(fetchBody).toContain('client_id=test-client-id');
+      expect(fetchBody).toContain('client_secret=test-client-secret');
     });
 
     it('should throw InternalServerErrorException if the token exchange fails', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as ProviderResult);
+      } as unknown as NonNullable<ProviderResult>);
 
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
@@ -195,21 +315,25 @@ describe('ConnectorsService', () => {
       } as Response);
 
       await expect(
-        service.exchangeCodeForTokens('salesforce', 'bad-code'),
+        service.exchangeCodeForTokens('salesforce', 'bad-code', testTenantId),
       ).rejects.toThrow(InternalServerErrorException);
     });
 
     it('should throw InternalServerErrorException on network/timeout errors', async () => {
-      mockProviderRegistry.getProvider.mockResolvedValue({
-        id: '1',
+      mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
+        authType: 'OAUTH2',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as ProviderResult);
+      } as unknown as NonNullable<ProviderResult>);
 
       vi.mocked(fetch).mockRejectedValue(new Error('network unreachable'));
 
       await expect(
-        service.exchangeCodeForTokens('salesforce', 'timeout-code'),
+        service.exchangeCodeForTokens(
+          'salesforce',
+          'timeout-code',
+          testTenantId,
+        ),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });

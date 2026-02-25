@@ -102,6 +102,7 @@ describe('ConnectorsController', () => {
       expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
         'salesforce',
         'mocked_jwt_state',
+        'tenant-123',
       );
       expect(mockRes.redirect).toHaveBeenCalledWith('https://vendor.com/auth');
     });
@@ -133,9 +134,9 @@ describe('ConnectorsController', () => {
   });
 
   describe('getProviders', () => {
-    it('should map provider data exactly as required by the frontend uiSchema', async () => {
+    it('should map provider data exactly as required by the frontend uiSchema', () => {
       // Arrange
-      (mockProviderRegistry.getAllProviders as Mock).mockResolvedValue([
+      (mockProviderRegistry.getAllProviders as Mock).mockReturnValue([
         {
           name: 'salesforce',
           displayName: 'Salesforce',
@@ -143,18 +144,15 @@ describe('ConnectorsController', () => {
           description: 'CRM platform',
           logoUrl: 'https://logo.com/sf.png',
           category: 'CRM',
-          enabled: true,
           scopes: [],
           uiSchema: {},
           authorizeUrl: '',
           tokenUrl: '',
-          createdAt: new Date(),
-          updatedAt: new Date(),
         },
       ]);
 
       // Act
-      const result = await controller.getProviders();
+      const result = controller.getProviders();
 
       // Assert
       expect(result).toHaveLength(1);
@@ -171,14 +169,18 @@ describe('ConnectorsController', () => {
       expect(result[0]).not.toHaveProperty('authorizeUrl');
     });
 
-    it('should bubble up InternalServerErrorException from the provider registry', async () => {
-      mockProviderRegistry.getAllProviders.mockRejectedValue(
-        new Error('DB connection failed'),
-      );
+    it('should bubble up InternalServerErrorException from the provider registry', () => {
+      mockProviderRegistry.getAllProviders.mockImplementation(() => {
+        throw new Error('Registry initialization error');
+      });
 
-      const promise = controller.getProviders();
-      await expect(promise).rejects.toThrow(InternalServerErrorException);
-      await expect(promise).rejects.toThrow('Failed to get providers');
+      try {
+        controller.getProviders();
+        expect.unreachable('Should have thrown an exception');
+      } catch (error) {
+        expect(error).toBeInstanceOf(InternalServerErrorException);
+        expect((error as Error).message).toContain('Failed to get providers');
+      }
     });
   });
 

@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
 import { appConnections } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import Redis from 'ioredis';
-import { DrizzleDb } from './types.js';
+import type { DrizzleDb } from '@nexiom/database';
 
 // Abstract contracts — consumers must provide real implementations via DI
 export abstract class EncryptionService {
@@ -17,8 +17,15 @@ export class OAuthRefreshError extends Error {
     }
 }
 
+export class AppCredentialError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AppCredentialError';
+    }
+}
+
 export abstract class OAuthRefreshClient {
-    abstract refresh(appName: string, refreshToken: string): Promise<Record<string, unknown>>;
+    abstract refresh(tenantId: string, appName: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
 function parseExpiresAt(value: unknown): Date | null {
@@ -154,8 +161,13 @@ export class TokenManagerService implements OnModuleDestroy {
             throw new Error('No refresh token available');
         }
 
+        if (typeof connection.tenantId !== 'string' || !connection.tenantId.trim()) {
+            throw new TypeError('Invalid connection: tenantId is missing, empty or not a string');
+        }
+
         // 2. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
+            connection.tenantId,
             connection.appName as string,
             oldPayload.refreshToken as string,
         );
