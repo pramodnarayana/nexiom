@@ -1,6 +1,9 @@
 import { DefaultOAuthRefreshClient } from './token-refresh.service';
-import { ProviderRegistryService } from '@nexiom/connections';
-import { ConnectorsService } from '../connectors.service';
+import {
+  ProviderRegistryService,
+  EncryptionService,
+  OAuthRefreshError,
+} from '@nexiom/connections';
 import {
   describe,
   it,
@@ -12,29 +15,60 @@ import {
   type Mock,
 } from 'vitest';
 
+const QUICKBOOKS_PROVIDER = {
+  name: 'quickbooks',
+  displayName: 'QuickBooks',
+  description: 'Accounting',
+  logoUrl: '',
+  category: 'Accounting',
+  authType: 'OAUTH2' as const,
+  authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
+  tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
+  scopes: ['com.intuit.quickbooks.accounting'],
+};
+
 describe('DefaultOAuthRefreshClient', () => {
   let client: DefaultOAuthRefreshClient;
   let mockProviderRegistry: Mocked<Partial<ProviderRegistryService>>;
-  let mockConnectorsService: {
-    fetchAppCredential: Mock;
-    decryptClientSecret: Mock;
+  let mockEncryptionService: { encrypt: Mock; decrypt: Mock };
+  let mockDb: {
+    select: Mock;
+    from: Mock;
+    where: Mock;
+    limit: Mock;
   };
 
+  const encryptedValueBlob = 'encrypted-value-payload';
+  const decryptedValueBlob = JSON.stringify({
+    clientId: 'mock-client-id',
+    clientSecret: 'mock-client-secret',
+    accessToken: 'mock-access-token',
+    refreshToken: 'mock-refresh-token',
+    data: {},
+  });
+
   beforeEach(() => {
-    mockProviderRegistry = {
-      getProvider: vi.fn(),
+    mockProviderRegistry = { getProvider: vi.fn() };
+
+    mockEncryptionService = {
+      encrypt: vi.fn(),
+      decrypt: vi.fn().mockResolvedValue(decryptedValueBlob),
     };
-    mockConnectorsService = {
-      fetchAppCredential: vi.fn(),
-      decryptClientSecret: vi.fn(),
+
+    // Chain: db.select().from().where().limit() -> returns [{value}]
+    mockDb = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ value: encryptedValueBlob }]),
     };
 
     client = new DefaultOAuthRefreshClient(
       mockProviderRegistry as ProviderRegistryService,
-      mockConnectorsService as unknown as ConnectorsService,
+      mockDb as unknown as import('@nexiom/database').DrizzleDb,
+      mockEncryptionService as unknown as EncryptionService,
     );
 
-    // Mock the global fetch
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -52,43 +86,20 @@ describe('DefaultOAuthRefreshClient', () => {
 
   it('should throw an error if the provider lacks a tokenUrl', async () => {
     (mockProviderRegistry.getProvider as Mock).mockReturnValue({
-      name: 'salesforce',
-      displayName: 'Salesforce',
-      description: 'CRM',
-      logoUrl: '',
-      category: 'CRM',
-      authType: 'OAUTH2' as const,
-      authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+      ...QUICKBOOKS_PROVIDER,
       tokenUrl: '',
-      scopes: [],
     });
 
     await expect(
-      client.refresh('testTenant', 'salesforce', 'refresh123'),
+      client.refresh('testTenant', 'quickbooks', 'refresh123'),
     ).rejects.toThrow(
-      'Provider salesforce does not support OAuth refresh or lacks a token url',
+      'Provider quickbooks does not support OAuth refresh or lacks a token url',
     );
   });
 
-  it('should successfully call the vendor token URL and return the new mapped payload', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
-      name: 'quickbooks',
-      displayName: 'QuickBooks',
-      description: 'Accounting',
-      logoUrl: '',
-      category: 'Accounting',
-      authType: 'OAUTH2',
-      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
-      tokenUrl: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
-      scopes: ['com.intuit.quickbooks.accounting'],
-    });
-
-    mockConnectorsService.fetchAppCredential.mockResolvedValue({
-      clientId: 'mock-client-id',
-      encryptedClientSecret: 'mock-encrypted-secret',
-    });
-    mockConnectorsService.decryptClientSecret.mockResolvedValue(
-      'mock-decrypted-secret',
+  it('should successfully call the vendor token URL and return the new token payload', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(
+      QUICKBOOKS_PROVIDER,
     );
 
     const mockResponsePayload = {
@@ -108,85 +119,47 @@ describe('DefaultOAuthRefreshClient', () => {
       'old_refresh',
     );
 
+    expect(mockDb.select).toHaveBeenCalled();
+    expect(mockEncryptionService.decrypt).toHaveBeenCalledWith(
+      encryptedValueBlob,
+    );
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
-      expect.objectContaining({ method: 'POST' }),
+      QUICKBOOKS_PROVIDER.tokenUrl,
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('grant_type=refresh_token') as unknown,
+      }),
     );
     expect(result).toEqual(mockResponsePayload);
   });
 
-  it('should throw an error with specific message if credential retrieval fails', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
-      name: 'quickbooks',
-      displayName: 'QuickBooks',
-      description: 'Accounting',
-      logoUrl: '',
-      category: 'Accounting',
-      authType: 'OAUTH2',
-      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
-      tokenUrl: 'https://oauth.url',
-      scopes: ['com.intuit.quickbooks.accounting'],
-    });
-
-    mockConnectorsService.fetchAppCredential.mockRejectedValue(
-      new Error('Credential not found'),
+  it('should throw an OAuthRefreshError if no active connection is found', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(
+      QUICKBOOKS_PROVIDER,
     );
+    mockDb.limit.mockResolvedValue([]); // no connections found
 
     await expect(
       client.refresh('testTenant', 'quickbooks', 'refresh123'),
-    ).rejects.toThrow(
-      'Failed to retrieve app credential for tenantId/appName: Credential not found',
-    );
+    ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 
-  it('should throw an error with specific message if credential decryption fails', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
-      name: 'quickbooks',
-      displayName: 'QuickBooks',
-      description: 'Accounting',
-      logoUrl: '',
-      category: 'Accounting',
-      authType: 'OAUTH2',
-      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
-      tokenUrl: 'https://oauth.url',
-      scopes: ['com.intuit.quickbooks.accounting'],
-    });
-
-    mockConnectorsService.fetchAppCredential.mockResolvedValue({
-      clientId: 'mock-client-id',
-      encryptedClientSecret: 'mock-encrypted-secret',
-    });
-
-    mockConnectorsService.decryptClientSecret.mockRejectedValue(
+  it('should throw an OAuthRefreshError if credential decryption fails', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(
+      QUICKBOOKS_PROVIDER,
+    );
+    mockEncryptionService.decrypt.mockRejectedValue(
       new Error('decryption failed'),
     );
 
     await expect(
       client.refresh('testTenant', 'quickbooks', 'refresh123'),
-    ).rejects.toThrow(
-      'Failed to retrieve app credential for tenantId/appName: decryption failed',
-    );
+    ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 
-  it('should throw an error containing the status code if the vendor rejects the refresh', async () => {
-    (mockProviderRegistry.getProvider as Mock).mockReturnValue({
-      name: 'quickbooks',
-      displayName: 'QuickBooks',
-      description: 'Accounting',
-      logoUrl: '',
-      category: 'Accounting',
-      authType: 'OAUTH2',
-      authorizeUrl: 'https://appcenter.intuit.com/connect/oauth2',
-      tokenUrl: 'https://oauth.url',
-      scopes: ['com.intuit.quickbooks.accounting'],
-    });
-
-    mockConnectorsService.fetchAppCredential.mockResolvedValue({
-      clientId: 'mock-client-id',
-      encryptedClientSecret: 'mock-encrypted-secret',
-    });
-    mockConnectorsService.decryptClientSecret.mockResolvedValue(
-      'mock-decrypted-secret',
+  it('should throw an OAuthRefreshError with status code if the vendor rejects the refresh', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(
+      QUICKBOOKS_PROVIDER,
     );
 
     (globalThis.fetch as Mock).mockResolvedValue({
@@ -198,8 +171,21 @@ describe('DefaultOAuthRefreshClient', () => {
     await expect(
       client.refresh('testTenant', 'quickbooks', 'bad_refresh'),
     ).rejects.toMatchObject({
-      message: expect.stringContaining('OAuth Refresh failed: 401') as unknown,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      message: expect.stringContaining('OAuth Refresh failed: 401'),
       status: 401,
-    });
+    } satisfies Partial<OAuthRefreshError>);
+  });
+
+  it('should re-wrap unexpected errors as OAuthRefreshError', async () => {
+    (mockProviderRegistry.getProvider as Mock).mockReturnValue(
+      QUICKBOOKS_PROVIDER,
+    );
+
+    (globalThis.fetch as Mock).mockRejectedValue(new Error('network timeout'));
+
+    await expect(
+      client.refresh('testTenant', 'quickbooks', 'old_refresh'),
+    ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 });

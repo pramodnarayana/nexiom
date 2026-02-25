@@ -1,6 +1,6 @@
 /**
  * API client for the Connections / Integrations module.
- * Talks to apps/api /api/connect/* endpoints.
+ * Talks to apps/api /api/connectors/* endpoints.
  */
 
 import { apiClient } from "@/shared/lib/api-client";
@@ -23,15 +23,15 @@ export interface ProviderResponse {
 export interface ActiveConnectionResponse {
     id: string;
     appName: string;
+    /** User-defined kebab slug e.g. "salesforce-tms" */
+    externalId: string;
+    /** Human-readable label e.g. "TMS Salesforce" */
+    displayName: string;
+    authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
     status: 'ACTIVE' | 'INACTIVE' | 'REVOKED' | 'EXPIRED';
-    connectionKey: string;
     metadata?: Record<string, unknown>;
     expiresAt?: string;
     createdAt: string;
-    credentials?: {
-        clientId: string;
-        env?: string;
-    };
 }
 
 export async function listProviders(): Promise<ProviderResponse[]> {
@@ -49,6 +49,8 @@ export async function exchangeOAuthCode(payload: {
     code: string;
     clientId: string;
     clientSecret?: string;
+    /** Human-readable name for this connection e.g. "TMS Salesforce" */
+    displayName: string;
     env?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);

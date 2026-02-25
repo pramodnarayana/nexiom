@@ -1,10 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import {
   OAuthRefreshClient,
   ProviderRegistryService,
   OAuthRefreshError,
+  EncryptionService,
 } from '@nexiom/connections';
-import { ConnectorsService } from '../connectors.service';
+import {
+  appConnections,
+  AppConnectionStatus,
+  withTenantGuard,
+  type DrizzleDb,
+} from '@nexiom/database';
+import { eq, and } from 'drizzle-orm';
+import type { ConnectionValueBlob } from '../connectors.service';
 
 @Injectable()
 export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
@@ -12,7 +20,8 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
 
   constructor(
     private readonly providerRegistry: ProviderRegistryService,
-    private readonly connectorsService: ConnectorsService,
+    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+    private readonly crypto: EncryptionService,
   ) {}
 
   async refresh(
@@ -36,24 +45,39 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       let clientSecret: string;
 
       try {
-        const credential = await this.connectorsService.fetchAppCredential(
-          tenantId,
-          appName,
-        );
+        // Fetch the most recent active connection for this tenant + provider.
+        // The single-table model stores clientId/clientSecret inside the encrypted value blob.
 
-        if (!credential) {
-          throw new Error(`Credential not found for ${appName}`);
+        const [connection] = await this.db
+          .select({ value: appConnections.value })
+          .from(appConnections)
+          .where(
+            withTenantGuard(
+              appConnections.tenantId,
+              tenantId,
+              and(
+                eq(appConnections.appName, appName),
+                eq(appConnections.status, AppConnectionStatus.ACTIVE),
+              ),
+            ),
+          )
+          .limit(1);
+
+        if (!connection) {
+          throw new Error(
+            `No active connection found for ${appName} on tenant ${tenantId}`,
+          );
         }
 
-        clientId = credential.clientId;
-        clientSecret = await this.connectorsService.decryptClientSecret(
-          credential.encryptedClientSecret,
-          appName,
-          tenantId,
-        );
+        const rawEncryptedValue: string = connection.value;
+        const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);
+        const valueBlob = JSON.parse(decryptedValue) as ConnectionValueBlob;
+
+        clientId = valueBlob.clientId;
+        clientSecret = valueBlob.clientSecret;
       } catch (error: unknown) {
         throw new Error(
-          `Failed to retrieve app credential for tenantId/appName: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to retrieve credentials for tenantId/appName: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
 
@@ -78,8 +102,17 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
 
       return (await response.json()) as Record<string, unknown>;
     } catch (error) {
-      this.logger.error(`Exception during oauth refresh for ${appName}`, error);
-      throw error;
+      if (error instanceof OAuthRefreshError) {
+        throw error;
+      }
+      this.logger.error(
+        `[TokenRefresh] Unexpected error for ${appName} on tenant ${tenantId}:`,
+        error,
+      );
+      throw new OAuthRefreshError(
+        `Unexpected error during token refresh for ${appName}`,
+        500,
+      );
     }
   }
 }

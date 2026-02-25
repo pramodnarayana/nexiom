@@ -27,39 +27,27 @@ describe('ConnectorsService', () => {
   let service: ConnectorsService;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
   let mockEncryptionService: Mocked<EncryptionService>;
-  let mockDbWhere: ReturnType<typeof vi.fn>;
-  let mockTxInsert: ReturnType<typeof vi.fn>;
-  let mockTxValues: ReturnType<typeof vi.fn>;
-  let mockTxOnConflictDoUpdate: ReturnType<typeof vi.fn>;
+  let mockDbInsert: ReturnType<typeof vi.fn>;
+  let mockDbValues: ReturnType<typeof vi.fn>;
+  let mockDbOnConflictDoUpdate: ReturnType<typeof vi.fn>;
   let mockDb: {
     select: ReturnType<typeof vi.fn>;
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
-    transaction: ReturnType<typeof vi.fn>;
+    insert: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
-    mockDbWhere = vi.fn().mockResolvedValue([
-      {
-        clientId: 'test-client-id',
-        encryptedClientSecret: 'encrypted-secret',
-      },
-    ]);
-    mockTxOnConflictDoUpdate = vi.fn().mockResolvedValue([]);
-    mockTxValues = vi
+    mockDbOnConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    mockDbValues = vi
       .fn()
-      .mockReturnValue({ onConflictDoUpdate: mockTxOnConflictDoUpdate });
-    mockTxInsert = vi.fn().mockReturnValue({ values: mockTxValues });
+      .mockReturnValue({ onConflictDoUpdate: mockDbOnConflictDoUpdate });
+    mockDbInsert = vi.fn().mockReturnValue({ values: mockDbValues });
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      where: mockDbWhere,
-      transaction: vi
-        .fn()
-        .mockImplementation(
-          async (cb: (tx: { insert: typeof mockTxInsert }) => Promise<void>) =>
-            cb({ insert: mockTxInsert }),
-        ),
+      where: vi.fn().mockResolvedValue([]),
+      insert: mockDbInsert,
     };
 
     mockEncryptionService = {
@@ -470,63 +458,56 @@ describe('ConnectorsService', () => {
   });
 
   describe('storeOAuthConnection', () => {
-    it('should insert/upsert credential and connection securely in a transaction on happy path', async () => {
+    it('should upsert a single connection row on the happy path', async () => {
       await service.storeOAuthConnection({
         tenantId: 'tenant-123',
         providerName: 'salesforce',
-        connectionKey: 'realm-id',
+        externalId: 'salesforce-tms',
+        displayName: 'TMS Salesforce',
         authType: 'OAUTH2',
-        encryptedCredentials: 'encrypted-tokens',
+        value: 'encrypted-value-blob',
         expiresAt: new Date(),
         metadata: { env: 'sandbox' },
-        clientId: 'client-id',
-        encryptedClientSecret: 'encrypted-secret',
-        env: 'sandbox',
       });
 
-      expect(mockDb.transaction).toHaveBeenCalled();
-      // Expect 2 inserts: appCredentials, appConnections
-      expect(mockTxInsert).toHaveBeenCalledTimes(2);
-      expect(mockTxValues).toHaveBeenCalledTimes(2);
-      expect(mockTxOnConflictDoUpdate).toHaveBeenCalledTimes(2);
+      // Single insert on appConnections — no transaction, no second table
+      expect(mockDbInsert).toHaveBeenCalledTimes(1);
+      expect(mockDbValues).toHaveBeenCalledTimes(1);
+      expect(mockDbOnConflictDoUpdate).toHaveBeenCalledTimes(1);
 
-      // Verify Drizzle chain usage
-      const valuesCalls = vi.mocked(mockTxValues).mock.calls;
-      expect(valuesCalls[0]?.[0]).toMatchObject({
+      const insertedValues = vi.mocked(mockDbValues).mock
+        .calls[0]?.[0] as Record<string, unknown>;
+      expect(insertedValues).toMatchObject({
         tenantId: 'tenant-123',
         appName: 'salesforce',
-        clientId: 'client-id',
-        encryptedClientSecret: 'encrypted-secret',
-        setupMetadata: { env: 'sandbox' },
-      });
-      expect(valuesCalls[1]?.[0]).toMatchObject({
-        tenantId: 'tenant-123',
-        appName: 'salesforce',
-        connectionKey: 'realm-id',
+        externalId: 'salesforce-tms',
+        displayName: 'TMS Salesforce',
         authType: 'OAUTH2',
-        encryptedCredentials: 'encrypted-tokens',
+        value: 'encrypted-value-blob',
         metadata: { env: 'sandbox' },
         status: 'ACTIVE',
       });
     });
 
-    it('should throw InternalServerErrorException if the database transaction fails', async () => {
-      mockDb.transaction.mockRejectedValueOnce(
-        new Error('Transaction timeout'),
-      );
+    it('should throw InternalServerErrorException if the database insert fails', async () => {
+      mockDbInsert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi
+            .fn()
+            .mockRejectedValue(new Error('DB write failed')),
+        }),
+      });
 
       await expect(
         service.storeOAuthConnection({
           tenantId: 'tenant-123',
           providerName: 'salesforce',
-          connectionKey: 'realm-id',
+          externalId: 'salesforce-tms',
+          displayName: 'TMS Salesforce',
           authType: 'OAUTH2',
-          encryptedCredentials: 'encrypted-tokens',
+          value: 'encrypted-value-blob',
           expiresAt: new Date(),
           metadata: { env: 'sandbox' },
-          clientId: 'client-id',
-          encryptedClientSecret: 'encrypted-secret',
-          env: 'sandbox',
         }),
       ).rejects.toThrow(InternalServerErrorException);
     });

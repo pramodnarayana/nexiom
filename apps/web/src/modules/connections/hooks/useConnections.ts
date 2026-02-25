@@ -11,7 +11,7 @@ export function useConnections() {
     const [loading, setLoading] = useState(false);
 
     // Store credentials temporarily while the popup is open
-    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; env?: string } | null>(null);
+    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; displayName: string; env?: string } | null>(null);
 
     const refresh = useCallback(async () => {
         if (!user?.organizationId) return;
@@ -19,10 +19,13 @@ export function useConnections() {
         try {
             const data = await listActiveConnections();
             setConnections(data);
+        } catch (err: unknown) {
+            console.error('[useConnections] Failed to refresh connections', err);
+            toast({ title: 'Error', description: 'Failed to refresh connections.', variant: 'destructive' });
         } finally {
             setLoading(false);
         }
-    }, [user?.organizationId]);
+    }, [user?.organizationId, toast]);
 
     const handleSuccess = useCallback((data: { provider: string; code: string }) => {
         void (async () => {
@@ -45,6 +48,7 @@ export function useConnections() {
                     code,
                     clientId: pendingCredentials.current.clientId,
                     clientSecret: pendingCredentials.current.clientSecret,
+                    displayName: pendingCredentials.current.displayName,
                     env: pendingCredentials.current.env,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
@@ -81,9 +85,8 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, env }: { providerName: string; clientId: string; clientSecret?: string; env?: string }) => {
-            // Store credentials to use when the popup returns the code
-            pendingCredentials.current = { clientId, clientSecret, env };
+        ({ providerName, clientId, clientSecret, displayName, env }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string }) => {
+            pendingCredentials.current = { clientId, clientSecret, displayName, env };
 
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
@@ -91,7 +94,7 @@ export function useConnections() {
                 throw new Error('Missing VITE_API_URL environment variable');
             }
 
-            let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}&tenantId=${encodeURIComponent(user?.organizationId ?? '')}`;
+            let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (env) {
                 popupUrl += `&env=${encodeURIComponent(env)}`;
             }

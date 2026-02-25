@@ -73,10 +73,10 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
             `width=${width},height=${height},left=${left},top=${top},resizable=no`,
         );
         if (!popupRef.current) {
-            onError('popup_blocked');
+            onErrorRef.current('popup_blocked');
         }
 
-    }, [onError]);
+    }, []);
 
     return { openPopup };
 }

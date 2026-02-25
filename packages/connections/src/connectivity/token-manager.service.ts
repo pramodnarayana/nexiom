@@ -69,12 +69,12 @@ export class TokenManagerService implements OnModuleDestroy {
             (!expiresAtObj || new Date(expiresAtObj.getTime() - 5 * 60000) < new Date());
 
         if (isExpired) {
-            this.logger.warn(`Token expired or missing expiresAt for ${connection.appName as string}. Refreshing...`);
+            this.logger.warn(`Token expired or missing expiresAt for ${connection.appName}. Refreshing...`);
             return await this.refreshWithLock(connection);
         }
 
         // 2. Return decrypted credentials
-        return JSON.parse(await this.crypto.decrypt(connection.encryptedCredentials)) as Record<string, unknown>;
+        return JSON.parse(await this.crypto.decrypt(connection.value)) as Record<string, unknown>;
     }
 
     private async refreshWithLock(connection: Record<string, any>): Promise<Record<string, unknown>> {
@@ -125,7 +125,7 @@ export class TokenManagerService implements OnModuleDestroy {
                 new Date(parsedExpiry.getTime() - 5 * 60000) > new Date()) {
                 // Token was refreshed by another worker
                 const credentials = JSON.parse(
-                    await this.crypto.decrypt(freshConnection!.encryptedCredentials)
+                    await this.crypto.decrypt(freshConnection!.value)
                 ) as Record<string, unknown>;
                 return { credentials, connection };
             }
@@ -154,7 +154,7 @@ export class TokenManagerService implements OnModuleDestroy {
 
         // 1. Decrypt old payload to get refresh_token
         const oldPayload = JSON.parse(
-            await this.crypto.decrypt(connection.encryptedCredentials)
+            await this.crypto.decrypt(connection.value)
         ) as Record<string, unknown>;
 
         if (!oldPayload.refreshToken) {
@@ -192,7 +192,7 @@ export class TokenManagerService implements OnModuleDestroy {
 
         // 5. Save to DB
         await this.db.update(appConnections)
-            .set({ encryptedCredentials: encryptedPayload, expiresAt, updatedAt: new Date() })
+            .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(appConnections.id, connection.id));
 
         return updatedPayload;

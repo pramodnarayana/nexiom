@@ -22,7 +22,7 @@ import {
   type Mocked,
   type Mock,
 } from 'vitest';
-import { AuthGuard } from '../../identity/auth/auth.guard'; // Assume this is the path based on standard layout
+import { AuthGuard } from '../../identity/auth/auth.guard';
 import type { Response } from 'express';
 import type { RequestAuthContext } from '../../identity/auth/auth-context.decorator';
 
@@ -45,7 +45,6 @@ describe('ConnectorsController', () => {
   let mockDb: {
     select: Mock;
     from: Mock;
-    leftJoin: Mock;
     where: Mock;
   };
 
@@ -72,17 +71,14 @@ describe('ConnectorsController', () => {
       decrypt: vi.fn(),
     } as unknown as Mocked<EncryptionService>;
 
-    // Create two separate chain variables to easily assert against
     const dataChain = {
       limit: vi.fn().mockReturnThis(),
       offset: vi.fn().mockResolvedValue([]),
     };
 
-    // Default the `where` mock to return the data chain
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      leftJoin: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnValue(dataChain),
     };
 
@@ -94,27 +90,29 @@ describe('ConnectorsController', () => {
         { provide: OauthStateService, useValue: mockOauthStateService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: 'DRIZZLE_DB', useValue: mockDb },
-        // If AuthGuard is globally applied or injected at controller level, provide a dummy AuthService
         { provide: 'AuthService', useValue: {} },
       ],
     })
-      .overrideGuard(AuthGuard) // Attempt to override if it's explicitly imported
+      .overrideGuard(AuthGuard)
       .useValue({ canActivate: vi.fn().mockReturnValue(true) })
       .compile();
 
     controller = module.get<ConnectorsController>(ConnectorsController);
   });
 
-  describe('connect', () => {
-    it('should generate state, get auth url and redirect', () => {
-      const mockRes = { redirect: vi.fn() } as unknown as Response;
+  describe('initiateOAuth', () => {
+    it('should create state, build auth URL and redirect', () => {
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'salesforce' } },
+      } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('mocked_jwt_state');
       mockConnectorsService.getAuthorizationUrl.mockReturnValue(
         'https://vendor.com/auth',
       );
 
-      controller.connect('salesforce', mockCtx, 'mock-client-id', mockRes);
+      controller.initiateOAuth(mockCtx, 'mock-client-id', undefined, mockRes);
 
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
@@ -131,28 +129,37 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if tenant is missing', () => {
-      const mockRes = { redirect: vi.fn() } as unknown as Response;
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'salesforce' } },
+      } as unknown as Response;
 
       expect(() =>
-        controller.connect(
-          'salesforce',
+        controller.initiateOAuth(
           missingTenantCtx,
           'mock-client-id',
+          undefined,
           mockRes,
         ),
       ).toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if clientId is missing', () => {
-      const mockRes = { redirect: vi.fn() } as unknown as Response;
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'salesforce' } },
+      } as unknown as Response;
 
       expect(() =>
-        controller.connect('salesforce', mockCtx, '', mockRes),
+        controller.initiateOAuth(mockCtx, '', undefined, mockRes),
       ).toThrow(BadRequestException);
     });
 
-    it('should bubble up InternalServerErrorException if service fails', () => {
-      const mockRes = { redirect: vi.fn() } as unknown as Response;
+    it('should throw InternalServerErrorException if service fails', () => {
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'salesforce' } },
+      } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('state');
       mockConnectorsService.getAuthorizationUrl.mockImplementation(() => {
@@ -160,14 +167,13 @@ describe('ConnectorsController', () => {
       });
 
       expect(() =>
-        controller.connect('salesforce', mockCtx, 'mock-client-id', mockRes),
+        controller.initiateOAuth(mockCtx, 'mock-client-id', undefined, mockRes),
       ).toThrow(InternalServerErrorException);
     });
   });
 
   describe('getProviders', () => {
     it('should map provider data exactly as required by the frontend uiSchema', () => {
-      // Arrange
       (mockProviderRegistry.getAllProviders as Mock).mockReturnValue([
         {
           name: 'salesforce',
@@ -183,10 +189,8 @@ describe('ConnectorsController', () => {
         },
       ]);
 
-      // Act
       const result = controller.getProviders();
 
-      // Assert
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         name: 'salesforce',
@@ -195,8 +199,8 @@ describe('ConnectorsController', () => {
         logoUrl: 'https://logo.com/sf.png',
         authType: 'OAUTH2',
         category: 'CRM',
+        environments: undefined,
       });
-      // Ensure backend-only secrets like authorizeUrl/tokenUrl are stripped
       expect(result[0]).not.toHaveProperty('tokenUrl');
       expect(result[0]).not.toHaveProperty('authorizeUrl');
     });
@@ -217,44 +221,27 @@ describe('ConnectorsController', () => {
   });
 
   describe('getActiveConnections', () => {
-    it('should return active connections for the requesting tenant', async () => {
+    it('should return active connections with externalId and displayName for the requesting tenant', async () => {
       const mockDate = new Date();
-      const mockConnectionInfo = {
+      const mockConnectionRow = {
         id: '1',
         appName: 'salesforce',
+        externalId: 'salesforce-tms',
+        displayName: 'TMS Salesforce',
+        authType: 'OAUTH2' as const,
         status: AppConnectionStatus.ACTIVE,
-        metadata: { some: 'metadata' },
-        credentialClientId: 'client-123',
-        credentialEncryptedSecret: 'secret_leak',
-        credentialSetupMetadata: { env: 'sandbox' },
+        metadata: { env: 'sandbox' },
+        expiresAt: null,
         createdAt: mockDate,
         updatedAt: mockDate,
       };
 
-      const {
-        credentialClientId: _credentialClientId,
-        credentialEncryptedSecret: _credentialEncryptedSecret,
-        credentialSetupMetadata: _credentialSetupMetadata,
-        ...restOfData
-      } = mockConnectionInfo;
-
-      const expectedData = {
-        ...restOfData,
-        credentials: {
-          clientId: 'client-123',
-          env: 'sandbox',
-        },
-      };
-
-      // The controller calls where() twice: once for data, once for count.
       const dataChain = {
         limit: vi.fn().mockReturnThis(),
-        offset: vi.fn().mockResolvedValue([mockConnectionInfo]),
+        offset: vi.fn().mockResolvedValue([mockConnectionRow]),
       };
-
       const countPromise = Promise.resolve([{ count: 1 }]);
 
-      // First call gets dataChain, second call gets countPromise
       mockDb.where
         .mockReturnValueOnce(dataChain)
         .mockReturnValueOnce(countPromise);
@@ -263,34 +250,22 @@ describe('ConnectorsController', () => {
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.from).toHaveBeenCalled();
-
       expect(dataChain.limit).toHaveBeenCalledWith(50);
       expect(dataChain.offset).toHaveBeenCalledWith(0);
 
-      expect(mockDb.where).toHaveBeenCalledTimes(2);
-      expect(mockDb.where).toHaveBeenNthCalledWith(
-        1,
-        expect.any(Object), // Represents the drizzle 'and' clause for data
-      );
-      expect(mockDb.where).toHaveBeenNthCalledWith(
-        2,
-        expect.any(Object), // Represents the drizzle 'and' clause for count
-      );
-
       expect(result).toEqual({
-        data: [expectedData],
+        data: [mockConnectionRow],
         metadata: { limit: 50, offset: 0, count: 1 },
       });
 
-      expect(result.data[0]).not.toHaveProperty('credentialEncryptedSecret');
+      // No credentials JOIN — value is encrypted and never returned to client
+      expect(result.data[0]).not.toHaveProperty('value');
       expect(result.data[0]).not.toHaveProperty('encryptedCredentials');
-      expect((result.data[0] as { credentials: any }).credentials).toEqual({
-        clientId: 'client-123',
-        env: 'sandbox',
-      });
+      expect(result.data[0]).toHaveProperty('externalId', 'salesforce-tms');
+      expect(result.data[0]).toHaveProperty('displayName', 'TMS Salesforce');
     });
 
-    it('should throw an error if tenantId is missing from the request', async () => {
+    it('should throw BadRequestException if tenantId is missing', async () => {
       await expect(
         controller.getActiveConnections(missingTenantCtx, '50', '0'),
       ).rejects.toThrow(new BadRequestException('tenantId context is missing'));
@@ -303,7 +278,7 @@ describe('ConnectorsController', () => {
       code: 'auth-code-123',
       clientId: 'client-123',
       clientSecret: 'secret-123',
-      realmId: 'realm-1',
+      displayName: 'TMS Salesforce',
       env: 'sandbox',
     };
 
@@ -313,15 +288,14 @@ describe('ConnectorsController', () => {
       expires_in: 3600,
     };
 
-    it('should successfully exchange the code and store connection/credentials', async () => {
-      // 1. Happy path
+    it('should successfully exchange the code and store a single connection row', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
       } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
-      mockEncryptionService.encrypt.mockResolvedValue('encrypted-output');
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
       mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
 
       const result = await controller.exchangeCode(mockCtx, validBody);
@@ -334,27 +308,25 @@ describe('ConnectorsController', () => {
         'secret-123',
         'sandbox',
       );
+      // Single encrypt call — value blob contains clientId, clientSecret, tokens
+      expect(mockEncryptionService.encrypt).toHaveBeenCalledTimes(1);
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
         expect.stringContaining('access-123'),
       );
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
         tenantId: 'tenant-123',
         providerName: 'salesforce',
-        connectionKey: 'realm-1',
+        externalId: 'tms-salesforce', // auto-generated kebab slug
+        displayName: 'TMS Salesforce',
         authType: 'OAUTH2',
-        encryptedCredentials: 'encrypted-output', // encrypted payload
+        value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
-        metadata: { realmId: 'realm-1', env: 'sandbox' },
-        clientId: 'client-123',
-        encryptedClientSecret: 'encrypted-output', // encrypted secret
-        env: 'sandbox',
+        metadata: { env: 'sandbox' },
       });
     });
 
-    it('should assert BadRequestException for missing required body fields', async () => {
-      // 2. validation failures
+    it('should throw BadRequestException for missing required body fields', async () => {
       const invalidBody = { ...validBody, code: '' };
-
       await expect(
         controller.exchangeCode(mockCtx, invalidBody),
       ).rejects.toThrow(
@@ -362,9 +334,15 @@ describe('ConnectorsController', () => {
       );
     });
 
+    it('should throw BadRequestException if displayName is missing', async () => {
+      const invalidBody = { ...validBody, displayName: '' };
+      await expect(
+        controller.exchangeCode(mockCtx, invalidBody),
+      ).rejects.toThrow(new BadRequestException('displayName is required'));
+    });
+
     it('should throw BadRequestException if provider name format is invalid', async () => {
       const invalidBody = { ...validBody, providerName: 'Invalid Name!' };
-
       await expect(
         controller.exchangeCode(mockCtx, invalidBody),
       ).rejects.toThrow(
@@ -373,30 +351,25 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if provider is not registered', async () => {
-      // 3. invalid/non-registered provider
       mockProviderRegistry.getProvider.mockReturnValue(null);
-
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new BadRequestException('Invalid provider name'),
       );
     });
 
     it('should throw InternalServerErrorException if exchangeCodeForTokens throws', async () => {
-      // 4. connectorsService.exchangeCode throwing
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
       } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockRejectedValue(
         new Error('Network error'),
       );
-
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new InternalServerErrorException('Failed to exchange auth code'),
       );
     });
 
-    it('should throw InternalServerErrorException if encryptCredentials throws for payload', async () => {
-      // 5. cryptoService.encrypt throwing
+    it('should throw InternalServerErrorException if encrypt throws', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
       } as unknown as ProviderDefinition);
@@ -406,14 +379,12 @@ describe('ConnectorsController', () => {
       mockEncryptionService.encrypt.mockRejectedValueOnce(
         new Error('Encryption error'),
       );
-
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new InternalServerErrorException('Failed to encrypt credentials'),
       );
     });
 
-    it('should throw InternalServerErrorException if storeOAuthConnection string fails', async () => {
-      // 6. DB DB transaction/upsert failures
+    it('should propagate InternalServerErrorException if storeOAuthConnection fails', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
       } as unknown as ProviderDefinition);
@@ -422,13 +393,12 @@ describe('ConnectorsController', () => {
       );
       mockEncryptionService.encrypt.mockResolvedValue('encrypted');
       mockConnectorsService.storeOAuthConnection.mockRejectedValue(
-        new Error('Database transaction failure'),
-      );
-
-      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new InternalServerErrorException(
-          'Failed to store OAuth connection details',
+          'Failed to save connection to database',
         ),
+      );
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        InternalServerErrorException,
       );
     });
   });

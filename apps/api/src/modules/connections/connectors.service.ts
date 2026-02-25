@@ -9,30 +9,37 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
-  EncryptionService,
   AppCredentialError,
   ProviderEnvironment,
 } from '@nexiom/connections';
 import {
-  appCredentials,
   appConnections,
   AppConnectionStatus,
-  withTenantGuard,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq } from 'drizzle-orm';
+
+/** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
+export interface ConnectionValueBlob {
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  refreshToken?: string;
+  /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
+  data: Record<string, unknown>;
+}
 
 export interface StoreOAuthConnectionOptions {
   tenantId: string;
   providerName: string;
-  connectionKey: string;
+  /** User-defined kebab slug e.g. "salesforce-tms" — unique per tenant */
+  externalId: string;
+  /** Human-readable label e.g. "TMS Salesforce" */
+  displayName: string;
   authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
-  encryptedCredentials: string;
+  /** JSON.stringify(ConnectionValueBlob), then encrypted */
+  value: string;
   expiresAt: Date;
   metadata: Record<string, unknown>;
-  clientId: string;
-  encryptedClientSecret: string;
-  env?: string;
 }
 
 @Injectable()
@@ -41,57 +48,15 @@ export class ConnectorsService {
 
   constructor(
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
-    private readonly crypto: EncryptionService,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly configService: ConfigService,
   ) {}
 
   private buildRedirectUri(): string {
-    const baseUrl =
+    const rawBaseUrl =
       this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '');
     return `${baseUrl}/api/connect/callback`;
-  }
-
-  /**
-   * Fetches the OAuth app credential for a given tenant and provider.
-   * Extracts the database lookup logic into a shared helper to ensure RLS-like
-   * tenant isolation is consistently applied at the application layer.
-   */
-  async fetchAppCredential(tenantId: string, providerName: string) {
-    const [credential] = await this.db
-      .select()
-      .from(appCredentials)
-      .where(
-        withTenantGuard(
-          appCredentials.tenantId,
-          tenantId,
-          eq(appCredentials.appName, providerName),
-        ),
-      );
-
-    if (!credential) {
-      this.logger.error(
-        `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
-      );
-      return null;
-    }
-
-    return credential;
-  }
-
-  async decryptClientSecret(
-    encryptedSecret: string,
-    providerName: string,
-    tenantId: string,
-  ): Promise<string> {
-    try {
-      return await this.crypto.decrypt(encryptedSecret);
-    } catch {
-      this.logger.error(
-        `Failed to decrypt client secret for ${providerName} on tenant ${tenantId}`,
-      );
-      throw new AppCredentialError('Invalid connector configuration.');
-    }
   }
 
   /**
@@ -279,75 +244,48 @@ export class ConnectorsService {
   }
 
   /**
-   * Encapsulates the DB transaction logic to persist OAuth credentials
-   * and connection tokens securely.
+   * Persists an OAuth connection in a single upsert.
+   * Conflicts on (tenantId, externalId) — updating the same named connection
+   * refreshes its tokens and metadata (e.g. re-connect flow).
    */
   async storeOAuthConnection({
     tenantId,
     providerName,
-    connectionKey,
+    externalId,
+    displayName,
     authType,
-    encryptedCredentials,
+    value,
     expiresAt,
     metadata,
-    clientId,
-    encryptedClientSecret,
-    env,
   }: StoreOAuthConnectionOptions): Promise<void> {
     try {
-      await this.db.transaction(async (tx) => {
-        // 1. Upsert the BYOA Credential
-        await tx
-          .insert(appCredentials)
-          .values({
-            tenantId,
-            appName: providerName,
-            clientId,
-            encryptedClientSecret,
-            setupMetadata: { env },
-          })
-          .onConflictDoUpdate({
-            target: [appCredentials.tenantId, appCredentials.appName],
-            set: {
-              clientId,
-              encryptedClientSecret,
-              setupMetadata: { env },
-              updatedAt: new Date(),
-            },
-          });
-
-        // 2. Upsert the actual Connection payload
-        await tx
-          .insert(appConnections)
-          .values({
-            tenantId,
-            appName: providerName,
-            connectionKey,
+      await this.db
+        .insert(appConnections)
+        .values({
+          tenantId,
+          appName: providerName,
+          externalId,
+          displayName,
+          authType,
+          value,
+          expiresAt,
+          metadata,
+          status: AppConnectionStatus.ACTIVE,
+        })
+        .onConflictDoUpdate({
+          target: [appConnections.tenantId, appConnections.externalId],
+          set: {
             authType,
-            encryptedCredentials,
+            value,
             expiresAt,
             metadata,
             status: AppConnectionStatus.ACTIVE,
-          })
-          .onConflictDoUpdate({
-            target: [
-              appConnections.tenantId,
-              appConnections.appName,
-              appConnections.connectionKey,
-            ],
-            set: {
-              authType,
-              encryptedCredentials,
-              expiresAt,
-              metadata,
-              status: AppConnectionStatus.ACTIVE,
-              updatedAt: new Date(),
-            },
-          });
-      });
+            updatedAt: new Date(),
+          },
+        });
     } catch (error) {
       this.logger.error(
-        `Failed to store credentials for ${providerName}`,
+        `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,
         error,
       );
       throw new InternalServerErrorException(

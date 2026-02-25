@@ -25,7 +25,7 @@ import type { ProviderResponse, ActiveConnectionResponse } from '../api/connecti
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret?: string; env?: string }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string }) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -46,22 +46,21 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const isConnected = connection?.status === 'ACTIVE';
 
     const [open, setOpen] = useState(false);
+    const [connectionName, setConnectionName] = useState('');
     const [clientId, setClientId] = useState('');
     const [clientSecret, setClientSecret] = useState('');
     const [env, setEnv] = useState(provider.environments?.[0]?.name ?? 'production');
     const [copied, setCopied] = useState(false);
     const [imgError, setImgError] = useState(false);
 
-    // Pre-populate fields from backend when modal is opened to "Manage" an active connection
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
-        if (isOpen && connection?.credentials) {
-            setClientId(connection.credentials.clientId ?? '');
-            // Do NOT populate clientSecret, as it's not sent to the frontend for security reasons
-            setClientSecret('');
-            setEnv(connection.credentials.env ?? provider.environments?.[0]?.name ?? 'production');
+        if (isOpen && connection) {
+            // Pre-fill the connection name from the existing connection
+            setConnectionName(connection.displayName ?? '');
         }
         if (!isOpen) {
+            setConnectionName('');
             setClientId('');
             setClientSecret('');
             setEnv(provider.environments?.[0]?.name ?? 'production');
@@ -91,12 +90,15 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     };
 
     const handleConnect = () => {
-        if (!clientId || (!isConnected && !clientSecret)) return;
-        onConnect({ providerName: provider.name, clientId, clientSecret, env });
-        setOpen(false);
-        setClientId('');
-        setClientSecret('');
-        setEnv(provider.environments?.[0]?.name ?? 'production');
+        if (!connectionName.trim() || !clientId || (!isConnected && !clientSecret)) return;
+        onConnect({
+            providerName: provider.name,
+            clientId,
+            clientSecret,
+            displayName: connectionName.trim(),
+            env,
+        });
+        handleOpenChange(false);
     };
 
     return (
@@ -115,18 +117,18 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
             {/* Logo */}
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white border border-border shadow-sm overflow-hidden">
-                {provider.logoUrl && !imgError ? (
-                    <img
-                        src={provider.logoUrl}
-                        alt={`${provider.displayName} logo`}
-                        className="h-9 w-9 object-contain"
-                        onError={() => setImgError(true)}
-                    />
-                ) : provider.logoUrl && imgError ? (
-                    <span className="text-2xl font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>
-                ) : (
-                    <Plug2 className="h-7 w-7 text-muted-foreground" />
-                )}
+                {(() => {
+                    if (!provider.logoUrl) return <Plug2 className="h-7 w-7 text-muted-foreground" />;
+                    if (imgError) return <span className="text-2xl font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>;
+                    return (
+                        <img
+                            src={provider.logoUrl}
+                            alt={`${provider.displayName} logo`}
+                            className="h-9 w-9 object-contain"
+                            onError={() => setImgError(true)}
+                        />
+                    );
+                })()}
             </div>
 
             {/* Name + category */}
@@ -159,6 +161,18 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="connection-name" className="text-right">
+                                    Name
+                                </Label>
+                                <Input
+                                    id="connection-name"
+                                    placeholder={`e.g. ${provider.displayName}`}
+                                    value={connectionName}
+                                    onChange={(e) => setConnectionName(e.target.value)}
+                                    className="col-span-3"
+                                />
+                            </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="client-id" className="text-right">
                                     Client ID
@@ -226,7 +240,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                                 Cancel
                             </Button>
                             <Button type="button" onClick={handleConnect} disabled={!clientId || (!isConnected && !clientSecret)}>
