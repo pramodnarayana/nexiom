@@ -15,6 +15,10 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
+  AuthContext,
+  RequestAuthContext,
+} from '../../identity/auth/auth-context.decorator';
+import {
   ProviderRegistryService,
   EncryptionService,
 } from '@nexiom/connections';
@@ -68,12 +72,13 @@ export class ConnectorsController {
 
   @Get('active')
   async getActiveConnections(
-    @Query('tenantId') tenantId: string,
+    @AuthContext() ctx: RequestAuthContext,
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
+    const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
-      throw new BadRequestException('tenantId query parameter is required');
+      throw new BadRequestException('tenantId context is missing');
     }
 
     let limit = Number.parseInt(limitStr || '50', 10);
@@ -107,7 +112,7 @@ export class ConnectorsController {
             updatedAt: appConnections.updatedAt,
             credentialClientId: appCredentials.clientId,
             credentialEncryptedSecret: appCredentials.encryptedClientSecret,
-            credentialEnv: appCredentials.setupMetadata,
+            credentialSetupMetadata: appCredentials.setupMetadata,
           })
           .from(appConnections)
           .leftJoin(
@@ -140,52 +145,34 @@ export class ConnectorsController {
 
     const total = Number(countResult?.count ?? 0);
 
-    const decryptedConnections = await Promise.all(
-      activeConnections.map(async (conn) => {
-        let clientSecret: string | undefined = undefined;
-        let env: string | undefined = undefined;
+    const decryptedConnections = activeConnections.map((conn) => {
+      let env: string | undefined = undefined;
 
-        if (conn.credentialEncryptedSecret) {
-          try {
-            clientSecret = await this.crypto.decrypt(
-              conn.credentialEncryptedSecret,
-            );
-          } catch (e) {
-            this.logger.error(
-              `Failed to decrypt app credential for ${conn.appName}`,
-              e instanceof Error ? e.stack : e,
-            );
-          }
-        }
+      if (
+        typeof conn.credentialSetupMetadata === 'object' &&
+        conn.credentialSetupMetadata !== null
+      ) {
+        // Extract the simple string env property saved from setup
+        env = (conn.credentialSetupMetadata as Record<string, any>).env as
+          | string
+          | undefined;
+      }
 
-        if (
-          typeof conn.credentialEnv === 'object' &&
-          conn.credentialEnv !== null
-        ) {
-          // Extract the simple string env property saved from setup
-          env = (conn.credentialEnv as Record<string, any>).env as
-            | string
-            | undefined;
-        }
-
-        return {
-          id: conn.id,
-          appName: conn.appName,
-          status: conn.status,
-          metadata: conn.metadata,
-          createdAt: conn.createdAt,
-          updatedAt: conn.updatedAt,
-          credentials:
-            conn.credentialClientId && clientSecret
-              ? {
-                  clientId: conn.credentialClientId,
-                  clientSecret,
-                  env,
-                }
-              : undefined,
-        };
-      }),
-    );
+      return {
+        id: conn.id,
+        appName: conn.appName,
+        status: conn.status,
+        metadata: conn.metadata,
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
+        credentials: conn.credentialClientId
+          ? {
+              clientId: conn.credentialClientId,
+              env,
+            }
+          : undefined,
+      };
+    });
 
     return {
       data: decryptedConnections,
@@ -196,14 +183,15 @@ export class ConnectorsController {
   @Get(':provider')
   connect(
     @Param('provider') providerName: string,
-    @Query('tenantId') tenantId: string,
+    @AuthContext() ctx: RequestAuthContext,
     @Query('clientId') clientId: string,
     @Res() res: Response,
     @Query('realmId') realmId?: string,
     @Query('env') env?: string,
   ) {
+    const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
-      throw new BadRequestException('tenantId query parameter is required');
+      throw new BadRequestException('tenantId context is missing');
     }
     if (!clientId) {
       throw new BadRequestException('clientId query parameter is required');
@@ -249,22 +237,23 @@ export class ConnectorsController {
 
   @Post('oauth-exchange')
   async exchangeCode(
+    @AuthContext() ctx: RequestAuthContext,
     @Body()
     body: {
       providerName: string;
       code: string;
       clientId: string;
       clientSecret: string;
-      tenantId: string;
       realmId?: string;
       env?: string;
     },
   ) {
-    const { tenantId, env, realmId, ...restOfBody } = body;
-
+    const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
-      throw new BadRequestException('tenantId body parameter is required');
+      throw new BadRequestException('tenantId context is missing');
     }
+
+    const { env, realmId, ...restOfBody } = body;
 
     if (
       !restOfBody.providerName ||
@@ -360,74 +349,22 @@ export class ConnectorsController {
     }
 
     // Store the activated connection into the Drizzle database mapping
-    try {
-      await this.db.transaction(async (tx) => {
-        // 1. Upsert the Bring Your Own App (BYOA) Credential
-        await tx
-          .insert(appCredentials)
-          .values({
-            tenantId,
-            appName: restOfBody.providerName,
-            clientId: restOfBody.clientId,
-            encryptedClientSecret,
-            setupMetadata: { env },
-          })
-          .onConflictDoUpdate({
-            target: [appCredentials.tenantId, appCredentials.appName],
-            set: {
-              clientId: restOfBody.clientId,
-              encryptedClientSecret,
-              setupMetadata: { env },
-              updatedAt: new Date(),
-            },
-          });
+    await this.connectorsService.storeOAuthConnection(
+      tenantId,
+      restOfBody.providerName,
+      connectionKey,
+      providerData.authType,
+      encryptedPayload,
+      expiresAt,
+      { realmId, env },
+      restOfBody.clientId,
+      encryptedClientSecret,
+      env,
+    );
 
-        // 2. Upsert the actual Connection payload containing the tokens
-        await tx
-          .insert(appConnections)
-          .values({
-            tenantId,
-            appName: restOfBody.providerName,
-            connectionKey,
-            authType: providerData.authType,
-            encryptedCredentials: encryptedPayload,
-            expiresAt,
-            metadata: {
-              realmId,
-              // don't store plain text credentials in metadata anymore
-              env,
-            },
-            status: AppConnectionStatus.ACTIVE,
-          })
-          .onConflictDoUpdate({
-            target: [
-              appConnections.tenantId,
-              appConnections.appName,
-              appConnections.connectionKey,
-            ],
-            set: {
-              authType: providerData.authType,
-              encryptedCredentials: encryptedPayload,
-              expiresAt,
-              metadata: { realmId, env },
-              status: AppConnectionStatus.ACTIVE,
-              updatedAt: new Date(),
-            },
-          });
-      });
-
-      this.logger.log(
-        `[OAuth Exchange] Success: ${restOfBody.providerName} for tenant ${tenantId}`,
-      );
-      return { success: true };
-    } catch (error) {
-      this.logger.error(
-        `Failed to store credentials for ${restOfBody.providerName}`,
-        error,
-      );
-      throw new InternalServerErrorException(
-        'Failed to save connection to database',
-      );
-    }
+    this.logger.log(
+      `[OAuth Exchange] Success: ${restOfBody.providerName} for tenant ${tenantId}`,
+    );
+    return { success: true };
   }
 }

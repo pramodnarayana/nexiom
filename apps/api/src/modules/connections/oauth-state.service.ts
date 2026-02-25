@@ -67,12 +67,15 @@ export class OauthStateService {
       throw new UnauthorizedException('Missing OAuth state token');
     }
     try {
-      const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
-      if (!decoded || !decoded.provider) {
+      const raw = jwt.decode(stateToken);
+      if (!raw || typeof raw === 'string' || !raw.provider) {
         throw new UnauthorizedException('Malformed OAuth state token');
       }
-      return decoded.provider as string;
-    } catch {
+      return raw.provider as string;
+    } catch (e) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
       throw new UnauthorizedException('Invalid OAuth state token format');
     }
   }

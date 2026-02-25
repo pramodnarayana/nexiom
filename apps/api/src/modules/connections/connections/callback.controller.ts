@@ -1,5 +1,6 @@
 import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
   type ProviderDefinition,
@@ -9,7 +10,7 @@ import { OauthStateService } from '../oauth-state.service';
 
 export class OAuthCallbackError extends Error {
   constructor(
-    public readonly redirectErrorPath: string,
+    public readonly errorCode: string,
     message: string,
   ) {
     super(message);
@@ -21,12 +22,37 @@ export class OAuthCallbackError extends Error {
 export class OAuthCallbackController {
   private readonly logger = new Logger(OAuthCallbackController.name);
 
+  private readonly targetOrigin: string;
+
   constructor(
     private readonly providerRegistry: ProviderRegistryService,
     private readonly oauthStateService: OauthStateService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    if (!frontendUrl) {
+      throw new Error(
+        'FATAL: FRONTEND_URL is required but not defined in environment variables.',
+      );
+    }
+
+    try {
+      const parsedUrl = new URL(frontendUrl);
+      this.targetOrigin = parsedUrl.origin;
+    } catch (_e) {
+      throw new Error(`FATAL: FRONTEND_URL is not a valid URL: ${frontendUrl}`);
+    }
+  }
 
   private sendPopupMessage(res: Response, payload: any) {
+    // Safely serialize and escape the payload to prevent XSS
+    const safePayload = JSON.stringify(payload)
+      .replaceAll('<', String.raw`\u003c`)
+      .replaceAll('>', String.raw`\u003e`)
+      .replaceAll('/', String.raw`\u002f`)
+      .replaceAll('\u2028', String.raw`\u2028`)
+      .replaceAll('\u2029', String.raw`\u2029`);
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -35,8 +61,8 @@ export class OAuthCallbackController {
         </head>
         <body>
           <script>
-            if (window.opener) {
-              window.opener.postMessage(${JSON.stringify(payload)}, "*");
+            if (window.opener && window.opener.origin === '${this.targetOrigin}') {
+              window.opener.postMessage(${safePayload}, '${this.targetOrigin}');
             }
             window.close();
           </script>
@@ -112,7 +138,7 @@ export class OAuthCallbackController {
       if (error instanceof OAuthCallbackError) {
         return this.sendPopupMessage(res, {
           status: 'error',
-          error: error.redirectErrorPath,
+          error: error.errorCode,
         });
       }
       return this.sendPopupMessage(res, {

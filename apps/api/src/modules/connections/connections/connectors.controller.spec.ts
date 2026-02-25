@@ -4,6 +4,7 @@ import { ConnectorsController } from './connectors.controller.js';
 import {
   ProviderRegistryService,
   EncryptionService,
+  ProviderDefinition,
 } from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
@@ -23,6 +24,17 @@ import {
 } from 'vitest';
 import { AuthGuard } from '../../identity/auth/auth.guard'; // Assume this is the path based on standard layout
 import type { Response } from 'express';
+import type { RequestAuthContext } from '../../identity/auth/auth-context.decorator';
+
+const mockCtx = {
+  user: {
+    organizationId: 'tenant-123',
+  },
+} as unknown as RequestAuthContext;
+
+const missingTenantCtx = {
+  user: {},
+} as unknown as RequestAuthContext;
 
 describe('ConnectorsController', () => {
   let controller: ConnectorsController;
@@ -47,6 +59,7 @@ describe('ConnectorsController', () => {
     mockConnectorsService = {
       getAuthorizationUrl: vi.fn(),
       exchangeCodeForTokens: vi.fn(),
+      storeOAuthConnection: vi.fn(),
     } as unknown as Mocked<ConnectorsService>;
 
     mockOauthStateService = {
@@ -101,7 +114,7 @@ describe('ConnectorsController', () => {
         'https://vendor.com/auth',
       );
 
-      controller.connect('salesforce', 'tenant-123', 'mock-client-id', mockRes);
+      controller.connect('salesforce', mockCtx, 'mock-client-id', mockRes);
 
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
@@ -121,7 +134,12 @@ describe('ConnectorsController', () => {
       const mockRes = { redirect: vi.fn() } as unknown as Response;
 
       expect(() =>
-        controller.connect('salesforce', '', 'mock-client-id', mockRes),
+        controller.connect(
+          'salesforce',
+          missingTenantCtx,
+          'mock-client-id',
+          mockRes,
+        ),
       ).toThrow(BadRequestException);
     });
 
@@ -129,7 +147,7 @@ describe('ConnectorsController', () => {
       const mockRes = { redirect: vi.fn() } as unknown as Response;
 
       expect(() =>
-        controller.connect('salesforce', 'tenant-123', '', mockRes),
+        controller.connect('salesforce', mockCtx, '', mockRes),
       ).toThrow(BadRequestException);
     });
 
@@ -142,12 +160,7 @@ describe('ConnectorsController', () => {
       });
 
       expect(() =>
-        controller.connect(
-          'salesforce',
-          'tenant-123',
-          'mock-client-id',
-          mockRes,
-        ),
+        controller.connect('salesforce', mockCtx, 'mock-client-id', mockRes),
       ).toThrow(InternalServerErrorException);
     });
   });
@@ -211,18 +224,32 @@ describe('ConnectorsController', () => {
         appName: 'salesforce',
         status: AppConnectionStatus.ACTIVE,
         metadata: { some: 'metadata' },
-        encryptedCredentials: 'secret_leak',
+        credentialClientId: 'client-123',
+        credentialEncryptedSecret: 'secret_leak',
+        credentialSetupMetadata: { env: 'sandbox' },
         createdAt: mockDate,
         updatedAt: mockDate,
       };
 
-      const { encryptedCredentials: _encryptedCredentials, ...expectedData } =
-        mockConnectionInfo;
+      const {
+        credentialClientId: _credentialClientId,
+        credentialEncryptedSecret: _credentialEncryptedSecret,
+        credentialSetupMetadata: _credentialSetupMetadata,
+        ...restOfData
+      } = mockConnectionInfo;
+
+      const expectedData = {
+        ...restOfData,
+        credentials: {
+          clientId: 'client-123',
+          env: 'sandbox',
+        },
+      };
 
       // The controller calls where() twice: once for data, once for count.
       const dataChain = {
         limit: vi.fn().mockReturnThis(),
-        offset: vi.fn().mockResolvedValue([expectedData]),
+        offset: vi.fn().mockResolvedValue([mockConnectionInfo]),
       };
 
       const countPromise = Promise.resolve([{ count: 1 }]);
@@ -232,7 +259,7 @@ describe('ConnectorsController', () => {
         .mockReturnValueOnce(dataChain)
         .mockReturnValueOnce(countPromise);
 
-      const result = await controller.getActiveConnections('tenant-123');
+      const result = await controller.getActiveConnections(mockCtx);
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.from).toHaveBeenCalled();
@@ -255,19 +282,141 @@ describe('ConnectorsController', () => {
         metadata: { limit: 50, offset: 0, count: 1 },
       });
 
-      expect(mockDb.select).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          encryptedCredentials: expect.anything() as unknown,
-        }),
-      );
+      expect(result.data[0]).not.toHaveProperty('credentialEncryptedSecret');
+      expect(result.data[0]).not.toHaveProperty('encryptedCredentials');
+      expect((result.data[0] as { credentials: any }).credentials).toEqual({
+        clientId: 'client-123',
+        env: 'sandbox',
+      });
     });
 
     it('should throw an error if tenantId is missing from the request', async () => {
-      const promise = controller.getActiveConnections('', '50', '0');
+      await expect(
+        controller.getActiveConnections(missingTenantCtx, '50', '0'),
+      ).rejects.toThrow(new BadRequestException('tenantId context is missing'));
+    });
+  });
 
-      await expect(promise).rejects.toThrow(BadRequestException);
-      await expect(promise).rejects.toThrow(
-        'tenantId query parameter is required',
+  describe('exchangeCode', () => {
+    const validBody = {
+      providerName: 'salesforce',
+      code: 'auth-code-123',
+      clientId: 'client-123',
+      clientSecret: 'secret-123',
+      realmId: 'realm-1',
+      env: 'sandbox',
+    };
+
+    const mockTokenResponse = {
+      access_token: 'access-123',
+      refresh_token: 'refresh-123',
+      expires_in: 3600,
+    };
+
+    it('should successfully exchange the code and store connection/credentials', async () => {
+      // 1. Happy path
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-output');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      const result = await controller.exchangeCode(mockCtx, validBody);
+
+      expect(result).toEqual({ success: true });
+      expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
+        'salesforce',
+        'auth-code-123',
+        'client-123',
+        'secret-123',
+        'sandbox',
+      );
+      expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
+        expect.stringContaining('access-123'),
+      );
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        'tenant-123',
+        'salesforce',
+        'realm-1',
+        'OAUTH2',
+        'encrypted-output', // encrypted payload
+        expect.any(Date),
+        { realmId: 'realm-1', env: 'sandbox' },
+        'client-123',
+        'encrypted-output', // encrypted secret
+        'sandbox',
+      );
+    });
+
+    it('should assert BadRequestException for missing required body fields', async () => {
+      // 2. validation failures
+      const invalidBody = { ...validBody, code: '' };
+
+      await expect(
+        controller.exchangeCode(mockCtx, invalidBody),
+      ).rejects.toThrow(
+        new BadRequestException('Missing required fields inside body'),
+      );
+    });
+
+    it('should throw BadRequestException if provider is not registered', async () => {
+      // 3. invalid/non-registered provider
+      mockProviderRegistry.getProvider.mockReturnValue(undefined);
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        new BadRequestException('Invalid provider name'),
+      );
+    });
+
+    it('should throw InternalServerErrorException if exchangeCodeForTokens throws', async () => {
+      // 4. connectorsService.exchangeCode throwing
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockConnectorsService.exchangeCodeForTokens.mockRejectedValue(
+        new Error('Network error'),
+      );
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        new InternalServerErrorException('Failed to exchange auth code'),
+      );
+    });
+
+    it('should throw InternalServerErrorException if encryptCredentials throws for payload', async () => {
+      // 5. cryptoService.encrypt throwing
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockRejectedValueOnce(
+        new Error('Encryption error'),
+      );
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        new InternalServerErrorException('Failed to encrypt credentials'),
+      );
+    });
+
+    it('should bubble up error if storeOAuthConnection string fails', async () => {
+      // 6. DB DB transaction/upsert failures
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockConnectorsService.storeOAuthConnection.mockRejectedValue(
+        new Error('Database transaction failure'),
+      );
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        'Database transaction failure',
       );
     });
   });

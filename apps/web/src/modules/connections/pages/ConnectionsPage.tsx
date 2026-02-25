@@ -8,14 +8,21 @@ import { listProviders, type ProviderResponse } from '../api/connections.api';
 function useProviders() {
     const [providers, setProviders] = useState<ProviderResponse[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
         try {
             const data = await listProviders();
             setProviders(data);
-        } catch (e) {
+            setError(null);
+        } catch (e: unknown) {
             console.error(e);
+            if (e instanceof Error) {
+                setError(e.message);
+            } else {
+                setError('Failed to load integrations.');
+            }
         } finally {
             setLoading(false);
         }
@@ -25,12 +32,12 @@ function useProviders() {
         void load();
     }, [load]);
 
-    return { providers, loading };
+    return { providers, loading, error };
 }
 
 export function ConnectionsPage() {
     const { connections, loading: connectionsLoading, refresh, connect } = useConnections();
-    const { providers, loading: providersLoading } = useProviders();
+    const { providers, loading: providersLoading, error: providersError } = useProviders();
     const [search, setSearch] = useState('');
 
     // Load active connections on mount
@@ -96,12 +103,17 @@ export function ConnectionsPage() {
             )}
 
             {/* Provider grid */}
-            {isLoading && (
+            {providersError ? (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+                    <p className="font-semibold">Unable to load integrations</p>
+                    <p>{providersError}</p>
+                </div>
+            ) : isLoading ? (
                 <div className="flex items-center justify-center py-24">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-            )}
-            {!isLoading && filtered.length === 0 && (
+            ) : null}
+            {!providersError && !isLoading && filtered.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
                     <Blocks className="h-12 w-12 text-muted-foreground/50" />
                     <p className="text-muted-foreground">

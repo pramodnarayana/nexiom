@@ -260,6 +260,7 @@ describe('ConnectorsService', () => {
       expect(fetchBody).toContain('client_id=mock_client_id');
       expect(fetchBody).toContain('client_secret=mock_client_secret');
     });
+
     it('should invoke validateConnectResponse and throw if validation fails', async () => {
       const mockValidate = vi.fn().mockImplementation(() => {
         throw new AppCredentialError('Validation failed');

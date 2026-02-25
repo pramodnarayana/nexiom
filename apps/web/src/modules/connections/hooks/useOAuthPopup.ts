@@ -19,6 +19,13 @@ export type OAuthPopupOptions = {
  */
 export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
     const popupRef = useRef<Window | null>(null);
+    const onSuccessRef = useRef(onSuccess);
+    const onErrorRef = useRef(onError);
+
+    useEffect(() => {
+        onSuccessRef.current = onSuccess;
+        onErrorRef.current = onError;
+    }, [onSuccess, onError]);
 
     // Stable message handler attached once via useEffect
     useEffect(() => {
@@ -34,15 +41,21 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
             if (typeof data !== 'object' || !data || !('status' in data)) return;
 
             if (data.status === 'success') {
-                onSuccess({ provider: data.provider, code: data.code });
+                onSuccessRef.current({ provider: data.provider, code: data.code });
             } else if (data.status === 'error') {
-                onError(data.error ?? 'unknown_error');
+                onErrorRef.current(data.error ?? 'unknown_error');
             }
         }
 
         globalThis.addEventListener('message', handleMessage);
-        return () => globalThis.removeEventListener('message', handleMessage);
-    }, [onSuccess, onError]);
+        return () => {
+            globalThis.removeEventListener('message', handleMessage);
+            if (popupRef.current && !popupRef.current.closed) {
+                popupRef.current.close();
+            }
+            popupRef.current = null;
+        };
+    }, []);
 
     const openPopup = useCallback((connectUrl: string) => {
         // Close stale popup if it's still open
@@ -60,7 +73,11 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
             'nexiom_oauth',
             `width=${width},height=${height},left=${left},top=${top},resizable=no`,
         );
-    }, []);
+        if (!popupRef.current) {
+            onError('popup_blocked');
+        }
+
+    }, [onError]);
 
     return { openPopup };
 }

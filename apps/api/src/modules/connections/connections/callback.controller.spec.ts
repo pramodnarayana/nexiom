@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthCallbackController } from './callback.controller';
 import { ProviderRegistryService } from '@nexiom/connections';
 import { Request, Response } from 'express';
 import { vi, describe, it, expect, beforeEach, Mocked } from 'vitest';
 import { OauthStateService } from '../oauth-state.service';
+import { ConfigService } from '@nestjs/config';
 
 const VALID_TENANT_ID = 'test-tenant-123';
 
@@ -58,6 +60,13 @@ describe('OAuthCallbackController', () => {
       verifyState: vi.fn(),
     } as unknown as Mocked<OauthStateService>;
 
+    const mockConfigService = {
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === 'FRONTEND_URL') return 'http://localhost:5173';
+        return undefined;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthCallbackController],
       providers: [
@@ -68,6 +77,10 @@ describe('OAuthCallbackController', () => {
         {
           provide: OauthStateService,
           useValue: mockOauthStateService,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();
@@ -228,9 +241,10 @@ describe('OAuthCallbackController', () => {
       res as unknown as Response,
     );
 
-    expect(() =>
-      mockOauthStateService.verifyState('valid-jwt', 'salesforce'),
-    ).not.toThrow();
+    expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
+      'valid-jwt',
+      'salesforce',
+    );
 
     expectPopupMessage(res, {
       status: 'success',

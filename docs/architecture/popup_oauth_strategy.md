@@ -42,6 +42,6 @@ By executing the OAuth flow inside a dedicated popup window (`window.open`):
 5. **Completion & Hand-off (Popup Window to Main Window):**
    * The `OAuthCallbackController` responds with a success status. Instead of a standard JSON response or a hard redirect to a dashboard URL, it returns a small, self-executing HTML page.
    * This HTML page does exactly two things:
-     1. Uses `window.opener.postMessage({ status: 'success', provider: 'salesforce' }, '*')` to broadcast the success state back to the main React application window that is waiting.
+     1. Uses `window.opener.postMessage({ status: 'success', provider: 'salesforce' }, FRONTEND_URL)` to broadcast the success state back to the main React application window that is waiting.
      2. Calls `window.close()` to destroy the popup.
    * The main React window receives the `message` event, toasts a success notification, and refreshes the connection UI to show "Active" without ever having to reload the page.

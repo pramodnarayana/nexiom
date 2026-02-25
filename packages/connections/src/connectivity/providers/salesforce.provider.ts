@@ -26,7 +26,7 @@ export const salesforceProvider: ProviderDefinition = {
             tokenUrl: 'https://test.salesforce.com/services/oauth2/token',
         },
     ],
-    // Defaults back to production if no env is specified programmaticly
+    // Defaults back to production if no env is specified programmatically
     authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
     tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
     scopes: ['refresh_token', 'full', 'api'],

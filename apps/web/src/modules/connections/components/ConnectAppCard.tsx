@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plug2, Copy, Check } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -25,7 +25,7 @@ import type { ProviderResponse, ActiveConnectionResponse } from '../api/connecti
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; env?: string }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret?: string; env?: string }) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -50,23 +50,23 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const [clientSecret, setClientSecret] = useState('');
     const [env, setEnv] = useState(provider.environments?.[0]?.name ?? 'production');
     const [copied, setCopied] = useState(false);
+    const [imgError, setImgError] = useState(false);
 
     // Pre-populate fields from backend when modal is opened to "Manage" an active connection
-    /* eslint-disable react-hooks/set-state-in-effect */
-    useEffect(() => {
-        if (open && connection?.credentials) {
-            if (connection.credentials.clientId && clientId !== connection.credentials.clientId) {
-                setClientId(connection.credentials.clientId);
-            }
-            if (connection.credentials.clientSecret && clientSecret !== connection.credentials.clientSecret) {
-                setClientSecret(connection.credentials.clientSecret);
-            }
-            if (connection.credentials.env && env !== connection.credentials.env) {
-                setEnv(connection.credentials.env);
-            }
+    const handleOpenChange = (isOpen: boolean) => {
+        setOpen(isOpen);
+        if (isOpen && connection?.credentials) {
+            setClientId(connection.credentials.clientId ?? '');
+            // Do NOT populate clientSecret, as it's not sent to the frontend for security reasons
+            setClientSecret('');
+            setEnv(connection.credentials.env ?? provider.environments?.[0]?.name ?? 'production');
         }
-    }, [open, connection, provider, clientId, clientSecret, env]);
-    /* eslint-enable react-hooks/set-state-in-effect */
+        if (!isOpen) {
+            setClientId('');
+            setClientSecret('');
+            setEnv(provider.environments?.[0]?.name ?? 'production');
+        }
+    };
 
     // Compute the callback URL dynamically based on the current window origin.
     // Assuming backend API is on /api or a predictable subdomain.
@@ -75,21 +75,23 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     // which assumes the Vite proxy or ingress controller handles it.
     let callbackUrl = '';
     if (globalThis.window !== undefined) {
-        const { protocol, hostname, port } = globalThis.window.location;
-        const mappedPort = port === '5173' ? '3000' : port;
-        const portSuffix = mappedPort ? `:${mappedPort}` : '';
-        callbackUrl = `${protocol}//${hostname}${portSuffix}/api/connect/callback`;
+        const apiUrl = import.meta.env.VITE_API_URL || `${globalThis.window.location.origin}/api`;
+        callbackUrl = `${apiUrl}/connect/callback`;
     }
 
     const handleCopy = () => {
         if (!callbackUrl) return;
-        navigator.clipboard.writeText(callbackUrl);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        navigator.clipboard.writeText(callbackUrl).then(
+            () => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            },
+            () => { /* silently ignore clipboard failure */ },
+        );
     };
 
     const handleConnect = () => {
-        if (!clientId || !clientSecret) return;
+        if (!clientId || (!isConnected && !clientSecret)) return;
         onConnect({ providerName: provider.name, clientId, clientSecret, env: env !== 'production' ? env : undefined });
         setOpen(false);
         setClientId('');
@@ -113,17 +115,15 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
             {/* Logo */}
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white border border-border shadow-sm overflow-hidden">
-                {provider.logoUrl ? (
+                {provider.logoUrl && !imgError ? (
                     <img
                         src={provider.logoUrl}
                         alt={`${provider.displayName} logo`}
                         className="h-9 w-9 object-contain"
-                        onError={(e) => {
-                            // fallback to icon if logo fails to load
-                            (e.currentTarget.parentElement as HTMLElement).innerHTML =
-                                `<span class="text-2xl font-bold text-muted-foreground">${provider.displayName.charAt(0)}</span>`;
-                        }}
+                        onError={() => setImgError(true)}
                     />
+                ) : provider.logoUrl && imgError ? (
+                    <span className="text-2xl font-bold text-muted-foreground">{provider.displayName.charAt(0)}</span>
                 ) : (
                     <Plug2 className="h-7 w-7 text-muted-foreground" />
                 )}
@@ -139,7 +139,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
             {/* Action */}
             <div className="w-full mt-1">
-                <Dialog open={open} onOpenChange={setOpen}>
+                <Dialog open={open} onOpenChange={handleOpenChange}>
                     <DialogTrigger asChild>
                         <Button
                             id={`connect-btn-${provider.name}`}
@@ -229,8 +229,8 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="button" onClick={handleConnect} disabled={!clientId || !clientSecret}>
-                                Connect
+                            <Button type="button" onClick={handleConnect} disabled={!clientId || (!isConnected && !clientSecret)}>
+                                {isConnected ? 'Reconnect' : 'Connect'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

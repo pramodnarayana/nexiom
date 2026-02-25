@@ -11,9 +11,12 @@ import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
+  ProviderEnvironment,
 } from '@nexiom/connections';
 import {
   appCredentials,
+  appConnections,
+  AppConnectionStatus,
   withTenantGuard,
   type DrizzleDb,
 } from '@nexiom/database';
@@ -100,26 +103,31 @@ export class ConnectorsService {
       );
     }
 
-    if (provider.authType !== 'OAUTH2' || !provider.authorizeUrl) {
-      this.logger.error(
-        `Provider ${providerName} missing authorizeUrl or not an OAuth provider.`,
-      );
+    if (!clientId) {
+      throw new BadRequestException('clientId is required for authorization');
+    }
+    if (provider.authType !== 'OAUTH2') {
+      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
       throw new InternalServerErrorException(
         `Provider ${providerName} configuration is incomplete for OAuth.`,
       );
     }
 
-    if (!clientId) {
-      throw new BadRequestException('clientId is required for authorization');
-    }
     // Attempt to match the requested environment from the provider's defined environments array.
     const environmentConfig = provider.environments?.find(
-      (e) => e.name === env,
+      (envParam: unknown) => (envParam as ProviderEnvironment).name === env,
     );
 
     // If an environment match is found, prefer its authorizeUrl. Otherwise, fallback to the root definition.
     const authorizeUrl =
       environmentConfig?.authorizeUrl ?? provider.authorizeUrl;
+
+    if (!authorizeUrl) {
+      this.logger.error(`Provider ${providerName} missing authorizeUrl.`);
+      throw new InternalServerErrorException(
+        `Provider ${providerName} configuration is incomplete for OAuth.`,
+      );
+    }
 
     const url = new URL(authorizeUrl);
     url.searchParams.append('response_type', 'code');
@@ -159,10 +167,8 @@ export class ConnectorsService {
       );
     }
 
-    if (provider.authType !== 'OAUTH2' || !provider.tokenUrl) {
-      this.logger.error(
-        `Provider ${providerName} does not have a tokenUrl defined.`,
-      );
+    if (provider.authType !== 'OAUTH2') {
+      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
       throw new InternalServerErrorException(
         `Provider ${providerName} configuration is incomplete.`,
       );
@@ -174,9 +180,18 @@ export class ConnectorsService {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
       // Resolve token URL dynamically based on environment, falling back to basic tokenUrl
       const environmentConfig = provider.environments?.find(
-        (e) => e.name === env,
+        (envParam: unknown) => (envParam as ProviderEnvironment).name === env,
       );
       const tokenUrl = environmentConfig?.tokenUrl ?? provider.tokenUrl;
+
+      if (!tokenUrl) {
+        this.logger.error(
+          `Provider ${providerName} does not have a tokenUrl defined. Resolved to: ${tokenUrl}`,
+        );
+        throw new InternalServerErrorException(
+          `Provider ${providerName} configuration is incomplete.`,
+        );
+      }
 
       const response = await fetch(tokenUrl, {
         method: 'POST',
@@ -212,10 +227,20 @@ export class ConnectorsService {
         );
       }
 
-      const tokens = (await response.json()) as Record<string, unknown>;
+      let tokens: Record<string, unknown>;
+      try {
+        tokens = (await response.json()) as Record<string, unknown>;
+      } catch (parseError) {
+        this.logger.error(
+          `Failed to parse token response from ${providerName} as JSON. Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`,
+          parseError,
+        );
+        throw new InternalServerErrorException(
+          `Vendor ${providerName} returned an invalid response format that could not be parsed as JSON.`,
+        );
+      }
 
       if (
-        provider.authType === 'OAUTH2' &&
         'validateConnectResponse' in provider &&
         provider.validateConnectResponse
       ) {
@@ -236,6 +261,84 @@ export class ConnectorsService {
       );
       throw new InternalServerErrorException(
         `Unexpected error during ${providerName} token exchange`,
+      );
+    }
+  }
+
+  /**
+   * Encapsulates the DB transaction logic to persist OAuth credentials
+   * and connection tokens securely.
+   */
+  async storeOAuthConnection(
+    tenantId: string,
+    providerName: string,
+    connectionKey: string,
+    authType: 'OAUTH2' | 'API_KEY' | 'BASIC',
+    encryptedCredentials: string,
+    expiresAt: Date,
+    metadata: Record<string, unknown>,
+    clientId: string,
+    encryptedClientSecret: string,
+    env?: string,
+  ): Promise<void> {
+    try {
+      await this.db.transaction(async (tx) => {
+        // 1. Upsert the BYOA Credential
+        await tx
+          .insert(appCredentials)
+          .values({
+            tenantId,
+            appName: providerName,
+            clientId,
+            encryptedClientSecret,
+            setupMetadata: { env },
+          })
+          .onConflictDoUpdate({
+            target: [appCredentials.tenantId, appCredentials.appName],
+            set: {
+              clientId,
+              encryptedClientSecret,
+              setupMetadata: { env },
+              updatedAt: new Date(),
+            },
+          });
+
+        // 2. Upsert the actual Connection payload
+        await tx
+          .insert(appConnections)
+          .values({
+            tenantId,
+            appName: providerName,
+            connectionKey,
+            authType,
+            encryptedCredentials,
+            expiresAt,
+            metadata,
+            status: AppConnectionStatus.ACTIVE,
+          })
+          .onConflictDoUpdate({
+            target: [
+              appConnections.tenantId,
+              appConnections.appName,
+              appConnections.connectionKey,
+            ],
+            set: {
+              authType,
+              encryptedCredentials,
+              expiresAt,
+              metadata,
+              status: AppConnectionStatus.ACTIVE,
+              updatedAt: new Date(),
+            },
+          });
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to store credentials for ${providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to save connection to database',
       );
     }
   }

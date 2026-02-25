@@ -9,7 +9,7 @@ This document outlines the end-to-end testing procedure for the Bring Your Own A
 3. **Seed the Database**: If this is a fresh database, ensure Salesforce is registered as a viable connector provider. Run the bootstrap command (e.g., `pnpm admin:seed` or executing `admin-bootstrap.ts`) to populate the `provider` table.
 4. **Create Salesforce Connected App**: You will need to create a Connected App in your Salesforce developer account.
     * Ensure **Enable OAuth Settings** is checked.
-    * Set the **Callback URL** to your backend's external API callback endpoint. For local development, this is typically `http://localhost:3000/api/connect/callback/salesforce` (assuming your backend runs on port 3000). If you are using a tunneling service like ngrok, use your ngrok HTTPS URL (e.g., `https://<your-ngrok-id>.ngrok-free.app/api/connect/callback/salesforce`).
+    * Set the **Callback URL** to your backend's external API callback endpoint. For local development, this is typically `http://localhost:3000/api/connect/callback` (assuming your backend runs on port 3000). If you are using a tunneling service like ngrok, use your ngrok HTTPS URL (e.g., `https://<your-ngrok-id>.ngrok-free.app/api/connect/callback`).
     * Add the required OAuth Scopes (typically `Manage user data via APIs (api)` and `Perform requests on your behalf at any time (refresh_token, offline_access)`).
 
 ## E2E Testing Steps
