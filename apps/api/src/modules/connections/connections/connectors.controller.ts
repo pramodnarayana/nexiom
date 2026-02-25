@@ -1,10 +1,10 @@
 import {
   Controller,
   Get,
-  Req,
+  Post,
+  Body,
   UseGuards,
   Inject,
-  UnauthorizedException,
   InternalServerErrorException,
   BadRequestException,
   Query,
@@ -13,12 +13,16 @@ import {
   Res,
   HttpException,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { ProviderRegistryService } from '@nexiom/connections';
+import { Response } from 'express';
+import {
+  ProviderRegistryService,
+  EncryptionService,
+} from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
 import {
   appConnections,
+  appCredentials,
   AppConnectionStatus,
   type DrizzleDb,
 } from '@nexiom/database';
@@ -35,6 +39,7 @@ export class ConnectorsController {
     private readonly providerRegistry: ProviderRegistryService,
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
+    private readonly crypto: EncryptionService,
   ) {}
 
   @Get('providers')
@@ -49,6 +54,7 @@ export class ConnectorsController {
         logoUrl: p.logoUrl,
         authType: p.authType,
         category: p.category,
+        environments: 'environments' in p ? p.environments : undefined,
       }));
     } catch (error) {
       if (error instanceof Error) {
@@ -62,13 +68,12 @@ export class ConnectorsController {
 
   @Get('active')
   async getActiveConnections(
-    @Req() req: Request & { user?: { tenantId: string } },
+    @Query('tenantId') tenantId: string,
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
-    const tenantId = req.user?.tenantId;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID missing from request');
+      throw new BadRequestException('tenantId query parameter is required');
     }
 
     let limit = Number.parseInt(limitStr || '50', 10);
@@ -100,8 +105,18 @@ export class ConnectorsController {
             metadata: appConnections.metadata,
             createdAt: appConnections.createdAt,
             updatedAt: appConnections.updatedAt,
+            credentialClientId: appCredentials.clientId,
+            credentialEncryptedSecret: appCredentials.encryptedClientSecret,
+            credentialEnv: appCredentials.setupMetadata,
           })
           .from(appConnections)
+          .leftJoin(
+            appCredentials,
+            and(
+              eq(appConnections.tenantId, appCredentials.tenantId),
+              eq(appConnections.appName, appCredentials.appName),
+            ),
+          )
           .where(whereClause)
           .limit(limit)
           .offset(offset),
@@ -125,22 +140,73 @@ export class ConnectorsController {
 
     const total = Number(countResult?.count ?? 0);
 
+    const decryptedConnections = await Promise.all(
+      activeConnections.map(async (conn) => {
+        let clientSecret: string | undefined = undefined;
+        let env: string | undefined = undefined;
+
+        if (conn.credentialEncryptedSecret) {
+          try {
+            clientSecret = await this.crypto.decrypt(
+              conn.credentialEncryptedSecret,
+            );
+          } catch (e) {
+            this.logger.error(
+              `Failed to decrypt app credential for ${conn.appName}`,
+              e instanceof Error ? e.stack : e,
+            );
+          }
+        }
+
+        if (
+          typeof conn.credentialEnv === 'object' &&
+          conn.credentialEnv !== null
+        ) {
+          // Extract the simple string env property saved from setup
+          env = (conn.credentialEnv as Record<string, any>).env as
+            | string
+            | undefined;
+        }
+
+        return {
+          id: conn.id,
+          appName: conn.appName,
+          status: conn.status,
+          metadata: conn.metadata,
+          createdAt: conn.createdAt,
+          updatedAt: conn.updatedAt,
+          credentials:
+            conn.credentialClientId && clientSecret
+              ? {
+                  clientId: conn.credentialClientId,
+                  clientSecret,
+                  env,
+                }
+              : undefined,
+        };
+      }),
+    );
+
     return {
-      data: activeConnections,
+      data: decryptedConnections,
       metadata: { limit, offset, count: total },
     };
   }
 
   @Get(':provider')
-  async connect(
+  connect(
     @Param('provider') providerName: string,
-    @Req() req: Request & { user?: { tenantId: string } },
+    @Query('tenantId') tenantId: string,
+    @Query('clientId') clientId: string,
     @Res() res: Response,
     @Query('realmId') realmId?: string,
+    @Query('env') env?: string,
   ) {
-    const tenantId = req.user?.tenantId;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID missing from request');
+      throw new BadRequestException('tenantId query parameter is required');
+    }
+    if (!clientId) {
+      throw new BadRequestException('clientId query parameter is required');
     }
 
     if (realmId) {
@@ -158,10 +224,11 @@ export class ConnectorsController {
         providerName,
         realmId,
       );
-      const url = await this.connectorsService.getAuthorizationUrl(
+      const url = this.connectorsService.getAuthorizationUrl(
         providerName,
         state,
-        tenantId,
+        clientId,
+        env,
       );
 
       // Redirect the user browser to the vendor's OAuth page
@@ -176,6 +243,190 @@ export class ConnectorsController {
       );
       throw new InternalServerErrorException(
         `Failed to initiate OAuth connect for ${providerName}`,
+      );
+    }
+  }
+
+  @Post('oauth-exchange')
+  async exchangeCode(
+    @Body()
+    body: {
+      providerName: string;
+      code: string;
+      clientId: string;
+      clientSecret: string;
+      tenantId: string;
+      realmId?: string;
+      env?: string;
+    },
+  ) {
+    const { tenantId, env, realmId, ...restOfBody } = body;
+
+    if (!tenantId) {
+      throw new BadRequestException('tenantId body parameter is required');
+    }
+
+    if (
+      !restOfBody.providerName ||
+      !restOfBody.code ||
+      !restOfBody.clientId ||
+      !restOfBody.clientSecret
+    ) {
+      throw new BadRequestException('Missing required fields inside body');
+    }
+
+    const providerData = this.providerRegistry.getProvider(
+      restOfBody.providerName,
+    );
+    if (!providerData) {
+      throw new BadRequestException('Invalid provider name');
+    }
+
+    // Exchange the code for actual OAuth tokens using user-provided credentials
+    let tokenResponse: Record<string, unknown>;
+    try {
+      tokenResponse = await this.connectorsService.exchangeCodeForTokens(
+        restOfBody.providerName,
+        restOfBody.code,
+        restOfBody.clientId,
+        restOfBody.clientSecret,
+        env,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Token exchange failed for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to exchange auth code');
+    }
+
+    if (!tokenResponse.access_token) {
+      throw new BadRequestException('Invalid credentials returned from vendor');
+    }
+
+    // Prepare credentials for DB storage (similar to Activepieces "data" payload)
+    const credentials = {
+      accessToken: tokenResponse.access_token as string,
+      refreshToken: tokenResponse.refresh_token as string | undefined,
+      realmId, // e.g. for QuickBooks mapping
+      data: tokenResponse, // vendor-specific properties like instance_url
+    };
+
+    let encryptedPayload: string;
+    try {
+      encryptedPayload = await this.crypto.encrypt(JSON.stringify(credentials));
+    } catch (error) {
+      this.logger.error(
+        `Encryption failed for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to encrypt credentials');
+    }
+
+    let parsedExpiresIn = 3600; // default 1 hour
+    if (
+      typeof tokenResponse.expires_in === 'number' &&
+      tokenResponse.expires_in > 0
+    ) {
+      parsedExpiresIn = tokenResponse.expires_in;
+    } else if (
+      typeof tokenResponse.expires_in === 'string' &&
+      Number.parseInt(tokenResponse.expires_in, 10) > 0
+    ) {
+      parsedExpiresIn = Number.parseInt(tokenResponse.expires_in, 10);
+    }
+
+    const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
+    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    const connectionKey = realmId || 'default';
+
+    // Store the activated connection into the Drizzle database mapping
+    // Encrypt the Client Secret for the App Credential table
+    let encryptedClientSecret: string;
+    try {
+      encryptedClientSecret = await this.crypto.encrypt(
+        restOfBody.clientSecret,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to encrypt client secret for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to encrypt app credentials',
+      );
+    }
+
+    // Store the activated connection into the Drizzle database mapping
+    try {
+      await this.db.transaction(async (tx) => {
+        // 1. Upsert the Bring Your Own App (BYOA) Credential
+        await tx
+          .insert(appCredentials)
+          .values({
+            tenantId,
+            appName: restOfBody.providerName,
+            clientId: restOfBody.clientId,
+            encryptedClientSecret,
+            setupMetadata: { env },
+          })
+          .onConflictDoUpdate({
+            target: [appCredentials.tenantId, appCredentials.appName],
+            set: {
+              clientId: restOfBody.clientId,
+              encryptedClientSecret,
+              setupMetadata: { env },
+              updatedAt: new Date(),
+            },
+          });
+
+        // 2. Upsert the actual Connection payload containing the tokens
+        await tx
+          .insert(appConnections)
+          .values({
+            tenantId,
+            appName: restOfBody.providerName,
+            connectionKey,
+            authType: providerData.authType,
+            encryptedCredentials: encryptedPayload,
+            expiresAt,
+            metadata: {
+              realmId,
+              // don't store plain text credentials in metadata anymore
+              env,
+            },
+            status: AppConnectionStatus.ACTIVE,
+          })
+          .onConflictDoUpdate({
+            target: [
+              appConnections.tenantId,
+              appConnections.appName,
+              appConnections.connectionKey,
+            ],
+            set: {
+              authType: providerData.authType,
+              encryptedCredentials: encryptedPayload,
+              expiresAt,
+              metadata: { realmId, env },
+              status: AppConnectionStatus.ACTIVE,
+              updatedAt: new Date(),
+            },
+          });
+      });
+
+      this.logger.log(
+        `[OAuth Exchange] Success: ${restOfBody.providerName} for tenant ${tenantId}`,
+      );
+      return { success: true };
+    } catch (error) {
+      this.logger.error(
+        `Failed to store credentials for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to save connection to database',
       );
     }
   }

@@ -1,14 +1,11 @@
-import { Controller, Get, Req, Res, Logger, Inject } from '@nestjs/common';
+import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { appConnections, type DrizzleDb } from '@nexiom/database';
 import {
-  EncryptionService,
   ProviderRegistryService,
   type ProviderDefinition,
 } from '@nexiom/connections';
 
 import { OauthStateService } from '../oauth-state.service';
-import { ConnectorsService } from '../connectors.service';
 
 export class OAuthCallbackError extends Error {
   constructor(
@@ -20,26 +17,67 @@ export class OAuthCallbackError extends Error {
   }
 }
 
-@Controller('connect/:provider/callback')
+@Controller('connect/callback')
 export class OAuthCallbackController {
   private readonly logger = new Logger(OAuthCallbackController.name);
 
   constructor(
-    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
-    private readonly crypto: EncryptionService,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly oauthStateService: OauthStateService,
-    private readonly connectorsService: ConnectorsService,
   ) {}
 
+  private sendPopupMessage(res: Response, payload: any) {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Authenticating...</title>
+        </head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage(${JSON.stringify(payload)}, "*");
+            }
+            window.close();
+          </script>
+        </body>
+      </html>
+    `;
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  }
+
   @Get()
-  async handleCallback(@Req() req: Request, @Res() res: Response) {
-    const provider = req.params.provider;
+  handleCallback(@Req() req: Request, @Res() res: Response) {
+    const rawState = req.query.state as string | undefined;
+
+    if (!rawState) {
+      this.logger.warn('Callback missing state parameter');
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'missing_state',
+      });
+    }
+
+    let provider: string;
+    try {
+      provider = this.oauthStateService.extractProviderFromState(rawState);
+    } catch (error) {
+      this.logger.warn('Failed to extract provider from state', error);
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'invalid_state',
+      });
+    }
 
     if (!/^[a-z0-9-]+$/.test(provider)) {
-      this.logger.warn(`Rejected invalid provider path param: ${provider}`);
-      res.redirect(`/app/connections?error=invalid_provider`);
-      return;
+      this.logger.warn(
+        `Rejected invalid provider extracted from state: ${provider}`,
+      );
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'invalid_provider',
+      });
     }
 
     let providerData: ProviderDefinition | null;
@@ -47,16 +85,20 @@ export class OAuthCallbackController {
       providerData = this.providerRegistry.getProvider(provider);
       if (!providerData) {
         this.logger.warn(`Rejected unauthorized provider: ${provider}`);
-        res.redirect(`/app/connections?error=invalid_provider`);
-        return;
+        return this.sendPopupMessage(res, {
+          status: 'error',
+          error: 'invalid_provider',
+        });
       }
     } catch (error) {
       this.logger.error(
         `Provider registry check failed for: ${provider}`,
         error,
       );
-      res.redirect(`/app/connections?error=internal_error`);
-      return;
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'internal_error',
+      });
     }
 
     let validatedParams: {
@@ -68,21 +110,23 @@ export class OAuthCallbackController {
       validatedParams = this.validateQueryParams(req, provider);
     } catch (error) {
       if (error instanceof OAuthCallbackError) {
-        return res.redirect(
-          `/app/connections?error=${error.redirectErrorPath}`,
-        );
+        return this.sendPopupMessage(res, {
+          status: 'error',
+          error: error.redirectErrorPath,
+        });
       }
-      return res.redirect(`/app/connections?error=internal_error`);
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'internal_error',
+      });
     }
 
-    const { code, rawState, rawRealmId } = validatedParams;
+    const { code, rawRealmId } = validatedParams;
 
     // 2. Validate State (Tenant Context) using stateless JWT
-    let tenantId: string;
     let stateRealmId: string | undefined;
     try {
       const stateData = this.oauthStateService.verifyState(rawState, provider);
-      tenantId = stateData.tenantId;
       stateRealmId = stateData.realmId;
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
@@ -90,55 +134,24 @@ export class OAuthCallbackController {
         `Missing or invalid OAuth state for provider: ${provider}`,
         errMessage,
       );
-      res.redirect(`/app/connections?error=invalid_state`);
-      return;
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'invalid_state',
+      });
     }
 
     if (stateRealmId !== rawRealmId) {
       this.logger.warn(
         `Realm ID mismatch for ${provider}: expected ${stateRealmId}, got ${rawRealmId}`,
       );
-      return res.redirect(`/app/connections?error=invalid_state`);
+      return this.sendPopupMessage(res, {
+        status: 'error',
+        error: 'invalid_state',
+      });
     }
 
-    // 3. Exchange code for real tokens
-    let tokenResponse: Record<string, unknown>;
-    try {
-      tokenResponse = await this.connectorsService.exchangeCodeForTokens(
-        provider,
-        code,
-        tenantId,
-      );
-    } catch (error) {
-      this.logger.error(`Token exchange failed for ${provider}`, error);
-      return res.redirect(`/app/connections?error=internal_error`);
-    }
-
-    if (!tokenResponse.access_token) {
-      this.logger.warn(
-        `Missing access_token in OAuth response for ${provider}, tenant: ${tenantId}`,
-      );
-      return res.redirect(`/app/connections?error=invalid_credentials`);
-    }
-
-    try {
-      await this.persistConnection(
-        provider,
-        providerData,
-        tenantId,
-        stateRealmId,
-        tokenResponse,
-      );
-    } catch (error) {
-      if (error instanceof OAuthCallbackError) {
-        return res.redirect(
-          `/app/connections?error=${error.redirectErrorPath}`,
-        );
-      }
-      return res.redirect(`/app/connections?error=internal_error`);
-    }
-
-    res.redirect(`/app/connections?success=true`);
+    // Frontend uses popup message to capture code and execute exchange itself
+    return this.sendPopupMessage(res, { status: 'success', provider, code });
   }
 
   private validateQueryParams(
@@ -195,94 +208,5 @@ export class OAuthCallbackController {
     }
 
     return { code, rawState, rawRealmId };
-  }
-
-  private async persistConnection(
-    provider: string,
-    providerData: ProviderDefinition,
-    tenantId: string,
-    stateRealmId: string | undefined,
-    tokenResponse: Record<string, unknown>,
-  ) {
-    // 4. Prepare Encrypted Payload
-    const credentials = {
-      accessToken: tokenResponse.access_token as string,
-      refreshToken: tokenResponse.refresh_token as string | undefined,
-      realmId: stateRealmId, // Common for QuickBooks/accounting
-    };
-
-    let encryptedPayload: string;
-    try {
-      encryptedPayload = await this.crypto.encrypt(JSON.stringify(credentials));
-    } catch (error) {
-      this.logger.error(
-        `Encryption failed for ${provider}, tenant: ${tenantId}`,
-        error,
-      );
-      throw new OAuthCallbackError(
-        'internal_error',
-        'Failed to encrypt credentials',
-      );
-    }
-
-    // 5. Calculate Expiry
-    let parsedExpiresIn = 3600; // default 1 hour
-    if (
-      typeof tokenResponse.expires_in === 'number' &&
-      tokenResponse.expires_in > 0
-    ) {
-      parsedExpiresIn = tokenResponse.expires_in;
-    } else if (
-      typeof tokenResponse.expires_in === 'string' &&
-      Number.parseInt(tokenResponse.expires_in, 10) > 0
-    ) {
-      parsedExpiresIn = Number.parseInt(tokenResponse.expires_in, 10);
-    }
-
-    const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
-    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    // 6. Derive connectionKey (e.g. for multiple environments)
-    const connectionKey = stateRealmId || 'default';
-
-    // 7. Save to Database using Upsert to prevent duplicate tenant+provider rows
-    try {
-      await this.db
-        .insert(appConnections)
-        .values({
-          tenantId,
-          appName: provider,
-          connectionKey,
-          authType: providerData.authType,
-          encryptedCredentials: encryptedPayload,
-          expiresAt: expiresAt,
-          metadata: { realmId: stateRealmId },
-        })
-        .onConflictDoUpdate({
-          target: [
-            appConnections.tenantId,
-            appConnections.appName,
-            appConnections.connectionKey,
-          ],
-          set: {
-            encryptedCredentials: encryptedPayload,
-            expiresAt: expiresAt,
-            metadata: { realmId: stateRealmId },
-            status: 'ACTIVE',
-            updatedAt: new Date(),
-          },
-        });
-
-      this.logger.log(
-        `Successfully stored credentials for ${provider}, tenant: ${tenantId}`,
-      );
-    } catch (error) {
-      this.logger.error(`Failed to store credentials for ${provider}`, error);
-      throw new OAuthCallbackError(
-        'internal_error',
-        'Failed to save to database',
-      );
-    }
   }
 }

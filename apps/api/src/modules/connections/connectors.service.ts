@@ -30,10 +30,10 @@ export class ConnectorsService {
     private readonly configService: ConfigService,
   ) {}
 
-  private buildRedirectUri(providerName: string): string {
+  private buildRedirectUri(): string {
     const baseUrl =
       this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
-    return `${baseUrl}/api/connect/${providerName}/callback`;
+    return `${baseUrl}/api/connect/callback`;
   }
 
   /**
@@ -82,11 +82,12 @@ export class ConnectorsService {
    * Generates the fully qualified Authorization URL for the vendor.
    * Redirects the user's browser to this URL to start the OAuth flow.
    */
-  async getAuthorizationUrl(
+  getAuthorizationUrl(
     providerName: string,
     state: string,
-    tenantId: string,
-  ): Promise<string> {
+    clientId: string,
+    env?: string,
+  ): string {
     if (!/^[a-z0-9-]+$/.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
@@ -108,18 +109,19 @@ export class ConnectorsService {
       );
     }
 
-    // Fetch tenant's BYOA credentials
-    const credential = await this.fetchAppCredential(tenantId, providerName);
-
-    if (!credential) {
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
+    if (!clientId) {
+      throw new BadRequestException('clientId is required for authorization');
     }
+    // Attempt to match the requested environment from the provider's defined environments array.
+    const environmentConfig = provider.environments?.find(
+      (e) => e.name === env,
+    );
 
-    const clientId = credential.clientId;
+    // If an environment match is found, prefer its authorizeUrl. Otherwise, fallback to the root definition.
+    const authorizeUrl =
+      environmentConfig?.authorizeUrl ?? provider.authorizeUrl;
 
-    const url = new URL(provider.authorizeUrl);
+    const url = new URL(authorizeUrl);
     url.searchParams.append('response_type', 'code');
     url.searchParams.append('client_id', clientId);
     url.searchParams.append('state', state);
@@ -130,10 +132,7 @@ export class ConnectorsService {
       url.searchParams.append('scope', provider.scopes.join(' '));
     }
 
-    url.searchParams.append(
-      'redirect_uri',
-      this.buildRedirectUri(providerName),
-    );
+    url.searchParams.append('redirect_uri', this.buildRedirectUri());
 
     return url.toString();
   }
@@ -144,7 +143,9 @@ export class ConnectorsService {
   async exchangeCodeForTokens(
     providerName: string,
     code: string,
-    tenantId: string,
+    clientId: string,
+    clientSecret: string,
+    env?: string,
   ): Promise<Record<string, unknown>> {
     if (!/^[a-z0-9-]+$/.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
@@ -167,29 +168,17 @@ export class ConnectorsService {
       );
     }
 
-    // Fetch tenant's BYOA credentials
-    const credential = await this.fetchAppCredential(tenantId, providerName);
-
-    if (!credential) {
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
-    }
-
-    const clientId = credential.clientId;
-
-    const clientSecret = await this.decryptClientSecret(
-      credential.encryptedClientSecret,
-      providerName,
-      tenantId,
-    );
-
-    const redirectUri = this.buildRedirectUri(providerName);
+    const redirectUri = this.buildRedirectUri();
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
+      // Resolve token URL dynamically based on environment, falling back to basic tokenUrl
+      const environmentConfig = provider.environments?.find(
+        (e) => e.name === env,
+      );
+      const tokenUrl = environmentConfig?.tokenUrl ?? provider.tokenUrl;
 
-      const response = await fetch(provider.tokenUrl, {
+      const response = await fetch(tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -223,7 +212,17 @@ export class ConnectorsService {
         );
       }
 
-      return (await response.json()) as Record<string, unknown>;
+      const tokens = (await response.json()) as Record<string, unknown>;
+
+      if (
+        provider.authType === 'OAUTH2' &&
+        'validateConnectResponse' in provider &&
+        provider.validateConnectResponse
+      ) {
+        provider.validateConnectResponse(tokens);
+      }
+
+      return tokens;
     } catch (error) {
       if (
         error instanceof InternalServerErrorException ||

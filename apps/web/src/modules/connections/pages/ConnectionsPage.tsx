@@ -1,0 +1,126 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Blocks, RefreshCw, Loader2 } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import { ConnectAppCard } from '../components/ConnectAppCard';
+import { useConnections } from '../hooks/useConnections';
+import { listProviders, type ProviderResponse } from '../api/connections.api';
+
+function useProviders() {
+    const [providers, setProviders] = useState<ProviderResponse[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await listProviders();
+            setProviders(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    return { providers, loading };
+}
+
+export function ConnectionsPage() {
+    const { connections, loading: connectionsLoading, refresh, connect } = useConnections();
+    const { providers, loading: providersLoading } = useProviders();
+    const [search, setSearch] = useState('');
+
+    // Load active connections on mount
+    useEffect(() => {
+        void refresh();
+    }, [refresh]);
+
+    // Build a map: providerName → active connection
+    const connectionMap = Object.fromEntries(
+        connections.map((c) => [c.appName, c]),
+    );
+
+    // Filter providers by search
+    const filtered = providers.filter(
+        (p) =>
+            p.displayName.toLowerCase().includes(search.toLowerCase()) ||
+            p.category?.toLowerCase().includes(search.toLowerCase()),
+    );
+
+    const isLoading = providersLoading || connectionsLoading;
+    const activeCount = connections.filter((c) => c.status === 'ACTIVE').length;
+
+    return (
+        <div className="space-y-8">
+            {/* Page header */}
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Integrations</h1>
+                    <p className="text-muted-foreground text-sm mt-1">
+                        Connect your third-party apps to power your workflows.
+                    </p>
+                </div>
+                <Button
+                    id="refresh-connections-btn"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refresh()}
+                    disabled={connectionsLoading}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${connectionsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+                <input
+                    id="provider-search"
+                    type="text"
+                    placeholder="Search integrations..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <Blocks className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
+
+            {/* Active connections count */}
+            {activeCount > 0 && (
+                <p className="text-sm text-muted-foreground">
+                    {activeCount} active {activeCount === 1 ? 'connection' : 'connections'}
+                </p>
+            )}
+
+            {/* Provider grid */}
+            {isLoading && (
+                <div className="flex items-center justify-center py-24">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            )}
+            {!isLoading && filtered.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                    <Blocks className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="text-muted-foreground">
+                        {search ? `No integrations matching "${search}"` : 'No integrations available yet.'}
+                    </p>
+                </div>
+            )}
+            {!isLoading && filtered.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {filtered.map((provider) => (
+                        <ConnectAppCard
+                            key={provider.name}
+                            provider={provider}
+                            connection={connectionMap[provider.name]}
+                            onConnect={connect}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}

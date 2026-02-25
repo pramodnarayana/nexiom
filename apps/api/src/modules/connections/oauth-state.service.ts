@@ -58,6 +58,26 @@ export class OauthStateService {
   }
 
   /**
+   * Safely decodes the state token without verifying the signature
+   * to extract just the provider name so the generic callback router
+   * can look up the correct provider schema before full verification.
+   */
+  extractProviderFromState(stateToken: string): string {
+    if (!stateToken) {
+      throw new UnauthorizedException('Missing OAuth state token');
+    }
+    try {
+      const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
+      if (!decoded || !decoded.provider) {
+        throw new UnauthorizedException('Malformed OAuth state token');
+      }
+      return decoded.provider as string;
+    } catch {
+      throw new UnauthorizedException('Invalid OAuth state token format');
+    }
+  }
+
+  /**
    * Verifies the OAuth state JWT and extracts the embedded tenantId.
    * Throws UnauthorizedException if the token is tampered with or expired.
    */

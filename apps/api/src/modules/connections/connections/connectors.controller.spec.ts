@@ -1,12 +1,15 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
-import { ProviderRegistryService } from '@nexiom/connections';
+import {
+  ProviderRegistryService,
+  EncryptionService,
+} from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
 import { AppConnectionStatus } from '@nexiom/database';
 import {
-  UnauthorizedException,
+  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import {
@@ -19,16 +22,18 @@ import {
   type Mock,
 } from 'vitest';
 import { AuthGuard } from '../../identity/auth/auth.guard'; // Assume this is the path based on standard layout
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 
 describe('ConnectorsController', () => {
   let controller: ConnectorsController;
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
   let mockConnectorsService: Mocked<ConnectorsService>;
   let mockOauthStateService: Mocked<OauthStateService>;
+  let mockEncryptionService: Mocked<EncryptionService>;
   let mockDb: {
     select: Mock;
     from: Mock;
+    leftJoin: Mock;
     where: Mock;
   };
 
@@ -49,6 +54,11 @@ describe('ConnectorsController', () => {
       verifyState: vi.fn(),
     } as unknown as Mocked<OauthStateService>;
 
+    mockEncryptionService = {
+      encrypt: vi.fn(),
+      decrypt: vi.fn(),
+    } as unknown as Mocked<EncryptionService>;
+
     // Create two separate chain variables to easily assert against
     const dataChain = {
       limit: vi.fn().mockReturnThis(),
@@ -59,6 +69,7 @@ describe('ConnectorsController', () => {
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnValue(dataChain),
     };
 
@@ -68,6 +79,7 @@ describe('ConnectorsController', () => {
         { provide: ProviderRegistryService, useValue: mockProviderRegistry },
         { provide: ConnectorsService, useValue: mockConnectorsService },
         { provide: OauthStateService, useValue: mockOauthStateService },
+        { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: 'DRIZZLE_DB', useValue: mockDb },
         // If AuthGuard is globally applied or injected at controller level, provide a dummy AuthService
         { provide: 'AuthService', useValue: {} },
@@ -81,18 +93,15 @@ describe('ConnectorsController', () => {
   });
 
   describe('connect', () => {
-    it('should generate state, get auth url and redirect', async () => {
-      const mockReq = {
-        user: { tenantId: 'tenant-123' },
-      } as unknown as Request;
+    it('should generate state, get auth url and redirect', () => {
       const mockRes = { redirect: vi.fn() } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('mocked_jwt_state');
-      mockConnectorsService.getAuthorizationUrl.mockResolvedValue(
+      mockConnectorsService.getAuthorizationUrl.mockReturnValue(
         'https://vendor.com/auth',
       );
 
-      await controller.connect('salesforce', mockReq, mockRes);
+      controller.connect('salesforce', 'tenant-123', 'mock-client-id', mockRes);
 
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
@@ -102,34 +111,44 @@ describe('ConnectorsController', () => {
       expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
         'salesforce',
         'mocked_jwt_state',
-        'tenant-123',
+        'mock-client-id',
+        undefined,
       );
       expect(mockRes.redirect).toHaveBeenCalledWith('https://vendor.com/auth');
     });
 
-    it('should throw UnauthorizedException if tenant is missing', async () => {
-      const mockReq = { user: {} } as unknown as Request;
+    it('should throw BadRequestException if tenant is missing', () => {
       const mockRes = { redirect: vi.fn() } as unknown as Response;
 
-      await expect(
-        controller.connect('salesforce', mockReq, mockRes),
-      ).rejects.toThrow(UnauthorizedException);
+      expect(() =>
+        controller.connect('salesforce', '', 'mock-client-id', mockRes),
+      ).toThrow(BadRequestException);
     });
 
-    it('should bubble up InternalServerErrorException if service fails', async () => {
-      const mockReq = {
-        user: { tenantId: 'tenant-123' },
-      } as unknown as Request;
+    it('should throw BadRequestException if clientId is missing', () => {
+      const mockRes = { redirect: vi.fn() } as unknown as Response;
+
+      expect(() =>
+        controller.connect('salesforce', 'tenant-123', '', mockRes),
+      ).toThrow(BadRequestException);
+    });
+
+    it('should bubble up InternalServerErrorException if service fails', () => {
       const mockRes = { redirect: vi.fn() } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('state');
-      mockConnectorsService.getAuthorizationUrl.mockRejectedValue(
-        new Error('Config error'),
-      );
+      mockConnectorsService.getAuthorizationUrl.mockImplementation(() => {
+        throw new Error('Config error');
+      });
 
-      await expect(
-        controller.connect('salesforce', mockReq, mockRes),
-      ).rejects.toThrow(InternalServerErrorException);
+      expect(() =>
+        controller.connect(
+          'salesforce',
+          'tenant-123',
+          'mock-client-id',
+          mockRes,
+        ),
+      ).toThrow(InternalServerErrorException);
     });
   });
 
@@ -186,9 +205,6 @@ describe('ConnectorsController', () => {
 
   describe('getActiveConnections', () => {
     it('should return active connections for the requesting tenant', async () => {
-      const mockReq = {
-        user: { tenantId: 'tenant-123' },
-      } as unknown as Request;
       const mockDate = new Date();
       const mockConnectionInfo = {
         id: '1',
@@ -216,7 +232,7 @@ describe('ConnectorsController', () => {
         .mockReturnValueOnce(dataChain)
         .mockReturnValueOnce(countPromise);
 
-      const result = await controller.getActiveConnections(mockReq);
+      const result = await controller.getActiveConnections('tenant-123');
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.from).toHaveBeenCalled();
@@ -247,11 +263,12 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw an error if tenantId is missing from the request', async () => {
-      const mockReq = { user: {} } as unknown as Request;
-      const promise = controller.getActiveConnections(mockReq, '50', '0');
+      const promise = controller.getActiveConnections('', '50', '0');
 
-      await expect(promise).rejects.toThrow(UnauthorizedException);
-      await expect(promise).rejects.toThrow('Tenant ID missing from request');
+      await expect(promise).rejects.toThrow(BadRequestException);
+      await expect(promise).rejects.toThrow(
+        'tenantId query parameter is required',
+      );
     });
   });
 });
