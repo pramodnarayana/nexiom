@@ -337,18 +337,18 @@ describe('ConnectorsController', () => {
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
         expect.stringContaining('access-123'),
       );
-      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
-        'tenant-123',
-        'salesforce',
-        'realm-1',
-        'OAUTH2',
-        'encrypted-output', // encrypted payload
-        expect.any(Date),
-        { realmId: 'realm-1', env: 'sandbox' },
-        'client-123',
-        'encrypted-output', // encrypted secret
-        'sandbox',
-      );
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
+        tenantId: 'tenant-123',
+        providerName: 'salesforce',
+        connectionKey: 'realm-1',
+        authType: 'OAUTH2',
+        encryptedCredentials: 'encrypted-output', // encrypted payload
+        expiresAt: expect.any(Date) as unknown as Date,
+        metadata: { realmId: 'realm-1', env: 'sandbox' },
+        clientId: 'client-123',
+        encryptedClientSecret: 'encrypted-output', // encrypted secret
+        env: 'sandbox',
+      });
     });
 
     it('should assert BadRequestException for missing required body fields', async () => {
@@ -362,9 +362,19 @@ describe('ConnectorsController', () => {
       );
     });
 
+    it('should throw BadRequestException if provider name format is invalid', async () => {
+      const invalidBody = { ...validBody, providerName: 'Invalid Name!' };
+
+      await expect(
+        controller.exchangeCode(mockCtx, invalidBody),
+      ).rejects.toThrow(
+        new BadRequestException('Invalid provider name format'),
+      );
+    });
+
     it('should throw BadRequestException if provider is not registered', async () => {
       // 3. invalid/non-registered provider
-      mockProviderRegistry.getProvider.mockReturnValue(undefined);
+      mockProviderRegistry.getProvider.mockReturnValue(null);
 
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new BadRequestException('Invalid provider name'),
@@ -402,7 +412,7 @@ describe('ConnectorsController', () => {
       );
     });
 
-    it('should bubble up error if storeOAuthConnection string fails', async () => {
+    it('should throw InternalServerErrorException if storeOAuthConnection string fails', async () => {
       // 6. DB DB transaction/upsert failures
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
@@ -416,7 +426,9 @@ describe('ConnectorsController', () => {
       );
 
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
-        'Database transaction failure',
+        new InternalServerErrorException(
+          'Failed to store OAuth connection details',
+        ),
       );
     });
   });

@@ -17,7 +17,7 @@ export function useConnections() {
         if (!user?.organizationId) return;
         setLoading(true);
         try {
-            const data = await listActiveConnections(user.organizationId);
+            const data = await listActiveConnections();
             setConnections(data);
         } finally {
             setLoading(false);
@@ -45,11 +45,10 @@ export function useConnections() {
                     code,
                     clientId: pendingCredentials.current.clientId,
                     clientSecret: pendingCredentials.current.clientSecret,
-                    tenantId: user.organizationId,
                     env: pendingCredentials.current.env,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
-                void refresh();
+                await refresh();
             } catch (err: unknown) {
                 let msg = 'Unknown error occurred.';
                 if (err instanceof Error) {
@@ -86,7 +85,12 @@ export function useConnections() {
             // Store credentials to use when the popup returns the code
             pendingCredentials.current = { clientId, clientSecret, env };
 
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+            const apiUrl = import.meta.env.VITE_API_URL;
+            if (!apiUrl) {
+                toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
+                throw new Error('Missing VITE_API_URL environment variable');
+            }
+
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}&tenantId=${encodeURIComponent(user?.organizationId ?? '')}`;
             if (env) {
                 popupUrl += `&env=${encodeURIComponent(env)}`;

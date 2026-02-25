@@ -92,7 +92,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
     const handleConnect = () => {
         if (!clientId || (!isConnected && !clientSecret)) return;
-        onConnect({ providerName: provider.name, clientId, clientSecret, env: env !== 'production' ? env : undefined });
+        onConnect({ providerName: provider.name, clientId, clientSecret, env });
         setOpen(false);
         setClientId('');
         setClientSecret('');
@@ -150,7 +150,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             {isConnected ? 'Manage' : '+ New Connection'}
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[1200px] w-full">
+                    <DialogContent className="sm:max-w-[480px] w-full">
                         <DialogHeader>
                             <DialogTitle>Connect {provider.displayName}</DialogTitle>
                             <DialogDescription>

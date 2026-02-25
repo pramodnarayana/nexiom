@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Blocks, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ConnectAppCard } from '../components/ConnectAppCard';
@@ -46,16 +46,18 @@ export function ConnectionsPage() {
     }, [refresh]);
 
     // Build a map: providerName → active connection
-    const connectionMap = Object.fromEntries(
-        connections.map((c) => [c.appName, c]),
-    );
+    const connectionMap = useMemo(() =>
+        Object.fromEntries(connections.map((c) => [c.appName, c])),
+        [connections]);
 
     // Filter providers by search
-    const filtered = providers.filter(
-        (p) =>
-            p.displayName.toLowerCase().includes(search.toLowerCase()) ||
-            p.category?.toLowerCase().includes(search.toLowerCase()),
-    );
+    const filtered = useMemo(() =>
+        providers.filter(
+            (p) =>
+                p.displayName.toLowerCase().includes(search.toLowerCase()) ||
+                p.category?.toLowerCase().includes(search.toLowerCase()),
+        ),
+        [providers, search]);
 
     const isLoading = providersLoading || connectionsLoading;
     const activeCount = connections.filter((c) => c.status === 'ACTIVE').length;
@@ -121,7 +123,7 @@ export function ConnectionsPage() {
                     </p>
                 </div>
             )}
-            {!isLoading && filtered.length > 0 && (
+            {!providersError && !isLoading && filtered.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filtered.map((provider) => (
                         <ConnectAppCard

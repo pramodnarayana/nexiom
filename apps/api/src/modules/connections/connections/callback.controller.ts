@@ -18,6 +18,10 @@ export class OAuthCallbackError extends Error {
   }
 }
 
+export type PopupPayload =
+  | { status: 'success'; provider: string; code: string }
+  | { status: 'error'; error: string };
+
 @Controller('connect/callback')
 export class OAuthCallbackController {
   private readonly logger = new Logger(OAuthCallbackController.name);
@@ -39,12 +43,14 @@ export class OAuthCallbackController {
     try {
       const parsedUrl = new URL(frontendUrl);
       this.targetOrigin = parsedUrl.origin;
-    } catch (_e) {
-      throw new Error(`FATAL: FRONTEND_URL is not a valid URL: ${frontendUrl}`);
+    } catch (error_) {
+      throw new Error(
+        `FATAL: FRONTEND_URL is not a valid URL: ${frontendUrl} — ${String(error_)}`,
+      );
     }
   }
 
-  private sendPopupMessage(res: Response, payload: any) {
+  private sendPopupMessage(res: Response, payload: PopupPayload) {
     // Safely serialize and escape the payload to prevent XSS
     const safePayload = JSON.stringify(payload)
       .replaceAll('<', String.raw`\u003c`)
@@ -61,8 +67,14 @@ export class OAuthCallbackController {
         </head>
         <body>
           <script>
-            if (window.opener && window.opener.origin === '${this.targetOrigin}') {
-              window.opener.postMessage(${safePayload}, '${this.targetOrigin}');
+            try {
+              if (window.opener) {
+                window.opener.postMessage(${safePayload}, '${this.targetOrigin}');
+              } else {
+                console.error('No window.opener found to post message to.');
+              }
+            } catch (error) {
+              console.error('Failed to post message to opener:', error);
             }
             window.close();
           </script>

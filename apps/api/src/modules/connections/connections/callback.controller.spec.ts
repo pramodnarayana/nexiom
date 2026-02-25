@@ -26,12 +26,38 @@ function expectPopupMessage(
   expectedPayload: Record<string, unknown>,
 ) {
   expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html');
-  expect(res.send).toHaveBeenCalledWith(
-    expect.stringContaining(JSON.stringify(expectedPayload)),
+
+  const htmlCall = res.send.mock.calls.find(
+    (call) =>
+      typeof call[0] === 'string' &&
+      call[0].includes('window.opener.postMessage'),
   );
-  expect(res.send).toHaveBeenCalledWith(
-    expect.stringContaining('window.opener.postMessage'),
-  );
+  if (!htmlCall) {
+    throw new Error(
+      'Expected window.opener.postMessage payload inside res.send but none found',
+    );
+  }
+
+  const html = htmlCall[0] as string;
+  const match = /window\.opener\.postMessage\((.*?), '/.exec(html);
+  if (!match) {
+    throw new Error(
+      'Could not parse window.opener.postMessage format inside HTML',
+    );
+  }
+
+  let safePayload: string = match[1] ?? '';
+
+  // Unescape the controller's transformations
+  safePayload = safePayload
+    .replaceAll(String.raw`\u003c`, '<')
+    .replaceAll(String.raw`\u003e`, '>')
+    .replaceAll(String.raw`\u002f`, '/')
+    .replaceAll(String.raw`\u2028`, '\u2028')
+    .replaceAll(String.raw`\u2029`, '\u2029');
+
+  const payload: unknown = JSON.parse(safePayload);
+  expect(payload).toEqual(expectedPayload);
 }
 
 describe('OAuthCallbackController', () => {
@@ -91,6 +117,21 @@ describe('OAuthCallbackController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('should send error popup with invalid_state if extractProviderFromState throws', () => {
+    mockOauthStateService.extractProviderFromState.mockImplementation(() => {
+      throw new Error('bad state');
+    });
+
+    const req = mockRequest({ state: 'valid-jwt' });
+    const res = mockResponse();
+
+    controller.handleCallback(
+      req as unknown as Request,
+      res as unknown as Response,
+    );
+    expectPopupMessage(res, { status: 'error', error: 'invalid_state' });
   });
 
   it('should send error popup with invalid_provider if provider name is malformed', () => {

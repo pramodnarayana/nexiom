@@ -28,10 +28,14 @@ describe('ConnectorsService', () => {
   let mockProviderRegistry: Mocked<ProviderRegistryService>;
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockDbWhere: ReturnType<typeof vi.fn>;
+  let mockTxInsert: ReturnType<typeof vi.fn>;
+  let mockTxValues: ReturnType<typeof vi.fn>;
+  let mockTxOnConflictDoUpdate: ReturnType<typeof vi.fn>;
   let mockDb: {
     select: ReturnType<typeof vi.fn>;
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
+    transaction: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -41,10 +45,21 @@ describe('ConnectorsService', () => {
         encryptedClientSecret: 'encrypted-secret',
       },
     ]);
+    mockTxOnConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    mockTxValues = vi
+      .fn()
+      .mockReturnValue({ onConflictDoUpdate: mockTxOnConflictDoUpdate });
+    mockTxInsert = vi.fn().mockReturnValue({ values: mockTxValues });
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: mockDbWhere,
+      transaction: vi
+        .fn()
+        .mockImplementation(
+          async (cb: (tx: { insert: typeof mockTxInsert }) => Promise<void>) =>
+            cb({ insert: mockTxInsert }),
+        ),
     };
 
     mockEncryptionService = {
@@ -109,6 +124,60 @@ describe('ConnectorsService', () => {
       expect(url.searchParams.get('redirect_uri')).toBe(
         'https://tenant.nexiom.app/api/connect/callback',
       );
+    });
+
+    it('should use environment specific authorizeUrl when env parameter is passed and matched', () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+        environments: [
+          {
+            name: 'sandbox',
+            displayName: 'Sandbox',
+            authorizeUrl:
+              'https://test.salesforce.com/services/oauth2/authorize',
+          },
+        ],
+      } as unknown as NonNullable<ProviderResult>);
+
+      const result = service.getAuthorizationUrl(
+        'salesforce',
+        'random-state-123',
+        'test-client-id',
+        'sandbox',
+      );
+
+      const url = new URL(result);
+      expect(url.origin).toBe('https://test.salesforce.com');
+      expect(url.pathname).toBe('/services/oauth2/authorize');
+    });
+
+    it('should fallback to root authorizeUrl when env parameter is passed but does not match', () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+        environments: [
+          {
+            name: 'sandbox',
+            displayName: 'Sandbox',
+            authorizeUrl:
+              'https://test.salesforce.com/services/oauth2/authorize',
+          },
+        ],
+      } as unknown as NonNullable<ProviderResult>);
+
+      const result = service.getAuthorizationUrl(
+        'salesforce',
+        'random-state-123',
+        'test-client-id',
+        'production',
+      );
+
+      const url = new URL(result);
+      expect(url.origin).toBe('https://login.salesforce.com');
+      expect(url.pathname).toBe('/services/oauth2/authorize');
     });
 
     it('should throw NotFoundException if provider does not exist', () => {
@@ -261,6 +330,72 @@ describe('ConnectorsService', () => {
       expect(fetchBody).toContain('client_secret=mock_client_secret');
     });
 
+    it('should route to environment specific tokenUrl when env is provided and matched', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+        environments: [
+          {
+            name: 'sandbox',
+            displayName: 'Sandbox',
+            tokenUrl: 'https://test.salesforce.com/services/oauth2/token',
+          },
+        ],
+      } as unknown as NonNullable<ProviderResult>);
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'abc' }),
+      } as Response);
+
+      await service.exchangeCodeForTokens(
+        'salesforce',
+        'code',
+        'cl_id',
+        'cl_secret',
+        'sandbox',
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://test.salesforce.com/services/oauth2/token',
+        expect.any(Object),
+      );
+    });
+
+    it('should fallback to root tokenUrl when env is provided but no match is found', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+        environments: [
+          {
+            name: 'sandbox',
+            displayName: 'Sandbox',
+            tokenUrl: 'https://test.salesforce.com/services/oauth2/token',
+          },
+        ],
+      } as unknown as NonNullable<ProviderResult>);
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'xyz' }),
+      } as Response);
+
+      await service.exchangeCodeForTokens(
+        'salesforce',
+        'code',
+        'cl_id',
+        'cl_secret',
+        'unknown',
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://login.salesforce.com/services/oauth2/token',
+        expect.any(Object),
+      );
+    });
+
     it('should invoke validateConnectResponse and throw if validation fails', async () => {
       const mockValidate = vi.fn().mockImplementation(() => {
         throw new AppCredentialError('Validation failed');
@@ -330,6 +465,69 @@ describe('ConnectorsService', () => {
           'mock_client_id',
           'mock_client_secret',
         ),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+  });
+
+  describe('storeOAuthConnection', () => {
+    it('should insert/upsert credential and connection securely in a transaction on happy path', async () => {
+      await service.storeOAuthConnection({
+        tenantId: 'tenant-123',
+        providerName: 'salesforce',
+        connectionKey: 'realm-id',
+        authType: 'OAUTH2',
+        encryptedCredentials: 'encrypted-tokens',
+        expiresAt: new Date(),
+        metadata: { env: 'sandbox' },
+        clientId: 'client-id',
+        encryptedClientSecret: 'encrypted-secret',
+        env: 'sandbox',
+      });
+
+      expect(mockDb.transaction).toHaveBeenCalled();
+      // Expect 2 inserts: appCredentials, appConnections
+      expect(mockTxInsert).toHaveBeenCalledTimes(2);
+      expect(mockTxValues).toHaveBeenCalledTimes(2);
+      expect(mockTxOnConflictDoUpdate).toHaveBeenCalledTimes(2);
+
+      // Verify Drizzle chain usage
+      const valuesCalls = vi.mocked(mockTxValues).mock.calls;
+      expect(valuesCalls[0]?.[0]).toMatchObject({
+        tenantId: 'tenant-123',
+        appName: 'salesforce',
+        clientId: 'client-id',
+        encryptedClientSecret: 'encrypted-secret',
+        setupMetadata: { env: 'sandbox' },
+      });
+      expect(valuesCalls[1]?.[0]).toMatchObject({
+        tenantId: 'tenant-123',
+        appName: 'salesforce',
+        connectionKey: 'realm-id',
+        authType: 'OAUTH2',
+        encryptedCredentials: 'encrypted-tokens',
+        metadata: { env: 'sandbox' },
+        status: 'ACTIVE',
+      });
+    });
+
+    it('should throw InternalServerErrorException if the database transaction fails', async () => {
+      mockDb.transaction.mockRejectedValueOnce(
+        new Error('Transaction timeout'),
+      );
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          connectionKey: 'realm-id',
+          authType: 'OAUTH2',
+          encryptedCredentials: 'encrypted-tokens',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+          clientId: 'client-id',
+          encryptedClientSecret: 'encrypted-secret',
+          env: 'sandbox',
+        }),
       ).rejects.toThrow(InternalServerErrorException);
     });
   });

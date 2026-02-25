@@ -46,10 +46,9 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
                 onErrorRef.current(data.error ?? 'unknown_error');
             }
         }
-
-        globalThis.addEventListener('message', handleMessage);
+        window.addEventListener('message', handleMessage);
         return () => {
-            globalThis.removeEventListener('message', handleMessage);
+            window.removeEventListener('message', handleMessage);
             if (popupRef.current && !popupRef.current.closed) {
                 popupRef.current.close();
             }

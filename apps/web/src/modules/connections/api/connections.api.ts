@@ -39,10 +39,8 @@ export async function listProviders(): Promise<ProviderResponse[]> {
     return res.data;
 }
 
-export async function listActiveConnections(tenantId: string): Promise<ActiveConnectionResponse[]> {
-    const res = await apiClient.get<{ data: ActiveConnectionResponse[] }>('/connectors/active', {
-        params: { tenantId },
-    });
+export async function listActiveConnections(): Promise<ActiveConnectionResponse[]> {
+    const res = await apiClient.get<{ data: ActiveConnectionResponse[] }>('/connectors/active');
     return res.data.data;
 }
 
@@ -51,7 +49,6 @@ export async function exchangeOAuthCode(payload: {
     code: string;
     clientId: string;
     clientSecret?: string;
-    tenantId: string;
     env?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);

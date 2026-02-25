@@ -21,6 +21,7 @@ import {
 import {
   ProviderRegistryService,
   EncryptionService,
+  AppCredentialError,
 } from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
@@ -111,7 +112,6 @@ export class ConnectorsController {
             createdAt: appConnections.createdAt,
             updatedAt: appConnections.updatedAt,
             credentialClientId: appCredentials.clientId,
-            credentialEncryptedSecret: appCredentials.encryptedClientSecret,
             credentialSetupMetadata: appCredentials.setupMetadata,
           })
           .from(appConnections)
@@ -264,6 +264,10 @@ export class ConnectorsController {
       throw new BadRequestException('Missing required fields inside body');
     }
 
+    if (!/^[a-z0-9-]+$/.test(restOfBody.providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
     const providerData = this.providerRegistry.getProvider(
       restOfBody.providerName,
     );
@@ -282,6 +286,12 @@ export class ConnectorsController {
         env,
       );
     } catch (error) {
+      if (
+        error instanceof HttpException ||
+        error instanceof AppCredentialError
+      ) {
+        throw error;
+      }
       this.logger.error(
         `Token exchange failed for ${restOfBody.providerName}`,
         error,
@@ -349,18 +359,28 @@ export class ConnectorsController {
     }
 
     // Store the activated connection into the Drizzle database mapping
-    await this.connectorsService.storeOAuthConnection(
-      tenantId,
-      restOfBody.providerName,
-      connectionKey,
-      providerData.authType,
-      encryptedPayload,
-      expiresAt,
-      { realmId, env },
-      restOfBody.clientId,
-      encryptedClientSecret,
-      env,
-    );
+    try {
+      await this.connectorsService.storeOAuthConnection({
+        tenantId,
+        providerName: restOfBody.providerName,
+        connectionKey,
+        authType: providerData.authType,
+        encryptedCredentials: encryptedPayload,
+        expiresAt,
+        metadata: { realmId, env },
+        clientId: restOfBody.clientId,
+        encryptedClientSecret,
+        env,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to store connection for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to store OAuth connection details',
+      );
+    }
 
     this.logger.log(
       `[OAuth Exchange] Success: ${restOfBody.providerName} for tenant ${tenantId}`,

@@ -22,6 +22,19 @@ import {
 } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 
+export interface StoreOAuthConnectionOptions {
+  tenantId: string;
+  providerName: string;
+  connectionKey: string;
+  authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
+  encryptedCredentials: string;
+  expiresAt: Date;
+  metadata: Record<string, unknown>;
+  clientId: string;
+  encryptedClientSecret: string;
+  env?: string;
+}
+
 @Injectable()
 export class ConnectorsService {
   private readonly logger = new Logger(ConnectorsService.name);
@@ -115,7 +128,7 @@ export class ConnectorsService {
 
     // Attempt to match the requested environment from the provider's defined environments array.
     const environmentConfig = provider.environments?.find(
-      (envParam: unknown) => (envParam as ProviderEnvironment).name === env,
+      (envParam: ProviderEnvironment) => envParam.name === env,
     );
 
     // If an environment match is found, prefer its authorizeUrl. Otherwise, fallback to the root definition.
@@ -180,7 +193,7 @@ export class ConnectorsService {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
       // Resolve token URL dynamically based on environment, falling back to basic tokenUrl
       const environmentConfig = provider.environments?.find(
-        (envParam: unknown) => (envParam as ProviderEnvironment).name === env,
+        (envParam: ProviderEnvironment) => envParam.name === env,
       );
       const tokenUrl = environmentConfig?.tokenUrl ?? provider.tokenUrl;
 
@@ -269,18 +282,18 @@ export class ConnectorsService {
    * Encapsulates the DB transaction logic to persist OAuth credentials
    * and connection tokens securely.
    */
-  async storeOAuthConnection(
-    tenantId: string,
-    providerName: string,
-    connectionKey: string,
-    authType: 'OAUTH2' | 'API_KEY' | 'BASIC',
-    encryptedCredentials: string,
-    expiresAt: Date,
-    metadata: Record<string, unknown>,
-    clientId: string,
-    encryptedClientSecret: string,
-    env?: string,
-  ): Promise<void> {
+  async storeOAuthConnection({
+    tenantId,
+    providerName,
+    connectionKey,
+    authType,
+    encryptedCredentials,
+    expiresAt,
+    metadata,
+    clientId,
+    encryptedClientSecret,
+    env,
+  }: StoreOAuthConnectionOptions): Promise<void> {
     try {
       await this.db.transaction(async (tx) => {
         // 1. Upsert the BYOA Credential
