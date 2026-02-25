@@ -82,7 +82,7 @@ describe('DefaultOAuthRefreshClient', () => {
   it('should throw an error if the provider is not found in the registry', async () => {
     (mockProviderRegistry.getProvider as Mock).mockReturnValue(null);
     await expect(
-      client.refresh('testTenant', 'unknown_app', 'refresh123'),
+      client.refresh('testTenant', 'unknown_app', 'test-ext', 'refresh123'),
     ).rejects.toThrow('Provider not found for refresh: unknown_app');
   });
 
@@ -93,7 +93,7 @@ describe('DefaultOAuthRefreshClient', () => {
     });
 
     await expect(
-      client.refresh('testTenant', 'quickbooks', 'refresh123'),
+      client.refresh('testTenant', 'quickbooks', 'test-ext', 'refresh123'),
     ).rejects.toThrow(
       'Provider quickbooks does not support OAuth refresh or lacks a token url',
     );
@@ -118,6 +118,7 @@ describe('DefaultOAuthRefreshClient', () => {
     const result = await client.refresh(
       'testTenant',
       'quickbooks',
+      'test-ext',
       'old_refresh',
     );
 
@@ -142,7 +143,7 @@ describe('DefaultOAuthRefreshClient', () => {
     mockDb.limit.mockResolvedValue([]); // no connections found
 
     await expect(
-      client.refresh('testTenant', 'quickbooks', 'refresh123'),
+      client.refresh('testTenant', 'quickbooks', 'test-ext', 'refresh123'),
     ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 
@@ -155,7 +156,7 @@ describe('DefaultOAuthRefreshClient', () => {
     );
 
     await expect(
-      client.refresh('testTenant', 'quickbooks', 'refresh123'),
+      client.refresh('testTenant', 'quickbooks', 'test-ext', 'refresh123'),
     ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 
@@ -171,7 +172,7 @@ describe('DefaultOAuthRefreshClient', () => {
     });
 
     await expect(
-      client.refresh('testTenant', 'quickbooks', 'bad_refresh'),
+      client.refresh('testTenant', 'quickbooks', 'test-ext', 'bad_refresh'),
     ).rejects.toMatchObject({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message: expect.stringContaining('OAuth Refresh failed: 401'),
@@ -187,7 +188,7 @@ describe('DefaultOAuthRefreshClient', () => {
     (globalThis.fetch as Mock).mockRejectedValue(new Error('network timeout'));
 
     await expect(
-      client.refresh('testTenant', 'quickbooks', 'old_refresh'),
+      client.refresh('testTenant', 'quickbooks', 'test-ext', 'old_refresh'),
     ).rejects.toBeInstanceOf(OAuthRefreshError);
   });
 });

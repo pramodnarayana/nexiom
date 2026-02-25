@@ -25,7 +25,7 @@ export class AppCredentialError extends Error {
 }
 
 export abstract class OAuthRefreshClient {
-    abstract refresh(tenantId: string, appName: string, refreshToken: string): Promise<Record<string, unknown>>;
+    abstract refresh(tenantId: string, appName: string, externalId: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
 function parseExpiresAt(value: unknown): Date | null {
@@ -169,6 +169,7 @@ export class TokenManagerService implements OnModuleDestroy {
         const newTokens = await this.oauthClient.refresh(
             connection.tenantId,
             connection.appName as string,
+            connection.externalId as string,
             oldPayload.refreshToken as string,
         );
 

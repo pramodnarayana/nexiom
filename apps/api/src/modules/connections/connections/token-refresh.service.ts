@@ -27,6 +27,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
   async refresh(
     tenantId: string,
     appName: string,
+    externalId: string,
     refreshToken: string,
   ): Promise<Record<string, unknown>> {
     const provider = this.providerRegistry.getProvider(appName);
@@ -57,6 +58,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
               tenantId,
               and(
                 eq(appConnections.appName, appName),
+                eq(appConnections.externalId, externalId),
                 eq(appConnections.status, AppConnectionStatus.ACTIVE),
               ),
             ),

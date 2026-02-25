@@ -102,7 +102,7 @@ export function useConnections() {
             // Initiate popup with BYOA credentials injected into the URL
             openPopup(popupUrl);
         },
-        [openPopup, user?.organizationId, toast],
+        [openPopup, toast],
     );
 
     return { connections, loading, refresh, connect };

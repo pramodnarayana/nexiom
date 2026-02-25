@@ -63,7 +63,7 @@ describe('ConnectorsController', () => {
 
     mockOauthStateService = {
       generateState: vi.fn(),
-      verifyState: vi.fn(),
+      verifyState: vi.fn().mockReturnValue({ tenantId: 'tenant-123' }),
     } as unknown as Mocked<OauthStateService>;
 
     mockEncryptionService = {
@@ -293,6 +293,7 @@ describe('ConnectorsController', () => {
       code: 'auth-code-123',
       clientId: 'client-123',
       clientSecret: 'secret-123',
+      state: 'valid-state',
       displayName: 'TMS Salesforce',
       env: 'sandbox',
     };

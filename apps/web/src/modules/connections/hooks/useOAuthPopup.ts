@@ -29,12 +29,12 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
 
     // Stable message handler attached once via useEffect
     useEffect(() => {
-        function handleMessage(event: MessageEvent) {
-            // Security: verify origin against our API URL
-            const expectedOrigin = import.meta.env.VITE_API_URL
-                ? new URL(import.meta.env.VITE_API_URL, globalThis.location.origin).origin
-                : globalThis.location.origin;
+        // Security: verify origin against our API URL
+        const expectedOrigin = import.meta.env.VITE_API_URL
+            ? new URL(import.meta.env.VITE_API_URL, globalThis.location.origin).origin
+            : globalThis.location.origin;
 
+        function handleMessage(event: MessageEvent) {
             if (event.origin !== expectedOrigin || event.source !== popupRef.current) return;
 
             const data = event.data as OAuthPopupMessage;

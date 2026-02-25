@@ -243,6 +243,7 @@ export class ConnectorsController {
       code: string;
       clientId: string;
       clientSecret: string;
+      state: string;
       /** User-provided human-readable name e.g. "TMS Salesforce" */
       displayName: string;
       env?: string;
@@ -253,19 +254,42 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { env, displayName, ...restOfBody } = body;
+    const { env, displayName, state, ...restOfBody } = body;
 
     if (
       !restOfBody.providerName ||
       !restOfBody.code ||
       !restOfBody.clientId ||
-      !restOfBody.clientSecret
+      !restOfBody.clientSecret ||
+      !state
     ) {
       throw new BadRequestException('Missing required fields inside body');
     }
 
-    if (!displayName || displayName.trim().length === 0) {
+    const trimmedDisplayName = displayName?.trim();
+    if (!trimmedDisplayName || trimmedDisplayName.length === 0) {
       throw new BadRequestException('displayName is required');
+    }
+    const MAX_DISPLAY_NAME_LENGTH = 100;
+    if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+      throw new BadRequestException(
+        `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
+      );
+    }
+
+    const MAX_EXTERNAL_ID_LENGTH = 100;
+    const externalId = toKebabSlug(
+      `${restOfBody.providerName}-${trimmedDisplayName}`,
+    );
+    if (!externalId) {
+      throw new BadRequestException(
+        'displayName must contain at least one alphanumeric character',
+      );
+    }
+    if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
+      throw new BadRequestException(
+        `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
+      );
     }
 
     if (!/^[a-z0-9-]+$/.test(restOfBody.providerName)) {
@@ -277,6 +301,17 @@ export class ConnectorsController {
     );
     if (!providerData) {
       throw new BadRequestException('Invalid provider name');
+    }
+
+    // Validate the highly-critical OAuth state to prevent CSRF
+    const decodedState = this.oauthStateService.verifyState(
+      state,
+      restOfBody.providerName,
+    );
+    if (decodedState.tenantId !== tenantId) {
+      throw new BadRequestException(
+        'State token does not belong to this tenant',
+      );
     }
 
     // Exchange the code for actual OAuth tokens using user-provided credentials
@@ -345,20 +380,14 @@ export class ConnectorsController {
     const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // externalId is auto-derived from the user-supplied displayName and provider
-    const externalId = toKebabSlug(`${restOfBody.providerName}-${displayName}`);
-    if (!externalId) {
-      throw new BadRequestException(
-        'displayName must contain at least one alphanumeric character',
-      );
-    }
+    // NOTE: externalId and displayName bounds are checked earlier
 
     try {
       await this.connectorsService.storeOAuthConnection({
         tenantId,
         providerName: restOfBody.providerName,
         externalId,
-        displayName: displayName.trim(),
+        displayName: trimmedDisplayName,
         authType: providerData.authType,
         value: encryptedValue,
         expiresAt,

@@ -57,6 +57,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const clientIdId = useId();
     const clientSecretId = useId();
     const envSelectId = useId();
+    const callbackUrlId = useId();
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
@@ -96,10 +97,13 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
     const handleConnect = () => {
         if (!connectionName.trim() || !clientId || (!isConnected && !clientSecret)) return;
+
+        const normalizedSecret = clientSecret?.trim() ? clientSecret.trim() : undefined;
+
         onConnect({
             providerName: provider.name,
             clientId,
-            clientSecret,
+            clientSecret: normalizedSecret,
             displayName: connectionName.trim(),
             env,
         });
@@ -221,11 +225,12 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                                 </div>
                             )}
                             <div className="grid grid-cols-4 items-center gap-4">
-                                <Label className="text-right">
+                                <Label htmlFor={callbackUrlId} className="text-right">
                                     Callback URL
                                 </Label>
                                 <div className="col-span-3 flex items-center relative gap-2">
                                     <Input
+                                        id={callbackUrlId}
                                         value={callbackUrl}
                                         readOnly
                                         className="bg-muted font-mono text-xs pr-10 truncate"
