@@ -36,20 +36,20 @@ export class OauthStateService {
    * Generates a short-lived JWT containing the tenantId to be used as the OAuth `state` parameter.
    * This provides stateless CSRF protection and context continuity across the redirect boundary.
    */
-  generateState(tenantId: string, provider: string, realmId?: string): string {
+  generateState(tenantId: string, provider: string, env?: string): string {
     const payload: {
       tenantId: string;
       provider: string;
       purpose: string;
-      realmId?: string;
+      env?: string;
     } = {
       tenantId,
       provider,
       purpose: 'oauth_state_handshake',
     };
 
-    if (realmId) {
-      payload.realmId = realmId;
+    if (env) {
+      payload.env = env;
     }
 
     // State tokens exist simply to bridge the browser redirect.
@@ -87,7 +87,7 @@ export class OauthStateService {
   verifyState(
     stateToken: string,
     expectedProvider: string,
-  ): { tenantId: string; realmId?: string } {
+  ): { tenantId: string; env?: string } {
     if (!stateToken) {
       this.logger.error('OAuth state token is missing entirely');
       throw new UnauthorizedException('Missing OAuth state token');
@@ -115,7 +115,7 @@ export class OauthStateService {
 
       return {
         tenantId: decoded.tenantId as string,
-        realmId: decoded.realmId as string | undefined,
+        env: decoded.env as string | undefined,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {

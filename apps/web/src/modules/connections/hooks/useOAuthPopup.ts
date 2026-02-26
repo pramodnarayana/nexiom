@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 export type OAuthPopupMessage =
-    | { status: 'success'; provider: string; code: string }
+    | { status: 'success'; provider: string; code: string; state: string }
     | { status: 'error'; error: string };
 
 export type OAuthPopupOptions = {
     /** Called when the popup postMessages a success result */
-    onSuccess: (data: { provider: string; code: string }) => void;
+    onSuccess: (data: { provider: string; code: string; state: string }) => void;
     /** Called when the popup postMessages an error result */
     onError: (error: string) => void;
 };
@@ -41,8 +41,8 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
             if (typeof data !== 'object' || !data || !('status' in data)) return;
 
             if (data.status === 'success') {
-                if (typeof data.provider === 'string' && typeof data.code === 'string') {
-                    onSuccessRef.current({ provider: data.provider, code: data.code });
+                if (typeof data.provider === 'string' && typeof data.code === 'string' && typeof data.state === 'string') {
+                    onSuccessRef.current({ provider: data.provider, code: data.code, state: data.state });
                 } else {
                     onErrorRef.current('invalid_payload');
                 }

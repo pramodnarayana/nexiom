@@ -238,42 +238,19 @@ describe('OAuthCallbackController', () => {
     expectPopupMessage(res, { status: 'error', error: 'invalid_state' });
   });
 
-  it('should send error popup with invalid_state if realmId mismatch occurs', () => {
+  it('should successfully send success popup with code, provider, state, and vendorParams', () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
       'salesforce',
     );
     mockOauthStateService.verifyState.mockReturnValue({
       tenantId: VALID_TENANT_ID,
-      realmId: 'db-realm-id',
-    });
-
-    const req = mockRequest({
-      code: '123',
-      state: 'valid-jwt',
-      realmId: 'different-realm-id',
-    });
-    const res = mockResponse();
-
-    controller.handleCallback(
-      req as unknown as Request,
-      res as unknown as Response,
-    );
-    expectPopupMessage(res, { status: 'error', error: 'invalid_state' });
-  });
-
-  it('should successfully send success popup with code and provider', () => {
-    mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
-    );
-    mockOauthStateService.verifyState.mockReturnValue({
-      tenantId: VALID_TENANT_ID,
-      realmId: 'ext-realm-id',
+      env: 'sandbox',
     });
 
     const req = mockRequest({
       code: 'oauth-code-xyz',
       state: 'valid-jwt',
-      realmId: 'ext-realm-id', // matches state realmId exactly
+      realmId: 'ext-realm-id',
     });
     const res = mockResponse();
 
@@ -291,6 +268,8 @@ describe('OAuthCallbackController', () => {
       status: 'success',
       provider: 'salesforce',
       code: 'oauth-code-xyz',
+      state: 'valid-jwt',
+      vendorParams: { realmId: 'ext-realm-id' },
     });
   });
 });

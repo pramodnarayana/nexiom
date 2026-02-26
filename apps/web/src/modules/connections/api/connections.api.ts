@@ -47,6 +47,7 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
 export async function exchangeOAuthCode(payload: {
     providerName: string;
     code: string;
+    state: string;
     clientId: string;
     clientSecret?: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */
