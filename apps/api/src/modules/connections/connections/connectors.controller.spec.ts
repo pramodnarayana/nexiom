@@ -46,6 +46,7 @@ describe('ConnectorsController', () => {
     select: Mock;
     from: Mock;
     where: Mock;
+    orderBy: Mock;
   };
 
   beforeEach(async () => {
@@ -72,6 +73,7 @@ describe('ConnectorsController', () => {
     } as unknown as Mocked<EncryptionService>;
 
     const dataChain = {
+      orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
       offset: vi.fn().mockResolvedValue([]),
     };
@@ -80,6 +82,7 @@ describe('ConnectorsController', () => {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnValue(dataChain),
+      orderBy: vi.fn().mockReturnThis(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -252,6 +255,7 @@ describe('ConnectorsController', () => {
       };
 
       const dataChain = {
+        orderBy: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
         offset: vi.fn().mockResolvedValue([mockConnectionRow]),
       };
@@ -442,7 +446,7 @@ describe('ConnectorsController', () => {
       );
     });
 
-    it('should propagate InternalServerErrorException if storeOAuthConnection fails', async () => {
+    it('should propagate HttpException as-is if storeOAuthConnection fails', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         authType: 'OAUTH2',
       } as unknown as ProviderDefinition);
@@ -451,12 +455,10 @@ describe('ConnectorsController', () => {
       );
       mockEncryptionService.encrypt.mockResolvedValue('encrypted');
       mockConnectorsService.storeOAuthConnection.mockRejectedValue(
-        new InternalServerErrorException(
-          'Failed to save connection to database',
-        ),
+        new BadRequestException('Invalid connection slug'),
       );
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
-        InternalServerErrorException,
+        new BadRequestException('Invalid connection slug'),
       );
     });
 

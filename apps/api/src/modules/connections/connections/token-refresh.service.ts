@@ -30,6 +30,8 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     externalId: string,
     refreshToken: string,
   ): Promise<Record<string, unknown>> {
+    this.validateInputs(tenantId, appName, externalId, refreshToken);
+
     const provider = this.providerRegistry.getProvider(appName);
     if (!provider) {
       throw new Error(`Provider not found for refresh: ${appName}`);
@@ -42,58 +44,11 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     }
 
     try {
-      let clientId: string;
-      let clientSecret: string;
-
-      try {
-        // Fetch the most recent active connection for this tenant + provider.
-        // The single-table model stores clientId/clientSecret inside the encrypted value blob.
-
-        const [connection] = await this.db
-          .select({ value: appConnections.value })
-          .from(appConnections)
-          .where(
-            withTenantGuard(
-              appConnections.tenantId,
-              tenantId,
-              and(
-                eq(appConnections.appName, appName),
-                eq(appConnections.externalId, externalId),
-                eq(appConnections.status, AppConnectionStatus.ACTIVE),
-              ),
-            ),
-          )
-          .orderBy(desc(appConnections.updatedAt), desc(appConnections.id)) // Ensure deterministic resolution
-          .limit(1);
-
-        if (!connection) {
-          throw new Error(
-            `No active connection found for ${appName} on tenant ${tenantId}`,
-          );
-        }
-
-        const rawEncryptedValue: string = connection.value;
-        const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);
-        const valueBlob = JSON.parse(decryptedValue) as ConnectionValueBlob;
-
-        if (
-          typeof valueBlob.clientId !== 'string' ||
-          !valueBlob.clientId.trim() ||
-          typeof valueBlob.clientSecret !== 'string' ||
-          !valueBlob.clientSecret.trim()
-        ) {
-          throw new Error(
-            'Decrypted credentials missing valid clientId or clientSecret',
-          );
-        }
-
-        clientId = valueBlob.clientId;
-        clientSecret = valueBlob.clientSecret;
-      } catch (error: unknown) {
-        throw new Error(
-          `Failed to retrieve credentials for tenantId=${tenantId} appName=${appName}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+      const { clientId, clientSecret } = await this.getCredentials(
+        tenantId,
+        appName,
+        externalId,
+      );
 
       const response = await fetch(provider.tokenUrl, {
         method: 'POST',
@@ -126,6 +81,87 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       throw new OAuthRefreshError(
         `Unexpected error during token refresh for ${appName}: ${error instanceof Error ? error.message : String(error)}`,
         500,
+      );
+    }
+  }
+
+  private validateInputs(
+    tenantId: string,
+    appName: string,
+    externalId: string,
+    refreshToken: string,
+  ): void {
+    if (typeof tenantId !== 'string' || !tenantId.trim()) {
+      throw new TypeError(
+        'Invalid refresh input: tenantId is missing or empty',
+      );
+    }
+    if (typeof appName !== 'string' || !appName.trim()) {
+      throw new TypeError('Invalid refresh input: appName is missing or empty');
+    }
+    if (typeof externalId !== 'string' || !externalId.trim()) {
+      throw new TypeError(
+        'Invalid refresh input: externalId is missing or empty',
+      );
+    }
+    if (typeof refreshToken !== 'string' || !refreshToken.trim()) {
+      throw new TypeError(
+        'Invalid refresh input: refreshToken is missing or empty',
+      );
+    }
+  }
+
+  private async getCredentials(
+    tenantId: string,
+    appName: string,
+    externalId: string,
+  ): Promise<{ clientId: string; clientSecret: string }> {
+    try {
+      const [connection] = await this.db
+        .select({ value: appConnections.value })
+        .from(appConnections)
+        .where(
+          withTenantGuard(
+            appConnections.tenantId,
+            tenantId,
+            and(
+              eq(appConnections.appName, appName),
+              eq(appConnections.externalId, externalId),
+              eq(appConnections.status, AppConnectionStatus.ACTIVE),
+            ),
+          ),
+        )
+        .orderBy(desc(appConnections.updatedAt), desc(appConnections.id))
+        .limit(1);
+
+      if (!connection) {
+        throw new Error(
+          `No active connection found for ${appName} on tenant ${tenantId}`,
+        );
+      }
+
+      const rawEncryptedValue: string = connection.value;
+      const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);
+      const valueBlob = JSON.parse(decryptedValue) as ConnectionValueBlob;
+
+      if (
+        typeof valueBlob.clientId !== 'string' ||
+        !valueBlob.clientId.trim() ||
+        typeof valueBlob.clientSecret !== 'string' ||
+        !valueBlob.clientSecret.trim()
+      ) {
+        throw new Error(
+          'Decrypted credentials missing valid clientId or clientSecret',
+        );
+      }
+
+      return {
+        clientId: valueBlob.clientId,
+        clientSecret: valueBlob.clientSecret,
+      };
+    } catch (error: unknown) {
+      throw new Error(
+        `Failed to retrieve credentials for tenantId=${tenantId} appName=${appName}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

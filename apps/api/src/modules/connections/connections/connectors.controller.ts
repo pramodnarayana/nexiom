@@ -30,7 +30,7 @@ import {
   AppConnectionStatus,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, desc } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
 
 /** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
@@ -138,6 +138,7 @@ export class ConnectorsController {
           })
           .from(appConnections)
           .where(whereClause)
+          .orderBy(desc(appConnections.createdAt), desc(appConnections.id))
           .limit(limit)
           .offset(offset),
 
@@ -337,8 +338,26 @@ export class ConnectorsController {
       throw new InternalServerErrorException('Failed to exchange auth code');
     }
 
-    if (!tokenResponse.access_token) {
-      throw new BadRequestException('Invalid credentials returned from vendor');
+    if (
+      typeof tokenResponse.access_token !== 'string' ||
+      !tokenResponse.access_token.trim()
+    ) {
+      throw new BadRequestException(
+        'Invalid or missing access_token returned from vendor',
+      );
+    }
+
+    let validRefreshToken: string | undefined;
+    if (tokenResponse.refresh_token !== undefined) {
+      if (
+        typeof tokenResponse.refresh_token !== 'string' ||
+        !tokenResponse.refresh_token.trim()
+      ) {
+        throw new BadRequestException(
+          'Invalid refresh_token format returned from vendor',
+        );
+      }
+      validRefreshToken = tokenResponse.refresh_token;
     }
 
     // Build the Activepieces-style encrypted value blob:
@@ -346,8 +365,8 @@ export class ConnectorsController {
     const valueBlob = {
       clientId: restOfBody.clientId,
       clientSecret: restOfBody.clientSecret,
-      accessToken: tokenResponse.access_token as string,
-      refreshToken: tokenResponse.refresh_token as string | undefined,
+      accessToken: tokenResponse.access_token,
+      refreshToken: validRefreshToken,
       data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
     };
 
