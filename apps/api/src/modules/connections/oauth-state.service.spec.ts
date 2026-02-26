@@ -75,11 +75,11 @@ describe('OauthStateService', () => {
   });
 
   describe('generateState', () => {
-    it('should generate a valid JWT containing the tenantId, provider, and realmId', () => {
+    it('should generate a valid JWT containing the tenantId, provider, and env', () => {
       const stateToken = service.generateState(
         mockTenantId,
         mockProvider,
-        'realm-456',
+        'sandbox',
       );
 
       expect(typeof stateToken).toBe('string');
@@ -89,7 +89,7 @@ describe('OauthStateService', () => {
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
       expect(decoded.tenantId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
-      expect(decoded.realmId).toBe('realm-456');
+      expect(decoded.env).toBe('sandbox');
       expect(decoded.purpose).toBe('oauth_state_handshake');
       expect(decoded.exp).toBeDefined();
     });
@@ -100,11 +100,11 @@ describe('OauthStateService', () => {
       const validToken = service.generateState(
         mockTenantId,
         mockProvider,
-        'realm-456',
+        'sandbox',
       );
 
       const result = service.verifyState(validToken, mockProvider);
-      expect(result).toEqual({ tenantId: mockTenantId, realmId: 'realm-456' });
+      expect(result).toEqual({ tenantId: mockTenantId, env: 'sandbox' });
     });
 
     it('should throw UnauthorizedException if token is completely missing', () => {

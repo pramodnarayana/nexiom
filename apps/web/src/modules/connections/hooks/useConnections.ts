@@ -27,9 +27,9 @@ export function useConnections() {
         }
     }, [user?.organizationId, toast]);
 
-    const handleSuccess = useCallback((data: { provider: string; code: string }) => {
+    const handleSuccess = useCallback((data: { provider: string; code: string; state: string; vendorParams?: Record<string, string> }) => {
         void (async () => {
-            const { provider, code } = data;
+            const { provider, code, state, vendorParams } = data;
             if (!pendingCredentials.current) {
                 toast({ title: 'Error', description: 'Missing pending credentials for exchange.', variant: 'destructive' });
                 return;
@@ -46,6 +46,8 @@ export function useConnections() {
                 await exchangeOAuthCode({
                     providerName: provider,
                     code,
+                    state,
+                    vendorParams,
                     clientId: pendingCredentials.current.clientId,
                     clientSecret: pendingCredentials.current.clientSecret,
                     displayName: pendingCredentials.current.displayName,

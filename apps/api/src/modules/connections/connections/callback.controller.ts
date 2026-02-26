@@ -19,7 +19,13 @@ export class OAuthCallbackError extends Error {
 }
 
 export type PopupPayload =
-  | { status: 'success'; provider: string; code: string }
+  | {
+      status: 'success';
+      provider: string;
+      code: string;
+      state: string;
+      vendorParams?: Record<string, string>;
+    }
   | { status: 'error'; error: string };
 
 @Controller('connect/callback')
@@ -142,7 +148,7 @@ export class OAuthCallbackController {
     let validatedParams: {
       code: string;
       rawState: string;
-      rawRealmId?: string;
+      vendorParams: Record<string, string>;
     };
     try {
       validatedParams = this.validateQueryParams(req, provider);
@@ -159,13 +165,11 @@ export class OAuthCallbackController {
       });
     }
 
-    const { code, rawRealmId } = validatedParams;
+    const { code, vendorParams } = validatedParams;
 
     // 2. Validate State (Tenant Context) using stateless JWT
-    let stateRealmId: string | undefined;
     try {
-      const stateData = this.oauthStateService.verifyState(rawState, provider);
-      stateRealmId = stateData.realmId;
+      this.oauthStateService.verifyState(rawState, provider);
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -178,24 +182,20 @@ export class OAuthCallbackController {
       });
     }
 
-    if (stateRealmId !== rawRealmId) {
-      this.logger.warn(
-        `Realm ID mismatch for ${provider}: expected ${stateRealmId}, got ${rawRealmId}`,
-      );
-      return this.sendPopupMessage(res, {
-        status: 'error',
-        error: 'invalid_state',
-      });
-    }
-
     // Frontend uses popup message to capture code and execute exchange itself
-    return this.sendPopupMessage(res, { status: 'success', provider, code });
+    return this.sendPopupMessage(res, {
+      status: 'success',
+      provider,
+      code,
+      state: rawState,
+      ...(Object.keys(vendorParams).length > 0 ? { vendorParams } : {}),
+    });
   }
 
   private validateQueryParams(
     req: Request,
     provider: string,
-  ): { code: string; rawState: string; rawRealmId?: string } {
+  ): { code: string; rawState: string; vendorParams: Record<string, string> } {
     // Guard against Express passing repeated query params as arrays
     const raw = (key: string) => {
       const val = req.query[key];
@@ -214,7 +214,6 @@ export class OAuthCallbackController {
     const code = raw('code');
     const rawState = raw('state');
     const errorQuery = raw('error');
-    const rawRealmId = raw('realmId');
 
     if (errorQuery) {
       this.logger.warn(
@@ -235,16 +234,14 @@ export class OAuthCallbackController {
       );
     }
 
-    if (rawRealmId) {
-      if (rawRealmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(rawRealmId)) {
-        this.logger.warn(`Invalid realmId format in callback for ${provider}`);
-        throw new OAuthCallbackError(
-          'invalid_callback',
-          'Invalid realmId format',
-        );
+    const vendorParams: Record<string, string> = {};
+    for (const key of Object.keys(req.query)) {
+      if (key !== 'code' && key !== 'state' && key !== 'error') {
+        const val = raw(key);
+        if (val) vendorParams[key] = val;
       }
     }
 
-    return { code, rawState, rawRealmId };
+    return { code, rawState, vendorParams };
   }
 }
