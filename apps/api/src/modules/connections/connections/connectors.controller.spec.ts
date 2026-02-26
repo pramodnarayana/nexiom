@@ -349,7 +349,10 @@ describe('ConnectorsController', () => {
       // Single encrypt call — value blob contains clientId, clientSecret, tokens
       expect(mockEncryptionService.encrypt).toHaveBeenCalledTimes(1);
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
-        expect.stringContaining('test-123'),
+        expect.stringMatching(/test-123/), // vendorParams.realmId
+      );
+      expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
+        expect.stringMatching(/access-123/), // tokenResponse.access_token
       );
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
         tenantId: 'tenant-123',
