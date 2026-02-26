@@ -1,12 +1,9 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 
-// Auth type enum — previously in provider.ts, now inlined here since the provider table is dropped
+// Auth type enum — matches Activepieces' AppConnectionType pattern
 export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);
 
-// Tenants table and associated identity schema are physically isolated per tenant or live in a separate DB.
-// Drizzle foreign keys pointing to "organization" are handled directly in raw migrations (0000_...sql)
-// rather than strict drizzle-orm foreignKey() constraints here to allow cross-database resolution.
-
+// Tenants table — cross-database FKs handled in raw SQL migrations (0000_...sql)
 export const tenants = pgTable('tenant', {
     id: uuid('id').primaryKey(),
 });
@@ -21,30 +18,53 @@ export const AppConnectionStatus = {
 } as const;
 export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppConnectionStatus];
 
+/**
+ * Activepieces-style single-table connection.
+ *
+ * One row = one named connection. A tenant can have multiple connections to
+ * the same provider (e.g. "TMS Salesforce" + "Marketing Salesforce"), each
+ * identified by a user-provided externalId (kebab slug).
+ *
+ * Encrypted `value` blob contains everything sensitive:
+ *   { clientId, clientSecret, accessToken, refreshToken, data }
+ * where `data` holds vendor-specific extras (instance_url, realmId, etc.)
+ */
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull(), // Uses organization(id) in SQL migrations
-    appName: varchar('app_name', { length: 100 }).notNull(), // 'salesforce', 'quickbooks' — validated against PROVIDER_REGISTRY in code
-    authType: authTypeEnum('auth_type').notNull(), // 'OAUTH2', 'API_KEY', 'BASIC'
+    tenantId: uuid('tenant_id').notNull(),
 
-    // Encrypted Payload (Contains access_token, refresh_token, or api_key)
-    encryptedCredentials: text('encrypted_credentials').notNull(),
+    // Provider name — validated against PROVIDER_REGISTRY in application code
+    appName: varchar('app_name', { length: 100 }).notNull(),
 
-    // Extracted for fast querying without decryption
+    // User-defined machine-readable identifier — unique per tenant.
+    // Auto-generated as kebab-case from displayName on the frontend
+    // e.g. "TMS Salesforce" → "tms-salesforce"
+    externalId: varchar('external_id', { length: 255 }).notNull(),
+
+    // Human-readable label shown in the UI e.g. "TMS Salesforce"
+    displayName: varchar('display_name', { length: 255 }).notNull(),
+
+    // Auth mechanism — kept as top-level for fast filtering and token refresh
+    // dispatch without needing to decrypt `value`. Mirrors Activepieces' AppConnectionType.
+    authType: authTypeEnum('auth_type').notNull(),
+
+    // Encrypted payload. JSON structure:
+    // { clientId, clientSecret, accessToken, refreshToken, data: Record<string, unknown> }
+    // where `data` holds all vendor-specific extras (instance_url, realmId, etc.)
+    value: text('value').notNull(),
+
+    // Extracted from `value.expires_in` for fast expiry queries without decryption
     expiresAt: timestamp('expires_at', { withTimezone: true }),
-    status: connectionStatusEnum('status').default('ACTIVE').notNull(), // ACTIVE, INACTIVE, REVOKED, EXPIRED
+    status: connectionStatusEnum('status').default('ACTIVE').notNull(),
 
-    // Public metadata (e.g., connected account email, realmId)
+    // Plain-text metadata for display purposes only (e.g. connected account email, env label)
     metadata: jsonb('metadata').default({}),
-
-    // Stable per-connection key for multi-realm providers (e.g., QB realmId).
-    // Defaults to 'default' for single-realm providers like Salesforce.
-    connectionKey: varchar('connection_key', { length: 255 }).default('default').notNull(),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
     index('tenant_status_idx').on(table.tenantId, table.status),
-    uniqueIndex('tenant_app_connection_unique_idx').on(table.tenantId, table.appName, table.connectionKey),
+    // One named connection per tenant — the externalId is the unique discriminator
+    uniqueIndex('tenant_external_id_unique_idx').on(table.tenantId, table.externalId),
 ]);

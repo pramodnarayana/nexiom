@@ -1,20 +1,28 @@
 import {
   Controller,
   Get,
-  Req,
+  Post,
+  Body,
   UseGuards,
   Inject,
-  UnauthorizedException,
   InternalServerErrorException,
   BadRequestException,
   Query,
   Logger,
-  Param,
   Res,
   HttpException,
+  Param,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { ProviderRegistryService } from '@nexiom/connections';
+import { Response } from 'express';
+import {
+  AuthContext,
+  RequestAuthContext,
+} from '../../identity/auth/auth-context.decorator';
+import {
+  ProviderRegistryService,
+  EncryptionService,
+  AppCredentialError,
+} from '@nexiom/connections';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
 import {
@@ -22,8 +30,17 @@ import {
   AppConnectionStatus,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, desc } from 'drizzle-orm';
 import { AuthGuard } from '../../identity/auth/auth.guard';
+
+/** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
+function toKebabSlug(displayName: string): string {
+  return displayName
+    .toLowerCase()
+    .trim()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '');
+}
 
 @Controller('connectors')
 @UseGuards(AuthGuard)
@@ -35,13 +52,13 @@ export class ConnectorsController {
     private readonly providerRegistry: ProviderRegistryService,
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
+    private readonly crypto: EncryptionService,
   ) {}
 
   @Get('providers')
   getProviders() {
     try {
       const providers = this.providerRegistry.getAllProviders();
-      // Only return the necessary public info to the frontend
       return providers.map((p) => ({
         name: p.name,
         displayName: p.displayName,
@@ -49,6 +66,7 @@ export class ConnectorsController {
         logoUrl: p.logoUrl,
         authType: p.authType,
         category: p.category,
+        environments: 'environments' in p ? p.environments : undefined,
       }));
     } catch (error) {
       if (error instanceof Error) {
@@ -62,13 +80,13 @@ export class ConnectorsController {
 
   @Get('active')
   async getActiveConnections(
-    @Req() req: Request & { user?: { tenantId: string } },
+    @AuthContext() ctx: RequestAuthContext,
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
-    const tenantId = req.user?.tenantId;
+    const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID missing from request');
+      throw new BadRequestException('tenantId context is missing');
     }
 
     let limit = Number.parseInt(limitStr || '50', 10);
@@ -87,8 +105,19 @@ export class ConnectorsController {
       eq(appConnections.status, AppConnectionStatus.ACTIVE),
     );
 
-    let activeConnections;
-    let countResult;
+    let activeConnections: {
+      id: string;
+      appName: string;
+      externalId: string;
+      displayName: string;
+      authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
+      status: string;
+      metadata: unknown;
+      expiresAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }[];
+    let countResult: { count: number | string } | undefined;
 
     try {
       [activeConnections, [countResult]] = await Promise.all([
@@ -96,13 +125,20 @@ export class ConnectorsController {
           .select({
             id: appConnections.id,
             appName: appConnections.appName,
+
+            externalId: appConnections.externalId,
+
+            displayName: appConnections.displayName,
+            authType: appConnections.authType,
             status: appConnections.status,
             metadata: appConnections.metadata,
+            expiresAt: appConnections.expiresAt,
             createdAt: appConnections.createdAt,
             updatedAt: appConnections.updatedAt,
           })
           .from(appConnections)
           .where(whereClause)
+          .orderBy(desc(appConnections.createdAt), desc(appConnections.id))
           .limit(limit)
           .offset(offset),
 
@@ -126,57 +162,274 @@ export class ConnectorsController {
     const total = Number(countResult?.count ?? 0);
 
     return {
-      data: activeConnections,
+      data: activeConnections.map((conn) => ({
+        id: conn.id,
+        appName: conn.appName,
+        externalId: conn.externalId,
+        displayName: conn.displayName,
+        authType: conn.authType,
+        status: conn.status,
+        metadata: conn.metadata,
+        expiresAt: conn.expiresAt,
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
+      })),
       metadata: { limit, offset, count: total },
     };
   }
 
-  @Get(':provider')
-  async connect(
-    @Param('provider') providerName: string,
-    @Req() req: Request & { user?: { tenantId: string } },
+  @Get(':providerName')
+  initiateOAuth(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('providerName') providerName: string,
+    @Query('clientId') clientId: string,
+    @Query('env') env: string | undefined,
     @Res() res: Response,
-    @Query('realmId') realmId?: string,
   ) {
-    const tenantId = req.user?.tenantId;
+    const tenantId = ctx.user?.organizationId;
+
+    if (!providerName || !/^[a-z0-9-]+$/.test(providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
     if (!tenantId) {
-      throw new UnauthorizedException('Tenant ID missing from request');
+      throw new BadRequestException('tenantId context is missing');
     }
 
-    if (realmId) {
-      if (realmId.length > 64 || !/^[a-zA-Z0-9-]+$/.test(realmId)) {
-        this.logger.warn(
-          `Invalid realmId format in connect for ${providerName}`,
-        );
-        throw new BadRequestException('Invalid realmId format');
-      }
+    if (!clientId || clientId.trim().length === 0) {
+      throw new BadRequestException('clientId query parameter is required');
     }
 
+    if (clientId.length > 512) {
+      throw new BadRequestException('clientId exceeds maximum allowed length');
+    }
+
+    let authorizeUrl: string;
     try {
-      const state = this.oauthStateService.generateState(
+      const jwtState = this.oauthStateService.generateState(
         tenantId,
         providerName,
-        realmId,
+        env,
       );
-      const url = await this.connectorsService.getAuthorizationUrl(
+      authorizeUrl = this.connectorsService.getAuthorizationUrl(
         providerName,
-        state,
-        tenantId,
+        jwtState,
+        clientId,
+        env,
       );
-
-      // Redirect the user browser to the vendor's OAuth page
-      return res.redirect(url);
     } catch (error) {
-      if (error instanceof HttpException) {
+      if (
+        error instanceof HttpException ||
+        error instanceof AppCredentialError
+      ) {
         throw error;
       }
       this.logger.error(
-        `Failed to initiate OAuth connect for ${providerName}`,
-        error instanceof Error ? error.stack : error,
+        `Failed to build authorization URL for ${providerName}`,
+        error,
       );
-      throw new InternalServerErrorException(
-        `Failed to initiate OAuth connect for ${providerName}`,
+      throw new InternalServerErrorException('Failed to initiate OAuth flow');
+    }
+
+    res.redirect(authorizeUrl);
+  }
+
+  @Post('oauth-exchange')
+  async exchangeCode(
+    @AuthContext() ctx: RequestAuthContext,
+    @Body()
+    body: {
+      providerName: string;
+      code: string;
+      clientId: string;
+      clientSecret: string;
+      state: string;
+      /** User-provided human-readable name e.g. "TMS Salesforce" */
+      displayName: string;
+      env?: string;
+    },
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('tenantId context is missing');
+    }
+
+    const { env, displayName, state, ...restOfBody } = body;
+
+    if (
+      !restOfBody.providerName ||
+      !restOfBody.code ||
+      !restOfBody.clientId ||
+      !restOfBody.clientSecret ||
+      !state
+    ) {
+      throw new BadRequestException('Missing required fields inside body');
+    }
+
+    const trimmedDisplayName = displayName?.trim();
+    if (!trimmedDisplayName || trimmedDisplayName.length === 0) {
+      throw new BadRequestException('displayName is required');
+    }
+    const MAX_DISPLAY_NAME_LENGTH = 100;
+    if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+      throw new BadRequestException(
+        `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
       );
     }
+
+    const MAX_EXTERNAL_ID_LENGTH = 100;
+    const externalId = toKebabSlug(
+      `${restOfBody.providerName}-${trimmedDisplayName}`,
+    );
+    if (!externalId) {
+      throw new BadRequestException(
+        'displayName must contain at least one alphanumeric character',
+      );
+    }
+    if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
+      throw new BadRequestException(
+        `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
+      );
+    }
+
+    if (!/^[a-z0-9-]+$/.test(restOfBody.providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
+    const providerData = this.providerRegistry.getProvider(
+      restOfBody.providerName,
+    );
+    if (!providerData) {
+      throw new BadRequestException('Invalid provider name');
+    }
+
+    // Validate the highly-critical OAuth state to prevent CSRF
+    const decodedState = this.oauthStateService.verifyState(
+      state,
+      restOfBody.providerName,
+    );
+    if (decodedState.tenantId !== tenantId) {
+      throw new BadRequestException(
+        'State token does not belong to this tenant',
+      );
+    }
+
+    // Exchange the code for actual OAuth tokens using user-provided credentials
+    let tokenResponse: Record<string, unknown>;
+    try {
+      tokenResponse = await this.connectorsService.exchangeCodeForTokens(
+        restOfBody.providerName,
+        restOfBody.code,
+        restOfBody.clientId,
+        restOfBody.clientSecret,
+        env,
+      );
+    } catch (error) {
+      if (
+        error instanceof HttpException ||
+        error instanceof AppCredentialError
+      ) {
+        throw error;
+      }
+      this.logger.error(
+        `Token exchange failed for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to exchange auth code');
+    }
+
+    if (
+      typeof tokenResponse.access_token !== 'string' ||
+      !tokenResponse.access_token.trim()
+    ) {
+      throw new BadRequestException(
+        'Invalid or missing access_token returned from vendor',
+      );
+    }
+
+    let validRefreshToken: string | undefined;
+    if (tokenResponse.refresh_token !== undefined) {
+      if (
+        typeof tokenResponse.refresh_token !== 'string' ||
+        !tokenResponse.refresh_token.trim()
+      ) {
+        throw new BadRequestException(
+          'Invalid refresh_token format returned from vendor',
+        );
+      }
+      validRefreshToken = tokenResponse.refresh_token;
+    }
+
+    // Build the Activepieces-style encrypted value blob:
+    // Everything sensitive in one encrypted payload — clientId, secret, tokens, vendor-specific data
+    const valueBlob = {
+      clientId: restOfBody.clientId,
+      clientSecret: restOfBody.clientSecret,
+      accessToken: tokenResponse.access_token,
+      refreshToken: validRefreshToken,
+      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+    };
+
+    let encryptedValue: string;
+    try {
+      encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
+    } catch (error) {
+      this.logger.error(
+        `Encryption failed for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to encrypt credentials');
+    }
+
+    let parsedExpiresIn = 3600; // default 1 hour
+    if (
+      typeof tokenResponse.expires_in === 'number' &&
+      tokenResponse.expires_in > 0
+    ) {
+      parsedExpiresIn = tokenResponse.expires_in;
+    } else if (
+      typeof tokenResponse.expires_in === 'string' &&
+      Number.parseInt(tokenResponse.expires_in, 10) > 0
+    ) {
+      parsedExpiresIn = Number.parseInt(tokenResponse.expires_in, 10);
+    }
+
+    const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
+    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // NOTE: externalId and displayName bounds are checked earlier
+
+    try {
+      await this.connectorsService.storeOAuthConnection({
+        tenantId,
+        providerName: restOfBody.providerName,
+        externalId,
+        displayName: trimmedDisplayName,
+        authType: providerData.authType,
+        value: encryptedValue,
+        expiresAt,
+        metadata: { env },
+      });
+    } catch (error) {
+      if (
+        error instanceof HttpException ||
+        error instanceof AppCredentialError
+      ) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${restOfBody.providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to save connection to database',
+      );
+    }
+
+    this.logger.log(
+      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
+    );
+    return { success: true };
   }
 }

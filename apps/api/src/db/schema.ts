@@ -39,5 +39,5 @@ export type {
   AbacConditions,
 } from '@nexiom/identity/src/schema';
 
-// Engine schema — credentials and connection tables
-export { appConnections, appCredentials } from '@nexiom/database';
+// Engine schema — connection table (single-table Activepieces model)
+export { appConnections } from '@nexiom/database';

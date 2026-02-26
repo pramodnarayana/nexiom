@@ -17,11 +17,12 @@ nexiom/
 ├── apps/
 │   ├── api/
 │   │   └── src/
-│   │       └── modules/engine/connections/  # API Gateway: OAuth Handshakes & Marketplace endpoints
+│   │       └── modules/connections/  # API Gateway: OAuth Handshakes & Marketplace endpoints
 │   └── web/
 │       └── src/
-│           ├── app/layouts/TenantLayout.tsx # Navigation: Sidebar layout rendering
-│           └── modules/integrations/        # Frontend: App Directory, Search, Connect Flow UI
+│           ├── app/layouts/TenantLayout.tsx              # Navigation: Sidebar layout rendering
+│           └── modules/integrations/                    # Frontend: App Directory, Search, Connect Flow UI
+│               └── components/ConnectAppCard.tsx        # Popup OAuth trigger component
 ├── integrations/                            # Isolated Vendor Connectors (Activepieces model)
 │   ├── salesforce/                          # Explicit implementation of a single vendor API
 │   ├── quickbooks/
@@ -29,9 +30,11 @@ nexiom/
 └── packages/
     ├── database/
     │   └── src/schema/tenant.ts             # Database: `app_connection` standard schema
-    └── engine/
+    └── connections/                         # (alias: @nexiom/connections)
         └── src/
             ├── connectivity/                # Core: TokenManagerService & ProviderRegistryService
+            ├── http/                        # NexiomHttpClient (Goal 2)
+            ├── piece-framework/             # Shim types for Activepieces compatibility (Goal 2)
             └── crypto/                      # Crypto: EncryptionService for secure tokens
 ```
 
@@ -69,30 +72,70 @@ Before starting on the Marketplace, the core foundation of the engine has been e
 * **Sidebar Navigation:** Add a "Marketplace" or "Integrations" link to the main navigation sidebar (`apps/web/src/app/layouts/TenantLayout.tsx`).
 * **App Directory UI:** Build a page displaying available integrations as a grid of cards (e.g., Salesforce, QuickBooks, HubSpot).
 * **Search & Filter:** Implement a search bar and category filters (e.g., CRM, Accounting) to easily find specific apps.
-* **Connect Flow:**
-  * Each app card will have a "Connect" button.
-  * Clicking "Connect" initiates an OAuth handshake or opens a dynamic credential form (based on the `ConnectorAuthSchema` provided by the backend) for API key inputs.
-  * For OAuth, the button links to `GET /api/connect/:provider?tenantId={currentTenantId}`.
+* **Connect Flow (Popup-Based OAuth):** See [Popup OAuth Strategy](#popup-oauth-strategy) below.
 
-## 2. API Gateway: Unified OAuth Handshake
+### Popup OAuth Strategy
 
-*(Target Path: `apps/api/src/modules/engine/connections/`)*
+To preserve the user's current context when connecting a third-party app, Nexiom implements a **popup-based OAuth flow** rather than redirecting the entire browser window.
 
-To automatically configure third-parties using **Grant.js**, the backend must support generic callback interception and secure credential storage.
+**Why a Popup?**
 
-* **Dynamic Grant.js Middleware Layer**
-  * A custom middleware or NestJS module is built to inject Grant.js into the Express application lifecycle.
-  * This custom middleware queries the `ProviderRegistryService` (database `providers` table) on boot to dynamically construct the Grant configuration object containing all vendor `authorizeUrl`, `tokenUrl`, and `scopes`.
-  * It maps the kickoff route specifically to `GET /api/connect/:provider`.
+A hard redirect to the vendor's login screen destroys the user's current context (e.g., an in-progress workflow configuration). By executing the OAuth flow inside a dedicated popup (`window.open`):
 
-* **The Connection Flow:**
-    1. User clicks "Connect" -> Redirects to `GET /api/connect/:provider?tenantId={currentTenantId}`.
-    2. The dynamically mounted Grant.js middleware intercepts this route. It securely stores `tenantId` in the `state` parameter and redirects the browser to the third-party's OAuth login screen (e.g., Salesforce login).
-    3. User authenticates -> Third-party redirects back to `/api/connect/:provider/callback`.
-    4. The `OAuthCallbackController` intercepts the callback, extracting the `grant.response` tokens and original `state` payload (Tenant ID context).
-    5. Tokens are deeply encrypted via AES-256-GCM (`AesEncryptionService`).
-    6. Encrypted credentials and metadata are saved to the `app_connection` table using Upsert.
-    7. User is redirected back to the Marketplace UI with a success state `?success=true`.
+1. **Context Preservation:** The main application window remains untouched.
+2. **Session Stitching is Unnecessary:** No server-side `redirectTo` cookies or state restoration needed.
+3. **Cleaner UX:** The popup naturally focuses the user on the auth task and closes on completion.
+
+**The Authorized Handshake Flow (End-to-End):**
+
+1. **Initiation (Main Window)**
+   * User clicks the "Connect" button on an app card.
+   * The React app constructs the backend URL (e.g., `https://api.nexiom.com/connect/salesforce`).
+   * React calls `window.open(url, '_blank', 'resizable=no,width=600,height=800')`.
+   * The main window sets up `window.addEventListener('message', handler)` to wait for the result.
+
+2. **Backend Kickoff (Popup Window)**
+   * The popup hits `ConnectorsController` (`GET /connect/:provider`).
+   * The backend generates the vendor's required scopes and authorization URL via `ProviderRegistryService`.
+   * A secure stateless JWT is generated containing `tenantId` as the OAuth `state` parameter.
+   * The popup is redirected to the vendor's login page.
+
+3. **Vendor Authentication (Popup Window)**
+   * The user logs in and grants permissions in the vendor's UI.
+   * The vendor redirects the popup back to `https://api.nexiom.com/connect/:provider/callback`.
+
+4. **Token Exchange & Storage (Popup Window)**
+   * `OAuthCallbackController` intercepts the callback.
+   * It extracts `code` and verifies the JWT `state` to confirm `tenantId` and integrity.
+   * The backend exchanges the `code` for `access_token` and `refresh_token`.
+   * Credentials are encrypted and stored in the `app_connection` table.
+
+5. **Completion & Hand-off (Popup → Main Window)**
+   * Instead of a redirect, the callback returns a **self-closing HTML page** that:
+     1. Calls `window.opener.postMessage({ status: 'success', provider: 'salesforce' }, '*')` to notify the main window.
+     2. Calls `window.close()` to destroy the popup.
+   * The main React window receives the `message` event, shows a success toast, and refreshes the connections list — without ever reloading.
+
+**Error Handling:** If the callback results in an error, the popup page calls `window.opener.postMessage({ status: 'error', error: 'auth_failed' }, '*')` before closing.
+
+---
+
+## 2. API Gateway: Stateless OAuth Handshake
+
+*(Target Path: `apps/api/src/modules/connections/`)*
+
+The backend uses a **stateless JWT-based state parameter** instead of server-side session storage (e.g., Grant.js middleware). This makes the OAuth flow horizontally scalable.
+
+* **The Connection Flow (Implemented — Goal 1 ✅):**
+    1. User clicks "Connect" → popup opens and hits `GET /api/connect/:provider`.
+    2. `ConnectorsController` reads the provider's `authorizeUrl`, `scopes`, and `tokenUrl` from `ProviderRegistryService`.
+    3. A signed JWT (via `OauthStateService`) is generated with `tenantId`, `provider`, and optional `realmId` as the OAuth `state`.
+    4. The popup is redirected to the vendor's login screen.
+    5. User authenticates → vendor redirects to `/api/connect/:provider/callback`.
+    6. `OAuthCallbackController` verifies the JWT `state`, extracts `tenantId` and `realmId`.
+    7. `ConnectorsService` exchanges the `code` for tokens via the vendor's `tokenUrl`.
+    8. Tokens are encrypted via `EncryptionService` and stored in `app_connection` (upsert).
+    9. A self-closing HTML page is returned to the popup which fires `postMessage` back to the main window.
 
 ## 3. Database Layer: `app_connection` Standard Schema
 
@@ -125,7 +168,7 @@ The system must guarantee that stored tokens are always valid for background wor
 
 ## 6. Integration Execution Engine (Goal 2: Reading & Writing Data)
 
-Once an OAuth connection is established (Goal 1), the system needs a secure, scalable way to execute business logic (read, write, update) against the vendor's API. To support 500+ apps without writing custom HTTP handlers for every endpoint, Nexiom will implement a **Decoupled Execution Framework** inspired by Activepieces.
+Once Goal 1 OAuth connections are established, the system needs a secure, scalable way to execute business logic (read, write, update) against vendor APIs. To support 500+ apps without writing custom HTTP handlers for every endpoint, Nexiom implements a **Decoupled Execution Framework** inspired by Activepieces.
 
 ### A. The `Piece` Concept
 
@@ -138,36 +181,48 @@ Every integration in the `integrations/` folder is defined as a `Piece`. A `Piec
 
 To standardize how we talk to 500+ APIs, every Action is defined by a strict TypeScript schema. An Action contains:
 
-* `name`: e.g., 'create_contact'
-* `displayName`: e.g., 'Create Contact'
+* `name`: e.g., `'create_contact'`
+* `displayName`: e.g., `'Create Contact'`
 * `props`: A declarative list of inputs required from the user/workflow (e.g., `email` (string), `firstName` (string)).
-* `run(context)`: The async TypeScript function that executes the vendor API call. It constructs the request, sends it via the injected `HttpClient`, awaits the response, and either returns a standardized result object (e.g., `Promise<ActionResult>`) or throws a typed error on failure. The `run` function never handles authentication directly—it delegates to `HttpClient` for credential injection.
+* `run(context)`: The async TypeScript function that executes the vendor API call. It constructs the request, sends it via the injected `HttpClient`, awaits the response, and either returns a standardized result object (e.g., `Promise<ActionResult>`) or throws a typed error on failure. The `run` function never handles authentication directly — it delegates to `HttpClient` for credential injection.
 
-### C. The Nexiom `HttpClient` Wrapper
+### C. The Activepieces Compatibility Layer
 
-Vendors require different authentication headers (Bearer tokens, API keys in the URL, Basic Auth, etc.).
+To leverage thousands of open-source Activepieces actions **without rewriting or maintaining custom fetch logic**, Nexiom implements a shim inside `@nexiom/connections`.
 
-* **The Solution:** We will build a unified `NexiomHttpClient` inside the `@nexiom/connections` package (see note below on the alias).
+> **Key Insight:** We do **not** need to run the entire Activepieces Node.js engine — we only need their TypeScript type signatures.
+
+**The Shim Architecture:**
+
+Nexiom exports `createPiece`, `createAction`, `PieceAuth`, and `Property` with the **exact same TypeScript signatures** as `@activepieces/pieces-framework`. This means open-source Activepieces integration files can be dropped into `nexiom/integrations/` and work immediately.
+
+**Folder structure** (mirrors Activepieces):
+
+* Every app is isolated in its own directory (e.g., `integrations/salesforce/`)
+* `index.ts` exports a `createPiece({ ... })` wrapper (defining `PieceAuth.OAuth2`, scopes, actions)
+* Actions like `create-contact.ts` use `createAction({ props: {...}, run(context) {...} })`
+
+### D. The Nexiom `HttpClient` Wrapper
+
+The single most powerful override is replacing Activepieces' `httpClient.sendRequest()`. When a copied action calls `await httpClient.sendRequest()`, our `NexiomHttpClient` intercepts it and:
+
+1. Calls `TokenManagerService.getValidCredentials(connectionId)` to get a guaranteed unexpired token.
+2. Switches on `Piece.authType` to choose the correct injection strategy:
+   * **Bearer / OAuth 2.0:** Injects `Authorization: Bearer <accessToken>` header.
+   * **API Key:** Appends key to URL query string or designated header per provider convention.
+   * **Basic Auth:** Encodes `username:password` in Base64 and sets `Authorization: Basic <encoded>`.
+3. Normalizes credential shape so `run(context)` always receives a consistent interface regardless of `authType`.
+4. Executes the vendor API call with credentials already applied.
 
 > **Note:** `@nexiom/connections` is a workspace alias that maps to `packages/connections`. `NexiomHttpClient` lives at `packages/connections/src/http/nexiom-http-client.ts`.
 
-* **Execution Flow:**
-  1. The API or Background Worker calls the engine: `Engine.executeAction('salesforce', 'create_contact', { email: "test@test.com" }, connectionId)`.
-  2. The Engine invokes `TokenManagerService` to get the guaranteed valid tokens. `TokenManagerService` returns different credential shapes depending on the provider's `authType` (e.g., `{ accessToken }` for OAuth 2.0, `{ apiKey }` for api_key, `{ username, password }` for basic).
-  3. The Engine reads the target `Piece.authType` metadata and passes both the tokens and the `authType` to `NexiomHttpClient`.
-  4. `NexiomHttpClient` switches on `authType` to choose the correct injection strategy:
-     * **Bearer / OAuth 2.0:** Injects `Authorization: Bearer <accessToken>` header.
-     * **API Key:** Appends the key to the URL query string or a designated header, per the provider's convention.
-     * **Basic Auth:** Encodes `username:password` in Base64 and sets `Authorization: Basic <encoded>`.
-  5. `NexiomHttpClient` normalizes the credential shape before injection so `run(context)` always receives a consistent interface regardless of `authType`.
-  6. `NexiomHttpClient` executes the `Piece.run(context)` function with credentials already applied.
+### E. Why this is Enterprise-Grade
 
-### D. Why this is Enterprise-Grade
-
-1. **Code Portability:** Because we are adopting the `Piece` and `Action` schema structure used by open-source engines like Activepieces, we can literally copy-paste the `salesforce/actions/create-contact.ts` file from their open-source GitHub repository into our `integrations/salesforce` folder. It will instantly work with our `TokenManagerService`.
-   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into the `integrations/` directory, developers MUST preserve the original MIT license header and attribute Activepieces. Before merging any copied file, verify attribution against the **project-level compliance checklist** at [`docs/compliance/CHECKLIST.md`](../compliance/CHECKLIST.md) (or the `## Licensing` section in `CONTRIBUTING.md`). Nexiom's `TokenManagerService` and `HttpClient` will execute these actions natively, but strict adherence to upstream licensing at the file level is required.
-2. **Sandboxing:** Actions are stateless functions (`run(context)`). They do not hold database connections or memory. This means they can eventually be executed inside isolated Node.js child processes or Serverless functions (AWS Lambda) if a customer submits untrusted code.
-3. **No Credential Leakage:** The integration code (the `Piece` developer) NEVER sees the raw OAuth token. They just use the `HttpClient`, which injects the token downstream.
+1. **Code Portability:** We can copy-paste `salesforce/actions/create-contact.ts` from the Activepieces GitHub repository into `integrations/salesforce/` and it will instantly work with `TokenManagerService`.
+   > **Compliance Note:** Activepieces code is MIT-licensed. When copying `Piece` or `Action` files into `integrations/`, developers MUST preserve the original MIT license header and attribute Activepieces. Before merging, verify attribution against the **project-level compliance checklist** at [`docs/compliance/CHECKLIST.md`](../compliance/CHECKLIST.md). Nexiom's `TokenManagerService` and `HttpClient` execute these actions natively, but strict adherence to upstream licensing at the file level is required.
+2. **Sandboxed Credentials:** The `run(context)` function **never sees the raw, decrypted OAuth tokens** — only the `HttpClient` does.
+3. **Instant Scalability:** Access to hundreds of CRM, Marketing, and Accounting workflows without writing bespoke HTTP wrappers.
+4. **Sandboxing:** Actions are stateless functions. They can eventually run in isolated Node.js child processes or AWS Lambda for untrusted code.
 
 ---
 
@@ -175,15 +230,27 @@ Vendors require different authentication headers (Bearer tokens, API keys in the
 
 ### Automated Tests
 
-1. **Token Manager Mocking:** Create Vitest unit tests for `TokenManagerService` focusing on the Redis lock `SET` with `NX` and `PX` mechanism to ensure only *one* promise triggers an outgoing OAuth refresh API call, while subsequent calls wait and receive the updated token.
-2. **Database Insertion Flow:** Build tests mapping a mocked `grant.js` response payload through the `OAuthCallbackController` to ensure it invokes `EncryptionService` and populates `app_connection` accurately. Ensure test runner configuration uses `vitest.config.ts` and Vitest import usage.
+1. **Token Manager Mocking:** Vitest unit tests for `TokenManagerService` focusing on the Redis `SET NX PX` lock mechanism — ensuring only one promise triggers an outgoing refresh while others wait.
+2. **Database Insertion Flow:** Unit tests mapping a mocked OAuth callback payload through `OAuthCallbackController` to ensure `EncryptionService` is invoked and `app_connection` is populated accurately.
+3. **NexiomHttpClient:** Unit tests for each `authType` strategy (Bearer, API Key, Basic Auth).
 
-### Manual End-to-End Verification
+### Goal 1 End-to-End Verification (Popup OAuth)
 
-1. Login to the web dashboard.
-2. Navigate to "Marketplace" via the sidebar.
-3. Search for a test integration (e.g., a dummy OAuth provider).
-4. Click "Connect" and complete the OAuth flow.
-5. Verify successful redirect back to the app and confirm the connection shows as "Active".
-6. Query the database to ensure credentials are saved in the `app_connection` table and are correctly encrypted.
-7. Simulate a token expiration in the database and run a test script that fetches credentials to verify the background refresh mechanism acquires a lock, updates the token, and saves the new expiry.
+1. Seed Salesforce and QuickBooks into the `providers` table.
+2. Add `SALESFORCE_CLIENT_ID/SECRET` and `QUICKBOOKS_CLIENT_ID/SECRET` to `.env`.
+3. Login to the web dashboard → navigate to the Integrations Marketplace.
+4. Click "Connect" on the Salesforce card:
+   * Popup opens → Salesforce login → OAuth grants permissions.
+   * Callback handled → `app_connection` row inserted with `status = ACTIVE`.
+   * Popup closes → main window shows success toast.
+5. Repeat for QuickBooks (verify `realmId` is stored in `metadata`).
+6. Query the database to confirm credentials are encrypted and `expiresAt` is set.
+7. Simulate token expiration → verify `TokenManagerService` auto-refreshes before next execution.
+
+### Goal 2 End-to-End Verification (Action Execution)
+
+1. With a live Salesforce connection: call `POST /execute/salesforce/createContact` with test props.
+   * Verify contact appears in the Salesforce CRM sandbox.
+2. With a live QuickBooks connection: call `POST /execute/quickbooks/createInvoice` with test props.
+   * Verify invoice appears in the QuickBooks Online sandbox.
+3. Token expiry simulation: expire the token in the DB → confirm `TokenManagerService` silently refreshes and the action still succeeds.

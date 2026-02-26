@@ -18,9 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 10.2.1
+        run: corepack enable pnpm && corepack prepare --activate
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

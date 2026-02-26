@@ -9,15 +9,38 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
-  EncryptionService,
   AppCredentialError,
+  ProviderEnvironment,
 } from '@nexiom/connections';
 import {
-  appCredentials,
-  withTenantGuard,
+  appConnections,
+  AppConnectionStatus,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq } from 'drizzle-orm';
+
+/** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
+export interface ConnectionValueBlob {
+  clientId: string;
+  clientSecret: string;
+  accessToken: string;
+  refreshToken?: string;
+  /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
+  data: Record<string, unknown>;
+}
+
+export interface StoreOAuthConnectionOptions {
+  tenantId: string;
+  providerName: string;
+  /** User-defined kebab slug e.g. "salesforce-tms" — unique per tenant */
+  externalId: string;
+  /** Human-readable label e.g. "TMS Salesforce" */
+  displayName: string;
+  authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
+  /** JSON.stringify(ConnectionValueBlob), then encrypted */
+  value: string;
+  expiresAt: Date;
+  metadata: Record<string, unknown>;
+}
 
 @Injectable()
 export class ConnectorsService {
@@ -25,68 +48,27 @@ export class ConnectorsService {
 
   constructor(
     @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
-    private readonly crypto: EncryptionService,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly configService: ConfigService,
   ) {}
 
-  private buildRedirectUri(providerName: string): string {
-    const baseUrl =
+  private buildRedirectUri(): string {
+    const rawBaseUrl =
       this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
-    return `${baseUrl}/api/connect/${providerName}/callback`;
-  }
-
-  /**
-   * Fetches the OAuth app credential for a given tenant and provider.
-   * Extracts the database lookup logic into a shared helper to ensure RLS-like
-   * tenant isolation is consistently applied at the application layer.
-   */
-  async fetchAppCredential(tenantId: string, providerName: string) {
-    const [credential] = await this.db
-      .select()
-      .from(appCredentials)
-      .where(
-        withTenantGuard(
-          appCredentials.tenantId,
-          tenantId,
-          eq(appCredentials.appName, providerName),
-        ),
-      );
-
-    if (!credential) {
-      this.logger.error(
-        `Missing OAuth app credential for ${providerName} on tenant ${tenantId}`,
-      );
-      return null;
-    }
-
-    return credential;
-  }
-
-  async decryptClientSecret(
-    encryptedSecret: string,
-    providerName: string,
-    tenantId: string,
-  ): Promise<string> {
-    try {
-      return await this.crypto.decrypt(encryptedSecret);
-    } catch {
-      this.logger.error(
-        `Failed to decrypt client secret for ${providerName} on tenant ${tenantId}`,
-      );
-      throw new AppCredentialError('Invalid connector configuration.');
-    }
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+    return `${baseUrl}/api/connect/callback`;
   }
 
   /**
    * Generates the fully qualified Authorization URL for the vendor.
    * Redirects the user's browser to this URL to start the OAuth flow.
    */
-  async getAuthorizationUrl(
+  getAuthorizationUrl(
     providerName: string,
     state: string,
-    tenantId: string,
-  ): Promise<string> {
+    clientId: string,
+    env?: string,
+  ): string {
     if (!/^[a-z0-9-]+$/.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
@@ -99,27 +81,40 @@ export class ConnectorsService {
       );
     }
 
-    if (provider.authType !== 'OAUTH2' || !provider.authorizeUrl) {
-      this.logger.error(
-        `Provider ${providerName} missing authorizeUrl or not an OAuth provider.`,
-      );
+    if (!clientId) {
+      throw new BadRequestException('clientId is required for authorization');
+    }
+    if (provider.authType !== 'OAUTH2') {
+      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
       throw new InternalServerErrorException(
         `Provider ${providerName} configuration is incomplete for OAuth.`,
       );
     }
 
-    // Fetch tenant's BYOA credentials
-    const credential = await this.fetchAppCredential(tenantId, providerName);
+    // Attempt to match the requested environment from the provider's defined environments array.
+    let authorizeUrl: string | undefined;
+    if (env) {
+      const environmentConfig = provider.environments?.find(
+        (envParam: ProviderEnvironment) => envParam.name === env,
+      );
+      if (!environmentConfig) {
+        throw new BadRequestException(
+          `Environment '${env}' is not configured for provider '${providerName}'`,
+        );
+      }
+      authorizeUrl = environmentConfig.authorizeUrl;
+    } else {
+      authorizeUrl = provider.authorizeUrl;
+    }
 
-    if (!credential) {
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
+    if (!authorizeUrl) {
+      this.logger.error(`Provider ${providerName} missing authorizeUrl.`);
+      throw new InternalServerErrorException(
+        `Provider ${providerName} configuration is incomplete for OAuth.`,
       );
     }
 
-    const clientId = credential.clientId;
-
-    const url = new URL(provider.authorizeUrl);
+    const url = new URL(authorizeUrl);
     url.searchParams.append('response_type', 'code');
     url.searchParams.append('client_id', clientId);
     url.searchParams.append('state', state);
@@ -130,10 +125,7 @@ export class ConnectorsService {
       url.searchParams.append('scope', provider.scopes.join(' '));
     }
 
-    url.searchParams.append(
-      'redirect_uri',
-      this.buildRedirectUri(providerName),
-    );
+    url.searchParams.append('redirect_uri', this.buildRedirectUri());
 
     return url.toString();
   }
@@ -144,7 +136,9 @@ export class ConnectorsService {
   async exchangeCodeForTokens(
     providerName: string,
     code: string,
-    tenantId: string,
+    clientId: string,
+    clientSecret: string,
+    env?: string,
   ): Promise<Record<string, unknown>> {
     if (!/^[a-z0-9-]+$/.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
@@ -158,38 +152,43 @@ export class ConnectorsService {
       );
     }
 
-    if (provider.authType !== 'OAUTH2' || !provider.tokenUrl) {
-      this.logger.error(
-        `Provider ${providerName} does not have a tokenUrl defined.`,
-      );
+    if (provider.authType !== 'OAUTH2') {
+      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
       throw new InternalServerErrorException(
         `Provider ${providerName} configuration is incomplete.`,
       );
     }
 
-    // Fetch tenant's BYOA credentials
-    const credential = await this.fetchAppCredential(tenantId, providerName);
-
-    if (!credential) {
-      throw new NotFoundException(
-        `Platform administrator has not configured ${providerName} integration.`,
-      );
-    }
-
-    const clientId = credential.clientId;
-
-    const clientSecret = await this.decryptClientSecret(
-      credential.encryptedClientSecret,
-      providerName,
-      tenantId,
-    );
-
-    const redirectUri = this.buildRedirectUri(providerName);
+    const redirectUri = this.buildRedirectUri();
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
+      // Resolve token URL dynamically based on environment
+      let tokenUrl: string | undefined;
+      if (env) {
+        const environmentConfig = provider.environments?.find(
+          (envParam: ProviderEnvironment) => envParam.name === env,
+        );
+        if (!environmentConfig) {
+          throw new BadRequestException(
+            `Environment '${env}' is not configured for provider '${providerName}'`,
+          );
+        }
+        tokenUrl = environmentConfig.tokenUrl;
+      } else {
+        tokenUrl = provider.tokenUrl;
+      }
 
-      const response = await fetch(provider.tokenUrl, {
+      if (!tokenUrl) {
+        this.logger.error(
+          `Provider ${providerName} does not have a tokenUrl defined. Resolved to: ${tokenUrl}`,
+        );
+        throw new InternalServerErrorException(
+          `Provider ${providerName} configuration is incomplete.`,
+        );
+      }
+
+      const response = await fetch(tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -223,10 +222,31 @@ export class ConnectorsService {
         );
       }
 
-      return (await response.json()) as Record<string, unknown>;
+      let tokens: Record<string, unknown>;
+      try {
+        tokens = (await response.json()) as Record<string, unknown>;
+      } catch (parseError) {
+        this.logger.error(
+          `Failed to parse token response from ${providerName} as JSON. Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`,
+          parseError,
+        );
+        throw new InternalServerErrorException(
+          `Vendor ${providerName} returned an invalid response format that could not be parsed as JSON.`,
+        );
+      }
+
+      if (
+        'validateConnectResponse' in provider &&
+        provider.validateConnectResponse
+      ) {
+        provider.validateConnectResponse(tokens);
+      }
+
+      return tokens;
     } catch (error) {
       if (
         error instanceof InternalServerErrorException ||
+        error instanceof BadRequestException ||
         error instanceof AppCredentialError
       ) {
         throw error;
@@ -237,6 +257,57 @@ export class ConnectorsService {
       );
       throw new InternalServerErrorException(
         `Unexpected error during ${providerName} token exchange`,
+      );
+    }
+  }
+
+  /**
+   * Persists an OAuth connection in a single upsert.
+   * Conflicts on (tenantId, externalId) — updating the same named connection
+   * refreshes its tokens and metadata (e.g. re-connect flow).
+   */
+  async storeOAuthConnection({
+    tenantId,
+    providerName,
+    externalId,
+    displayName,
+    authType,
+    value,
+    expiresAt,
+    metadata,
+  }: StoreOAuthConnectionOptions): Promise<void> {
+    try {
+      await this.db
+        .insert(appConnections)
+        .values({
+          tenantId,
+          appName: providerName,
+          externalId,
+          displayName,
+          authType,
+          value,
+          expiresAt,
+          metadata,
+          status: AppConnectionStatus.ACTIVE,
+        })
+        .onConflictDoUpdate({
+          target: [appConnections.tenantId, appConnections.externalId],
+          set: {
+            authType,
+            value,
+            expiresAt,
+            metadata,
+            status: AppConnectionStatus.ACTIVE,
+            updatedAt: new Date(),
+          },
+        });
+    } catch (error) {
+      this.logger.error(
+        `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to save connection to database',
       );
     }
   }

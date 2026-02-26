@@ -44,6 +44,7 @@ export default defineConfig({
                 '**/*.spec.ts',
                 '**/*.e2e-spec.ts',
                 'src/**/index.ts',
+                '**/*.config.*',
             ],
             reporter: ['text', 'json', 'html'],
             thresholds: {

@@ -88,7 +88,46 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ## Medium Priority
 
-*No items currently tracked*
+### 1. Cross-Module AuthGuard Import
+
+**Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`  
+**Added**: 2026-02-23  
+**Impact**: Code Architecture, Module Coupling  
+**Effort**: Low (1 day)
+
+**Current State**:
+
+- `AuthGuard` is imported directly via a hardcoded relative path (`../../identity/auth/auth.guard`) from the `connections` module.
+- Creates tight coupling between domains and breaks encapsulation.
+
+**Recommended Solution**:
+
+- **Shared Workspace Package**: Export `AuthGuard` from `@nexiom/identity/guards` if `identity` is built as a library.
+- **Global Guard**: Register `AuthGuard` globally in `app.module.ts` via `APP_GUARD`.
+- **Module Export**: Explicitly export `AuthGuard` from an `index.ts` within the `identity` module.
+
+---
+
+### 2. Enterprise-Grade Global Frontend UI Polish
+
+**Location**: `apps/web/src/*`
+**Added**: 2026-02-24
+**Impact**: User Experience, Product Quality, Brand Perception
+**Effort**: High (1-2 sprints)
+
+**Current State**:
+
+- The application uses functional standard Shadcn components, but lacks a cohesive premium aesthetic.
+- "Active" states, data loading, and layout transitions are visually basic.
+- No unified animation system for modals, page transitions, or micro-interactions.
+- Dark mode requires fine-tuning regarding contrast, borders, and textures.
+
+**Recommended Solution**:
+
+- **System-wide Animations**: Implement Framer Motion for page layouts, modal slide-ins, and shared component layout changes.
+- **Premium Textures & Micro-interactions**: Integrate glassmorphism (backdrop-blur), gradient mesh backgrounds on empty states, and interactive hover states (e.g., animated borders, color shifts).
+- **Data Loading**: Replace generic spinners in dashboards and lists with beautiful, grid-matching skeleton loaders.
+- **Status Indication**: Transition away from static text badges to live, pulsing status indicators (e.g., `🟢` for connected/healthy states) similar to Vercel/Supabase.
 
 ---
 

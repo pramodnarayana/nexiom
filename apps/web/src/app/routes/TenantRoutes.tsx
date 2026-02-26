@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
-import { LayoutDashboard, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Blocks } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { RESOURCES } from '@/shared/constants/resources';
 
@@ -16,6 +16,7 @@ import { UserEdit } from '../../modules/identity/pages/admin/users/UserEdit';
 import { TenantSettingsPage } from '../../modules/identity/pages/TenantSettingsPage';
 import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
 import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
+import { ConnectionsPage as MarketplacePage } from '../../modules/connections/pages/ConnectionsPage';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -24,6 +25,7 @@ export function TenantRoutes() {
             items: [
                 { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
                 { label: 'Users', href: '/dashboard/users', icon: Users },
+                { label: 'Marketplace', href: '/dashboard/marketplace', icon: Blocks },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ]
         }
@@ -67,6 +69,7 @@ export function TenantRoutes() {
                             <Route path="users/edit/:id" element={<UserEdit />} />
                             <Route path="settings" element={<TenantSettingsPage />} />
                             <Route path="profile" element={<UserProfilePage />} />
+                            <Route path="marketplace" element={<MarketplacePage />} />
                         </Route>
                     </Routes>
                 </Refine>
