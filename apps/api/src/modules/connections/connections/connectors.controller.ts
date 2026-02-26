@@ -247,6 +247,7 @@ export class ConnectorsController {
       /** User-provided human-readable name e.g. "TMS Salesforce" */
       displayName: string;
       env?: string;
+      vendorParams?: Record<string, string>;
     },
   ) {
     const tenantId = ctx.user?.organizationId;
@@ -254,7 +255,7 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { env, displayName, state, ...restOfBody } = body;
+    const { env, displayName, state, vendorParams, ...restOfBody } = body;
 
     if (
       !restOfBody.providerName ||
@@ -367,7 +368,10 @@ export class ConnectorsController {
       clientSecret: restOfBody.clientSecret,
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
-      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+      data: {
+        ...vendorParams,
+        ...tokenResponse,
+      }, // vendor-specific: instance_url, realmId, id_token, etc.
     };
 
     let encryptedValue: string;

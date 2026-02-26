@@ -313,6 +313,7 @@ describe('ConnectorsController', () => {
       state: 'valid-state',
       displayName: 'TMS Salesforce',
       env: 'sandbox',
+      vendorParams: { realmId: 'test-123' },
     };
 
     const mockTokenResponse = {
@@ -348,7 +349,7 @@ describe('ConnectorsController', () => {
       // Single encrypt call — value blob contains clientId, clientSecret, tokens
       expect(mockEncryptionService.encrypt).toHaveBeenCalledTimes(1);
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
-        expect.stringContaining('access-123'),
+        expect.stringContaining('test-123'),
       );
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
         tenantId: 'tenant-123',
