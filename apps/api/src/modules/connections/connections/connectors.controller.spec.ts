@@ -112,7 +112,13 @@ describe('ConnectorsController', () => {
         'https://vendor.com/auth',
       );
 
-      controller.initiateOAuth(mockCtx, 'mock-client-id', undefined, mockRes);
+      controller.initiateOAuth(
+        mockCtx,
+        'salesforce',
+        'mock-client-id',
+        undefined,
+        mockRes,
+      );
 
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
@@ -137,6 +143,7 @@ describe('ConnectorsController', () => {
       expect(() =>
         controller.initiateOAuth(
           missingTenantCtx,
+          'salesforce',
           'mock-client-id',
           undefined,
           mockRes,
@@ -151,7 +158,7 @@ describe('ConnectorsController', () => {
       } as unknown as Response;
 
       expect(() =>
-        controller.initiateOAuth(mockCtx, '', undefined, mockRes),
+        controller.initiateOAuth(mockCtx, 'salesforce', '', undefined, mockRes),
       ).toThrow(BadRequestException);
     });
 
@@ -167,7 +174,13 @@ describe('ConnectorsController', () => {
       });
 
       expect(() =>
-        controller.initiateOAuth(mockCtx, 'mock-client-id', undefined, mockRes),
+        controller.initiateOAuth(
+          mockCtx,
+          'salesforce',
+          'mock-client-id',
+          undefined,
+          mockRes,
+        ),
       ).toThrow(InternalServerErrorException);
     });
   });
@@ -324,6 +337,10 @@ describe('ConnectorsController', () => {
         'secret-123',
         'sandbox',
       );
+      expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
+        'valid-state',
+        'salesforce',
+      );
       // Single encrypt call — value blob contains clientId, clientSecret, tokens
       expect(mockEncryptionService.encrypt).toHaveBeenCalledTimes(1);
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
@@ -367,9 +384,34 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if provider is not registered', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue(null);
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new BadRequestException('Invalid provider name'),
+      );
+    });
+
+    it('should throw BadRequestException if verifyState throws', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockOauthStateService.verifyState.mockImplementationOnce(() => {
+        throw new BadRequestException('Invalid state signature');
+      });
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException if state token does not belong to this tenant', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        authType: 'OAUTH2',
+      } as unknown as ProviderDefinition);
+      mockOauthStateService.verifyState.mockReturnValueOnce({
+        tenantId: 'other-tenant',
+      });
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        new BadRequestException('State token does not belong to this tenant'),
       );
     });
 

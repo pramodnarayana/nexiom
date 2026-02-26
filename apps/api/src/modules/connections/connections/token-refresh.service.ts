@@ -11,7 +11,7 @@ import {
   withTenantGuard,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import type { ConnectionValueBlob } from '../connectors.service';
 
 @Injectable()
@@ -63,7 +63,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
               ),
             ),
           )
-          .orderBy(appConnections.updatedAt, appConnections.id) // Ensure deterministic resolution
+          .orderBy(desc(appConnections.updatedAt), desc(appConnections.id)) // Ensure deterministic resolution
           .limit(1);
 
         if (!connection) {
@@ -91,7 +91,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
         clientSecret = valueBlob.clientSecret;
       } catch (error: unknown) {
         throw new Error(
-          `Failed to retrieve credentials for tenantId/appName: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to retrieve credentials for tenantId=${tenantId} appName=${appName}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
 
@@ -124,7 +124,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
         error,
       );
       throw new OAuthRefreshError(
-        `Unexpected error during token refresh for ${appName}`,
+        `Unexpected error during token refresh for ${appName}: ${error instanceof Error ? error.message : String(error)}`,
         500,
       );
     }

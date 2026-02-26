@@ -11,6 +11,7 @@ import {
   Logger,
   Res,
   HttpException,
+  Param,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -179,13 +180,11 @@ export class ConnectorsController {
   @Get(':providerName')
   initiateOAuth(
     @AuthContext() ctx: RequestAuthContext,
+    @Param('providerName') providerName: string,
     @Query('clientId') clientId: string,
     @Query('env') env: string | undefined,
     @Res() res: Response,
-    // providerName is validated below — extracted from the path via ctx.params
   ) {
-    const providerName =
-      (res.req.params as { providerName?: string }).providerName ?? '';
     const tenantId = ctx.user?.organizationId;
 
     if (!providerName || !/^[a-z0-9-]+$/.test(providerName)) {
@@ -394,8 +393,14 @@ export class ConnectorsController {
         metadata: { env },
       });
     } catch (error) {
+      if (
+        error instanceof HttpException ||
+        error instanceof AppCredentialError
+      ) {
+        throw error;
+      }
       this.logger.error(
-        `Failed to store connection "${displayName}" (${externalId}) for ${restOfBody.providerName}`,
+        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${restOfBody.providerName}`,
         error,
       );
       throw new InternalServerErrorException(
@@ -404,7 +409,7 @@ export class ConnectorsController {
     }
 
     this.logger.log(
-      `[OAuth Exchange] Success: ${restOfBody.providerName} "${displayName}" (${externalId}) for tenant ${tenantId}`,
+      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
     );
     return { success: true };
   }

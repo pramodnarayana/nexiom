@@ -49,7 +49,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const [connectionName, setConnectionName] = useState('');
     const [clientId, setClientId] = useState('');
     const [clientSecret, setClientSecret] = useState('');
-    const [env, setEnv] = useState(provider.environments?.[0]?.name ?? 'production');
+    const [env, setEnv] = useState<string | undefined>(provider.environments?.[0]?.name);
     const [copied, setCopied] = useState(false);
     const [imgError, setImgError] = useState(false);
 
@@ -69,7 +69,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
             setConnectionName('');
             setClientId('');
             setClientSecret('');
-            setEnv(provider.environments?.[0]?.name ?? 'production');
+            setEnv(provider.environments?.[0]?.name);
         }
     };
 
@@ -100,13 +100,18 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
         const normalizedSecret = clientSecret?.trim() ? clientSecret.trim() : undefined;
 
-        onConnect({
+        const connectPayload: Parameters<typeof onConnect>[0] = {
             providerName: provider.name,
             clientId,
             clientSecret: normalizedSecret,
             displayName: connectionName.trim(),
-            env,
-        });
+        };
+
+        if (provider.environments && provider.environments.length > 0) {
+            connectPayload.env = env;
+        }
+
+        onConnect(connectPayload);
         handleOpenChange(false);
     };
 
@@ -253,7 +258,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                                 Cancel
                             </Button>
-                            <Button type="button" onClick={handleConnect} disabled={!clientId || (!isConnected && !clientSecret)}>
+                            <Button type="button" onClick={handleConnect} disabled={!connectionName.trim() || !clientId || (!isConnected && !clientSecret)}>
                                 {isConnected ? 'Reconnect' : 'Connect'}
                             </Button>
                         </DialogFooter>

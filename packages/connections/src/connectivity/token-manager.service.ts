@@ -165,6 +165,10 @@ export class TokenManagerService implements OnModuleDestroy {
             throw new TypeError('Invalid connection: tenantId is missing, empty or not a string');
         }
 
+        if (typeof connection.externalId !== 'string' || !connection.externalId.trim()) {
+            throw new TypeError('Invalid connection: externalId is missing, empty or not a string');
+        }
+
         // 2. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
             connection.tenantId,

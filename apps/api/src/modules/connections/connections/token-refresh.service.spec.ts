@@ -142,9 +142,21 @@ describe('DefaultOAuthRefreshClient', () => {
     );
     mockDb.limit.mockResolvedValue([]); // no connections found
 
-    await expect(
-      client.refresh('testTenant', 'quickbooks', 'test-ext', 'refresh123'),
-    ).rejects.toBeInstanceOf(OAuthRefreshError);
+    try {
+      await client.refresh(
+        'testTenant',
+        'quickbooks',
+        'test-ext',
+        'refresh123',
+      );
+      expect.unreachable('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(OAuthRefreshError);
+      expect((error as OAuthRefreshError).status).toBe(500);
+      expect((error as OAuthRefreshError).message).toContain(
+        'No active connection found',
+      );
+    }
   });
 
   it('should throw an OAuthRefreshError if credential decryption fails', async () => {
@@ -155,9 +167,21 @@ describe('DefaultOAuthRefreshClient', () => {
       new Error('decryption failed'),
     );
 
-    await expect(
-      client.refresh('testTenant', 'quickbooks', 'test-ext', 'refresh123'),
-    ).rejects.toBeInstanceOf(OAuthRefreshError);
+    try {
+      await client.refresh(
+        'testTenant',
+        'quickbooks',
+        'test-ext',
+        'refresh123',
+      );
+      expect.unreachable('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(OAuthRefreshError);
+      expect((error as OAuthRefreshError).status).toBe(500);
+      expect((error as OAuthRefreshError).message).toContain(
+        'decryption failed',
+      );
+    }
   });
 
   it('should throw an OAuthRefreshError with status code if the vendor rejects the refresh', async () => {
