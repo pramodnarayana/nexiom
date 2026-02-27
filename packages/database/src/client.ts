@@ -31,11 +31,5 @@ export function getDb(): DrizzleDb {
     return dbInstance;
 }
 
-// For backwards compatibility where `db` was used directly, we can define a proxy
-// that initializes the DB on the first query.
-export const db = new Proxy({} as DrizzleDb, {
-    get(_target, prop) {
-        return getDb()[prop as keyof DrizzleDb];
-    }
-});
+
 
