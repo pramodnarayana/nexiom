@@ -1,19 +1,22 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from '../modules/identity/users/users.module';
 import { TenantsModule } from '../modules/identity/tenants/tenants.module';
-import { AuthModule } from '../modules/identity/auth/auth.module';
+import { AuthModule } from '@nexiom/auth';
+import { IdentityAuthModule } from '../modules/identity/auth/auth.module';
 import { DbModule } from '../db/db.module';
 import { InvitationsModule } from '../modules/identity/invitations/invitations.module';
 import { SystemAdminModule } from '../modules/identity/system-admin/system-admin.module';
 import { RolesModule } from '../modules/identity/roles/roles.module';
 import { IdentityModule } from '@nexiom/identity';
 import { EmailService } from '../modules/email/email.service.abstract';
+import { DATABASE_CONNECTION } from '@nexiom/database';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../db/schema';
 import { ConnectionsModule } from '../modules/connections/connections.module';
+import { EmailModule } from '../modules/email/email.module';
 
 @Module({
   imports: [
@@ -25,8 +28,13 @@ import { ConnectionsModule } from '../modules/connections/connections.module';
       ],
     }),
     IdentityModule.registerAsync({
-      imports: [ConfigModule, DbModule, AuthModule], // Ensure DbModule is here
-      inject: [ConfigService, 'DRIZZLE_DB', EmailService],
+      imports: [
+        ConfigModule,
+        DbModule,
+        forwardRef(() => AuthModule),
+        EmailModule,
+      ], // Ensure DbModule and EmailModule are here
+      inject: [ConfigService, DATABASE_CONNECTION, EmailService],
       useFactory: (
         configService: ConfigService,
         db: NodePgDatabase<typeof schema>,
@@ -55,7 +63,8 @@ import { ConnectionsModule } from '../modules/connections/connections.module';
         email: emailService,
       }),
     }),
-    AuthModule,
+    forwardRef(() => AuthModule),
+    IdentityAuthModule,
     UsersModule,
     TenantsModule,
     InvitationsModule,

@@ -15,6 +15,7 @@ import {
 import {
   appConnections,
   AppConnectionStatus,
+  DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
 
@@ -47,7 +48,7 @@ export class ConnectorsService {
   private readonly logger = new Logger(ConnectorsService.name);
 
   constructor(
-    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly configService: ConfigService,
   ) {}

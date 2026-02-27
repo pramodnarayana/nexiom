@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Request } from 'express';
 import { TenantsController } from './tenants.controller';
 import { TENANT_PROVIDER, Tenant } from '@nexiom/identity';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard } from '@nexiom/auth';
 import { UpdateTenantStatus } from './tenants.validation';
 
 describe('TenantsController', () => {

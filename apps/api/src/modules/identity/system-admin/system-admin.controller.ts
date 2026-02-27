@@ -23,10 +23,7 @@ import {
   ROLE_PROVIDER,
   IRoleProvider,
 } from '@nexiom/identity';
-import {
-  AuthContext,
-  RequestAuthContext,
-} from '../auth/auth-context.decorator';
+import { AuthContext, RequestAuthContext } from '@nexiom/auth';
 import {
   getRequiredAdminRoleId,
   getRequiredSystemTenantId,
@@ -41,9 +38,7 @@ import {
   CreateSystemInvitationDto,
 } from './system-admin.validation';
 import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe';
-import { RequirePermission } from '../auth/require-permission.decorator';
-import { PermissionsGuard } from '../auth/permissions.guard';
-import { AuthGuard } from '../auth/auth.guard';
+import { RequirePermission, PermissionsGuard, AuthGuard } from '@nexiom/auth';
 
 @Controller('admin')
 @UseGuards(AuthGuard, PermissionsGuard)

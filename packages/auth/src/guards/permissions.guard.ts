@@ -5,14 +5,14 @@ import {
   Logger,
   UnauthorizedException,
   ForbiddenException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import {
   PERMISSION_KEY,
   RequiredPermission,
-} from './require-permission.decorator';
-import { Request } from 'express';
-import { User } from '@nexiom/identity';
+} from "../decorators/require-permission.decorator";
+import { Request } from "express";
+import { User } from "@nexiom/identity";
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -34,13 +34,13 @@ export class PermissionsGuard implements CanActivate {
       .getRequest<Request & { user: User & { permissions: string[] } }>();
 
     if (!user) {
-      this.logger.warn('User not found in request (AuthGuard missing?)');
-      throw new UnauthorizedException('User not authenticated');
+      this.logger.warn("User not found in request (AuthGuard missing?)");
+      throw new UnauthorizedException("User not authenticated");
     }
 
     if (!user.permissions) {
       this.logger.warn(`User ${user.id} has no permissions loaded`);
-      throw new ForbiddenException('User has no permissions assigned');
+      throw new ForbiddenException("User has no permissions assigned");
     }
 
     const hasPerm = requiredPermissions.some((required) =>
@@ -50,13 +50,13 @@ export class PermissionsGuard implements CanActivate {
     if (!hasPerm) {
       const requiredStrings = requiredPermissions
         .map((r) => `${r.resource}:${r.action}`)
-        .join(', ');
+        .join(", ");
 
       this.logger.warn(
-        `Missing required permissions: [${requiredStrings}]. User has: [${user.permissions.join(', ')}]`,
+        `Missing required permissions: [${requiredStrings}]. User has: [${user.permissions.join(", ")}]`,
       );
 
-      throw new ForbiddenException('Missing required permissions');
+      throw new ForbiddenException("Missing required permissions");
     }
 
     return true;
@@ -67,7 +67,7 @@ export class PermissionsGuard implements CanActivate {
     required: RequiredPermission,
   ): boolean {
     // Platform Admin wildcard equivalent
-    if (userPermissions.includes('*')) {
+    if (userPermissions.includes("*")) {
       return true;
     }
 

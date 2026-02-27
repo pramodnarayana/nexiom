@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SystemAdminGuard } from './system-admin.guard';
-import { AuthService } from './auth.service';
+import { AuthService } from '@nexiom/auth';
 import {
   ExecutionContext,
   ForbiddenException,

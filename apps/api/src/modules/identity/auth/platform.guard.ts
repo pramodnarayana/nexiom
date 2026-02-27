@@ -5,10 +5,9 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { AuthService, RequestAuthContext } from '@nexiom/auth';
 import { Request } from 'express';
 import { toWebHeaders } from '../../../common/utils/headers.util';
-import { RequestAuthContext } from './auth-context.decorator';
 
 /**
  * PlatformGuard
@@ -42,12 +41,16 @@ export class PlatformGuard implements CanActivate {
     }
 
     // Attach User to Request for Controller usage
-    (req as Request & { user: unknown }).user = user;
-    req.authContext = {
+    const reqWithAuth = req as Request & {
+      user: unknown;
+      authContext: RequestAuthContext;
+    };
+    reqWithAuth.user = user;
+    reqWithAuth.authContext = {
       headers,
       user,
       session: sessionData.session,
-    } satisfies RequestAuthContext;
+    };
     return true;
   }
 }

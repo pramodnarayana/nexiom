@@ -13,10 +13,12 @@ import {
   getRequiredSystemTenantId,
 } from '../../../constants';
 import { SystemAdminGuard } from '../auth/system-admin.guard';
-import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../auth/permissions.guard';
+import {
+  AuthGuard,
+  PermissionsGuard,
+  type RequestAuthContext,
+} from '@nexiom/auth';
 import { PlatformGuard } from '../auth/platform.guard';
-import type { RequestAuthContext } from '../auth/auth-context.decorator';
 
 vi.mock('../../../constants', () => ({
   getRequiredAdminRoleId: vi.fn(() => 'admin-role-id'),

@@ -23,9 +23,7 @@ import {
 import { InvitationsService } from '../invitations/invitations.service';
 import { CreateUser } from './users.validation';
 import { Request } from 'express';
-import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermission } from '../auth/require-permission.decorator';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '@nexiom/auth';
 
 // Union type to support both real Users and Pending Invitations in the same list
 export type UserListItem =

@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service';
 import {
@@ -70,7 +71,7 @@ describe('ConnectorsService', () => {
         { provide: ProviderRegistryService, useValue: mockProviderRegistry },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EncryptionService, useValue: mockEncryptionService },
-        { provide: 'DRIZZLE_DB', useValue: mockDb as unknown },
+        { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
       ],
     }).compile();
 

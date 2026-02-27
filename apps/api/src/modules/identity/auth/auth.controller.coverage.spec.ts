@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthService, AuthGuard } from '@nexiom/auth';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
-import { AuthGuard } from './auth.guard';
 import { BadRequestException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 import { Response } from 'express';

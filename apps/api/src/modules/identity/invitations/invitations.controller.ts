@@ -1,12 +1,8 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitation, AcceptInvitation } from './invitations.validation';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard, AuthContext, RequestAuthContext } from '@nexiom/auth';
 import { User } from '@nexiom/identity';
-import {
-  AuthContext,
-  RequestAuthContext,
-} from '../auth/auth-context.decorator';
 
 @Controller('invitations')
 export class InvitationsController {

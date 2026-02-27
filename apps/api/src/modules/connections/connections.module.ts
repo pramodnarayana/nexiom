@@ -15,12 +15,31 @@ import { OauthStateService } from './oauth-state.service';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 
+import { DATABASE_CONNECTION } from '@nexiom/database';
+import { type DrizzleDb } from '@nexiom/database';
+
 @Module({
   imports: [DbModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
     ProviderRegistryService,
-    TokenManagerService,
+    {
+      provide: TokenManagerService,
+      useFactory: (
+        db: DrizzleDb,
+        redis: Redis,
+        crypto: EncryptionService,
+        refreshClient: OAuthRefreshClient,
+      ) => {
+        return new TokenManagerService(db, redis, crypto, refreshClient);
+      },
+      inject: [
+        DATABASE_CONNECTION,
+        'REDIS_CLIENT',
+        EncryptionService,
+        OAuthRefreshClient,
+      ],
+    },
     ConnectorsService,
     OauthStateService,
     { provide: EncryptionService, useClass: AesEncryptionService },

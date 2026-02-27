@@ -14,10 +14,7 @@ import {
   Param,
 } from '@nestjs/common';
 import { Response } from 'express';
-import {
-  AuthContext,
-  RequestAuthContext,
-} from '../../identity/auth/auth-context.decorator';
+import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import {
   ProviderRegistryService,
   EncryptionService,
@@ -28,10 +25,10 @@ import { OauthStateService } from '../oauth-state.service';
 import {
   appConnections,
   AppConnectionStatus,
+  DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, count, desc } from 'drizzle-orm';
-import { AuthGuard } from '../../identity/auth/auth.guard';
 
 /** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
 function toKebabSlug(displayName: string): string {
@@ -48,7 +45,7 @@ export class ConnectorsController {
   private readonly logger = new Logger(ConnectorsController.name);
 
   constructor(
-    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,

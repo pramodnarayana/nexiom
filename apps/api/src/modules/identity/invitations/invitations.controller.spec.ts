@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard, type RequestAuthContext } from '@nexiom/auth';
 import { CreateInvitation } from './invitations.validation';
-import type { RequestAuthContext } from '../auth/auth-context.decorator';
 import type { User } from '@nexiom/identity';
 
 describe('InvitationsController', () => {
