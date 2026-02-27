@@ -22,8 +22,8 @@ With the introduction of the Activepieces-inspired Action Engine and Dynamic Cus
 
 - **Actor:** Platform Layer
 - **Flow:**
-  1. A webhook hits `POST /webhooks/revenova?tenantId=envoy_123`.
-  2. The Platform injects the `tenantId` into `AsyncLocalStorage`.
+  1. A webhook hits `POST /webhooks/revenova/envoy-us` (following the `POST /webhooks/{app}/{workspace_slug}` pattern).
+  2. The Platform extracts the `workspace_slug` from the path and injects it into `AsyncLocalStorage`.
   3. The Platform saves the raw, unparsed JSON directly to the DB.
   4. Pushes job to `Inbound_Queue`.
 

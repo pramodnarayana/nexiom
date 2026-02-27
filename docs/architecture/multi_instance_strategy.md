@@ -25,7 +25,7 @@ The `public` schema acts as the Central Registry. It stores the "Map" of where e
 
 Each workspace has its own physically isolated schema (e.g., `tenant_ws_101`). This is where the actual "heavy" data lives.
 
-- **Tables:** `App_Connection`, `Replica_Entity`, `Normalized_Entity`, `Global_Map`.
+- **Tables:** `Replica_Entity`, `Normalized_Entity`, `Global_Map`.
 
 ## 3. Database Schema Definitions
 
@@ -35,6 +35,7 @@ Each workspace has its own physically isolated schema (e.g., `tenant_ws_101`). T
 | :--- | :--- | :--- |
 | `organization` | Billing/Identity Unit | `id`, `name`, `owner_id` |
 | `workspace` | The Schema Pointer | `id`, `org_id`, `name`, `slug`, `db_schema_name` |
+| `app_connection` | OAuth Credentials & Routing | `id`, `workspace_id`, `app_name`, `encrypted_credentials` |
 
 ### Workspace Schema (The Silo)
 
@@ -42,7 +43,6 @@ Each workspace has its own physically isolated schema (e.g., `tenant_ws_101`). T
 
 | Table | Purpose |
 | :--- | :--- |
-| `App_Connection` | Credentials for THAT specific division's Salesforce/QB. |
 | `Replica_Entity` | Raw data synced ONLY for this division. |
 | `Normalized_Entity` | Standardized data for this division. |
 
@@ -69,7 +69,7 @@ How the system handles a request for Envoy US:
    Every Drizzle query from that point forward automatically prepends the schema:
 
    ```sql
-   SELECT * FROM "tenant_ws_101"."App_Connection";
+   SELECT * FROM "tenant_ws_101"."Replica_Entity";
    ```
 
 ## 5. Benefits of this Split

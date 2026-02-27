@@ -71,7 +71,7 @@ These tables act as the "Waiting Rooms" for data entering and leaving the platfo
 | Table Name | Purpose | Key Columns |
 | :--- | :--- | :--- |
 | `sync_log` | Trace history. | `id`, `stitch_id`, `layer`, `status`, `error_payload` |
-| `notification_log`| Failed sync alerts. | `id`, `error_code`, `message`, `status` |
+| `notification_log` | Failed sync alerts. | `id`, `error_code`, `message`, `status` |
 
 ## 3. Implementation Notes
 

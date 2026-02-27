@@ -31,6 +31,16 @@ To maintain a strict separation of concerns, the monorepo is divided into the Pl
 
 ## 2. What code we will be borrowing from Activepieces
 
+> [!WARNING]
+> **Activepieces Licensing & Attribution Requirement**
+>
+> The Activepieces code we are borrowing is **MIT-licensed**. When copying files from the Activepieces repository into the FluxNex monorepo, developers **must**:
+>
+> 1. Preserve the original MIT license headers in every copied file.
+> 2. Include file-level attribution indicating the code originated from Activepieces.
+>
+> Please refer to the [Integration Compliance Checklist](../../docs/compliance/CHECKLIST.md) which provides explicit guidance on verifying preserved headers, including attribution, and recording the source repository and commit hash.
+
 We are not using the Activepieces workflow orchestrator, DAG engine, or scheduling systems. We are only extracting their highly robust `pieces-framework` to act as our HTTP client layer.
 
 Specifically, we are borrowing four things:
@@ -135,17 +145,33 @@ export class OutboundPrepWorker {
     });
 
     for (const route of routes) {
-      // 2. Hydrate the JSON Template with actual canonical data
-      // e.g., "{{vendorName}}" becomes "Acme Logistics"
-      const hydratedProps = hydrateTemplate(route.mappingTemplate, canonicalRecord);
+      try {
+        // 2. Hydrate the JSON Template with actual canonical data
+        // e.g., "{{vendorName}}" becomes "Acme Logistics"
+        const hydratedProps = hydrateTemplate(route.mappingTemplate, canonicalRecord);
 
-      // 3. Send to Layer 5 for HTTP Execution
-      await queue.add('Outbound_Queue', {
-        connectionId: route.connectionId, 
-        targetApp: route.targetApp,       // e.g., 'quickbooks'
-        targetAction: route.targetAction, // e.g., 'create_vendor'
-        propsValue: hydratedProps         // The fully mapped JSON payload
-      });
+        // Ensure hydration resulted in a valid format before dispatching
+        if (!hydratedProps || typeof hydratedProps !== 'object') {
+          throw new Error('Hydration failed: returned invalid mapped payload object.');
+        }
+
+        // 3. Send to Layer 5 for HTTP Execution
+        await queue.add('Outbound_Queue', {
+          connectionId: route.connectionId, 
+          targetApp: route.targetApp,       // e.g., 'quickbooks'
+          targetAction: route.targetAction, // e.g., 'create_vendor'
+          propsValue: hydratedProps         // The fully mapped JSON payload
+        });
+      } catch (error) {
+        processLogger.error('Failed to process outbound route', {
+           connectionId: route.connectionId,
+           targetApp: route.targetApp,
+           targetAction: route.targetAction,
+           canonicalType,
+           error: error.message
+        });
+        // Continue loop to process other mappings, letting this specific route fail
+      }
     }
   }
 }
@@ -166,21 +192,47 @@ export class DeliveryWorker {
     new Worker('Outbound_Queue', async (job: Job) => {
       const { connectionId, targetApp, targetAction, propsValue } = job.data;
 
+      // 0. Idempotency Check
+      if (await isDuplicateDelivery(job.id)) {
+        processLogger.warn(`Duplicate job execution prevented for ${job.id}`);
+        return;
+      }
+
       // 1. Load the Action Definition (Borrowed from Activepieces)
       const actionToRun = getAppAction(targetApp, targetAction);
 
-      // 2. Execute via the Platform Foundation
-      const result = await this.executor.executeAction(
-         connectionId, 
-         actionToRun, 
-         propsValue
-      );
+      try {
+        // 2. Execute via the Platform Foundation
+        const result = await this.executor.executeAction(
+           connectionId, 
+           actionToRun, 
+           propsValue
+        );
 
-      // 3. Save success state to Global_Entity_Map DB...
+        // 3. Save success state to Global_Entity_Map DB
+        await markDeliverySuccess(connectionId, result.id, job.id);
+      } catch (error) {
+        // 4. Handle partial failures and retries
+        await markDeliveryFailure(connectionId, error.message, job.id);
+        throw error; // Let BullMQ handle exponential backoff
+      }
     });
   }
 }
 ```
+
+### State Persistence & Idempotency Strategy
+
+Maintaining the integrity of sync pipelines requires highly durable state persistence.
+
+We use the `Global_Entity_Map` (or dedicated delivery tracking) to capture exactly **what** has synced and **whether** it succeeded:
+
+- **What to persist:** `source_id`, `target_id`, `last_synced_at`, `delivery_status` (`PENDING`, `SUCCESS`, `FAILED`), `attempt_count`, and `last_error`.
+- **When to persist:**
+  - Before a message is dispatched to the executing action, ensure it runs under the protection of `isDuplicateDelivery(job.id)`.
+  - Update to `SUCCESS` via `markDeliverySuccess()` if the HTTP call completes cleanly.
+  - Default to `FAILED` with specific stack traces via `markDeliveryFailure()` if it breaks.
+- **Handling Partial Failures:** A failure increments the `attempt_count` inside the persistence layer. The `throw error` safely kicks the queue payload back to the scheduler, backing off exponentially, while compensating tracking functions keep analytics dashboards in sync.
 
 ## 5. Sync Engine: Application Layer
 
@@ -194,22 +246,37 @@ The Application Layer maintains a registry that allows the Platform Layer to dyn
 
 ```typescript
 // packages/connectors/apps/index.ts
-import { salesforcePiece } from './salesforce';
-import { quickbooksPiece } from './quickbooks';
+import { ConnectorAction } from '../framework';
 
-const apps = {
-  salesforce: salesforcePiece,
-  quickbooks: quickbooksPiece
-};
+// Pre-define available apps for validation without loading all code into memory
+const availableApps = ['salesforce', 'quickbooks'] as const;
+export type SupportedApp = typeof availableApps[number];
 
-export const getAppAction = (appName: string, actionName: string) => {
-  const app = apps[appName];
-  if (!app) throw new Error(`App ${appName} not found`);
+/**
+ * Dynamically loads an app module and retrieves an action.
+ * Uses lazy-loading to optimize memory usage (500+ apps won't all be in RAM).
+ */
+export const getAppAction = async (appName: string, actionName: string): Promise<ConnectorAction> => {
+  if (!availableApps.includes(appName as SupportedApp)) {
+    throw new Error(`App '${appName}' not found. Available apps: ${availableApps.join(', ')}`);
+  }
+  
+  // Lazy load the specific app's piece definition
+  const appModule = await import(`./${appName}`);
+  const app = appModule[`${appName}Piece`]; // e.g. salesforcePiece
   
   const action = app.actions[actionName];
-  if (!action) throw new Error(`Action ${actionName} not found in ${appName}`);
+  if (!action) {
+    const availableActions = Object.keys(app.actions).join(', ');
+    throw new Error(`Action '${actionName}' not found in '${appName}'. Available actions: ${availableActions}`);
+  }
   
-  return action;
+  // Runtime validation ensuring the Action conforms to the Interface
+  if (typeof action.run !== 'function') {
+      throw new Error(`Action '${actionName}' is invalid: missing 'run' execution function.`);
+  }
+  
+  return action as ConnectorAction;
 };
 ```
 
@@ -222,14 +289,17 @@ This configuration is saved securely in the Tenant's isolated database schema an
 ### Database Schema
 
 ```typescript
-// packages/database-schema/src/tenant/field_mapping.ts
-import { pgTable, uuid, varchar, jsonb } from 'drizzle-orm/pg-core';
+// packages/database/src/schema/tenant/field_mapping.ts
+import { pgTable, uuid, varchar, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { appConnection } from './app_connection';
 
 export const fieldMappings = pgTable('field_mapping', {
   id: uuid('id').defaultRandom().primaryKey(),
   
-  // Link to the specific OAuth token to use
-  connectionId: uuid('connection_id').notNull(),
+  // Link to the specific OAuth connection to use (Enforces Referential Integrity)
+  connectionId: uuid('connection_id')
+    .notNull()
+    .references(() => appConnection.id, { onDelete: 'cascade' }),
   
   // Routing rules
   sourceCanonical: varchar('source_canonical').notNull(), // e.g., 'TMS_VENDOR'
@@ -238,6 +308,21 @@ export const fieldMappings = pgTable('field_mapping', {
   
   // The JSON template defined by the Customer in the UI
   mappingTemplate: jsonb('mapping_template').notNull(),
+}, (table) => {
+  return {
+    // 1. Optimize lookups when a webhook arrives (Layer 4 worker queries this)
+    sourceCanonicalIdx: index('idx_field_mapping_source_canonical')
+      .on(table.sourceCanonical),
+      
+    // 2. Composite index for faster joint lookups
+    routingCompositeIdx: index('idx_field_mapping_routing')
+      .on(table.sourceCanonical, table.targetApp, table.targetAction),
+      
+    // 3. Prevent duplicate mappings for the SAME connection + action
+    // A user shouldn't map 'TMS_VENDOR' to 'QB Create Vendor' twice on the same QB account
+    uniqueMappingConstraint: uniqueIndex('unq_connection_mapping_route')
+      .on(table.connectionId, table.sourceCanonical, table.targetApp, table.targetAction)
+  };
 });
 ```
 
