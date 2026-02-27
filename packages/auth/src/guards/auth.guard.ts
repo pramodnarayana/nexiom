@@ -67,7 +67,7 @@ export class AuthGuard implements CanActivate {
         throw error;
       }
       this.logger.error(
-        `[AuthGuard] Error validating session: ${error instanceof Error ? error.message : error}`,
+        `[AuthGuard] Error validating session: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined,
       );
       throw error;
