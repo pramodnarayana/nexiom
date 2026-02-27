@@ -14,6 +14,11 @@ export default defineConfig({
         alias: {
             '@src': path.resolve(__dirname, 'src'),
         },
+        server: {
+            deps: {
+                external: ['@nexiom/auth', '@nexiom/identity'],
+            },
+        },
         env: {
             SYSTEM_TENANT_ID: '00000000-0000-0000-0000-000000000000',
             OWNER_ROLE_ID: 'owner',
@@ -58,6 +63,7 @@ export default defineConfig({
     plugins: [
         // Essential for NestJS DI to work correctly
         swc.vite({
+            module: { type: 'es6' },
             jsc: {
                 parser: {
                     syntax: 'typescript',

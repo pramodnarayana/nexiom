@@ -18,8 +18,6 @@ import { ConfigService } from '@nestjs/config';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { type DrizzleDb } from '@nexiom/database';
 
-// ... other imports
-
 @Module({
   imports: [DbModule],
   controllers: [OAuthCallbackController, ConnectorsController],

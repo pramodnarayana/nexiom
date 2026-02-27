@@ -14,13 +14,13 @@ While moving Auth to a shared directory within the API app (e.g., `apps/api/src/
 
 1. **Strict Dependency Boundaries:** The TypeScript compiler and package manager prevent circular dependencies. The Auth layer cannot accidentally import domain-specific logic from the main application; it remains pure and isolated.
 2. **Universal Portability:** Any future microservice or application within the monorepo can instantly secure its endpoints by running `pnpm add @nexiom/auth` and importing the shared `AuthModule`, ensuring identical security standards system-wide.
-3. **Optimized Build Caching:** In a Turborepo environment, changes to the main API will not trigger a rebuild or re-linting of the Auth package. The `@nexiom/auth` package enjoys a 100% cache hit rate unless its specific logic is modified, significantly speeding up CI/CD pipelines.
+3. **Optimized Build Caching:** In a Turborepo environment, changes to the main API will not trigger a rebuild or re-linting of the Auth package. The `@nexiom/auth` package likely enjoys a very high cache hit rate unless its specific logic is modified, significantly speeding up CI/CD pipelines.
 
 ## Architecture Implementation
 
 ### 1. The `@nexiom/auth` Package Structure
 
-A new package will be scaffolded at `packages/auth` with its own `package.json`, `tsconfig.json`, and standardized exports.
+A new package has been scaffolded at `packages/auth` with its own `package.json`, `tsconfig.json`, and standardized exports.
 
 It will encapsulate:
 

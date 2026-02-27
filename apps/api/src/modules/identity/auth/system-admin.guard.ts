@@ -38,12 +38,16 @@ export class SystemAdminGuard implements CanActivate {
 
     // 4. Attach User to Request for Controller usage
     // We explicitly DO NOT attach a "Tenant" here to prevent accidental leakage.
-    (req as Request & { user: unknown }).user = user;
-    req.authContext = {
+    const reqWithAuth = req as Request & {
+      user: unknown;
+      authContext: RequestAuthContext;
+    };
+    reqWithAuth.user = user;
+    reqWithAuth.authContext = {
       headers,
       user,
       session: sessionData.session,
-    } satisfies RequestAuthContext;
+    };
     return true;
   }
 }

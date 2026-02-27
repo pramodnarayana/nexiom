@@ -1,5 +1,6 @@
 import { forwardRef, Module, Global } from '@nestjs/common';
 import { SystemAdminGuard } from './system-admin.guard';
+import { AuthModule } from '@nexiom/auth';
 import { PlatformGuard } from './platform.guard';
 import { EmailModule } from '../../email/email.module';
 import { AuthController } from './auth.controller';
@@ -14,6 +15,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
     TenantsModule,
     DbModule,
     forwardRef(() => InvitationsModule),
+    AuthModule,
   ],
   controllers: [AuthController],
   providers: [SystemAdminGuard, PlatformGuard],

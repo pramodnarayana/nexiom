@@ -6,6 +6,8 @@ describe('Auth Package Smoke Test', () => {
         // Basic verification that the package structure is correct and vitest can see it
         const mockContext: RequestAuthContext = {
             headers: new Headers(),
+            session: {} as any,
+            user: {} as any,
         };
         expect(mockContext.headers).toBeDefined();
     });

@@ -41,12 +41,16 @@ export class PlatformGuard implements CanActivate {
     }
 
     // Attach User to Request for Controller usage
-    (req as Request & { user: unknown }).user = user;
-    req.authContext = {
+    const reqWithAuth = req as Request & {
+      user: unknown;
+      authContext: RequestAuthContext;
+    };
+    reqWithAuth.user = user;
+    reqWithAuth.authContext = {
       headers,
       user,
       session: sessionData.session,
-    } satisfies RequestAuthContext;
+    };
     return true;
   }
 }

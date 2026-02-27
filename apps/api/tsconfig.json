@@ -23,7 +23,6 @@
     "noImplicitAny": true,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
       "@nexiom/identity": [

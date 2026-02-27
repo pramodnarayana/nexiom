@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,7 +28,12 @@ import { EmailModule } from '../modules/email/email.module';
       ],
     }),
     IdentityModule.registerAsync({
-      imports: [ConfigModule, DbModule, AuthModule, EmailModule], // Ensure DbModule and EmailModule are here
+      imports: [
+        ConfigModule,
+        DbModule,
+        forwardRef(() => AuthModule),
+        EmailModule,
+      ], // Ensure DbModule and EmailModule are here
       inject: [ConfigService, DATABASE_CONNECTION, EmailService],
       useFactory: (
         configService: ConfigService,
@@ -58,7 +63,7 @@ import { EmailModule } from '../modules/email/email.module';
         email: emailService,
       }),
     }),
-    AuthModule,
+    forwardRef(() => AuthModule),
     IdentityAuthModule,
     UsersModule,
     TenantsModule,

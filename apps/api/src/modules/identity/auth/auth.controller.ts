@@ -238,19 +238,19 @@ export class AuthController {
     this.logger.debug(
       `[DEBUG] BetterAuth Method Hit. Method: ${req.method} Path: ${req.path}`,
     );
-    console.log(
-      `[DEBUG_AUTH_CONTROLLER] Received Request: ${req.method} ${req.url}`,
-    );
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const handler = this.authService.getHandler();
 
     if (typeof handler !== 'function') {
-      console.error(
+      this.logger.error(
         `[DEBUG_AUTH_CONTROLLER] ERROR: authService.getHandler() did not return a valid function. Type returned: ${typeof handler}`,
       );
+      return res.status(500).json({ error: 'Invalid auth handler' });
     } else {
-      console.log(`[DEBUG_AUTH_CONTROLLER] Executing toNodeHandler wrapper...`);
+      this.logger.debug(
+        `[DEBUG_AUTH_CONTROLLER] Executing toNodeHandler wrapper...`,
+      );
     }
 
     // Convert Better Auth's standard web handler to Node (Express) handler
