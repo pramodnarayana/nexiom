@@ -10,11 +10,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '@nexiom/auth';
 import { UpdateTenantStatus, UpdateTenantDto } from './tenants.validation';
 import { TENANT_PROVIDER, ITenantProvider } from '@nexiom/identity';
-import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermission } from '../auth/require-permission.decorator';
 
 @Controller('tenants')
 @UseGuards(AuthGuard, PermissionsGuard)

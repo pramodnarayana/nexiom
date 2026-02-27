@@ -2,7 +2,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PlatformGuard } from './platform.guard';
-import { AuthService } from './auth.service';
+import { AuthService } from '@nexiom/auth';
 import {
   ForbiddenException,
   UnauthorizedException,

@@ -1,9 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesController } from './roles.controller';
 import { ROLE_PROVIDER } from '@nexiom/identity';
-import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequestAuthContext } from '../auth/auth-context.decorator';
+import { AuthGuard, PermissionsGuard, RequestAuthContext } from '@nexiom/auth';
 
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 

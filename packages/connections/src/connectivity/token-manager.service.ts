@@ -3,6 +3,7 @@ import { appConnections } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import Redis from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@nexiom/database';
 
 // Abstract contracts — consumers must provide real implementations via DI
 export abstract class EncryptionService {
@@ -39,7 +40,7 @@ export class TokenManagerService implements OnModuleDestroy {
     private readonly logger = new Logger(TokenManagerService.name);
 
     constructor(
-        @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+        @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
         @Inject('REDIS_CLIENT') private readonly redis: Redis,
         private readonly crypto: EncryptionService,
         private readonly oauthClient: OAuthRefreshClient,

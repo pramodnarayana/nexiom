@@ -1,6 +1,4 @@
 import { forwardRef, Module, Global } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthGuard } from './auth.guard';
 import { SystemAdminGuard } from './system-admin.guard';
 import { PlatformGuard } from './platform.guard';
 import { EmailModule } from '../../email/email.module';
@@ -18,7 +16,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
     forwardRef(() => InvitationsModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard, SystemAdminGuard, PlatformGuard],
-  exports: [AuthService, AuthGuard, SystemAdminGuard, PlatformGuard],
+  providers: [SystemAdminGuard, PlatformGuard],
+  exports: [SystemAdminGuard, PlatformGuard],
 })
-export class AuthModule {}
+export class IdentityAuthModule {}

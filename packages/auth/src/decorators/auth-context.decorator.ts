@@ -2,9 +2,9 @@ import {
   createParamDecorator,
   ExecutionContext,
   InternalServerErrorException,
-} from '@nestjs/common';
-import { User, Session } from '@nexiom/identity';
-import { Request } from 'express';
+} from "@nestjs/common";
+import { User, Session } from "@nexiom/identity";
+import { Request } from "express";
 
 export interface RequestAuthContext {
   headers: Headers;
@@ -12,7 +12,7 @@ export interface RequestAuthContext {
   session: Session;
 }
 
-declare module 'express' {
+declare module "express" {
   interface Request {
     authContext?: RequestAuthContext;
   }
@@ -25,7 +25,7 @@ export const AuthContext = createParamDecorator(
 
     if (!authContext) {
       throw new InternalServerErrorException(
-        'AuthContext is not available. Ensure an auth guard (AuthGuard, SystemAdminGuard, or PlatformGuard) is applied to this route.',
+        "AuthContext is not available. Ensure an auth guard (AuthGuard, SystemAdminGuard, or PlatformGuard) is applied to this route.",
       );
     }
 

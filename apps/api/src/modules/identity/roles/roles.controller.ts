@@ -12,13 +12,13 @@ import {
   Controller,
   NotFoundException,
 } from '@nestjs/common';
-import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermission } from '../auth/require-permission.decorator';
 import {
+  AuthGuard,
+  PermissionsGuard,
+  RequirePermission,
   AuthContext,
   RequestAuthContext,
-} from '../auth/auth-context.decorator';
+} from '@nexiom/auth';
 import {
   ROLE_PROVIDER,
   RoleScope,

@@ -1,6 +1,6 @@
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata } from "@nestjs/common";
 
-export const PERMISSION_KEY = 'permissions';
+export const PERMISSION_KEY = "permissions";
 
 export interface RequiredPermission {
   resource: string;

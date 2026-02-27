@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesController } from './roles.controller';
 import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
-import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../auth/permissions.guard';
+import {
+  AuthGuard,
+  PermissionsGuard,
+  type RequestAuthContext,
+} from '@nexiom/auth';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import type { RequestAuthContext } from '../auth/auth-context.decorator';
 import { NotFoundException } from '@nestjs/common';
 
 describe('RolesController', () => {

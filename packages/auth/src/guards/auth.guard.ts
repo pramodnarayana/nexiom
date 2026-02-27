@@ -4,12 +4,12 @@ import {
   Injectable,
   UnauthorizedException,
   Logger,
-} from '@nestjs/common';
-import { AuthService } from './auth.service';
+} from "@nestjs/common";
+import { AuthService } from "../services/auth.service";
 
-import { Request } from 'express';
-import { toWebHeaders } from '../../../common/utils/headers.util';
-import { RequestAuthContext } from './auth-context.decorator';
+import { Request } from "express";
+import { toWebHeaders } from "../utils/headers.util";
+import { RequestAuthContext } from "../decorators/auth-context.decorator";
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -34,8 +34,8 @@ export class AuthGuard implements CanActivate {
         request.headers,
       );
 
-      if (!sessionData || typeof sessionData.session?.token !== 'string') {
-        throw new UnauthorizedException('Invalid or Expired Session');
+      if (!sessionData || typeof sessionData.session?.token !== "string") {
+        throw new UnauthorizedException("Invalid or Expired Session");
       }
 
       const enrichedResult = await this.authService.getEnrichedSession(
@@ -44,7 +44,7 @@ export class AuthGuard implements CanActivate {
 
       if (!enrichedResult) {
         throw new UnauthorizedException(
-          'Session extraction failed during enrichment',
+          "Session extraction failed during enrichment",
         );
       }
 

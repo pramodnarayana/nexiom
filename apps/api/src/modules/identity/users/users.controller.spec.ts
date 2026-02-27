@@ -3,9 +3,8 @@ import { UsersController } from './users.controller';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service';
 import { Request } from 'express';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { CreateUser } from './users.validation';
-import { PermissionsGuard } from '../auth/permissions.guard';
 import {
   NotFoundException,
   InternalServerErrorException,

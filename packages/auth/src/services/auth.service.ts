@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common'; // Removed UnauthorizedException
+import { Inject, Injectable, Logger } from "@nestjs/common"; // Removed UnauthorizedException
 import {
   AUTH_PROVIDER,
   IAuthProvider,
@@ -11,8 +11,8 @@ import {
   ITenantProvider,
   PERMISSION_PROVIDER,
   IPermissionProvider,
-} from '@nexiom/identity';
-import { getRequiredSystemTenantId } from '../../../constants';
+  getSystemTenantId,
+} from "@nexiom/identity";
 
 @Injectable()
 export class AuthService {
@@ -29,11 +29,14 @@ export class AuthService {
     const result = await this.authProvider.login(credentials);
 
     // Enrich with permissions immediately so frontend can perform PBAC
-    let enriched = null;
+    let enriched: {
+      session: Session;
+      user: User & { permissions: string[] };
+    } | null = null;
     try {
       enriched = await this.getEnrichedSession(result.session.token);
     } catch (error) {
-      this.logger.error('Failed to enrich session during login', error);
+      this.logger.error("Failed to enrich session during login", error);
       // Fallback to basic result
       return result;
     }
@@ -103,7 +106,7 @@ export class AuthService {
     try {
       const systemPerms = await this.permissionProvider.getPermissions(
         user,
-        getRequiredSystemTenantId(),
+        getSystemTenantId(),
       );
       for (const p of systemPerms) {
         permissionsSet.add(p);
@@ -152,11 +155,11 @@ export class AuthService {
     try {
       const perms = await this.permissionProvider.getPermissions(
         user,
-        getRequiredSystemTenantId(),
+        getSystemTenantId(),
       );
       // 'manage' implies full access, 'view' implies read access.
       // We check if the user has specific permission OR wildcard.
-      if (perms.includes('*')) return true;
+      if (perms.includes("*")) return true;
       if (perms.includes(`system:${action}`)) return true;
 
       // Legacy mapping (temporarily support old roles via permission check if needed,
@@ -174,8 +177,8 @@ export class AuthService {
   getHandler() {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const handler = (this.authProvider as any).getHandler;
-    if (typeof handler !== 'function') {
-      throw new TypeError('Auth Provider does not support getHandler');
+    if (typeof handler !== "function") {
+      throw new TypeError("Auth Provider does not support getHandler");
     }
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return handler.call(this.authProvider);
@@ -215,7 +218,7 @@ export class AuthService {
     if (this.authProvider.setPassword) {
       return this.authProvider.setPassword(userId, password);
     }
-    throw new Error('Auth Provider does not support setting password');
+    throw new Error("Auth Provider does not support setting password");
   }
 
   /**
@@ -227,7 +230,7 @@ export class AuthService {
       return this.authProvider.resendVerificationEmail(email);
     }
     throw new Error(
-      'Auth Provider does not support resending verification email',
+      "Auth Provider does not support resending verification email",
     );
   }
 }

@@ -9,6 +9,7 @@ import {
   appConnections,
   AppConnectionStatus,
   withTenantGuard,
+  DATABASE_CONNECTION, // Added DATABASE_CONNECTION here
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, desc } from 'drizzle-orm';
@@ -20,7 +21,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
 
   constructor(
     private readonly providerRegistry: ProviderRegistryService,
-    @Inject('DRIZZLE_DB') private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly crypto: EncryptionService,
   ) {}
 

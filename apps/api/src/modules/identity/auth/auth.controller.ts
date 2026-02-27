@@ -10,7 +10,12 @@ import {
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import {
+  AuthService,
+  AuthGuard,
+  AuthContext,
+  RequestAuthContext,
+} from '@nexiom/auth';
 import {
   USER_PROVIDER,
   IUserProvider,
@@ -25,8 +30,6 @@ import { Signup, CompleteInvite } from '../users/users.validation';
 import { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import { InvitationsService } from '../invitations/invitations.service';
-import { AuthGuard } from './auth.guard';
-import { AuthContext, RequestAuthContext } from './auth-context.decorator';
 
 /**
  * Handles authentication-related operations such as user login.
@@ -225,7 +228,6 @@ export class AuthController {
       user: context.user,
     };
   }
-
   /**
    * Catch-All route for standard Better Auth endpoints.
    * Handles /auth/sign-in/social, /auth/callback/*, etc.
@@ -233,10 +235,23 @@ export class AuthController {
    */
   @All('*splat')
   async betterAuth(@Req() req: Request, @Res() res: Response) {
-    this.logger.debug(`BetterAuth Request: ${req.method} ${req.path}`);
+    this.logger.debug(
+      `[DEBUG] BetterAuth Method Hit. Method: ${req.method} Path: ${req.path}`,
+    );
+    console.log(
+      `[DEBUG_AUTH_CONTROLLER] Received Request: ${req.method} ${req.url}`,
+    );
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const handler = this.authService.getHandler();
+
+    if (typeof handler !== 'function') {
+      console.error(
+        `[DEBUG_AUTH_CONTROLLER] ERROR: authService.getHandler() did not return a valid function. Type returned: ${typeof handler}`,
+      );
+    } else {
+      console.log(`[DEBUG_AUTH_CONTROLLER] Executing toNodeHandler wrapper...`);
+    }
 
     // Convert Better Auth's standard web handler to Node (Express) handler
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
