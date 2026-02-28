@@ -243,7 +243,7 @@ describe('OAuthCallbackController', () => {
       'salesforce',
     );
     mockOauthStateService.verifyState.mockReturnValue({
-      tenantId: VALID_TENANT_ID,
+      workspaceId: VALID_TENANT_ID,
       env: 'sandbox',
     });
 

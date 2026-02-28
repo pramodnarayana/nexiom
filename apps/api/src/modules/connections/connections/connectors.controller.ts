@@ -5,6 +5,7 @@ import {
   Body,
   UseGuards,
   Inject,
+  Req,
   InternalServerErrorException,
   BadRequestException,
   Query,
@@ -13,8 +14,12 @@ import {
   HttpException,
   Param,
 } from '@nestjs/common';
-import { Response } from 'express';
-import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { Request, Response } from 'express';
+import { AuthGuard } from '@nexiom/auth';
+import {
+  WorkspaceGuard,
+  type WorkspaceRequest,
+} from '../../../common/auth/guards/workspace.guard';
 import {
   ProviderRegistryService,
   EncryptionService,
@@ -40,7 +45,7 @@ function toKebabSlug(displayName: string): string {
 }
 
 @Controller('connectors')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, WorkspaceGuard)
 export class ConnectorsController {
   private readonly logger = new Logger(ConnectorsController.name);
 
@@ -77,13 +82,13 @@ export class ConnectorsController {
 
   @Get('active')
   async getActiveConnections(
-    @AuthContext() ctx: RequestAuthContext,
+    @Req() req: WorkspaceRequest,
     @Query('limit') limitStr?: string,
     @Query('offset') offsetStr?: string,
   ) {
-    const tenantId = ctx.user?.organizationId;
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) {
+      throw new BadRequestException('workspaceId context is missing');
     }
 
     let limit = Number.parseInt(limitStr || '50', 10);
@@ -98,7 +103,7 @@ export class ConnectorsController {
     }
 
     const whereClause = and(
-      eq(appConnections.tenantId, tenantId),
+      eq(appConnections.workspaceId, workspaceId),
       eq(appConnections.status, AppConnectionStatus.ACTIVE),
     );
 
@@ -145,7 +150,7 @@ export class ConnectorsController {
           .where(whereClause),
       ]);
     } catch (error) {
-      const msg = `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`;
+      const msg = `Failed to get active connections - workspaceId=${workspaceId}, limit=${limit}, offset=${offset}`;
       if (error instanceof Error) {
         this.logger.error(msg, error.stack);
       } else {
@@ -177,20 +182,20 @@ export class ConnectorsController {
 
   @Get(':providerName')
   initiateOAuth(
-    @AuthContext() ctx: RequestAuthContext,
+    @Req() req: WorkspaceRequest,
     @Param('providerName') providerName: string,
     @Query('clientId') clientId: string,
     @Query('env') env: string | undefined,
     @Res() res: Response,
   ) {
-    const tenantId = ctx.user?.organizationId;
+    const workspaceId = req.workspaceId;
 
     if (!providerName || !/^[a-z0-9-]+$/.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
 
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    if (!workspaceId) {
+      throw new BadRequestException('workspaceId context is missing');
     }
 
     if (!clientId || clientId.trim().length === 0) {
@@ -204,7 +209,7 @@ export class ConnectorsController {
     let authorizeUrl: string;
     try {
       const jwtState = this.oauthStateService.generateState(
-        tenantId,
+        workspaceId,
         providerName,
         env,
       );
@@ -233,7 +238,7 @@ export class ConnectorsController {
 
   @Post('oauth-exchange')
   async exchangeCode(
-    @AuthContext() ctx: RequestAuthContext,
+    @Req() req: WorkspaceRequest,
     @Body()
     body: {
       providerName: string;
@@ -247,9 +252,9 @@ export class ConnectorsController {
       vendorParams?: Record<string, string>;
     },
   ) {
-    const tenantId = ctx.user?.organizationId;
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) {
+      throw new BadRequestException('workspaceId context is missing');
     }
 
     const { env, displayName, state, vendorParams, ...restOfBody } = body;
@@ -306,9 +311,9 @@ export class ConnectorsController {
       state,
       restOfBody.providerName,
     );
-    if (decodedState.tenantId !== tenantId) {
+    if (decodedState.workspaceId !== workspaceId) {
       throw new BadRequestException(
-        'State token does not belong to this tenant',
+        'State token does not belong to this workspace',
       );
     }
 
@@ -403,7 +408,7 @@ export class ConnectorsController {
 
     try {
       await this.connectorsService.storeOAuthConnection({
-        tenantId,
+        workspaceId,
         providerName: restOfBody.providerName,
         externalId,
         displayName: trimmedDisplayName,
@@ -429,7 +434,7 @@ export class ConnectorsController {
     }
 
     this.logger.log(
-      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
+      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for workspace ${workspaceId}`,
     );
     return { success: true };
   }

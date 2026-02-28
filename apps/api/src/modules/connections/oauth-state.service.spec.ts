@@ -50,7 +50,7 @@ describe('OauthStateService', () => {
         explicitModule.get<OauthStateService>(OauthStateService);
       const token = explicitService.generateState('tenant', 'provider');
       const verified = explicitService.verifyState(token, 'provider');
-      expect(verified.tenantId).toBe('tenant');
+      expect(verified.workspaceId).toBe('tenant');
     });
 
     it('should throw Error in production if secrets are missing', async () => {
@@ -87,7 +87,7 @@ describe('OauthStateService', () => {
 
       // We can manually decode to verify contents without verifying signature
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
-      expect(decoded.tenantId).toBe(mockTenantId);
+      expect(decoded.workspaceId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
       expect(decoded.env).toBe('sandbox');
       expect(decoded.purpose).toBe('oauth_state_handshake');
@@ -104,7 +104,7 @@ describe('OauthStateService', () => {
       );
 
       const result = service.verifyState(validToken, mockProvider);
-      expect(result).toEqual({ tenantId: mockTenantId, env: 'sandbox' });
+      expect(result).toEqual({ workspaceId: mockTenantId, env: 'sandbox' });
     });
 
     it('should throw UnauthorizedException if token is completely missing', () => {
@@ -128,7 +128,7 @@ describe('OauthStateService', () => {
       // Simulate an internal attacker signing a generic JWT from somewhere else in the app
       const maliciousToken = jwt.sign(
         {
-          tenantId: mockTenantId,
+          workspaceId: mockTenantId,
           provider: mockProvider,
           purpose: 'something_else',
         },
@@ -147,7 +147,7 @@ describe('OauthStateService', () => {
       // Tamper with the payload specifically
       const tamperedPayload = Buffer.from(
         JSON.stringify({
-          tenantId: 'attacker-tenant',
+          workspaceId: 'attacker-tenant',
           provider: mockProvider,
           purpose: 'oauth_state_handshake',
         }),
@@ -165,7 +165,7 @@ describe('OauthStateService', () => {
       // Create a token that expires instantly
       const expiredToken = jwt.sign(
         {
-          tenantId: mockTenantId,
+          workspaceId: mockTenantId,
           provider: mockProvider,
           purpose: 'oauth_state_handshake',
         },

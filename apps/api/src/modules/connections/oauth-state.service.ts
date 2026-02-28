@@ -36,14 +36,14 @@ export class OauthStateService {
    * Generates a short-lived JWT containing the tenantId to be used as the OAuth `state` parameter.
    * This provides stateless CSRF protection and context continuity across the redirect boundary.
    */
-  generateState(tenantId: string, provider: string, env?: string): string {
+  generateState(workspaceId: string, provider: string, env?: string): string {
     const payload: {
-      tenantId: string;
+      workspaceId: string;
       provider: string;
       purpose: string;
       env?: string;
     } = {
-      tenantId,
+      workspaceId,
       provider,
       purpose: 'oauth_state_handshake',
     };
@@ -87,7 +87,7 @@ export class OauthStateService {
   verifyState(
     stateToken: string,
     expectedProvider: string,
-  ): { tenantId: string; env?: string } {
+  ): { workspaceId: string; env?: string } {
     if (!stateToken) {
       this.logger.error('OAuth state token is missing entirely');
       throw new UnauthorizedException('Missing OAuth state token');
@@ -108,13 +108,13 @@ export class OauthStateService {
         throw new UnauthorizedException('OAuth state provider mismatch');
       }
 
-      if (!decoded.tenantId) {
-        this.logger.warn('No tenantId embedded in the state token');
+      if (!decoded.workspaceId) {
+        this.logger.warn('No workspaceId embedded in the state token');
         throw new UnauthorizedException('Malformed OAuth state token');
       }
 
       return {
-        tenantId: decoded.tenantId as string,
+        workspaceId: decoded.workspaceId as string,
         env: decoded.env as string | undefined,
       };
     } catch (error) {

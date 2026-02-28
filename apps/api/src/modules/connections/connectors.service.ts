@@ -30,7 +30,7 @@ export interface ConnectionValueBlob {
 }
 
 export interface StoreOAuthConnectionOptions {
-  tenantId: string;
+  workspaceId: string;
   providerName: string;
   /** User-defined kebab slug e.g. "salesforce-tms" — unique per tenant */
   externalId: string;
@@ -268,7 +268,7 @@ export class ConnectorsService {
    * refreshes its tokens and metadata (e.g. re-connect flow).
    */
   async storeOAuthConnection({
-    tenantId,
+    workspaceId,
     providerName,
     externalId,
     displayName,
@@ -281,7 +281,7 @@ export class ConnectorsService {
       await this.db
         .insert(appConnections)
         .values({
-          tenantId,
+          workspaceId,
           appName: providerName,
           externalId,
           displayName,
@@ -292,7 +292,7 @@ export class ConnectorsService {
           status: AppConnectionStatus.ACTIVE,
         })
         .onConflictDoUpdate({
-          target: [appConnections.tenantId, appConnections.externalId],
+          target: [appConnections.workspaceId, appConnections.externalId],
           set: {
             authType,
             value,

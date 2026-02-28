@@ -29,14 +29,27 @@ export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppC
  *   { clientId, clientSecret, accessToken, refreshToken, data }
  * where `data` holds vendor-specific extras (instance_url, realmId, etc.)
  */
+export const workspaces = pgTable("workspace", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull(),
+    dbSchemaName: varchar("db_schema_name", { length: 255 }).notNull().unique(), // e.g. tenant_ws_101
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+    index("workspace_tenant_idx").on(table.tenantId),
+    uniqueIndex("workspace_tenant_slug_idx").on(table.tenantId, table.slug),
+]);
+
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
 
     // Provider name — validated against PROVIDER_REGISTRY in application code
     appName: varchar('app_name', { length: 100 }).notNull(),
 
-    // User-defined machine-readable identifier — unique per tenant.
+    // User-defined machine-readable identifier — unique per workspace.
     // Auto-generated as kebab-case from displayName on the frontend
     // e.g. "TMS Salesforce" → "tms-salesforce"
     externalId: varchar('external_id', { length: 255 }).notNull(),
@@ -64,7 +77,7 @@ export const appConnections = pgTable('app_connection', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     index('app_name_idx').on(table.appName),
-    index('tenant_status_idx').on(table.tenantId, table.status),
-    // One named connection per tenant — the externalId is the unique discriminator
-    uniqueIndex('tenant_external_id_unique_idx').on(table.tenantId, table.externalId),
+    index('workspace_status_idx').on(table.workspaceId, table.status),
+    // One named connection per workspace — the externalId is the unique discriminator
+    uniqueIndex('workspace_external_id_unique_idx').on(table.workspaceId, table.externalId),
 ]);

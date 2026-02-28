@@ -40,4 +40,4 @@ export type {
 } from '@nexiom/identity/src/schema';
 
 // Engine schema — connection table (single-table Activepieces model)
-export { appConnections } from '@nexiom/database';
+export { appConnections, workspaces } from '@nexiom/database';

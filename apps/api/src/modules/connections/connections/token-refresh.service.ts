@@ -8,7 +8,6 @@ import {
 import {
   appConnections,
   AppConnectionStatus,
-  withTenantGuard,
   DATABASE_CONNECTION, // Added DATABASE_CONNECTION here
   type DrizzleDb,
 } from '@nexiom/database';
@@ -122,14 +121,11 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
         .select({ value: appConnections.value })
         .from(appConnections)
         .where(
-          withTenantGuard(
-            appConnections.tenantId,
-            tenantId,
-            and(
-              eq(appConnections.appName, appName),
-              eq(appConnections.externalId, externalId),
-              eq(appConnections.status, AppConnectionStatus.ACTIVE),
-            ),
+          and(
+            eq(appConnections.workspaceId, tenantId), // Note: Background jobs currently inject workspaceId via the 'tenantId' param interface
+            eq(appConnections.appName, appName),
+            eq(appConnections.externalId, externalId),
+            eq(appConnections.status, AppConnectionStatus.ACTIVE),
           ),
         )
         .orderBy(desc(appConnections.updatedAt), desc(appConnections.id))

@@ -453,7 +453,7 @@ describe('ConnectorsService', () => {
   describe('storeOAuthConnection', () => {
     it('should upsert a single connection row on the happy path', async () => {
       await service.storeOAuthConnection({
-        tenantId: 'tenant-123',
+        workspaceId: 'tenant-123',
         providerName: 'salesforce',
         externalId: 'salesforce-tms',
         displayName: 'TMS Salesforce',
@@ -471,7 +471,7 @@ describe('ConnectorsService', () => {
       const insertedValues = vi.mocked(mockDbValues).mock
         .calls[0]?.[0] as Record<string, unknown>;
       expect(insertedValues).toMatchObject({
-        tenantId: 'tenant-123',
+        workspaceId: 'tenant-123',
         appName: 'salesforce',
         externalId: 'salesforce-tms',
         displayName: 'TMS Salesforce',
@@ -493,7 +493,7 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.storeOAuthConnection({
-          tenantId: 'tenant-123',
+          workspaceId: 'tenant-123',
           providerName: 'salesforce',
           externalId: 'salesforce-tms',
           displayName: 'TMS Salesforce',
