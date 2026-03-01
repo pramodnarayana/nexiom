@@ -1,11 +1,16 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
-import { DrizzleDb } from '@nexiom/database';
-import { connectionStorageRegistry } from '@nexiom/database/src/schema/storage_registry';
-import { eq } from 'drizzle-orm';
+import {
+  DrizzleDb,
+  DATABASE_CONNECTION,
+  connectionStorageRegistry,
+} from '@nexiom/database';
+import { eq, type InferSelectModel } from 'drizzle-orm';
+
+export type HostContext = InferSelectModel<typeof connectionStorageRegistry>;
 
 @Injectable()
 export class StorageResolverService {
-  constructor(@Inject('DATABASE_CONNECTION') private readonly db: DrizzleDb) {}
+  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
 
   /**
    * Resolves the physical PostgreSQL schema name (workspaceId) for a connection.
@@ -31,7 +36,7 @@ export class StorageResolverService {
    * Retrieves host and region context for the connection.
    * Critical for multi-region routing and residency compliance.
    */
-  async getHostContext(connectionId: string) {
+  async getHostContext(connectionId: string): Promise<HostContext> {
     const registryEntry = await this.db
       .select()
       .from(connectionStorageRegistry)

@@ -29,8 +29,7 @@ export interface ActiveConnectionResponse {
     displayName: string;
     authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
     status: 'ACTIVE' | 'INACTIVE' | 'REVOKED' | 'EXPIRED';
-    clientId: string;
-    clientSecret?: string;
+    hasCredentials?: boolean;
     metadata?: Record<string, unknown>;
     expiresAt?: string;
     createdAt: string;
@@ -44,6 +43,11 @@ export async function listProviders(): Promise<ProviderResponse[]> {
 export async function listActiveConnections(): Promise<ActiveConnectionResponse[]> {
     const res = await apiClient.get<{ data: ActiveConnectionResponse[] }>('/connectors/active');
     return res.data.data;
+}
+
+export async function getConnectionCredentials(connectionId: string): Promise<{ clientId: string; clientSecret: string }> {
+    const res = await apiClient.get<{ clientId: string; clientSecret: string }>(`/connectors/active/${connectionId}/credentials`);
+    return res.data;
 }
 
 export async function exchangeOAuthCode(payload: {

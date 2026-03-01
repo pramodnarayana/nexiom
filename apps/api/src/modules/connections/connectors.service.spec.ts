@@ -501,14 +501,89 @@ describe('ConnectorsService', () => {
       });
     });
 
-    it('should throw InternalServerErrorException if the database insert fails', async () => {
+    it('should throw InternalServerErrorException and abort if appConnection insert fails', async () => {
       mockDbInsert.mockReturnValue({
         values: vi.fn().mockReturnValue({
           onConflictDoUpdate: vi.fn().mockReturnValue({
-            returning: vi.fn().mockRejectedValue(new Error('DB write failed')),
+            returning: vi
+              .fn()
+              .mockRejectedValue(new Error('appConnection DB write failed')),
           }),
         }),
       });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          externalId: 'salesforce-tms',
+          displayName: 'TMS Salesforce',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException and abort if connectionStorageRegistry insert fails', async () => {
+      // Mock the appConnection insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi
+              .fn()
+              .mockResolvedValue([{ id: 'mock-connection-id' }]),
+          }),
+        }),
+      });
+
+      // Mock the storageRegistry insert failing:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockRejectedValue(new Error('Registry DB write failed')),
+        }),
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          externalId: 'salesforce-tms',
+          displayName: 'TMS Salesforce',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException and abort if schema creation execute() fails', async () => {
+      // Mock appConnection insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi
+              .fn()
+              .mockResolvedValue([{ id: 'mock-connection-id' }]),
+          }),
+        }),
+      });
+
+      // Mock storageRegistry insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockResolvedValue([{ id: 'mock-registry-id' }]),
+        }),
+      });
+
+      // Mock the raw schema execute command failing:
+      mockDb.execute.mockRejectedValueOnce(new Error('schema create failed'));
 
       await expect(
         service.storeOAuthConnection({

@@ -34,15 +34,12 @@ export const connectionStorageRegistry = pgTable(
       .notNull(),
 
     // 4. Compliance/Region Context
-    regionContext: varchar("region_context", { length: 50 })
-      .default("us-east-1")
-      .notNull(),
+    // Ensures data sovereignty requirements are met
+    regionContext: varchar("region_context", { length: 50 }).notNull(),
 
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    connIdx: index("idx_storage_conn").on(table.connectionId),
-  }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+  }
 );
 ```
 

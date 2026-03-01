@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StorageResolverService } from './storage-resolver.service';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { connectionStorageRegistry } from '@nexiom/database/src/schema/storage_registry';
+import {
+  DATABASE_CONNECTION,
+  connectionStorageRegistry,
+} from '@nexiom/database';
 import { NotFoundException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 

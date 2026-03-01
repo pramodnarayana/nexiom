@@ -7,6 +7,7 @@ import {
   Inject,
   InternalServerErrorException,
   BadRequestException,
+  NotFoundException,
   Query,
   Logger,
   Res,
@@ -160,47 +161,78 @@ export class ConnectorsController {
 
     const total = Number(countResult?.count ?? 0);
 
-    const decryptedConnections = await Promise.all(
-      activeConnections.map(async (conn) => {
-        let clientId = '';
-        let clientSecret = '';
-        try {
-          if (conn.value) {
-            const decrypted = await this.crypto.decrypt(conn.value);
-            const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-            clientId =
-              typeof parsed.clientId === 'string' ? parsed.clientId : '';
-            clientSecret =
-              typeof parsed.clientSecret === 'string'
-                ? parsed.clientSecret
-                : '';
-          }
-        } catch (e) {
-          const errMsg = e instanceof Error ? e.message : String(e);
-          this.logger.warn(
-            `Failed to decrypt credentials for connection ${conn.id}: ${errMsg}`,
-          );
-        }
-        return {
-          id: conn.id,
-          appName: conn.appName,
-          externalId: conn.externalId,
-          displayName: conn.displayName,
-          authType: conn.authType,
-          status: conn.status,
-          metadata: conn.metadata,
-          expiresAt: conn.expiresAt,
-          createdAt: conn.createdAt,
-          updatedAt: conn.updatedAt,
-          clientId,
-          clientSecret,
-        };
-      }),
-    );
+    const listConnections = activeConnections.map((conn) => {
+      const hasCredentials = !!conn.value;
+      return {
+        id: conn.id,
+        appName: conn.appName,
+        externalId: conn.externalId,
+        displayName: conn.displayName,
+        authType: conn.authType,
+        status: conn.status,
+        metadata: conn.metadata,
+        expiresAt: conn.expiresAt,
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
+        hasCredentials,
+      };
+    });
 
     return {
-      data: decryptedConnections,
+      data: listConnections,
       metadata: { limit, offset, count: total },
+    };
+  }
+
+  @Get('active/:id/credentials')
+  async getConnectionCredentials(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('id') connectionId: string,
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('tenantId context is missing');
+    }
+
+    const [connection] = await this.db
+      .select({ id: appConnections.id, value: appConnections.value })
+      .from(appConnections)
+      .where(
+        and(
+          eq(appConnections.id, connectionId),
+          eq(appConnections.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (!connection) {
+      throw new NotFoundException('Connection not found');
+    }
+
+    let clientId = '';
+    let clientSecret = '';
+
+    if (connection.value) {
+      try {
+        const decrypted = await this.crypto.decrypt(connection.value);
+        const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+        clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
+        clientSecret =
+          typeof parsed.clientSecret === 'string' ? parsed.clientSecret : '';
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        this.logger.error(
+          `Failed to decrypt credentials for connection ${connection.id}: ${errMsg}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to decrypt connection credentials',
+        );
+      }
+    }
+
+    return {
+      clientId,
+      clientSecret,
     };
   }
 

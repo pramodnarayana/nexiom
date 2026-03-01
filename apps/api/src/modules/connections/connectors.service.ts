@@ -316,7 +316,9 @@ export class ConnectorsService {
         // If this is a new connection, it needs a physical place to live.
         // We generate a deterministic but unique schema name: e.g. ws_salesforce_123xyz
         const uniqueSuffix = connection.id.substring(0, 8);
-        const workspaceSchemaName = `ws_${providerName.replace(/[^a-z0-9]/g, '')}_${uniqueSuffix}`;
+        const sanitizedProvider = providerName.replaceAll(/[^a-z0-9]/g, '');
+        const finalProviderToken = sanitizedProvider || 'unknown';
+        const workspaceSchemaName = `ws_${finalProviderToken}_${uniqueSuffix}`;
 
         await tx
           .insert(connectionStorageRegistry)
