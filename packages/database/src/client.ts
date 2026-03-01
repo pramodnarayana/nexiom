@@ -1,8 +1,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as tenantSchema from './schema/tenant';
+import * as registrySchema from './schema/storage_registry';
 
-const schemaBundle = { ...tenantSchema };
+const schemaBundle = { ...tenantSchema, ...registrySchema };
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;

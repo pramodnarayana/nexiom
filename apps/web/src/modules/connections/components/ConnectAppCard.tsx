@@ -20,7 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/shared/components/ui/select';
-import type { ProviderResponse, ActiveConnectionResponse } from '../api/connections.api';
+import { type ProviderResponse, type ActiveConnectionResponse, getConnectionCredentials } from '../api/connections.api';
 
 interface ConnectAppCardProps {
     provider: ProviderResponse;
@@ -64,6 +64,19 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
         if (isOpen && connection) {
             // Pre-fill the connection name from the existing connection
             setConnectionName(connection.displayName ?? '');
+            if (connection.hasCredentials) {
+                getConnectionCredentials(connection.id)
+                    .then((creds) => {
+                        setClientId(creds.clientId);
+                        setClientSecret('');
+                    })
+                    .catch(() => {
+                        /* silently ignore */
+                    });
+            } else {
+                setClientId('');
+                setClientSecret('');
+            }
         }
         if (!isOpen) {
             setConnectionName('');

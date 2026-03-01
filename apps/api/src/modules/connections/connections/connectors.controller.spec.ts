@@ -282,6 +282,7 @@ describe('ConnectorsController', () => {
         expiresAt: mockConnectionRow.expiresAt,
         createdAt: mockConnectionRow.createdAt,
         updatedAt: mockConnectionRow.updatedAt,
+        hasCredentials: true,
       };
 
       expect(result).toEqual({

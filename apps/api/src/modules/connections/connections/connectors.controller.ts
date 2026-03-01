@@ -7,11 +7,13 @@ import {
   Inject,
   InternalServerErrorException,
   BadRequestException,
+  NotFoundException,
   Query,
   Logger,
   Res,
   HttpException,
   Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
@@ -113,6 +115,7 @@ export class ConnectorsController {
       expiresAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
+      value: string | null;
     }[];
     let countResult: { count: number | string } | undefined;
 
@@ -132,6 +135,7 @@ export class ConnectorsController {
             expiresAt: appConnections.expiresAt,
             createdAt: appConnections.createdAt,
             updatedAt: appConnections.updatedAt,
+            value: appConnections.value,
           })
           .from(appConnections)
           .where(whereClause)
@@ -158,8 +162,9 @@ export class ConnectorsController {
 
     const total = Number(countResult?.count ?? 0);
 
-    return {
-      data: activeConnections.map((conn) => ({
+    const listConnections = activeConnections.map((conn) => {
+      const hasCredentials = !!conn.value;
+      return {
         id: conn.id,
         appName: conn.appName,
         externalId: conn.externalId,
@@ -170,8 +175,76 @@ export class ConnectorsController {
         expiresAt: conn.expiresAt,
         createdAt: conn.createdAt,
         updatedAt: conn.updatedAt,
-      })),
+        hasCredentials,
+      };
+    });
+
+    return {
+      data: listConnections,
       metadata: { limit, offset, count: total },
+    };
+  }
+
+  @Get('active/:id/credentials')
+  async getConnectionCredentials(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('id', ParseUUIDPipe) connectionId: string,
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('tenantId context is missing');
+    }
+
+    const [connection] = await this.db
+      .select({ id: appConnections.id, value: appConnections.value })
+      .from(appConnections)
+      .where(
+        and(
+          eq(appConnections.id, connectionId),
+          eq(appConnections.tenantId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (!connection) {
+      throw new NotFoundException('Connection not found');
+    }
+
+    let clientId = '';
+    let hasClientSecret = false;
+
+    if (connection.value) {
+      try {
+        const decrypted = await this.crypto.decrypt(connection.value);
+        const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+        clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
+        hasClientSecret =
+          typeof parsed.clientSecret === 'string' &&
+          parsed.clientSecret.length > 0;
+
+        // Emit a structured access audit log indicating that a connection's credentials were reconstructed
+        this.logger.log({
+          message: `User requested valid credentials payload for connection ${connection.id}`,
+          action: 'ACCESS_CREDENTIALS',
+          userId: ctx.user?.id,
+          tenantId,
+          connectionId: connection.id,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        this.logger.error(
+          `Failed to decrypt credentials for connection ${connection.id}: ${errMsg}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to decrypt connection credentials',
+        );
+      }
+    }
+
+    return {
+      clientId,
+      hasClientSecret,
     };
   }
 

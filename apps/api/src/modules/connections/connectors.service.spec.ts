@@ -36,19 +36,32 @@ describe('ConnectorsService', () => {
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
+    transaction: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
-    mockDbOnConflictDoUpdate = vi.fn().mockResolvedValue([]);
-    mockDbValues = vi
-      .fn()
-      .mockReturnValue({ onConflictDoUpdate: mockDbOnConflictDoUpdate });
+    mockDbOnConflictDoUpdate = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
+    });
+
+    mockDbValues = vi.fn().mockReturnValue({
+      onConflictDoUpdate: mockDbOnConflictDoUpdate,
+      onConflictDoNothing: vi.fn(), // for connectionStorageRegistry
+    });
     mockDbInsert = vi.fn().mockReturnValue({ values: mockDbValues });
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockResolvedValue([]),
       insert: mockDbInsert,
+      transaction: vi
+        .fn()
+        .mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+          // Evaluate the inner transaction callback using the main mockDb instance
+          return await cb(mockDb);
+        }),
+      execute: vi.fn().mockResolvedValue(true),
     };
 
     mockEncryptionService = {
@@ -452,6 +465,11 @@ describe('ConnectorsService', () => {
 
   describe('storeOAuthConnection', () => {
     it('should upsert a single connection row on the happy path', async () => {
+      // Mock the returning closure for Drizzle
+      mockDbOnConflictDoUpdate.mockReturnValue({
+        returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
+      });
+
       await service.storeOAuthConnection({
         tenantId: 'tenant-123',
         providerName: 'salesforce',
@@ -463,10 +481,11 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      // Single insert on appConnections — no transaction, no second table
-      expect(mockDbInsert).toHaveBeenCalledTimes(1);
-      expect(mockDbValues).toHaveBeenCalledTimes(1);
-      expect(mockDbOnConflictDoUpdate).toHaveBeenCalledTimes(1);
+      // The transaction will hit the main mockDb context for both inserts
+      // appConnections and connectionStorageRegistry
+      expect(mockDbInsert).toHaveBeenCalledTimes(2);
+      expect(mockDbValues).toHaveBeenCalledTimes(2);
+      expect(mockDbOnConflictDoUpdate).toHaveBeenCalled();
 
       const insertedValues = vi.mocked(mockDbValues).mock
         .calls[0]?.[0] as Record<string, unknown>;
@@ -482,14 +501,89 @@ describe('ConnectorsService', () => {
       });
     });
 
-    it('should throw InternalServerErrorException if the database insert fails', async () => {
+    it('should throw InternalServerErrorException and abort if appConnection insert fails', async () => {
       mockDbInsert.mockReturnValue({
         values: vi.fn().mockReturnValue({
-          onConflictDoUpdate: vi
-            .fn()
-            .mockRejectedValue(new Error('DB write failed')),
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi
+              .fn()
+              .mockRejectedValue(new Error('appConnection DB write failed')),
+          }),
         }),
       });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          externalId: 'salesforce-tms',
+          displayName: 'TMS Salesforce',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException and abort if connectionStorageRegistry insert fails', async () => {
+      // Mock the appConnection insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi
+              .fn()
+              .mockResolvedValue([{ id: 'mock-connection-id' }]),
+          }),
+        }),
+      });
+
+      // Mock the storageRegistry insert failing:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockRejectedValue(new Error('Registry DB write failed')),
+        }),
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'salesforce',
+          externalId: 'salesforce-tms',
+          displayName: 'TMS Salesforce',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException and abort if schema creation execute() fails', async () => {
+      // Mock appConnection insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi
+              .fn()
+              .mockResolvedValue([{ id: 'mock-connection-id' }]),
+          }),
+        }),
+      });
+
+      // Mock storageRegistry insert succeeding:
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi
+            .fn()
+            .mockResolvedValue([{ id: 'mock-registry-id' }]),
+        }),
+      });
+
+      // Mock the raw schema execute command failing:
+      mockDb.execute.mockRejectedValueOnce(new Error('schema create failed'));
 
       await expect(
         service.storeOAuthConnection({

@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   Inject,
+  HttpException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -15,9 +16,12 @@ import {
 import {
   appConnections,
   AppConnectionStatus,
+  connectionStorageRegistry,
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
+import { sql } from 'drizzle-orm';
+import * as crypto from 'crypto';
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
@@ -41,6 +45,8 @@ export interface StoreOAuthConnectionOptions {
   value: string;
   expiresAt: Date;
   metadata: Record<string, unknown>;
+  /** Physical target region for database infrastructure mapping (optional) */
+  regionContext?: string;
 }
 
 @Injectable()
@@ -276,33 +282,89 @@ export class ConnectorsService {
     value,
     expiresAt,
     metadata,
+    regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
+    const finalRegionContext =
+      regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
+
+    if (!finalRegionContext) {
+      this.logger.error(
+        `regionContext is missing and no DEFAULT_REGION_CONTEXT is configured`,
+      );
+      throw new InternalServerErrorException(
+        'Infrastructure configuration error: missing region context',
+      );
+    }
+
     try {
-      await this.db
-        .insert(appConnections)
-        .values({
-          tenantId,
-          appName: providerName,
-          externalId,
-          displayName,
-          authType,
-          value,
-          expiresAt,
-          metadata,
-          status: AppConnectionStatus.ACTIVE,
-        })
-        .onConflictDoUpdate({
-          target: [appConnections.tenantId, appConnections.externalId],
-          set: {
+      await this.db.transaction(async (tx) => {
+        // 1. Insert or update the business connection metadata
+        const [connection] = await tx
+          .insert(appConnections)
+          .values({
+            tenantId,
+            appName: providerName,
+            externalId,
+            displayName,
             authType,
             value,
             expiresAt,
             metadata,
             status: AppConnectionStatus.ACTIVE,
-            updatedAt: new Date(),
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: [appConnections.tenantId, appConnections.externalId],
+            set: {
+              authType,
+              value,
+              expiresAt,
+              metadata,
+              status: AppConnectionStatus.ACTIVE,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: appConnections.id });
+
+        if (!connection) {
+          throw new Error('Failed to retrieve connection ID after upsert');
+        }
+
+        // 2. Provision the Infrastructure Router (Storage Registry)
+        // If this is a new connection, it needs a physical place to live.
+        // We generate a deterministic but unique schema name: e.g. ws_salesforce_abc123...
+        const hashedSuffix = crypto
+          .createHash('sha256')
+          .update(connection.id)
+          .digest('hex')
+          .substring(0, 16);
+        const sanitizedProvider = providerName.replaceAll(/[^a-z0-9]/g, '');
+        const finalProviderToken = sanitizedProvider || 'unknown';
+        const safeToken = finalProviderToken.substring(0, 40);
+        const workspaceSchemaName = `ws_${safeToken}_${hashedSuffix}`;
+
+        await tx
+          .insert(connectionStorageRegistry)
+          .values({
+            connectionId: connection.id,
+            workspaceId: workspaceSchemaName,
+            databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
+            regionContext: finalRegionContext,
+          })
+          .onConflictDoNothing({
+            target: connectionStorageRegistry.connectionId,
+          }); // Already provisioned
+
+        // 3. Actually create the physical PostgreSQL schema on the cluster
+        // Using sql.raw here is safe because workspaceSchemaName is strictly internally generated
+        // from a regex-sanitized string and a UUID slice, not user input.
+        await tx.execute(
+          sql`CREATE SCHEMA IF NOT EXISTS "${sql.raw(workspaceSchemaName)}"`,
+        );
+      });
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,
         error,
