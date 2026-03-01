@@ -4,6 +4,20 @@
     "private": true,
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./framework": {
+            "types": "./dist/framework/index.d.ts",
+            "import": "./dist/framework/index.js",
+            "require": "./dist/framework/index.js",
+            "default": "./dist/framework/index.js"
+        }
+    },
     "scripts": {
         "build": "tsc",
         "test": "vitest run",
