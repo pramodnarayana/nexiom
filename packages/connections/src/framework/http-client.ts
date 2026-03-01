@@ -228,10 +228,18 @@ export class HostHttpClient {
     private async enforceRateLimits(url: string) {
         const domain = new URL(url).hostname;
         const key = `ratelimit:ap_vendor:${domain}`;
-        const calls = await this.redis.incr(key);
-        if (calls === 1) {
-            await this.redis.expire(key, 60); // 1 minute window
-        }
+
+        // Atomic Lua script: INCR + EXPIRE only when the key is newly created (value == 1)
+        // Prevents the INCR/EXPIRE race condition under concurrent callers
+        const luaScript = `
+            local count = redis.call('INCR', KEYS[1])
+            if count == 1 then
+                redis.call('EXPIRE', KEYS[1], ARGV[1])
+            end
+            return count
+        `;
+        const calls = await this.redis.eval(luaScript, 1, key, '60') as number;
+
         if (calls > 1000) {
             await new Promise((res) => setTimeout(res, 3000));
         }
@@ -267,8 +275,20 @@ export class HostHttpClient {
         }
 
         if (typeof parsedBody === 'object' && parsedBody !== null) {
-            // Deep-clone before mutation to avoid modifying the caller's object
-            const sanitized: Record<string, any> = structuredClone(parsedBody);
+            // Deep-clone before mutation to avoid modifying the caller's object.
+            // structuredClone can throw for non-cloneable values (e.g. functions, DOM nodes)
+            // so fall back to JSON round-trip for plain serializable objects.
+            let sanitized: Record<string, any>;
+            try {
+                sanitized = structuredClone(parsedBody);
+            } catch {
+                try {
+                    sanitized = JSON.parse(JSON.stringify(parsedBody)); // NOSONAR — intentional fallback when structuredClone throws DataCloneError
+                } catch {
+                    return body; // Unserializable — return original, don't risk mutation
+                }
+            }
+
             const sensitiveFields = ['password', 'token', 'secret', 'access_token', 'refresh_token', 'client_secret'];
 
             const redactRecursive = (obj: any) => {
