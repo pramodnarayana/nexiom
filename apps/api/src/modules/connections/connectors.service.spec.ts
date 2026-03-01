@@ -36,6 +36,8 @@ describe('ConnectorsService', () => {
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
+    transaction: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
