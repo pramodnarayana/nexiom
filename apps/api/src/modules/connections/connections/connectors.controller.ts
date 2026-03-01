@@ -222,10 +222,15 @@ export class ConnectorsController {
           typeof parsed.clientSecret === 'string' &&
           parsed.clientSecret.length > 0;
 
-        // Emit an access audit log indicating that a connection's credentials were reconstructed
-        this.logger.log(
-          `[AUDIT] User ${ctx.user?.id} in tenant ${tenantId} requested valid credentials payload for connection ${connection.id} at ${new Date().toISOString()}`,
-        );
+        // Emit a structured access audit log indicating that a connection's credentials were reconstructed
+        this.logger.log({
+          message: `User requested valid credentials payload for connection ${connection.id}`,
+          action: 'ACCESS_CREDENTIALS',
+          userId: ctx.user?.id,
+          tenantId,
+          connectionId: connection.id,
+          timestamp: new Date().toISOString(),
+        });
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
         this.logger.error(
