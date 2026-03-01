@@ -210,15 +210,21 @@ export class ConnectorsController {
     }
 
     let clientId = '';
-    let clientSecret = '';
+    let hasClientSecret = false;
 
     if (connection.value) {
       try {
         const decrypted = await this.crypto.decrypt(connection.value);
         const parsed = JSON.parse(decrypted) as Record<string, unknown>;
         clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
-        clientSecret =
-          typeof parsed.clientSecret === 'string' ? parsed.clientSecret : '';
+        hasClientSecret =
+          typeof parsed.clientSecret === 'string' &&
+          parsed.clientSecret.length > 0;
+
+        // Emit an access audit log indicating that a connection's credentials were reconstructed
+        this.logger.log(
+          `[AUDIT] User ${ctx.user?.id} in tenant ${tenantId} requested valid credentials payload for connection ${connection.id} at ${new Date().toISOString()}`,
+        );
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
         this.logger.error(
@@ -232,7 +238,7 @@ export class ConnectorsController {
 
     return {
       clientId,
-      clientSecret,
+      hasClientSecret,
     };
   }
 

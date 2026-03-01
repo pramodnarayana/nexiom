@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
 import { appConnections } from './tenant';
 
 /**

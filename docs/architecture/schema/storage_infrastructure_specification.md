@@ -48,19 +48,20 @@ export const connectionStorageRegistry = pgTable(
 The Resolver is the runtime bridge used by Sync Workers (Layers 1-6) to identify where to read or write data.
 
 ```typescript
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { db } from "@fluxnex/database";
-import { connectionStorageRegistry } from "@fluxnex/database/schema/public";
+import { Injectable, NotFoundException, Inject } from "@nestjs/common";
+import { DrizzleDb, DATABASE_CONNECTION, connectionStorageRegistry } from "@nexiom/database";
 import { eq } from "drizzle-orm";
 
 @Injectable()
 export class StorageResolverService {
+  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+
   /**
    * Resolves the physical PostgreSQL schema name (workspaceId) for a connection.
    * Used by Ingestion and Replica workers for 'SET search_path'.
    */
   async resolveSchemaName(connectionId: string): Promise<string> {
-    const registryEntry = await db
+    const registryEntry = await this.db
       .select({ workspaceId: connectionStorageRegistry.workspaceId })
       .from(connectionStorageRegistry)
       .where(eq(connectionStorageRegistry.connectionId, connectionId))
@@ -80,17 +81,19 @@ export class StorageResolverService {
    * Critical for multi-region routing and residency compliance.
    */
   async getHostContext(connectionId: string) {
-    const entry = await db.query.connectionStorageRegistry.findFirst({
-      where: eq(connectionStorageRegistry.connectionId, connectionId),
-    });
+    const registryEntry = await this.db
+      .select()
+      .from(connectionStorageRegistry)
+      .where(eq(connectionStorageRegistry.connectionId, connectionId))
+      .limit(1);
 
-    if (!entry) {
+    if (registryEntry.length === 0) {
       throw new NotFoundException(
         `No infrastructure registry found for connection: ${connectionId}`,
       );
     }
 
-    return entry;
+    return registryEntry[0];
   }
 }
 ```

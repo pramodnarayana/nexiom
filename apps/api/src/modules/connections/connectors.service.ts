@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   Inject,
+  HttpException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -43,6 +44,8 @@ export interface StoreOAuthConnectionOptions {
   value: string;
   expiresAt: Date;
   metadata: Record<string, unknown>;
+  /** Physical target region for database infrastructure mapping (optional) */
+  regionContext?: string;
 }
 
 @Injectable()
@@ -278,6 +281,7 @@ export class ConnectorsService {
     value,
     expiresAt,
     metadata,
+    regionContext = 'us-east-1',
   }: StoreOAuthConnectionOptions): Promise<void> {
     try {
       await this.db.transaction(async (tx) => {
@@ -326,7 +330,7 @@ export class ConnectorsService {
             connectionId: connection.id,
             workspaceId: workspaceSchemaName,
             databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
-            regionContext: 'us-east-1',
+            regionContext,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,
@@ -340,6 +344,9 @@ export class ConnectorsService {
         );
       });
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,
         error,
