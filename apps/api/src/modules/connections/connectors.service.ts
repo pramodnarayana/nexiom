@@ -21,6 +21,7 @@ import {
   type DrizzleDb,
 } from '@nexiom/database';
 import { sql } from 'drizzle-orm';
+import * as crypto from 'crypto';
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
@@ -281,8 +282,20 @@ export class ConnectorsService {
     value,
     expiresAt,
     metadata,
-    regionContext = 'us-east-1',
+    regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
+    const finalRegionContext =
+      regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
+
+    if (!finalRegionContext) {
+      this.logger.error(
+        `regionContext is missing and no DEFAULT_REGION_CONTEXT is configured`,
+      );
+      throw new InternalServerErrorException(
+        'Infrastructure configuration error: missing region context',
+      );
+    }
+
     try {
       await this.db.transaction(async (tx) => {
         // 1. Insert or update the business connection metadata
@@ -318,11 +331,16 @@ export class ConnectorsService {
 
         // 2. Provision the Infrastructure Router (Storage Registry)
         // If this is a new connection, it needs a physical place to live.
-        // We generate a deterministic but unique schema name: e.g. ws_salesforce_123xyz
-        const uniqueSuffix = connection.id.substring(0, 8);
+        // We generate a deterministic but unique schema name: e.g. ws_salesforce_abc123...
+        const hashedSuffix = crypto
+          .createHash('sha256')
+          .update(connection.id)
+          .digest('hex')
+          .substring(0, 16);
         const sanitizedProvider = providerName.replaceAll(/[^a-z0-9]/g, '');
         const finalProviderToken = sanitizedProvider || 'unknown';
-        const workspaceSchemaName = `ws_${finalProviderToken}_${uniqueSuffix}`;
+        const safeToken = finalProviderToken.substring(0, 40);
+        const workspaceSchemaName = `ws_${safeToken}_${hashedSuffix}`;
 
         await tx
           .insert(connectionStorageRegistry)
@@ -330,7 +348,7 @@ export class ConnectorsService {
             connectionId: connection.id,
             workspaceId: workspaceSchemaName,
             databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
-            regionContext,
+            regionContext: finalRegionContext,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,

@@ -13,6 +13,7 @@ import {
   Res,
   HttpException,
   Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
@@ -187,7 +188,7 @@ export class ConnectorsController {
   @Get('active/:id/credentials')
   async getConnectionCredentials(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('id') connectionId: string,
+    @Param('id', ParseUUIDPipe) connectionId: string,
   ) {
     const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
