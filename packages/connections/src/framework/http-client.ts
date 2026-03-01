@@ -34,9 +34,13 @@ export interface HttpResponse {
     body: any;
 }
 
+/** How long a trace context is retained before it is treated as expired (5 minutes). */
+const EXECUTION_STATE_TTL_MS = 5 * 60 * 1000;
+
 interface InternalExecutionState {
     connectionId: string;
     workspaceId?: string;
+    createdAt: number;
 }
 
 /**
@@ -63,11 +67,30 @@ export class HostHttpClient {
         connectionId: string,
         workspaceId: string,
     ) {
-        this.executionState.set(traceId, { connectionId, workspaceId });
+        this.executionState.set(traceId, { connectionId, workspaceId, createdAt: Date.now() });
+        // Schedule a cleanup pass to evict any stale entries from previous executions
+        setTimeout(() => this.purgeExpiredExecutionState(), EXECUTION_STATE_TTL_MS + 1000);
     }
 
     public static getExecutionCtx(traceId: string): InternalExecutionState | undefined {
-        return this.executionState.get(traceId);
+        const entry = this.executionState.get(traceId);
+        if (!entry) return undefined;
+        if (Date.now() - entry.createdAt > EXECUTION_STATE_TTL_MS) {
+            // Expired — evict on access so the map doesn't retain stale state
+            this.executionState.delete(traceId);
+            return undefined;
+        }
+        return entry;
+    }
+
+    /** Removes all expired entries from the execution state map. */
+    public static purgeExpiredExecutionState() {
+        const now = Date.now();
+        for (const [id, state] of this.executionState.entries()) {
+            if (now - state.createdAt > EXECUTION_STATE_TTL_MS) {
+                this.executionState.delete(id);
+            }
+        }
     }
 
     public static unbindExecutionCtx(traceId: string) {
@@ -118,7 +141,7 @@ export class HostHttpClient {
 
         while (attempt < 3) {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10000 * Math.pow(2, attempt)); // Scaling timeout
+            const timeout = setTimeout(() => controller.abort(), 10_000); // Fixed 10s per-attempt; backoff is handled by the sleep below
 
             try {
                 response = await fetch(url, { ...options, signal: controller.signal });
