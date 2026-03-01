@@ -45,6 +45,16 @@ export function createPiece(params: CreatePieceParams): Piece {
 
     const triggersMap = (params.triggers || []).reduce(
         (acc, trigger) => {
+            // Guard: skip entries that are not valid objects with a non-empty name
+            if (
+                typeof trigger !== 'object' ||
+                trigger === null ||
+                typeof trigger.name !== 'string' ||
+                trigger.name.length === 0
+            ) {
+                console.warn('[createPiece] Skipping invalid trigger entry — missing or non-string name:', trigger);
+                return acc;
+            }
             if (acc[trigger.name]) {
                 throw new InternalServerErrorException(`Duplicate trigger name: ${trigger.name}`);
             }

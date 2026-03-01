@@ -96,9 +96,8 @@ export class HostHttpClient {
         };
 
         // 4. Gateway Database Archival
-        // Instead of taking the first map value, deterministic lookup should be driven by an explicitly passed or thread-local traceId.
-        // For the shim, we assume the caller injects or provides 'x-nexiom-trace-id' in headers, or we use a fallback for now.
-        const traceId = request.headers?.['x-nexiom-trace-id'] || Array.from(HostHttpClient.executionState.keys())[0];
+        // Only use the explicitly injected trace header — no non-deterministic fallback.
+        const traceId = request.headers?.['x-nexiom-trace-id'];
         const trace = traceId ? HostHttpClient.getExecutionCtx(traceId) : undefined;
 
         if (trace?.workspaceId) {
@@ -208,7 +207,7 @@ export class HostHttpClient {
         (method, url, request_headers, request_body, response_status, response_headers, response_body, duration_ms, created_at)
         VALUES (
             ${req.method},
-            ${req.url},
+            ${this.sanitizeUrl(req.url)},
             ${JSON.stringify(this.sanitizeHeaders(req.headers ?? {}))},
             ${JSON.stringify(this.sanitizeBody(req.body ?? {}))},
             ${res.status},
@@ -268,7 +267,8 @@ export class HostHttpClient {
         }
 
         if (typeof parsedBody === 'object' && parsedBody !== null) {
-            const sanitized = { ...parsedBody };
+            // Deep-clone before mutation to avoid modifying the caller's object
+            const sanitized: Record<string, any> = structuredClone(parsedBody);
             const sensitiveFields = ['password', 'token', 'secret', 'access_token', 'refresh_token', 'client_secret'];
 
             const redactRecursive = (obj: any) => {
@@ -286,6 +286,21 @@ export class HostHttpClient {
         }
 
         return body;
+    }
+
+    private sanitizeUrl(url: string): string {
+        const sensitiveParams = new Set(['token', 'access_token', 'refresh_token', 'api_key', 'apikey', 'key', 'signature']);
+        try {
+            const parsed = new URL(url);
+            for (const [paramKey] of parsed.searchParams.entries()) {
+                if (sensitiveParams.has(paramKey.toLowerCase())) {
+                    parsed.searchParams.set(paramKey, '[REDACTED]');
+                }
+            }
+            return parsed.toString();
+        } catch {
+            return url; // Fallback to original on parse errors
+        }
     }
 }
 
