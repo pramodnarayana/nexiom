@@ -51,6 +51,8 @@ interface InternalExecutionState {
 export class HostHttpClient {
     // A global AsyncLocalStorage map or static context to bind the current executing connectionId to generic fetch calls
     private static readonly executionState = new Map<string, InternalExecutionState>();
+    /** Single shared cleanup timer — prevents one timer per bindExecutionCtx call. */
+    private static cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(
         private readonly tokenManager: TokenManagerService,
@@ -68,8 +70,11 @@ export class HostHttpClient {
         workspaceId: string,
     ) {
         this.executionState.set(traceId, { connectionId, workspaceId, createdAt: Date.now() });
-        // Schedule a cleanup pass to evict any stale entries from previous executions
-        setTimeout(() => this.purgeExpiredExecutionState(), EXECUTION_STATE_TTL_MS + 1000);
+        // Start a single shared cleanup interval — only if one isn't already running
+        HostHttpClient.cleanupTimer ??= setInterval(
+            () => HostHttpClient.purgeExpiredExecutionState(),
+            EXECUTION_STATE_TTL_MS + 1000,
+        );
     }
 
     public static getExecutionCtx(traceId: string): InternalExecutionState | undefined {
@@ -83,13 +88,18 @@ export class HostHttpClient {
         return entry;
     }
 
-    /** Removes all expired entries from the execution state map. */
+    /** Removes all expired entries from the execution state map. Stops the interval when the map is empty. */
     public static purgeExpiredExecutionState() {
         const now = Date.now();
         for (const [id, state] of this.executionState.entries()) {
             if (now - state.createdAt > EXECUTION_STATE_TTL_MS) {
                 this.executionState.delete(id);
             }
+        }
+        // Stop the interval when no entries remain to avoid keeping the process alive
+        if (this.executionState.size === 0 && this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+            this.cleanupTimer = null;
         }
     }
 
@@ -124,7 +134,8 @@ export class HostHttpClient {
         const trace = traceId ? HostHttpClient.getExecutionCtx(traceId) : undefined;
 
         if (trace?.workspaceId) {
-            this.archiveToGateway(trace.workspaceId, request, payload, duration);
+            // Pass the effective URL (with merged query params) from the actual fetch call for accurate audit logs
+            this.archiveToGateway(trace.workspaceId, request, payload, duration, response.url);
         }
 
         return payload;
@@ -190,12 +201,16 @@ export class HostHttpClient {
             (options.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
         }
 
-        const urlParams = request.queryParams
-            ? '?' + new URLSearchParams(request.queryParams).toString()
-            : '';
+        const effectiveUrl = new URL(request.url);
+        if (request.queryParams) {
+            // Safely merge params; preserves any query params already in request.url
+            for (const [k, v] of new URLSearchParams(request.queryParams).entries()) {
+                effectiveUrl.searchParams.append(k, v);
+            }
+        }
 
         return {
-            url: `${request.url}${urlParams}`,
+            url: effectiveUrl.toString(),
             options,
         };
     }
@@ -219,6 +234,7 @@ export class HostHttpClient {
         req: HttpRequest,
         res: HttpResponse,
         durationMs: number,
+        effectiveUrl: string,
     ) {
         try {
             // Secure gateway DB storage with proper SQL Identifier sanitization
@@ -230,7 +246,7 @@ export class HostHttpClient {
         (method, url, request_headers, request_body, response_status, response_headers, response_body, duration_ms, created_at)
         VALUES (
             ${req.method},
-            ${this.sanitizeUrl(req.url)},
+            ${this.sanitizeUrl(effectiveUrl)},
             ${JSON.stringify(this.sanitizeHeaders(req.headers ?? {}))},
             ${JSON.stringify(this.sanitizeBody(req.body ?? {}))},
             ${res.status},
