@@ -78,8 +78,8 @@ export type AnyProperty =
     | CheckboxProperty
     | NumberProperty
     | JsonProperty
-    | DropdownProperty<any>
-    | StaticDropdownProperty<any>;
+    | DropdownProperty<unknown>
+    | StaticDropdownProperty<unknown>;
 
 /**
  * Mocks the exact Activepieces Property namespace.

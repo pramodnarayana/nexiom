@@ -1,5 +1,6 @@
 import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
+import { InternalServerErrorException } from '@nestjs/common';
 
 export interface Piece {
     name: string;
@@ -33,10 +34,24 @@ export function createPiece(params: CreatePieceParams): Piece {
     // Convert Action array to a Record for O(1) invocation lookups
     const actionsMap = params.actions.reduce(
         (acc, action) => {
+            if (acc[action.name]) {
+                throw new InternalServerErrorException(`Duplicate action name: ${action.name}`);
+            }
             acc[action.name] = action;
             return acc;
         },
         {} as Record<string, Action>,
+    );
+
+    const triggersMap = (params.triggers || []).reduce(
+        (acc, trigger) => {
+            if (acc[trigger.name]) {
+                throw new InternalServerErrorException(`Duplicate trigger name: ${trigger.name}`);
+            }
+            acc[trigger.name] = trigger;
+            return acc;
+        },
+        {} as Record<string, any>,
     );
 
     return {
@@ -45,7 +60,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         logoUrl: params.logoUrl,
         auth: params.auth,
         actions: actionsMap,
-        triggers: {}, // Stubbed for now
+        triggers: triggersMap,
         description: params.description || '',
         minimumSupportedRelease: params.minimumSupportedRelease,
         maximumSupportedRelease: params.maximumSupportedRelease,

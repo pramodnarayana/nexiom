@@ -1,14 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
     createPiece,
     createAction,
     Property,
     PieceAuth,
     httpClient,
+    initializeHttpClient,
+    HostHttpClient,
     HttpMethod,
 } from './index.js';
+import { TokenManagerService } from '../connectivity/token-manager.service.js';
+import { DrizzleDb } from '@nexiom/database';
+import { Redis } from 'ioredis';
 
 describe('Activepieces Framework Native Shim', () => {
+    beforeEach(() => {
+        // Initialize the singleton to prevent the "accessed before platform initialization" throw
+        initializeHttpClient(
+            {} as TokenManagerService,
+            { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
+            { incr: vi.fn().mockResolvedValue(1), expire: vi.fn() } as unknown as Redis
+        );
+    });
+
     it('Should successfully type-check and instantiate a mocked Salesforce piece exactly like Activepieces', async () => {
         // 1. Mock standard Activepieces Auth Definition
         const auth = PieceAuth.OAuth2({
@@ -65,5 +79,36 @@ describe('Activepieces Framework Native Shim', () => {
 
         // Assert Context runtime mapping mock
         expect(typeof salesforcePiece.actions['create_record'].run).toBe('function');
+
+        // 4. Assert actual HTTP Runtime Passthrough
+        // Spy on the class prototype so Vitest can intercept the method regardless of Proxy wrapping
+        const sendRequestSpy = vi
+            .spyOn(HostHttpClient.prototype, 'sendRequest')
+            .mockResolvedValue({
+                status: 201,
+                headers: {},
+                body: { success: true, id: '001A000001bcdefQAA' },
+            });
+
+        const mockContext = {
+            auth: 'mocked_oauth_token',
+            propsValue: {
+                objectTarget: 'Account',
+                recordData: { Name: 'Acme Corp' },
+            },
+        };
+
+        const result = await salesforcePiece.actions['create_record'].run(mockContext as any);
+
+        expect(sendRequestSpy).toHaveBeenCalledTimes(1);
+        expect(sendRequestSpy).toHaveBeenCalledWith({
+            method: HttpMethod.POST,
+            url: 'https://mock.salesforce.com/services/data/v60.0/sobjects/Account',
+            body: { Name: 'Acme Corp' },
+        });
+
+        expect(result).toEqual({ success: true, id: '001A000001bcdefQAA' });
+
+        sendRequestSpy.mockRestore();
     });
 });

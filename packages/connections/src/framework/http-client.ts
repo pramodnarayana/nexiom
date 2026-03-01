@@ -66,6 +66,10 @@ export class HostHttpClient {
         this.executionState.set(traceId, { connectionId, workspaceId });
     }
 
+    public static getExecutionCtx(traceId: string): InternalExecutionState | undefined {
+        return this.executionState.get(traceId);
+    }
+
     public static unbindExecutionCtx(traceId: string) {
         this.executionState.delete(traceId);
     }
@@ -92,7 +96,11 @@ export class HostHttpClient {
         };
 
         // 4. Gateway Database Archival
-        const trace = Array.from(HostHttpClient.executionState.values())[0];
+        // Instead of taking the first map value, deterministic lookup should be driven by an explicitly passed or thread-local traceId.
+        // For the shim, we assume the caller injects or provides 'x-nexiom-trace-id' in headers, or we use a fallback for now.
+        const traceId = request.headers?.['x-nexiom-trace-id'] || Array.from(HostHttpClient.executionState.keys())[0];
+        const trace = traceId ? HostHttpClient.getExecutionCtx(traceId) : undefined;
+
         if (trace?.workspaceId) {
             this.archiveToGateway(trace.workspaceId, request, payload, duration);
         }
@@ -110,13 +118,18 @@ export class HostHttpClient {
         const { url, options } = this.buildFetchOptions(request, token);
 
         while (attempt < 3) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000 * Math.pow(2, attempt)); // Scaling timeout
+
             try {
-                response = await fetch(url, options);
+                response = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeout);
 
                 this.throwIfTransientError(response);
 
                 return response;
             } catch (err) {
+                clearTimeout(timeout);
                 const errorMessage = err instanceof Error ? err.message : String(err);
                 console.debug(`AP Http Request attempt ${attempt + 1} failed: ${errorMessage}`);
 
@@ -148,7 +161,7 @@ export class HostHttpClient {
                 'Content-Type': 'application/json',
                 ...request.headers,
             },
-            body: request.body ? JSON.stringify(request.body) : undefined,
+            body: request.body === undefined ? undefined : JSON.stringify(request.body),
         };
 
         if (token) {
@@ -186,18 +199,21 @@ export class HostHttpClient {
         durationMs: number,
     ) {
         try {
-            // Direct raw insertion to bypass schema boundaries, ensuring the log always hits the target workspace.
+            // Secure gateway DB storage with proper SQL Identifier sanitization
+            const schemaIdentifier = sql.identifier(workspaceId);
+            const tableIdentifier = sql.identifier('gateway_logs');
+
             await this.db.execute(sql`
-        INSERT INTO ${sql.raw(`"${workspaceId}".gateway_logs`)} 
+        INSERT INTO ${schemaIdentifier}.${tableIdentifier}
         (method, url, request_headers, request_body, response_status, response_headers, response_body, duration_ms, created_at)
         VALUES (
             ${req.method},
             ${req.url},
-            ${JSON.stringify(req.headers ?? {})},
-            ${JSON.stringify(req.body ?? {})},
+            ${JSON.stringify(this.sanitizeHeaders(req.headers ?? {}))},
+            ${JSON.stringify(this.sanitizeBody(req.body ?? {}))},
             ${res.status},
-            ${JSON.stringify(res.headers ?? {})},
-            ${JSON.stringify(res.body ?? {})},
+            ${JSON.stringify(this.sanitizeHeaders(res.headers ?? {}))},
+            ${JSON.stringify(this.sanitizeBody(res.body ?? {}))},
             ${durationMs},
             NOW()
         )
@@ -212,26 +228,91 @@ export class HostHttpClient {
 
     private async enforceRateLimits(url: string) {
         const domain = new URL(url).hostname;
-        // Example primitive sliding window using Redis
-        // In production, use token bucket or Redis Cell for high-throughput
         const key = `ratelimit:ap_vendor:${domain}`;
         const calls = await this.redis.incr(key);
         if (calls === 1) {
             await this.redis.expire(key, 60); // 1 minute window
         }
         if (calls > 1000) {
-            // Delay explicitly to smooth out bursts, avoiding hard 429 errors from standard APIs
             await new Promise((res) => setTimeout(res, 3000));
         }
+    }
+
+    private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+        const sensitiveKeys = new Set(['authorization', 'cookie', 'set-cookie', 'x-api-key', 'bearer']);
+        const sanitized: Record<string, string> = {};
+        for (const [key, value] of Object.entries(headers)) {
+            if (sensitiveKeys.has(key.toLowerCase())) {
+                sanitized[key] = '[REDACTED]';
+            } else {
+                sanitized[key] = value;
+            }
+        }
+        return sanitized;
+    }
+
+    private sanitizeBody(body: any): any {
+        if (!body) return body;
+
+        // If stringified JSON, try to parse and redact
+        let parsedBody = body;
+        let isStringified = false;
+
+        if (typeof body === 'string') {
+            try {
+                parsedBody = JSON.parse(body);
+                isStringified = true;
+            } catch {
+                return body; // Plain text or unparseable, skip redact logic for now
+            }
+        }
+
+        if (typeof parsedBody === 'object' && parsedBody !== null) {
+            const sanitized = { ...parsedBody };
+            const sensitiveFields = ['password', 'token', 'secret', 'access_token', 'refresh_token', 'client_secret'];
+
+            const redactRecursive = (obj: any) => {
+                for (const key in obj) {
+                    if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        redactRecursive(obj[key]);
+                    } else if (sensitiveFields.some(sf => key.toLowerCase().includes(sf))) {
+                        obj[key] = '[REDACTED]';
+                    }
+                }
+            };
+
+            redactRecursive(sanitized);
+            return isStringified ? JSON.stringify(sanitized) : sanitized;
+        }
+
+        return body;
     }
 }
 
 /**
- * Singleton exported as exactly 'httpClient' to match the Activepieces framework signature.
- * Note: Must be injected / initialized by the Host Engine at startup.
+ * Global instance for Activepieces context execution.
+ * Throws an error if accessed before being fully initialized by the host platform to prevent null panics.
  */
-export const httpClient = new HostHttpClient(
-    null as any, // Injected at run-time by NestJS
-    null as any,
-    null as any,
-);
+let _httpClientInstance: HostHttpClient | null = null;
+
+export function initializeHttpClient(
+    tokenManager: TokenManagerService,
+    db: DrizzleDb,
+    redis: Redis
+) {
+    _httpClientInstance ??= new HostHttpClient(tokenManager, db, redis);
+}
+
+export const httpClient = new Proxy({} as HostHttpClient, {
+    get: (_target, prop) => {
+        if (!_httpClientInstance) {
+            throw new InternalServerErrorException('HostHttpClient accessed before platform initialization');
+        }
+        const value = (_httpClientInstance as any)[prop];
+        // Bind methods to the instance to ensure `this` works inside sendRequest
+        if (typeof value === 'function') {
+            return value.bind(_httpClientInstance);
+        }
+        return value;
+    }
+});
