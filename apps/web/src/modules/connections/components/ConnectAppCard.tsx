@@ -64,6 +64,8 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
         if (isOpen && connection) {
             // Pre-fill the connection name from the existing connection
             setConnectionName(connection.displayName ?? '');
+            setClientId(connection.clientId ?? '');
+            setClientSecret(connection.clientSecret ?? '');
         }
         if (!isOpen) {
             setConnectionName('');

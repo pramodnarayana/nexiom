@@ -15,9 +15,11 @@ import {
 import {
   appConnections,
   AppConnectionStatus,
+  connectionStorageRegistry,
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
+import { sql } from 'drizzle-orm';
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
@@ -278,30 +280,63 @@ export class ConnectorsService {
     metadata,
   }: StoreOAuthConnectionOptions): Promise<void> {
     try {
-      await this.db
-        .insert(appConnections)
-        .values({
-          tenantId,
-          appName: providerName,
-          externalId,
-          displayName,
-          authType,
-          value,
-          expiresAt,
-          metadata,
-          status: AppConnectionStatus.ACTIVE,
-        })
-        .onConflictDoUpdate({
-          target: [appConnections.tenantId, appConnections.externalId],
-          set: {
+      await this.db.transaction(async (tx) => {
+        // 1. Insert or update the business connection metadata
+        const [connection] = await tx
+          .insert(appConnections)
+          .values({
+            tenantId,
+            appName: providerName,
+            externalId,
+            displayName,
             authType,
             value,
             expiresAt,
             metadata,
             status: AppConnectionStatus.ACTIVE,
-            updatedAt: new Date(),
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: [appConnections.tenantId, appConnections.externalId],
+            set: {
+              authType,
+              value,
+              expiresAt,
+              metadata,
+              status: AppConnectionStatus.ACTIVE,
+              updatedAt: new Date(),
+            },
+          })
+          .returning({ id: appConnections.id });
+
+        if (!connection) {
+          throw new Error('Failed to retrieve connection ID after upsert');
+        }
+
+        // 2. Provision the Infrastructure Router (Storage Registry)
+        // If this is a new connection, it needs a physical place to live.
+        // We generate a deterministic but unique schema name: e.g. ws_salesforce_123xyz
+        const uniqueSuffix = connection.id.substring(0, 8);
+        const workspaceSchemaName = `ws_${providerName.replace(/[^a-z0-9]/g, '')}_${uniqueSuffix}`;
+
+        await tx
+          .insert(connectionStorageRegistry)
+          .values({
+            connectionId: connection.id,
+            workspaceId: workspaceSchemaName,
+            databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
+            regionContext: 'us-east-1',
+          })
+          .onConflictDoNothing({
+            target: connectionStorageRegistry.connectionId,
+          }); // Already provisioned
+
+        // 3. Actually create the physical PostgreSQL schema on the cluster
+        // Using sql.raw here is safe because workspaceSchemaName is strictly internally generated
+        // from a regex-sanitized string and a UUID slice, not user input.
+        await tx.execute(
+          sql`CREATE SCHEMA IF NOT EXISTS "${sql.raw(workspaceSchemaName)}"`,
+        );
+      });
     } catch (error) {
       this.logger.error(
         `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,

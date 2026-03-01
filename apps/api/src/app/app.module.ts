@@ -17,6 +17,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../db/schema';
 import { ConnectionsModule } from '../modules/connections/connections.module';
 import { EmailModule } from '../modules/email/email.module';
+import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { EmailModule } from '../modules/email/email.module';
     SystemAdminModule,
     RolesModule,
     ConnectionsModule,
+    StorageResolverModule,
   ],
   controllers: [AppController],
   providers: [AppService],

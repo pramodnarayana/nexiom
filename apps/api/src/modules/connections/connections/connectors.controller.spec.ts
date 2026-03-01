@@ -264,6 +264,10 @@ describe('ConnectorsController', () => {
         .mockReturnValueOnce(dataChain)
         .mockReturnValueOnce(countPromise);
 
+      mockEncryptionService.decrypt.mockResolvedValueOnce(
+        '{"clientId":"test-client-id","clientSecret":"test-secret"}',
+      );
+
       const result = await controller.getActiveConnections(mockCtx);
 
       expect(mockDb.select).toHaveBeenCalled();
@@ -282,6 +286,8 @@ describe('ConnectorsController', () => {
         expiresAt: mockConnectionRow.expiresAt,
         createdAt: mockConnectionRow.createdAt,
         updatedAt: mockConnectionRow.updatedAt,
+        clientId: 'test-client-id',
+        clientSecret: 'test-secret',
       };
 
       expect(result).toEqual({

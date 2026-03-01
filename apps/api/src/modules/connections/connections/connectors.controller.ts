@@ -113,6 +113,7 @@ export class ConnectorsController {
       expiresAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
+      value: string | null;
     }[];
     let countResult: { count: number | string } | undefined;
 
@@ -132,6 +133,7 @@ export class ConnectorsController {
             expiresAt: appConnections.expiresAt,
             createdAt: appConnections.createdAt,
             updatedAt: appConnections.updatedAt,
+            value: appConnections.value,
           })
           .from(appConnections)
           .where(whereClause)
@@ -158,19 +160,46 @@ export class ConnectorsController {
 
     const total = Number(countResult?.count ?? 0);
 
+    const decryptedConnections = await Promise.all(
+      activeConnections.map(async (conn) => {
+        let clientId = '';
+        let clientSecret = '';
+        try {
+          if (conn.value) {
+            const decrypted = await this.crypto.decrypt(conn.value);
+            const parsed = JSON.parse(decrypted) as Record<string, unknown>;
+            clientId =
+              typeof parsed.clientId === 'string' ? parsed.clientId : '';
+            clientSecret =
+              typeof parsed.clientSecret === 'string'
+                ? parsed.clientSecret
+                : '';
+          }
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          this.logger.warn(
+            `Failed to decrypt credentials for connection ${conn.id}: ${errMsg}`,
+          );
+        }
+        return {
+          id: conn.id,
+          appName: conn.appName,
+          externalId: conn.externalId,
+          displayName: conn.displayName,
+          authType: conn.authType,
+          status: conn.status,
+          metadata: conn.metadata,
+          expiresAt: conn.expiresAt,
+          createdAt: conn.createdAt,
+          updatedAt: conn.updatedAt,
+          clientId,
+          clientSecret,
+        };
+      }),
+    );
+
     return {
-      data: activeConnections.map((conn) => ({
-        id: conn.id,
-        appName: conn.appName,
-        externalId: conn.externalId,
-        displayName: conn.displayName,
-        authType: conn.authType,
-        status: conn.status,
-        metadata: conn.metadata,
-        expiresAt: conn.expiresAt,
-        createdAt: conn.createdAt,
-        updatedAt: conn.updatedAt,
-      })),
+      data: decryptedConnections,
       metadata: { limit, offset, count: total },
     };
   }

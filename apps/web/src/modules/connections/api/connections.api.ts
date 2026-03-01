@@ -29,6 +29,8 @@ export interface ActiveConnectionResponse {
     displayName: string;
     authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
     status: 'ACTIVE' | 'INACTIVE' | 'REVOKED' | 'EXPIRED';
+    clientId: string;
+    clientSecret?: string;
     metadata?: Record<string, unknown>;
     expiresAt?: string;
     createdAt: string;
