@@ -60,8 +60,8 @@ We do not use the Activepieces workflow runner. Instead, we use the trigger defi
 
 | Trigger Event | Nexiom Physical Action |
 |---------------|------------------------|
-| Webhook Hits  | The `api-gateway` calls `trigger.run()`, generates a `trace_id`, and saves the result to `ws_source.inbound_gateway`. |
-| Poller Runs   | `PollerService` calls `trigger.run()`, loops through the returned array, and creates one row in `ws_source.inbound_gateway` for every record found. |
+| Webhook Hits  | The `WebhooksController` invokes `TriggerExecutorService.runWebhook()`, which verifies the signature, calls `trigger.run()`, and saves results to `ws_source.inbound_gateway`. |
+| Poller Runs   | `PollerService` invokes `TriggerExecutorService.runPoll()`, which acquires a distributed lock, calls `trigger.run()`, ingests records idempotently into `ws_source.inbound_gateway`, and routes failures to the DLQ. |
 
 ---
 
@@ -69,7 +69,7 @@ We do not use the Activepieces workflow runner. Instead, we use the trigger defi
 
 To make triggers "seamless" like the actions we previously implemented:
 
-1. **Trigger Registry:** Add a `getTriggerDefinition(appName, triggerName)` helper to your `packages/connectors/apps` registry.
+1. **Trigger Registry:** Use `getTrigger(appName, triggerName)` from `PieceRegistryService` in `apps/api`. Trigger definitions live in `@nexiom/connections` (under `packages/connections/src/apps/`) and are registered at startup via `REGISTERED_PIECES`.
 2. **The Poller Kernel:** `PollerService` in `apps/api/src/modules/trigger/poller.service.ts` handles polling. It:
    - Queries all active connections with a registered Polling trigger (keyset-paginated).
    - Invokes `TriggerExecutorService.runPoll()` which calls the piece's `run()` function.

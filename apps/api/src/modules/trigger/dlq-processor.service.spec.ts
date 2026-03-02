@@ -246,9 +246,9 @@ describe('DlqProcessorService', () => {
       ...baseJob,
       nextAttemptAt: Date.now() - 1,
     });
-    // Lua eval returns [member, member, ...] (no scores — ZRANGEBYSCORE result)
-    redis.eval.mockResolvedValue([dueJob]);
-    // After promotion via pipeline.lpush, drain picks up the job
+    // Lua returns a count (integer) — the script does LPUSH internally
+    redis.eval.mockResolvedValue(1);
+    // After atomic promotion, drain picks up the job
     redis.rpoplpush.mockResolvedValueOnce(dueJob).mockResolvedValue(null);
 
     const service = new DlqProcessorService(
@@ -259,8 +259,20 @@ describe('DlqProcessorService', () => {
 
     await service.processDlq();
 
-    // Due job promoted to ready queue via pipeline.lpush (Lua script handles ZREM)
-    expect(redis._pipeline.lpush).toHaveBeenCalledWith('dlq:triggers', dueJob);
-    expect(redis._pipeline.exec).toHaveBeenCalled();
+    // Lua eval should have been called with both DLQ keys (delayed + ready)
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('ZRANGEBYSCORE'),
+      2, // numkeys
+      'dlq:triggers:delayed',
+      'dlq:triggers',
+      expect.any(String), // now score
+      expect.any(String), // batch size
+    );
+
+    // JS pipeline.lpush must NOT be called — Lua owns the LPUSH
+    expect(redis._pipeline.lpush).not.toHaveBeenCalledWith(
+      'dlq:triggers',
+      expect.anything(),
+    );
   });
 });

@@ -70,50 +70,102 @@ export class DlqProcessorService {
   @Cron(CronExpression.EVERY_MINUTE)
   async processDlq(): Promise<void> {
     await this.promoteDelayedJobs();
+    await this.reclaimStaleProcessingJobs();
     await this.drainReadyJobs();
   }
 
   /**
-   * Atomically fetches-and-removes delayed jobs whose score ≤ now using a Lua
-   * script so there is no window between read and remove where two instances
-   * can race on the same members.
+   * Fully atomic delayed-job promotion via a single Lua script.
    *
-   * Lua guarantees:
-   *   1. ZRANGEBYSCORE reads the due set in one shot.
-   *   2. ZREM removes exactly those members in the same script execution.
-   *   3. The member list is returned to the caller for LPUSH into DLQ_KEY.
+   * The Lua script:
+   *   1. ZRANGEBYSCORE — read due members (score ≤ now).
+   *   2. For each member, LPUSH into DLQ_KEY (ready queue).
+   *   3. ZREM those members from DLQ_DELAYED_KEY.
+   *
+   * All three steps happen inside one Redis atomic execution, so there is
+   * no window where a process crash can leave items removed from the sorted
+   * set but not yet in the ready queue.
    */
   private async promoteDelayedJobs(): Promise<void> {
     const now = Date.now();
 
-    // Atomic: range + remove in one script; returns [member, member, ...]
     const LUA_PROMOTE = [
       'local members = redis.call("ZRANGEBYSCORE", KEYS[1], "-inf", ARGV[1], "LIMIT", 0, ARGV[2])',
       'if #members > 0 then',
+      '  for _, m in ipairs(members) do',
+      '    redis.call("LPUSH", KEYS[2], m)',
+      '  end',
       '  redis.call("ZREM", KEYS[1], unpack(members))',
       'end',
-      'return members',
+      'return #members',
     ].join('\n');
 
-    const due = (await this.redis.eval(
+    const promoted = (await this.redis.eval(
       LUA_PROMOTE,
-      1,
-      DLQ_DELAYED_KEY,
+      2, // numkeys
+      DLQ_DELAYED_KEY, // KEYS[1]
+      DLQ_KEY, // KEYS[2]
       String(now), // ARGV[1] — upper score bound
       String(this.BATCH_SIZE), // ARGV[2] — page limit
-    )) as string[];
+    )) as number;
 
-    if (!due || due.length === 0) return;
-
-    // Batch-push all due items into the ready queue
-    const pipeline = this.redis.pipeline();
-    for (const raw of due) {
-      pipeline.lpush(DLQ_KEY, raw);
+    if (promoted > 0) {
+      this.logger.debug(
+        `Promoted ${promoted} delayed DLQ job(s) to ready queue`,
+      );
     }
-    await pipeline.exec();
-    this.logger.debug(
-      `Promoted ${due.length} delayed DLQ job(s) to ready queue`,
-    );
+  }
+
+  /**
+   * Reclaims stale in-flight jobs from DLQ_PROCESSING_KEY.
+   *
+   * Jobs are moved via RPOPLPUSH so a crashed pod leaves them in
+   * DLQ_PROCESSING_KEY indefinitely.  Each job payload stores a
+   * `processingStartedAt` timestamp; any item older than STALE_LEASE_MS is
+   * considered abandoned and moved back to DLQ_KEY for retry.
+   *
+   * Atomicity: a Lua script reads the list tail, checks the timestamp, and
+   * if stale performs RPOPLPUSH(processing → ready) in one atomic step.
+   */
+  private readonly STALE_LEASE_MS = 10 * 60 * 1000; // 10 minutes
+
+  private async reclaimStaleProcessingJobs(): Promise<void> {
+    const staleThreshold = Date.now() - this.STALE_LEASE_MS;
+
+    // Lua: inspect the tail of the processing list, move back if stale
+    const LUA_RECLAIM = [
+      'local item = redis.call("LINDEX", KEYS[1], -1)',
+      'if not item then return 0 end',
+      'local ok, parsed = pcall(cjson.decode, item)',
+      'if not ok then',
+      '  -- Unparseable item: remove it rather than loop forever',
+      '  redis.call("LREM", KEYS[1], 1, item)',
+      '  return 0',
+      'end',
+      'if not parsed.processingStartedAt or parsed.processingStartedAt > tonumber(ARGV[1]) then',
+      '  return 0',
+      'end',
+      'redis.call("RPOPLPUSH", KEYS[1], KEYS[2])',
+      'return 1',
+    ].join('\n');
+
+    let reclaimed = 0;
+    // Iterate up to BATCH_SIZE times (one item per eval call for atomicity)
+    for (let i = 0; i < this.BATCH_SIZE; i++) {
+      const moved = (await this.redis.eval(
+        LUA_RECLAIM,
+        2,
+        DLQ_PROCESSING_KEY,
+        DLQ_KEY,
+        String(staleThreshold),
+      )) as number;
+      if (!moved) break;
+      reclaimed++;
+    }
+
+    if (reclaimed > 0) {
+      this.logger.warn(`Reclaimed ${reclaimed} stale in-flight DLQ job(s)`);
+    }
   }
 
   // ─── Drain ready queue ───────────────────────────────────────────────────

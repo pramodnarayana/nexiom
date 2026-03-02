@@ -36,6 +36,8 @@ export interface TriggerRunParams {
 export interface WebhookRunParams extends TriggerRunParams {
   headers: Record<string, string>;
   rawBody: Buffer;
+  /** Parsed webhook body — populated in TriggerContext.payload for trigger logic. */
+  payload?: unknown;
   secret?: string;
 }
 
@@ -99,7 +101,16 @@ export class TriggerExecutorService {
       trigger.verifySignature(headers, rawBody, secret ?? '');
     }
 
-    await this.executeAndIngest(params);
+    // Parse the raw body so TriggerContext.payload is populated for trigger logic.
+    // Falls back to the raw buffer if JSON parsing fails (e.g. plain-text hooks).
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody.toString('utf-8')) as unknown;
+    } catch {
+      payload = rawBody;
+    }
+
+    await this.executeAndIngest({ ...params, payload });
   }
 
   // ─── onEnable / onDisable ────────────────────────────────────────────────
@@ -147,7 +158,7 @@ export class TriggerExecutorService {
   // ─── Core execution ──────────────────────────────────────────────────────
 
   private async executeAndIngest(
-    params: TriggerRunParams,
+    params: TriggerRunParams | WebhookRunParams,
     fromDlqRetry = false,
   ): Promise<void> {
     const context = this.buildContext(params);
@@ -190,23 +201,34 @@ export class TriggerExecutorService {
         record,
       );
 
-      const didInsert = await this.insertGatewayRow({
-        workspaceId: params.workspaceId,
-        appName: params.appName,
-        triggerName: params.triggerName,
-        objectType: params.objectType,
-        payload: record,
-        sourceEventId,
-      });
+      try {
+        const didInsert = await this.insertGatewayRow({
+          workspaceId: params.workspaceId,
+          appName: params.appName,
+          triggerName: params.triggerName,
+          objectType: params.objectType,
+          payload: record,
+          sourceEventId,
+        });
 
-      if (didInsert) {
-        inserted++;
-        // Advance cursor to the source record's own timestamp if available,
-        // falling back to the current ISO time only when the record carries
-        // no recognisable cursor field.  Using the record timestamp avoids
-        // clock-skew issues where the server clock is ahead of the source API.
-        const sourceCursor = extractRecordCursor(record);
-        await store.put('last_cursor', sourceCursor);
+        if (didInsert) {
+          inserted++;
+          const sourceCursor = extractRecordCursor(record);
+          await store.put('last_cursor', sourceCursor);
+        }
+      } catch (err) {
+        // Per-record failure — push to DLQ so it’s retried, then re-throw
+        // so the batch fails visibly and the cursor does not advance past
+        // unprocessed records.
+        this.logger.error('Record ingest failed — pushing to DLQ', {
+          sourceEventId,
+          appName: params.appName,
+          triggerName: params.triggerName,
+          workspaceId: params.workspaceId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await this.pushToDlq(params, err);
+        throw err;
       }
     }
 
@@ -273,11 +295,15 @@ export class TriggerExecutorService {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  private buildContext(params: TriggerRunParams): TriggerContext {
+  private buildContext(
+    params: TriggerRunParams | WebhookRunParams,
+  ): TriggerContext {
     return {
       auth: params.auth,
       propsValue: params.propsValue,
       store: this.buildStore(params),
+      // payload is set for webhook triggers; undefined for polling triggers
+      payload: 'payload' in params ? params.payload : undefined,
       metadata: {
         workspaceId: params.workspaceId,
         triggerName: params.triggerName,
