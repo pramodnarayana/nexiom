@@ -54,7 +54,7 @@ const baseJob = {
   workspaceId: 'ws_1',
   propsValue: {},
   auth: {},
-  failedAt: new Date().toISOString(),
+  failedAt: '2023-01-01T00:00:00.000Z',
   error: 'timeout',
   attempt: 1,
 };

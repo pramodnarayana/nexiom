@@ -291,7 +291,7 @@ export class TriggerExecutorService {
   // ─── DLQ ─────────────────────────────────────────────────────────────────
 
   private async pushToDlq(
-    params: TriggerRunParams,
+    params: TriggerRunParams | WebhookRunParams,
     err: unknown,
   ): Promise<void> {
     const job = JSON.stringify({
@@ -301,6 +301,8 @@ export class TriggerExecutorService {
       objectType: params.objectType,
       propsValue: params.propsValue,
       auth: params.auth, // required for credential reconstruction on retry
+      // Preserve webhook payload for retry (may contain remaining unprocessed records)
+      payload: 'payload' in params ? params.payload : undefined,
       failedAt: new Date().toISOString(),
       error: err instanceof Error ? err.message : String(err),
       attempt: 1,
