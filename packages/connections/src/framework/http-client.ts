@@ -15,6 +15,7 @@ export enum HttpMethod {
     PUT = 'PUT',
     PATCH = 'PATCH',
     DELETE = 'DELETE',
+    HEAD = 'HEAD',
 }
 
 export interface HttpRequest {
@@ -106,6 +107,11 @@ export class HostHttpClient {
 
     public static unbindExecutionCtx(traceId: string) {
         this.executionState.delete(traceId);
+        // Stop the cleanup interval when the map drains to avoid keeping the process alive
+        if (this.executionState.size === 0 && this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+            this.cleanupTimer = null;
+        }
     }
 
     async sendRequest(request: HttpRequest): Promise<HttpResponse> {
@@ -137,8 +143,11 @@ export class HostHttpClient {
         };
 
         // 4. Gateway Database Archival
-        // Only use the explicitly injected trace header — no non-deterministic fallback.
-        const traceId = request.headers?.['x-nexiom-trace-id'];
+        // Case-insensitive lookup for the trace header so clients sending
+        // "X-Trace-Id" (any casing) are handled correctly.
+        const headerEntries = Object.entries(request.headers ?? {});
+        const traceEntry = headerEntries.find(([k]) => k.toLowerCase() === 'x-trace-id');
+        const traceId = traceEntry?.[1];
         const trace = traceId ? HostHttpClient.getExecutionCtx(traceId) : undefined;
 
         if (trace?.workspaceId) {
@@ -196,14 +205,43 @@ export class HostHttpClient {
     }
 
     private buildFetchOptions(request: HttpRequest, token?: string): { url: string; options: RequestInit } {
-        const options: RequestInit = {
-            method: request.method,
-            headers: {
-                'Content-Type': 'application/json',
-                ...request.headers,
-            },
-            body: request.body === undefined ? undefined : JSON.stringify(request.body),
-        };
+        const isBodylessMethod = request.method === HttpMethod.GET || request.method === HttpMethod.HEAD;
+
+        // Determine whether the body needs JSON serialisation.
+        // Plain objects/arrays get JSON.stringify + Content-Type: application/json.
+        // Native body types (FormData, URLSearchParams, string, Blob, ArrayBuffer,
+        // TypedArray, ReadableStream) are passed through unchanged so the runtime
+        // can set the correct Content-Type (e.g. multipart/form-data with boundary).
+        const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+            v !== null &&
+            typeof v === 'object' &&
+            !(v instanceof FormData) &&
+            !(v instanceof URLSearchParams) &&
+            !(v instanceof Blob) &&
+            !(v instanceof ArrayBuffer) &&
+            !ArrayBuffer.isView(v) &&
+            !(typeof ReadableStream !== 'undefined' && v instanceof ReadableStream);
+
+        const callerHasContentType = Object.keys(request.headers ?? {}).some(
+            (k) => k.toLowerCase() === 'content-type',
+        );
+
+        const headers: Record<string, string> = { ...request.headers };
+        let body: RequestInit['body'];
+
+        if (!isBodylessMethod && request.body !== undefined) {
+            if (isPlainObject(request.body)) {
+                body = JSON.stringify(request.body);
+                if (!callerHasContentType) {
+                    headers['Content-Type'] = 'application/json';
+                }
+            } else {
+                // Non-plain body: pass through as-is; do not touch Content-Type
+                body = request.body as RequestInit['body'];
+            }
+        }
+
+        const options: RequestInit = { method: request.method, headers, body };
 
         if (token) {
             (options.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
