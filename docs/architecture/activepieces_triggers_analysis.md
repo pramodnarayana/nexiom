@@ -61,7 +61,7 @@ We do not use the Activepieces workflow runner. Instead, we use the trigger defi
 | Trigger Event | Nexiom Physical Action |
 |---------------|------------------------|
 | Webhook Hits  | The `api-gateway` calls `trigger.run()`, generates a `trace_id`, and saves the result to `ws_source.inbound_gateway`. |
-| Poller Runs   | The engine worker calls `trigger.run()`, loops through the returned array, and creates one row in `ws_source.inbound_gateway` for every record found. |
+| Poller Runs   | `PollerService` calls `trigger.run()`, loops through the returned array, and creates one row in `ws_source.inbound_gateway` for every record found. |
 
 ---
 

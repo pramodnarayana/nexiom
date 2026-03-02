@@ -26,9 +26,8 @@ const PAGE_SIZE = 200;
  *  1. Pages through active connections using keyset pagination (created_at +
  *     workspace_id) so no single query loads unbounded rows.
  *  2. Dispatches each connection to TriggerExecutorService.runPoll().
- *  3. When runPoll() returns false (lock contention), logs structured
- *     telemetry and re-queues the connection for a short-delayed retry via
- *     the DLQ delayed sorted-set so the skip is observable and recoverable.
+ *  3. When runPoll() returns false (lock contention), logs structured telemetry
+ *     but does NOT re-queue the connection — the next cron tick will retry it.
  *
  * Connections are processed with bounded parallelism (MAX_CONCURRENCY).
  */

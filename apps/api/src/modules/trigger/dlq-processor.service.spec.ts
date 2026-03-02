@@ -7,7 +7,7 @@ import type { PieceRegistryService } from './piece-registry.service';
 
 /**
  * Minimal Redis mock that supports the DLQ surface:
- *   zpopmin, pipeline, rpoplpush, lrem, lpush, zadd
+ *   eval (Lua), pipeline, rpoplpush, lrem, lpush, zadd
  */
 function makeRedis() {
   const pipeline = {
@@ -17,8 +17,8 @@ function makeRedis() {
   };
 
   return {
-    // delayed-set promotion (atomic remove-and-return)
-    zpopmin: vi.fn().mockResolvedValue([]), // returns [member, score, ...]
+    // delayed-set promotion (Lua eval)
+    eval: vi.fn().mockResolvedValue([]), // returns [member, member, ...]
     pipeline: vi.fn().mockReturnValue(pipeline),
     // ready-queue drain (atomic pop)
     rpoplpush: vi.fn().mockResolvedValue(null),
@@ -112,7 +112,7 @@ describe('DlqProcessorService', () => {
     expect(redis.lrem).toHaveBeenCalled();
   });
 
-  it('should requeue job without incrementing attempt when lock is held (runPoll=false)', async () => {
+  it('should defer job to delayed sorted-set (not immediate lpush) when lock is held (runPoll=false)', async () => {
     redis = makeRedis();
     executor = makeExecutor(false); // lock contention
     registry = makeRegistry();
@@ -128,16 +128,18 @@ describe('DlqProcessorService', () => {
 
     await service.processDlq();
 
-    // Job MUST be pushed back, not lost
-    expect(redis.lpush).toHaveBeenCalledWith(
-      'dlq:triggers',
-      JSON.stringify(baseJob),
+    // Job must be scheduled in the delayed set (not immediately re-queued to DLQ_KEY)
+    // so drainReadyJobs cannot hot-loop on it within the same cron pass.
+    expect(redis.zadd).toHaveBeenCalledWith(
+      'dlq:triggers:delayed',
+      expect.any(Number), // score = Date.now() + delay
+      expect.stringContaining('"appName":"salesforce"'), // payload contains job data
     );
-    // Attempt must NOT have incremented
-    const requeued = JSON.parse(
-      (redis.lpush.mock.calls[0] as string[])[1],
-    ) as typeof baseJob;
-    expect(requeued.attempt).toBe(baseJob.attempt);
+    // Must NOT lpush directly onto the ready queue
+    expect(redis.lpush).not.toHaveBeenCalledWith(
+      'dlq:triggers',
+      expect.anything(),
+    );
   });
 
   it('should discard unparseable jobs and log a fingerprint (not the raw payload)', async () => {
@@ -244,9 +246,8 @@ describe('DlqProcessorService', () => {
       ...baseJob,
       nextAttemptAt: Date.now() - 1,
     });
-    const score = String(Date.now() - 1);
-    // zpopmin returns alternating [member, score] pairs
-    redis.zpopmin.mockResolvedValue([dueJob, score]);
+    // Lua eval returns [member, member, ...] (no scores — ZRANGEBYSCORE result)
+    redis.eval.mockResolvedValue([dueJob]);
     // After promotion via pipeline.lpush, drain picks up the job
     redis.rpoplpush.mockResolvedValueOnce(dueJob).mockResolvedValue(null);
 
@@ -258,7 +259,7 @@ describe('DlqProcessorService', () => {
 
     await service.processDlq();
 
-    // Due job promoted to ready queue via pipeline.lpush (no zrem needed — zpopmin already removed it)
+    // Due job promoted to ready queue via pipeline.lpush (Lua script handles ZREM)
     expect(redis._pipeline.lpush).toHaveBeenCalledWith('dlq:triggers', dueJob);
     expect(redis._pipeline.exec).toHaveBeenCalled();
   });

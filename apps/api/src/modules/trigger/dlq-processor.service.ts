@@ -74,46 +74,36 @@ export class DlqProcessorService {
   }
 
   /**
-   * Atomically removes delayed jobs whose score ≤ now from the sorted set
-   * and re-queues them into the ready DLQ.
+   * Atomically fetches-and-removes delayed jobs whose score ≤ now using a Lua
+   * script so there is no window between read and remove where two instances
+   * can race on the same members.
    *
-   * ZPOPMIN is atomic (remove + return in one command), avoiding the
-   * ZRANGEBYSCORE → ZREM race where two instances could both read the
-   * same members before either had removed them.
-   *
-   * We pop up to BATCH_SIZE items and discard any whose score is in the
-   * future (shouldn't happen, but guards against clock drift).
+   * Lua guarantees:
+   *   1. ZRANGEBYSCORE reads the due set in one shot.
+   *   2. ZREM removes exactly those members in the same script execution.
+   *   3. The member list is returned to the caller for LPUSH into DLQ_KEY.
    */
   private async promoteDelayedJobs(): Promise<void> {
     const now = Date.now();
 
-    // [member, score, member, score, ...] alternating
-    const popped = await this.redis.zpopmin(DLQ_DELAYED_KEY, this.BATCH_SIZE);
-    if (popped.length === 0) return;
+    // Atomic: range + remove in one script; returns [member, member, ...]
+    const LUA_PROMOTE = [
+      'local members = redis.call("ZRANGEBYSCORE", KEYS[1], "-inf", ARGV[1], "LIMIT", 0, ARGV[2])',
+      'if #members > 0 then',
+      '  redis.call("ZREM", KEYS[1], unpack(members))',
+      'end',
+      'return members',
+    ].join('\n');
 
-    // Pair up [member, score] tuples and filter by due time
-    const due: string[] = [];
-    const future: Array<[string, number]> = [];
-    for (let i = 0; i < popped.length; i += 2) {
-      const member = popped[i];
-      const score = Number(popped[i + 1]);
-      if (score <= now) {
-        due.push(member);
-      } else {
-        future.push([member, score]); // popped too early — re-add
-      }
-    }
+    const due = (await this.redis.eval(
+      LUA_PROMOTE,
+      1,
+      DLQ_DELAYED_KEY,
+      String(now), // ARGV[1] — upper score bound
+      String(this.BATCH_SIZE), // ARGV[2] — page limit
+    )) as string[];
 
-    // Re-add any items whose score is in the future (clock skew guard)
-    if (future.length > 0) {
-      const pipeline = this.redis.pipeline();
-      for (const [member, score] of future) {
-        pipeline.zadd(DLQ_DELAYED_KEY, score, member);
-      }
-      await pipeline.exec();
-    }
-
-    if (due.length === 0) return;
+    if (!due || due.length === 0) return;
 
     // Batch-push all due items into the ready queue
     const pipeline = this.redis.pipeline();
@@ -181,17 +171,33 @@ export class DlqProcessorService {
     };
 
     try {
-      const executed = await this.executor.runPoll(params);
+      const executed = await this.executor.runPoll(
+        params,
+        /* fromDlqRetry */ true,
+      );
 
       if (!executed) {
-        // Lock contention — requeue immediately (no increment) so it's retried
-        // on the next cron tick once the lock is released.
-        this.logger.debug('DLQ job skipped (lock contention) — requeueing', {
-          appName: job.appName,
-          triggerName: job.triggerName,
+        // Lock contention — defer via delayed sorted-set (MIN_RETRY_DELAY_MS)
+        // so drainReadyJobs cannot pick this up again in the same cron pass.
+        const delay = 5_000; // 5 s back-off before the next cron tick
+        const retryPayload = JSON.stringify({
+          ...job,
+          nextAttemptAt: Date.now() + delay,
         });
         await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-        await this.redis.lpush(DLQ_KEY, raw);
+        await this.redis.zadd(
+          DLQ_DELAYED_KEY,
+          Date.now() + delay,
+          retryPayload,
+        );
+        this.logger.debug(
+          'DLQ job deferred (lock contention) — scheduled in delayed set',
+          {
+            appName: job.appName,
+            triggerName: job.triggerName,
+            delayMs: delay,
+          },
+        );
         return;
       }
 

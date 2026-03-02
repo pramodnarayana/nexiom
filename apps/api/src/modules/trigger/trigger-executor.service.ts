@@ -61,7 +61,16 @@ export class TriggerExecutorService {
 
   // ─── Polling ────────────────────────────────────────────────────────────
 
-  async runPoll(params: TriggerRunParams): Promise<boolean> {
+  /**
+   * @param fromDlqRetry When true the caller is the DLQ processor retrying a
+   *   previously failed job. Any trigger.run() failure is re-thrown so the DLQ
+   *   processor can increment the attempt counter and schedule a delayed retry.
+   *   When false (normal poller path) failures are pushed as a new DLQ job.
+   */
+  async runPoll(
+    params: TriggerRunParams,
+    fromDlqRetry = false,
+  ): Promise<boolean> {
     const lockKey = `lock:poll:${params.workspaceId}:${params.triggerName}`;
     const token = await this.acquireLock(lockKey);
     if (!token) {
@@ -73,7 +82,7 @@ export class TriggerExecutorService {
     }
 
     try {
-      await this.executeAndIngest(params);
+      await this.executeAndIngest(params, fromDlqRetry);
       return true;
     } finally {
       await this.releaseLock(lockKey, token);
@@ -137,13 +146,22 @@ export class TriggerExecutorService {
 
   // ─── Core execution ──────────────────────────────────────────────────────
 
-  private async executeAndIngest(params: TriggerRunParams): Promise<void> {
+  private async executeAndIngest(
+    params: TriggerRunParams,
+    fromDlqRetry = false,
+  ): Promise<void> {
     const context = this.buildContext(params);
     let records: unknown[];
 
     try {
       records = await params.trigger.run(context);
     } catch (err) {
+      if (fromDlqRetry) {
+        // DLQ processor owns retry counting — re-throw so it can increment
+        // the attempt counter and schedule a delayed retry instead of
+        // creating a new attempt=1 job that bypasses the existing counter.
+        throw err;
+      }
       this.logger.error('trigger.run() failed — pushing to DLQ', {
         appName: params.appName,
         triggerName: params.triggerName,
