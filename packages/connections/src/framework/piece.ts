@@ -1,5 +1,6 @@
 import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
+import { Trigger } from './trigger.js';
 import { InternalServerErrorException } from '@nestjs/common';
 
 export interface Piece {
@@ -8,7 +9,7 @@ export interface Piece {
     logoUrl: string;
     auth?: PieceAuthProperty;
     actions: Record<string, Action>;
-    triggers: Record<string, any>; // Triggers not yet implemented in Phase 1
+    triggers: Record<string, Trigger>;
     description: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
@@ -20,7 +21,7 @@ export interface CreatePieceParams {
     logoUrl: string;
     auth?: PieceAuthProperty;
     actions: Action[];
-    triggers: any[]; // Triggers not yet implemented in Phase 1
+    triggers: Trigger[];
     description?: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
@@ -44,7 +45,7 @@ export function createPiece(params: CreatePieceParams): Piece {
     );
 
     const triggersMap = (params.triggers || []).reduce(
-        (acc, trigger) => {
+        (acc, trigger: Trigger) => {
             // Guard: skip entries that are not valid objects with a non-empty name
             if (
                 typeof trigger !== 'object' ||
@@ -61,7 +62,7 @@ export function createPiece(params: CreatePieceParams): Piece {
             acc[trigger.name] = trigger;
             return acc;
         },
-        {} as Record<string, any>,
+        {} as Record<string, Trigger>,
     );
 
     return {

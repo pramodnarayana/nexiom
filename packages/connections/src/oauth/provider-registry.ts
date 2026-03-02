@@ -4,7 +4,7 @@ import type { ProviderDefinition } from './types.js';
 
 /**
  * Code-first provider registry.
- * Provider definitions live in packages/connections/src/connectivity/providers/
+ * Provider definitions live in packages/connections/src/oauth/providers/
  * — no database queries required. Add new providers to PROVIDER_REGISTRY.
  */
 @Injectable()

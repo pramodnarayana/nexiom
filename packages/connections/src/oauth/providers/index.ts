@@ -1,6 +1,6 @@
 import { ProviderDefinition } from '../types.js';
-import { salesforceProvider } from './salesforce.provider.js';
-import { quickbooksProvider } from './quickbooks.provider.js';
+import { salesforceProvider } from './salesforce.js';
+import { quickbooksProvider } from './quickbooks.js';
 
 export type ProviderName = 'salesforce' | 'quickbooks';
 
@@ -15,6 +15,6 @@ export const PROVIDER_REGISTRY: Record<ProviderName, ProviderDefinition> = {
     quickbooks: quickbooksProvider,
 };
 
-export { salesforceProvider } from './salesforce.provider.js';
-export { quickbooksProvider } from './quickbooks.provider.js';
+export { salesforceProvider } from './salesforce.js';
+export { quickbooksProvider } from './quickbooks.js';
 export type { ProviderDefinition } from '../types.js';

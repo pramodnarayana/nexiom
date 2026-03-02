@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EncryptionService } from '../connectivity/token-manager.service';
+import { EncryptionService } from '../oauth/token-manager.service';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 @Injectable()
