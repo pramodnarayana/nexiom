@@ -14,16 +14,17 @@ import type { Client } from 'pg';
 import { createHash } from 'node:crypto';
 
 /**
- * Strict allowlist: only lowercase letters, digits, and underscores.
- * This prevents SQL injection via schema-name interpolation.
+ * Strict allowlist: must match the workspace schema pattern ws_{workspaceId}
+ * where the id portion is lowercase alphanumeric only.
+ * This prevents creating arbitrary schemas and stops SQL injection via the prefix.
  */
-const SAFE_SCHEMA_NAME_RE = /^[a-z0-9_]+$/;
+const SAFE_SCHEMA_NAME_RE = /^ws_[a-z0-9]+$/;
 
 function validateSchemaName(name: string): void {
   if (!SAFE_SCHEMA_NAME_RE.test(name)) {
     throw new Error(
-      `Invalid schemaName "${createHash('sha256').update(name).digest('hex').slice(0, 8)}…" — ` +
-        `only lowercase letters, digits, and underscores are permitted.`,
+      `Invalid schemaName (sha256 prefix: ${createHash('sha256').update(name).digest('hex').slice(0, 8)}…) — ` +
+        `expected format: ws_{workspaceId} with only lowercase letters and digits after the prefix.`,
     );
   }
 }

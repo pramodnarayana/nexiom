@@ -6,19 +6,19 @@ import type { TriggerExecutorService } from './trigger-executor.service';
 import type { PieceRegistryService } from './piece-registry.service';
 
 /**
- * Minimal Redis mock that supports the new DLQ surface:
- *   zrangebyscore, pipeline, rpoplpush, lrem, lpush, zadd
+ * Minimal Redis mock that supports the DLQ surface:
+ *   zpopmin, pipeline, rpoplpush, lrem, lpush, zadd
  */
 function makeRedis() {
   const pipeline = {
-    zrem: vi.fn().mockReturnThis(),
+    zadd: vi.fn().mockReturnThis(),
     lpush: vi.fn().mockReturnThis(),
     exec: vi.fn().mockResolvedValue([]),
   };
 
   return {
-    // delayed-set promotion
-    zrangebyscore: vi.fn().mockResolvedValue([]),
+    // delayed-set promotion (atomic remove-and-return)
+    zpopmin: vi.fn().mockResolvedValue([]), // returns [member, score, ...]
     pipeline: vi.fn().mockReturnValue(pipeline),
     // ready-queue drain (atomic pop)
     rpoplpush: vi.fn().mockResolvedValue(null),
@@ -244,8 +244,10 @@ describe('DlqProcessorService', () => {
       ...baseJob,
       nextAttemptAt: Date.now() - 1,
     });
-    redis.zrangebyscore.mockResolvedValue([dueJob]);
-    // After promotion, rpoplpush returns the promoted job
+    const score = String(Date.now() - 1);
+    // zpopmin returns alternating [member, score] pairs
+    redis.zpopmin.mockResolvedValue([dueJob, score]);
+    // After promotion via pipeline.lpush, drain picks up the job
     redis.rpoplpush.mockResolvedValueOnce(dueJob).mockResolvedValue(null);
 
     const service = new DlqProcessorService(
@@ -256,11 +258,7 @@ describe('DlqProcessorService', () => {
 
     await service.processDlq();
 
-    // Pipeline should have been used to promote
-    expect(redis._pipeline.zrem).toHaveBeenCalledWith(
-      'dlq:triggers:delayed',
-      dueJob,
-    );
+    // Due job promoted to ready queue via pipeline.lpush (no zrem needed — zpopmin already removed it)
     expect(redis._pipeline.lpush).toHaveBeenCalledWith('dlq:triggers', dueJob);
     expect(redis._pipeline.exec).toHaveBeenCalled();
   });

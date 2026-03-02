@@ -70,12 +70,12 @@ We do not use the Activepieces workflow runner. Instead, we use the trigger defi
 To make triggers "seamless" like the actions we previously implemented:
 
 1. **Trigger Registry:** Add a `getTriggerDefinition(appName, triggerName)` helper to your `packages/connectors/apps` registry.
-2. **The Poller Kernel:** Build a generic "Polling Worker" in `packages/engine`. It should:
-   - Find all active Routes.
-   - If the source uses a Polling Trigger, execute the piece's `run()` function.
-   - Map the output into your Layer 1 `inbound_gateway` table.
+2. **The Poller Kernel:** `PollerService` in `apps/api/src/modules/trigger/poller.service.ts` handles polling. It:
+   - Queries all active connections with a registered Polling trigger (keyset-paginated).
+   - Invokes `TriggerExecutorService.runPoll()` which calls the piece's `run()` function.
+   - Maps the output into your Layer 1 `inbound_gateway` table via idempotent insert.
 3. **The Webhook Router:** Create a single endpoint `POST /webhooks/:connectionId`.
-   - Lookup the `connectionId` to find the `appName`.
+   - Look up the `connectionId` to find the `appName`.
    - Execute the webhook logic from the Piece definition.
 
 ---

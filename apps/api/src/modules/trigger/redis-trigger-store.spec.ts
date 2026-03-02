@@ -64,4 +64,22 @@ describe('RedisBackedTriggerStore', () => {
       'last_cursor',
     );
   });
+
+  it('uses "_" as object-type segment when objectType is undefined', async () => {
+    // Instantiate with objectType=undefined to exercise the fallback branch.
+    const noObjectStore = new RedisBackedTriggerStore(
+      redis,
+      'ws_test',
+      'salesforce',
+      undefined,
+      'new_record',
+    );
+    (redis.hset as Mock).mockResolvedValue(1);
+    await noObjectStore.put('last_cursor', 'ts');
+    expect(redis.hset).toHaveBeenCalledWith(
+      'cursor:ws_test:salesforce:_:new_record', // '_' fallback for missing objectType
+      'last_cursor',
+      JSON.stringify('ts'),
+    );
+  });
 });

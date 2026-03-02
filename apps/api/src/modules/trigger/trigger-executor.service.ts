@@ -4,6 +4,7 @@ import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';
+import { RedisBackedTriggerStore } from './redis-trigger-store';
 
 /**
  * Extracts a cursor value from a trigger record.
@@ -21,7 +22,6 @@ function extractRecordCursor(record: unknown): string {
   }
   return new Date().toISOString();
 }
-import { RedisBackedTriggerStore } from './redis-trigger-store';
 
 export interface TriggerRunParams {
   trigger: Trigger;
@@ -213,30 +213,24 @@ export class TriggerExecutorService {
     payload: unknown;
     sourceEventId: string;
   }): Promise<boolean> {
-    try {
-      const result = await this.db.$client.query<{ id: string }>(
-        `INSERT INTO inbound_gateway
+    const result = await this.db.$client.query<{ id: string }>(
+      `INSERT INTO inbound_gateway
                     (source_event_id, trigger_name, app_name, object_type, payload)
                  VALUES ($1, $2, $3, $4, $5)
                  ON CONFLICT (source_event_id) DO NOTHING
                  RETURNING id`,
-        [
-          row.sourceEventId,
-          row.triggerName,
-          row.appName,
-          row.objectType ?? null,
-          JSON.stringify(row.payload),
-        ],
-      );
-      return (result.rowCount ?? 0) > 0;
-    } catch (err) {
-      this.logger.error('inbound_gateway insert failed', {
-        sourceEventId: row.sourceEventId,
-        workspaceId: row.workspaceId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return false;
-    }
+      [
+        row.sourceEventId,
+        row.triggerName,
+        row.appName,
+        row.objectType ?? null,
+        JSON.stringify(row.payload),
+      ],
+    );
+    // rowCount === 0 means a duplicate (ON CONFLICT DO NOTHING) — not an error.
+    // Any real DB failure propagates as a thrown exception to the caller, which
+    // will route the entire batch to the DLQ via pushToDlq.
+    return (result.rowCount ?? 0) > 0;
   }
 
   // ─── DLQ ─────────────────────────────────────────────────────────────────
@@ -251,6 +245,7 @@ export class TriggerExecutorService {
       workspaceId: params.workspaceId,
       objectType: params.objectType,
       propsValue: params.propsValue,
+      auth: params.auth, // required for credential reconstruction on retry
       failedAt: new Date().toISOString(),
       error: err instanceof Error ? err.message : String(err),
       attempt: 1,

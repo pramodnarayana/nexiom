@@ -74,23 +74,55 @@ export class DlqProcessorService {
   }
 
   /**
-   * Moves delayed jobs whose nextAttemptAt ≤ now back into DLQ_KEY.
+   * Atomically removes delayed jobs whose score ≤ now from the sorted set
+   * and re-queues them into the ready DLQ.
+   *
+   * ZPOPMIN is atomic (remove + return in one command), avoiding the
+   * ZRANGEBYSCORE → ZREM race where two instances could both read the
+   * same members before either had removed them.
+   *
+   * We pop up to BATCH_SIZE items and discard any whose score is in the
+   * future (shouldn't happen, but guards against clock drift).
    */
   private async promoteDelayedJobs(): Promise<void> {
     const now = Date.now();
-    // ZRANGEBYSCORE returns members with score ≤ now
-    const ready = await this.redis.zrangebyscore(DLQ_DELAYED_KEY, '-inf', now);
-    if (ready.length === 0) return;
 
-    // Promote each in a pipeline: remove from delayed, push to DLQ
+    // [member, score, member, score, ...] alternating
+    const popped = await this.redis.zpopmin(DLQ_DELAYED_KEY, this.BATCH_SIZE);
+    if (popped.length === 0) return;
+
+    // Pair up [member, score] tuples and filter by due time
+    const due: string[] = [];
+    const future: Array<[string, number]> = [];
+    for (let i = 0; i < popped.length; i += 2) {
+      const member = popped[i];
+      const score = Number(popped[i + 1]);
+      if (score <= now) {
+        due.push(member);
+      } else {
+        future.push([member, score]); // popped too early — re-add
+      }
+    }
+
+    // Re-add any items whose score is in the future (clock skew guard)
+    if (future.length > 0) {
+      const pipeline = this.redis.pipeline();
+      for (const [member, score] of future) {
+        pipeline.zadd(DLQ_DELAYED_KEY, score, member);
+      }
+      await pipeline.exec();
+    }
+
+    if (due.length === 0) return;
+
+    // Batch-push all due items into the ready queue
     const pipeline = this.redis.pipeline();
-    for (const raw of ready) {
-      pipeline.zrem(DLQ_DELAYED_KEY, raw);
+    for (const raw of due) {
       pipeline.lpush(DLQ_KEY, raw);
     }
     await pipeline.exec();
     this.logger.debug(
-      `Promoted ${ready.length} delayed DLQ job(s) to ready queue`,
+      `Promoted ${due.length} delayed DLQ job(s) to ready queue`,
     );
   }
 

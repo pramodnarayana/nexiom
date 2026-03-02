@@ -131,6 +131,32 @@ describe('TriggerExecutorService', () => {
 
       expect(verifySpy).toHaveBeenCalled();
     });
+
+    it('should reject and not ingest when verifySignature throws', async () => {
+      const sigError = new Error('Invalid signature');
+      const badVerify = vi.fn().mockImplementation(() => {
+        throw sigError;
+      });
+
+      await expect(
+        service.runWebhook({
+          trigger: makeMockTrigger({ verifySignature: badVerify }),
+          appName: 'salesforce',
+          triggerName: 'new_record',
+          objectType: undefined,
+          auth: {},
+          propsValue: {},
+          workspaceId: 'ws_1',
+          headers: { 'x-hub-signature': 'sha256=bad' },
+          rawBody: Buffer.from('{}'),
+          secret: 'wrong_secret',
+        }),
+      ).rejects.toThrow('Invalid signature');
+
+      // No DB write or cursor update should occur
+      expect(db.$client.query).not.toHaveBeenCalled();
+      expect(redis.hset).not.toHaveBeenCalled();
+    });
   });
 
   describe('runOnEnable() / runOnDisable()', () => {

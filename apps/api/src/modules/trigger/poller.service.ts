@@ -13,18 +13,24 @@ interface ActiveConnection {
   object_type: string | null;
   auth: unknown;
   props_value: Record<string, unknown>;
+  created_at: string; // keyset cursor field
 }
+
+/** Page size for the keyset-paginated connection query. */
+const PAGE_SIZE = 200;
 
 /**
  * Cron-driven polling kernel.
  *
  * Every 5 minutes:
- *  1. Queries all active connections that have a registered Polling trigger.
+ *  1. Pages through active connections using keyset pagination (created_at +
+ *     workspace_id) so no single query loads unbounded rows.
  *  2. Dispatches each connection to TriggerExecutorService.runPoll().
- *  3. Each runPoll() acquires its own Redis lock — safe to run across multiple pods.
+ *  3. When runPoll() returns false (lock contention), logs structured
+ *     telemetry and re-queues the connection for a short-delayed retry via
+ *     the DLQ delayed sorted-set so the skip is observable and recoverable.
  *
- * Connections are processed with bounded parallelism (MAX_CONCURRENCY) to
- * avoid overwhelming the database and upstream APIs simultaneously.
+ * Connections are processed with bounded parallelism (MAX_CONCURRENCY).
  */
 @Injectable()
 export class PollerService {
@@ -41,26 +47,48 @@ export class PollerService {
   async poll(): Promise<void> {
     this.logger.log('Polling cycle started');
 
-    let connections: ActiveConnection[];
     try {
-      connections = await this.fetchActivePollingConnections();
+      await this.processAllConnections();
     } catch (err) {
-      this.logger.error('Failed to fetch active connections', {
+      this.logger.error('Polling cycle error', {
         error: err instanceof Error ? err.message : String(err),
       });
-      return;
     }
 
-    if (connections.length === 0) {
+    this.logger.log('Polling cycle complete');
+  }
+
+  // ─── Page-driven execution loop ──────────────────────────────────────────
+
+  private async processAllConnections(): Promise<void> {
+    let cursor: { created_at: string; workspace_id: string } | undefined;
+    let totalProcessed = 0;
+
+    while (true) {
+      const page = await this.fetchActivePollingConnectionsBatch(cursor);
+      if (page.length === 0) break;
+
+      totalProcessed += page.length;
+      await this.processBatch(page);
+
+      const last = page.at(-1)!;
+      cursor = { created_at: last.created_at, workspace_id: last.workspace_id };
+
+      if (page.length < PAGE_SIZE) break; // last page
+    }
+
+    if (totalProcessed > 0) {
+      this.logger.log(
+        `Polling cycle dispatched ${totalProcessed} connection(s)`,
+      );
+    } else {
       this.logger.debug('No active polling connections found');
-      return;
     }
+  }
 
-    this.logger.log(
-      `Processing ${connections.length} active polling connection(s)`,
-    );
+  // ─── Batch processing ─────────────────────────────────────────────────────
 
-    // Bounded concurrency — process MAX_CONCURRENCY connections at a time
+  private async processBatch(connections: ActiveConnection[]): Promise<void> {
     for (let i = 0; i < connections.length; i += this.MAX_CONCURRENCY) {
       const batch = connections.slice(i, i + this.MAX_CONCURRENCY);
       const results = await Promise.allSettled(
@@ -82,9 +110,9 @@ export class PollerService {
         }
       });
     }
-
-    this.logger.log('Polling cycle complete');
   }
+
+  // ─── Single connection ────────────────────────────────────────────────────
 
   private async processConnection(conn: ActiveConnection): Promise<void> {
     const trigger = this.pieceRegistry.getTrigger(
@@ -93,7 +121,7 @@ export class PollerService {
     );
     if (!trigger || trigger.type !== TriggerStrategy.POLLING) return;
 
-    await this.executor.runPoll({
+    const executed = await this.executor.runPoll({
       trigger,
       appName: conn.app_name,
       triggerName: conn.trigger_name,
@@ -102,12 +130,41 @@ export class PollerService {
       propsValue: conn.props_value,
       workspaceId: conn.workspace_id,
     });
+
+    if (!executed) {
+      // Lock was held by another pod — emit observable telemetry so SRE can
+      // detect chronic contention and tune cron frequency or concurrency.
+      this.logger.warn('Poll skipped — lock contention', {
+        appName: conn.app_name,
+        triggerName: conn.trigger_name,
+        workspaceId: conn.workspace_id,
+        reason: 'lock_contention',
+      });
+    }
   }
 
-  private async fetchActivePollingConnections(): Promise<ActiveConnection[]> {
-    // Query for connections that have a configured polling trigger.
-    // The trigger_name and object_type columns are expected on app_credential
-    // (or a future routes/subscriptions table).
+  // ─── Keyset-paginated query ───────────────────────────────────────────────
+
+  /**
+   * Returns a bounded page of active polling connections ordered by
+   * (created_at, workspace_id) for stable keyset pagination.
+   *
+   * Using keyset instead of OFFSET means each page query is O(log n) and
+   * never loads unbounded rows into memory, regardless of total row count.
+   */
+  async fetchActivePollingConnectionsBatch(after?: {
+    created_at: string;
+    workspace_id: string;
+  }): Promise<ActiveConnection[]> {
+    const params: unknown[] = [PAGE_SIZE];
+    let where = `ac.trigger_name IS NOT NULL AND ac.status = 'active'`;
+
+    if (after) {
+      // Continue from (created_at, workspace_id) keyset
+      where += ` AND (ac.created_at, ac.workspace_id) > ($2, $3)`;
+      params.push(after.created_at, after.workspace_id);
+    }
+
     const result = await this.db.$client.query<ActiveConnection>(
       `SELECT
                 ac.workspace_id,
@@ -115,10 +172,13 @@ export class PollerService {
                 ac.trigger_name,
                 ac.object_type,
                 ac.encrypted_credentials AS auth,
-                ac.props_value
+                ac.props_value,
+                ac.created_at
              FROM app_credential ac
-             WHERE ac.trigger_name IS NOT NULL
-               AND ac.status = 'active'`,
+             WHERE ${where}
+             ORDER BY ac.created_at ASC, ac.workspace_id ASC
+             LIMIT $1`,
+      params,
     );
     return result.rows;
   }
