@@ -167,7 +167,14 @@ export class HostHttpClient {
 
         const { url, options } = this.buildFetchOptions(request, token);
 
-        while (attempt < 3) {
+        // ReadableStream bodies are consumed on first read and cannot be replayed.
+        // Limit to a single attempt to avoid silently sending an empty body on retry.
+        const isNonReplayable =
+            typeof ReadableStream !== 'undefined' &&
+            request.body instanceof ReadableStream;
+        const maxAttempts = isNonReplayable ? 1 : 3;
+
+        while (attempt < maxAttempts) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 10_000); // Fixed 10s per-attempt; backoff is handled by the sleep below
 
@@ -184,9 +191,9 @@ export class HostHttpClient {
                 console.debug(`AP Http Request attempt ${attempt + 1} failed: ${errorMessage}`);
 
                 attempt++;
-                if (attempt >= 3) {
+                if (attempt >= maxAttempts) {
                     throw new InternalServerErrorException(
-                        `Failed to execute outgoing AP request after 3 attempts. Last error: ${errorMessage}`,
+                        `Failed to execute outgoing AP request after ${maxAttempts} attempt(s). Last error: ${errorMessage}`,
                         { cause: err instanceof Error ? err : new Error(String(err)) }
                     );
                 }
