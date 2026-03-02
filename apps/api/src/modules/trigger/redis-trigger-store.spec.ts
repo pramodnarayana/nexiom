@@ -17,7 +17,13 @@ describe('RedisBackedTriggerStore', () => {
 
   beforeEach(() => {
     redis = makeMockRedis();
-    store = new RedisBackedTriggerStore(redis, 'ws_test', 'new_record');
+    store = new RedisBackedTriggerStore(
+      redis,
+      'ws_test',
+      'salesforce',
+      'Account',
+      'new_record',
+    );
   });
 
   it('get() returns null when key does not exist', async () => {
@@ -44,7 +50,7 @@ describe('RedisBackedTriggerStore', () => {
     (redis.hset as Mock).mockResolvedValue(1);
     await store.put('last_cursor', { ts: '2024-01-01' });
     expect(redis.hset).toHaveBeenCalledWith(
-      'cursor:ws_test:new_record',
+      'cursor:ws_test:salesforce:Account:new_record',
       'last_cursor',
       JSON.stringify({ ts: '2024-01-01' }),
     );
@@ -54,7 +60,7 @@ describe('RedisBackedTriggerStore', () => {
     (redis.hdel as Mock).mockResolvedValue(1);
     await store.delete('last_cursor');
     expect(redis.hdel).toHaveBeenCalledWith(
-      'cursor:ws_test:new_record',
+      'cursor:ws_test:salesforce:Account:new_record',
       'last_cursor',
     );
   });

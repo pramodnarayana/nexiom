@@ -23,10 +23,10 @@ Activepieces triggers are more complex than actions because they have a lifecycl
 
 ### A. Polling Strategy (The Pull Engine)
 
-1. **Scheduler:** A cron worker in `packages/engine` identifies active Routes using Polling triggers.
-2. **Context:** The `TriggerExecutor` fetches the `sync_cursor` (Last Modified Date) from the connection's schema.
-3. **Execution:** The Piece's `run()` function is executed. It returns an array of new records.
-4. **Ingestion:** Each record is saved into the `inbound_gateway` table with a new `trace_id`.
+1. **Scheduler:** `PollerService` in `apps/api` runs a cron every 5 minutes (via `@nestjs/schedule`). It queries all active connections that have a registered Polling trigger.
+2. **Context:** `TriggerExecutorService` acquires a per-(workspace, trigger) Redis lock, then builds a `TriggerContext` whose `store` reads/writes the `sync_cursor` (last-seen timestamp) from a Redis Hash (`cursor:{workspaceId}:{appName}:{objectType}:{triggerName}`).
+3. **Execution:** The Piece's `run()` function is executed. It reads the cursor from `context.store`, calls the upstream API, and returns an array of new records.
+4. **Ingestion:** Each record is idempotently saved into the `inbound_gateway` table (via `ON CONFLICT DO NOTHING`). After each successful insert the cursor advances to the record's own source timestamp.
 
 ### B. Webhook Strategy (The Push Engine)
 

@@ -5,16 +5,34 @@ import { TriggerStrategy } from '@nexiom/connections';
 import type { TriggerExecutorService } from './trigger-executor.service';
 import type { PieceRegistryService } from './piece-registry.service';
 
+/**
+ * Minimal Redis mock that supports the new DLQ surface:
+ *   zrangebyscore, pipeline, rpoplpush, lrem, lpush, zadd
+ */
 function makeRedis() {
+  const pipeline = {
+    zrem: vi.fn().mockReturnThis(),
+    lpush: vi.fn().mockReturnThis(),
+    exec: vi.fn().mockResolvedValue([]),
+  };
+
   return {
-    rpop: vi.fn(),
+    // delayed-set promotion
+    zrangebyscore: vi.fn().mockResolvedValue([]),
+    pipeline: vi.fn().mockReturnValue(pipeline),
+    // ready-queue drain (atomic pop)
+    rpoplpush: vi.fn().mockResolvedValue(null),
+    // ack / requeue
+    lrem: vi.fn().mockResolvedValue(1),
     lpush: vi.fn().mockResolvedValue(1),
+    zadd: vi.fn().mockResolvedValue(1),
+    _pipeline: pipeline,
   };
 }
 
-function makeExecutor() {
+function makeExecutor(returnValue = true) {
   return {
-    runPoll: vi.fn().mockResolvedValue(undefined),
+    runPoll: vi.fn().mockResolvedValue(returnValue),
   } as unknown as TriggerExecutorService;
 }
 
@@ -59,7 +77,8 @@ describe('DlqProcessorService', () => {
     redis = makeRedis();
     executor = makeExecutor();
     registry = makeRegistry();
-    redis.rpop.mockResolvedValue(null);
+    // zrangebyscore returns nothing, rpoplpush returns nothing
+    redis.rpoplpush.mockResolvedValue(null);
 
     const service = new DlqProcessorService(
       redis as unknown as import('ioredis').Redis,
@@ -67,18 +86,16 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
     expect(executor.runPoll).not.toHaveBeenCalled();
   });
 
   it('should retry a valid job via executor.runPoll', async () => {
     redis = makeRedis();
-    executor = makeExecutor();
+    executor = makeExecutor(true);
     registry = makeRegistry();
-    redis.rpop
+    redis.rpoplpush
       .mockResolvedValueOnce(JSON.stringify(baseJob))
       .mockResolvedValue(null);
 
@@ -88,18 +105,46 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
     expect(executor.runPoll).toHaveBeenCalledOnce();
+    // Job should be acked from processing list on success
+    expect(redis.lrem).toHaveBeenCalled();
   });
 
-  it('should discard unparseable jobs', async () => {
+  it('should requeue job without incrementing attempt when lock is held (runPoll=false)', async () => {
+    redis = makeRedis();
+    executor = makeExecutor(false); // lock contention
+    registry = makeRegistry();
+    redis.rpoplpush
+      .mockResolvedValueOnce(JSON.stringify(baseJob))
+      .mockResolvedValue(null);
+
+    const service = new DlqProcessorService(
+      redis as unknown as import('ioredis').Redis,
+      executor,
+      registry,
+    );
+
+    await service.processDlq();
+
+    // Job MUST be pushed back, not lost
+    expect(redis.lpush).toHaveBeenCalledWith(
+      'dlq:triggers',
+      JSON.stringify(baseJob),
+    );
+    // Attempt must NOT have incremented
+    const requeued = JSON.parse(
+      (redis.lpush.mock.calls[0] as string[])[1],
+    ) as typeof baseJob;
+    expect(requeued.attempt).toBe(baseJob.attempt);
+  });
+
+  it('should discard unparseable jobs and log a fingerprint (not the raw payload)', async () => {
     redis = makeRedis();
     executor = makeExecutor();
     registry = makeRegistry();
-    redis.rpop
+    redis.rpoplpush
       .mockResolvedValueOnce('not-valid-json{{{')
       .mockResolvedValue(null);
 
@@ -109,18 +154,18 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
     expect(executor.runPoll).not.toHaveBeenCalled();
+    // Job must be removed from processing list
+    expect(redis.lrem).toHaveBeenCalled();
   });
 
   it('should discard job if trigger is not found in registry', async () => {
     redis = makeRedis();
     executor = makeExecutor();
-    registry = makeRegistry(false);
-    redis.rpop
+    registry = makeRegistry(false); // trigger not found
+    redis.rpoplpush
       .mockResolvedValueOnce(JSON.stringify(baseJob))
       .mockResolvedValue(null);
 
@@ -130,20 +175,19 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
     expect(executor.runPoll).not.toHaveBeenCalled();
+    expect(redis.lrem).toHaveBeenCalled();
   });
 
-  it('should re-queue job on failure if attempts remain', async () => {
+  it('should schedule a delayed retry when runPoll throws and attempts remain', async () => {
     redis = makeRedis();
     const failingExecutor = {
       runPoll: vi.fn().mockRejectedValue(new Error('retry me')),
     } as unknown as TriggerExecutorService;
     registry = makeRegistry();
-    redis.rpop
+    redis.rpoplpush
       .mockResolvedValueOnce(JSON.stringify({ ...baseJob, attempt: 1 }))
       .mockResolvedValue(null);
 
@@ -153,13 +197,17 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
-    expect(redis.lpush).toHaveBeenCalledWith(
-      'dlq:triggers',
+    // Must be scheduled into delayed sorted set, NOT pushed to ready queue
+    expect(redis.zadd).toHaveBeenCalledWith(
+      'dlq:triggers:delayed',
+      expect.any(Number),
       expect.stringContaining('"attempt":2'),
+    );
+    expect(redis.lpush).not.toHaveBeenCalledWith(
+      'dlq:triggers',
+      expect.any(String),
     );
   });
 
@@ -169,8 +217,8 @@ describe('DlqProcessorService', () => {
       runPoll: vi.fn().mockRejectedValue(new Error('permanent fail')),
     } as unknown as TriggerExecutorService;
     registry = makeRegistry();
-    // attempt: 2 means next attempt (3) hits the limit
-    redis.rpop
+    // attempt: 2 means next attempt (3) hits the MAX_ATTEMPTS=3 limit
+    redis.rpoplpush
       .mockResolvedValueOnce(JSON.stringify({ ...baseJob, attempt: 2 }))
       .mockResolvedValue(null);
 
@@ -180,13 +228,40 @@ describe('DlqProcessorService', () => {
       registry,
     );
 
-    const p = service.processDlq();
-    await vi.runAllTimersAsync();
-    await p;
+    await service.processDlq();
 
     expect(redis.lpush).toHaveBeenCalledWith(
       'dlq:triggers:failed',
       expect.stringContaining('exhaustedAt'),
     );
+  });
+
+  it('should promote delayed jobs that are due back into the ready queue', async () => {
+    redis = makeRedis();
+    executor = makeExecutor();
+    registry = makeRegistry();
+    const dueJob = JSON.stringify({
+      ...baseJob,
+      nextAttemptAt: Date.now() - 1,
+    });
+    redis.zrangebyscore.mockResolvedValue([dueJob]);
+    // After promotion, rpoplpush returns the promoted job
+    redis.rpoplpush.mockResolvedValueOnce(dueJob).mockResolvedValue(null);
+
+    const service = new DlqProcessorService(
+      redis as unknown as import('ioredis').Redis,
+      executor,
+      registry,
+    );
+
+    await service.processDlq();
+
+    // Pipeline should have been used to promote
+    expect(redis._pipeline.zrem).toHaveBeenCalledWith(
+      'dlq:triggers:delayed',
+      dueJob,
+    );
+    expect(redis._pipeline.lpush).toHaveBeenCalledWith('dlq:triggers', dueJob);
+    expect(redis._pipeline.exec).toHaveBeenCalled();
   });
 });

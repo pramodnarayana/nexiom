@@ -3,7 +3,24 @@ import type { Trigger, TriggerContext } from '@nexiom/connections';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { Redis } from 'ioredis';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+
+/**
+ * Extracts a cursor value from a trigger record.
+ *
+ * Checks, in order: LastModifiedDate, _cursor, CreatedDate.
+ * Falls back to the current ISO timestamp only when none of those fields exist.
+ * Using the record's own timestamp avoids server clock skew against the source API.
+ */
+function extractRecordCursor(record: unknown): string {
+  if (record !== null && typeof record === 'object') {
+    const r = record as Record<string, unknown>;
+    for (const key of ['LastModifiedDate', '_cursor', 'CreatedDate']) {
+      if (typeof r[key] === 'string' && r[key]) return r[key];
+    }
+  }
+  return new Date().toISOString();
+}
 import { RedisBackedTriggerStore } from './redis-trigger-store';
 
 export interface TriggerRunParams {
@@ -44,21 +61,22 @@ export class TriggerExecutorService {
 
   // ─── Polling ────────────────────────────────────────────────────────────
 
-  async runPoll(params: TriggerRunParams): Promise<void> {
+  async runPoll(params: TriggerRunParams): Promise<boolean> {
     const lockKey = `lock:poll:${params.workspaceId}:${params.triggerName}`;
-    const acquired = await this.acquireLock(lockKey);
-    if (!acquired) {
+    const token = await this.acquireLock(lockKey);
+    if (!token) {
       this.logger.debug('Skipping poll — lock already held', {
         workspaceId: params.workspaceId,
         triggerName: params.triggerName,
       });
-      return;
+      return false; // lock contention — caller should requeue
     }
 
     try {
       await this.executeAndIngest(params);
+      return true;
     } finally {
-      await this.releaseLock(lockKey);
+      await this.releaseLock(lockKey, token);
     }
   }
 
@@ -165,8 +183,12 @@ export class TriggerExecutorService {
 
       if (didInsert) {
         inserted++;
-        // Cursor advances per-record only after successful DB write (atomicity guarantee)
-        await store.put('last_cursor', new Date().toISOString());
+        // Advance cursor to the source record's own timestamp if available,
+        // falling back to the current ISO time only when the record carries
+        // no recognisable cursor field.  Using the record timestamp avoids
+        // clock-skew issues where the server clock is ahead of the source API.
+        const sourceCursor = extractRecordCursor(record);
+        await store.put('last_cursor', sourceCursor);
       }
     }
 
@@ -256,26 +278,103 @@ export class TriggerExecutorService {
     return new RedisBackedTriggerStore(
       this.redis,
       params.workspaceId,
+      params.appName,
+      params.objectType,
       params.triggerName,
     );
   }
 
+  /**
+   * Builds a stable, bounded fingerprint for a trigger record.
+   *
+   * Design decisions:
+   *  - Keys are sorted so insertion order doesn't affect the hash.
+   *  - Common volatile fields (timestamps, ETags, version counters) are
+   *    stripped so repeated polls of the same logical record produce the
+   *    same ID even when the API updates those fields.
+   *  - The serialized string is capped at FINGERPRINT_MAX_BYTES before
+   *    hashing to prevent O(n) hashing of very large payloads.
+   *  - Falls back to JSON.stringify for non-object records (arrays, strings).
+   *
+   * Tradeoff: stripping volatile keys means a record whose ONLY change is
+   * e.g. a timestamp bump will hash identically — acceptable for polling
+   * deduplication where we track "have we seen this logical record" rather
+   * than "has this record changed since last poll".
+   */
   private buildSourceEventId(
     workspaceId: string,
     triggerName: string,
     record: unknown,
   ): string {
+    const FINGERPRINT_MAX_BYTES = 4096;
+    const VOLATILE_KEYS = new Set([
+      'SystemModstamp',
+      'LastModifiedDate',
+      'LastReferencedDate',
+      'LastViewedDate',
+      '_etag',
+      'etag',
+      'version',
+      '__v',
+    ]);
+
+    let payload: string;
+    if (
+      record !== null &&
+      typeof record === 'object' &&
+      !Array.isArray(record)
+    ) {
+      const sorted = Object.keys(record as Record<string, unknown>)
+        .filter((k) => !VOLATILE_KEYS.has(k))
+        .sort((a, b) => a.localeCompare(b))
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = (record as Record<string, unknown>)[k];
+          return acc;
+        }, {});
+      payload = JSON.stringify(sorted);
+    } else {
+      payload = JSON.stringify(record);
+    }
+
+    const bounded =
+      payload.length > FINGERPRINT_MAX_BYTES
+        ? payload.slice(0, FINGERPRINT_MAX_BYTES)
+        : payload;
+
     return createHash('sha256')
-      .update(`${workspaceId}:${triggerName}:${JSON.stringify(record)}`)
+      .update(`${workspaceId}:${triggerName}:${bounded}`)
       .digest('hex');
   }
 
-  private async acquireLock(key: string): Promise<boolean> {
-    const result = await this.redis.set(key, '1', 'PX', this.LOCK_TTL_MS, 'NX');
-    return result === 'OK';
+  /**
+   * Acquires a Redis NX lock and returns a unique token identifying this holder.
+   * Returns null if the lock is already held by another process.
+   */
+  private async acquireLock(key: string): Promise<string | null> {
+    const token = randomUUID();
+    const result = await this.redis.set(
+      key,
+      token,
+      'PX',
+      this.LOCK_TTL_MS,
+      'NX',
+    );
+    return result === 'OK' ? token : null;
   }
 
-  private async releaseLock(key: string): Promise<void> {
-    await this.redis.del(key);
+  /**
+   * Releases the lock ONLY if the stored value matches the caller's token.
+   * Uses a Lua script to guarantee atomicity — prevents a process from
+   * accidentally deleting another process's lock after TTL expiry.
+   */
+  private async releaseLock(key: string, token: string): Promise<void> {
+    const lua = [
+      "if redis.call('get', KEYS[1]) == ARGV[1] then",
+      "  return redis.call('del', KEYS[1])",
+      'else',
+      '  return 0',
+      'end',
+    ].join('\n');
+    await this.redis.eval(lua, 1, key, token);
   }
 }

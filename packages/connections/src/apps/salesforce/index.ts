@@ -19,7 +19,7 @@ const salesforcePiece: Piece = createPiece({
         required: true,
         authUrl: 'https://login.salesforce.com/services/oauth2/authorize',
         tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-        scope: ['refresh_token', 'full', 'api'],
+        scope: ['refresh_token', 'api'],
     }),
     actions: [], // Actions added separately per feature
     triggers: [newRecordTrigger, updatedRecordTrigger],

@@ -11,11 +11,29 @@
  *   await createInboundGateway(client, 'ws_abc123');
  */
 import type { Client } from 'pg';
+import { createHash } from 'node:crypto';
+
+/**
+ * Strict allowlist: only lowercase letters, digits, and underscores.
+ * This prevents SQL injection via schema-name interpolation.
+ */
+const SAFE_SCHEMA_NAME_RE = /^[a-z0-9_]+$/;
+
+function validateSchemaName(name: string): void {
+  if (!SAFE_SCHEMA_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid schemaName "${createHash('sha256').update(name).digest('hex').slice(0, 8)}…" — ` +
+        `only lowercase letters, digits, and underscores are permitted.`,
+    );
+  }
+}
 
 export async function createInboundGateway(
   client: Client,
   schemaName: string, // e.g. 'ws_abc123'
 ): Promise<void> {
+  validateSchemaName(schemaName);
+
   await client.query(`
         CREATE SCHEMA IF NOT EXISTS "${schemaName}";
     `);

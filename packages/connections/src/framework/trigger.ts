@@ -82,21 +82,13 @@ export interface Trigger<AuthT = any, PropsT = any> {
     ): void;
 }
 
-export interface CreateTriggerParams<AuthT = any, PropsT = any> {
-    name: string;
-    displayName: string;
-    description: string;
-    type: TriggerStrategy;
-    props: Record<string, AnyProperty>;
-    run(context: TriggerContext<AuthT, PropsT>): Promise<unknown[]>;
-    onEnable?(context: TriggerContext<AuthT, PropsT>): Promise<void>;
-    onDisable?(context: TriggerContext<AuthT, PropsT>): Promise<void>;
-    verifySignature?(
-        headers: Record<string, string>,
-        rawBody: Buffer,
-        secret: string,
-    ): void;
-}
+/**
+ * Parameters accepted by createTrigger().
+ *
+ * Exactly mirrors the Trigger interface so there is a single source of truth.
+ * Aliasing instead of extending/repeating prevents the two shapes from drifting.
+ */
+export type CreateTriggerParams<AuthT = any, PropsT = any> = Trigger<AuthT, PropsT>;
 
 /**
  * Mocks the exact Activepieces createTrigger function.

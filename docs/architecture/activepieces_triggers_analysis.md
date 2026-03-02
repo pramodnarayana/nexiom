@@ -19,8 +19,8 @@ Used for real-time events. The source app (e.g., Stripe, Shopify) sends data to 
 
 Used for apps that don't support webhooks or for enterprise objects (e.g., Salesforce Accounts). The system "polls" the API every N minutes to look for new or updated records.
 
-- **Nexiom Mapping:** Maps to a scheduled BullMQ/SQS job.
-- **AP Framework Advantage:** Handles the Cursor logic. It remembers the last ID or timestamp seen so it doesn't fetch the same data twice.
+- **Nexiom Mapping:** Maps to the `PollerService` cron schedule (runs every 5 minutes via `@nestjs/schedule`).
+- **AP Framework Advantage:** Handles the cursor logic. It remembers the last ID or timestamp seen so it doesn't fetch the same data twice.
 
 ---
 

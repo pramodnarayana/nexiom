@@ -1,4 +1,4 @@
-import { Module, OnModuleDestroy, Inject, Logger } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import {
   ProviderRegistryService,
   EncryptionService,
@@ -6,9 +6,9 @@ import {
   AesEncryptionService,
   OAuthRefreshClient,
 } from '@nexiom/connections';
+import { DbModule } from '../../db/db.module';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
-import { DbModule } from '../../db/db.module';
 import { OAuthCallbackController } from './connections/callback.controller';
 import { ConnectorsController } from './connections/connectors.controller';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
@@ -20,8 +20,11 @@ import { type DrizzleDb } from '@nexiom/database';
 
 /**
  * Handles OAuth connectivity, credential storage, and token management.
- * Redis is provided globally by CacheModule (imported in AppModule) so
- * this module simply injects the REDIS_CLIENT token — no factory needed here.
+ * Redis is provided globally by CacheModule (imported in AppModule).
+ *
+ * NOTE: Do NOT implement OnModuleDestroy here to call redis.quit()/disconnect().
+ * The CacheModule's RedisLifecycleService owns the connection lifecycle and will
+ * close the socket on shutdown — closing it a second time would cause errors.
  */
 @Module({
   imports: [DbModule],
@@ -51,17 +54,4 @@ import { type DrizzleDb } from '@nexiom/database';
     { provide: OAuthRefreshClient, useClass: DefaultOAuthRefreshClient },
   ],
 })
-export class ConnectionsModule implements OnModuleDestroy {
-  private readonly logger = new Logger(ConnectionsModule.name);
-
-  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
-
-  async onModuleDestroy() {
-    try {
-      await this.redis.quit();
-    } catch (error) {
-      this.logger.error('Redis quit failed, forcefully disconnecting', error);
-      this.redis.disconnect();
-    }
-  }
-}
+export class ConnectionsModule {}

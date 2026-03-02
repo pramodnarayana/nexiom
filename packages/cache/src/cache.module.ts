@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Module, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -8,16 +8,42 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
 export type { Redis };
 
 /**
+ * Internal token used to hold the lifecycle-managed wrapper.
+ * Not exported — consumers always inject REDIS_CLIENT for the raw Redis instance.
+ */
+const REDIS_LIFECYCLE = 'REDIS_LIFECYCLE';
+
+/**
+ * Registers itself with Nest's DI so onModuleDestroy is called on shutdown,
+ * then calls client.quit() to close TCP sockets gracefully.
+ */
+@Injectable()
+class RedisLifecycleService implements OnModuleDestroy {
+    constructor(private readonly client: Redis) { }
+
+    async onModuleDestroy(): Promise<void> {
+        try {
+            await this.client.quit();
+        } catch {
+            // quit() may fail if connection already dropped; force-disconnect.
+            this.client.disconnect();
+        }
+    }
+}
+
+/**
  * @Global module — import once in AppModule; all other modules receive the
  * REDIS_CLIENT token automatically without importing CacheModule themselves.
  *
  * Key namespacing convention:
- *   rl:{url}                              — rate limiter (HostHttpClient)
- *   token:{connectionId}                  — OAuth token cache (TokenManagerService)
- *   cursor:{workspaceId}:{triggerName}    — polling cursors (TriggerStore)
- *   lock:poll:{workspaceId}:{triggerName} — distributed poll locks
- *   dlq:triggers                          — dead-letter queue for failed trigger runs
- *   dlq:triggers:failed                   — exhausted DLQ jobs for human inspection
+ *   rl:{url}                                               — rate limiter
+ *   token:{connectionId}                                   — OAuth token cache
+ *   cursor:{workspaceId}:{appName}:{objectType}:{name}     — polling cursors
+ *   lock:poll:{workspaceId}:{triggerName}                  — distributed locks
+ *   dlq:triggers                                           — DLQ ready queue
+ *   dlq:triggers:processing                                — in-flight jobs
+ *   dlq:triggers:delayed                                   — deferred retries
+ *   dlq:triggers:failed                                    — exhausted jobs
  */
 @Global()
 @Module({
@@ -39,6 +65,12 @@ export type { Redis };
                 await client.connect();
                 return client;
             },
+        },
+        {
+            // Lifecycle service — injected only so Nest calls onModuleDestroy.
+            provide: REDIS_LIFECYCLE,
+            inject: [REDIS_CLIENT],
+            useFactory: (client: Redis) => new RedisLifecycleService(client),
         },
     ],
     exports: [REDIS_CLIENT],

@@ -63,9 +63,24 @@ export class PollerService {
     // Bounded concurrency — process MAX_CONCURRENCY connections at a time
     for (let i = 0; i < connections.length; i += this.MAX_CONCURRENCY) {
       const batch = connections.slice(i, i + this.MAX_CONCURRENCY);
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         batch.map((conn) => this.processConnection(conn)),
       );
+
+      results.forEach((result, idx) => {
+        if (result.status === 'rejected') {
+          const conn = batch[idx];
+          this.logger.error('Connection poll failed', {
+            appName: conn?.app_name,
+            workspaceId: conn?.workspace_id,
+            triggerName: conn?.trigger_name,
+            reason:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          });
+        }
+      });
     }
 
     this.logger.log('Polling cycle complete');

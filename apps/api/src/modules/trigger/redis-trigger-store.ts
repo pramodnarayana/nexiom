@@ -4,13 +4,19 @@ import type { Redis } from 'ioredis';
 /**
  * Redis-backed TriggerStore.
  *
- * All cursor state is stored as a Redis Hash under:
- *   cursor:{workspaceId}:{triggerName}
+ * All cursor state is stored as a Redis Hash under a fully-qualified key:
+ *   cursor:{workspaceId}:{appName}:{objectType}:{triggerName}
  *
- * This keeps it clearly separated from:
- *   - rate limiter keys  (rl:...)
- *   - token cache keys   (token:...)
- *   - DLQ list           (dlq:triggers)
+ * Using all four dimensions prevents cross-object collisions when the same
+ * trigger runs for different object types (e.g., Account vs Contact) within
+ * the same workspace.
+ *
+ * Key namespace separation:
+ *   - Cursor keys:        cursor:...
+ *   - Rate-limiter keys:  rl:...
+ *   - Token cache keys:   token:...
+ *   - DLQ list:           dlq:triggers
+ *   - Poll locks:         lock:poll:...
  */
 export class RedisBackedTriggerStore implements TriggerStore {
   private readonly hashKey: string;
@@ -18,9 +24,12 @@ export class RedisBackedTriggerStore implements TriggerStore {
   constructor(
     private readonly redis: Redis,
     workspaceId: string,
+    appName: string,
+    objectType: string | undefined,
     triggerName: string,
   ) {
-    this.hashKey = `cursor:${workspaceId}:${triggerName}`;
+    const objSegment = objectType ?? '_';
+    this.hashKey = `cursor:${workspaceId}:${appName}:${objSegment}:${triggerName}`;
   }
 
   async get<T>(key: string): Promise<T | null> {

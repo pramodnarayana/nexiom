@@ -4,11 +4,11 @@ import {
     type TriggerContext,
     Property,
 } from '../../../framework/index.js';
-
-interface SalesforceAuth {
-    access_token: string;
-    instance_url: string;
-}
+import {
+    assertSafeSalesforceObject,
+    runSalesforcePolling,
+    type SalesforceAuth,
+} from './salesforce-polling.helper.js';
 
 interface UpdatedRecordProps {
     object: string;
@@ -17,6 +17,7 @@ interface UpdatedRecordProps {
 /**
  * Polling trigger — fires for every Salesforce record updated since the last cursor.
  * Uses LastModifiedDate so truly unchanged records are never re-ingested.
+ * The cursor is the LastModifiedDate of the last returned record, stored in Redis.
  */
 export const updatedRecordTrigger = createTrigger<SalesforceAuth, UpdatedRecordProps>({
     name: 'updated_record',
@@ -35,30 +36,13 @@ export const updatedRecordTrigger = createTrigger<SalesforceAuth, UpdatedRecordP
         const { auth, propsValue, store } = context;
         const { object } = propsValue;
 
-        const lastCursor = await store.get<string>('last_modified_cursor');
-        const since = lastCursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        // Guard against SOQL injection before any interpolation
+        assertSafeSalesforceObject(object);
 
-        const soql = encodeURIComponent(
-            `SELECT Id, Name, LastModifiedDate FROM ${object} WHERE LastModifiedDate > ${since} ORDER BY LastModifiedDate ASC LIMIT 200`,
-        );
-        const url = `${auth.instance_url}/services/data/v59.0/query?q=${soql}`;
-
-        const response = await fetch(url, {
-            headers: { Authorization: `Bearer ${auth.access_token}` },
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Salesforce SOQL query failed (${response.status}): ${text}`);
-        }
-
-        const body = await response.json() as { records: unknown[] };
-        const records = body.records ?? [];
-
-        if (records.length > 0) {
-            await store.put('last_modified_cursor', new Date().toISOString());
-        }
-
-        return records;
+        return runSalesforcePolling(auth, object, {
+            cursorKey: 'last_modified_cursor',
+            dateField: 'LastModifiedDate',
+            extraColumns: ['Name'],
+        }, store);
     },
 });

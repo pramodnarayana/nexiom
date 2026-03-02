@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PollerService } from './poller.service';
 import { TriggerStrategy } from '@nexiom/connections';
 import type { TriggerExecutorService } from './trigger-executor.service';
@@ -33,13 +33,8 @@ describe('PollerService', () => {
   let registry: PieceRegistryService;
 
   beforeEach(() => {
-    vi.useFakeTimers();
     executor = makeExecutor();
     registry = makeRegistry();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('should dispatch executor.runPoll for each active polling connection', async () => {

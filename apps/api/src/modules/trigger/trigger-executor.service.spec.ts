@@ -13,12 +13,13 @@ function makeMockDb() {
 
 function makeMockRedis() {
   return {
-    set: vi.fn(),
-    del: vi.fn(),
-    lpush: vi.fn(),
-    hget: vi.fn(),
-    hset: vi.fn(),
-    hdel: vi.fn(),
+    set: vi.fn().mockResolvedValue('OK'), // default: lock acquired
+    del: vi.fn().mockResolvedValue(1),
+    eval: vi.fn().mockResolvedValue(1), // Lua lock release
+    lpush: vi.fn().mockResolvedValue(1),
+    hget: vi.fn().mockResolvedValue(null),
+    hset: vi.fn().mockResolvedValue(1),
+    hdel: vi.fn().mockResolvedValue(1),
   };
 }
 
@@ -83,7 +84,8 @@ describe('TriggerExecutorService', () => {
         workspaceId: 'ws_1',
       });
 
-      expect(redis.del).toHaveBeenCalled();
+      // Lock is released via Lua eval (atomic check-and-delete)
+      expect(redis.eval).toHaveBeenCalled();
     });
   });
 
