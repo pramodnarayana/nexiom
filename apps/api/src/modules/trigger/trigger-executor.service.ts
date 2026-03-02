@@ -227,7 +227,22 @@ export class TriggerExecutorService {
           workspaceId: params.workspaceId,
           error: err instanceof Error ? err.message : String(err),
         });
-        await this.pushToDlq(params, err);
+
+        // For webhooks, `params` may have a `payload` containing the full array or payload.
+        // We update it to only contain the remaining unprocessed records so
+        // the DLQ retry doesn't re-process already committed records.
+        const remainingRecords = records.slice(inserted);
+        let dlqParams: TriggerRunParams | WebhookRunParams = params;
+        if ('payload' in params) {
+          dlqParams = {
+            ...params,
+            payload: Array.isArray(params.payload)
+              ? remainingRecords
+              : params.payload,
+          };
+        }
+
+        await this.pushToDlq(dlqParams, err);
         throw err;
       }
     }
@@ -365,7 +380,7 @@ export class TriggerExecutorService {
     ) {
       const sorted = Object.keys(record as Record<string, unknown>)
         .filter((k) => !VOLATILE_KEYS.has(k))
-        .sort((a, b) => a.localeCompare(b))
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
         .reduce<Record<string, unknown>>((acc, k) => {
           acc[k] = (record as Record<string, unknown>)[k];
           return acc;

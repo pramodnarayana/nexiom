@@ -138,8 +138,8 @@ export class DlqProcessorService {
       'if not item then return 0 end',
       'local ok, parsed = pcall(cjson.decode, item)',
       'if not ok then',
-      '  -- Unparseable item: remove it rather than loop forever',
-      '  redis.call("LREM", KEYS[1], 1, item)',
+      '  -- Unparseable item: remove exactly this tail item rather than searching',
+      '  redis.call("RPOP", KEYS[1])',
       '  return 0',
       'end',
       'if not parsed.processingStartedAt or parsed.processingStartedAt > tonumber(ARGV[1]) then',
@@ -171,10 +171,28 @@ export class DlqProcessorService {
   // ─── Drain ready queue ───────────────────────────────────────────────────
 
   private async drainReadyJobs(): Promise<void> {
+    // Atomically move from DLQ_KEY to DLQ_PROCESSING_KEY and stamp processingStartedAt
+    // so the reclaim script can detect stale leases if the pod crashes.
+    const LUA_DRAIN = [
+      'local item = redis.call("RPOP", KEYS[1])',
+      'if not item then return nil end',
+      'local ok, parsed = pcall(cjson.decode, item)',
+      'if ok then',
+      '  parsed.processingStartedAt = tonumber(ARGV[1])',
+      '  item = cjson.encode(parsed)',
+      'end',
+      'redis.call("LPUSH", KEYS[2], item)',
+      'return item',
+    ].join('\n');
+
     for (let i = 0; i < this.BATCH_SIZE; i++) {
-      // Atomic move: pop from DLQ_KEY, push to processing list
-      // If the process dies between pop and ack, the job remains in processing.
-      const raw = await this.redis.rpoplpush(DLQ_KEY, DLQ_PROCESSING_KEY);
+      const raw = (await this.redis.eval(
+        LUA_DRAIN,
+        2,
+        DLQ_KEY,
+        DLQ_PROCESSING_KEY,
+        String(Date.now()),
+      )) as string | null;
       if (!raw) break;
 
       await this.handleJob(raw);
@@ -263,7 +281,7 @@ export class DlqProcessorService {
     } catch (err) {
       const nextAttempt = job.attempt + 1;
 
-      if (nextAttempt >= MAX_ATTEMPTS) {
+      if (nextAttempt > MAX_ATTEMPTS) {
         // Permanently failed — move to human-inspection list
         const failedPayload = JSON.stringify({
           appName: job.appName,

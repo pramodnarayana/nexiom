@@ -77,8 +77,11 @@ describe('DlqProcessorService', () => {
     redis = makeRedis();
     executor = makeExecutor();
     registry = makeRegistry();
-    // zrangebyscore returns nothing, rpoplpush returns nothing
-    redis.rpoplpush.mockResolvedValue(null);
+    // promote=0, reclaim=0, drain=null
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(null);
 
     const service = new DlqProcessorService(
       redis as unknown as import('ioredis').Redis,
@@ -95,7 +98,10 @@ describe('DlqProcessorService', () => {
     redis = makeRedis();
     executor = makeExecutor(true);
     registry = makeRegistry();
-    redis.rpoplpush
+    // promote=0, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(JSON.stringify(baseJob))
       .mockResolvedValue(null);
 
@@ -112,11 +118,46 @@ describe('DlqProcessorService', () => {
     expect(redis.lrem).toHaveBeenCalled();
   });
 
+  it('should reclaim stale jobs from processing list back to DLQ_KEY', async () => {
+    redis = makeRedis();
+    executor = makeExecutor(true);
+    registry = makeRegistry();
+
+    // The first eval handles `promoteDelayedJobs` (return 0)
+    redis.eval.mockResolvedValueOnce(0);
+    // The second eval handles `reclaimStaleProcessingJobs` (LUA_RECLAIM returns 1 for stale)
+    // It loops up to BATCH_SIZE until it returns 0
+    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    // The next eval is `drainReadyJobs`
+    redis.eval.mockResolvedValueOnce(null);
+
+    const service = new DlqProcessorService(
+      redis as unknown as import('ioredis').Redis,
+      executor,
+      registry,
+    );
+
+    // Call processDlq (which calls promote, reclaim, drain)
+    await service.processDlq();
+
+    // Verify LUA_RECLAIM was executed with correct keys
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('RPOPLPUSH'),
+      2,
+      'dlq:triggers:processing',
+      'dlq:triggers',
+      expect.any(String), // staleThreshold ARGV
+    );
+  });
+
   it('should defer job to delayed sorted-set (not immediate lpush) when lock is held (runPoll=false)', async () => {
     redis = makeRedis();
     executor = makeExecutor(false); // lock contention
     registry = makeRegistry();
-    redis.rpoplpush
+    // promote=0, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(JSON.stringify(baseJob))
       .mockResolvedValue(null);
 
@@ -146,7 +187,10 @@ describe('DlqProcessorService', () => {
     redis = makeRedis();
     executor = makeExecutor();
     registry = makeRegistry();
-    redis.rpoplpush
+    // promote=0, reclaim=0, drain=bad json
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
       .mockResolvedValueOnce('not-valid-json{{{')
       .mockResolvedValue(null);
 
@@ -167,7 +211,10 @@ describe('DlqProcessorService', () => {
     redis = makeRedis();
     executor = makeExecutor();
     registry = makeRegistry(false); // trigger not found
-    redis.rpoplpush
+    // promote=0, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(JSON.stringify(baseJob))
       .mockResolvedValue(null);
 
@@ -189,7 +236,10 @@ describe('DlqProcessorService', () => {
       runPoll: vi.fn().mockRejectedValue(new Error('retry me')),
     } as unknown as TriggerExecutorService;
     registry = makeRegistry();
-    redis.rpoplpush
+    // promote=0, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(JSON.stringify({ ...baseJob, attempt: 1 }))
       .mockResolvedValue(null);
 
@@ -219,9 +269,12 @@ describe('DlqProcessorService', () => {
       runPoll: vi.fn().mockRejectedValue(new Error('permanent fail')),
     } as unknown as TriggerExecutorService;
     registry = makeRegistry();
-    // attempt: 2 means next attempt (3) hits the MAX_ATTEMPTS=3 limit
-    redis.rpoplpush
-      .mockResolvedValueOnce(JSON.stringify({ ...baseJob, attempt: 2 }))
+    // attempt: 3 means next attempt (4) hits the `nextAttempt > MAX_ATTEMPTS` limit (MAX_ATTEMPTS=3)
+    // promote=0, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(JSON.stringify({ ...baseJob, attempt: 3 }))
       .mockResolvedValue(null);
 
     const service = new DlqProcessorService(
@@ -246,10 +299,12 @@ describe('DlqProcessorService', () => {
       ...baseJob,
       nextAttemptAt: Date.now() - 1,
     });
-    // Lua returns a count (integer) — the script does LPUSH internally
-    redis.eval.mockResolvedValue(1);
-    // After atomic promotion, drain picks up the job
-    redis.rpoplpush.mockResolvedValueOnce(dueJob).mockResolvedValue(null);
+    // promote=1, reclaim=0, drain=job
+    redis.eval
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(dueJob)
+      .mockResolvedValue(null);
 
     const service = new DlqProcessorService(
       redis as unknown as import('ioredis').Redis,
