@@ -2,6 +2,7 @@ import {
     Injectable,
     InternalServerErrorException,
     BadGatewayException,
+    BadRequestException,
 } from '@nestjs/common';
 import { TokenManagerService } from '../connectivity/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
@@ -108,6 +109,13 @@ export class HostHttpClient {
     }
 
     async sendRequest(request: HttpRequest): Promise<HttpResponse> {
+        // 0. Validate the URL immediately — a TypeError from new URL() must NOT be swallowed by the retry loop
+        try {
+            new URL(request.url);
+        } catch {
+            throw new BadRequestException(`Invalid or non-absolute URL: ${request.url}`);
+        }
+
         // 1. Identify Context
         const token = request.authentication?.token;
 
@@ -285,7 +293,7 @@ export class HostHttpClient {
     }
 
     private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
-        const sensitiveKeys = new Set(['authorization', 'cookie', 'set-cookie', 'x-api-key', 'bearer']);
+        const sensitiveKeys = new Set(['authorization', 'cookie', 'set-cookie', 'x-api-key']);
         const sanitized: Record<string, string> = {};
         for (const [key, value] of Object.entries(headers)) {
             if (sensitiveKeys.has(key.toLowerCase())) {
