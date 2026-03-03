@@ -2,6 +2,8 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { Trigger, TriggerContext } from '@nexiom/connections';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';
 import { RedisBackedTriggerStore } from './redis-trigger-store';
@@ -59,6 +61,7 @@ export class TriggerExecutorService {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
   // ─── Polling ────────────────────────────────────────────────────────────
@@ -138,6 +141,13 @@ export class TriggerExecutorService {
   async runOnEnable(params: TriggerRunParams): Promise<void> {
     const context = this.buildContext(params);
     try {
+      // 1. Ensure the gateway tables are provisioned lazily
+      await this.dbManager.applyPlan(
+        params.workspaceId,
+        SchemaPlan.GATEWAY_ACTIVE,
+      );
+
+      // 2. Invoke the trigger enablement logic (e.g. Subscribe to webhook)
       await params.trigger.onEnable?.(context);
       this.logger.log('onEnable completed', {
         appName: params.appName,
@@ -428,7 +438,11 @@ export class TriggerExecutorService {
     ) {
       const sorted = Object.keys(record as Record<string, unknown>)
         .filter((k) => !VOLATILE_KEYS.has(k))
-        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .sort((a, b) => {
+          if (a < b) return -1;
+          if (a > b) return 1;
+          return 0;
+        })
         .reduce<Record<string, unknown>>((acc, k) => {
           acc[k] = (record as Record<string, unknown>)[k];
           return acc;

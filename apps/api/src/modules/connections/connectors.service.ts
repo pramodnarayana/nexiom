@@ -20,7 +20,8 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { sql } from 'drizzle-orm';
+import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import * as crypto from 'crypto';
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
@@ -55,6 +56,7 @@ export class ConnectorsService {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly providerRegistry: ProviderRegistryService,
     private readonly configService: ConfigService,
   ) {}
@@ -297,7 +299,7 @@ export class ConnectorsService {
     }
 
     try {
-      await this.db.transaction(async (tx) => {
+      const workspaceSchemaName = await this.db.transaction(async (tx) => {
         // 1. Insert or update the business connection metadata
         const [connection] = await tx
           .insert(appConnections)
@@ -340,13 +342,13 @@ export class ConnectorsService {
         const sanitizedProvider = providerName.replaceAll(/[^a-z0-9]/g, '');
         const finalProviderToken = sanitizedProvider || 'unknown';
         const safeToken = finalProviderToken.substring(0, 40);
-        const workspaceSchemaName = `ws_${safeToken}_${hashedSuffix}`;
+        const schemaName = `ws_${safeToken}_${hashedSuffix}`;
 
         await tx
           .insert(connectionStorageRegistry)
           .values({
             connectionId: connection.id,
-            workspaceId: workspaceSchemaName,
+            workspaceId: schemaName,
             databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
             regionContext: finalRegionContext,
           })
@@ -354,13 +356,16 @@ export class ConnectorsService {
             target: connectionStorageRegistry.connectionId,
           }); // Already provisioned
 
-        // 3. Actually create the physical PostgreSQL schema on the cluster
-        // Using sql.raw here is safe because workspaceSchemaName is strictly internally generated
-        // from a regex-sanitized string and a UUID slice, not user input.
-        await tx.execute(
-          sql`CREATE SCHEMA IF NOT EXISTS "${sql.raw(workspaceSchemaName)}"`,
-        );
+        return schemaName;
       });
+
+      // 3. Apply the initial schema plan (NAMESPACE_ONLY) outside the transaction
+      // so the DDL runs on its own connection and does not silently escape the
+      // Drizzle tx scope (db.$client vs the transaction's dedicated connection).
+      await this.dbManager.applyPlan(
+        workspaceSchemaName,
+        SchemaPlan.NAMESPACE_ONLY,
+      );
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;

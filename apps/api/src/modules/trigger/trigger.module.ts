@@ -9,6 +9,8 @@ import { DlqProcessorService } from './dlq-processor.service';
 import { WebhooksController } from './webhooks.controller';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module';
+import { DatabaseManager } from '@nexiom/dbmanager';
 
 /**
  * Wires all trigger-related services.
@@ -23,9 +25,9 @@ import type { DrizzleDb } from '@nexiom/database';
     PieceRegistryService,
     {
       provide: TriggerExecutorService,
-      useFactory: (db: DrizzleDb, redis: Redis) =>
-        new TriggerExecutorService(db, redis),
-      inject: [DATABASE_CONNECTION, REDIS_CLIENT],
+      useFactory: (db: DrizzleDb, redis: Redis, dbManager: DatabaseManager) =>
+        new TriggerExecutorService(db, redis, dbManager),
+      inject: [DATABASE_CONNECTION, REDIS_CLIENT, DB_MANAGER],
     },
     {
       provide: PollerService,

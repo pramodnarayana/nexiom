@@ -46,6 +46,9 @@ describe('TriggerExecutorService', () => {
     service = new TriggerExecutorService(
       db as unknown as import('@nexiom/database').DrizzleDb,
       redis as unknown as import('ioredis').Redis,
+      {
+        applyPlan: vi.fn(),
+      } as unknown as import('@nexiom/dbmanager').DatabaseManager,
     );
   });
 
