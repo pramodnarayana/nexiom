@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Piece, Trigger } from '@nexiom/connections';
-import { salesforcePiece } from '@nexiom/connections';
+import { salesforcePiece, quickbooksPiece } from '@nexiom/connections';
 
 /**
  * In-memory piece registry — single source of truth for all registered Pieces.
  * Add new pieces to REGISTERED_PIECES; no database or config file required.
  */
-const REGISTERED_PIECES: Piece[] = [salesforcePiece];
+const REGISTERED_PIECES: Piece[] = [salesforcePiece as Piece, quickbooksPiece];
 
 @Injectable()
 export class PieceRegistryService {

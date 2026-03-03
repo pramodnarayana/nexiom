@@ -241,3 +241,21 @@ Redis is declared in docker-compose but no application code references it. Fine 
 
 **Problem**: The current frontend relies on a basic baseline UI framework. It lacks the dynamic, premium design aesthetics (vibrant colors, smooth gradients, glassmorphism, micro-animations, tailored dark modes) typical of state-of-the-art enterprise builders like Activepieces or Retool.
 **Fix**: Complete a design system overhaul. Enforce modern typography (e.g. Inter/Outfit), tailored HSL palettes, dynamic hover states, and smooth transition animations to deliver a "WOW" first impression. Replace generic structural components with custom, highly polished UI widgets.
+
+---
+
+## Activepieces Integrations
+
+### TD-INT-01 — Unused Activepieces Legacy Triggers (WEBHOOK)
+
+**Status**: Open
+**Owner**: Backend Team
+**Issue**: TBD
+**Severity**: Low
+**Effort**: Ongoing cleanup
+
+**Problem**: The Activepieces open-source framework we shimmed defines `TriggerStrategy.WEBHOOK` and `TriggerStrategy.MANUAL` alongside `APP_WEBHOOK`.
+
+As established in our workflow architecture, enterprise-grade applications manage their own subscriptions autonomously via OAuth credentials (`APP_WEBHOOK`). In contrast, `WEBHOOK` acts as a "dumb pipe" that forces users to manually copy/paste configuration URLs between platforms. The `WEBHOOK` strategy is still heavily distributed throughout the `@activepieces` NPM ecosystem (e.g. `salesforce` exports `newOutboundMessage` using `TriggerStrategy.WEBHOOK`).
+
+**Fix**: As we mature our local registry, we should deprecate and rigorously strip any imported piece that relies on `TriggerStrategy.WEBHOOK` and require all integrated pieces to use `APP_WEBHOOK` for frictionless UX.
