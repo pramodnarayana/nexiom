@@ -22,7 +22,7 @@ import {
 } from '@nexiom/database';
 import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {

@@ -592,7 +592,10 @@ describe('ConnectorsService', () => {
         providers: [
           ConnectorsService,
           { provide: ProviderRegistryService, useValue: mockProviderRegistry },
-          { provide: ConfigService, useValue: { get: vi.fn() } },
+          {
+            provide: ConfigService,
+            useValue: { get: vi.fn().mockReturnValue('mock-region-context') },
+          },
           { provide: EncryptionService, useValue: mockEncryptionService },
           { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
           { provide: DB_MANAGER, useValue: failingDbManager },

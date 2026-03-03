@@ -438,11 +438,7 @@ export class TriggerExecutorService {
     ) {
       const sorted = Object.keys(record as Record<string, unknown>)
         .filter((k) => !VOLATILE_KEYS.has(k))
-        .sort((a, b) => {
-          if (a < b) return -1;
-          if (a > b) return 1;
-          return 0;
-        })
+        .sort((a, b) => (a ?? '').localeCompare(b ?? ''))
         .reduce<Record<string, unknown>>((acc, k) => {
           acc[k] = (record as Record<string, unknown>)[k];
           return acc;

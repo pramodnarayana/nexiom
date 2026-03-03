@@ -18,10 +18,8 @@ Result: A physical "Wall" is established. The schema is empty, incurring zero in
 Stage 2: Route Activation (The "Kernel" Event)
 Trigger: User creates a Route (e.g., Salesforce → QuickBooks) and clicks "Save & Activate."
 Database Action: The dbmanager uses Atlas to deploy the Pipeline Kernel tables into the connection's schema.
-Tables Created: * inbound_gateway: Stores raw ingestion data.
-sync_log: Stores the audit trail.
-sync_cursor: Stores polling timestamps.
-outbound_gateway: (If used as a destination) Stores API delivery attempts.
+Tables Created: * `inbound_gateway`: Stores raw ingestion data.
+*(Note: `sync_log`, `sync_cursor`, and `outbound_gateway` are planned additions for future Gateway integration).*
 Stage 3: Object Mapping (The "Storage Initialization" Event)
 Trigger: User selects a specific object (e.g., "Accounts") in the Mapping UI.
 Database Action: The system ensures the structured state store is ready. It executes the SQL to create:
@@ -48,8 +46,8 @@ async function processLayerJob(connectionId: string, payload: any) {
   const schema = await storageResolver.resolve(connectionId);
 
   // 2. JIT Check (The "Ensure" step)
-  // If the table is missing, the worker triggers a fast Atlas apply
-  await dbmanager.ensureKernelReady(schema);
+  // If the tables are missing, the worker triggers a fast schema plan apply
+  await dbmanager.applyPlan(schema, SchemaPlan.GATEWAY_ACTIVE);
 
   // 3. Perform Business Logic
   await db.withSchema(schema).insert(...);

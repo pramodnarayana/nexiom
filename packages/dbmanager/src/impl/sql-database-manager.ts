@@ -20,33 +20,35 @@ export class SqlDatabaseManager implements DatabaseManager {
     async applyPlan(schemaName: string, plan: SchemaPlan): Promise<void> {
         this.validateSchemaName(schemaName);
 
-        // 1. Always ensure namespace exists (Minimum baseline for all plans)
-        await this.db.$client.query(
-            `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`,
-        );
+        // Run DDL inside a transaction to prevent partial schema/table creation
+        await this.db.transaction(async (tx) => {
+            // 1. Always ensure namespace exists (Minimum baseline for all plans)
+            await tx.execute(
+                `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`,
+            );
 
-        if (plan === SchemaPlan.NAMESPACE_ONLY) {
-            return;
-        }
+            if (plan === SchemaPlan.NAMESPACE_ONLY) {
+                return;
+            }
 
-        // 2. Ensure Gateway Tables exist
-        await this.provisionGatewayTables(schemaName);
+            // 2. Ensure Gateway Tables exist
+            await this.provisionGatewayTables(tx, schemaName);
 
-        if (plan === SchemaPlan.GATEWAY_ACTIVE) {
-            return;
-        }
+            if (plan === SchemaPlan.GATEWAY_ACTIVE) {
+                return;
+            }
 
-        // 3. (Future) Ensure Replica Tables exist
-        // TODO: implement provisionReplicaTables(schemaName) before enabling REPLICA_ACTIVE in production
-        if (plan === SchemaPlan.REPLICA_ACTIVE) {
-            return;
-        }
+            // 3. (Future) Ensure Replica Tables exist
+            if (plan === SchemaPlan.REPLICA_ACTIVE) {
+                throw new Error('Provisioning for SchemaPlan.REPLICA_ACTIVE is not yet implemented.');
+            }
+        });
     }
 
-    private async provisionGatewayTables(schemaName: string): Promise<void> {
+    private async provisionGatewayTables(tx: any, schemaName: string): Promise<void> {
         // We execute these independently so that they are idempotent.
-        // If they error, the whole task fails, preventing partial corruption.
-        await this.db.$client.query(`
+        // If they error, the transaction rolls back, preventing partial corruption.
+        await tx.execute(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_gateway (
             id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
             source_event_id  TEXT        NOT NULL,
@@ -62,18 +64,18 @@ export class SqlDatabaseManager implements DatabaseManager {
         );
     `);
 
-        await this.db.$client.query(`
+        await tx.execute(`
         CREATE INDEX IF NOT EXISTS idx_inbound_gateway_status
             ON "${schemaName}".inbound_gateway (status);
     `);
 
-        await this.db.$client.query(`
+        await tx.execute(`
         CREATE INDEX IF NOT EXISTS idx_inbound_gateway_object_type
             ON "${schemaName}".inbound_gateway (object_type)
             WHERE object_type IS NOT NULL;
     `);
 
-        await this.db.$client.query(`
+        await tx.execute(`
         CREATE INDEX IF NOT EXISTS idx_inbound_gateway_created_at
             ON "${schemaName}".inbound_gateway (created_at DESC);
     `);
