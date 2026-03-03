@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import {
   TriggerExecutorService,
+  type WebhookRunParams,
   type TriggerRunParams,
 } from './trigger-executor.service';
 import { PieceRegistryService } from './piece-registry.service';
@@ -29,6 +30,7 @@ interface DlqJob {
   objectType?: string;
   propsValue: Record<string, unknown>;
   auth: unknown;
+  payload?: unknown;
   failedAt: string;
   error: string;
   attempt: number;
@@ -230,7 +232,7 @@ export class DlqProcessorService {
       return;
     }
 
-    const params: TriggerRunParams = {
+    const params: TriggerRunParams | WebhookRunParams = {
       trigger,
       appName: job.appName,
       triggerName: job.triggerName,
@@ -238,6 +240,7 @@ export class DlqProcessorService {
       auth: job.auth,
       propsValue: job.propsValue,
       workspaceId: job.workspaceId,
+      ...(job.payload !== undefined && { payload: job.payload }),
     };
 
     try {
@@ -279,46 +282,55 @@ export class DlqProcessorService {
         attempt: job.attempt,
       });
     } catch (err) {
-      const nextAttempt = job.attempt + 1;
+      await this.handleJobFailure(job, raw, err);
+    }
+  }
 
-      if (nextAttempt > MAX_ATTEMPTS) {
-        // Permanently failed — move to human-inspection list
-        const failedPayload = JSON.stringify({
-          appName: job.appName,
-          triggerName: job.triggerName,
-          workspaceId: job.workspaceId,
-          attempt: nextAttempt,
-          exhaustedAt: new Date().toISOString(),
-          error: err instanceof Error ? err.message : String(err),
-        });
-        await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-        await this.redis.lpush(DLQ_FAILED_KEY, failedPayload);
-        this.logger.error('DLQ job exhausted retries — moved to failed list', {
-          appName: job.appName,
-          triggerName: job.triggerName,
-        });
-      } else {
-        // Schedule a delayed retry via sorted set (score = epoch ms)
-        const delay = Math.pow(2, nextAttempt) * 1000;
-        const retryJob = JSON.stringify({
-          appName: job.appName,
-          triggerName: job.triggerName,
-          workspaceId: job.workspaceId,
-          objectType: job.objectType,
-          propsValue: job.propsValue,
-          auth: job.auth,
-          failedAt: job.failedAt,
-          error: err instanceof Error ? err.message : String(err),
-          attempt: nextAttempt,
-          nextAttemptAt: Date.now() + delay,
-        });
-        await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-        await this.redis.zadd(DLQ_DELAYED_KEY, Date.now() + delay, retryJob);
-        this.logger.warn(
-          `DLQ job failed (attempt ${nextAttempt}/${MAX_ATTEMPTS}) — scheduled delay ${delay}ms`,
-          { appName: job.appName, triggerName: job.triggerName },
-        );
-      }
+  private async handleJobFailure(
+    job: DlqJob,
+    raw: string,
+    err: unknown,
+  ): Promise<void> {
+    const nextAttempt = job.attempt + 1;
+
+    if (nextAttempt > MAX_ATTEMPTS) {
+      // Permanently failed — move to human-inspection list
+      const failedPayload = JSON.stringify({
+        appName: job.appName,
+        triggerName: job.triggerName,
+        workspaceId: job.workspaceId,
+        attempt: nextAttempt,
+        exhaustedAt: new Date().toISOString(),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
+      await this.redis.lpush(DLQ_FAILED_KEY, failedPayload);
+      this.logger.error('DLQ job exhausted retries — moved to failed list', {
+        appName: job.appName,
+        triggerName: job.triggerName,
+      });
+    } else {
+      // Schedule a delayed retry via sorted set (score = epoch ms)
+      const delay = Math.pow(2, nextAttempt) * 1000;
+      const retryJob = JSON.stringify({
+        appName: job.appName,
+        triggerName: job.triggerName,
+        workspaceId: job.workspaceId,
+        objectType: job.objectType,
+        propsValue: job.propsValue,
+        auth: job.auth,
+        payload: job.payload,
+        failedAt: job.failedAt,
+        error: err instanceof Error ? err.message : String(err),
+        attempt: nextAttempt,
+        nextAttemptAt: Date.now() + delay,
+      });
+      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
+      await this.redis.zadd(DLQ_DELAYED_KEY, Date.now() + delay, retryJob);
+      this.logger.warn(
+        `DLQ job failed (attempt ${nextAttempt}/${MAX_ATTEMPTS}) — scheduled delay ${delay}ms`,
+        { appName: job.appName, triggerName: job.triggerName },
+      );
     }
   }
 }

@@ -192,6 +192,7 @@ export class TriggerExecutorService {
     }
 
     let inserted = 0;
+    let currentIndex = 0;
     const store = this.buildStore(params);
 
     for (const record of records) {
@@ -217,34 +218,17 @@ export class TriggerExecutorService {
           await store.put('last_cursor', sourceCursor);
         }
       } catch (err) {
-        // Per-record failure — push to DLQ so it’s retried, then re-throw
-        // so the batch fails visibly and the cursor does not advance past
-        // unprocessed records.
-        this.logger.error('Record ingest failed — pushing to DLQ', {
+        await this.handleRecordIngestFailure(
+          params,
+          fromDlqRetry,
+          records,
+          currentIndex,
           sourceEventId,
-          appName: params.appName,
-          triggerName: params.triggerName,
-          workspaceId: params.workspaceId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-
-        // For webhooks, `params` may have a `payload` containing the full array or payload.
-        // We update it to only contain the remaining unprocessed records so
-        // the DLQ retry doesn't re-process already committed records.
-        const remainingRecords = records.slice(inserted);
-        let dlqParams: TriggerRunParams | WebhookRunParams = params;
-        if ('payload' in params) {
-          dlqParams = {
-            ...params,
-            payload: Array.isArray(params.payload)
-              ? remainingRecords
-              : params.payload,
-          };
-        }
-
-        await this.pushToDlq(dlqParams, err);
-        throw err;
+          err,
+        );
       }
+
+      currentIndex++;
     }
 
     this.logger.log(
@@ -256,6 +240,50 @@ export class TriggerExecutorService {
         objectType: params.objectType,
       },
     );
+  }
+
+  private async handleRecordIngestFailure(
+    params: TriggerRunParams | WebhookRunParams,
+    fromDlqRetry: boolean,
+    records: unknown[],
+    currentIndex: number,
+    sourceEventId: string,
+    err: unknown,
+  ): Promise<void> {
+    // Per-record failure — push to DLQ so it’s retried, then re-throw
+    // so the batch fails visibly and the cursor does not advance past
+    // unprocessed records.
+    this.logger.error('Record ingest failed', {
+      sourceEventId,
+      appName: params.appName,
+      triggerName: params.triggerName,
+      workspaceId: params.workspaceId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+
+    // Skip pushing to DLQ if we are already in a DLQ retry context,
+    // so the outer DLQ layer increments the retry attempt counter instead
+    // of appending a duplicate DLQ job via this nested catch block.
+    if (fromDlqRetry) {
+      throw err;
+    }
+
+    // For webhooks, `params` may have a `payload` containing the full array or payload.
+    // We update it to only contain the remaining unprocessed records so
+    // the DLQ retry doesn't re-process already committed records.
+    const remainingRecords = records.slice(currentIndex);
+    let dlqParams: TriggerRunParams | WebhookRunParams = params;
+    if ('payload' in params) {
+      dlqParams = {
+        ...params,
+        payload: Array.isArray(params.payload)
+          ? remainingRecords
+          : params.payload,
+      };
+    }
+
+    await this.pushToDlq(dlqParams, err);
+    throw err;
   }
 
   // ─── Gateway row insert ──────────────────────────────────────────────────
