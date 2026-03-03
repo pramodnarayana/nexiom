@@ -26,5 +26,10 @@ export * from './crypto/encryption.service.js';
 // Framework — Piece, Action, Trigger, Auth, Property definitions
 export * from './framework/index.js';
 
-// Registered app Pieces — one export per integrated app
-export { salesforcePiece } from './apps/salesforce/index.js';
+export { salesforce as salesforcePiece } from '@activepieces/piece-salesforce';
+
+// The upstream displayName is "Quickbooks Online" which auto-derives to "quickbooks-online".
+// Pin the name to 'quickbooks' so DB app_name lookups remain stable.
+import { quickbooks as _quickbooks } from '@activepieces/piece-quickbooks';
+import type { Piece } from './framework/piece.js';
+export const quickbooksPiece: Piece = { ...(_quickbooks as unknown as Piece), name: 'quickbooks' };

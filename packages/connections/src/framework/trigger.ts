@@ -8,7 +8,22 @@ import { AnyProperty } from './property.js';
 export enum TriggerStrategy {
     POLLING = 'POLLING',
     WEBHOOK = 'WEBHOOK',
+    APP_WEBHOOK = 'APP_WEBHOOK',
+    TIMEBASED = 'TIMEBASED',
 }
+
+export enum DedupeStrategy {
+    TIMEBASED = 'TIMEBASED',
+    LAST_ITEM = 'LAST_ITEM',
+}
+
+export const pollingHelper = {
+    test:      async (_polling: unknown, _ctx: unknown): Promise<unknown[]> => [],
+    poll:      async (_polling: unknown, _ctx: unknown): Promise<unknown[]> => [],
+    onEnable:  async (_polling: unknown, _ctx: unknown): Promise<void> => {},
+    onDisable: async (_polling: unknown, _ctx: unknown): Promise<void> => {},
+    awaitOn:   async (_polling: unknown, _ctx: unknown): Promise<unknown[]> => [],
+};
 
 /**
  * Cursor-backed key/value store injected into every trigger context.

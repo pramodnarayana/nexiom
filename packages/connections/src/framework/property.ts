@@ -114,4 +114,15 @@ export const Property = {
     ): StaticDropdownProperty<T> {
         return { ...request, type: PropertyType.STATIC_DROPDOWN };
     },
+    File(request: any): any { return { ...request, type: PropertyType.FILE }; },
+    Array(request: any): any { return { ...request, type: 'ARRAY' }; },
+    Object(request: any): any { return { ...request, type: 'OBJECT' }; },
+    DateTime(request: any): any { return { ...request, type: 'DATE_TIME' }; },
+    DynamicProperties(request: any): any { return { ...request, type: 'DYNAMIC' }; },
+    MultiSelectDropdown(request: any): any { return { ...request, type: 'MULTI_SELECT_DROPDOWN' }; },
+    StaticMultiSelectDropdown(request: any): any { return { ...request, type: 'STATIC_MULTI_SELECT_DROPDOWN' }; },
+    OAuth2(request: any): any { return { ...request, type: 'OAUTH2' }; },
+    CustomAuth(request: any): any { return { ...request, type: 'CUSTOM_AUTH' }; },
+    Dictionary(request: any): any { return { ...request, type: 'DICTIONARY' }; },
+    MarkDown(request: any): any { return { ...request, type: 'MARKDOWN' }; },
 };

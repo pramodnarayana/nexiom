@@ -1,0 +1,10 @@
+{
+    "name": "@activepieces/pieces-common",
+    "version": "1.0.0",
+    "description": "Enterprise Shim adapter routing Activepieces traffic to Nexiom",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "dependencies": {
+        "@nexiom/connections": "workspace:*"
+    }
+}

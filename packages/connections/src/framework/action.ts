@@ -34,3 +34,25 @@ export function createAction<AuthT = any, PropsT = any, ReturnT = any>(
         ...params,
     };
 }
+
+export interface CustomApiCallParams {
+    baseUrl: (auth: unknown) => string;
+    auth: unknown;
+    authMapping: (auth: unknown) => Promise<Record<string, string>>;
+}
+
+/**
+ * Stub for the Activepieces createCustomApiCallAction used by pieces-common.
+ * Returns a no-op action so external pieces that register a custom API call
+ * action can be loaded without errors.
+ */
+export function createCustomApiCallAction(_params: CustomApiCallParams): Action {
+    return createAction({
+        name: 'custom_api_call',
+        displayName: 'Custom API Call',
+        description: 'Performs a custom API call.',
+        requireAuth: true,
+        props: {},
+        run: async () => { throw new Error('Not implemented'); },
+    });
+}

@@ -16,7 +16,7 @@ export interface Piece {
 }
 
 export interface CreatePieceParams {
-    name: string;
+    name?: string;
     displayName: string;
     logoUrl: string;
     auth?: PieceAuthProperty;
@@ -66,7 +66,7 @@ export function createPiece(params: CreatePieceParams): Piece {
     );
 
     return {
-        name: params.name,
+        name: params.name || params.displayName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         displayName: params.displayName,
         logoUrl: params.logoUrl,
         auth: params.auth,
