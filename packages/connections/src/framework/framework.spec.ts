@@ -9,7 +9,7 @@ import {
     HostHttpClient,
     HttpMethod,
 } from './index.js';
-import { TokenManagerService } from '../connectivity/token-manager.service.js';
+import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { Redis } from 'ioredis';
 

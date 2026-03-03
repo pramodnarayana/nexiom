@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from '../modules/identity/users/users.module';
@@ -16,8 +17,10 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../db/schema';
 import { ConnectionsModule } from '../modules/connections/connections.module';
+import { TriggerModule } from '../modules/trigger/trigger.module';
 import { EmailModule } from '../modules/email/email.module';
 import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module';
+import { CacheModule } from '@nexiom/cache';
 
 @Module({
   imports: [
@@ -28,6 +31,10 @@ import { StorageResolverModule } from '../modules/storage-resolver/storage-resol
         '.env', // shared root env (from monorepo root)
       ],
     }),
+    // Global Redis client — available to all modules via REDIS_CLIENT token
+    CacheModule,
+    // Global cron scheduler — required for PollerService and DlqProcessorService
+    ScheduleModule.forRoot(),
     IdentityModule.registerAsync({
       imports: [
         ConfigModule,
@@ -73,6 +80,7 @@ import { StorageResolverModule } from '../modules/storage-resolver/storage-resol
     SystemAdminModule,
     RolesModule,
     ConnectionsModule,
+    TriggerModule,
     StorageResolverModule,
   ],
   controllers: [AppController],

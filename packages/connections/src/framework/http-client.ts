@@ -4,7 +4,7 @@ import {
     BadGatewayException,
     BadRequestException,
 } from '@nestjs/common';
-import { TokenManagerService } from '../connectivity/token-manager.service.js';
+import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
