@@ -40,3 +40,6 @@ playwright-report/
 # Vendor Reference Code
 activepieces-reference/
 n8n-reference/
+
+# TypeScript Build Info
+*.tsbuildinfo

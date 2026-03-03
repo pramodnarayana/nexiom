@@ -41,6 +41,7 @@
     "@nexiom/cache": "workspace:*",
     "@nexiom/connections": "workspace:*",
     "@nexiom/database": "workspace:*",
+    "@nexiom/dbmanager": "workspace:*",
     "@nexiom/identity": "workspace:*",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",

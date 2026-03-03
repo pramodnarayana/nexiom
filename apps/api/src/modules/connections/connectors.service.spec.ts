@@ -7,6 +7,7 @@ import {
   EncryptionService,
   AppCredentialError,
 } from '@nexiom/connections';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -85,6 +86,7 @@ describe('ConnectorsService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
+        { provide: DB_MANAGER, useValue: { applyPlan: vi.fn() } },
       ],
     }).compile();
 
@@ -561,7 +563,7 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should throw InternalServerErrorException and abort if schema creation execute() fails', async () => {
+    it('should throw InternalServerErrorException and abort if DB manager applyPlan fails', async () => {
       // Mock appConnection insert succeeding:
       mockDbInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
@@ -582,11 +584,29 @@ describe('ConnectorsService', () => {
         }),
       });
 
-      // Mock the raw schema execute command failing:
-      mockDb.execute.mockRejectedValueOnce(new Error('schema create failed'));
+      // We need to re-mock the DB_MANAGER for this specific test
+      const failingDbManager = {
+        applyPlan: vi.fn().mockRejectedValue(new Error('applyPlan failed')),
+      };
+      const moduleFail: TestingModule = await Test.createTestingModule({
+        providers: [
+          ConnectorsService,
+          { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+          {
+            provide: ConfigService,
+            useValue: { get: vi.fn().mockReturnValue('mock-region-context') },
+          },
+          { provide: EncryptionService, useValue: mockEncryptionService },
+          { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
+          { provide: DB_MANAGER, useValue: failingDbManager },
+        ],
+      }).compile();
+
+      const failingService =
+        moduleFail.get<ConnectorsService>(ConnectorsService);
 
       await expect(
-        service.storeOAuthConnection({
+        failingService.storeOAuthConnection({
           tenantId: 'tenant-123',
           providerName: 'salesforce',
           externalId: 'salesforce-tms',

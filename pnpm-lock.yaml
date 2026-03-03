@@ -66,6 +66,9 @@ importers:
       '@nexiom/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@nexiom/dbmanager':
+        specifier: workspace:*
+        version: link:../../packages/dbmanager
       '@nexiom/identity':
         specifier: workspace:*
         version: link:../../packages/identity
@@ -513,6 +516,19 @@ importers:
       drizzle-kit:
         specifier: ^0.31.8
         version: 0.31.8
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/dbmanager:
+    dependencies:
+      '@nexiom/database':
+        specifier: workspace:*
+        version: link:../database
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.3
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

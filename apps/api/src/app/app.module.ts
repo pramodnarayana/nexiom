@@ -21,6 +21,7 @@ import { TriggerModule } from '../modules/trigger/trigger.module';
 import { EmailModule } from '../modules/email/email.module';
 import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module';
 import { CacheModule } from '@nexiom/cache';
+import { DbManagerModule } from '../modules/dbmanager/dbmanager.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { CacheModule } from '@nexiom/cache';
     ConnectionsModule,
     TriggerModule,
     StorageResolverModule,
+    DbManagerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
