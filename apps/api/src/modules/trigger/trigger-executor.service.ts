@@ -110,7 +110,27 @@ export class TriggerExecutorService {
       payload = rawBody;
     }
 
-    await this.executeAndIngest({ ...params, payload });
+    // Derive a stable dedup key from the raw body so concurrent deliveries of
+    // the same event compete for the same lock (identical to runPoll semantics).
+    const bodyHash = createHash('sha256')
+      .update(rawBody)
+      .digest('hex')
+      .slice(0, 16);
+    const lockKey = `lock:webhook:${params.workspaceId}:${params.triggerName}:${bodyHash}`;
+    const token = await this.acquireLock(lockKey);
+    if (!token) {
+      this.logger.debug('Skipping webhook — lock held (duplicate delivery)', {
+        workspaceId: params.workspaceId,
+        triggerName: params.triggerName,
+      });
+      return;
+    }
+
+    try {
+      await this.executeAndIngest({ ...params, payload });
+    } finally {
+      await this.releaseLock(lockKey, token);
+    }
   }
 
   // ─── onEnable / onDisable ────────────────────────────────────────────────
@@ -204,7 +224,6 @@ export class TriggerExecutorService {
 
       try {
         const didInsert = await this.insertGatewayRow({
-          workspaceId: params.workspaceId,
           appName: params.appName,
           triggerName: params.triggerName,
           objectType: params.objectType,
@@ -289,7 +308,6 @@ export class TriggerExecutorService {
   // ─── Gateway row insert ──────────────────────────────────────────────────
 
   private async insertGatewayRow(row: {
-    workspaceId: string;
     appName: string;
     triggerName: string;
     objectType: string | undefined;

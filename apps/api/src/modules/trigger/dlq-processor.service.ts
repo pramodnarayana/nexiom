@@ -96,8 +96,8 @@ export class DlqProcessorService {
       'if #members > 0 then',
       '  for _, m in ipairs(members) do',
       '    redis.call("LPUSH", KEYS[2], m)',
+      '    redis.call("ZREM", KEYS[1], m)',
       '  end',
-      '  redis.call("ZREM", KEYS[1], unpack(members))',
       'end',
       'return #members',
     ].join('\n');
