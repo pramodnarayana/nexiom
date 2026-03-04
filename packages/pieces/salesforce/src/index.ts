@@ -43,6 +43,7 @@ import { newOrUpdatedRecord } from './lib/trigger/new-updated-record';
 import { newOutboundMessage } from './lib/trigger/new-outbound-message';
 import { newRecord } from './lib/trigger/new-record';
 import { newUpdatedFile } from './lib/trigger/new-updated-file';
+import { salesforceUniversalTrigger } from './lib/trigger/universal-trigger.js';
 import { exportReport } from './lib/action/export-report';
 
 export const salesforceAuth = PieceAuth.OAuth2({
@@ -134,5 +135,6 @@ export const salesforce = createPiece({
         newOutboundMessage,
         newRecord,
         newUpdatedFile,
+        salesforceUniversalTrigger,
     ],
 });

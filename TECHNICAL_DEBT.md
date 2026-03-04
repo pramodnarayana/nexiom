@@ -84,6 +84,23 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **Reset Migration History**: Generate a fresh baseline database schema and squash all historical migrations to reset the corrupted `.drizzle` snapshot folder.
 - **Centralize DB Credentials**: Export a generic database URL resolution file that automatically paths to the root or `apps/api` `.env` regardless of which workspace is currently executing the CLI.
 
+### 4. Shadow Mode Direct Trigger Imports
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts` & Quickbooks  
+**Added**: 2026-03-04  
+**Impact**: Code Architecture, Module Coupling  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- Universal triggers directly import `newContact` and `newLead` (and their QuickBooks equivalents) to run Shadow Mode data parity checks.
+- This creates tight coupling and a code smell where the generic engine is strongly typed against the old implementations it's supposed to replace.
+
+**Recommended Solution**:
+
+- **Short term**: Complete Phase 3 testing and delete the legacy stubs immediately, removing the imports.
+- **Long term (if kept)**: Implement a Dependency Injection registry where legacy triggers self-register for shadow testing, keeping `universal-trigger.ts` completely unaware and decoupled.
+
 ---
 
 ## Medium Priority

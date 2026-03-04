@@ -17,6 +17,8 @@ import { newExpense } from './triggers/new-expense';
 import { newCustomer } from './triggers/new-customer';
 import { newDeposit } from './triggers/new-deposit';
 import { newTransfer } from './triggers/new-transfer';
+import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
+
 export const quickbooksAuth = PieceAuth.OAuth2({
   description: 'You can find Company ID under **settings->Additional Info**.',
   required: true,
@@ -67,6 +69,7 @@ export const quickbooks = createPiece({
     newExpense,
     newCustomer,
     newDeposit,
-    newTransfer
+    newTransfer,
+    quickbooksUniversalTrigger
   ],
 });
