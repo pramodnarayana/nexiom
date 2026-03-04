@@ -2,7 +2,6 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { TriggerStrategy } from '@nexiom/connections';
 import { TriggerExecutorService } from './trigger-executor.service';
 import { PieceRegistryService } from './piece-registry.service';
 
@@ -118,7 +117,7 @@ export class PollerService {
       conn.app_name,
       conn.trigger_name,
     );
-    if (!trigger || trigger.type !== TriggerStrategy.POLLING) return;
+    if (!trigger || trigger.type !== 'POLLING') return;
 
     const executed = await this.executor.runPoll({
       trigger,

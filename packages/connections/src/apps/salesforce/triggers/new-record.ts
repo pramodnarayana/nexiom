@@ -6,7 +6,7 @@ import {
 } from '../../../framework/index.js';
 import {
     assertSafeSalesforceObject,
-    runSalesforcePolling,
+    runSalesforce,
     type SalesforceAuth,
 } from './salesforce-polling.helper.js';
 
@@ -15,7 +15,7 @@ interface NewRecordProps {
 }
 
 /**
- * Polling trigger — fires for every Salesforce record created since the last cursor.
+ *  trigger — fires for every Salesforce record created since the last cursor.
  * The cursor (ISO timestamp from the last record's CreatedDate) is persisted in
  * Redis via TriggerContext.store.
  */
@@ -39,7 +39,7 @@ export const newRecordTrigger = createTrigger<SalesforceAuth, NewRecordProps>({
         // Guard against SOQL injection before any interpolation
         assertSafeSalesforceObject(object);
 
-        return runSalesforcePolling(auth, object, {
+        return runSalesforce(auth, object, {
             cursorKey: 'last_created_cursor',
             dateField: 'CreatedDate',
             extraColumns: ['Name'],

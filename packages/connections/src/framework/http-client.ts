@@ -24,17 +24,19 @@ export interface HttpRequest {
     headers?: Record<string, string>;
     body?: any;
     queryParams?: Record<string, string>;
+    responseType?: any;
     authentication?: {
-        type: 'BEARER_TOKEN';
+        type: string;
         token: string;
     };
 }
 
-export interface HttpResponse {
+export interface HttpResponse<T = any> {
     status: number;
     headers: Record<string, string>;
-    body: any;
+    body: T;
 }
+
 
 /** How long a trace context is retained before it is treated as expired (5 minutes). */
 const EXECUTION_STATE_TTL_MS = 5 * 60 * 1000;
@@ -114,7 +116,7 @@ export class HostHttpClient {
         }
     }
 
-    async sendRequest(request: HttpRequest): Promise<HttpResponse> {
+    async sendRequest<T = any, E = any, B = any>(request: HttpRequest): Promise<HttpResponse<T>> {
         // 0. Validate the URL immediately — a TypeError from new URL() must NOT be swallowed by the retry loop
         try {
             new URL(request.url);

@@ -1,0 +1,13 @@
+{
+  "name": "@nexiom/piece-salesforce",
+  "version": "0.5.1",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@nexiom/connections": "workspace:*",
+    "dayjs": "^1.11.19"
+  }
+}
