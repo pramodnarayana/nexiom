@@ -98,9 +98,10 @@ async function runUniversalTrigger(
     assertSafeSalesforceObject(objectName);
     const hint = await optimizationService.getHint('salesforce', objectName);
 
+    const authData = (context.auth as any).data || context.auth;
     const flatAuth = {
-        access_token: context.auth.access_token as string,
-        instance_url: context.auth.data.instance_url as string
+        access_token: (context.auth as any).access_token as string,
+        instance_url: authData.instance_url as string
     };
 
     // CDC path not yet implemented — warn and fall through to REST polling

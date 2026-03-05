@@ -6,21 +6,19 @@ This document provides the low-level technical specification for the FluxNex Int
 
 The registry stores "hacks" and "optimizations" for specific apps and objects. It allows the generic engine to behave as if it were custom-coded for high-performance entities.
 
-### Schema: `public.connector_optimization_hints`
+### Schema: `public.connector_object_profiles`
 
 | Column | Type | Description |
 | --- | --- | --- |
 | app_name | String | e.g., salesforce |
 | object_name | String | e.g., Contact |
-| strategy_overrides | JSONB | Optimization flags (Bulk, Stream, Join) |
-| cursor_precedence | String[] | Priority list of fields to use for polling |
+| profile | JSONB | Optimization profile containing strategy overrides and cursor precedence |
+| updated_at | Timestamp | Last modified date |
 
-### Example Entry: Salesforce Invoice
+### Example Entry: Salesforce Invoice (Profile JSON Payload)
 
 ```json
 {
-  "app_name": "salesforce",
-  "object_name": "Invoice",
   "strategy_overrides": {
     "use_bulk_api_threshold": 10000,
     "auto_join": ["LineItems", "Account"],

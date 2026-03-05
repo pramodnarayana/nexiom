@@ -32,7 +32,7 @@ This document provides the low-level technical specification for the Nexiom Inte
 
 ## 2. System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Route Engine (cron / webhook)                │
 └────────────────────────────┬────────────────────────────────────┘
@@ -322,7 +322,7 @@ export class BulkJobManager {
 
 **State machine:**
 
-```
+```text
 IDLE ──(TotalSize > threshold)──▶ IN_PROGRESS
                                      │
                                      │ (next poll cycle checks job status)

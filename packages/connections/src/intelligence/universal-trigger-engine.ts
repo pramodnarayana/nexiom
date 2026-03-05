@@ -88,15 +88,19 @@ export class UniversalTriggerEngine {
         // 9. Checkpoint State
         // MAX across all records — safe against out-of-order results and timestamp ties
         let maxCursor: string | undefined;
+        let maxTieBreaker: string | undefined;
         for (const rec of records) {
-            const val = (rec as Record<string, unknown>)[cursorField];
-            if (typeof val === 'string' && (!maxCursor || val > maxCursor)) {
+            const val = String((rec as Record<string, unknown>)[cursorField]);
+            const tieBreaker = String((rec as Record<string, unknown>)['Id'] ?? (rec as Record<string, unknown>)['id'] ?? '');
+
+            if (!maxCursor || val > maxCursor || (val === maxCursor && tieBreaker > (maxTieBreaker ?? ''))) {
                 maxCursor = val;
+                maxTieBreaker = tieBreaker;
             }
         }
         if (maxCursor) {
             await config.store.put(cursorKey, maxCursor);
-            log.info('Cursor advanced', { objectName, cursor: maxCursor });
+            log.info('Cursor advanced', { objectName, cursor: maxCursor, tieBreaker: maxTieBreaker });
         } else {
             log.debug('No new records, cursor retained', { objectName, cursor: lastCursor });
         }

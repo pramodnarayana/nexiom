@@ -101,6 +101,25 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **Short term**: Complete Phase 3 testing and delete the legacy stubs immediately, removing the imports.
 - **Long term (if kept)**: Implement a Dependency Injection registry where legacy triggers self-register for shadow testing, keeping `universal-trigger.ts` completely unaware and decoupled.
 
+### 5. Drizzle Schema Consolidation (Modular Monolith)
+
+**Location**: `packages/database`, `packages/identity`  
+**Added**: 2026-03-05  
+**Impact**: Code Architecture, Developer Velocity  
+**Effort**: High (1 sprint)
+
+**Current State**:
+
+- The project follows a strict "Bounded Context" approach with database schemas separated across multiple packages (`@nexiom/identity` manages `organization`, `@nexiom/database` manages `app_connection` and `tenant`).
+- While this prevents circular dependencies and provides strict microservice-style domain boundaries, it incurs the overhead of data duplication. Specifically, it necessitates an artificial `tenant` "anchor" table in the database package to shadow the real `organization` table.
+
+**Recommended Solution**:
+
+- Adopt the "Shared Database Architecture" (Monolithic DB Package) which is the industry standard for TS monorepos (e.g., Vercel, Cal.com, Supabase).
+- Migrate all Drizzle schema files from `@nexiom/identity` directly into `@nexiom/database`.
+- Make `@nexiom/database` the single source of truth for the entire database. All other packages will list it as a dependency.
+- This allows `app_connection` to safely declare a TypeScript foreign key directly to `organization` without circular dependency errors.
+
 ---
 
 ## Medium Priority

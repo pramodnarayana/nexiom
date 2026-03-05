@@ -74,7 +74,10 @@ describe('SalesforceQueryAdapter', () => {
         it('should default to COUNT() if Id field is missing from schema', () => {
             const noIdSchema: ObjectSchema = {
                 objectName: 'CustomObj__c',
-                fields: [{ name: 'Name', type: 'string', filterable: true, sortable: true, nillable: true }],
+                fields: [
+                    { name: 'Name', type: 'string', filterable: true, sortable: true, nillable: true },
+                    { name: 'CreatedDate', type: 'datetime', filterable: true, sortable: true, nillable: false }
+                ],
                 childRelationships: [],
                 fetchedAt: Date.now()
             };

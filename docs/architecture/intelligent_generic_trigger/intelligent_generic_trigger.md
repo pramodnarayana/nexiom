@@ -48,14 +48,14 @@ The generic engine must test the object's schema to determine the most reliable 
 Instead of 500 files, we move to a Core Registry + Unified Runner:
 
 ```typescript
-// packages/connectors/apps/salesforce/registry.ts
+// packages/connections/src/intelligence/optimization-registry.ts
 export const SalesforceObjectHacks = {
   'Contact': { preferApi: 'CDC', defaultFields: ['Email', 'AccountId'] },
   'Invoice': { autoJoinChildren: ['LineItems'], cursor: 'SystemModstamp' }
 };
 
-// packages/connectors/apps/salesforce/triggers/universal-trigger.ts
-export const universalTrigger = createTrigger({
+// packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts
+export const salesforceUniversalTrigger = createTrigger({
   name: 'universal_trigger',
   async run(context) {
     const { objectName, auth } = context;

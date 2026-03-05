@@ -30,12 +30,26 @@ export async function runQuickBooksQuery(
     const url = `${quickbooksCommon.getApiUrl(auth.props.companyId)}/query`
         + `?query=${encodeURIComponent(sql)}&minorversion=65`;
 
-    const response = await fetch(url, {
-        headers: {
-            Authorization: `Bearer ${auth.access_token}`,
-            Accept: 'application/json',
-        },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${auth.access_token}`,
+                Accept: 'application/json',
+            },
+            signal: controller.signal,
+        });
+    } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') {
+            throw new Error(`QuickBooks query timed out after 15 seconds`);
+        }
+        throw e;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
         const text = await response.text();
@@ -54,10 +68,20 @@ export async function runQuickBooksQuery(
         .filter(v => typeof v === 'object' && v !== null);
 
     if (records.length > 0) {
-        const last = records.at(-1) as Record<string, any>;
-        const nextCursor = last?.['MetaData']?.['LastUpdatedTime'];
-        if (nextCursor) {
-            await store.put(cursorKey, nextCursor);
+        let maxTimestamp = 0;
+        let latestCursorStr: string | null = null;
+        for (const record of records as Record<string, any>[]) {
+            const timeStr = record?.['MetaData']?.['LastUpdatedTime'];
+            if (timeStr) {
+                const parsed = Date.parse(timeStr);
+                if (!Number.isNaN(parsed) && parsed > maxTimestamp) {
+                    maxTimestamp = parsed;
+                    latestCursorStr = timeStr;
+                }
+            }
+        }
+        if (latestCursorStr) {
+            await store.put(cursorKey, latestCursorStr);
         }
     }
 

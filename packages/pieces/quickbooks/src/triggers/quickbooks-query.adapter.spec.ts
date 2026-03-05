@@ -59,5 +59,36 @@ describe('QuickBooksQueryAdapter', () => {
                 });
             }).toThrowError("Invalid cursor format: 1' OR '1'='1");
         });
+
+        it('should throw an error for invalid cursorField formats to prevent SQL injection', () => {
+            expect(() => {
+                QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
+                    objectName: 'Invoice',
+                    cursorField: 'Id; DROP TABLE Invoice',
+                    cursorValue: '1',
+                    limit: 10
+                });
+            }).toThrowError('Invalid cursorField: Id; DROP TABLE Invoice');
+        });
+
+        it('should throw an error for invalid limit formats to prevent SQL injection', () => {
+            expect(() => {
+                QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
+                    objectName: 'Invoice',
+                    cursorField: 'Id',
+                    cursorValue: '1',
+                    limit: '10; DROP TABLE' as any
+                });
+            }).toThrowError('Invalid limit: 10; DROP TABLE');
+
+            expect(() => {
+                QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
+                    objectName: 'Invoice',
+                    cursorField: 'Id',
+                    cursorValue: '1',
+                    limit: -5
+                });
+            }).toThrowError('Invalid limit: -5');
+        });
     });
 });

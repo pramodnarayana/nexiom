@@ -9,7 +9,7 @@ All file paths, function names, and API endpoints are grounded in the actual cod
 ## 0. Pre-conditions & Repository State
 
 | Item | Current State | Required Before Start |
-|---|---|---|
+| --- | --- | --- |
 | Salesforce triggers | 8 webhook stubs in `packages/pieces/salesforce/src/lib/trigger/` | No change — replace at end |
 | QuickBooks triggers | 5 webhook stubs in `packages/pieces/quickbooks/src/triggers/` | No change — replace at end |
 | Polling helper | `packages/connections/src/apps/salesforce/triggers/salesforce-polling.helper.ts` | Read-only reference |
@@ -23,7 +23,8 @@ All file paths, function names, and API endpoints are grounded in the actual cod
 ### Task 1.1 — Create `intelligence/` package scaffold
 
 **Files to create:**
-```
+
+```text
 packages/connections/src/intelligence/
   index.ts          ← barrel export
   optimization-registry.ts
@@ -36,6 +37,7 @@ packages/connections/src/intelligence/
 **Action:** Create the directory and empty barrel. No logic yet — establishes the import path for all subsequent tasks.
 
 **Acceptance criteria:**
+
 - `import { DiscoveryService } from '@nexiom/connections/intelligence'` resolves without TypeScript errors.
 - All five service files export at least their type definitions.
 
@@ -46,12 +48,14 @@ packages/connections/src/intelligence/
 **File:** `packages/connections/src/intelligence/optimization-registry.ts`
 
 **What to build:**
+
 - TypeScript interfaces: `ObjectHint`, `AppHints`, `OptimizationRegistry` (see design doc §3.1).
 - Static `OPTIMIZATION_REGISTRY` constant with entries for Salesforce `Contact`, `Opportunity`, `Invoice__c` and QuickBooks `Invoice`.
 
 **No external dependencies.** Pure TypeScript — no HTTP calls, no DB reads.
 
 **Acceptance criteria:**
+
 - `OPTIMIZATION_REGISTRY.salesforce.Contact.cursorPrecedence` returns `['SystemModstamp', 'LastModifiedDate']`.
 - TypeScript compiles without errors.
 
@@ -62,6 +66,7 @@ packages/connections/src/intelligence/
 **File:** `packages/connections/src/intelligence/discovery-service.ts`
 
 **What to build:**
+
 1. Interfaces: `FieldDescriptor`, `ChildRelationshipDescriptor`, `ObjectSchema` (see design doc §3.2).
 2. `DiscoveryService` class with:
    - `describe(auth, objectName): Promise<ObjectSchema>` — calls `GET /services/data/v59.0/sobjects/{object}/describe`, normalises the response to `ObjectSchema`, caches for 15 minutes.
@@ -73,6 +78,7 @@ packages/connections/src/intelligence/
 **Auth shape:** `SalesforceAuth` from `salesforce-polling.helper.ts:15–18` (`access_token`, `instance_url`).
 
 **Acceptance criteria:**
+
 - First call hits the API; second call within 15 min is served from cache (verify with a spy in unit tests).
 - `fieldExists` returns `false` for a field not present in the schema.
 - Cache is invalidated correctly and next call fetches fresh data.
@@ -84,6 +90,7 @@ packages/connections/src/intelligence/
 **File:** `packages/connections/src/intelligence/smart-cursor-selector.ts`
 
 **What to build:**
+
 - Static class `SmartCursorSelector` with `pick(schema, hint?): string`.
 - Default precedence: `['SystemModstamp', 'LastModifiedDate', 'CreatedDate']`.
 - Falls back to `'Id'` if none found.
@@ -91,7 +98,7 @@ packages/connections/src/intelligence/
 **Acceptance criteria (unit tests):**
 
 | Schema has | Hint | Expected result |
-|---|---|---|
+| --- | --- | --- |
 | `SystemModstamp`, `LastModifiedDate` | none | `SystemModstamp` |
 | `LastModifiedDate` only | none | `LastModifiedDate` |
 | `CreatedDate` only | none | `CreatedDate` |
@@ -106,6 +113,7 @@ packages/connections/src/intelligence/
 **File:** `packages/connections/src/intelligence/dynamic-query-builder.ts`
 
 **What to build:**
+
 1. `QuerySpec` interface (see design doc §3.4).
 2. `DynamicQueryBuilder.buildSOQL(schema, spec): string`
    - Always includes `Id` and `cursorField`.
@@ -121,7 +129,7 @@ packages/connections/src/intelligence/
 **Acceptance criteria (unit tests):**
 
 | Input | Expected SOQL fragment |
-|---|---|
+| --- | --- |
 | Schema with Name, Email; no joins | `SELECT Id, SystemModstamp, Email, Name FROM Contact WHERE ...` |
 | Schema with autoJoin `['OpportunityLineItems']` | `..., (SELECT Id, Quantity FROM OpportunityLineItems) FROM Opportunity WHERE ...` |
 | `requestedFields: ['Name']` | `SELECT Id, SystemModstamp, Name FROM ...` |
@@ -134,6 +142,7 @@ packages/connections/src/intelligence/
 **File:** `packages/connections/src/intelligence/bulk-job-manager.ts`
 
 **What to build:**
+
 1. `BulkJobCheckpoint` interface and `BulkJobState` type (see design doc §3.5).
 2. `BulkJobManager.run(auth, soql, store): Promise<unknown[]>` — implements the state machine using the Bulk Query API directly:
    - Read checkpoint from `store.get('igt_bulk_job_checkpoint')`.
@@ -146,6 +155,7 @@ packages/connections/src/intelligence/
 **Do not reuse** the existing `createBulkJob` / `getBulkJobInfo` helpers from `common/index.ts` — those target the Bulk **Ingest** API (`/jobs/ingest/`) which is for writing data. Use the Bulk **Query** API endpoints directly (`/jobs/query/`) as specified in design doc §3.5.
 
 **Acceptance criteria:**
+
 - If a checkpoint exists with `IN_PROGRESS` state, no new job is created (verified via mock).
 - Completed job returns records and clears the checkpoint from `TriggerStore`.
 - Failed job clears checkpoint and throws a typed error.
@@ -158,6 +168,7 @@ packages/connections/src/intelligence/
 
 **What to build:**
 Full `createTrigger()` implementation following the execution lifecycle in design doc §4:
+
 1. `assertSafeSalesforceObject(objectName)`
 2. Load `OPTIMIZATION_REGISTRY.salesforce[objectName]`
 3. `discoveryService.describe(auth, objectName)`
@@ -169,11 +180,13 @@ Full `createTrigger()` implementation following the execution lifecycle in desig
 9. Advance cursor to last record's `cursorField` value
 
 **Props:**
+
 - `object`: reuse `salesforcesCommon.object` dropdown from `common/index.ts` — no new API calls needed.
 
 **Auth:** Use `SalesforceAuth` flat shape (`auth.access_token`, `auth.instance_url`).
 
 **Acceptance criteria:**
+
 - Running with `objectName = 'Contact'` produces SOQL containing `SystemModstamp` (from hint).
 - Running with `objectName = 'CustomObject__c'` (not in registry) falls back to `SmartCursorSelector` default precedence.
 - Schema drift: if `DiscoveryService.fieldExists` returns `false`, trigger returns `[]` without throwing.
@@ -198,6 +211,7 @@ Add `salesforceUniversalTrigger` to the `triggers` array of the `createPiece()` 
 **File:** `packages/pieces/quickbooks/src/triggers/quickbooks-polling.helper.ts`
 
 **What to build:**
+
 - `runQuickBooksQuery(auth, entityType, store): Promise<unknown[]>` as specified in design doc §5.1.
 - Cursor key: `igt_{entityType}_MetaData.LastUpdatedTime`.
 - Default lookback: 24 hours (consistent with Salesforce helper).
@@ -210,6 +224,7 @@ Add `salesforceUniversalTrigger` to the `triggers` array of the `createPiece()` 
 **Auth shape:** `{ access_token: string; realmId: string }` (derive from existing `quickbooksAuth` OAuth2 config).
 
 **Acceptance criteria:**
+
 - Mock query response with 3 Invoice records returns an array of 3 records.
 - Cursor advances to the `MetaData.LastUpdatedTime` of the last record.
 - Empty `QueryResponse` returns `[]` without error and does not advance the cursor.
@@ -249,6 +264,7 @@ export const quickbooksUniversalTrigger = createTrigger({
 `QB_SUPPORTED_ENTITIES` is a constant listing all queryable QBO entities (Invoice, Customer, Payment, Expense, Deposit, Transfer, etc.).
 
 **Acceptance criteria:**
+
 - Running with `entity = 'Invoice'` builds and executes the correct QBO SQL query.
 - Integration test: mock QBO query API, verify cursor is advanced, records returned.
 - Running with an entity not in `OPTIMIZATION_REGISTRY` works correctly via the default path.
@@ -271,12 +287,14 @@ Add `quickbooksUniversalTrigger` to the `triggers` array. Keep existing 5 stubs 
 Add a `SHADOW_MODE` flag (env var `IGT_SHADOW_MODE=true`) to the universal trigger run function.
 
 When enabled:
+
 1. Run both the universal trigger path AND the original hardcoded trigger path.
 2. Compare outputs using a deep-diff function.
 3. Log any discrepancies to the workspace `gateway_logs` table (already used by `http-client.ts`).
 4. Return results from the **original** path (no data change in production).
 
 **Acceptance criteria:**
+
 - With `IGT_SHADOW_MODE=true`, both paths execute.
 - Discrepancies are logged with `source: 'igt_shadow_diff'` in `gateway_logs`.
 - With `IGT_SHADOW_MODE=false` (default), only the universal path executes.
@@ -286,6 +304,7 @@ When enabled:
 ### Task 3.2 — Data Parity Sign-Off
 
 **Process (not a code task):**
+
 1. Enable shadow mode for 5 business days on a staging workspace.
 2. Review `gateway_logs` for `igt_shadow_diff` entries.
 3. If zero discrepancies in 5 days → proceed to Task 3.3.
@@ -296,7 +315,8 @@ When enabled:
 ### Task 3.3 — Delete Hardcoded Trigger Stubs
 
 **Files to delete (Salesforce):**
-```
+
+```text
 packages/pieces/salesforce/src/lib/trigger/new-contact.ts
 packages/pieces/salesforce/src/lib/trigger/new-lead.ts
 packages/pieces/salesforce/src/lib/trigger/new-case-attachment.ts
@@ -308,7 +328,8 @@ packages/pieces/salesforce/src/lib/trigger/new-updated-file.ts
 ```
 
 **Files to delete (QuickBooks):**
-```
+
+```text
 packages/pieces/quickbooks/src/triggers/new-invoice.ts
 packages/pieces/quickbooks/src/triggers/new-expense.ts
 packages/pieces/quickbooks/src/triggers/new-customer.ts
@@ -317,6 +338,7 @@ packages/pieces/quickbooks/src/triggers/new-transfer.ts
 ```
 
 **Files to update after deletion:**
+
 - `packages/pieces/salesforce/src/index.ts` — remove deleted triggers from `triggers` array.
 - `packages/pieces/quickbooks/src/index.ts` — remove deleted triggers from `triggers` array.
 
@@ -345,6 +367,7 @@ Add a `QuickBooks Hint Profile` example in a comment as documentation for new co
 **New migration file:** `packages/database/src/migrations/YYYYMMDD_add_connector_object_profiles.ts`
 
 Schema:
+
 ```sql
 CREATE TABLE connector_object_profiles (
     app_name    VARCHAR(100) NOT NULL,
@@ -363,7 +386,7 @@ This task is optional for the initial launch but required before offering a self
 
 ## 4. Task Dependency Graph
 
-```
+```text
 1.1 scaffold
   └─▶ 1.2 OptimizationRegistry
   └─▶ 1.3 DiscoveryService
@@ -389,7 +412,7 @@ This task is optional for the initial launch but required before offering a self
 ### Unit Tests (co-located with each service)
 
 | Service | Key test cases |
-|---|---|
+| --- | --- |
 | `SmartCursorSelector` | All 6 field presence combinations (see Task 1.4 table) |
 | `DynamicQueryBuilder` | Valid SOQL output, sub-query injection, SOQL injection rejection |
 | `DiscoveryService` | Cache hit/miss, TTL expiry, `fieldExists` true/false |
@@ -413,7 +436,7 @@ This task is optional for the initial launch but required before offering a self
 ## 6. Key Success Metrics
 
 | Metric | Target | How Measured |
-|---|---|---|
+| --- | --- | --- |
 | Trigger file count | Reduce by 13 files (8 SF + 5 QB) | `git diff --stat` after Task 3.3 |
 | SELECT field overhead | Reduce by ≥ 40% vs. current stubs | Compare field counts in SOQL logs |
 | Custom object support | Zero developer changes for any `__c` object | Manual test with `CustomObject__c` |

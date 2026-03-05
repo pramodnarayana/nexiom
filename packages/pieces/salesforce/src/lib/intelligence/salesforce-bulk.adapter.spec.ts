@@ -65,7 +65,7 @@ describe('SalesforceBulkAdapter', () => {
 
             vi.mocked(sfFetch).mockResolvedValueOnce({
                 ok: true,
-                text: async () => '{"Id":"1","Name":"Test"}'
+                text: async () => '"Id","Name"\n"1","Test"'
             } as unknown as Response);
 
             records = await adapter.runBulkJob(mockAuth, query, mockStore);

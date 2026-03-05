@@ -25,13 +25,29 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const selectClause = columns.join(', ');
 
         const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
-        const isStringType = cursorFieldDef && ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
+        if (!cursorFieldDef) {
+            throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
+        }
+        const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
         let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${spec.cursorField} > ${formattedCursorValue} ORDER BY ${spec.cursorField} ASC`;
 
-        if (!spec.omitLimit && spec.limit !== 0) {
-            query += ` LIMIT ${spec.limit ?? 200}`;
+        let safeLimit = 200;
+        if (spec.limit !== undefined) {
+            if (spec.limit === 0) {
+                safeLimit = 0;
+            } else {
+                const parsed = Number(spec.limit);
+                if (Number.isNaN(parsed) || parsed < 0) {
+                    throw new Error(`Invalid limit: ${spec.limit}`);
+                }
+                safeLimit = Math.max(1, Math.floor(parsed));
+            }
+        }
+
+        if (!spec.omitLimit && safeLimit !== 0) {
+            query += ` LIMIT ${safeLimit}`;
         }
 
         return query;
@@ -42,7 +58,10 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         this.validateCursor(spec.cursorValue);
 
         const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
-        const isStringType = cursorFieldDef && ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
+        if (!cursorFieldDef) {
+            throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
+        }
+        const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
         return `SELECT COUNT() FROM ${spec.objectName} WHERE ${spec.cursorField} > ${formattedCursorValue}`;

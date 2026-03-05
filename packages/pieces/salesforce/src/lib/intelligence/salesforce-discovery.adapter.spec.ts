@@ -57,7 +57,7 @@ describe('SalesforceDiscoveryAdapter', () => {
 
             const schema = await adapter.describe(mockAuth, 'Contact', mockStore);
 
-            expect(mockStore.get).toHaveBeenCalledWith('igt_schema_Contact');
+            expect(mockStore.get).toHaveBeenCalledWith('igt_schema_https://test.salesforce.com:Contact');
             expect(sfFetch).not.toHaveBeenCalled();
             expect(schema).toEqual(mockSchemaResponse);
         });
@@ -86,7 +86,7 @@ describe('SalesforceDiscoveryAdapter', () => {
 
             // Ensure it was saved to the store
             expect(mockStore.put).toHaveBeenCalledWith(
-                'igt_schema_Contact',
+                'igt_schema_https://test.salesforce.com:Contact',
                 expect.objectContaining({ objectName: 'Contact' })
             );
         });
@@ -113,7 +113,7 @@ describe('SalesforceDiscoveryAdapter', () => {
             } as unknown as Response);
 
             await expect(adapter.describe(mockAuth, 'InvalidObject', mockStore))
-                .rejects.toThrow('Salesforce describe failed for InvalidObject (404): Not Found');
+                .rejects.toThrow('[FieldNotFoundError] Salesforce describe failed for InvalidObject: Not Found');
         });
     });
 
@@ -146,7 +146,7 @@ describe('SalesforceDiscoveryAdapter', () => {
             // Invalidate
             await adapter.invalidate(mockAuth, 'Contact', mockStore);
 
-            expect(mockStore.delete).toHaveBeenCalledWith('igt_schema_Contact');
+            expect(mockStore.delete).toHaveBeenCalledWith('igt_schema_https://test.salesforce.com:Contact');
 
             // Next describe should force a store/api check (store get is called)
             await adapter.describe(mockAuth, 'Contact', mockStore);

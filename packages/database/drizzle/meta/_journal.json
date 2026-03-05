@@ -8,6 +8,13 @@
       "when": 1772618691690,
       "tag": "0000_optimal_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772688194812,
+      "tag": "0001_goofy_mercury",
+      "breakpoints": true
     }
   ]
 }

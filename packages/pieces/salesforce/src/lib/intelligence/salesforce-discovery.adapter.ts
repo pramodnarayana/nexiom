@@ -18,7 +18,7 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
 
     async describe(auth: SalesforceAuth, objectName: string, store?: TriggerStore): Promise<ObjectSchema> {
         const memKey = `${auth.instance_url}:${objectName}`;
-        const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${objectName}`;
+        const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`;
 
         // Tier 1 — in-memory
         const cached = this.cache.get(memKey);
@@ -37,7 +37,11 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
 
         // Tier 3 — live Salesforce API
         log.debug('Fetching schema from Salesforce API', { object: objectName });
-        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/sobjects/${objectName}/describe`;
+        if (!/^[A-Za-z0-9_]+$/.test(objectName)) {
+            throw new Error(`Invalid Salesforce object name: ${objectName}`);
+        }
+        const encodedObject = encodeURIComponent(objectName.trim());
+        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/sobjects/${encodedObject}/describe`;
         const response = await sfFetch(url, {
             headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
         });
@@ -51,6 +55,9 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
                 }
             } catch (e) {
                 // ignore
+            }
+            if (response.status === 404 || errMsg.includes('No such field') || errMsg.includes('NOT_FOUND')) {
+                throw new Error(`[FieldNotFoundError] Salesforce describe failed for ${objectName}: ${errMsg}`);
             }
             throw new Error(`Salesforce describe failed for ${objectName} (${response.status}): ${errMsg}`);
         }
@@ -95,15 +102,18 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
             return schema.fields.some(f => f.name === fieldName);
         } catch (error) {
             if (error instanceof SalesforceAuthError) throw error;
-            log.debug('Failed to fetch schema for drift check', { object: objectName, error: String(error) });
-            return false;
+            if (error instanceof Error && error.message.includes('[FieldNotFoundError]')) {
+                log.debug('Object or field not found during drift check', { object: objectName, field: fieldName });
+                return false;
+            }
+            throw error;
         }
     }
 
     invalidate(auth: SalesforceAuth, objectName: string, store?: TriggerStore): void {
         this.cache.delete(`${auth.instance_url}:${objectName}`);
         if (store) {
-            store.delete(`${STORE_SCHEMA_KEY_PREFIX}${objectName}`).catch(() => { });
+            store.delete(`${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`).catch(() => { });
         }
     }
 }

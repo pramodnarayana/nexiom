@@ -1,6 +1,7 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;--> statement-breakpoint
 CREATE TYPE "public"."auth_type_enum" AS ENUM('OAUTH2', 'API_KEY', 'BASIC');--> statement-breakpoint
 CREATE TYPE "public"."connection_status_enum" AS ENUM('ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED');--> statement-breakpoint
-CREATE TABLE "connector_object_profiles" (
+CREATE TABLE IF NOT EXISTS "connector_object_profiles" (
 	"app_name" varchar(100) NOT NULL,
 	"object_name" varchar(100) NOT NULL,
 	"profile" jsonb DEFAULT '{}' NOT NULL,
@@ -8,7 +9,7 @@ CREATE TABLE "connector_object_profiles" (
 	CONSTRAINT "connector_object_profiles_app_name_object_name_pk" PRIMARY KEY("app_name","object_name")
 );
 --> statement-breakpoint
-CREATE TABLE "connection_storage_registry" (
+CREATE TABLE IF NOT EXISTS "connection_storage_registry" (
 	"connection_id" uuid PRIMARY KEY NOT NULL,
 	"workspace_id" varchar(128) NOT NULL,
 	"database_host_id" varchar(255) DEFAULT 'primary-cluster' NOT NULL,
@@ -18,7 +19,7 @@ CREATE TABLE "connection_storage_registry" (
 	CONSTRAINT "connection_storage_registry_workspace_id_unique" UNIQUE("workspace_id")
 );
 --> statement-breakpoint
-CREATE TABLE "app_connection" (
+CREATE TABLE IF NOT EXISTS "app_connection" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"app_name" varchar(100) NOT NULL,
@@ -33,7 +34,7 @@ CREATE TABLE "app_connection" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "tenant" (
+CREATE TABLE IF NOT EXISTS "tenant" (
 	"id" uuid PRIMARY KEY NOT NULL
 );
 --> statement-breakpoint
