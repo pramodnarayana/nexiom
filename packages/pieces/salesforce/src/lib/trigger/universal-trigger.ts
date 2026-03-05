@@ -87,10 +87,17 @@ async function runUniversalTrigger(
 
     if (isShadowMode && LEGACY_TRIGGERS[objectName]) {
         try {
-            // Run legacy trigger path
-            legacyRecords = await LEGACY_TRIGGERS[objectName].run!(context);
+            // Run legacy trigger path, which expects webhook context
+            const res = await LEGACY_TRIGGERS[objectName].run!(context);
+            if (Array.isArray(res)) {
+                legacyRecords = res.map(r => typeof r === 'object' && r !== null ? r : { Id: String(r || '') })
+                    .filter(r => Boolean(r.Id));
+            } else {
+                legacyRecords = [];
+            }
         } catch (e) {
             log.warn('Shadow mode legacy trigger failed', { object: objectName, error: String(e) });
+            legacyRecords = []; // Ensure valid type on fail
         }
     }
 
@@ -98,10 +105,17 @@ async function runUniversalTrigger(
     assertSafeSalesforceObject(objectName);
     const hint = await optimizationService.getHint('salesforce', objectName);
 
-    const authData = (context.auth as any).data || context.auth;
+    const authData = (context.auth).data || context.auth;
+    const access_token = authData.access_token || (context.auth as any).access_token;
+    const instance_url = authData.instance_url;
+
+    if (!access_token || !instance_url) {
+        throw new Error('Missing access_token or instance_url in authentication data');
+    }
+
     const flatAuth = {
-        access_token: (context.auth as any).access_token as string,
-        instance_url: authData.instance_url as string
+        access_token: access_token as string,
+        instance_url: instance_url as string
     };
 
     // CDC path not yet implemented — warn and fall through to REST polling

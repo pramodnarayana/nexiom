@@ -19,12 +19,10 @@ The registry stores "hacks" and "optimizations" for specific apps and objects. I
 
 ```json
 {
-  "strategy_overrides": {
-    "use_bulk_api_threshold": 10000,
-    "auto_join": ["LineItems", "Account"],
-    "prefer_api": "REST_V2"
-  },
-  "cursor_precedence": ["SystemModstamp", "LastModifiedDate", "Id"]
+  "bulkThreshold": 10000,
+  "autoJoin": ["LineItems", "Account"],
+  "preferPath": "REST_V2",
+  "cursorPrecedence": ["SystemModstamp", "LastModifiedDate", "Id"]
 }
 ```
 
@@ -50,7 +48,7 @@ The `QueryBuilder` service constructs the SOQL/SQL string:
 
 - **Path A (Standard):** Executes a standard REST request for `< 5,000` records.
 - **Path B (Bulk 2.0):** If the API indicates a large dataset, the runner yields control to the `BulkJobManager`.
-- **Path C (CDC/Stream):** If the app supports it, it switches to a Change-Data-Capture listener.
+- **Path C (CDC/Stream):** *Plan for Future/Fallback-only*. If requested, the system attempts to switch to a Change-Data-Capture listener. Currently, `universal-trigger.ts` intercepts this and logs a warning, falling back to the Standard REST path.
 
 ## 3. The High-Volume State Machine (Bulk API 2.0)
 

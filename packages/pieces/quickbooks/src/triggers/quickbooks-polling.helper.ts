@@ -17,13 +17,23 @@ export async function runQuickBooksQuery(
     hint?: ObjectHint
 ): Promise<unknown[]> {
     const cursorKey = `igt_${entityType}_MetaData.LastUpdatedTime`;
-    const lastCursor = await store.get<string>(cursorKey);
-    const since = lastCursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let lastCursorParams = await store.get<any>(cursorKey);
+    let since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let lastId = '0';
+
+    if (lastCursorParams && typeof lastCursorParams === 'object') {
+        since = lastCursorParams.lastUpdatedTime || since;
+        lastId = lastCursorParams.lastId || lastId;
+    } else if (typeof lastCursorParams === 'string') {
+        since = lastCursorParams;
+    }
 
     const sql = QuickBooksQueryAdapter.buildQBOQuery(entityType, {
         objectName: entityType,
         cursorField: 'MetaData.LastUpdatedTime',
         cursorValue: since,
+        cursorIdField: 'Id',
+        cursorIdValue: lastId,
         limit: hint?.bulkThreshold ?? 100, // example using hint
     });
 
@@ -68,20 +78,12 @@ export async function runQuickBooksQuery(
         .filter(v => typeof v === 'object' && v !== null);
 
     if (records.length > 0) {
-        let maxTimestamp = 0;
-        let latestCursorStr: string | null = null;
-        for (const record of records as Record<string, any>[]) {
-            const timeStr = record?.['MetaData']?.['LastUpdatedTime'];
-            if (timeStr) {
-                const parsed = Date.parse(timeStr);
-                if (!Number.isNaN(parsed) && parsed > maxTimestamp) {
-                    maxTimestamp = parsed;
-                    latestCursorStr = timeStr;
-                }
-            }
-        }
-        if (latestCursorStr) {
-            await store.put(cursorKey, latestCursorStr);
+        const lastRecord = records[records.length - 1] as Record<string, any>;
+        const timeStr = lastRecord?.['MetaData']?.['LastUpdatedTime'];
+        const idStr = lastRecord?.['Id']?.toString();
+
+        if (timeStr && idStr) {
+            await store.put(cursorKey, { lastUpdatedTime: timeStr, lastId: idStr });
         }
     }
 

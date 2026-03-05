@@ -37,32 +37,12 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
 
         // Tier 3 — live Salesforce API
         log.debug('Fetching schema from Salesforce API', { object: objectName });
-        if (!/^[A-Za-z0-9_]+$/.test(objectName)) {
+        if (!/^\w+$/.test(objectName)) {
             throw new Error(`Invalid Salesforce object name: ${objectName}`);
         }
-        const encodedObject = encodeURIComponent(objectName.trim());
-        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/sobjects/${encodedObject}/describe`;
-        const response = await sfFetch(url, {
-            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
-        });
 
-        if (!response.ok) {
-            let errMsg = response.statusText || 'Unknown error';
-            try {
-                const errBody = await response.json();
-                if (Array.isArray(errBody) && errBody[0]?.message) {
-                    errMsg = errBody[0].message;
-                }
-            } catch (e) {
-                // ignore
-            }
-            if (response.status === 404 || errMsg.includes('No such field') || errMsg.includes('NOT_FOUND')) {
-                throw new Error(`[FieldNotFoundError] Salesforce describe failed for ${objectName}: ${errMsg}`);
-            }
-            throw new Error(`Salesforce describe failed for ${objectName} (${response.status}): ${errMsg}`);
-        }
+        const body = await this.fetchSchemaFromSource(auth, objectName);
 
-        const body = await response.json();
 
         const schema: ObjectSchema = {
             objectName,
@@ -115,5 +95,32 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
         if (store) {
             store.delete(`${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`).catch(() => { });
         }
+    }
+
+    private async fetchSchemaFromSource(auth: SalesforceAuth, objectName: string): Promise<any> {
+        const encodedObject = encodeURIComponent(objectName.trim());
+        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/sobjects/${encodedObject}/describe`;
+        const response = await sfFetch(url, {
+            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+            let errMsg = response.statusText || 'Unknown error';
+            try {
+                const errBody = await response.json();
+                if (Array.isArray(errBody) && errBody[0]?.message) {
+                    errMsg = errBody[0].message;
+                }
+            } catch (e) {
+                log.debug('Failed to parse Salesforce error response', { error: String(e) });
+            }
+            const isMissingField = (response.status === 404 && (errMsg.includes('No such field') || errMsg.includes('NOT_FOUND'))) || errMsg.includes('No such field') || errMsg.includes('NOT_FOUND');
+            if (isMissingField) {
+                throw new Error(`[FieldNotFoundError] Salesforce describe failed for ${objectName}: ${errMsg}`);
+            }
+            throw new Error(`Salesforce describe failed for ${objectName} (${response.status}): ${errMsg}`);
+        }
+
+        return await response.json();
     }
 }

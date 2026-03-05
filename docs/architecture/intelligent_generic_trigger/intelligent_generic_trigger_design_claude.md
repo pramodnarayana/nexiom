@@ -396,8 +396,13 @@ export const salesforceUniversalTrigger = createTrigger({
         let records: unknown[];
 
         if (hint?.preferPath === 'CDC') {
-            records = await runSalesforceCDC(auth, objectName, lastCursor, store);
-        } else {
+            // CDC is planned for a future release. Currently, the engine logs a warning
+            // and falls back to the REST polling path to ensure uninterrupted operation.
+            // records = await runSalesforceCDC(auth, objectName, lastCursor, store);
+            console.warn(`CDC path requested for ${objectName} but not yet available. Falling back to REST polling.`);
+        }
+        
+        if (!records) {
             // Run standard query; totalSize reflects the full result set even under LIMIT.
             // If the full set exceeds the threshold, rebuild without LIMIT and hand off to Bulk.
             const result = await runSalesforceQuery(auth, soql);

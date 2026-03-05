@@ -288,10 +288,10 @@ Add a `SHADOW_MODE` flag (env var `IGT_SHADOW_MODE=true`) to the universal trigg
 
 When enabled:
 
-1. Run both the universal trigger path AND the original hardcoded trigger path.
+1. Run both the universal trigger path AND the real polling path (the actual poller implementation used in production).
 2. Compare outputs using a deep-diff function.
 3. Log any discrepancies to the workspace `gateway_logs` table (already used by `http-client.ts`).
-4. Return results from the **original** path (no data change in production).
+4. Return results from the **real polling implementation** (or, if polling cannot run, fall back to polling-output-mock only for diffing and never as the returned production result).
 
 **Acceptance criteria:**
 

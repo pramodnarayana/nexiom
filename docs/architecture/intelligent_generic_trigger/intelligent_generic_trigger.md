@@ -50,8 +50,8 @@ Instead of 500 files, we move to a Core Registry + Unified Runner:
 ```typescript
 // packages/connections/src/intelligence/optimization-registry.ts
 export const SalesforceObjectHacks = {
-  'Contact': { preferApi: 'CDC', defaultFields: ['Email', 'AccountId'] },
-  'Invoice': { autoJoinChildren: ['LineItems'], cursor: 'SystemModstamp' }
+  'Contact': { preferPath: 'CDC', requiredFields: ['Email', 'AccountId'] },
+  'Invoice': { autoJoin: ['LineItems'], cursorPrecedence: ['SystemModstamp'] }
 };
 
 // packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts

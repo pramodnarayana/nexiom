@@ -26,6 +26,10 @@ vi.mock('./igt-logger.js', () => ({
     }
 }));
 
+vi.mock('../apps/salesforce/sf-fetch.js', () => ({
+    checkSalesforceLimits: vi.fn().mockResolvedValue({ total: 15000, remaining: 14000 })
+}));
+
 describe('UniversalTriggerEngine', () => {
     let mockStore: any;
     let mockDiscoveryAdapter: IDiscoveryAdapter;
@@ -96,7 +100,7 @@ describe('UniversalTriggerEngine', () => {
         const records = await UniversalTriggerEngine.execute(config);
 
         expect(records).toEqual([]);
-        expect(mockStore.get).not.toHaveBeenCalled();
+        expect(mockStore.get).not.toHaveBeenCalledWith('igt_TestObject_LastModifiedDate');
         expect(mockExecuteStandardQuery).not.toHaveBeenCalled();
     });
 
@@ -122,7 +126,7 @@ describe('UniversalTriggerEngine', () => {
         // Assert cursor was saved
         expect(mockStore.put).toHaveBeenCalledWith(
             'igt_TestObject_LastModifiedDate',
-            '2026-03-02T00:00:00.000Z'
+            '2026-03-02T00:00:00.000Z||2'
         );
     });
 

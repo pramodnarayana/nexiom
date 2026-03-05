@@ -26,6 +26,31 @@ describe('SalesforceQueryAdapter', () => {
     });
 
     describe('buildQuery', () => {
+        it('should throw an error if the cursorField does not exist in the schema', () => {
+            expect(() => {
+                adapter.buildQuery(mockSchema, {
+                    objectName: 'Contact',
+                    cursorField: 'NonExistentField',
+                    cursorValue: '2026-03-01T00:00:00.000Z',
+                    limit: 100
+                });
+            }).toThrowError('Cursor field NonExistentField not found in schema definitions.');
+        });
+
+        it('should throw descriptive errors for non-finite or negative limits', () => {
+            const invalidLimits = [-1, NaN, Infinity];
+            for (const limit of invalidLimits) {
+                expect(() => {
+                    adapter.buildQuery(mockSchema, {
+                        objectName: 'Contact',
+                        cursorField: 'SystemModstamp',
+                        cursorValue: '2026-03-01T00:00:00.000Z',
+                        limit: limit
+                    });
+                }).toThrowError(`Invalid limit: ${limit}`);
+            }
+        });
+
         it('should generate a standard SOQL query with all fields', () => {
             const result = adapter.buildQuery(mockSchema, {
                 objectName: 'Contact',

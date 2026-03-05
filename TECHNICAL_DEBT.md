@@ -98,7 +98,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Recommended Solution**:
 
-- **Short term**: Complete Phase 3 testing and delete the legacy stubs immediately, removing the imports.
+- **Short term**: Complete Phase 3 testing (i.e., validate that the universal polling engine achieves 100% data parity and stability over a 2-week dual-run window; refer to the [QA Test Plan](/docs/qa/shadow_mode_test_plan.md) for exit criteria) and delete the legacy stubs immediately, removing the imports.
 - **Long term (if kept)**: Implement a Dependency Injection registry where legacy triggers self-register for shadow testing, keeping `universal-trigger.ts` completely unaware and decoupled.
 
 ### 5. Drizzle Schema Consolidation (Modular Monolith)

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceDiscoveryAdapter } from './salesforce-discovery.adapter.js';
-import { sfFetch } from '@nexiom/connections/intelligence';
-import type { SalesforceAuth, ObjectSchema } from '@nexiom/connections/intelligence';
+import { sfFetch, SF_API_VERSION } from '@nexiom/connections/intelligence';
+import type { SalesforceAuth } from '@nexiom/connections/intelligence';
 import type { TriggerStore } from '@nexiom/connections/framework';
 
 vi.mock('@nexiom/connections/intelligence', async (importOriginal) => {
@@ -75,7 +75,7 @@ describe('SalesforceDiscoveryAdapter', () => {
             const schema = await adapter.describe(mockAuth, 'Contact', mockStore);
 
             expect(sfFetch).toHaveBeenCalledWith(
-                'https://test.salesforce.com/services/data/v59.0/sobjects/Contact/describe',
+                `https://test.salesforce.com/services/data/${SF_API_VERSION}/sobjects/Contact/describe`,
                 { headers: { Authorization: `Bearer test_token`, Accept: 'application/json' } }
             );
 

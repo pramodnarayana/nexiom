@@ -39,7 +39,7 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
                 safeLimit = 0;
             } else {
                 const parsed = Number(spec.limit);
-                if (Number.isNaN(parsed) || parsed < 0) {
+                if (!Number.isFinite(parsed) || parsed < 0) {
                     throw new Error(`Invalid limit: ${spec.limit}`);
                 }
                 safeLimit = Math.max(1, Math.floor(parsed));

@@ -105,6 +105,41 @@ describe('SalesforceBulkAdapter', () => {
             expect(sfFetch).toHaveBeenCalledTimes(2);
         });
 
+        it('should correctly handle transient network errors while polling bulk job status', async () => {
+            (mockStore.get as any).mockResolvedValue({ jobId: 'job123', state: 'IN_PROGRESS', soql: 'SELECT Id FROM Lead' });
+
+            vi.mocked(sfFetch).mockRejectedValueOnce(new Error('Network error')); // transient
+
+            await expect(adapter.runBulkJob(mockAuth, 'SELECT Id FROM Lead', mockStore))
+                .rejects.toThrow('Network error');
+
+            expect(mockStore.delete).not.toHaveBeenCalled();
+            expect(sfFetch).toHaveBeenCalledTimes(1);
+        });
+
+        it('should correctly parse CSV text containing quoted fields with embedded commas and newlines', async () => {
+            (mockStore.get as any).mockResolvedValue({ jobId: 'job123', state: 'IN_PROGRESS', soql: 'SELECT Name, Notes FROM Lead' });
+
+            vi.mocked(sfFetch).mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ state: 'JobComplete' })
+            } as unknown as Response);
+
+            const mockCsvData = `"Name","Notes"\n"Smith, John","Line1\nLine2"\n"Doe, Jane","Single Line"`;
+            vi.mocked(sfFetch).mockResolvedValueOnce({
+                ok: true,
+                text: async () => mockCsvData
+            } as unknown as Response);
+
+            const records = await adapter.runBulkJob(mockAuth, 'SELECT Name, Notes FROM Lead', mockStore);
+
+            expect(records).toEqual([
+                { Name: 'Smith, John', Notes: 'Line1\nLine2' },
+                { Name: 'Doe, Jane', Notes: 'Single Line' }
+            ]);
+            expect(mockStore.delete).toHaveBeenCalledWith('igt_bulk_job_checkpoint');
+        });
+
         it('should throw an error if job creation fails', async () => {
             vi.mocked(sfFetch).mockResolvedValueOnce({
                 ok: false,
