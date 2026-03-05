@@ -1,6 +1,7 @@
 import type { TriggerStore } from '@nexiom/connections/framework';
 import { quickbooksCommon, type QuickbooksEntityResponse } from '../lib/common.js';
-import { DynamicQueryBuilder, type ObjectHint } from '@nexiom/connections/intelligence';
+import { type ObjectHint } from '@nexiom/connections/intelligence';
+import { QuickBooksQueryAdapter } from './quickbooks-query.adapter.js';
 
 export interface QuickBooksAuth {
     access_token: string;
@@ -19,7 +20,7 @@ export async function runQuickBooksQuery(
     const lastCursor = await store.get<string>(cursorKey);
     const since = lastCursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const sql = DynamicQueryBuilder.buildQBOQuery(entityType, {
+    const sql = QuickBooksQueryAdapter.buildQBOQuery(entityType, {
         objectName: entityType,
         cursorField: 'MetaData.LastUpdatedTime',
         cursorValue: since,

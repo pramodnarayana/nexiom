@@ -4,7 +4,11 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.lib.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@nexiom/connections": "workspace:*",

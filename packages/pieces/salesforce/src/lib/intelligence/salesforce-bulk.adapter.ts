@@ -1,5 +1,13 @@
-import type { TriggerStore } from '../framework/index.js';
-import type { SalesforceAuth } from '../apps/salesforce/triggers/salesforce-polling.helper.js';
+import type { TriggerStore } from '@nexiom/connections/framework';
+import {
+    type IBulkAdapter,
+    type SalesforceAuth,
+    sfFetch,
+    SF_API_VERSION,
+    IgtLogger
+} from '@nexiom/connections/intelligence';
+
+const log = new IgtLogger({ app: 'salesforce' });
 
 export type BulkJobState =
     | 'IDLE'
@@ -14,14 +22,8 @@ export interface BulkJobCheckpoint {
     startedAt: string;  // ISO
 }
 
-export class BulkJobManager {
-    /**
-     * Checks TriggerStore for an in-progress Bulk job checkpoint.
-     * If one exists, polls its status.
-     * If complete, downloads results and returns records[].
-     * If none exists, creates a new Bulk job for the given SOQL.
-     */
-    async run(
+export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
+    async runBulkJob(
         auth: SalesforceAuth,
         soql: string,
         store: TriggerStore,
@@ -30,24 +32,28 @@ export class BulkJobManager {
         let checkpoint = await store.get<BulkJobCheckpoint>(storeKey);
 
         if (!checkpoint || checkpoint.state === 'IDLE') {
-            // Create new Bulk Query Job
-            const url = `${auth.instance_url}/services/data/v59.0/jobs/query`;
-            const response = await fetch(url, {
+            const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query`;
+            const response = await sfFetch(url, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${auth.access_token}`,
                     'Content-Type': 'application/json',
                     Accept: 'application/json'
                 },
-                body: JSON.stringify({
-                    operation: 'query',
-                    query: soql
-                })
+                body: JSON.stringify({ operation: 'query', query: soql }),
             });
 
             if (!response.ok) {
-                const err = await response.text();
-                throw new Error(`Failed to create bulk query job: ${err}`);
+                let errMsg = response.statusText || 'Unknown error';
+                try {
+                    const errBody = await response.json();
+                    if (Array.isArray(errBody) && errBody[0]?.message) {
+                        errMsg = errBody[0].message;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                throw new Error(`Salesforce bulk query job creation failed: ${errMsg}`);
             }
 
             const jobData = await response.json();
@@ -58,22 +64,20 @@ export class BulkJobManager {
                 startedAt: new Date().toISOString()
             };
             await this.checkpoint(store, checkpoint);
-            return []; // Return empty this poll cycle
+            log.info('Bulk job created', { jobId: checkpoint.jobId });
+            return [];
         }
 
         if (checkpoint.state === 'IN_PROGRESS' || checkpoint.state === 'AWAITING_RESULTS') {
-            // Poll status
-            const url = `${auth.instance_url}/services/data/v59.0/jobs/query/${checkpoint.jobId}`;
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${auth.access_token}`,
-                    Accept: 'application/json'
-                }
-            });
-
-            if (!response.ok) {
+            const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${checkpoint.jobId}`;
+            let response: Response;
+            try {
+                response = await sfFetch(url, {
+                    headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
+                });
+            } catch (e) {
                 await store.delete(storeKey);
-                throw new Error(`Failed to poll bulk query job status: ${response.statusText}`);
+                throw e;
             }
 
             const jobInfo = await response.json();
@@ -81,15 +85,18 @@ export class BulkJobManager {
             if (jobInfo.state === 'JobComplete') {
                 checkpoint.state = 'AWAITING_RESULTS';
                 await this.checkpoint(store, checkpoint);
+                log.info('Bulk job complete — downloading results', { jobId: checkpoint.jobId });
 
                 const records = await this.downloadResults(auth, checkpoint.jobId);
                 await store.delete(storeKey);
+                log.info('Bulk job results downloaded', { jobId: checkpoint.jobId, records: String(records.length) });
                 return records;
             } else if (jobInfo.state === 'Failed' || jobInfo.state === 'Aborted') {
                 await store.delete(storeKey);
-                throw new Error(`Bulk job failed or aborted: ${jobInfo.errorMessage}`);
+                log.error('Bulk job failed or aborted', { jobId: checkpoint.jobId, state: jobInfo.state, errorMessage: jobInfo.errorMessage });
+                throw new Error(`Bulk job ${jobInfo.state.toLowerCase()}: ${jobInfo.errorMessage}`);
             } else {
-                // Still in progress
+                log.debug('Bulk job still in progress', { jobId: checkpoint.jobId, state: jobInfo.state });
                 return [];
             }
         }
@@ -97,24 +104,15 @@ export class BulkJobManager {
         return [];
     }
 
-    /** Stores IN_PROGRESS checkpoint so duplicate pollers skip this run. */
     private async checkpoint(store: TriggerStore, data: BulkJobCheckpoint): Promise<void> {
         await store.put('igt_bulk_job_checkpoint', data);
     }
 
-    /** Downloads Bulk API result CSV/NDJSON, streams into records[]. */
     private async downloadResults(auth: SalesforceAuth, jobId: string): Promise<unknown[]> {
-        const url = `${auth.instance_url}/services/data/v59.0/jobs/query/${jobId}/results`;
-        const response = await fetch(url, {
-            headers: {
-                Authorization: `Bearer ${auth.access_token}`,
-                Accept: 'application/json' // request JSON format if supported, or handle CSV/NDJSON
-            }
+        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${jobId}/results`;
+        const response = await sfFetch(url, {
+            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
         });
-
-        if (!response.ok) {
-            throw new Error(`Failed to download results: ${response.statusText}`);
-        }
 
         const text = await response.text();
         return this.parseNdjson(text);
@@ -129,12 +127,9 @@ export class BulkJobManager {
             try {
                 records.push(JSON.parse(line));
             } catch (e) {
-                // ignore bad line or Header line in CSV
-                console.debug('Failed to parse NDJSON line:', e);
+                log.debug('Skipping unparseable NDJSON line', { error: String(e) });
             }
         }
         return records;
     }
 }
-
-export const bulkJobManager = new BulkJobManager();

@@ -150,7 +150,88 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ### Low Priority
 
-*No items currently tracked*
+### 1. Replace custom Logger with Pino
+
+**Location**: `packages/connections/src/intelligence/igt-logger.ts`  
+**Added**: 2026-03-05  
+**Impact**: Observability, Standardization  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- The `IgtLogger` is a custom implementation written specifically for the Intelligence Engine.
+- While functional, it does not adhere to the enterprise standard of using `pino` for structured, high-performance logging.
+- Lacks integration with standard log forwarders or shared configuration that a unified `pino` logger would provide.
+
+**Recommended Solution**:
+
+- Deprecate and remove `igt-logger.ts`.
+- Replace all imports of `IgtLogger` across the `@nexiom/connections` and `@nexiom/piece-*` packages with the enterprise-standard `pino` logger instance.
+- Ensure log levels and metadata context remain structured to avoid breaking existing observability dashboards.
+
+---
+
+## Intelligent Generic Trigger (IGT) — Known Limitations
+
+> These are documented trade-offs, not bugs. The core engine is correct and data-safe.
+
+### 1. CDC Path Not Implemented
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts`
+**Added**: 2026-03-04
+**Impact**: Performance, API Call Efficiency
+**Effort**: High (1 sprint)
+
+**Current State**:
+
+- When `hint.preferPath === 'CDC'` is configured, the engine emits a warning and falls back to REST polling.
+- Change Data Capture is the preferred path for high-volume, high-frequency objects (e.g. objects receiving thousands of updates per minute) as it eliminates polling latency and reduces API call consumption.
+
+**Recommended Solution**:
+
+- Implement a Salesforce Platform Event subscription for CDC.
+- Persist a replay ID in `TriggerStore` to resume from the last processed event after restarts.
+- Add `executeCDCQuery` to `UniversalEngineConfig` as an optional path the engine routes to when `hint.preferPath === 'CDC'`.
+
+---
+
+### 2. No Salesforce API Call Budget Tracking
+
+**Location**: `packages/connections/src/apps/salesforce/sf-fetch.ts`, `packages/connections/src/intelligence/universal-trigger-engine.ts`
+**Added**: 2026-03-04
+**Impact**: Reliability, Org Stability
+**Effort**: Medium (2-3 days)
+
+**Current State**:
+
+- The engine does not track or throttle API calls against Salesforce org limits (typically ~15,000 calls/day on standard orgs, higher on Enterprise/Unlimited).
+- At high polling frequency across many objects, flows could exhaust the org's daily API limit with no early warning.
+
+**Recommended Solution**:
+
+- Poll the Salesforce Limits API (`/services/data/vXX.0/limits`) periodically and cache the result in a shared store.
+- Emit a structured warning log when remaining calls drop below a configurable threshold (e.g. 20%).
+- Back off automatically when Salesforce returns `REQUEST_LIMIT_EXCEEDED` (HTTP 403).
+
+---
+
+### 3. Shadow Mode Is Process-Wide, Not Per-Flow
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts`
+**Added**: 2026-03-04
+**Impact**: Deployment Flexibility
+**Effort**: Low (1 day)
+
+**Current State**:
+
+- Shadow mode is controlled by the `IGT_SHADOW_MODE` environment variable, which applies to the entire process.
+- All flows on a node enable or disable shadow mode together — it is not possible to shadow-test a single flow while others run in full production mode.
+
+**Recommended Solution**:
+
+- Add a `shadowMode` boolean to the flow's trigger configuration (stored in the database).
+- Read it from `TriggerStore` or `propsValue` at poll time instead of the environment variable.
+- Retain the env var as a global override for emergency rollback.
 
 ---
 

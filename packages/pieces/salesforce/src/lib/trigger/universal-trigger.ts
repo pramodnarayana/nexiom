@@ -2,32 +2,43 @@ import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore 
 import { salesforcesCommon } from '../common/index.js';
 import { salesforceAuth } from '../../index.js';
 
-
 import {
     optimizationService,
-    discoveryService,
-    SmartCursorSelector,
-    DynamicQueryBuilder,
-    bulkJobManager,
-    type ObjectSchema,
-    type ObjectHint
+    UniversalTriggerEngine,
+    assertSafeSalesforceObject,
+    sfFetch,
+    SF_API_VERSION,
+    SalesforceAuthError,
+    IgtLogger,
 } from '@nexiom/connections/intelligence';
+
+import {
+    SalesforceDiscoveryAdapter,
+    SalesforceQueryAdapter,
+    SalesforceBulkAdapter
+} from '../intelligence/index.js';
 
 // Fallback to legacy triggers for shadow mode
 import { newContact } from './new-contact.js';
 import { newLead } from './new-lead.js';
 
-function assertSafeSalesforceObject(objectName: string) {
-    if (!/^\w+$/.test(objectName)) {
-        throw new Error(`Invalid Salesforce object name: ${objectName}`);
-    }
+interface SfQueryPage {
+    done: boolean;
+    nextRecordsUrl?: string;
+    records: unknown[];
+    totalSize?: number;
 }
 
 // (Map of supported shadow mode objects)
 const LEGACY_TRIGGERS: Record<string, any> = {
     'Contact': newContact,
-    'Lead': newLead
+    'Lead': newLead,
 };
+
+// Module-level singletons — in-memory schema cache survives across poll runs
+const discoveryAdapter = new SalesforceDiscoveryAdapter();
+const queryAdapter = new SalesforceQueryAdapter();
+const bulkAdapter = new SalesforceBulkAdapter();
 
 export const salesforceUniversalTrigger = createTrigger({
     name: 'universal_trigger',
@@ -41,65 +52,20 @@ export const salesforceUniversalTrigger = createTrigger({
     async run(context: TriggerContext) {
         const { propsValue, store } = context;
         const objectName = propsValue.object as string;
+        const log = new IgtLogger({ app: 'salesforce', object: objectName });
 
-        // --- SHADOW MODE INFRASTRUCTURE ---
-        const isShadowMode = process.env.IGT_SHADOW_MODE === 'true';
-        let legacyRecords: unknown[] | null = null;
-
-        if (isShadowMode && LEGACY_TRIGGERS[objectName]) {
-            try {
-                // Run legacy trigger path
-                legacyRecords = await LEGACY_TRIGGERS[objectName].run!(context);
-            } catch (e) {
-                console.error(`[SHADOW MODE] Legacy trigger failed for ${objectName}`, e);
+        try {
+            return await runUniversalTrigger(context, objectName, store, log);
+        } catch (e) {
+            if (e instanceof SalesforceAuthError) {
+                throw new Error(
+                    `Your Salesforce connection has expired or been revoked. ` +
+                    `Please reconnect your account in the connection settings. ` +
+                    `Details: ${e.message}`,
+                );
             }
+            throw e;
         }
-
-        // --- UNIVERSAL ENGINE PATH ---
-        assertSafeSalesforceObject(objectName);
-        const hint = await optimizationService.getHint('salesforce', objectName);
-
-        const flatAuth = {
-            access_token: context.auth.access_token as string,
-            instance_url: context.auth.data.instance_url as string
-        };
-        const schema = await discoveryService.describe(flatAuth, objectName);
-
-        const cursorField = SmartCursorSelector.pick(schema, hint);
-        const driftOk = await discoveryService.fieldExists(flatAuth, objectName, cursorField);
-        if (!driftOk) {
-            console.error(`Cursor field ${cursorField} not found in ${objectName} schema`);
-            return isShadowMode && legacyRecords ? legacyRecords : [];
-        }
-
-        const cursorKey = `igt_${objectName}_${cursorField}`;
-        const lastCursor = await store.get<string>(cursorKey)
-            ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-        const records = await executeUniversalQuery(
-            flatAuth,
-            schema,
-            objectName,
-            cursorField,
-            lastCursor,
-            hint,
-            store
-        );
-
-        // --- SHADOW MODE COMPARISON ---
-        if (isShadowMode && legacyRecords !== null) {
-            if (legacyRecords.length !== records.length) {
-                // In a real system, we'd log this to the gateway_logs table:
-                console.warn(`[SHADOW MODE DIFF] ${objectName}: Legacy got ${legacyRecords.length}, Universal got ${records.length}`);
-            }
-            // In shadow mode, we ALWAYS return the legacy records to prevent data impact!
-            return legacyRecords;
-        }
-
-        // --- PRODUCTION ADVANCE CURSOR ---
-        await advanceCursor(records, cursorField, cursorKey, store);
-
-        return records;
     },
     async onEnable() {
         return;
@@ -109,62 +75,109 @@ export const salesforceUniversalTrigger = createTrigger({
     },
 });
 
-async function executeUniversalQuery(
-    flatAuth: { access_token: string; instance_url: string; },
-    schema: ObjectSchema,
+async function runUniversalTrigger(
+    context: TriggerContext,
     objectName: string,
-    cursorField: string,
-    lastCursor: string,
-    hint: ObjectHint | undefined,
-    store: TriggerStore
+    store: TriggerStore,
+    log: IgtLogger,
 ): Promise<unknown[]> {
-    const soql = DynamicQueryBuilder.buildSOQL(schema, {
-        objectName,
-        cursorField,
-        cursorValue: lastCursor,
-        autoJoins: hint?.autoJoin,
-        limit: 200,
-    });
+    // --- SHADOW MODE INFRASTRUCTURE ---
+    const isShadowMode = process.env.IGT_SHADOW_MODE === 'true';
+    let legacyRecords: any[] | null = null;
 
-    const bulkThreshold = hint?.bulkThreshold ?? 5_000;
+    if (isShadowMode && LEGACY_TRIGGERS[objectName]) {
+        try {
+            // Run legacy trigger path
+            legacyRecords = await LEGACY_TRIGGERS[objectName].run!(context);
+        } catch (e) {
+            log.warn('Shadow mode legacy trigger failed', { object: objectName, error: String(e) });
+        }
+    }
 
+    // --- UNIVERSAL ENGINE PATH ---
+    assertSafeSalesforceObject(objectName);
+    const hint = await optimizationService.getHint('salesforce', objectName);
+
+    const flatAuth = {
+        access_token: context.auth.access_token as string,
+        instance_url: context.auth.data.instance_url as string
+    };
+
+    // CDC path not yet implemented — warn and fall through to REST polling
     if (hint?.preferPath === 'CDC') {
-        // CDC implementation placeholder
-        return [];
+        log.warn('CDC path not yet implemented; falling back to REST polling');
+        // fall through to REST path
     }
 
-    const url = `${flatAuth.instance_url}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`;
-    const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${flatAuth.access_token}` },
+    const executeStandardQuery = async (auth: typeof flatAuth, query: string): Promise<unknown[]> => {
+        const headers = { Authorization: `Bearer ${auth.access_token}` };
+        const all: unknown[] = [];
+        let url: string | undefined = `${auth.instance_url}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(query)}`;
+
+        while (url) {
+            const response = await sfFetch(url, { headers });
+            const page = await response.json() as SfQueryPage;
+            all.push(...(page.records ?? []));
+            url = page.done || !page.nextRecordsUrl
+                ? undefined
+                : `${auth.instance_url}${page.nextRecordsUrl}`;
+        }
+
+        return all;
+    };
+
+    const executeCountQuery = async (auth: typeof flatAuth, query: string): Promise<number> => {
+        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(query)}`;
+        const response = await sfFetch(url, { headers: { Authorization: `Bearer ${auth.access_token}` } });
+        const result = await response.json() as SfQueryPage & { records?: Array<{ expr0?: number }> };
+        return result.totalSize ?? result.records?.[0]?.expr0 ?? 0;
+    };
+
+    log.info('Poll started', { object: objectName });
+
+    // The engine advances the cursor internally before returning,
+    // so shadow mode automatically gets cursor advancement — no extra code needed.
+    const records = await UniversalTriggerEngine.execute({
+        auth: flatAuth,
+        store,
+        objectName,
+        hint,
+        discoveryAdapter,
+        queryAdapter,
+        bulkAdapter,
+        executeStandardQuery,
+        executeCountQuery
     });
 
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Salesforce Universal Trigger query failed (${response.status}): ${text}`);
+    log.info('Poll completed', { object: objectName, records: String(records.length) });
+
+    // --- SHADOW MODE COMPARISON ---
+    if (isShadowMode && legacyRecords !== null) {
+        validateShadowParity(legacyRecords, records, log);
+        // In shadow mode, we ALWAYS return the legacy records to prevent data impact!
+        return legacyRecords;
     }
 
-    const result = await response.json();
-
-    if (result.totalSize >= bulkThreshold) {
-        const bulkSoql = DynamicQueryBuilder.buildSOQL(schema, {
-            objectName,
-            cursorField,
-            cursorValue: lastCursor,
-            autoJoins: hint?.autoJoin,
-            limit: 0,
-        });
-        return await bulkJobManager.run(flatAuth, bulkSoql.replace('LIMIT 0', '').trim(), store);
-    }
-
-    return result.records ?? [];
+    return records;
 }
 
-async function advanceCursor(records: unknown[], cursorField: string, cursorKey: string, store: TriggerStore): Promise<void> {
-    if (records.length > 0) {
-        const last = records.at(-1) as Record<string, unknown>;
-        const nextCursor = last[cursorField];
-        if (typeof nextCursor === 'string') {
-            await store.put(cursorKey, nextCursor);
-        }
+function validateShadowParity(legacyRecords: any[], records: unknown[], log: IgtLogger): void {
+    const legacyIds = new Set(legacyRecords.map(r => r.Id).filter(Boolean));
+    const universalIds = new Set(records.map(r => (r as any).Id).filter(Boolean));
+
+    let missing = 0;
+    let extra = 0;
+    for (const id of legacyIds) { if (!universalIds.has(id)) missing++; }
+    for (const id of universalIds) { if (!legacyIds.has(id)) extra++; }
+
+    if (missing > 0 || extra > 0 || legacyRecords.length !== records.length) {
+        log.warn('Shadow mode parity mismatch', {
+            legacyCount: String(legacyRecords.length),
+            universalCount: String(records.length),
+            missingInUniversal: String(missing),
+            extraInUniversal: String(extra),
+        });
+    } else {
+        log.debug('Shadow mode parity OK', { count: String(legacyRecords.length) });
     }
 }
