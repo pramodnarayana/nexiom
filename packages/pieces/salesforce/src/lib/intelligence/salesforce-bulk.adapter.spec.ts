@@ -141,13 +141,12 @@ describe('SalesforceBulkAdapter', () => {
         });
 
         it('should throw an error if job creation fails', async () => {
-            vi.mocked(sfFetch).mockResolvedValueOnce({
-                ok: false,
-                json: async () => [{ message: 'Internal Server Error' }]
-            } as unknown as Response);
+            vi.mocked(sfFetch).mockRejectedValueOnce(
+                new Error('Salesforce API error (500): [{"message":"Internal Server Error"}]')
+            );
 
             await expect(adapter.runBulkJob(mockAuth, 'SELECT Id FROM Account', mockStore))
-                .rejects.toThrow('Salesforce bulk query job creation failed: Internal Server Error');
+                .rejects.toThrow('Salesforce bulk query job creation failed: Error: Salesforce API error (500): [{"message":"Internal Server Error"}]');
         });
     });
 });

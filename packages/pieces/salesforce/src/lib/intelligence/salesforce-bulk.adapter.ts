@@ -49,27 +49,24 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         storeKey: string
     ): Promise<unknown[]> {
         const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query`;
-        const response = await sfFetch(url, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${auth.access_token}`,
-                'Content-Type': 'application/json',
-                Accept: 'application/json'
-            },
-            body: JSON.stringify({ operation: 'query', query: soql }),
-        });
-
-        if (!response.ok) {
-            let errMsg = response.statusText || 'Unknown error';
-            try {
-                const errBody = await response.json();
-                if (Array.isArray(errBody) && errBody[0]?.message) {
-                    errMsg = errBody[0].message;
-                }
-            } catch (e) {
-                log.debug('Failed to parse error body', { error: String(e) });
+        let response: Response;
+        try {
+            response = await sfFetch(url, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${auth.access_token}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json'
+                },
+                body: JSON.stringify({ operation: 'query', query: soql }),
+            });
+        } catch (e: any) {
+            // Check for 404 or 410 which indicate the job was deleted/expired
+            if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
+                await store.delete(storeKey);
+                throw new Error('Salesforce bulk query job expired or not found. State reset.');
             }
-            throw new Error(`Salesforce bulk query job creation failed: ${errMsg}`);
+            throw new Error(`Salesforce bulk query job creation failed: ${e}`);
         }
 
         const jobData = await response.json();
@@ -119,7 +116,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             await this.checkpoint(store, checkpoint);
             log.info('Bulk job complete — downloading results', { jobId: checkpoint.jobId });
 
-            const records = await this.downloadResults(auth, checkpoint.jobId);
+            const records = await this.downloadResults(auth, checkpoint.jobId, store);
             await store.delete(storeKey);
             log.info('Bulk job results downloaded', { jobId: checkpoint.jobId, records: String(records.length) });
             return records;
@@ -139,15 +136,19 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         await store.put('igt_bulk_job_checkpoint', data);
     }
 
-    private async downloadResults(auth: SalesforceAuth, jobId: string): Promise<unknown[]> {
+    private async downloadResults(auth: SalesforceAuth, jobId: string, store: TriggerStore): Promise<unknown[]> {
         const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${jobId}/results`;
-        const response = await sfFetch(url, {
-            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'text/csv' },
-        });
-
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`Failed to download bulk job results (${response.status} ${response.statusText}): ${errBody}`);
+        let response: Response;
+        try {
+            response = await sfFetch(url, {
+                headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'text/csv' },
+            });
+        } catch (e: any) {
+            if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
+                await store.delete('igt_bulk_job_checkpoint'); // The store key is hardcoded in checkpoint()
+                throw new Error(`Salesforce bulk query job results expired or not found for jobId ${jobId}. State reset.`);
+            }
+            throw new Error(`Failed to download bulk job results: ${e}`);
         }
 
         const text = await response.text();

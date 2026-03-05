@@ -34,11 +34,11 @@ describe('SalesforceQueryAdapter', () => {
                     cursorValue: '2026-03-01T00:00:00.000Z',
                     limit: 100
                 });
-            }).toThrowError('Cursor field NonExistentField not found in schema definitions.');
+            }).toThrowError('Invalid cursorField: \'NonExistentField\' not found on object \'Contact\'');
         });
 
         it('should throw descriptive errors for non-finite or negative limits', () => {
-            const invalidLimits = [-1, NaN, Infinity];
+            const invalidLimits = [-1, Number.NaN, Infinity];
             for (const limit of invalidLimits) {
                 expect(() => {
                     adapter.buildQuery(mockSchema, {

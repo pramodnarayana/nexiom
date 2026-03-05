@@ -36,6 +36,13 @@ export class QuickBooksQueryAdapter {
         if (!/^[-a-zA-Z0-9_:.+ ]+$/.test(spec.cursorValue)) {
             throw new Error(`Invalid cursor format: ${spec.cursorValue}`);
         }
+        if (spec.cursorIdField && !spec.cursorIdValue) {
+            throw new Error(`Both cursorIdField and cursorIdValue must be provided together. Missing cursorIdValue for cursorIdField: ${spec.cursorIdField}`);
+        }
+        if (!spec.cursorIdField && spec.cursorIdValue) {
+            throw new Error(`Both cursorIdField and cursorIdValue must be provided together. Missing cursorIdField for cursorIdValue: ${spec.cursorIdValue}`);
+        }
+
         if (spec.cursorIdField && !/^[a-zA-Z0-9_.:]+$/.test(spec.cursorIdField)) {
             throw new Error(`Invalid cursorIdField: ${spec.cursorIdField}`);
         }

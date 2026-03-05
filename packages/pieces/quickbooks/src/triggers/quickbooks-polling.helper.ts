@@ -7,7 +7,13 @@ export interface QuickBooksAuth {
     access_token: string;
     props: {
         companyId: string;
+        useSandbox?: boolean;
     };
+}
+
+export interface Cursor {
+    lastUpdatedTime?: string;
+    lastId?: string;
 }
 
 export async function runQuickBooksQuery(
@@ -16,8 +22,15 @@ export async function runQuickBooksQuery(
     store: TriggerStore,
     hint?: ObjectHint
 ): Promise<unknown[]> {
+    if (!auth || typeof auth.access_token !== 'string' || auth.access_token.trim() === '') {
+        throw new Error('QuickBooks authentication missing or invalid access_token');
+    }
+    if (!auth.props?.companyId || typeof auth.props.companyId !== 'string' || auth.props.companyId.trim() === '') {
+        throw new Error('QuickBooks authentication missing or invalid companyId');
+    }
+
     const cursorKey = `igt_${entityType}_MetaData.LastUpdatedTime`;
-    let lastCursorParams = await store.get<any>(cursorKey);
+    let lastCursorParams = await store.get<Cursor | string>(cursorKey);
     let since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     let lastId = '0';
 
@@ -37,7 +50,7 @@ export async function runQuickBooksQuery(
         limit: hint?.bulkThreshold ?? 100, // example using hint
     });
 
-    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId)}/query`
+    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, auth.props.useSandbox === true)}/query`
         + `?query=${encodeURIComponent(sql)}&minorversion=65`;
 
     const controller = new AbortController();

@@ -18,9 +18,15 @@ export async function checkSalesforceLimits(
     store: ApiLimitsStore
 ): Promise<{ remaining: number; total: number } | null> {
     const CACHE_KEY = `sf_limits_${auth.instance_url}`;
-    const POLL_INTERVAL = process.env.SF_LIMITS_POLL_INTERVAL_MS
-        ? Number.parseInt(process.env.SF_LIMITS_POLL_INTERVAL_MS, 10)
-        : 15 * 60 * 1000;
+    let POLL_INTERVAL = 15 * 60 * 1000;
+    if (process.env.SF_LIMITS_POLL_INTERVAL_MS) {
+        const parsed = Number.parseFloat(process.env.SF_LIMITS_POLL_INTERVAL_MS);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            POLL_INTERVAL = parsed;
+        } else {
+            console.warn(`Invalid SF_LIMITS_POLL_INTERVAL_MS: '${process.env.SF_LIMITS_POLL_INTERVAL_MS}'. Using default 15m.`);
+        }
+    }
 
     const cached = await store.get<{ timestamp: number; limits: { remaining: number; total: number } }>(CACHE_KEY);
     if (cached && (Date.now() - cached.timestamp < POLL_INTERVAL)) {
@@ -33,27 +39,24 @@ export async function checkSalesforceLimits(
             headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' }
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            if (data.DailyApiRequests) {
-                const limits = {
-                    total: data.DailyApiRequests.Max,
-                    remaining: data.DailyApiRequests.Remaining,
-                };
-                await store.put(CACHE_KEY, { timestamp: Date.now(), limits });
-                return limits;
-            }
-        } else if (response.status === 403) {
-            const body = await response.text();
-            if (body.includes('REQUEST_LIMIT_EXCEEDED')) {
-                const limits = { total: 1, remaining: 0 };
-                await store.put(CACHE_KEY, { timestamp: Date.now(), limits });
-                return limits;
-            }
+        // if we get here, response is OK because sfFetch throws on non-ok (except 403 maybe? Actually sfFetch only returns if ok)
+        const data = await response.json();
+        if (data.DailyApiRequests) {
+            const limits = {
+                total: data.DailyApiRequests.Max,
+                remaining: data.DailyApiRequests.Remaining,
+            };
+            await store.put(CACHE_KEY, { timestamp: Date.now(), limits });
+            return limits;
         }
-    } catch (e) {
-        // Ignore limit check errors to avoid breaking the main flow
-        console.debug('Failed to check Salesforce limits', e);
+    } catch (e: any) {
+        if (e.message?.includes('(403)') && e.message?.includes('REQUEST_LIMIT_EXCEEDED')) {
+            const limits = { total: 1, remaining: 0 };
+            await store.put(CACHE_KEY, { timestamp: Date.now(), limits });
+            return limits;
+        }
+        // Rethrow for other errors
+        throw e;
     }
     return null;
 }
@@ -93,9 +96,23 @@ export async function sfFetch(
 
         if (isRetriable && attempt < maxRetries) {
             const retryAfter = response.headers.get('Retry-After');
-            const delayMs = retryAfter
-                ? Number.parseInt(retryAfter, 10) * 1000
-                : Math.min(1_000 * 2 ** attempt, 30_000);
+            let delayMs = -1;
+
+            if (retryAfter) {
+                if (/^\d+$/.test(retryAfter)) {
+                    delayMs = Number.parseInt(retryAfter, 10) * 1000;
+                } else {
+                    const parsedDate = Date.parse(retryAfter);
+                    if (!Number.isNaN(parsedDate)) {
+                        delayMs = parsedDate - Date.now();
+                    }
+                }
+            }
+
+            if (delayMs <= 0 || Number.isNaN(delayMs)) {
+                delayMs = Math.min(1_000 * 2 ** attempt, 30_000);
+            }
+
             attempt++;
             await new Promise<void>(resolve => setTimeout(resolve, delayMs));
             continue;

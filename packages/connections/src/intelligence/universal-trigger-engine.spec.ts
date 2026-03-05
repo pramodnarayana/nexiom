@@ -40,7 +40,7 @@ describe('UniversalTriggerEngine', () => {
 
     const mockSchema: ObjectSchema = {
         objectName: 'TestObject',
-        fields: [],
+        fields: [{ name: 'LastModifiedDate', type: 'datetime', filterable: true, sortable: true, nillable: false } as any],
         childRelationships: [],
         fetchedAt: Date.now()
     };
@@ -116,6 +116,16 @@ describe('UniversalTriggerEngine', () => {
 
         expect(mockDiscoveryAdapter.describe).toHaveBeenCalled();
         expect(mockStore.get).toHaveBeenCalledWith('igt_TestObject_LastModifiedDate');
+
+        expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.objectContaining({ objectName: 'TestObject', cursorValue: '2026-01-01T00:00:00.000Z' })
+        );
+        expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.objectContaining({ objectName: 'TestObject', cursorValue: '2026-01-01T00:00:00.000Z' })
+        );
+
         expect(mockExecuteCountQuery).toHaveBeenCalled();
         expect(mockExecuteStandardQuery).toHaveBeenCalled();
         expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
@@ -123,10 +133,10 @@ describe('UniversalTriggerEngine', () => {
         // Assert we got records
         expect(records.length).toBe(2);
 
-        // Assert cursor was saved
+        // Assert cursor was saved with typed unix epoch
         expect(mockStore.put).toHaveBeenCalledWith(
             'igt_TestObject_LastModifiedDate',
-            '2026-03-02T00:00:00.000Z||2'
+            '1772409600000||2'
         );
     });
 
@@ -138,6 +148,15 @@ describe('UniversalTriggerEngine', () => {
         });
 
         const records = await UniversalTriggerEngine.execute(config);
+
+        expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.anything()
+        );
+        expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.anything()
+        );
 
         expect(mockExecuteCountQuery).toHaveBeenCalled();
         expect(mockBulkAdapter.runBulkJob).toHaveBeenCalled();
@@ -151,6 +170,11 @@ describe('UniversalTriggerEngine', () => {
         const config = createConfig();
 
         const records = await UniversalTriggerEngine.execute(config);
+
+        expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.anything()
+        );
 
         expect(mockExecuteCountQuery).toHaveBeenCalled();
         expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
@@ -166,6 +190,10 @@ describe('UniversalTriggerEngine', () => {
 
         const records = await UniversalTriggerEngine.execute(config);
 
+        expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.anything()
+        );
         expect(mockExecuteStandardQuery).toHaveBeenCalled();
         expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
         expect(records.length).toBe(2);
@@ -181,6 +209,8 @@ describe('UniversalTriggerEngine', () => {
         const records = await UniversalTriggerEngine.execute(config);
 
         // Even though size is massive, we have no bulk adapter, must route to standard
+        expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(mockSchema, expect.anything());
+        expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(mockSchema, expect.anything());
         expect(mockExecuteCountQuery).toHaveBeenCalled();
         expect(mockExecuteStandardQuery).toHaveBeenCalled();
         expect(records.length).toBe(2);

@@ -44,7 +44,11 @@ export class UniversalTriggerEngine {
         const stateStr = await config.store.get<string>(cursorKey);
         const { lastCursor, lastTieBreaker } = this.parseState(stateStr, schema, cursorField);
 
-        log.debug('Polling engine active', { object: objectName, cursor: lastCursor });
+        log.debug('Polling engine active', { object: objectName, cursor: String(lastCursor) });
+
+        const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
+        const fieldType = fieldDef?.type || 'string';
+        const queryCursorValue = this.formatForQuery(lastCursor, fieldType);
 
         // 6. Preflight Size Estimation (If specific API supports it)
         let totalSize = -1;
@@ -52,7 +56,7 @@ export class UniversalTriggerEngine {
             const countSoql = queryAdapter.buildCountQuery(schema, {
                 objectName,
                 cursorField,
-                cursorValue: lastCursor,
+                cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
             });
 
@@ -64,7 +68,7 @@ export class UniversalTriggerEngine {
 
         let records: unknown[] = [];
         try {
-            records = await this.fetchRecords(config, totalSize, bulkThreshold, lastCursor);
+            records = await this.fetchRecords(config, schema, totalSize, bulkThreshold, lastCursor);
         } catch (e: any) {
             if (e.message?.includes('REQUEST_LIMIT_EXCEEDED')) {
                 log.warn('Salesforce API limit exceeded (403). Backing off.', { objectName });
@@ -74,11 +78,11 @@ export class UniversalTriggerEngine {
         }
 
         if (records.length > 0 && lastTieBreaker) {
-            records = records.filter(rec => this.isRecordNewer(rec, cursorField, lastCursor, lastTieBreaker));
+            records = records.filter(rec => this.isRecordNewer(rec, cursorField, lastCursor, lastTieBreaker, schema));
         }
 
         // 9. Checkpoint State
-        await this.checkpointState(records, cursorField, cursorKey, lastCursor, config.store, objectName);
+        await this.checkpointState(records, cursorField, cursorKey, lastCursor, config.store, objectName, schema);
 
         return records;
     }
@@ -112,24 +116,25 @@ export class UniversalTriggerEngine {
         return true;
     }
 
-    private static parseState(stateStr: string | null, schema: any, cursorField: string): { lastCursor: string, lastTieBreaker: string } {
-        let lastCursor: string | undefined;
+    private static parseState(stateStr: string | null, schema: any, cursorField: string): { lastCursor: string | number, lastTieBreaker: string } {
+        let lastCursor: string | number | undefined;
         let lastTieBreaker = '';
+
+        const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
+        const fieldType = fieldDef?.type || 'string';
 
         if (stateStr) {
             const parts = stateStr.split('||');
-            lastCursor = parts[0];
+            lastCursor = this.toTypedCursor(parts[0], fieldType);
             lastTieBreaker = parts[1] ?? '';
         }
 
         if (lastCursor === null || lastCursor === undefined) {
-            const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
-            const fieldType = fieldDef?.type?.toLowerCase() || 'string';
-
-            if (['datetime', 'date', 'time'].includes(fieldType)) {
-                lastCursor = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            } else if (['int', 'double', 'currency', 'percent', 'number', 'id', 'reference'].includes(fieldType)) {
-                lastCursor = '0';
+            const ft = fieldType.toLowerCase();
+            if (['datetime', 'date', 'time'].includes(ft)) {
+                lastCursor = Date.now() - 24 * 60 * 60 * 1000;
+            } else if (['int', 'double', 'currency', 'percent', 'number', 'id', 'reference'].includes(ft)) {
+                lastCursor = 0;
             } else {
                 lastCursor = '';
             }
@@ -138,21 +143,47 @@ export class UniversalTriggerEngine {
         return { lastCursor, lastTieBreaker };
     }
 
+    private static toTypedCursor(val: any, fieldType: string): string | number {
+        if (val === null || val === undefined) return '';
+        const ft = fieldType.toLowerCase();
+        if (['datetime', 'date', 'time'].includes(ft)) {
+            const parsed = Date.parse(String(val));
+            return Number.isNaN(parsed) ? String(val) : parsed;
+        } else if (['int', 'double', 'currency', 'percent', 'number'].includes(ft)) {
+            const parsed = Number(val);
+            return Number.isNaN(parsed) ? String(val) : parsed;
+        }
+        return String(val);
+    }
+
+    private static formatForQuery(val: string | number, fieldType: string): string | number {
+        const ft = fieldType.toLowerCase();
+        if (['datetime', 'date', 'time'].includes(ft) && typeof val === 'number') {
+            return new Date(val).toISOString();
+        }
+        return val;
+    }
+
     private static async fetchRecords(
         config: UniversalEngineConfig<any>,
+        schema: any,
         totalSize: number,
         bulkThreshold: number,
-        lastCursor: string
+        lastCursor: string | number
     ): Promise<unknown[]> {
-        const { objectName, hint, queryAdapter, bulkAdapter, executeStandardQuery, schema } = config as any;
+        const { objectName, hint, queryAdapter, bulkAdapter, executeStandardQuery } = config as any;
+        const cursorField = SmartCursorSelector.pick(schema, hint);
+        const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
+        const fieldType = fieldDef?.type || 'string';
+        const queryCursorValue = this.formatForQuery(lastCursor, fieldType);
 
         // 7. Route to Bulk API if threshold exceeded
         if (bulkAdapter && totalSize >= bulkThreshold) {
             log.info('Threshold exceeded, routing to Bulk API tier', { totalSize: String(totalSize) });
             const bulkQueryString = queryAdapter.buildQuery(schema, {
                 objectName,
-                cursorField: SmartCursorSelector.pick(schema, hint),
-                cursorValue: lastCursor,
+                cursorField,
+                cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
                 omitLimit: true,
             });
@@ -163,8 +194,8 @@ export class UniversalTriggerEngine {
             // 8. Execute Standard HTTP Polling Loop
             const queryString = queryAdapter.buildQuery(schema, {
                 objectName,
-                cursorField: SmartCursorSelector.pick(schema, hint),
-                cursorValue: lastCursor,
+                cursorField,
+                cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
                 limit: 2_000,
             });
@@ -172,8 +203,11 @@ export class UniversalTriggerEngine {
         }
     }
 
-    private static isRecordNewer(rec: unknown, cursorField: string, lastCursor: string, lastTieBreaker: string): boolean {
-        const val = String((rec as Record<string, unknown>)[cursorField]);
+    private static isRecordNewer(rec: unknown, cursorField: string, lastCursor: string | number, lastTieBreaker: string, schema: any): boolean {
+        const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
+        const fieldType = fieldDef?.type || 'string';
+        const val = this.toTypedCursor((rec as Record<string, unknown>)[cursorField], fieldType);
+
         const idRaw = (rec as Record<string, unknown>)['Id'] ?? (rec as Record<string, unknown>)['id'];
         const tb = typeof idRaw === 'string' || typeof idRaw === 'number' ? String(idRaw) : '';
         return val > lastCursor || (val === lastCursor && tb > lastTieBreaker);
@@ -183,31 +217,35 @@ export class UniversalTriggerEngine {
         records: unknown[],
         cursorField: string,
         cursorKey: string,
-        lastCursor: string,
+        lastCursor: string | number,
         store: any,
-        objectName: string
+        objectName: string,
+        schema: any
     ): Promise<void> {
+        const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
+        const fieldType = fieldDef?.type || 'string';
+
         // MAX across all records — safe against out-of-order results and timestamp ties
-        let maxCursor: string | undefined;
+        let maxCursor: string | number | undefined;
         let maxTieBreaker: string | undefined;
 
         for (const rec of records) {
-            const val = String((rec as Record<string, unknown>)[cursorField]);
+            const val = this.toTypedCursor((rec as Record<string, unknown>)[cursorField], fieldType);
             const idRaw = (rec as Record<string, unknown>)['Id'] ?? (rec as Record<string, unknown>)['id'];
             const tieBreaker = typeof idRaw === 'string' || typeof idRaw === 'number' ? String(idRaw) : '';
 
-            if (!maxCursor || val > maxCursor || (val === maxCursor && tieBreaker > (maxTieBreaker ?? ''))) {
+            if (maxCursor === undefined || val > maxCursor || (val === maxCursor && tieBreaker > (maxTieBreaker ?? ''))) {
                 maxCursor = val;
                 maxTieBreaker = tieBreaker;
             }
         }
 
-        if (maxCursor) {
-            const compositeCursor = maxTieBreaker ? `${maxCursor}||${maxTieBreaker}` : maxCursor;
+        if (maxCursor !== undefined) {
+            const compositeCursor = maxTieBreaker ? `${maxCursor}||${maxTieBreaker}` : String(maxCursor);
             await store.put(cursorKey, compositeCursor);
-            log.info('Cursor advanced', { objectName, cursor: maxCursor, tieBreaker: maxTieBreaker });
+            log.info('Cursor advanced', { objectName, cursor: String(maxCursor), tieBreaker: maxTieBreaker });
         } else {
-            log.debug('No new records, cursor retained', { objectName, cursor: lastCursor });
+            log.debug('No new records, cursor retained', { objectName, cursor: String(lastCursor) });
         }
     }
 }

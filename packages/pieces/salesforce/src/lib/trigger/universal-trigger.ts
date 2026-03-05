@@ -19,8 +19,7 @@ import {
 } from '../intelligence/index.js';
 
 // Fallback to legacy triggers for shadow mode
-import { newContact } from './new-contact.js';
-import { newLead } from './new-lead.js';
+// (Currently we only support this for polling triggers, not webhooks)
 
 interface SfQueryPage {
     done: boolean;
@@ -29,10 +28,14 @@ interface SfQueryPage {
     totalSize?: number;
 }
 
-// (Map of supported shadow mode objects)
+// Map of supported shadow mode objects to their POLLING legacy triggers
+// If the object isn't listed here, we will not replace the payload results.
 const LEGACY_TRIGGERS: Record<string, any> = {
-    'Contact': newContact,
-    'Lead': newLead,
+    // Only map objects that have existing polling triggers natively
+    // e.g 'Contact': legacyContactPollingTrigger (if it existed)
+    // For now, these were webhooks so we don't map them if there is no polling equiv:
+    // 'Contact': newContact, // WEBHOOK - Removed
+    // 'Lead': newLead,       // WEBHOOK - Removed
 };
 
 // Module-level singletons — in-memory schema cache survives across poll runs
@@ -87,11 +90,11 @@ async function runUniversalTrigger(
 
     if (isShadowMode && LEGACY_TRIGGERS[objectName]) {
         try {
-            // Run legacy trigger path, which expects webhook context
+            // Run legacy trigger path, which expects POLLING context now
             const res = await LEGACY_TRIGGERS[objectName].run!(context);
             if (Array.isArray(res)) {
-                legacyRecords = res.map(r => typeof r === 'object' && r !== null ? r : { Id: String(r || '') })
-                    .filter(r => Boolean(r.Id));
+                legacyRecords = res.map((r: any) => typeof r === 'object' && r !== null ? r : { Id: String(r || '') })
+                    .filter((r: any) => Boolean(r.Id));
             } else {
                 legacyRecords = [];
             }
@@ -169,7 +172,7 @@ async function runUniversalTrigger(
     // --- SHADOW MODE COMPARISON ---
     if (isShadowMode && legacyRecords !== null) {
         validateShadowParity(legacyRecords, records, log);
-        // In shadow mode, we ALWAYS return the legacy records to prevent data impact!
+        // In shadow mode, we ALWAYS return the legacy records IF they existed to prevent data impact!
         return legacyRecords;
     }
 
