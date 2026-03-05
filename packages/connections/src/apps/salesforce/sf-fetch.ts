@@ -18,15 +18,7 @@ export async function checkSalesforceLimits(
     store: ApiLimitsStore
 ): Promise<{ remaining: number; total: number } | null> {
     const CACHE_KEY = `sf_limits_${auth.instance_url}`;
-    let POLL_INTERVAL = 15 * 60 * 1000;
-    if (process.env.SF_LIMITS_POLL_INTERVAL_MS) {
-        const parsed = Number.parseFloat(process.env.SF_LIMITS_POLL_INTERVAL_MS);
-        if (Number.isFinite(parsed) && parsed > 0) {
-            POLL_INTERVAL = parsed;
-        } else {
-            console.warn(`Invalid SF_LIMITS_POLL_INTERVAL_MS: '${process.env.SF_LIMITS_POLL_INTERVAL_MS}'. Using default 15m.`);
-        }
-    }
+    const POLL_INTERVAL = getPollIntervalMs();
 
     const cached = await store.get<{ timestamp: number; limits: { remaining: number; total: number } }>(CACHE_KEY);
     if (cached && (Date.now() - cached.timestamp < POLL_INTERVAL)) {
@@ -50,7 +42,7 @@ export async function checkSalesforceLimits(
             return limits;
         }
     } catch (e: any) {
-        if (e.message?.includes('(403)') && e.message?.includes('REQUEST_LIMIT_EXCEEDED')) {
+        if (isRateLimitExceededException(e)) {
             const limits = { total: 1, remaining: 0 };
             await store.put(CACHE_KEY, { timestamp: Date.now(), limits });
             return limits;
@@ -59,6 +51,29 @@ export async function checkSalesforceLimits(
         throw e;
     }
     return null;
+}
+
+function getPollIntervalMs(): number {
+    if (!process.env.SF_LIMITS_POLL_INTERVAL_MS) return 15 * 60 * 1000;
+    const parsed = Number.parseFloat(process.env.SF_LIMITS_POLL_INTERVAL_MS);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    console.warn(`Invalid SF_LIMITS_POLL_INTERVAL_MS: '${process.env.SF_LIMITS_POLL_INTERVAL_MS}'. Using default 15m.`);
+    return 15 * 60 * 1000;
+}
+
+function isRateLimitExceededException(e: any): boolean {
+    const status = e.status || e.statusCode || e.response?.status;
+    const data = e.data || e.response?.body || e.message;
+
+    if (status === 403) {
+        if (
+            (Array.isArray(data) && data[0]?.errorCode === 'REQUEST_LIMIT_EXCEEDED') ||
+            (typeof data === 'string' && data.includes('REQUEST_LIMIT_EXCEEDED'))
+        ) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -78,48 +93,96 @@ export async function sfFetch(
     let attempt = 0;
 
     while (true) {
-        const response = await fetch(url, init);
+        let isTransientError = false;
+        let response: Response | undefined;
 
-        if (response.ok) return response;
-
-        if (response.status === 401) {
-            const body = await response.text();
-            throw new SalesforceAuthError(
-                `Salesforce session expired or token invalid (401): ${body}`,
-            );
+        try {
+            response = await executeFetchWithTimeout(url, init);
+        } catch (err: unknown) {
+            // Sonarqube: Handle this exception or don't catch it at all
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.debug(`[sfFetch] Transient network error encountered: ${errMsg}`);
+            isTransientError = true;
         }
 
-        const isRetriable =
-            response.status === 429 ||
-            response.status === 500 ||
-            response.status === 503;
+        if (response?.ok) return response;
 
-        if (isRetriable && attempt < maxRetries) {
-            const retryAfter = response.headers.get('Retry-After');
-            let delayMs = -1;
+        if (response?.status === 401) {
+            const body = await response.text();
+            throw new SalesforceAuthError(`Salesforce session expired or token invalid (401): ${body}`);
+        }
 
-            if (retryAfter) {
-                if (/^\d+$/.test(retryAfter)) {
-                    delayMs = Number.parseInt(retryAfter, 10) * 1000;
-                } else {
-                    const parsedDate = Date.parse(retryAfter);
-                    if (!Number.isNaN(parsedDate)) {
-                        delayMs = parsedDate - Date.now();
-                    }
-                }
-            }
-
-            if (delayMs <= 0 || Number.isNaN(delayMs)) {
-                delayMs = Math.min(1_000 * 2 ** attempt, 30_000);
-            }
+        if (isRetriableError(isTransientError, response) && attempt < maxRetries) {
+            const retryAfter = response?.headers?.get('Retry-After');
+            const delayMs = calculateRetryDelayMs(retryAfter, attempt);
 
             attempt++;
             await new Promise<void>(resolve => setTimeout(resolve, delayMs));
             continue;
         }
 
-        const body = await response.text();
-        throw new Error(`Salesforce API error (${response.status}): ${body}`);
+        throw await buildSalesforceError(response);
     }
+}
+
+function isRetriableError(isTransient: boolean, response?: Response): boolean {
+    if (isTransient) return true;
+    if (!response) return false;
+    return response.status === 429 || response.status === 500 || response.status === 503;
+}
+
+async function buildSalesforceError(response?: Response): Promise<Error> {
+    const bodyText = response ? await response.text() : 'Network or timeout error';
+    const err: any = new Error(`Salesforce API error (${response?.status || 0}): ${bodyText}`);
+    err.status = response?.status || 0;
+    err.response = { status: response?.status || 0, body: bodyText };
+    try {
+        err.data = JSON.parse(bodyText);
+    } catch {
+        // Ignore JSON parse errors for non-JSON bodies
+    }
+    return err;
+}
+
+async function executeFetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+    const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_FETCH_TIMEOUT_MS);
+
+    const fetchInit: RequestInit = {
+        ...init,
+        signal: init.signal || controller.signal
+    };
+
+    try {
+        return await fetch(url, fetchInit);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function calculateRetryDelayMs(retryAfter: string | null | undefined, attempt: number): number {
+    let delayMs = -1;
+
+    if (retryAfter) {
+        if (/^\d+$/.test(retryAfter)) {
+            delayMs = Number.parseInt(retryAfter, 10) * 1000;
+        } else {
+            const parsedDate = Date.parse(retryAfter);
+            if (!Number.isNaN(parsedDate)) {
+                delayMs = parsedDate - Date.now();
+            }
+        }
+
+        if (delayMs > 0) {
+            delayMs = Math.min(delayMs, 30_000);
+        }
+    }
+
+    if (delayMs <= 0 || Number.isNaN(delayMs)) {
+        delayMs = Math.min(1_000 * 2 ** attempt, 30_000);
+    }
+
+    return delayMs;
 }
 

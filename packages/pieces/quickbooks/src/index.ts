@@ -26,6 +26,11 @@ export const quickbooksAuth = PieceAuth.OAuth2({
     companyId: Property.ShortText({
       displayName: 'Company ID',
       required: true,
+    }),
+    useSandbox: Property.Checkbox({
+      displayName: 'Use Sandbox',
+      description: 'Check to use the QuickBooks Sandbox environment',
+      required: false,
     })
   },
   authUrl: 'https://appcenter.intuit.com/connect/oauth2',

@@ -140,6 +140,26 @@ describe('UniversalTriggerEngine', () => {
         );
     });
 
+    it('should correctly replay an epoch-based cursor and format it as ISO string for queries', async () => {
+        (mockStore.get).mockResolvedValue('1772409600000||2');
+        (mockExecuteCountQuery).mockResolvedValue(100);
+
+        const config = createConfig({
+            hint: { bulkThreshold: 500 }
+        });
+
+        await UniversalTriggerEngine.execute(config);
+
+        expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.objectContaining({ objectName: 'TestObject', cursorValue: '2026-03-02T00:00:00.000Z' })
+        );
+        expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(
+            mockSchema,
+            expect.objectContaining({ objectName: 'TestObject', cursorValue: '2026-03-02T00:00:00.000Z' })
+        );
+    });
+
     it('should execute bulk job when preflight count exceeds bulk threshold', async () => {
         (mockExecuteCountQuery).mockResolvedValue(600);
 

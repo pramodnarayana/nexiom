@@ -31,7 +31,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         const storeKey = 'igt_bulk_job_checkpoint';
         let checkpoint = await store.get<BulkJobCheckpoint>(storeKey);
 
-        if (!checkpoint || checkpoint.state === 'IDLE') {
+        if (!checkpoint || checkpoint.state === 'IDLE' || checkpoint.state === 'FAILED') {
             return this.createBulkJob(auth, soql, store, storeKey);
         }
 
@@ -93,20 +93,13 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             response = await sfFetch(url, {
                 headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
             });
-        } catch (e) {
-            // Transient network error, do NOT delete checkpoint
-            log.debug('Failed to fetch bulk job status', { error: String(e) });
-            throw e;
-        }
-
-        if (!response.ok) {
-            const errBody = await response.text();
-            // If job not found or explicit terminal error, we delete the checkpoint
-            const terminalStatuses = new Set([404, 410]);
-            if (terminalStatuses.has(response.status)) {
+        } catch (e: any) {
+            if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
                 await store.delete(storeKey);
             }
-            throw new Error(`Failed to check bulk job status (${response.status} ${response.statusText}): ${errBody}`);
+            // Transient network error, do NOT delete checkpoint, except for 404/410 explicitly terminal above
+            log.debug('Failed to fetch bulk job status', { error: String(e) });
+            throw e;
         }
 
         const jobInfo = await response.json();

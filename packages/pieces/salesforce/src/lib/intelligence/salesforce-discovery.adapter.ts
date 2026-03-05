@@ -17,6 +17,13 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
     private readonly TTL_MS = 15 * 60 * 1000; // 15 minutes
 
     async describe(auth: SalesforceAuth, objectName: string, store?: TriggerStore): Promise<ObjectSchema> {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if (now - entry.fetchedAt >= this.TTL_MS) {
+                this.cache.delete(key);
+            }
+        }
+
         const memKey = `${auth.instance_url}:${objectName}`;
         const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`;
 
@@ -54,13 +61,13 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
                 nillable: f.nillable,
                 referenceTo: f.referenceTo?.length > 0 ? f.referenceTo : undefined,
             })) : [],
-            childRelationships: (body.childRelationships || [])
+            childRelationships: Array.isArray(body.childRelationships) ? body.childRelationships
                 .filter((rel: any) => rel.relationshipName)
                 .map((rel: any) => ({
                     relationshipName: rel.relationshipName,
                     childSObject: rel.childSObject,
                     field: rel.field,
-                })),
+                })) : [],
             fetchedAt: Date.now(),
         };
 
@@ -107,6 +114,9 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
             });
             return await response.json();
         } catch (e: any) {
+            if (e instanceof SalesforceAuthError) {
+                throw e;
+            }
             const errMsg = String(e.message || e);
             const isMissingField = errMsg.includes('(404)') || errMsg.includes('No such field') || errMsg.includes('NOT_FOUND');
             if (isMissingField) {

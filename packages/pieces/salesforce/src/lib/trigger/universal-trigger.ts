@@ -108,12 +108,12 @@ async function runUniversalTrigger(
     assertSafeSalesforceObject(objectName);
     const hint = await optimizationService.getHint('salesforce', objectName);
 
-    const authData = (context.auth).data || context.auth;
+    const authData = (context.auth).data || context.auth || {};
     const access_token = authData.access_token || (context.auth as any).access_token;
-    const instance_url = authData.instance_url;
+    const instance_url = authData.instance_url || (context.auth).instance_url;
 
     if (!access_token || !instance_url) {
-        throw new Error('Missing access_token or instance_url in authentication data');
+        throw new SalesforceAuthError('Missing access_token or instance_url in authentication data');
     }
 
     const flatAuth = {

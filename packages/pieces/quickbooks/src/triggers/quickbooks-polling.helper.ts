@@ -75,14 +75,13 @@ export async function runQuickBooksQuery(
     }
 
     if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`QuickBooks query failed (${response.status}): ${text}`);
+        throw new Error(`QuickBooks query failed with status ${response.status} (response body omitted)`);
     }
 
     const body = await response.json() as QuickbooksEntityResponse<unknown>;
 
     if (body.Fault) {
-        throw new Error(`QuickBooks query fault: ${JSON.stringify(body.Fault)}`);
+        throw new Error(`QuickBooks query returned a fault response (fault details omitted)`);
     }
 
     const records = Object.values(body.QueryResponse ?? {})

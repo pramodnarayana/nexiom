@@ -61,8 +61,13 @@ export class UniversalTriggerEngine {
             });
 
             if (countSoql) {
-                totalSize = await executeCountQuery(config.auth, countSoql);
-                log.debug('Preflight count fetched', { objectName, count: String(totalSize) });
+                try {
+                    totalSize = await executeCountQuery(config.auth, countSoql);
+                    log.debug('Preflight count fetched', { objectName, count: String(totalSize) });
+                } catch (e: any) {
+                    log.error('Preflight count query failed', { objectName, error: String(e.message || e) });
+                    totalSize = -1;
+                }
             }
         }
 
@@ -147,8 +152,12 @@ export class UniversalTriggerEngine {
         if (val === null || val === undefined) return '';
         const ft = fieldType.toLowerCase();
         if (['datetime', 'date', 'time'].includes(ft)) {
-            const parsed = Date.parse(String(val));
-            return Number.isNaN(parsed) ? String(val) : parsed;
+            const valStr = String(val);
+            if (/^\d+$/.test(valStr)) {
+                return Number(valStr);
+            }
+            const parsed = Date.parse(valStr);
+            return Number.isNaN(parsed) ? valStr : parsed;
         } else if (['int', 'double', 'currency', 'percent', 'number'].includes(ft)) {
             const parsed = Number(val);
             return Number.isNaN(parsed) ? String(val) : parsed;
@@ -240,12 +249,12 @@ export class UniversalTriggerEngine {
             }
         }
 
-        if (maxCursor !== undefined) {
+        if (maxCursor === undefined) {
+            log.debug('No new records, cursor retained', { objectName, cursor: String(lastCursor) });
+        } else {
             const compositeCursor = maxTieBreaker ? `${maxCursor}||${maxTieBreaker}` : String(maxCursor);
             await store.put(cursorKey, compositeCursor);
             log.info('Cursor advanced', { objectName, cursor: String(maxCursor), tieBreaker: maxTieBreaker });
-        } else {
-            log.debug('No new records, cursor retained', { objectName, cursor: String(lastCursor) });
         }
     }
 }
