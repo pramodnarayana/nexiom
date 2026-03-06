@@ -84,6 +84,42 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **Reset Migration History**: Generate a fresh baseline database schema and squash all historical migrations to reset the corrupted `.drizzle` snapshot folder.
 - **Centralize DB Credentials**: Export a generic database URL resolution file that automatically paths to the root or `apps/api` `.env` regardless of which workspace is currently executing the CLI.
 
+### 4. Shadow Mode Direct Trigger Imports
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts` & Quickbooks  
+**Added**: 2026-03-04  
+**Impact**: Code Architecture, Module Coupling  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- Universal triggers directly import `newContact` and `newLead` (and their QuickBooks equivalents) to run Shadow Mode data parity checks.
+- This creates tight coupling and a code smell where the generic engine is strongly typed against the old implementations it's supposed to replace.
+
+**Recommended Solution**:
+
+- **Short term**: Complete Phase 3 testing (i.e., validate that the universal polling engine achieves 100% data parity and stability over a 2-week dual-run window; refer to the [QA Test Plan](/docs/qa/shadow_mode_test_plan.md) for exit criteria) and delete the legacy stubs immediately, removing the imports.
+- **Long term (if kept)**: Implement a Dependency Injection registry where legacy triggers self-register for shadow testing, keeping `universal-trigger.ts` completely unaware and decoupled.
+
+### 5. Drizzle Schema Consolidation (Modular Monolith)
+
+**Location**: `packages/database`, `packages/identity`  
+**Added**: 2026-03-05  
+**Impact**: Code Architecture, Developer Velocity  
+**Effort**: High (1 sprint)
+
+**Current State**:
+
+- The project follows a strict "Bounded Context" approach with database schemas separated across multiple packages (`@nexiom/identity` manages `organization`, `@nexiom/database` manages `app_connection` and `tenant`).
+- While this prevents circular dependencies and provides strict microservice-style domain boundaries, it incurs the overhead of data duplication. Specifically, it necessitates an artificial `tenant` "anchor" table in the database package to shadow the real `organization` table.
+
+**Recommended Solution**:
+
+- Adopt the "Shared Database Architecture" (Monolithic DB Package) which is the industry standard for TS monorepos (e.g., Vercel, Cal.com, Supabase).
+- Migrate all Drizzle schema files from `@nexiom/identity` directly into `@nexiom/database`.
+- Make `@nexiom/database` the single source of truth for the entire database. All other packages will list it as a dependency.
+- This allows `app_connection` to safely declare a TypeScript foreign key directly to `organization` without circular dependency errors.
+
 ---
 
 ## Medium Priority
@@ -133,7 +169,88 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ### Low Priority
 
-*No items currently tracked*
+### 1. Replace custom Logger with Pino
+
+**Location**: `packages/connections/src/intelligence/igt-logger.ts`  
+**Added**: 2026-03-05  
+**Impact**: Observability, Standardization  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- The `IgtLogger` is a custom implementation written specifically for the Intelligence Engine.
+- While functional, it does not adhere to the enterprise standard of using `pino` for structured, high-performance logging.
+- Lacks integration with standard log forwarders or shared configuration that a unified `pino` logger would provide.
+
+**Recommended Solution**:
+
+- Deprecate and remove `igt-logger.ts`.
+- Replace all imports of `IgtLogger` across the `@nexiom/connections` and `@nexiom/piece-*` packages with the enterprise-standard `pino` logger instance.
+- Ensure log levels and metadata context remain structured to avoid breaking existing observability dashboards.
+
+---
+
+## Intelligent Generic Trigger (IGT) — Known Limitations
+
+> These are documented trade-offs, not bugs. The core engine is correct and data-safe.
+
+### 1. CDC Path Not Implemented
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts`
+**Added**: 2026-03-04
+**Impact**: Performance, API Call Efficiency
+**Effort**: High (1 sprint)
+
+**Current State**:
+
+- When `hint.preferPath === 'CDC'` is configured, the engine emits a warning and falls back to REST polling.
+- Change Data Capture is the preferred path for high-volume, high-frequency objects (e.g. objects receiving thousands of updates per minute) as it eliminates polling latency and reduces API call consumption.
+
+**Recommended Solution**:
+
+- Implement a Salesforce Platform Event subscription for CDC.
+- Persist a replay ID in `TriggerStore` to resume from the last processed event after restarts.
+- Add `executeCDCQuery` to `UniversalEngineConfig` as an optional path the engine routes to when `hint.preferPath === 'CDC'`.
+
+---
+
+### 2. No Salesforce API Call Budget Tracking
+
+**Location**: `packages/connections/src/apps/salesforce/sf-fetch.ts`, `packages/connections/src/intelligence/universal-trigger-engine.ts`
+**Added**: 2026-03-04
+**Impact**: Reliability, Org Stability
+**Effort**: Medium (2-3 days)
+
+**Current State**:
+
+- The engine does not track or throttle API calls against Salesforce org limits (typically ~15,000 calls/day on standard orgs, higher on Enterprise/Unlimited).
+- At high polling frequency across many objects, flows could exhaust the org's daily API limit with no early warning.
+
+**Recommended Solution**:
+
+- Poll the Salesforce Limits API (`/services/data/vXX.0/limits`) periodically and cache the result in a shared store.
+- Emit a structured warning log when remaining calls drop below a configurable threshold (e.g. 20%).
+- Back off automatically when Salesforce returns `REQUEST_LIMIT_EXCEEDED` (HTTP 403).
+
+---
+
+### 3. Shadow Mode Is Process-Wide, Not Per-Flow
+
+**Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts`
+**Added**: 2026-03-04
+**Impact**: Deployment Flexibility
+**Effort**: Low (1 day)
+
+**Current State**:
+
+- Shadow mode is controlled by the `IGT_SHADOW_MODE` environment variable, which applies to the entire process.
+- All flows on a node enable or disable shadow mode together — it is not possible to shadow-test a single flow while others run in full production mode.
+
+**Recommended Solution**:
+
+- Add a `shadowMode` boolean to the flow's trigger configuration (stored in the database).
+- Read it from `TriggerStore` or `propsValue` at poll time instead of the environment variable.
+- Retain the env var as a global override for emergency rollback.
 
 ---
 

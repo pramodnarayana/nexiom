@@ -16,6 +16,12 @@
             "import": "./dist/framework/index.js",
             "require": "./dist/framework/index.js",
             "default": "./dist/framework/index.js"
+        },
+        "./intelligence": {
+            "types": "./dist/intelligence/index.d.ts",
+            "import": "./dist/intelligence/index.js",
+            "require": "./dist/intelligence/index.js",
+            "default": "./dist/intelligence/index.js"
         }
     },
     "scripts": {

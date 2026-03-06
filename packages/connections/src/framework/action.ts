@@ -3,6 +3,7 @@ import { AnyProperty } from './property.js';
 export interface ActionContext<AuthT, PropsT> {
     auth: AuthT;
     propsValue: PropsT;
+    files?: Record<string, any>;
 }
 
 export interface Action<AuthT = any, PropsT = any, ReturnT = any> {
@@ -10,16 +11,19 @@ export interface Action<AuthT = any, PropsT = any, ReturnT = any> {
     displayName: string;
     description: string;
     props: Record<string, AnyProperty>;
-    requireAuth: boolean;
+    requireAuth?: boolean;
+    sampleData?: any;
     run: (context: ActionContext<AuthT, PropsT>) => Promise<ReturnT>;
 }
 
 export interface CreateActionParams<AuthT, PropsT, ReturnT> {
     name: string;
+    auth?: any;
     displayName: string;
     description: string;
     props: Record<string, AnyProperty>;
-    requireAuth: boolean;
+    requireAuth?: boolean;
+    sampleData?: any;
     run: (context: ActionContext<AuthT, PropsT>) => Promise<ReturnT>;
 }
 
@@ -34,3 +38,5 @@ export function createAction<AuthT = any, PropsT = any, ReturnT = any>(
         ...params,
     };
 }
+
+export const createCustomApiCallAction = (...args: any[]) => ({} as any);

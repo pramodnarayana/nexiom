@@ -10,6 +10,15 @@ export enum TriggerStrategy {
     WEBHOOK = 'WEBHOOK',
 }
 
+export const DedupeStrategy = { TIMEBASED: 'TIMEBASED', LAST_ITEM: 'LAST_ITEM' };
+
+export const pollingHelper = {
+    onEnable: async () => { },
+    onDisable: async () => { },
+    test: async () => [],
+    poll: async () => []
+};
+
 /**
  * Cursor-backed key/value store injected into every trigger context.
  * The host provides a Redis-backed implementation; pieces use it to track
@@ -53,10 +62,12 @@ export interface TriggerContext<AuthT = any, PropsT = any> {
  */
 export interface Trigger<AuthT = any, PropsT = any> {
     name: string;
+    auth?: any;
     displayName: string;
     description: string;
-    type: TriggerStrategy;
+    type: string | TriggerStrategy;
     props: Record<string, AnyProperty>;
+    sampleData?: any;
 
     /**
      * Core execution: returns an array of inbound records.

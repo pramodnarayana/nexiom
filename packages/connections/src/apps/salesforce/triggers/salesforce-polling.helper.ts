@@ -55,7 +55,7 @@ export function assertSafeSalesforceObject(objectName: string): void {
  * @param opts     Cursor key, date field, and optional extra SELECT columns
  * @param store    TriggerStore for reading/writing the cursor
  */
-export async function runSalesforcePolling(
+export async function runSalesforce(
     auth: SalesforceAuth,
     object: string,
     opts: PollOptions,

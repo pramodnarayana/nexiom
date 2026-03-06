@@ -5,6 +5,8 @@ export type OAuth2GrantType = 'AUTHORIZATION_CODE' | 'CLIENT_CREDENTIALS';
 export interface OAuth2Auth {
     type: PropertyType.OAUTH2;
     required: boolean;
+    description?: string;
+    props?: Record<string, AnyProperty>;
     authUrl: string;
     tokenUrl: string;
     scope: string[];

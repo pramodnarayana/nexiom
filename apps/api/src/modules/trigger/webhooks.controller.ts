@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { TriggerStrategy } from '@nexiom/connections';
 import { PieceRegistryService } from './piece-registry.service';
 import { TriggerExecutorService } from './trigger-executor.service';
 
@@ -68,7 +67,7 @@ export class WebhooksController {
       conn.app_name,
       conn.trigger_name,
     );
-    if (!trigger || trigger.type !== TriggerStrategy.WEBHOOK) {
+    if (!trigger || trigger.type !== 'WEBHOOK') {
       throw new NotFoundException(
         `No webhook trigger '${conn.trigger_name}' registered for app '${conn.app_name}'`,
       );

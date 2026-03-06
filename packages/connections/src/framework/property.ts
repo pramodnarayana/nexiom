@@ -21,6 +21,7 @@ export type BasePropertySchema = {
     displayName: string;
     description?: string;
     required: boolean;
+    auth?: any;
 };
 
 export type ShortTextProperty = BasePropertySchema & {
@@ -49,17 +50,15 @@ export type NumberProperty = BasePropertySchema & {
 
 export type JsonProperty = BasePropertySchema & {
     type: PropertyType.JSON;
-    defaultValue?: Record<string, unknown>;
+    defaultValue?: any;
 };
 
 export type DropdownProperty<T> = BasePropertySchema & {
     type: PropertyType.DROPDOWN;
     refreshers: string[];
-    options: (propsValue: Record<string, unknown>) => Promise<{
-        disabled?: boolean;
-        placeholder?: string;
-        options: { label: string; value: T }[];
-    }>;
+    refreshOnSearch?: boolean;
+    options: (...args: any[]) => Promise<any>;
+    defaultValue?: T;
 };
 
 export type StaticDropdownProperty<T> = BasePropertySchema & {
@@ -69,6 +68,7 @@ export type StaticDropdownProperty<T> = BasePropertySchema & {
         placeholder?: string;
         options: { label: string; value: T }[];
     };
+    defaultValue?: T;
 };
 
 export type AnyProperty =
@@ -81,11 +81,32 @@ export type AnyProperty =
     | DropdownProperty<unknown>
     | StaticDropdownProperty<unknown>;
 
+
+export const AuthenticationType = { BEARER_TOKEN: 'BEARER_TOKEN', BASIC: 'BASIC', CUSTOM: 'CUSTOM', OAUTH2: 'OAUTH2' };
+
 /**
  * Mocks the exact Activepieces Property namespace.
  * Used strictly for typing the input config schema of an Action.
  */
 export const Property = {
+    File<T = any>(request: any): any {
+        return { ...request, type: PropertyType.FILE };
+    },
+    Array<T = any>(request: any): any {
+        return { ...request, type: PropertyType.ARRAY };
+    },
+    Object<T = any>(request: any): any {
+        return { ...request, type: PropertyType.OBJECT };
+    },
+    DateTime<T = any>(request: any): any {
+        return { ...request, type: PropertyType.SHORT_TEXT };
+    },
+    DynamicProperties<T = any>(request: any): any {
+        return { ...request, type: PropertyType.DYNAMIC };
+    },
+    MarkDown<T = any>(request: any): any {
+        return { ...request, type: PropertyType.SHORT_TEXT };
+    },
     ShortText(request: Omit<ShortTextProperty, 'type'>): ShortTextProperty {
         return { ...request, type: PropertyType.SHORT_TEXT };
     },
@@ -104,12 +125,12 @@ export const Property = {
     SecretText(request: Omit<SecretTextProperty, 'type'>): SecretTextProperty {
         return { ...request, type: PropertyType.SECRET_TEXT };
     },
-    Dropdown<T>(
+    Dropdown<T = any, R extends boolean = boolean, AuthT = any>(
         request: Omit<DropdownProperty<T>, 'type'>,
     ): DropdownProperty<T> {
         return { ...request, type: PropertyType.DROPDOWN };
     },
-    StaticDropdown<T>(
+    StaticDropdown<T = any>(
         request: Omit<StaticDropdownProperty<T>, 'type'>,
     ): StaticDropdownProperty<T> {
         return { ...request, type: PropertyType.STATIC_DROPDOWN };

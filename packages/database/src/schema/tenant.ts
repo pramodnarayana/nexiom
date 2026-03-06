@@ -31,7 +31,7 @@ export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppC
  */
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
 
     // Provider name — validated against PROVIDER_REGISTRY in application code
     appName: varchar('app_name', { length: 100 }).notNull(),

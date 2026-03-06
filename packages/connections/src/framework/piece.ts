@@ -15,10 +15,14 @@ export interface Piece {
     maximumSupportedRelease?: string;
 }
 
+export const PieceCategory: any = {};
+
 export interface CreatePieceParams {
-    name: string;
+    name?: string;
     displayName: string;
     logoUrl: string;
+    authors?: string[];
+    categories?: any[];
     auth?: PieceAuthProperty;
     actions: Action[];
     triggers: Trigger[];
@@ -66,7 +70,7 @@ export function createPiece(params: CreatePieceParams): Piece {
     );
 
     return {
-        name: params.name,
+        name: params.name || '',
         displayName: params.displayName,
         logoUrl: params.logoUrl,
         auth: params.auth,

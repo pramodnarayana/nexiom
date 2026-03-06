@@ -6,7 +6,7 @@ import {
 } from '../../../framework/index.js';
 import {
     assertSafeSalesforceObject,
-    runSalesforcePolling,
+    runSalesforce,
     type SalesforceAuth,
 } from './salesforce-polling.helper.js';
 
@@ -15,7 +15,7 @@ interface UpdatedRecordProps {
 }
 
 /**
- * Polling trigger — fires for every Salesforce record updated since the last cursor.
+ *  trigger — fires for every Salesforce record updated since the last cursor.
  * Uses LastModifiedDate so truly unchanged records are never re-ingested.
  * The cursor is the LastModifiedDate of the last returned record, stored in Redis.
  */
@@ -39,7 +39,7 @@ export const updatedRecordTrigger = createTrigger<SalesforceAuth, UpdatedRecordP
         // Guard against SOQL injection before any interpolation
         assertSafeSalesforceObject(object);
 
-        return runSalesforcePolling(auth, object, {
+        return runSalesforce(auth, object, {
             cursorKey: 'last_modified_cursor',
             dateField: 'LastModifiedDate',
             extraColumns: ['Name'],
