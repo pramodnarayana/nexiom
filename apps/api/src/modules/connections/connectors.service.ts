@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Inject,
   HttpException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -259,9 +260,19 @@ export class ConnectorsService {
       sanitizedError = sanitizedError.substring(0, 500) + '...(truncated)';
     }
 
-    this.logger.error(
-      `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`,
-    );
+    const errorMessage = `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`;
+    this.logger.error(errorMessage);
+
+    if (response.status === 400) {
+      throw new BadRequestException(errorMessage);
+    }
+    if (response.status === 401) {
+      throw new UnauthorizedException(errorMessage);
+    }
+    if (response.status >= 400 && response.status < 500) {
+      throw new HttpException(errorMessage, response.status);
+    }
+
     throw new InternalServerErrorException(
       `Failed to exchange code with ${providerName}`,
     );
