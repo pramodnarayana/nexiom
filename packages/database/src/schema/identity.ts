@@ -273,9 +273,11 @@ export const member = pgTable(
   "member",
   {
     id: text("id").primaryKey(),
-    organizationId: text("organizationId").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
+    organizationId: text("organizationId")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -290,9 +292,7 @@ export const member = pgTable(
     deletedAt: timestamp("deletedAt", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("member_null_org_user_idx")
-      .on(table.userId, sql`COALESCE("organizationId", '__NULL__')`)
-      .where(sql`"deletedAt" IS NULL`),
+    unique("member_user_org_unique").on(table.userId, table.organizationId),
     index("member_org_idx").on(table.organizationId),
   ],
 );
@@ -314,9 +314,11 @@ export const memberRelations = relations(member, ({ one }) => ({
 
 export const invitation = pgTable("invitation", {
   id: text("id").primaryKey(),
-  organizationId: text("organizationId").references(() => organization.id, {
-    onDelete: "cascade",
-  }),
+  organizationId: text("organizationId")
+    .notNull()
+    .references(() => organization.id, {
+      onDelete: "cascade",
+    }),
   email: text("email").notNull(),
   role: text("role"),
   status: text("status").notNull(),

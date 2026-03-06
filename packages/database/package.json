@@ -3,6 +3,28 @@
     "version": "1.0.0",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "require": "./dist/index.js",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./schema/identity": {
+            "require": "./dist/schema/identity.js",
+            "import": "./dist/schema/identity.js",
+            "default": "./dist/schema/identity.js"
+        },
+        "./schema/tenant": {
+            "require": "./dist/schema/tenant.js",
+            "import": "./dist/schema/tenant.js",
+            "default": "./dist/schema/tenant.js"
+        },
+        "./dist/schema/identity": {
+            "require": "./dist/schema/identity.js",
+            "import": "./dist/schema/identity.js",
+            "default": "./dist/schema/identity.js"
+        }
+    },
     "scripts": {
         "build": "tsc",
         "db:generate": "drizzle-kit generate",
