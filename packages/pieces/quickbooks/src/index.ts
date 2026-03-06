@@ -28,6 +28,26 @@ export const quickbooksAuth = PieceAuth.OAuth2({
   scope: ['com.intuit.quickbooks.accounting'],
 });
 
+const customApiAction = createCustomApiCallAction({
+  auth: quickbooksAuth,
+  baseUrl: (auth: any) => {
+    const authValue = auth;
+    const companyId = authValue.props?.['companyId'];
+    if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
+      throw new Error('QuickBooks authentication missing or invalid companyId');
+    }
+
+    const useSandbox = authValue.props?.['useSandbox'] === true;
+    const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
+    return apiUrl;
+  },
+  authMapping: async (auth) => {
+    return {
+      Authorization: `Bearer ${(auth).access_token}`
+    }
+  }
+});
+
 export const quickbooks = createPiece({
   displayName: "Quickbooks Online",
   auth: quickbooksAuth,
@@ -37,25 +57,7 @@ export const quickbooks = createPiece({
     'onyedikachi-david'
   ],
   actions: [
-    createCustomApiCallAction({
-      auth: quickbooksAuth,
-      baseUrl: (auth: any) => {
-        const authValue = auth;
-        const companyId = authValue.props?.['companyId'];
-        if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
-          throw new Error('QuickBooks authentication missing or invalid companyId');
-        }
-
-        const useSandbox = authValue.props?.['useSandbox'] === true;
-        const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
-        return apiUrl;
-      },
-      authMapping: async (auth) => {
-        return {
-          Authorization: `Bearer ${(auth).access_token}`
-        }
-      }
-    })
+    customApiAction
   ],
   triggers: [
     quickbooksUniversalTrigger

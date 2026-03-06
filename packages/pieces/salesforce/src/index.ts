@@ -38,6 +38,14 @@ export const salesforceAuth = PieceAuth.OAuth2({
     scope: ['refresh_token', 'full', 'api'],
 });
 
+const customApiAction = createCustomApiCallAction({
+    baseUrl: (auth) => (auth).data['instance_url'],
+    auth: salesforceAuth,
+    authMapping: async (auth) => ({
+        Authorization: `Bearer ${(auth).access_token}`,
+    }),
+});
+
 export const salesforce = createPiece({
     displayName: 'Salesforce',
     description: 'CRM software solutions and enterprise cloud computing',
@@ -56,15 +64,9 @@ export const salesforce = createPiece({
     categories: [PieceCategory.SALES_AND_CRM],
     auth: salesforceAuth,
     actions: [
-        createCustomApiCallAction({
-            baseUrl: (auth) => (auth).data['instance_url'],
-            auth: salesforceAuth,
-            authMapping: async (auth) => ({
-                Authorization: `Bearer ${(auth).access_token}`,
-            }),
-        }),
+        customApiAction
     ],
     triggers: [
-        salesforceUniversalTrigger,
+        salesforceUniversalTrigger
     ],
 });
