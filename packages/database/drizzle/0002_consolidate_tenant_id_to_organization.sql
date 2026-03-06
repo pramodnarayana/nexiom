@@ -34,8 +34,23 @@ ALTER TABLE "app_connection" ADD CONSTRAINT "app_connection_tenant_id_organizati
 CREATE INDEX "tenant_status_idx" ON "app_connection" USING btree ("tenant_id", "status");--> statement-breakpoint
 CREATE UNIQUE INDEX "tenant_external_id_unique_idx" ON "app_connection" USING btree ("tenant_id", "external_id");--> statement-breakpoint
 
--- Step 7: Drop the orphaned shadow tenant table
-DROP TABLE IF EXISTS "tenant";--> statement-breakpoint
+-- Step 7: Guard: drop the orphaned shadow tenant table only if empty
+DO $$
+DECLARE
+  tenant_count integer;
+BEGIN
+  -- Only check if the table actually exists to avoid errors on re-runs
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'tenant') THEN
+    EXECUTE 'SELECT COUNT(*) FROM "tenant"' INTO tenant_count;
+    IF tenant_count > 0 THEN
+      RAISE EXCEPTION
+        'Migration aborted: shadow "tenant" table has % rows. '
+        'Backfill/migrate these to "organization" before dropping.',
+        tenant_count;
+    END IF;
+    DROP TABLE "tenant";
+  END IF;
+END $$;--> statement-breakpoint
 
 -- Step 8: Also drop connection from 0001 if it still exists
 ALTER TABLE "app_connection" DROP CONSTRAINT IF EXISTS "app_connection_tenant_id_tenant_id_fk";

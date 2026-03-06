@@ -322,7 +322,7 @@ export const invitation = pgTable("invitation", {
       onDelete: "cascade",
     }),
   email: text("email").notNull(),
-  role: text("role"),
+  role: text("role").references(() => role.id, { onDelete: "restrict" }),
   status: text("status").notNull(),
   expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
   inviterId: text("inviterId")
