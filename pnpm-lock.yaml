@@ -60,9 +60,9 @@ importers:
       '@nexiom/cache':
         specifier: workspace:*
         version: link:../../packages/cache
-      '@nexiom/connections':
+      '@nexiom/connectors':
         specifier: workspace:*
-        version: link:../../packages/connections
+        version: link:../../packages/connectors
       '@nexiom/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -473,7 +473,7 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
-  packages/connections:
+  packages/connectors:
     dependencies:
       '@nexiom/database':
         specifier: workspace:*
@@ -641,9 +641,9 @@ importers:
 
   packages/pieces/quickbooks:
     dependencies:
-      '@nexiom/connections':
+      '@nexiom/connectors':
         specifier: workspace:*
-        version: link:../../connections
+        version: link:../../connectors
       dayjs:
         specifier: ^1.11.19
         version: 1.11.19
@@ -654,9 +654,9 @@ importers:
 
   packages/pieces/salesforce:
     dependencies:
-      '@nexiom/connections':
+      '@nexiom/connectors':
         specifier: workspace:*
-        version: link:../../connections
+        version: link:../../connectors
       dayjs:
         specifier: ^1.11.19
         version: 1.11.19

@@ -21,7 +21,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
 import {

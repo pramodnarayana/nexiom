@@ -1,11 +1,11 @@
-import type { TriggerStore } from '@nexiom/connections/framework';
+import type { TriggerStore } from '@nexiom/connectors/framework';
 import {
     type IBulkAdapter,
     type SalesforceAuth,
     sfFetch,
     SF_API_VERSION,
     IgtLogger
-} from '@nexiom/connections/intelligence';
+} from '@nexiom/connectors/intelligence';
 
 const log = new IgtLogger({ app: 'salesforce' });
 

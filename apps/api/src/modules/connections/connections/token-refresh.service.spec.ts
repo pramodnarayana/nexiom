@@ -3,7 +3,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   OAuthRefreshError,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import {
   describe,
   it,

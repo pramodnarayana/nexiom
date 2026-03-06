@@ -6,7 +6,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import {
   InternalServerErrorException,
@@ -422,7 +422,7 @@ describe('ConnectorsService', () => {
       expect(mockValidate).toHaveBeenCalledWith(mockTokens);
     });
 
-    it('should throw InternalServerErrorException if the token exchange fails', async () => {
+    it('should throw BadRequestException if the token exchange fails with a HTTP 400', async () => {
       mockProviderRegistry.getProvider.mockReturnValue({
         name: 'salesforce',
         authType: 'OAUTH2',
@@ -433,6 +433,29 @@ describe('ConnectorsService', () => {
         ok: false,
         status: 400,
         text: () => Promise.resolve('invalid_client'),
+      } as Response);
+
+      await expect(
+        service.exchangeCodeForTokens(
+          'salesforce',
+          'bad-code',
+          'mock_client_id',
+          'mock_client_secret',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw InternalServerErrorException if the token exchange fails with a HTTP 500', async () => {
+      mockProviderRegistry.getProvider.mockReturnValue({
+        name: 'salesforce',
+        authType: 'OAUTH2',
+        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+      } as unknown as NonNullable<ProviderResult>);
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('internal server error'),
       } as Response);
 
       await expect(

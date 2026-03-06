@@ -1,5 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import type { Trigger, TriggerContext } from '@nexiom/connections';
+import type { Trigger, TriggerContext } from '@nexiom/connectors';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';

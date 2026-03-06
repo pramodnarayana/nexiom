@@ -5,7 +5,7 @@ import {
   TokenManagerService,
   AesEncryptionService,
   OAuthRefreshClient,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import { DbModule } from '../../db/db.module';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';

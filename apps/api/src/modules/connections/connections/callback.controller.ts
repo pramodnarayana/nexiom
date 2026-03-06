@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
   type ProviderDefinition,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 
 import { OauthStateService } from '../oauth-state.service';
 

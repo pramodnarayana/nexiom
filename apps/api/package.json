@@ -39,7 +39,7 @@
     "@nestjs/schedule": "^6.1.1",
     "@nexiom/auth": "workspace:*",
     "@nexiom/cache": "workspace:*",
-    "@nexiom/connections": "workspace:*",
+    "@nexiom/connectors": "workspace:*",
     "@nexiom/database": "workspace:*",
     "@nexiom/dbmanager": "workspace:*",
     "@nexiom/identity": "workspace:*",

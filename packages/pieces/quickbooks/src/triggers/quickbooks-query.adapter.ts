@@ -1,4 +1,4 @@
-import type { QuerySpec } from '@nexiom/connections/intelligence';
+import type { QuerySpec } from '@nexiom/connectors/intelligence';
 
 export type QBOQuerySpec = Omit<QuerySpec, 'autoJoins'> & {
     cursorIdField?: string;

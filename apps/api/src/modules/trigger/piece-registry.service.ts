@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Piece, Trigger } from '@nexiom/connections';
-import { salesforcePiece } from '@nexiom/connections';
+import type { Piece, Trigger } from '@nexiom/connectors';
+import { salesforcePiece } from '@nexiom/connectors';
 
 /**
  * In-memory piece registry — single source of truth for all registered Pieces.

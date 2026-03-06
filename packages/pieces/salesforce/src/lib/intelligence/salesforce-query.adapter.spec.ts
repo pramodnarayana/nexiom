@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceQueryAdapter } from './salesforce-query.adapter.js';
-import type { ObjectSchema } from '@nexiom/connections/intelligence';
+import type { ObjectSchema } from '@nexiom/connectors/intelligence';
 
 describe('SalesforceQueryAdapter', () => {
     let adapter: SalesforceQueryAdapter;

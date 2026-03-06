@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceBulkAdapter } from './salesforce-bulk.adapter.js';
-import { sfFetch } from '@nexiom/connections/intelligence';
-import type { SalesforceAuth } from '@nexiom/connections/intelligence';
-import type { TriggerStore } from '@nexiom/connections/framework';
+import { sfFetch } from '@nexiom/connectors/intelligence';
+import type { SalesforceAuth } from '@nexiom/connectors/intelligence';
+import type { TriggerStore } from '@nexiom/connectors/framework';
 
-vi.mock('@nexiom/connections/intelligence', async (importOriginal) => {
+vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
     const mod = await importOriginal() as any;
     return {
         ...mod,

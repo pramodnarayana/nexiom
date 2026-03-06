@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DlqProcessorService } from './dlq-processor.service';
-import { TriggerStrategy } from '@nexiom/connections';
+import { TriggerStrategy } from '@nexiom/connectors';
 import type { TriggerExecutorService } from './trigger-executor.service';
 import type { PieceRegistryService } from './piece-registry.service';
 

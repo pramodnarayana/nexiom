@@ -1,12 +1,10 @@
 import {
 	AuthenticationType,
 	HttpMethod,
-
-	HttpResponse,
 	httpClient,
-
 	Property
-} from '@nexiom/connections/framework';
+} from '@nexiom/connectors/framework';
+import type { HttpResponse } from '@nexiom/connectors/framework';
 import { salesforceAuth } from '../..';
 
 export const salesforcesCommon = {

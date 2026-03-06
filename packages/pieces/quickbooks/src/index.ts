@@ -5,19 +5,10 @@ import {
 
   Property,
   createCustomApiCallAction,
-} from '@nexiom/connections/framework';
+} from '@nexiom/connectors/framework';
 import { quickbooksCommon } from './lib/common';
-import { findInvoiceAction } from './actions/find-invoice';
-import { findCustomerAction } from './actions/find-customer';
-import { findPaymentAction } from './actions/find-payment';
-import { createInvoiceAction } from './actions/create-invoice';
-import { createExpenseAction } from './actions/create-expense';
-import { newInvoice } from './triggers/new-invoice';
-import { newExpense } from './triggers/new-expense';
-import { newCustomer } from './triggers/new-customer';
-import { newDeposit } from './triggers/new-deposit';
-import { newTransfer } from './triggers/new-transfer';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
+import type { QuickBooksAuth } from './triggers/quickbooks-polling.helper.js';
 
 export const quickbooksAuth = PieceAuth.OAuth2({
   description: 'You can find Company ID under **settings->Additional Info**.',
@@ -38,6 +29,25 @@ export const quickbooksAuth = PieceAuth.OAuth2({
   scope: ['com.intuit.quickbooks.accounting'],
 });
 
+const customApiAction = createCustomApiCallAction({
+  auth: quickbooksAuth,
+  baseUrl: (auth: QuickBooksAuth) => {
+    const companyId = auth.props?.['companyId'];
+    if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
+      throw new Error('QuickBooks authentication missing or invalid companyId');
+    }
+
+    const useSandbox = auth.props?.['useSandbox'] === true;
+    const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
+    return apiUrl;
+  },
+  authMapping: async (auth: QuickBooksAuth) => {
+    return {
+      Authorization: `Bearer ${auth.access_token}`
+    }
+  }
+});
+
 export const quickbooks = createPiece({
   displayName: "Quickbooks Online",
   auth: quickbooksAuth,
@@ -47,37 +57,9 @@ export const quickbooks = createPiece({
     'onyedikachi-david'
   ],
   actions: [
-    findInvoiceAction,
-    findCustomerAction,
-    findPaymentAction,
-    createInvoiceAction,
-    createExpenseAction,
-    createCustomApiCallAction({
-      auth: quickbooksAuth,
-      baseUrl: (auth: any) => {
-        const authValue = auth;
-        const companyId = authValue.props?.['companyId'];
-        if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
-          throw new Error('QuickBooks authentication missing or invalid companyId');
-        }
-
-        const useSandbox = authValue.props?.['useSandbox'] === true;
-        const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
-        return apiUrl;
-      },
-      authMapping: async (auth) => {
-        return {
-          Authorization: `Bearer ${(auth).access_token}`
-        }
-      }
-    })
+    customApiAction
   ],
   triggers: [
-    newInvoice,
-    newExpense,
-    newCustomer,
-    newDeposit,
-    newTransfer,
     quickbooksUniversalTrigger
   ],
 });

@@ -6,13 +6,14 @@ import {
   BadRequestException,
   Inject,
   HttpException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
   AppCredentialError,
-  ProviderEnvironment,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
+import type { ProviderEnvironment } from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,
@@ -23,6 +24,11 @@ import {
 import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import * as crypto from 'node:crypto';
+
+interface OAuthProviderConfig {
+  environments?: ProviderEnvironment[];
+  tokenUrl?: string;
+}
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
@@ -154,7 +160,6 @@ export class ConnectorsService {
     }
 
     const provider = this.providerRegistry.getProvider(providerName);
-
     if (!provider) {
       throw new NotFoundException(
         `Provider ${providerName} is not supported or not found`,
@@ -172,30 +177,7 @@ export class ConnectorsService {
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
-      // Resolve token URL dynamically based on environment
-      let tokenUrl: string | undefined;
-      if (env) {
-        const environmentConfig = provider.environments?.find(
-          (envParam: ProviderEnvironment) => envParam.name === env,
-        );
-        if (!environmentConfig) {
-          throw new BadRequestException(
-            `Environment '${env}' is not configured for provider '${providerName}'`,
-          );
-        }
-        tokenUrl = environmentConfig.tokenUrl;
-      } else {
-        tokenUrl = provider.tokenUrl;
-      }
-
-      if (!tokenUrl) {
-        this.logger.error(
-          `Provider ${providerName} does not have a tokenUrl defined. Resolved to: ${tokenUrl}`,
-        );
-        throw new InternalServerErrorException(
-          `Provider ${providerName} configuration is incomplete.`,
-        );
-      }
+      const tokenUrl = this.resolveTokenUrl(providerName, provider, env);
 
       const response = await fetch(tokenUrl, {
         method: 'POST',
@@ -207,42 +189,14 @@ export class ConnectorsService {
           client_id: clientId,
           client_secret: clientSecret,
         }).toString(),
-        signal: AbortSignal.timeout(10000), // 10 second timeout protection
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
-        let errorBody = '';
-        try {
-          errorBody = await response.text();
-        } catch {
-          /* ignore parsing errors */
-        }
-
-        let sanitizedError = errorBody.replaceAll(/[\r\n]+/g, ' ').trim();
-        if (sanitizedError.length > 500) {
-          sanitizedError = sanitizedError.substring(0, 500) + '...(truncated)';
-        }
-
-        this.logger.error(
-          `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`,
-        );
-        throw new InternalServerErrorException(
-          `Failed to exchange code with ${providerName}`,
-        );
+        await this.handleTokenExchangeError(providerName, response);
       }
 
-      let tokens: Record<string, unknown>;
-      try {
-        tokens = (await response.json()) as Record<string, unknown>;
-      } catch (parseError) {
-        this.logger.error(
-          `Failed to parse token response from ${providerName} as JSON. Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`,
-          parseError,
-        );
-        throw new InternalServerErrorException(
-          `Vendor ${providerName} returned an invalid response format that could not be parsed as JSON.`,
-        );
-      }
+      const tokens = await this.parseTokenResponse(providerName, response);
 
       if (
         'validateConnectResponse' in provider &&
@@ -253,21 +207,109 @@ export class ConnectorsService {
 
       return tokens;
     } catch (error) {
-      if (
-        error instanceof InternalServerErrorException ||
-        error instanceof BadRequestException ||
-        error instanceof AppCredentialError
-      ) {
-        throw error;
+      this.handleExchangeException(providerName, error);
+    }
+  }
+
+  private resolveTokenUrl(
+    providerName: string,
+    provider: OAuthProviderConfig,
+    env?: string,
+  ): string {
+    let tokenUrl: string | undefined;
+
+    if (env) {
+      const environmentConfig = provider.environments?.find(
+        (envParam: ProviderEnvironment) => envParam.name === env,
+      );
+      if (!environmentConfig) {
+        throw new BadRequestException(
+          `Environment '${env}' is not configured for provider '${providerName}'`,
+        );
       }
+      tokenUrl = environmentConfig.tokenUrl;
+    } else {
+      tokenUrl = provider.tokenUrl;
+    }
+
+    if (!tokenUrl) {
       this.logger.error(
-        `Exception during OAuth token exchange for ${providerName}`,
-        error,
+        `Provider ${providerName} does not have a tokenUrl defined.`,
       );
       throw new InternalServerErrorException(
-        `Unexpected error during ${providerName} token exchange`,
+        `Provider ${providerName} configuration is incomplete.`,
       );
     }
+
+    return tokenUrl;
+  }
+
+  private async handleTokenExchangeError(
+    providerName: string,
+    response: Response,
+  ): Promise<never> {
+    let errorBody = '';
+    try {
+      errorBody = await response.text();
+    } catch {
+      /* ignore parsing errors */
+    }
+
+    let sanitizedError = errorBody.replaceAll(/[\r\n]+/g, ' ').trim();
+    if (sanitizedError.length > 500) {
+      sanitizedError = sanitizedError.substring(0, 500) + '...(truncated)';
+    }
+
+    const errorMessage = `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`;
+    this.logger.error(errorMessage);
+
+    if (response.status === 400) {
+      throw new BadRequestException(errorMessage);
+    }
+    if (response.status === 401) {
+      throw new UnauthorizedException(errorMessage);
+    }
+    if (response.status >= 400 && response.status < 500) {
+      throw new HttpException(errorMessage, response.status);
+    }
+
+    throw new InternalServerErrorException(
+      `Failed to exchange code with ${providerName}`,
+    );
+  }
+
+  private async parseTokenResponse(
+    providerName: string,
+    response: Response,
+  ): Promise<Record<string, unknown>> {
+    try {
+      return (await response.json()) as Record<string, unknown>;
+    } catch (parseError) {
+      this.logger.error(
+        `Failed to parse token response from ${providerName} as JSON. Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`,
+        parseError,
+      );
+      throw new InternalServerErrorException(
+        `Vendor ${providerName} returned an invalid response format that could not be parsed as JSON.`,
+      );
+    }
+  }
+
+  private handleExchangeException(providerName: string, error: unknown): never {
+    if (
+      error instanceof InternalServerErrorException ||
+      error instanceof BadRequestException ||
+      error instanceof AppCredentialError
+    ) {
+      throw error;
+    }
+    this.logger.error(
+      `Exception during OAuth token exchange for ${providerName}`,
+      error,
+    );
+    throw new InternalServerErrorException(
+      `Unexpected error during ${providerName} token exchange`,
+    );
   }
 
   /**
