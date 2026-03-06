@@ -292,7 +292,9 @@ export const member = pgTable(
     deletedAt: timestamp("deletedAt", { withTimezone: true }),
   },
   (table) => [
-    unique("member_user_org_unique").on(table.userId, table.organizationId),
+    uniqueIndex("member_user_org_unique")
+      .on(table.userId, table.organizationId)
+      .where(sql`${table.deletedAt} IS NULL`),
     index("member_org_idx").on(table.organizationId),
   ],
 );

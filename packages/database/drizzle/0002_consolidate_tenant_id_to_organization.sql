@@ -9,8 +9,20 @@ DROP INDEX IF EXISTS "tenant_external_id_unique_idx";--> statement-breakpoint
 -- Step 2: Drop the old FK constraints (to tenant and also the one from 0001)
 ALTER TABLE "app_connection" DROP CONSTRAINT IF EXISTS "app_connection_tenant_id_tenant_id_fk";--> statement-breakpoint
 
--- Step 3: Truncate app_connection (pre-production; no live data to migrate)
-TRUNCATE TABLE "app_connection";--> statement-breakpoint
+-- Step 3: Guard: abort if app_connection has rows that would be lost.
+-- Operators must manually backfill tenant_id → organization.id mapping before running this migration.
+DO $$
+DECLARE
+  row_count integer;
+BEGIN
+  SELECT COUNT(*) INTO row_count FROM "app_connection";
+  IF row_count > 0 THEN
+    RAISE EXCEPTION
+      'Migration aborted: app_connection has % rows. '
+      'Backfill tenant_id values to matching organization.id values before re-running.',
+      row_count;
+  END IF;
+END $$;--> statement-breakpoint
 
 -- Step 4: Alter tenant_id column from uuid to text
 ALTER TABLE "app_connection" ALTER COLUMN "tenant_id" TYPE text USING "tenant_id"::text;--> statement-breakpoint
