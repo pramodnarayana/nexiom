@@ -6,7 +6,6 @@
  *
  *   - `@nexiom/connectors`
  *   - `@nexiom/connectors/framework`
- *   - `@nexiom/connectors/intelligence`
  *
  * Subpath imports (like `/oauth/types.js`) are no longer exposed. All
  * previously deep-imported symbols are available directly via the root or framework entrypoints.

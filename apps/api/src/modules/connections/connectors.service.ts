@@ -27,7 +27,6 @@ import * as crypto from 'node:crypto';
 interface OAuthProviderConfig {
   environments?: ProviderEnvironment[];
   tokenUrl?: string;
-  [key: string]: unknown;
 }
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
@@ -213,15 +212,13 @@ export class ConnectorsService {
 
   private resolveTokenUrl(
     providerName: string,
-
-    provider: any,
+    provider: OAuthProviderConfig,
     env?: string,
   ): string {
-    const typedProvider = provider as OAuthProviderConfig;
     let tokenUrl: string | undefined;
 
     if (env) {
-      const environmentConfig = typedProvider.environments?.find(
+      const environmentConfig = provider.environments?.find(
         (envParam: ProviderEnvironment) => envParam.name === env,
       );
       if (!environmentConfig) {
@@ -231,7 +228,7 @@ export class ConnectorsService {
       }
       tokenUrl = environmentConfig.tokenUrl;
     } else {
-      tokenUrl = typedProvider.tokenUrl;
+      tokenUrl = provider.tokenUrl;
     }
 
     if (!tokenUrl) {

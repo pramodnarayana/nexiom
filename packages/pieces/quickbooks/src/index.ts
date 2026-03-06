@@ -8,6 +8,7 @@ import {
 } from '@nexiom/connectors/framework';
 import { quickbooksCommon } from './lib/common';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
+import type { QuickBooksAuth } from './triggers/quickbooks-polling.helper.js';
 
 export const quickbooksAuth = PieceAuth.OAuth2({
   description: 'You can find Company ID under **settings->Additional Info**.',
@@ -30,20 +31,19 @@ export const quickbooksAuth = PieceAuth.OAuth2({
 
 const customApiAction = createCustomApiCallAction({
   auth: quickbooksAuth,
-  baseUrl: (auth: any) => {
-    const authValue = auth;
-    const companyId = authValue.props?.['companyId'];
+  baseUrl: (auth: QuickBooksAuth) => {
+    const companyId = auth.props?.['companyId'];
     if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
       throw new Error('QuickBooks authentication missing or invalid companyId');
     }
 
-    const useSandbox = authValue.props?.['useSandbox'] === true;
+    const useSandbox = auth.props?.['useSandbox'] === true;
     const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
     return apiUrl;
   },
-  authMapping: async (auth) => {
+  authMapping: async (auth: QuickBooksAuth) => {
     return {
-      Authorization: `Bearer ${(auth).access_token}`
+      Authorization: `Bearer ${auth.access_token}`
     }
   }
 });

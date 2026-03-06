@@ -42,7 +42,7 @@ const customApiAction = createCustomApiCallAction({
     baseUrl: (auth) => (auth).data['instance_url'],
     auth: salesforceAuth,
     authMapping: async (auth) => ({
-        Authorization: `Bearer ${(auth).access_token}`,
+        Authorization: `Bearer ${auth.access_token}`,
     }),
 });
 
