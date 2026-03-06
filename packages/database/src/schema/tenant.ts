@@ -1,12 +1,8 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
+import { organization } from './identity';
 
 // Auth type enum — matches Activepieces' AppConnectionType pattern
 export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);
-
-// Tenants table — cross-database FKs handled in raw SQL migrations (0000_...sql)
-export const tenants = pgTable('tenant', {
-    id: uuid('id').primaryKey(),
-});
 
 export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED']);
 
@@ -31,7 +27,7 @@ export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppC
  */
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    tenantId: text('tenant_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
 
     // Provider name — validated against PROVIDER_REGISTRY in application code
     appName: varchar('app_name', { length: 100 }).notNull(),
