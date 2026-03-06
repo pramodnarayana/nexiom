@@ -56,7 +56,7 @@ export const createInvoiceAction = createAction({
 					);
 				}
 
-				const customers = response.body.QueryResponse?.['Customer'] ?? [];
+				const customers = (response.body.QueryResponse?.['Customer'] as QuickbooksCustomer[]) ?? [];
 				return {
 					disabled: false,
 					options: customers.map((customer) => ({

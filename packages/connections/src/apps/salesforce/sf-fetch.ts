@@ -149,15 +149,28 @@ async function executeFetchWithTimeout(url: string, init: RequestInit): Promise<
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_FETCH_TIMEOUT_MS);
 
+    const onCallerAbort = () => controller.abort(init.signal?.reason);
+
+    if (init.signal) {
+        if (init.signal.aborted) {
+            controller.abort(init.signal.reason);
+        } else {
+            init.signal.addEventListener('abort', onCallerAbort);
+        }
+    }
+
     const fetchInit: RequestInit = {
         ...init,
-        signal: init.signal || controller.signal
+        signal: controller.signal
     };
 
     try {
         return await fetch(url, fetchInit);
     } finally {
         clearTimeout(timeoutId);
+        if (init.signal) {
+            init.signal.removeEventListener('abort', onCallerAbort);
+        }
     }
 }
 

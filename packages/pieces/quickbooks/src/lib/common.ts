@@ -13,7 +13,8 @@ export interface QuickbooksEntityResponse<T> {
         startPosition?: number;
         maxResults?: number;
         totalCount?: number;
-    } & Record<Exclude<string, 'startPosition' | 'maxResults' | 'totalCount'>, T[] | undefined>;
+        [key: string]: T[] | number | undefined;
+    };
     Fault?: {
         Error: {
             Message: string;

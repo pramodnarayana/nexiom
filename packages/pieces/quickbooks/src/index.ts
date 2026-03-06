@@ -54,13 +54,16 @@ export const quickbooks = createPiece({
     createExpenseAction,
     createCustomApiCallAction({
       auth: quickbooksAuth,
-      baseUrl: (auth) => {
+      baseUrl: (auth: any) => {
         const authValue = auth;
         const companyId = authValue.props?.['companyId'];
+        if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
+          throw new Error('QuickBooks authentication missing or invalid companyId');
+        }
 
-        const apiUrl = quickbooksCommon.getApiUrl(companyId);
-        return apiUrl
-
+        const useSandbox = authValue.props?.['useSandbox'] === true;
+        const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
+        return apiUrl;
       },
       authMapping: async (auth) => {
         return {

@@ -152,13 +152,14 @@ export const findInvoiceAction = createAction({
 			},
 		});
 
+		const invoices = response.body?.QueryResponse?.['Invoice'] as QuickBooksInvoice[] | undefined;
 		if (
-			response.body?.QueryResponse?.['Invoice'] &&
-			response.body.QueryResponse['Invoice'].length > 0
+			invoices &&
+			invoices.length > 0
 		) {
 			return {
 				found: true,
-				result: response.body.QueryResponse['Invoice'][0],
+				result: invoices[0],
 			};
 		}
 

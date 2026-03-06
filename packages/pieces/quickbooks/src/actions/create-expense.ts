@@ -55,7 +55,7 @@ export const createExpenseAction = createAction({
 					);
 				}
 
-				const accounts = response.body.QueryResponse?.['Account'] ?? [];
+				const accounts = (response.body.QueryResponse?.['Account'] as QuickbooksAccount[]) ?? [];
 				return {
 					disabled: false,
 					options: accounts.map((account) => ({
@@ -111,7 +111,7 @@ export const createExpenseAction = createAction({
 					);
 				}
 
-				const vendors = response.body.QueryResponse?.['Vendor'] ?? [];
+				const vendors = (response.body.QueryResponse?.['Vendor'] as QuickbooksVendor[]) ?? [];
 				return {
 					disabled: false,
 					options: vendors.map((vendor) => ({

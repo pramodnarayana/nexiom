@@ -50,13 +50,14 @@ export const findCustomerAction = createAction({
 			},
 		});
 
+		const customers = response.body?.QueryResponse?.['Customer'] as QuickBooksCustomer[] | undefined;
 		if (
-			response.body?.QueryResponse?.['Customer'] &&
-			response.body.QueryResponse['Customer'].length > 0
+			customers &&
+			customers.length > 0
 		) {
 			return {
 				found: true,
-				result: response.body.QueryResponse['Customer'][0],
+				result: customers[0],
 			};
 		}
 

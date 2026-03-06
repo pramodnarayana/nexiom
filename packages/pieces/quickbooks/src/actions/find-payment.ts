@@ -1,6 +1,5 @@
-import { Property, createAction } from '@nexiom/connections/framework';
+import { Property, createAction, HttpMethod, httpClient } from '@nexiom/connections/framework';
 import { quickbooksAuth } from '../index'; // Correct path relative to actions/find-payment.ts
-import { HttpMethod, httpClient } from '@nexiom/connections/framework';
 import { quickbooksCommon, QuickbooksEntityResponse } from '../lib/common';
 
 interface QuickbooksPayment {
@@ -79,13 +78,14 @@ export const findPaymentAction = createAction({
 			},
 		});
 
+		const payments = response.body.QueryResponse?.['Payment'] as QuickbooksPayment[] | undefined;
 		if (
-			response.body.QueryResponse?.['Payment'] &&
-			response.body.QueryResponse?.['Payment'].length > 0
+			payments &&
+			payments.length > 0
 		) {
 			return {
 				found: true,
-				result: response.body.QueryResponse?.['Payment'],
+				result: payments,
 			};
 		}
 

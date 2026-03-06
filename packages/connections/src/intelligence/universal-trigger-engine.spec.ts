@@ -235,4 +235,43 @@ describe('UniversalTriggerEngine', () => {
         expect(mockExecuteStandardQuery).toHaveBeenCalled();
         expect(records.length).toBe(2);
     });
+
+    it('should block polling if API-limit gating triggers', async () => {
+        // Mock the bounds checker to return limits < threshold (e.g., extremely low ratio)
+        const checkSalesforceLimitsMock = await import('../apps/salesforce/sf-fetch.js');
+        vi.mocked(checkSalesforceLimitsMock.checkSalesforceLimits).mockResolvedValueOnce({ total: 10000, remaining: 100 });
+
+        const config = createConfig();
+
+        const records = await UniversalTriggerEngine.execute(config);
+
+        // Expect empty array due to block
+        expect(records).toEqual([]);
+
+        // Assert core downstream polling adapters were completely bypassed
+        expect(mockDiscoveryAdapter.describe).not.toHaveBeenCalled();
+        expect(mockQueryAdapter.buildCountQuery).not.toHaveBeenCalled();
+        expect(mockExecuteCountQuery).not.toHaveBeenCalled();
+        expect(mockExecuteStandardQuery).not.toHaveBeenCalled();
+        expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to standard path if count-query preflight throws', async () => {
+        // Reject the executeCountQuery callback so that `totalSize = -1`
+        (mockExecuteCountQuery).mockRejectedValue(new Error('Syntax error on COUNT() clause'));
+
+        const config = createConfig();
+
+        const records = await UniversalTriggerEngine.execute(config);
+
+        // Preflight count should be flagged as failed without throwing entirely
+        expect(mockExecuteCountQuery).toHaveBeenCalled();
+
+        // The system should fall back to standard fetch because bulk relies on valid threshold exceeding
+        expect(mockExecuteStandardQuery).toHaveBeenCalled();
+        expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
+
+        // Assert standard fetch behavior continued downstream
+        expect(records.length).toBe(2);
+    });
 });

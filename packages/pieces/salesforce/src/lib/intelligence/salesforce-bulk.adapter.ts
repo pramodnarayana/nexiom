@@ -31,7 +31,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         const storeKey = 'igt_bulk_job_checkpoint';
         let checkpoint = await store.get<BulkJobCheckpoint>(storeKey);
 
-        if (!checkpoint || checkpoint.state === 'IDLE' || checkpoint.state === 'FAILED') {
+        if (!checkpoint || checkpoint.state === 'IDLE' || checkpoint.state === 'FAILED' || checkpoint.soql !== soql) {
             return this.createBulkJob(auth, soql, store, storeKey);
         }
 
@@ -130,22 +130,36 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
     }
 
     private async downloadResults(auth: SalesforceAuth, jobId: string, store: TriggerStore): Promise<unknown[]> {
-        const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${jobId}/results`;
-        let response: Response;
-        try {
-            response = await sfFetch(url, {
-                headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'text/csv' },
-            });
-        } catch (e: any) {
-            if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
-                await store.delete('igt_bulk_job_checkpoint'); // The store key is hardcoded in checkpoint()
-                throw new Error(`Salesforce bulk query job results expired or not found for jobId ${jobId}. State reset.`);
-            }
-            throw new Error(`Failed to download bulk job results: ${e}`);
-        }
+        let locator: string | null = null;
+        let allRecords: unknown[] = [];
 
-        const text = await response.text();
-        return this.parseCSV(text);
+        do {
+            let url = `${auth.instance_url}/services/data/${SF_API_VERSION}/jobs/query/${jobId}/results`;
+            if (locator && locator !== 'null') {
+                url += `?locator=${locator}`;
+            }
+
+            let response: Response;
+            try {
+                response = await sfFetch(url, {
+                    headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'text/csv' },
+                });
+            } catch (e: any) {
+                if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
+                    await store.delete('igt_bulk_job_checkpoint');
+                    throw new Error(`Salesforce bulk query job results expired or not found for jobId ${jobId}. State reset.`);
+                }
+                throw new Error(`Failed to download bulk job results: ${e}`);
+            }
+
+            const text = await response.text();
+            const pageRecords = this.parseCSV(text);
+            allRecords = allRecords.concat(pageRecords);
+
+            locator = response.headers.get('Sforce-Locator');
+        } while (locator && locator !== 'null');
+
+        return allRecords;
     }
 
     private parseCSV(text: string): unknown[] {

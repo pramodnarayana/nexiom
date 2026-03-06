@@ -20,7 +20,7 @@ export class UniversalTriggerEngine {
 
         // 1. Determine Identity & Configuration
         const bulkThreshold = hint?.bulkThreshold ?? 5_000;
-        const lowLimitThreshold = process.env.SF_API_LIMIT_THRESHOLD ? Number.parseFloat(process.env.SF_API_LIMIT_THRESHOLD) : 0.2;
+        const lowLimitThreshold = this.parseLimitThreshold(process.env.SF_API_LIMIT_THRESHOLD);
 
         // --- BACKOFF & PROTECTION LOGIC ---
         const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, objectName);
@@ -58,6 +58,8 @@ export class UniversalTriggerEngine {
                 cursorField,
                 cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
+                tieBreakerField: 'Id',
+                tieBreakerValue: lastTieBreaker || undefined,
             });
 
             if (countSoql) {
@@ -73,7 +75,7 @@ export class UniversalTriggerEngine {
 
         let records: unknown[] = [];
         try {
-            records = await this.fetchRecords(config, schema, totalSize, bulkThreshold, lastCursor);
+            records = await this.fetchRecords(config, schema, totalSize, bulkThreshold, lastCursor, cursorField, lastTieBreaker);
         } catch (e: any) {
             if (e.message?.includes('REQUEST_LIMIT_EXCEEDED')) {
                 log.warn('Salesforce API limit exceeded (403). Backing off.', { objectName });
@@ -119,6 +121,13 @@ export class UniversalTriggerEngine {
             }
         }
         return true;
+    }
+
+    private static parseLimitThreshold(envValue?: string): number {
+        if (!envValue) return 0.2;
+        const parsed = Number.parseFloat(envValue);
+        if (!Number.isFinite(parsed) || Number.isNaN(parsed)) return 0.2;
+        return Math.max(0, Math.min(1, parsed));
     }
 
     private static parseState(stateStr: string | null, schema: any, cursorField: string): { lastCursor: string | number, lastTieBreaker: string } {
@@ -178,10 +187,11 @@ export class UniversalTriggerEngine {
         schema: any,
         totalSize: number,
         bulkThreshold: number,
-        lastCursor: string | number
+        lastCursor: string | number,
+        cursorField: string,
+        lastTieBreaker: string
     ): Promise<unknown[]> {
         const { objectName, hint, queryAdapter, bulkAdapter, executeStandardQuery } = config as any;
-        const cursorField = SmartCursorSelector.pick(schema, hint);
         const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
         const fieldType = fieldDef?.type || 'string';
         const queryCursorValue = this.formatForQuery(lastCursor, fieldType);
@@ -195,6 +205,8 @@ export class UniversalTriggerEngine {
                 cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
                 omitLimit: true,
+                tieBreakerField: 'Id',
+                tieBreakerValue: lastTieBreaker || undefined,
             });
             return bulkAdapter.runBulkJob(config.auth, bulkQueryString, config.store);
         } else if (totalSize === 0) {
@@ -207,6 +219,8 @@ export class UniversalTriggerEngine {
                 cursorValue: String(queryCursorValue),
                 autoJoins: hint?.autoJoin,
                 limit: 2_000,
+                tieBreakerField: 'Id',
+                tieBreakerValue: lastTieBreaker || undefined,
             });
             return executeStandardQuery(config.auth, queryString);
         }

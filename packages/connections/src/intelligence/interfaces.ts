@@ -35,6 +35,8 @@ export interface QuerySpec {
     autoJoins?: string[];
     limit?: number;
     omitLimit?: boolean;
+    tieBreakerField?: string;
+    tieBreakerValue?: string;
 }
 
 /** Discovers schema and checks for schema drift. */

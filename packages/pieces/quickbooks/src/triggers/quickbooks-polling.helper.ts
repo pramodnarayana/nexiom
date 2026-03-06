@@ -30,16 +30,8 @@ export async function runQuickBooksQuery(
     }
 
     const cursorKey = `igt_${entityType}_MetaData.LastUpdatedTime`;
-    let lastCursorParams = await store.get<Cursor | string>(cursorKey);
-    let since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    let lastId = '0';
-
-    if (lastCursorParams && typeof lastCursorParams === 'object') {
-        since = lastCursorParams.lastUpdatedTime || since;
-        lastId = lastCursorParams.lastId || lastId;
-    } else if (typeof lastCursorParams === 'string') {
-        since = lastCursorParams;
-    }
+    const lastCursorParams = await store.get<Cursor | string>(cursorKey);
+    const { since, lastId } = parseCursorState(lastCursorParams);
 
     const sql = QuickBooksQueryAdapter.buildQBOQuery(entityType, {
         objectName: entityType,
@@ -50,6 +42,48 @@ export async function runQuickBooksQuery(
         limit: hint?.bulkThreshold ?? 100, // example using hint
     });
 
+    const body = await executeQuickBooksFetch(auth, sql);
+
+    const records = Object.values(body.QueryResponse ?? {})
+        .filter(v => Array.isArray(v)) // ignore startPosition, maxResults, totalCount
+        .flat()
+        .filter(v => typeof v === 'object' && v !== null);
+
+    if (records.length > 0) {
+        const lastRecord = records.at(-1) as Record<string, any>;
+        const timeStr = lastRecord?.['MetaData']?.['LastUpdatedTime'];
+        const idStr = lastRecord?.['Id']?.toString();
+
+        if (timeStr && idStr) {
+            await store.put(cursorKey, { lastUpdatedTime: timeStr, lastId: idStr });
+        }
+    }
+
+    return records;
+}
+
+function parseCursorState(lastCursorParams: Cursor | string | null): { since: string; lastId: string } {
+    let since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let lastId = '0';
+
+    if (lastCursorParams && typeof lastCursorParams === 'object') {
+        const parsedTime = (lastCursorParams).lastUpdatedTime;
+        const parsedId = (lastCursorParams).lastId;
+
+        if (typeof parsedTime === 'string') {
+            since = parsedTime;
+        }
+        if (typeof parsedId === 'string' || typeof parsedId === 'number') {
+            lastId = String(parsedId);
+        }
+    } else if (typeof lastCursorParams === 'string') {
+        since = lastCursorParams;
+    }
+
+    return { since, lastId };
+}
+
+async function executeQuickBooksFetch(auth: QuickBooksAuth, sql: string): Promise<QuickbooksEntityResponse<unknown>> {
     const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, auth.props.useSandbox === true)}/query`
         + `?query=${encodeURIComponent(sql)}&minorversion=65`;
 
@@ -84,20 +118,5 @@ export async function runQuickBooksQuery(
         throw new Error(`QuickBooks query returned a fault response (fault details omitted)`);
     }
 
-    const records = Object.values(body.QueryResponse ?? {})
-        .filter(v => Array.isArray(v)) // ignore startPosition, maxResults, totalCount
-        .flat()
-        .filter(v => typeof v === 'object' && v !== null);
-
-    if (records.length > 0) {
-        const lastRecord = records[records.length - 1] as Record<string, any>;
-        const timeStr = lastRecord?.['MetaData']?.['LastUpdatedTime'];
-        const idStr = lastRecord?.['Id']?.toString();
-
-        if (timeStr && idStr) {
-            await store.put(cursorKey, { lastUpdatedTime: timeStr, lastId: idStr });
-        }
-    }
-
-    return records;
+    return body;
 }

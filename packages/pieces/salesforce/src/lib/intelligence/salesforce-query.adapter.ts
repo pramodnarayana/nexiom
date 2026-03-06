@@ -31,7 +31,14 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
-        let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${spec.cursorField} > ${formattedCursorValue} ORDER BY ${spec.cursorField} ASC`;
+        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
+
+        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
+        if (spec.tieBreakerField && tbFormatted) {
+            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
+        }
+
+        let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${whereClause} ORDER BY ${spec.cursorField} ASC`;
 
         let safeLimit = 200;
         if (spec.limit !== undefined) {
@@ -64,7 +71,14 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
-        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${spec.cursorField} > ${formattedCursorValue}`;
+        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
+
+        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
+        if (spec.tieBreakerField && tbFormatted) {
+            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
+        }
+
+        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${whereClause}`;
     }
 
     private validateCursor(cursorValue: string): void {

@@ -16,27 +16,30 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
     private readonly cache = new Map<string, ObjectSchema>();
     private readonly TTL_MS = 15 * 60 * 1000; // 15 minutes
 
+    private readonly MAX_CACHE_SIZE = 100;
+
     async describe(auth: SalesforceAuth, objectName: string, store?: TriggerStore): Promise<ObjectSchema> {
-        const now = Date.now();
-        for (const [key, entry] of this.cache.entries()) {
-            if (now - entry.fetchedAt >= this.TTL_MS) {
-                this.cache.delete(key);
-            }
-        }
 
         const memKey = `${auth.instance_url}:${objectName}`;
         const storeKey = `${STORE_SCHEMA_KEY_PREFIX}${auth.instance_url}:${objectName}`;
 
         // Tier 1 — in-memory
         const cached = this.cache.get(memKey);
-        if (cached && (Date.now() - cached.fetchedAt < this.TTL_MS)) {
-            return cached;
+        if (cached) {
+            if (Date.now() - cached.fetchedAt < this.TTL_MS) {
+                return cached;
+            }
+            this.cache.delete(memKey); // Lazy expiration
         }
 
         // Tier 2 — persistent store (survives pod restarts)
         if (store) {
-            const stored = await store.get<ObjectSchema>(storeKey).catch(() => null);
+            const stored = await store.get<ObjectSchema>(storeKey).catch((err) => {
+                log.error('store.get failed during schema discovery', { storeKey, error: String(err) });
+                return null;
+            });
             if (stored && (Date.now() - stored.fetchedAt < this.TTL_MS)) {
+                this.enforceCacheSizeLimit();
                 this.cache.set(memKey, stored); // warm in-memory tier
                 return stored;
             }
@@ -72,15 +75,26 @@ export class SalesforceDiscoveryAdapter implements IDiscoveryAdapter<SalesforceA
         };
 
         // Write to both cache tiers
+        this.enforceCacheSizeLimit();
         this.cache.set(memKey, schema);
         if (store) {
-            await store.put(storeKey, schema).catch(() => {
-                log.debug('Failed to write schema to store cache', { object: objectName });
+            await store.put(storeKey, schema).catch((err) => {
+                log.error('Failed to write schema to store cache', { object: objectName, storeKey, error: String(err) });
             });
         }
 
         log.debug('Schema cached', { object: objectName, fields: String(schema.fields.length) });
         return schema;
+    }
+
+    private enforceCacheSizeLimit(): void {
+        if (this.cache.size >= this.MAX_CACHE_SIZE) {
+            // Map iteration respects insertion order; the first key is the oldest
+            const oldestKey = this.cache.keys().next().value;
+            if (oldestKey) {
+                this.cache.delete(oldestKey);
+            }
+        }
     }
 
     async fieldExists(auth: SalesforceAuth, objectName: string, fieldName: string, store?: TriggerStore): Promise<boolean> {

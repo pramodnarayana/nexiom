@@ -108,9 +108,9 @@ async function runUniversalTrigger(
     assertSafeSalesforceObject(objectName);
     const hint = await optimizationService.getHint('salesforce', objectName);
 
-    const authData = (context.auth).data || context.auth || {};
-    const access_token = authData.access_token || (context.auth as any).access_token;
-    const instance_url = authData.instance_url || (context.auth).instance_url;
+    const authData = context.auth?.data ?? context.auth ?? {};
+    const access_token = authData.access_token ?? (context.auth)?.access_token;
+    const instance_url = authData.instance_url ?? context.auth?.instance_url;
 
     if (!access_token || !instance_url) {
         throw new SalesforceAuthError('Missing access_token or instance_url in authentication data');
@@ -180,8 +180,8 @@ async function runUniversalTrigger(
 }
 
 function validateShadowParity(legacyRecords: any[], records: unknown[], log: IgtLogger): void {
-    const legacyIds = new Set(legacyRecords.map(r => r.Id).filter(Boolean));
-    const universalIds = new Set(records.map(r => (r as any).Id).filter(Boolean));
+    const legacyIds = new Set(legacyRecords.map(r => r && typeof r === 'object' ? r.Id : undefined).filter(Boolean));
+    const universalIds = new Set(records.map(r => r && typeof r === 'object' ? (r as any).Id : undefined).filter(Boolean));
 
     let missing = 0;
     let extra = 0;
