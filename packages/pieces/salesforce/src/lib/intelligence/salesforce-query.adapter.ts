@@ -3,7 +3,7 @@ import {
     type ObjectSchema,
     type QuerySpec,
     assertSafeSalesforceObject
-} from '@nexiom/connections/intelligence';
+} from '@nexiom/connectors/intelligence';
 
 export class SalesforceQueryAdapter implements IQueryAdapter {
     buildQuery(schema: ObjectSchema, spec: QuerySpec): string {

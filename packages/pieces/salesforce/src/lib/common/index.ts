@@ -6,7 +6,7 @@ import {
 	httpClient,
 
 	Property
-} from '@nexiom/connections/framework';
+} from '@nexiom/connectors/framework';
 import { salesforceAuth } from '../..';
 
 export const salesforcesCommon = {

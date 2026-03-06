@@ -6,7 +6,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module';
 import {
   InternalServerErrorException,

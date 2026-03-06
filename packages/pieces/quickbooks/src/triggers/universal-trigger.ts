@@ -1,7 +1,7 @@
-import { createTrigger, TriggerStrategy, type TriggerContext, Property } from '@nexiom/connections/framework';
+import { createTrigger, TriggerStrategy, type TriggerContext, Property } from '@nexiom/connectors/framework';
 import { quickbooksAuth } from '../index.js';
 import { QuickBooksAuth, runQuickBooksQuery } from './quickbooks-polling.helper.js';
-import { optimizationService } from '@nexiom/connections/intelligence';
+import { optimizationService } from '@nexiom/connectors/intelligence';
 
 const QB_SUPPORTED_ENTITIES = [
     'Account', 'Attachable', 'Bill', 'BillPayment', 'Class', 'CompanyInfo', 'CreditMemo',

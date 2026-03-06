@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthCallbackController } from './callback.controller';
-import { ProviderRegistryService } from '@nexiom/connections';
+import { ProviderRegistryService } from '@nexiom/connectors';
 import { Request, Response } from 'express';
 import { vi, describe, it, expect, beforeEach, Mocked } from 'vitest';
 import { OauthStateService } from '../oauth-state.service';

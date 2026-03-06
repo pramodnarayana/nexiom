@@ -1,4 +1,4 @@
-import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/connections/framework';
+import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/connectors/framework';
 import { salesforcesCommon } from '../common/index.js';
 import { salesforceAuth } from '../../index.js';
 
@@ -10,7 +10,7 @@ import {
     SF_API_VERSION,
     SalesforceAuthError,
     IgtLogger,
-} from '@nexiom/connections/intelligence';
+} from '@nexiom/connectors/intelligence';
 
 import {
     SalesforceDiscoveryAdapter,

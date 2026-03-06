@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/connections';
+import type { TriggerStore } from '@nexiom/connectors';
 import type { Redis } from 'ioredis';
 
 /**

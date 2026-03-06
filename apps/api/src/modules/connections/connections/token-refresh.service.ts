@@ -4,7 +4,7 @@ import {
   ProviderRegistryService,
   OAuthRefreshError,
   EncryptionService,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,

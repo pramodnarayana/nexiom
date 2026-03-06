@@ -1,5 +1,5 @@
 /**
- * @nexiom/connections — public API
+ * @nexiom/connectors — public API
  *
  * BREAKING CHANGE (v2.0.0): The `connectivity/` directory was renamed to `oauth/`.
  * Update any direct deep-imports:

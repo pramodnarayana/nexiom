@@ -5,18 +5,8 @@ import {
 
   Property,
   createCustomApiCallAction,
-} from '@nexiom/connections/framework';
+} from '@nexiom/connectors/framework';
 import { quickbooksCommon } from './lib/common';
-import { findInvoiceAction } from './actions/find-invoice';
-import { findCustomerAction } from './actions/find-customer';
-import { findPaymentAction } from './actions/find-payment';
-import { createInvoiceAction } from './actions/create-invoice';
-import { createExpenseAction } from './actions/create-expense';
-import { newInvoice } from './triggers/new-invoice';
-import { newExpense } from './triggers/new-expense';
-import { newCustomer } from './triggers/new-customer';
-import { newDeposit } from './triggers/new-deposit';
-import { newTransfer } from './triggers/new-transfer';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
 
 export const quickbooksAuth = PieceAuth.OAuth2({
@@ -47,11 +37,6 @@ export const quickbooks = createPiece({
     'onyedikachi-david'
   ],
   actions: [
-    findInvoiceAction,
-    findCustomerAction,
-    findPaymentAction,
-    createInvoiceAction,
-    createExpenseAction,
     createCustomApiCallAction({
       auth: quickbooksAuth,
       baseUrl: (auth: any) => {
@@ -73,11 +58,6 @@ export const quickbooks = createPiece({
     })
   ],
   triggers: [
-    newInvoice,
-    newExpense,
-    newCustomer,
-    newDeposit,
-    newTransfer,
     quickbooksUniversalTrigger
   ],
 });

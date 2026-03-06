@@ -5,7 +5,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   ProviderDefinition,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service';
 import { OauthStateService } from '../oauth-state.service';
 import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';

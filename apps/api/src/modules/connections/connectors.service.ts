@@ -12,7 +12,7 @@ import {
   ProviderRegistryService,
   AppCredentialError,
   ProviderEnvironment,
-} from '@nexiom/connections';
+} from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,
