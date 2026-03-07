@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common';
-import { DbModule } from '../../db/db.module';
+import { DbModule } from '../../db/db.module.js';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
-import { PieceRegistryService } from './piece-registry.service';
-import { TriggerExecutorService } from './trigger-executor.service';
-import { PollerService } from './poller.service';
-import { DlqProcessorService } from './dlq-processor.service';
-import { WebhooksController } from './webhooks.controller';
+import { PieceRegistryService } from './piece-registry.service.js';
+import { TriggerExecutorService } from './trigger-executor.service.js';
+import { PollerService } from './poller.service.js';
+import { DlqProcessorService } from './dlq-processor.service.js';
+import { WebhooksController } from './webhooks.controller.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { DatabaseManager } from '@nexiom/dbmanager';
 
 /**

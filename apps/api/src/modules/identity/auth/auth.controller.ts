@@ -14,22 +14,21 @@ import {
   AuthService,
   AuthGuard,
   AuthContext,
-  RequestAuthContext,
+  type RequestAuthContext,
 } from '@nexiom/auth';
-import {
-  USER_PROVIDER,
+import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import type {
   IUserProvider,
+  ITenantProvider,
   Session,
   User,
-  TENANT_PROVIDER,
-  ITenantProvider,
 } from '@nexiom/identity';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { Signup, CompleteInvite } from '../users/users.validation';
-import { Response, Request } from 'express';
+import { Signup, CompleteInvite } from '../users/users.validation.js';
+import type { Response, Request } from 'express';
 import { toNodeHandler } from 'better-auth/node';
-import { InvitationsService } from '../invitations/invitations.service';
+import { InvitationsService } from '../invitations/invitations.service.js';
 
 /**
  * Handles authentication-related operations such as user login.

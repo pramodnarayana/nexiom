@@ -1,27 +1,27 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { UsersModule } from '../modules/identity/users/users.module';
-import { TenantsModule } from '../modules/identity/tenants/tenants.module';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
+import { UsersModule } from '../modules/identity/users/users.module.js';
+import { TenantsModule } from '../modules/identity/tenants/tenants.module.js';
 import { AuthModule } from '@nexiom/auth';
-import { IdentityAuthModule } from '../modules/identity/auth/auth.module';
-import { DbModule } from '../db/db.module';
-import { InvitationsModule } from '../modules/identity/invitations/invitations.module';
-import { SystemAdminModule } from '../modules/identity/system-admin/system-admin.module';
-import { RolesModule } from '../modules/identity/roles/roles.module';
+import { IdentityAuthModule } from '../modules/identity/auth/auth.module.js';
+import { DbModule } from '../db/db.module.js';
+import { InvitationsModule } from '../modules/identity/invitations/invitations.module.js';
+import { SystemAdminModule } from '../modules/identity/system-admin/system-admin.module.js';
+import { RolesModule } from '../modules/identity/roles/roles.module.js';
 import { IdentityModule } from '@nexiom/identity';
-import { EmailService } from '../modules/email/email.service.abstract';
+import { EmailService } from '../modules/email/email.service.abstract.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../db/schema';
-import { ConnectionsModule } from '../modules/connections/connections.module';
-import { TriggerModule } from '../modules/trigger/trigger.module';
-import { EmailModule } from '../modules/email/email.module';
-import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module';
+import * as schema from '../db/schema.js';
+import { ConnectionsModule } from '../modules/connections/connections.module.js';
+import { TriggerModule } from '../modules/trigger/trigger.module.js';
+import { EmailModule } from '../modules/email/email.module.js';
+import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module.js';
 import { CacheModule } from '@nexiom/cache';
-import { DbManagerModule } from '../modules/dbmanager/dbmanager.module';
+import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
 
 @Module({
   imports: [

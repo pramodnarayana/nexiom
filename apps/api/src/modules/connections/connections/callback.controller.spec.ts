@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { OAuthCallbackController } from './callback.controller';
+import { OAuthCallbackController } from './callback.controller.js';
 import { ProviderRegistryService } from '@nexiom/connectors';
 import { Request, Response } from 'express';
 import { vi, describe, it, expect, beforeEach, Mocked } from 'vitest';
-import { OauthStateService } from '../oauth-state.service';
+import { OauthStateService } from '../oauth-state.service.js';
 import { ConfigService } from '@nestjs/config';
 
 const VALID_TENANT_ID = 'test-tenant-123';

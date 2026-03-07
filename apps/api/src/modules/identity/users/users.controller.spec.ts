@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UsersController } from './users.controller';
+import { UsersController } from './users.controller.js';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
-import { InvitationsService } from '../invitations/invitations.service';
+import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request } from 'express';
 import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
-import { CreateUser } from './users.validation';
+import { CreateUser } from './users.validation.js';
 import {
   NotFoundException,
   InternalServerErrorException,

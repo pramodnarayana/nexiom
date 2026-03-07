@@ -10,7 +10,7 @@ import { Reflector } from "@nestjs/core";
 import {
   PERMISSION_KEY,
   RequiredPermission,
-} from "../decorators/require-permission.decorator";
+} from "../decorators/require-permission.decorator.js";
 import { Request } from "express";
 import { User } from "@nexiom/identity";
 

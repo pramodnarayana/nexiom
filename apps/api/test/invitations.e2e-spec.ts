@@ -8,15 +8,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'node:http';
-import { AppModule } from './../src/app/app.module';
-import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
-import { EmailService } from './../src/modules/email/email.service.abstract';
+import { AppModule } from './../src/app/app.module.js';
+import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard.js';
+import { EmailService } from './../src/modules/email/email.service.abstract.js';
 import { eq } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { vi } from 'vitest';
 
-import * as schema from './../src/db/schema';
+import * as schema from './../src/db/schema.js';
 
 describe('Invitation Flow (e2e)', () => {
   let app: INestApplication;

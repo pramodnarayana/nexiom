@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { Client } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from './schema';
+import * as schema from './schema.js';
 
 /**
  * Enterprise-grade database management utility
@@ -38,7 +38,7 @@ export class DatabaseManager {
     ) => Promise<T>,
   ): Promise<T> {
     const { drizzle } = await import('drizzle-orm/node-postgres');
-    const dbSchema = await import('./schema');
+    const dbSchema = await import('./schema.js');
     const client = await this.getPgClient();
 
     try {
@@ -213,7 +213,7 @@ export class DatabaseManager {
     console.log('🌱 Seeding database...');
 
     const { drizzle } = await import('drizzle-orm/node-postgres');
-    const schema = await import('./schema');
+    const schema = await import('./schema.js');
     const { eq } = await import('drizzle-orm');
     const { seedSystemRbac } =
       await import('@nexiom/identity/utils/rbac-seeding');
@@ -222,7 +222,7 @@ export class DatabaseManager {
       getRequiredAdminRoleId,
       getRequiredMemberRoleId,
       getRequiredSystemTenantId,
-    } = await import('../constants');
+    } = await import('../constants.js');
 
     const client = await this.getPgClient();
 

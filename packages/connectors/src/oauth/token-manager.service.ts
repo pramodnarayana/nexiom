@@ -1,9 +1,8 @@
 import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
-import { appConnections } from '@nexiom/database';
+import { appConnections, DATABASE_CONNECTION } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
-import { DATABASE_CONNECTION } from '@nexiom/database';
 
 // Abstract contracts — consumers must provide real implementations via DI
 export abstract class EncryptionService {

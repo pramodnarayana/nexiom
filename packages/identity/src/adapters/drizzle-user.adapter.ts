@@ -3,15 +3,15 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, and, ilike, count, desc } from "drizzle-orm";
 import {
   IUserProvider,
-  CreateUserInput,
   UpdateUserInput,
   User as UserInterface,
   IAuthProvider,
   UserNotFoundError,
-} from "../interfaces";
-import * as schema from "../schema";
-import { AUTH_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
-import type { IdentityModuleOptions } from "../identity.module";
+} from "../interfaces/index.js";
+import type { CreateUserInput } from "../interfaces/index.js";
+import * as schema from "../schema.js";
+import { AUTH_PROVIDER, IDENTITY_OPTIONS, IDENTITY_DB } from "../constants.js";
+import type { IdentityModuleOptions } from "../identity.module.js";
 
 @Injectable()
 export class DrizzleUserAdapter implements IUserProvider {

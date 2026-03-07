@@ -1,4 +1,4 @@
-export * from "./interfaces";
+export * from "./interfaces/index.js";
 
 export {
   user,
@@ -21,7 +21,7 @@ export {
   roleRelations,
   permissionRelations,
   rolePermissionRelations,
-} from "./schema";
+} from "./schema.js";
 
 export type {
   User as DbUser,
@@ -29,13 +29,13 @@ export type {
   Organization as DbOrganization,
   Member as DbMember,
   Invitation as DbInvitation,
-} from "./schema";
+} from "./schema.js";
 
-export * from "./adapters/better-auth.adapter";
-export * from "./adapters/drizzle-user.adapter";
-export * from "./adapters/drizzle-tenant.adapter";
-export * from "./adapters/drizzle-permission.adapter";
-export * from "./adapters/drizzle-role.adapter";
+export * from "./adapters/better-auth.adapter.js";
+export * from "./adapters/drizzle-user.adapter.js";
+export * from "./adapters/drizzle-tenant.adapter.js";
+export * from "./adapters/drizzle-permission.adapter.js";
+export * from "./adapters/drizzle-role.adapter.js";
 
-export * from "./identity.module";
-export * from "./constants";
+export * from "./identity.module.js";
+export * from "./constants.js";

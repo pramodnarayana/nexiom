@@ -1,4 +1,4 @@
-import { AesEncryptionService } from './encryption.service';
+import { AesEncryptionService } from './encryption.service.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ConfigService } from '@nestjs/config';
 

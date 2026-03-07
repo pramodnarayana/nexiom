@@ -6,14 +6,14 @@ import {
   AesEncryptionService,
   OAuthRefreshClient,
 } from '@nexiom/connectors';
-import { DbModule } from '../../db/db.module';
+import { DbModule } from '../../db/db.module.js';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
-import { OAuthCallbackController } from './connections/callback.controller';
-import { ConnectorsController } from './connections/connectors.controller';
-import { DefaultOAuthRefreshClient } from './connections/token-refresh.service';
-import { ConnectorsService } from './connectors.service';
-import { OauthStateService } from './oauth-state.service';
+import { OAuthCallbackController } from './connections/callback.controller.js';
+import { ConnectorsController } from './connections/connectors.controller.js';
+import { DefaultOAuthRefreshClient } from './connections/token-refresh.service.js';
+import { ConnectorsService } from './connectors.service.js';
+import { OauthStateService } from './oauth-state.service.js';
 
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { type DrizzleDb } from '@nexiom/database';

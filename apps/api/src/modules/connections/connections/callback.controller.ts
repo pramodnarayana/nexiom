@@ -1,12 +1,12 @@
 import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import {
   ProviderRegistryService,
   type ProviderDefinition,
 } from '@nexiom/connectors';
 
-import { OauthStateService } from '../oauth-state.service';
+import { OauthStateService } from '../oauth-state.service.js';
 
 export class OAuthCallbackError extends Error {
   constructor(

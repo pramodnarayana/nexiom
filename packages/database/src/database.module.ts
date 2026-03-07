@@ -1,6 +1,6 @@
 import { Module, Global } from '@nestjs/common';
-import { DATABASE_CONNECTION } from './constants';
-import { getDb } from './client';
+import { DATABASE_CONNECTION } from './constants.js';
+import { getDb } from './client.js';
 
 @Global()
 @Module({

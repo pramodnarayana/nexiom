@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { InvitationsService } from './invitations.service';
-import { InvitationsController } from './invitations.controller';
+import { InvitationsService } from './invitations.service.js';
+import { InvitationsController } from './invitations.controller.js';
 import { AuthModule } from '@nexiom/auth';
 
 @Module({

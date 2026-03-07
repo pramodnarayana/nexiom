@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { UsersController } from './users.controller';
-import { InvitationsModule } from '../invitations/invitations.module';
+import { UsersController } from './users.controller.js';
+import { InvitationsModule } from '../invitations/invitations.module.js';
 import { AuthModule } from '@nexiom/auth';
 
 @Module({

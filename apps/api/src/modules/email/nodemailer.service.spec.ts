@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NodemailerService } from './nodemailer.service';
+import { NodemailerService } from './nodemailer.service.js';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { MAILER_TRANSPORTER } from './email.constants';
+import { MAILER_TRANSPORTER } from './email.constants.js';
 import type { Mock } from 'vitest';
 
 describe('NodemailerService', () => {

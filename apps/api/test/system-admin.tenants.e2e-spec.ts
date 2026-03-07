@@ -2,10 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { Server } from 'node:http';
-import { AppModule } from './../src/app/app.module';
-import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard';
+import { AppModule } from './../src/app/app.module.js';
+import { SystemAdminGuard } from './../src/modules/identity/auth/system-admin.guard.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from './../src/db/schema';
+import * as schema from './../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 interface TenantResponse {

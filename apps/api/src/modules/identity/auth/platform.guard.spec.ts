@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { PlatformGuard } from './platform.guard';
+import { PlatformGuard } from './platform.guard.js';
 import { AuthService } from '@nexiom/auth';
 import {
   ForbiddenException,

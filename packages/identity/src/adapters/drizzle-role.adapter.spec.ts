@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
-import { DrizzleRoleAdapter } from "./drizzle-role.adapter";
+import { DrizzleRoleAdapter } from "./drizzle-role.adapter.js";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema";
+import * as schema from "../schema.js";
 import { eq, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 

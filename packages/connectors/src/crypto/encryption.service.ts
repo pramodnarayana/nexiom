@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EncryptionService } from '../oauth/token-manager.service';
+import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 @Injectable()
-export class AesEncryptionService implements EncryptionService {
+export class AesEncryptionService {
     private readonly logger = new Logger(AesEncryptionService.name);
     private readonly algorithm = 'aes-256-gcm';
     private readonly keyBuffer: Buffer;

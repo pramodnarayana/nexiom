@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
-import { PermissionSeeder } from "./permission-seeder";
+import { PermissionSeeder } from "./permission-seeder.js";
 import { Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema";
-import { IdentityModuleOptions } from "../identity.module";
+import * as schema from "../schema.js";
+import { IdentityModuleOptions } from "../identity.module.js";
 
 // Mock constants removed (using vi.doMock in test instead)
 
@@ -195,7 +195,7 @@ describe("PermissionSeeder", () => {
   it("seed skips rolePermission insertion if all exist", async () => {
     vi.resetModules();
     vi.doMock("../constants", async (importOriginal) => {
-      const actual = await importOriginal<typeof import("../constants")>();
+      const actual = await importOriginal<typeof import("../constants.js")>();
       return {
         ...actual,
         // Include all permissions referenced by the member role in rbac-seeding
@@ -213,7 +213,7 @@ describe("PermissionSeeder", () => {
     });
 
     // Re-import to pickup mock
-    const { seedSystemRbac } = await import("../utils/rbac-seeding");
+    const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
 
     const dbMock = mkDb();
 
@@ -283,14 +283,14 @@ describe("PermissionSeeder", () => {
   it("seed throws error on invalid permission format", async () => {
     vi.resetModules();
     vi.doMock("../constants", async (importOriginal) => {
-      const actual = await importOriginal<typeof import("../constants")>();
+      const actual = await importOriginal<typeof import("../constants.js")>();
       return {
         ...actual,
         ALL_PERMISSIONS: ["invalid-format"],
       };
     });
 
-    const { seedSystemRbac } = await import("../utils/rbac-seeding");
+    const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
     const dbMock = mkDb();
     const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
     const optionsMock = mkOptions();

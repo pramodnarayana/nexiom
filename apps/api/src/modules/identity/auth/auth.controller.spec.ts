@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
-import { AuthService, RequestAuthContext } from '@nexiom/auth';
+import { AuthController } from './auth.controller.js';
+import { AuthService, type RequestAuthContext } from '@nexiom/auth';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
 import type { User, Session } from '@nexiom/identity';
-import { InvitationsService } from '../invitations/invitations.service';
+import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request, Response } from 'express';
-import { CompleteInvite } from '../users/users.validation';
+import { CompleteInvite } from '../users/users.validation.js';
 
 describe('AuthController', () => {
   let controller: AuthController;

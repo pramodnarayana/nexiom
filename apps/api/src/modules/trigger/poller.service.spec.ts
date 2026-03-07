@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PollerService } from './poller.service';
+import { PollerService } from './poller.service.js';
+/* eslint-disable @typescript-eslint/unbound-method */
 import { TriggerStrategy } from '@nexiom/connectors';
-import type { TriggerExecutorService } from './trigger-executor.service';
-import type { PieceRegistryService } from './piece-registry.service';
+import type { TriggerExecutorService } from './trigger-executor.service.js';
+import type { PieceRegistryService } from './piece-registry.service.js';
 
 function makeDb(rows: unknown[] = []) {
   return {

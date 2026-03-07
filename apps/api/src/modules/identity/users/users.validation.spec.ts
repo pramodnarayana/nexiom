@@ -3,7 +3,7 @@ import {
   CreateUser,
   Signup,
   SignupSchema,
-} from './users.validation';
+} from './users.validation.js';
 
 describe('Users Validation', () => {
   describe('CreateUserSchema', () => {

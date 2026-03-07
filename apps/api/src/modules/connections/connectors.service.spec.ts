@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ConfigService } from '@nestjs/config';
-import { ConnectorsService } from './connectors.service';
+import { ConnectorsService } from './connectors.service.js';
 import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
 } from '@nexiom/connectors';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import {
   InternalServerErrorException,
   NotFoundException,

@@ -13,15 +13,10 @@ import {
   Delete,
   Logger,
 } from '@nestjs/common';
-import {
-  USER_PROVIDER,
-  IUserProvider,
-  TENANT_PROVIDER,
-  ITenantProvider,
-  User,
-} from '@nexiom/identity';
-import { InvitationsService } from '../invitations/invitations.service';
-import { CreateUser } from './users.validation';
+import { USER_PROVIDER, TENANT_PROVIDER, User } from '@nexiom/identity';
+import type { ITenantProvider, IUserProvider } from '@nexiom/identity';
+import { InvitationsService } from '../invitations/invitations.service.js';
+import { CreateUser } from './users.validation.js';
 import { Request } from 'express';
 import { AuthGuard, PermissionsGuard, RequirePermission } from '@nexiom/auth';
 
@@ -123,25 +118,32 @@ export class UsersController {
     // Filter out invitations for users that already exist
     const existingEmails = new Set(users.map((u) => u.email.toLowerCase()));
     const pendingInvitations = invitations.filter(
-      (inv) => !existingEmails.has(inv.email.toLowerCase()),
+      (inv: { email: string }) => !existingEmails.has(inv.email.toLowerCase()),
     );
 
     // Map invitations to User structure for unified UI list
-    const invitedUsers: UserListItem[] = pendingInvitations.map((inv) => ({
-      id: inv.id, // Use invitation ID temporarily
-      email: inv.email,
-      name: '', // Name might not be known yet
-      role: inv.role,
-      status: 'pending', // Explicit status for UI (vs 'active')
-      emailVerified: false,
-      createdAt: inv.createdAt,
-      updatedAt: inv.createdAt,
-      isInvitation: true,
-      // Ensure other fields are undefined or compatible
-      permissions: undefined,
-      image: undefined,
-      banned: false,
-    }));
+    const invitedUsers: UserListItem[] = pendingInvitations.map(
+      (inv: {
+        id: string;
+        email: string;
+        role: string | null;
+        createdAt: Date;
+      }) => ({
+        id: inv.id, // Use invitation ID temporarily
+        email: inv.email,
+        name: '', // Name might not be known yet
+        role: inv.role,
+        status: 'pending', // Explicit status for UI (vs 'active')
+        emailVerified: false,
+        createdAt: inv.createdAt,
+        updatedAt: inv.createdAt,
+        isInvitation: true,
+        // Ensure other fields are undefined or compatible
+        permissions: undefined,
+        image: undefined,
+        banned: false,
+      }),
+    );
 
     // Merge: Users first, then Pending Invites (or sort by date)
     const combinedData = [...users, ...invitedUsers];

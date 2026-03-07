@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { getRequiredAdminRoleId } from '../../../constants';
+import { getRequiredAdminRoleId } from '../../../constants.js';
 
 export const CreateTenantSchema = z.object({
   name: z.string().min(1, 'Name is required'),

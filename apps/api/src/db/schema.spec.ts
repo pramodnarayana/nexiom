@@ -1,4 +1,4 @@
-import * as schema from './schema';
+import * as schema from './schema.js';
 
 describe('Database Schema', () => {
   describe('Table Exports', () => {

@@ -1,10 +1,10 @@
 import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { EmailService } from './email.service.abstract';
-import { NodemailerService } from './nodemailer.service';
-import { ConsoleEmailService } from './console-email.service';
-import { MAILER_TRANSPORTER } from './email.constants';
+import { EmailService } from './email.service.abstract.js';
+import { NodemailerService } from './nodemailer.service.js';
+import { ConsoleEmailService } from './console-email.service.js';
+import { MAILER_TRANSPORTER } from './email.constants.js';
 
 @Global()
 @Module({

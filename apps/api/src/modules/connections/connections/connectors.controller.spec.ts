@@ -6,8 +6,8 @@ import {
   EncryptionService,
   ProviderDefinition,
 } from '@nexiom/connectors';
-import { ConnectorsService } from '../connectors.service';
-import { OauthStateService } from '../oauth-state.service';
+import { ConnectorsService } from '../connectors.service.js';
+import { OauthStateService } from '../oauth-state.service.js';
 import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';
 import {
   BadRequestException,

@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { IdentityModule, IdentityModuleOptions } from "./identity.module";
+import { IdentityModule, IdentityModuleOptions } from "./identity.module.js";
 import {
   AUTH_PROVIDER,
   USER_PROVIDER,
   TENANT_PROVIDER,
   PERMISSION_PROVIDER,
   IDENTITY_OPTIONS,
-} from "./constants";
+} from "./constants.js";
 
 import type {
   DynamicModule,

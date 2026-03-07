@@ -1,17 +1,18 @@
 {
-    "name": "@nexiom/dbmanager",
-    "version": "0.0.1",
-    "description": "Declarative schema manager for Nexiom",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "scripts": {
-        "build": "tsc"
-    },
-    "dependencies": {
-        "@nexiom/database": "workspace:*"
-    },
-    "devDependencies": {
-        "@types/node": "^22.10.7",
-        "typescript": "^5.7.3"
-    }
+  "name": "@nexiom/dbmanager",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Declarative schema manager for Nexiom",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@nexiom/database": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  }
 }

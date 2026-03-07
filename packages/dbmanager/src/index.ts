@@ -1,2 +1,2 @@
-export * from './interfaces';
-export * from './impl/sql-database-manager';
+export * from './interfaces.js';
+export * from './impl/sql-database-manager.js';

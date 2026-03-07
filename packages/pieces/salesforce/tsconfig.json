@@ -8,7 +8,7 @@
     }
   ],
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "NodeNext",
     "forceConsistentCasingInFileNames": true,
     "strict": false,
     "noImplicitReturns": true,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { RedisBackedTriggerStore } from './redis-trigger-store';
+import { RedisBackedTriggerStore } from './redis-trigger-store.js';
 import type { Redis } from 'ioredis';
 
 function makeMockRedis() {

@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DrizzleUserAdapter } from "./drizzle-user.adapter";
-import * as schema from "../schema";
-import { UserNotFoundError } from "../interfaces";
+import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
+import * as schema from "../schema.js";
+import { UserNotFoundError } from "../interfaces/index.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type {
   IAuthProvider,
   CreateUserInput,
   UpdateUserInput,
-} from "../interfaces";
+} from "../interfaces/index.js";
 
 type MockFunc = ReturnType<typeof vi.fn>;
 
@@ -146,6 +146,7 @@ describe("DrizzleUserAdapter", () => {
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "newpw" } as UpdateUserInput);
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(auth.setPassword).toHaveBeenCalledWith("u1", "newpw");
 
     // field update path

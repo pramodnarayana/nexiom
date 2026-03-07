@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConsoleEmailService } from './console-email.service';
+import { ConsoleEmailService } from './console-email.service.js';
 
 describe('ConsoleEmailService', () => {
   let service: ConsoleEmailService;

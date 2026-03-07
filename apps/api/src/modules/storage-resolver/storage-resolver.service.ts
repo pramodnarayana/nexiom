@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import {
-  DrizzleDb,
   DATABASE_CONNECTION,
   connectionStorageRegistry,
 } from '@nexiom/database';
+import type { DrizzleDb } from '@nexiom/database';
 import { eq, type InferSelectModel } from 'drizzle-orm';
 
 export type HostContext = InferSelectModel<typeof connectionStorageRegistry>;
