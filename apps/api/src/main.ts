@@ -48,14 +48,9 @@ async function bootstrap() {
   );
 }
 
-// Top-level await is not available in CommonJS.
-const start = async () => {
-  try {
-    await bootstrap();
-  } catch (err) {
-    Logger.error('Bootstrap failed', err);
-    process.exit(1);
-  }
-};
-
-void start();
+try {
+  await bootstrap();
+} catch (err) {
+  Logger.error('Bootstrap failed', err);
+  process.exit(1);
+}

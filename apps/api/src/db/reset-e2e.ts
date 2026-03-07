@@ -3,7 +3,11 @@ import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as dotEnv from 'dotenv';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ALL_PERMISSIONS, isSystemPermission } from '../constants.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load .env from apps/api root
 dotEnv.config({ path: path.resolve(__dirname, '../../.env') });

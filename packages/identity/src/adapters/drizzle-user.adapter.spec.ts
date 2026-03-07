@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
 import * as schema from "../schema.js";
@@ -146,7 +147,6 @@ describe("DrizzleUserAdapter", () => {
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "newpw" } as UpdateUserInput);
 
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(auth.setPassword).toHaveBeenCalledWith("u1", "newpw");
 
     // field update path

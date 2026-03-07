@@ -8,7 +8,7 @@
     }
   ],
   "compilerOptions": {
-    "module": "NodeNext",
+    "module": "nodenext",
     "forceConsistentCasingInFileNames": true,
     "strict": false,
     "noImplicitReturns": true,

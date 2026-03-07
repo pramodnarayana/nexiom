@@ -18,11 +18,12 @@ This document tracks known technical debt items that should be addressed in futu
 - The `session` table currently exposes raw `ipAddress` and `userAgent` fields indefinitely.
 - There is no automated cleanup or anonymization of this Personally Identifiable Information (PII).
 
-**Recommended Solution**:
+**Recommended Solution (Time-bounded retention model chosen)**:
 
-- Update the schema with `anonymizeIp` and `anonymizeUserAgent` helpers to hash/truncate data before insert.
-- Create a `background` (or `jobs`) module in `apps/api` using `@nestjs/schedule`.
-- Implement `runPIICleanup` to run daily, finding sessions older than 30 days and anonymizing their PII, emitting audit logs.
+- Keep raw IP/user-agent on insert for security auditing.
+- Remove or rename the legacy `anonymizeIp` and `anonymizeUserAgent` pre-insert helpers if they exist.
+- Implement `runPIICleanup` inside the `background`/`jobs` module using `@nestjs/schedule` to run daily.
+- This job will find sessions older than 30 days and anonymize their PII (nullify or hash), emitting audit logs.
 - Add a Drizzle migration to backfill and anonymize existing old sessions.
 
 ### 2. Permission Caching Architecture

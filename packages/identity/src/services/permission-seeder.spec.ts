@@ -194,7 +194,7 @@ describe("PermissionSeeder", () => {
 
   it("seed skips rolePermission insertion if all exist", async () => {
     vi.resetModules();
-    vi.doMock("../constants", async (importOriginal) => {
+    vi.doMock("../constants.js", async (importOriginal) => {
       const actual = await importOriginal<typeof import("../constants.js")>();
       return {
         ...actual,
@@ -277,12 +277,12 @@ describe("PermissionSeeder", () => {
       "No new role permissions to insert.",
     );
 
-    vi.doUnmock("../constants");
+    vi.doUnmock("../constants.js");
   });
 
   it("seed throws error on invalid permission format", async () => {
     vi.resetModules();
-    vi.doMock("../constants", async (importOriginal) => {
+    vi.doMock("../constants.js", async (importOriginal) => {
       const actual = await importOriginal<typeof import("../constants.js")>();
       return {
         ...actual,
@@ -299,6 +299,6 @@ describe("PermissionSeeder", () => {
       seedSystemRbac(dbMock, optionsMock.constants, loggerMock),
     ).rejects.toThrow("Invalid permission format: invalid-format");
 
-    vi.doUnmock("../constants");
+    vi.doUnmock("../constants.js");
   });
 });
