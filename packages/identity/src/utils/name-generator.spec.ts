@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateFancyTenantName } from "./name-generator";
+import { generateFancyTenantName } from "./name-generator.js";
 
 describe("NameGenerator", () => {
   it("generateFancyTenantName returns a 2-word string", () => {

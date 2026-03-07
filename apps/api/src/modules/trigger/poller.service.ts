@@ -2,8 +2,8 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { TriggerExecutorService } from './trigger-executor.service';
-import { PieceRegistryService } from './piece-registry.service';
+import { TriggerExecutorService } from './trigger-executor.service.js';
+import { PieceRegistryService } from './piece-registry.service.js';
 
 interface ActiveConnection {
   workspace_id: string;

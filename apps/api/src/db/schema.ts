@@ -23,7 +23,7 @@ export {
   permissionRelations,
   rolePermissionRelations,
   organizationStatusEnum,
-} from '@nexiom/identity/schema';
+} from '@nexiom/database';
 
 export type {
   User,
@@ -37,7 +37,7 @@ export type {
   Account,
   Verification,
   AbacConditions,
-} from '@nexiom/identity/src/schema';
+} from '@nexiom/database';
 
 // Engine schema — connection table (single-table Activepieces model)
 export { appConnections } from '@nexiom/database';

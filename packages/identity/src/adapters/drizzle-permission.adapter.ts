@@ -1,14 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { IDENTITY_DB } from "../constants";
+import { IDENTITY_DB } from "../constants.js";
 import { eq, and } from "drizzle-orm";
 import type {
   IPermissionProvider,
   PermissionAction,
   PermissionResource,
   User,
-} from "../interfaces";
-import * as schema from "../schema";
+} from "../interfaces/index.js";
+import * as schema from "../schema.js";
 
 @Injectable()
 export class DrizzlePermissionAdapter implements IPermissionProvider {

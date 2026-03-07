@@ -1,4 +1,4 @@
-import { DefaultOAuthRefreshClient } from './token-refresh.service';
+import { DefaultOAuthRefreshClient } from './token-refresh.service.js';
 import {
   ProviderRegistryService,
   EncryptionService,

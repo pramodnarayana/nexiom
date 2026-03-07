@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { DlqProcessorService } from './dlq-processor.service';
+import { DlqProcessorService } from './dlq-processor.service.js';
+/* eslint-disable @typescript-eslint/unbound-method */
 import { TriggerStrategy } from '@nexiom/connectors';
-import type { TriggerExecutorService } from './trigger-executor.service';
-import type { PieceRegistryService } from './piece-registry.service';
+import type { TriggerExecutorService } from './trigger-executor.service.js';
+import type { PieceRegistryService } from './piece-registry.service.js';
 
 /**
  * Minimal Redis mock that supports the DLQ surface:

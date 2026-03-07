@@ -1,15 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { IDENTITY_DB, Role } from "../constants";
+import { IDENTITY_DB, Role } from "../constants.js";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
   ITenantProvider,
   Tenant as TenantInterface,
   UpdateTenantInput,
-} from "../interfaces";
-import * as schema from "../schema";
-import { generateFancyTenantName } from "../utils/name-generator";
+} from "../interfaces/index.js";
+import * as schema from "../schema.js";
+import { generateFancyTenantName } from "../utils/name-generator.js";
 
 interface PgError extends Error {
   code: string;

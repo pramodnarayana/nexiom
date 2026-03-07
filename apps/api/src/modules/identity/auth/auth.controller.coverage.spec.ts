@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
+import { AuthController } from './auth.controller.js';
 import { AuthService, AuthGuard } from '@nexiom/auth';
 import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
-import { InvitationsService } from '../invitations/invitations.service';
+import { InvitationsService } from '../invitations/invitations.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 import { Response } from 'express';
-import { CompleteInvite } from '../users/users.validation';
+import { CompleteInvite } from '../users/users.validation.js';
 
 describe('AuthController Coverage', () => {
   let controller: AuthController;

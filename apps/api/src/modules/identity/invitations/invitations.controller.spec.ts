@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { InvitationsController } from './invitations.controller';
-import { InvitationsService } from './invitations.service';
+import { InvitationsController } from './invitations.controller.js';
+import { InvitationsService } from './invitations.service.js';
 import { AuthGuard, type RequestAuthContext } from '@nexiom/auth';
-import { CreateInvitation } from './invitations.validation';
+import { CreateInvitation } from './invitations.validation.js';
 import type { User } from '@nexiom/identity';
 
 describe('InvitationsController', () => {
@@ -63,7 +64,7 @@ describe('InvitationsController', () => {
       };
 
       await controller.create(dto, mockCtx);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(service.create).toHaveBeenCalledWith(dto, 'user-123', {
         'x-request-id': undefined,
         'x-forwarded-for': undefined,
@@ -76,7 +77,7 @@ describe('InvitationsController', () => {
   describe('get', () => {
     it('should call service.get', async () => {
       await controller.get('inv-123');
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(service.get).toHaveBeenCalledWith('inv-123');
     });
   });
@@ -87,7 +88,7 @@ describe('InvitationsController', () => {
       const dto = { invitationId: 'inv-123', token: 'token' };
 
       await controller.accept(dto, mockUser);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(service.accept).toHaveBeenCalledWith('inv-123', 'user-123');
     });
   });
@@ -97,7 +98,7 @@ describe('InvitationsController', () => {
       const mockUser = { id: 'user-123', organizationId: 'org-123' } as User;
 
       await controller.list(mockUser);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(service.list).toHaveBeenCalledWith('org-123');
     });
 
@@ -106,7 +107,7 @@ describe('InvitationsController', () => {
 
       const result = await controller.list(mockUser);
       expect(result).toEqual([]);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
+
       expect(service.list).not.toHaveBeenCalled();
     });
   });

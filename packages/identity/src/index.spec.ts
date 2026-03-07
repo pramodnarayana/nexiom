@@ -49,7 +49,7 @@ vi.mock("./adapters/drizzle-permission.adapter", () => ({
 
 describe("Identity Package", () => {
   it("should export adapters", async () => {
-    const IdentityPackage = await import("./index");
+    const IdentityPackage = await import("./index.js");
 
     expect(IdentityPackage).toBeDefined();
 

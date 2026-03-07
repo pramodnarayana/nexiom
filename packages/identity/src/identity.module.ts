@@ -11,16 +11,16 @@ import {
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
   ROLE_PROVIDER,
-} from "./constants";
-import { BetterAuthAdapter } from "./adapters/better-auth.adapter";
-import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface";
-import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter";
-import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter";
-import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter";
-import { DrizzleRoleAdapter } from "./adapters/drizzle-role.adapter";
-import type { IEmailProvider } from "./interfaces";
-import * as schema from "./schema";
-import { PermissionSeeder } from "./services/permission-seeder";
+} from "./constants.js";
+import { BetterAuthAdapter } from "./adapters/better-auth.adapter.js";
+import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface.js";
+import { DrizzleUserAdapter } from "./adapters/drizzle-user.adapter.js";
+import { DrizzleTenantAdapter } from "./adapters/drizzle-tenant.adapter.js";
+import { DrizzlePermissionAdapter } from "./adapters/drizzle-permission.adapter.js";
+import { DrizzleRoleAdapter } from "./adapters/drizzle-role.adapter.js";
+import type { IEmailProvider } from "./interfaces/email-provider.interface.js";
+import * as schema from "./schema.js";
+import { PermissionSeeder } from "./services/permission-seeder.js";
 
 export interface IdentityConstants {
   systemTenantId: string;

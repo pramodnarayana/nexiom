@@ -1,5 +1,5 @@
-import type { DatabaseManager } from '../interfaces';
-import { SchemaPlan } from '../interfaces';
+import type { DatabaseManager } from '../interfaces.js';
+import { SchemaPlan } from '../interfaces.js';
 import type { DrizzleDb } from '@nexiom/database';
 import { createHash } from 'node:crypto';
 

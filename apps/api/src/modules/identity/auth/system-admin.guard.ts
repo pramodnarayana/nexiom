@@ -5,9 +5,9 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { AuthService, RequestAuthContext } from '@nexiom/auth';
+import { AuthService, type RequestAuthContext } from '@nexiom/auth';
 import { Request } from 'express';
-import { toWebHeaders } from '../../../common/utils/headers.util';
+import { toWebHeaders } from '../../../common/utils/headers.util.js';
 
 @Injectable()
 export class SystemAdminGuard implements CanActivate {

@@ -6,7 +6,26 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
-### 1. Permission Caching Architecture
+### 1. PII Cleanup Job for Sessions
+
+**Location**: `packages/database/src/schema/identity.ts` & `apps/api/src/modules/background`  
+**Added**: 2026-03-06  
+**Impact**: Compliance, Security, Data Privacy  
+**Effort**: Medium (1-2 days)
+
+**Current State**:
+
+- The `session` table currently exposes raw `ipAddress` and `userAgent` fields indefinitely.
+- There is no automated cleanup or anonymization of this Personally Identifiable Information (PII).
+
+**Recommended Solution**:
+
+- Update the schema with `anonymizeIp` and `anonymizeUserAgent` helpers to hash/truncate data before insert.
+- Create a `background` (or `jobs`) module in `apps/api` using `@nestjs/schedule`.
+- Implement `runPIICleanup` to run daily, finding sessions older than 30 days and anonymizing their PII, emitting audit logs.
+- Add a Drizzle migration to backfill and anonymize existing old sessions.
+
+### 2. Permission Caching Architecture
 
 **Location**: `apps/web/src/app/providers/auth-provider.ts`  
 **Added**: 2026-02-12  

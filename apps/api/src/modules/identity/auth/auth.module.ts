@@ -1,12 +1,12 @@
 import { forwardRef, Module, Global } from '@nestjs/common';
-import { SystemAdminGuard } from './system-admin.guard';
+import { SystemAdminGuard } from './system-admin.guard.js';
 import { AuthModule } from '@nexiom/auth';
-import { PlatformGuard } from './platform.guard';
-import { EmailModule } from '../../email/email.module';
-import { AuthController } from './auth.controller';
-import { TenantsModule } from '../tenants/tenants.module';
-import { DbModule } from '../../../db/db.module';
-import { InvitationsModule } from '../invitations/invitations.module';
+import { PlatformGuard } from './platform.guard.js';
+import { EmailModule } from '../../email/email.module.js';
+import { AuthController } from './auth.controller.js';
+import { TenantsModule } from '../tenants/tenants.module.js';
+import { DbModule } from '../../../db/db.module.js';
+import { InvitationsModule } from '../invitations/invitations.module.js';
 
 @Global()
 @Module({

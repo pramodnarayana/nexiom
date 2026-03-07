@@ -1,12 +1,12 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Logger } from "@nestjs/common";
 import { v4 as uuidv4 } from "uuid";
-import * as schema from "../schema";
+import * as schema from "../schema.js";
 import {
   ALL_PERMISSIONS,
   isSystemPermission,
   PermissionType,
-} from "../constants";
+} from "../constants.js";
 import { inArray } from "drizzle-orm";
 
 export interface RbacConfig {

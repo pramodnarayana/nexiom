@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
-import { runPIICleanup } from "./pii-cleanup";
+import { runPIICleanup } from "./pii-cleanup.js";
 import { Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema";
+import * as schema from "../schema.js";
 
 const mkDb = () => {
   const updateMock = vi.fn();

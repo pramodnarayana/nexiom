@@ -1,6 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { AUTH_PROVIDER, IAuthProvider, Invitation } from '@nexiom/identity';
-import { CreateInvitation } from './invitations.validation';
+import { AUTH_PROVIDER, Invitation } from '@nexiom/identity';
+import type { IAuthProvider } from '@nexiom/identity';
+import { CreateInvitation } from './invitations.validation.js';
 
 @Injectable()
 export class InvitationsService {

@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { organization } from './identity';
+import { organization } from './identity.js';
 
 // Auth type enum — matches Activepieces' AppConnectionType pattern
 export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);

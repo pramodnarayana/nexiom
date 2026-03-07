@@ -6,7 +6,7 @@ import * as path from 'node:path';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { DatabaseManager } from './database-manager';
+import { DatabaseManager } from './database-manager.js';
 
 const COMMANDS = [
   'drop',

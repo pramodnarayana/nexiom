@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TriggerExecutorService } from './trigger-executor.service';
+import { TriggerExecutorService } from './trigger-executor.service.js';
 import { TriggerStrategy } from '@nexiom/connectors';
 import type { Trigger } from '@nexiom/connectors';
 

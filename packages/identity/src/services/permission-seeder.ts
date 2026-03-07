@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "../schema";
-import { IDENTITY_OPTIONS, IDENTITY_DB } from "../constants";
-import type { IdentityModuleOptions } from "../identity.module";
-import { seedSystemRbac } from "../utils/rbac-seeding";
+import * as schema from "../schema.js";
+import { IDENTITY_OPTIONS, IDENTITY_DB } from "../constants.js";
+import type { IdentityModuleOptions } from "../identity.module.js";
+import { seedSystemRbac } from "../utils/rbac-seeding.js";
 
 @Injectable()
 export class PermissionSeeder implements OnModuleInit {

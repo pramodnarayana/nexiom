@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { SystemAdminGuard } from './system-admin.guard';
+import { SystemAdminGuard } from './system-admin.guard.js';
 import { AuthService } from '@nexiom/auth';
 import {
   ExecutionContext,

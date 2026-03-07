@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PieceRegistryService } from './piece-registry.service';
+import { PieceRegistryService } from './piece-registry.service.js';
 
 describe('PieceRegistryService', () => {
   let service: PieceRegistryService;

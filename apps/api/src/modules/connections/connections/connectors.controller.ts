@@ -15,15 +15,15 @@ import {
   Param,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
 } from '@nexiom/connectors';
-import { ConnectorsService } from '../connectors.service';
-import { OauthStateService } from '../oauth-state.service';
+import { ConnectorsService } from '../connectors.service.js';
+import { OauthStateService } from '../oauth-state.service.js';
 import {
   appConnections,
   AppConnectionStatus,

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter";
-import * as schema from "../schema";
+import { DrizzlePermissionAdapter } from "./drizzle-permission.adapter.js";
+import * as schema from "../schema.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import type { User } from "../interfaces";
-import { getSystemTenantId } from "../constants";
+import type { User } from "../interfaces/index.js";
+import { getSystemTenantId } from "../constants.js";
 
 vi.mock("../constants", async () => {
   return {

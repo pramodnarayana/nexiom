@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RolesController } from './roles.controller';
+import { RolesController } from './roles.controller.js';
 import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
 import {
   AuthGuard,

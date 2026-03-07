@@ -1,6 +1,6 @@
 import { Global, Module, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 /** Injection token for the single shared Redis client across the entire application. */
 export const REDIS_CLIENT = 'REDIS_CLIENT';

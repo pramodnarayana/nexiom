@@ -5,6 +5,7 @@
   "entryFile": "main",
   "compilerOptions": {
     "deleteOutDir": true,
-    "webpack": true
+    "builder": "swc",
+    "typeCheck": true
   }
 }

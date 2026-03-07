@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { SystemAdminController } from './system-admin.controller';
+import { SystemAdminController } from './system-admin.controller.js';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
@@ -11,14 +11,14 @@ import {
   getRequiredAdminRoleId,
   getRequiredOwnerRoleId,
   getRequiredSystemTenantId,
-} from '../../../constants';
-import { SystemAdminGuard } from '../auth/system-admin.guard';
+} from '../../../constants.js';
+import { SystemAdminGuard } from '../auth/system-admin.guard.js';
 import {
   AuthGuard,
   PermissionsGuard,
   type RequestAuthContext,
 } from '@nexiom/auth';
-import { PlatformGuard } from '../auth/platform.guard';
+import { PlatformGuard } from '../auth/platform.guard.js';
 
 vi.mock('../../../constants', () => ({
   getRequiredAdminRoleId: vi.fn(() => 'admin-role-id'),

@@ -6,8 +6,8 @@ import {
   TriggerExecutorService,
   type WebhookRunParams,
   type TriggerRunParams,
-} from './trigger-executor.service';
-import { PieceRegistryService } from './piece-registry.service';
+} from './trigger-executor.service.js';
+import { PieceRegistryService } from './piece-registry.service.js';
 
 const MAX_ATTEMPTS = 3;
 

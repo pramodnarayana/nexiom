@@ -11,8 +11,9 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard, PermissionsGuard, RequirePermission } from '@nexiom/auth';
-import { UpdateTenantStatus, UpdateTenantDto } from './tenants.validation';
-import { TENANT_PROVIDER, ITenantProvider } from '@nexiom/identity';
+import { UpdateTenantStatus, UpdateTenantDto } from './tenants.validation.js';
+import { TENANT_PROVIDER } from '@nexiom/identity';
+import type { ITenantProvider } from '@nexiom/identity';
 
 @Controller('tenants')
 @UseGuards(AuthGuard, PermissionsGuard)

@@ -1,11 +1,11 @@
-import { validateFrontendUrl } from "./utils/url.util";
+import { validateFrontendUrl } from "./utils/url.util.js";
 import { organization, admin } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { createAuthMiddleware } from "better-auth/api";
-import type { ITenantProvider } from "./interfaces/tenant-provider.interface";
-import type { IEmailProvider } from "./interfaces/email-provider.interface";
-import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface";
-import type { User as UserInterface } from "./interfaces";
+import type { ITenantProvider } from "./interfaces/tenant-provider.interface.js";
+import type { IEmailProvider } from "./interfaces/email-provider.interface.js";
+import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface.js";
+import type { User as UserInterface } from "./interfaces/index.js";
 // ... (existing imports)
 
 import type { HookEndpointContext } from "better-auth";

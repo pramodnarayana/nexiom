@@ -21,8 +21,9 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module';
+import { SchemaPlan } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import * as crypto from 'node:crypto';
 
 interface OAuthProviderConfig {

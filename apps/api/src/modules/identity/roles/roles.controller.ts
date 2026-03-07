@@ -17,16 +17,15 @@ import {
   PermissionsGuard,
   RequirePermission,
   AuthContext,
-  RequestAuthContext,
+  type RequestAuthContext,
 } from '@nexiom/auth';
-import {
-  ROLE_PROVIDER,
-  RoleScope,
+import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
+import type {
+  IRoleProvider,
   CreateRoleInput,
   UpdateRoleInput,
 } from '@nexiom/identity';
 import { filterRolesForRequester } from '@nexiom/identity/utils/role-visibility';
-import type { IRoleProvider } from '@nexiom/identity';
 
 @Controller('roles')
 @UseGuards(AuthGuard, PermissionsGuard)

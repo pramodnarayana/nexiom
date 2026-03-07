@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
-import { appConnections } from './tenant';
+import { appConnections } from './tenant.js';
 
 /**
  * THE INFRASTRUCTURE REGISTRY

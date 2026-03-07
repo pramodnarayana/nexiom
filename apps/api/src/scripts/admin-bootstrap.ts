@@ -5,18 +5,17 @@ import * as path from 'node:path';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
-import * as schema from '../db/schema';
+import * as schema from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getRequiredOwnerRoleId,
   getRequiredAdminRoleId,
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
-} from '../constants';
+} from '../constants.js';
 import { seedSystemRbac } from '@nexiom/identity/utils/rbac-seeding';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';

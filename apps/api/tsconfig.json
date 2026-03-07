@@ -3,8 +3,8 @@
     "types": [
       "vitest/globals"
     ],
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,
@@ -23,15 +23,7 @@
     "noImplicitAny": true,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "noUnusedParameters": true,
-    "paths": {
-      "@nexiom/identity": [
-        "../../packages/identity/src"
-      ],
-      "@nexiom/identity/*": [
-        "../../packages/identity/src/*"
-      ]
-    }
+    "noUnusedParameters": true
   },
   "exclude": [
     "vitest.config.mts",

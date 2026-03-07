@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseManager } from './database-manager';
+import { DatabaseManager } from './database-manager.js';
 import { execSync } from 'node:child_process';
 
 // Hoisted mocks for dynamic imports
@@ -238,7 +238,7 @@ describe('DatabaseManager', () => {
       });
 
       // We need to import schema to compare against
-      const { permission, role, rolePermission } = await import('./schema');
+      const { permission, role, rolePermission } = await import('./schema.js');
 
       await manager.seedAbac();
 

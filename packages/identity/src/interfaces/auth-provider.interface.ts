@@ -1,5 +1,5 @@
-import type { AuthResult, Invitation, Session, User } from "./types";
-import type { CreateUserInput } from "./user-provider.interface";
+import type { AuthResult, Invitation, Session, User } from "./types.js";
+import type { CreateUserInput } from "./user-provider.interface.js";
 
 export interface LoginCredentials {
   email: string;

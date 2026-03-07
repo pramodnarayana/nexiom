@@ -2,11 +2,12 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { Trigger, TriggerContext } from '@nexiom/connectors';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DatabaseManager, SchemaPlan } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module';
+import { SchemaPlan } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';
-import { RedisBackedTriggerStore } from './redis-trigger-store';
+import { RedisBackedTriggerStore } from './redis-trigger-store.js';
 
 /**
  * Extracts a cursor value from a trigger record.

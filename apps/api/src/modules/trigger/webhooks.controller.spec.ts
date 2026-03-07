@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { WebhooksController } from './webhooks.controller';
+import { WebhooksController } from './webhooks.controller.js';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { TriggerStrategy } from '@nexiom/connectors';
-import type { PieceRegistryService } from './piece-registry.service';
-import type { TriggerExecutorService } from './trigger-executor.service';
+import type { PieceRegistryService } from './piece-registry.service.js';
+import type { TriggerExecutorService } from './trigger-executor.service.js';
 
 function makeDb(row: unknown = null) {
   return {

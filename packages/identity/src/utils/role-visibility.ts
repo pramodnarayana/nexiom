@@ -1,4 +1,4 @@
-import { Role } from "../constants";
+import { Role } from "../constants.js";
 
 /**
  * Filter roles based on the requester's role to prevent privilege escalation.

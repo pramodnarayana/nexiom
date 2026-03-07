@@ -15,19 +15,21 @@ import {
 } from '@nestjs/common';
 import {
   AUTH_PROVIDER,
-  IAuthProvider,
   USER_PROVIDER,
-  IUserProvider,
   TENANT_PROVIDER,
-  ITenantProvider,
   ROLE_PROVIDER,
+} from '@nexiom/identity';
+import type {
+  IAuthProvider,
+  IUserProvider,
+  ITenantProvider,
   IRoleProvider,
 } from '@nexiom/identity';
-import { AuthContext, RequestAuthContext } from '@nexiom/auth';
+import { AuthContext, type RequestAuthContext } from '@nexiom/auth';
 import {
   getRequiredAdminRoleId,
   getRequiredSystemTenantId,
-} from '../../../constants';
+} from '../../../constants.js';
 import {
   CreateTenantValidation,
   UpdateTenantValidation,
@@ -35,9 +37,9 @@ import {
   CreateUserDto,
   UpdateUserValidation,
   buildCreateSystemInvitationSchema,
-  CreateSystemInvitationDto,
-} from './system-admin.validation';
-import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe';
+} from './system-admin.validation.js';
+import type { CreateSystemInvitationDto } from './system-admin.validation.js';
+import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe.js';
 import { RequirePermission, PermissionsGuard, AuthGuard } from '@nexiom/auth';
 
 @Controller('admin')

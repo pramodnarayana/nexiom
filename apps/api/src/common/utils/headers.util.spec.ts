@@ -1,4 +1,4 @@
-import { toWebHeaders } from './headers.util';
+import { toWebHeaders } from './headers.util.js';
 
 describe('headers.util', () => {
   describe('toWebHeaders', () => {

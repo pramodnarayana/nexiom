@@ -1,4 +1,4 @@
-import type { Tenant } from "./types";
+import type { Tenant } from "./types.js";
 
 export interface UpdateTenantInput {
   name?: string;

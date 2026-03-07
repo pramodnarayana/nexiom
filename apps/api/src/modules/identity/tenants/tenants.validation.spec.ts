@@ -1,7 +1,7 @@
 import {
   UpdateTenantStatusSchema,
   UpdateTenantStatus,
-} from './tenants.validation';
+} from './tenants.validation.js';
 
 describe('Tenants Validation', () => {
   describe('UpdateTenantStatusSchema', () => {

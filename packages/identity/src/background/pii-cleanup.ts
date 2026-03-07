@@ -1,7 +1,7 @@
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Logger } from "@nestjs/common";
 import { lt, and, isNotNull, or, inArray } from "drizzle-orm";
-import * as schema from "../schema";
+import * as schema from "../schema.js";
 
 /**
  * Anonymizes PII (IP Address, User Agent) from old sessions.

@@ -5,11 +5,11 @@ import {
   UnauthorizedException,
   Logger,
 } from "@nestjs/common";
-import { AuthService } from "../services/auth.service";
+import { AuthService } from "../services/auth.service.js";
 
 import { Request } from "express";
-import { toWebHeaders } from "../utils/headers.util";
-import { RequestAuthContext } from "../decorators/auth-context.decorator";
+import { toWebHeaders } from "../utils/headers.util.js";
+import { RequestAuthContext } from "../decorators/auth-context.decorator.js";
 
 @Injectable()
 export class AuthGuard implements CanActivate {

@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { InvitationsService } from './invitations.service';
+import { InvitationsService } from './invitations.service.js';
 import { AUTH_PROVIDER, IAuthProvider } from '@nexiom/identity';
 
 describe('InvitationsService', () => {

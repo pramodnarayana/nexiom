@@ -3,7 +3,7 @@ import {
   UpdateTenantSchema,
   CreateUserSchema,
   UpdateUserSchema,
-} from './system-admin.validation';
+} from './system-admin.validation.js';
 
 describe('SystemAdminValidation', () => {
   describe('CreateTenantSchema', () => {

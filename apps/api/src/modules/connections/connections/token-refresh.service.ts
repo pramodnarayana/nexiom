@@ -13,7 +13,7 @@ import {
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, desc } from 'drizzle-orm';
-import type { ConnectionValueBlob } from '../connectors.service';
+import type { ConnectionValueBlob } from '../connectors.service.js';
 
 @Injectable()
 export class DefaultOAuthRefreshClient implements OAuthRefreshClient {

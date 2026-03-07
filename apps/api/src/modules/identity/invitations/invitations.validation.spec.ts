@@ -1,7 +1,7 @@
 import {
   CreateInvitationSchema,
   AcceptInvitationSchema,
-} from './invitations.validation';
+} from './invitations.validation.js';
 
 describe('InvitationsValidation', () => {
   describe('CreateInvitationSchema', () => {
