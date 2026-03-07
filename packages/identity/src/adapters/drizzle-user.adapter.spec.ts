@@ -480,11 +480,9 @@ describe("DrizzleUserAdapter", () => {
     });
 
     await adapter.findAll({ tenantId: "t1" });
-
     expect(dataChain.innerJoin).toHaveBeenCalled();
-
     expect(countChain.innerJoin).toHaveBeenCalled();
-
     expect(dataChain.where).toHaveBeenCalled();
+    expect(countChain.where).toHaveBeenCalled();
   });
 });
