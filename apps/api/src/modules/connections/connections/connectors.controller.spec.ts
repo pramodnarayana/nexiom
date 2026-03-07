@@ -14,6 +14,10 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import {
+  PieceRegistryService,
+  PIECES,
+} from '../../trigger/piece-registry.service.js';
+import {
   describe,
   it,
   expect,
@@ -93,6 +97,9 @@ describe('ConnectorsController', () => {
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: 'AuthService', useValue: {} },
+        // PieceRegistryService and its PIECES token
+        { provide: PIECES, useValue: [] },
+        PieceRegistryService,
       ],
     })
       .overrideGuard(AuthGuard)
@@ -207,7 +214,7 @@ describe('ConnectorsController', () => {
       const result = controller.getProviders();
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         name: 'salesforce',
         displayName: 'Salesforce',
         description: 'CRM platform',

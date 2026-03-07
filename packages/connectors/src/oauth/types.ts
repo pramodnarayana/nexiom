@@ -8,6 +8,8 @@ interface BaseProviderDefinition {
     description: string;
     logoUrl: string;
     category: string;
+    /** Dynamically exposed JSON Schema (e.g. piece auth properties) */
+    uiSchema?: Record<string, any>;
 }
 
 export interface ProviderEnvironment {

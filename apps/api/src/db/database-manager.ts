@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema.js';
@@ -193,7 +194,12 @@ export class DatabaseManager {
    */
   migrate(): void {
     console.log('🔨 Running migrations...');
-    const cwd = path.resolve(__dirname, '../..');
+    let cwd: string;
+    if (typeof __dirname !== 'undefined') {
+      cwd = path.resolve(__dirname, '../..');
+    } else {
+      cwd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    }
     // Drizzle Kit is a CLI tool, so we still use execSync here (local execution, not docker)
     execSync('pnpm drizzle-kit migrate', {
       stdio: 'inherit',
@@ -340,6 +346,26 @@ export class DatabaseManager {
       } else {
         console.log('  ⚠️  Skipping bootstrap user: Missing env vars');
       }
+
+      // 4. Seed piece registry
+      await db
+        .insert(schema.pieces)
+        .values([
+          {
+            name: 'salesforce',
+            packageName: '@nexiom/piece-salesforce',
+            version: '0.5.1',
+            enabled: true,
+          },
+          {
+            name: 'quickbooks',
+            packageName: '@nexiom/piece-quickbooks',
+            version: '0.1.3',
+            enabled: true,
+          },
+        ])
+        .onConflictDoNothing();
+      console.log('  ✓ Piece registry seeded (salesforce, quickbooks)');
 
       console.log('  ✓ Seeding complete');
     } finally {

@@ -1,6 +1,5 @@
 import { ProviderDefinition } from '../types.js';
 import { AppCredentialError } from '../token-manager.service.js';
-
 /**
  * Salesforce OAuth2 auth config.
  * Source: activepieces-reference/packages/pieces/community/salesforce/src/index.ts

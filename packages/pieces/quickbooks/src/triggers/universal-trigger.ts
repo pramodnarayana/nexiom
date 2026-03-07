@@ -1,5 +1,5 @@
 import { createTrigger, TriggerStrategy, type TriggerContext, Property } from '@nexiom/connectors/framework';
-import { quickbooksAuth } from '../index.js';
+import { quickbooksAuth } from '../lib/auth.js';
 import { QuickBooksAuth, runQuickBooksQuery } from './quickbooks-polling.helper.js';
 import { optimizationService } from '@nexiom/connectors/intelligence';
 

@@ -1,6 +1,10 @@
 /* istanbul ignore file */
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });

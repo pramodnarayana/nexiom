@@ -274,6 +274,49 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
+### 4. Marketplace Piece Registry (Tier 4B)
+
+**Location**: `apps/api/src/modules/pieces/piece-loader.service.ts`
+**Added**: 2026-03-07
+**Impact**: Deployment Flexibility, Marketplace Readiness
+**Effort**: High (1-2 sprints)
+
+**Current State**:
+
+- The engine currently uses a Tier 4A database-driven piece registry. It dynamically resolves pieces from the `pieces` Drizzle table, but assumes the packages (`@nexiom/piece-*`) are already installed in the monorepo's `node_modules`.
+- **Note on Terminology**:
+  - **Connecting**: Tenants browse the "Marketplace Catalog" in their UI and click "Connect" to authorize a piece (e.g., Salesforce). This creates an `app_connection`. This requires zero platform changes.
+  - **Installing**: Adding a *brand new, never-before-seen* integration to the catalog itself (e.g., adding Zendesk tomorrow).
+- To allow the Nexiom platform administration team to **install** new integrations to the global catalog on the fly without requiring a code deployment or Node.js server restart, the system must dynamically `npm install` packages at runtime.
+
+**Recommended Solution**:
+
+1. **Dynamic Install**: Update `PieceLoaderService` to shell out to `npm install @nexiom/piece-X@version --prefix ./plugins` before calling `import()`.
+2. **Security Allowlist**: Validate package names against a signed registry to prevent malicious arbitrary code execution.
+3. **Sandboxing**: A bug in a dynamically loaded piece can crash the main API process. True isolation requires running piece execution in child processes (e.g., `worker_threads`).
+4. **Persistent Storage**: Ensure the `./plugins` directory lives on a persistent volume (e.g., EFS) so container restarts don't trigger mass re-installs and slow cold starts.
+
+---
+
+### 5. Frontend UI Unification (Legacy Provider Registry Deprecation)
+
+**Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`, `apps/web/src/modules/connections/components/DynamicAuthForm.tsx`
+**Added**: 2026-03-07
+**Impact**: Unified generic UI, Developer Experience
+**Effort**: Medium (About 15 files)
+
+**Current State**:
+
+- The frontend UI uses a hybrid approach to render connection forms: it relies partially on legacy hardcoded metadata from `ProviderRegistryService` (which powers the "Environment" dropdown for Salesforce) and partially on the new `PieceRegistryService` for dynamic vendor parameters.
+- This creates divergent code paths and prevents the UI from being 100% agnostic to new integration types.
+
+**Recommended Solution**:
+
+1. **API Modernization**: Fully delete `ProviderRegistryService`. Update `connectors.controller.ts` and `connectors.service.ts` to map `tokenUrl`, `authUrl`, and `clientId` dynamically using ONLY the `PieceAuth` definitions from `PieceRegistryService`.
+2. **Frontend Simplification**: Remove the hardcoded `env` fields from `DynamicAuthForm.tsx` and `oauth-state.service.ts`. The environment selector (or any custom field) should purely render as generic `uiSchema` passed straight through to `vendorParams`.
+
+---
+
 ### Completed Items
 
 *Items resolved will be moved here with completion date*

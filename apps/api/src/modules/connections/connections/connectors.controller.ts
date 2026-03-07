@@ -21,6 +21,7 @@ import {
   ProviderRegistryService,
   EncryptionService,
   AppCredentialError,
+  AnyProperty,
 } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
@@ -31,6 +32,60 @@ import {
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, count, desc } from 'drizzle-orm';
+import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
+function assertPropValue(
+  key: string,
+  val: string | undefined,
+  prop: AnyProperty,
+): void {
+  if (prop.required && (val === undefined || val === null || val === '')) {
+    throw new BadRequestException(`Missing required vendor parameter: ${key}`);
+  }
+  if (val === undefined || val === null || val === '') return;
+  if (String(prop.type) === 'NUMBER' && Number.isNaN(Number(val))) {
+    throw new BadRequestException(`Parameter ${key} must be a number`);
+  }
+  const BOOLEAN_VALUES = new Set(['true', 'false', '1', '0']);
+  if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
+    throw new BadRequestException(`Parameter ${key} must be a boolean`);
+  }
+}
+
+function validateVendorParams(
+  props: Record<string, AnyProperty> | undefined,
+  vendorParams: Record<string, string> | undefined,
+): void {
+  if (!props) return;
+  const params = vendorParams ?? {};
+  for (const [key, prop] of Object.entries(props)) {
+    assertPropValue(key, params[key], prop);
+  }
+}
+
+/** Parses expires_in from a token response, returning seconds (default 3600). */
+function parseExpiresIn(expiresIn: unknown): number {
+  const DEFAULT = 3600;
+  if (typeof expiresIn === 'number' && expiresIn > 0) return expiresIn;
+  if (typeof expiresIn === 'string') {
+    const parsed = Number.parseInt(expiresIn, 10);
+    if (parsed > 0) return parsed;
+  }
+  return DEFAULT;
+}
+
+/** Extracts and validates the refresh_token from a token response. */
+function extractRefreshToken(
+  tokenResponse: Record<string, unknown>,
+): string | undefined {
+  const rt = tokenResponse.refresh_token;
+  if (rt === undefined) return undefined;
+  if (typeof rt !== 'string' || !rt.trim()) {
+    throw new BadRequestException(
+      'Invalid refresh_token format returned from vendor',
+    );
+  }
+  return rt;
+}
 
 /** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
 function toKebabSlug(displayName: string): string {
@@ -39,6 +94,46 @@ function toKebabSlug(displayName: string): string {
     .trim()
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/^-+|-+$/g, '');
+}
+const MAX_DISPLAY_NAME_LENGTH = 100;
+const MAX_EXTERNAL_ID_LENGTH = 100;
+
+/** Validates required fields of the oauth-exchange body. Returns derived `trimmedDisplayName` and `externalId`. */
+function validateExchangeBody(
+  providerName: string,
+  code: string,
+  clientId: string,
+  clientSecret: string,
+  state: string,
+  displayName: string,
+): { trimmedDisplayName: string; externalId: string } {
+  if (!providerName || !code || !clientId || !clientSecret || !state) {
+    throw new BadRequestException('Missing required fields inside body');
+  }
+  if (!/^[a-z0-9-]+$/.test(providerName)) {
+    throw new BadRequestException('Invalid provider name format');
+  }
+  const trimmedDisplayName = displayName?.trim();
+  if (!trimmedDisplayName) {
+    throw new BadRequestException('displayName is required');
+  }
+  if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+    throw new BadRequestException(
+      `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
+    );
+  }
+  const externalId = toKebabSlug(`${providerName}-${trimmedDisplayName}`);
+  if (!externalId) {
+    throw new BadRequestException(
+      'displayName must contain at least one alphanumeric character',
+    );
+  }
+  if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
+    throw new BadRequestException(
+      `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
+    );
+  }
+  return { trimmedDisplayName, externalId };
 }
 
 @Controller('connectors')
@@ -49,6 +144,7 @@ export class ConnectorsController {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly providerRegistry: ProviderRegistryService,
+    private readonly pieceRegistry: PieceRegistryService,
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
     private readonly crypto: EncryptionService,
@@ -66,6 +162,13 @@ export class ConnectorsController {
         authType: p.authType,
         category: p.category,
         environments: 'environments' in p ? p.environments : undefined,
+        uiSchema:
+          p.uiSchema ||
+          (
+            this.pieceRegistry.getPiece(p.name)?.auth as
+              | { props?: Record<string, unknown> }
+              | undefined
+          )?.props,
       }));
     } catch (error) {
       if (error instanceof Error) {
@@ -325,47 +428,16 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { env, displayName, state, vendorParams, ...restOfBody } = body;
+    const { env, vendorParams, ...restOfBody } = body;
 
-    if (
-      !restOfBody.providerName ||
-      !restOfBody.code ||
-      !restOfBody.clientId ||
-      !restOfBody.clientSecret ||
-      !state
-    ) {
-      throw new BadRequestException('Missing required fields inside body');
-    }
-
-    const trimmedDisplayName = displayName?.trim();
-    if (!trimmedDisplayName || trimmedDisplayName.length === 0) {
-      throw new BadRequestException('displayName is required');
-    }
-    const MAX_DISPLAY_NAME_LENGTH = 100;
-    if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
-      throw new BadRequestException(
-        `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
-      );
-    }
-
-    const MAX_EXTERNAL_ID_LENGTH = 100;
-    const externalId = toKebabSlug(
-      `${restOfBody.providerName}-${trimmedDisplayName}`,
+    const { trimmedDisplayName, externalId } = validateExchangeBody(
+      restOfBody.providerName,
+      restOfBody.code,
+      restOfBody.clientId,
+      restOfBody.clientSecret,
+      body.state,
+      body.displayName,
     );
-    if (!externalId) {
-      throw new BadRequestException(
-        'displayName must contain at least one alphanumeric character',
-      );
-    }
-    if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
-      throw new BadRequestException(
-        `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
-      );
-    }
-
-    if (!/^[a-z0-9-]+$/.test(restOfBody.providerName)) {
-      throw new BadRequestException('Invalid provider name format');
-    }
 
     const providerData = this.providerRegistry.getProvider(
       restOfBody.providerName,
@@ -374,15 +446,20 @@ export class ConnectorsController {
       throw new BadRequestException('Invalid provider name');
     }
 
-    // Validate the highly-critical OAuth state to prevent CSRF
     const decodedState = this.oauthStateService.verifyState(
-      state,
+      body.state,
       restOfBody.providerName,
     );
     if (decodedState.tenantId !== tenantId) {
       throw new BadRequestException(
         'State token does not belong to this tenant',
       );
+    }
+
+    // STRICT VALIDATION: Ensure vendor params match Piece Schema
+    const piece = this.pieceRegistry.getPiece(restOfBody.providerName);
+    if (piece?.auth && 'props' in piece.auth) {
+      validateVendorParams(piece.auth.props, vendorParams);
     }
 
     // Exchange the code for actual OAuth tokens using user-provided credentials
@@ -418,18 +495,7 @@ export class ConnectorsController {
       );
     }
 
-    let validRefreshToken: string | undefined;
-    if (tokenResponse.refresh_token !== undefined) {
-      if (
-        typeof tokenResponse.refresh_token !== 'string' ||
-        !tokenResponse.refresh_token.trim()
-      ) {
-        throw new BadRequestException(
-          'Invalid refresh_token format returned from vendor',
-        );
-      }
-      validRefreshToken = tokenResponse.refresh_token;
-    }
+    const validRefreshToken = extractRefreshToken(tokenResponse);
 
     // Build the Activepieces-style encrypted value blob:
     // Everything sensitive in one encrypted payload — clientId, secret, tokens, vendor-specific data
@@ -438,10 +504,7 @@ export class ConnectorsController {
       clientSecret: restOfBody.clientSecret,
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
-      data: {
-        ...vendorParams,
-        ...tokenResponse,
-      }, // vendor-specific: instance_url, realmId, id_token, etc.
+      data: { ...vendorParams, ...tokenResponse }, // vendor-specific: instance_url, realmId, id_token, etc.
     };
 
     let encryptedValue: string;
@@ -455,18 +518,7 @@ export class ConnectorsController {
       throw new InternalServerErrorException('Failed to encrypt credentials');
     }
 
-    let parsedExpiresIn = 3600; // default 1 hour
-    if (
-      typeof tokenResponse.expires_in === 'number' &&
-      tokenResponse.expires_in > 0
-    ) {
-      parsedExpiresIn = tokenResponse.expires_in;
-    } else if (
-      typeof tokenResponse.expires_in === 'string' &&
-      Number.parseInt(tokenResponse.expires_in, 10) > 0
-    ) {
-      parsedExpiresIn = Number.parseInt(tokenResponse.expires_in, 10);
-    }
+    const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
 
     const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
     const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);

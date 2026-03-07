@@ -3,8 +3,9 @@ import { Pool } from 'pg';
 import * as tenantSchema from './schema/tenant.js';
 import * as registrySchema from './schema/storage_registry.js';
 import * as profileSchema from './schema/connector_object_profiles.js';
+import * as piecesSchema from './schema/pieces.js';
 
-const schemaBundle = { ...tenantSchema, ...registrySchema, ...profileSchema };
+const schemaBundle = { ...tenantSchema, ...registrySchema, ...profileSchema, ...piecesSchema };
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;

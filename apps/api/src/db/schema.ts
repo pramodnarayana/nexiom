@@ -41,3 +41,6 @@ export type {
 
 // Engine schema — connection table (single-table Activepieces model)
 export { appConnections } from '@nexiom/database';
+
+// Piece registry
+export { pieces } from '@nexiom/database';
