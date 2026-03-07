@@ -17,6 +17,7 @@ export * from './oauth/token-manager.service.js';
 export * from './oauth/provider-registry.js';
 
 // Crypto utilities
+export * from './crypto/encryption.interface.js';
 export * from './crypto/encryption.service.js';
 
 // Framework — Piece, Action, Trigger, Auth, Property definitions

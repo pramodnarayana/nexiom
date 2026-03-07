@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
 import * as schema from "../schema.js";
@@ -147,6 +146,7 @@ describe("DrizzleUserAdapter", () => {
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "newpw" } as UpdateUserInput);
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(auth.setPassword).toHaveBeenCalledWith("u1", "newpw");
 
     // field update path
@@ -169,6 +169,7 @@ describe("DrizzleUserAdapter", () => {
     db.update.mockClear();
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "pw" } as UpdateUserInput);
+
     expect(db.update).not.toHaveBeenCalled();
   });
 
@@ -190,6 +191,7 @@ describe("DrizzleUserAdapter", () => {
     });
 
     await adapter.delete("u1");
+
     expect(db.transaction).toHaveBeenCalled();
     expect(txCalls.length).toBeGreaterThan(0);
   });
@@ -372,9 +374,11 @@ describe("DrizzleUserAdapter", () => {
     await adapter.forceVerifyEmail("u1");
 
     expect(db.update).toHaveBeenCalledWith(schema.user);
+
     expect(db.set).toHaveBeenCalledWith(
       expect.objectContaining({ emailVerified: true }),
     );
+
     expect(db.where).toHaveBeenCalled();
   });
 
@@ -393,12 +397,14 @@ describe("DrizzleUserAdapter", () => {
     // 1. Global count
     const total = await adapter.count();
     expect(total).toBe(5);
+
     expect(db.innerJoin).not.toHaveBeenCalled();
 
     // 2. Tenant count
     db.innerJoin.mockClear();
     const totalTenant = await adapter.count({ tenantId: "t1" });
     expect(totalTenant).toBe(5);
+
     expect(db.innerJoin).toHaveBeenCalled();
   });
 
@@ -430,6 +436,7 @@ describe("DrizzleUserAdapter", () => {
     await adapter.findAll({ search: "test", limit: 10 });
 
     expect(dataChain.where).toHaveBeenCalled();
+
     expect(countChain.where).toHaveBeenCalled();
   });
 
@@ -468,7 +475,9 @@ describe("DrizzleUserAdapter", () => {
     await adapter.findAll({ tenantId: "t1" });
 
     expect(dataChain.innerJoin).toHaveBeenCalled();
+
     expect(countChain.innerJoin).toHaveBeenCalled();
+
     expect(dataChain.where).toHaveBeenCalled();
   });
 });
