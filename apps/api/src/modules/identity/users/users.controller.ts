@@ -13,8 +13,8 @@ import {
   Delete,
   Logger,
 } from '@nestjs/common';
-import { USER_PROVIDER, TENANT_PROVIDER, User } from '@nexiom/identity';
-import type { ITenantProvider, IUserProvider } from '@nexiom/identity';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import type { ITenantProvider, IUserProvider, User } from '@nexiom/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { CreateUser } from './users.validation.js';
 import { Request } from 'express';
@@ -132,7 +132,7 @@ export class UsersController {
         id: inv.id, // Use invitation ID temporarily
         email: inv.email,
         name: '', // Name might not be known yet
-        role: inv.role,
+        role: inv.role ?? 'member',
         status: 'pending', // Explicit status for UI (vs 'active')
         emailVerified: false,
         createdAt: inv.createdAt,

@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TokenManagerService } from '../oauth/token-manager.service.js';
+import { EncryptionService } from './encryption.interface.js';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 @Injectable()
-export class AesEncryptionService {
+export class AesEncryptionService extends EncryptionService {
     private readonly logger = new Logger(AesEncryptionService.name);
     private readonly algorithm = 'aes-256-gcm';
     private readonly keyBuffer: Buffer;
@@ -14,6 +14,7 @@ export class AesEncryptionService {
      * Requires ENCRYPTION_KEY to be provided and exactly 32 bytes (raw string)
      */
     constructor(private readonly configService: ConfigService) {
+        super();
         const key = this.configService.get<string>('ENCRYPTION_KEY');
         if (!key) {
             throw new Error('ENCRYPTION_KEY is missing from configuration');

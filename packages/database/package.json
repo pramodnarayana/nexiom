@@ -6,18 +6,22 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./schema/identity": {
+      "types": "./dist/schema/identity.d.ts",
       "import": "./dist/schema/identity.js",
       "default": "./dist/schema/identity.js"
     },
     "./schema/tenant": {
+      "types": "./dist/schema/tenant.d.ts",
       "import": "./dist/schema/tenant.js",
       "default": "./dist/schema/tenant.js"
     },
     "./dist/schema/identity": {
+      "types": "./dist/schema/identity.d.ts",
       "import": "./dist/schema/identity.js",
       "default": "./dist/schema/identity.js"
     }

@@ -58,7 +58,7 @@ vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
   seedSystemRbac: rbacMocks.seedSystemRbac,
 }));
 
-vi.mock('../constants', () => constantMocks);
+vi.mock('../constants.js', () => constantMocks);
 
 describe('DatabaseManager', () => {
   let manager: DatabaseManager;

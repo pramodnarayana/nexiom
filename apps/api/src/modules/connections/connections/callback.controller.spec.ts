@@ -2,8 +2,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthCallbackController } from './callback.controller.js';
 import { ProviderRegistryService } from '@nexiom/connectors';
-import { Request, Response } from 'express';
-import { vi, describe, it, expect, beforeEach, Mocked } from 'vitest';
+import type { Request, Response } from 'express';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { Mocked } from 'vitest';
 import { OauthStateService } from '../oauth-state.service.js';
 import { ConfigService } from '@nestjs/config';
 

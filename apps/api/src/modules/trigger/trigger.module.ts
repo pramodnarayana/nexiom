@@ -10,7 +10,7 @@ import { WebhooksController } from './webhooks.controller.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
-import { DatabaseManager } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
 
 /**
  * Wires all trigger-related services.

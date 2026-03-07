@@ -4,11 +4,7 @@ import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
 
-// Abstract contracts — consumers must provide real implementations via DI
-export abstract class EncryptionService {
-    abstract decrypt(val: string): Promise<string>;
-    abstract encrypt(val: string): Promise<string>;
-}
+import { EncryptionService } from '../crypto/encryption.interface.js';
 
 export class OAuthRefreshError extends Error {
     constructor(message: string, public status?: number) {

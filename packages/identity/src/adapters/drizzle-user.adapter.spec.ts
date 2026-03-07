@@ -169,6 +169,7 @@ describe("DrizzleUserAdapter", () => {
     db.update.mockClear();
     db.query.user.findFirst.mockResolvedValueOnce(mkUser({ id: "u1" }));
     await adapter.update("u1", { password: "pw" } as UpdateUserInput);
+
     expect(db.update).not.toHaveBeenCalled();
   });
 
@@ -178,11 +179,11 @@ describe("DrizzleUserAdapter", () => {
     const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // Access the transaction mock to verify cascade behavior
-    const txCalls: string[] = [];
+    const txCalls: any[] = [];
     db.transaction.mockImplementation((fn: (tx: MockTx) => unknown) => {
       const tx = {
-        delete: vi.fn().mockImplementation(() => {
-          txCalls.push("delete");
+        delete: vi.fn().mockImplementation((table: any) => {
+          txCalls.push(table);
           return { where: vi.fn().mockReturnThis() };
         }),
       } as unknown as MockTx;
@@ -190,8 +191,16 @@ describe("DrizzleUserAdapter", () => {
     });
 
     await adapter.delete("u1");
+
     expect(db.transaction).toHaveBeenCalled();
-    expect(txCalls.length).toBeGreaterThan(0);
+    expect(txCalls).toHaveLength(5);
+    expect(txCalls).toEqual([
+      schema.member,
+      schema.invitation,
+      schema.session,
+      schema.account,
+      schema.user,
+    ]);
   });
 
   it("findById and findByEmail return mapped or null", async () => {
@@ -372,9 +381,11 @@ describe("DrizzleUserAdapter", () => {
     await adapter.forceVerifyEmail("u1");
 
     expect(db.update).toHaveBeenCalledWith(schema.user);
+
     expect(db.set).toHaveBeenCalledWith(
       expect.objectContaining({ emailVerified: true }),
     );
+
     expect(db.where).toHaveBeenCalled();
   });
 
@@ -393,12 +404,14 @@ describe("DrizzleUserAdapter", () => {
     // 1. Global count
     const total = await adapter.count();
     expect(total).toBe(5);
+
     expect(db.innerJoin).not.toHaveBeenCalled();
 
     // 2. Tenant count
     db.innerJoin.mockClear();
     const totalTenant = await adapter.count({ tenantId: "t1" });
     expect(totalTenant).toBe(5);
+
     expect(db.innerJoin).toHaveBeenCalled();
   });
 
@@ -430,6 +443,7 @@ describe("DrizzleUserAdapter", () => {
     await adapter.findAll({ search: "test", limit: 10 });
 
     expect(dataChain.where).toHaveBeenCalled();
+
     expect(countChain.where).toHaveBeenCalled();
   });
 
@@ -466,9 +480,9 @@ describe("DrizzleUserAdapter", () => {
     });
 
     await adapter.findAll({ tenantId: "t1" });
-
     expect(dataChain.innerJoin).toHaveBeenCalled();
     expect(countChain.innerJoin).toHaveBeenCalled();
     expect(dataChain.where).toHaveBeenCalled();
+    expect(countChain.where).toHaveBeenCalled();
   });
 });
