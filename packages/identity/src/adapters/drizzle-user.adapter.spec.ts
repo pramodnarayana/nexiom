@@ -179,11 +179,11 @@ describe("DrizzleUserAdapter", () => {
     const adapter = new DrizzleUserAdapter(db, mkOptions(), auth);
 
     // Access the transaction mock to verify cascade behavior
-    const txCalls: string[] = [];
+    const txCalls: any[] = [];
     db.transaction.mockImplementation((fn: (tx: MockTx) => unknown) => {
       const tx = {
-        delete: vi.fn().mockImplementation(() => {
-          txCalls.push("delete");
+        delete: vi.fn().mockImplementation((table: any) => {
+          txCalls.push(table);
           return { where: vi.fn().mockReturnThis() };
         }),
       } as unknown as MockTx;
@@ -193,7 +193,14 @@ describe("DrizzleUserAdapter", () => {
     await adapter.delete("u1");
 
     expect(db.transaction).toHaveBeenCalled();
-    expect(txCalls.length).toBeGreaterThan(0);
+    expect(txCalls).toHaveLength(5);
+    expect(txCalls).toEqual([
+      schema.member,
+      schema.invitation,
+      schema.session,
+      schema.account,
+      schema.user,
+    ]);
   });
 
   it("findById and findByEmail return mapped or null", async () => {
