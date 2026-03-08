@@ -26,6 +26,6 @@ export const pieces = pgTable('pieces', {
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 
-    /** Last modification time. Must be set explicitly by application code on update. */
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    /** Last modification time — set on INSERT via defaultNow(), advanced automatically on UPDATE via $onUpdate. */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 });

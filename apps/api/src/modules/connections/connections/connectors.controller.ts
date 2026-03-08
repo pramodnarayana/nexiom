@@ -54,12 +54,17 @@ function assertPropValue(
 function validateVendorParams(
   schema: Record<string, AnyProperty> | undefined,
   vendorParams: Record<string, string> | undefined,
+  fallbackSchema?: Record<string, AnyProperty>,
 ): void {
-  if (!schema) return;
+  // Use the primary schema if provided, otherwise fall back to uiSchema-derived props.
+  // This mirrors the same resolution logic used in getProviders so that
+  // vendors with only p.uiSchema are validated correctly.
+  const effectiveSchema = schema ?? fallbackSchema;
+  if (!effectiveSchema) return;
   const params = vendorParams ?? {};
 
   // Reject keys not declared in the schema — prevents undeclared data reaching the value blob.
-  const declaredKeys = new Set(Object.keys(schema));
+  const declaredKeys = new Set(Object.keys(effectiveSchema));
   for (const key of Object.keys(params)) {
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
@@ -69,7 +74,7 @@ function validateVendorParams(
   }
 
   // Validate each declared field.
-  for (const [key, prop] of Object.entries(schema)) {
+  for (const [key, prop] of Object.entries(effectiveSchema)) {
     assertPropValue(key, params[key], prop);
   }
 }
@@ -166,6 +171,20 @@ function validateExchangeBody(
     );
   }
   return { trimmedDisplayName, externalId };
+}
+
+/** Safely extracts the `env` string from a connection's JSON metadata blob. */
+function parseEnvFromMetadata(metadata: unknown): string {
+  if (!metadata) return '';
+  try {
+    const meta =
+      typeof metadata === 'string'
+        ? (JSON.parse(metadata) as Record<string, unknown>)
+        : (metadata as Record<string, unknown>);
+    return typeof meta.env === 'string' ? meta.env : '';
+  } catch {
+    return '';
+  }
 }
 
 @Controller('connectors')
@@ -331,7 +350,11 @@ export class ConnectorsController {
     }
 
     const [connection] = await this.db
-      .select({ id: appConnections.id, value: appConnections.value })
+      .select({
+        id: appConnections.id,
+        value: appConnections.value,
+        metadata: appConnections.metadata,
+      })
       .from(appConnections)
       .where(
         and(
@@ -377,9 +400,13 @@ export class ConnectorsController {
       }
     }
 
+    // Extract env from metadata stored on the connection row.
+    const env = parseEnvFromMetadata(connection.metadata);
+
     return {
       clientId,
       hasClientSecret,
+      env,
     };
   }
 
@@ -488,11 +515,20 @@ export class ConnectorsController {
       );
     }
 
-    // STRICT VALIDATION: Ensure vendor params match Piece Schema
+    // STRICT VALIDATION: validate vendor params against the same schema source
+    // that getProviders exposes (p.uiSchema takes priority, then piece.auth.props).
     const piece = this.pieceRegistry.getPiece(restOfBody.providerName);
-    if (piece?.auth && 'props' in piece.auth) {
-      validateVendorParams(piece.auth.props, vendorParams);
-    }
+    const providerForSchema = this.providerRegistry.getProvider(
+      restOfBody.providerName,
+    );
+    const authProps =
+      piece?.auth && 'props' in piece.auth
+        ? (piece.auth.props as Record<string, AnyProperty>)
+        : undefined;
+    const uiSchemaProps = providerForSchema?.uiSchema as
+      | Record<string, AnyProperty>
+      | undefined;
+    validateVendorParams(uiSchemaProps, vendorParams, authProps);
 
     // Exchange the code for actual OAuth tokens using user-provided credentials
     let tokenResponse: Record<string, unknown>;

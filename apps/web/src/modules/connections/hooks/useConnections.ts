@@ -47,7 +47,13 @@ export function useConnections() {
                     providerName: provider,
                     code,
                     state,
-                    vendorParams,
+                    // Merge vendorParams from the popup response with those stored
+                    // in pendingCredentials (user-entered SECRET_TEXT fields).
+                    // Popup params take precedence for fields that appear in both.
+                    vendorParams: {
+                        ...(pendingCredentials.current.vendorParams),
+                        ...(vendorParams),
+                    },
                     clientId: pendingCredentials.current.clientId,
                     clientSecret: pendingCredentials.current.clientSecret,
                     displayName: pendingCredentials.current.displayName,
@@ -97,12 +103,12 @@ export function useConnections() {
 
             pendingCredentials.current = { clientId, clientSecret, displayName, env, vendorParams };
 
+            // Build popup URL — do NOT include vendorParams here to avoid leaking
+            // SECRET_TEXT values into GET URLs, server logs, or browser history.
+            // vendorParams are merged server-side from pendingCredentials in handleSuccess.
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (env) {
                 popupUrl += `&env=${encodeURIComponent(env)}`;
-            }
-            if (vendorParams && Object.keys(vendorParams).length > 0) {
-                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(vendorParams))}`;
             }
             // Initiate popup with BYOA credentials injected into the URL
             openPopup(popupUrl);

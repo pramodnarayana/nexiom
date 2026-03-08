@@ -58,18 +58,20 @@ export class PieceLoaderService {
   private extractPiece(
     mod: Record<string, unknown>,
     expectedName: string,
-  ): Piece | undefined {
+  ): Piece | null {
     for (const exported of Object.values(mod)) {
       if (this.isPiece(exported)) {
         if (exported.name !== expectedName) {
-          this.logger.warn(
-            `Piece in "${expectedName}" package reports name "${exported.name}" — using it anyway.`,
+          this.logger.error(
+            `Piece name mismatch: package registered as "${expectedName}" but exports name "${exported.name}". ` +
+              `Skipping to prevent registration under wrong key.`,
           );
+          return null;
         }
         return exported;
       }
     }
-    return undefined;
+    return null;
   }
 
   private isPiece(value: unknown): value is Piece {

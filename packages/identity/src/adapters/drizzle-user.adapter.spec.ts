@@ -4,6 +4,7 @@ import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
 import * as schema from "../schema.js";
 import { UserNotFoundError } from "../interfaces/index.js";
 import type { IdentityModuleOptions } from "../identity.module.js";
+import type { BetterAuthAdapterConfig } from "../interfaces/better-auth-config.interface.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type {
   IAuthProvider,
@@ -119,6 +120,12 @@ const mkOptions = (): IdentityModuleOptions =>
       adminRoleId: "admin-role-id",
       memberRoleId: "member-role-id",
     },
+    // Minimal stub — DrizzleUserAdapter does not use betterAuthConfig directly;
+    // it is required by IdentityModuleOptions but unused in this adapter's logic.
+    betterAuthConfig: {
+      allowedOrigins: [],
+      betterAuthUrl: "http://localhost:3000",
+    } as BetterAuthAdapterConfig,
   }) as IdentityModuleOptions;
 
 describe("DrizzleUserAdapter", () => {

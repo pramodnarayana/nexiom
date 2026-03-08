@@ -72,20 +72,24 @@ describe('DatabaseManager', () => {
     manager = new DatabaseManager();
 
     // Default mock behaviors — mirror production Drizzle:
-    // values() is a PromiseLike (awaitable) AND exposes chainable methods.
+    // values() returns a real Promise so await/catch/finally all work correctly.
+    // The resolved chain also exposes onConflictDoNothing/DoUpdate/returning for
+    // callers that chain further methods after await.
     const makeInsertChain = () => ({
       values: vi.fn().mockImplementation(() => {
         const chain = {
-          // Thenable: allows `await db.insert(t).values(...)`
-          then: (resolve: (v: undefined) => void) => resolve(undefined),
-          // Chain methods
           onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
           onConflictDoUpdate: vi.fn().mockReturnValue({
             returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
           }),
           returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
         };
-        return chain;
+        // Return a genuine Promise that also carries the chain methods,
+        // supporting both `await values()` and `values().returning(...)`.
+        const promise = Promise.resolve(undefined) as Promise<undefined> &
+          typeof chain;
+        Object.assign(promise, chain);
+        return promise;
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);

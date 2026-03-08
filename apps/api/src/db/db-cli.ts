@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables — root .env first, then API-specific .env with override
-// so that values in apps/api/.env always take precedence over the workspace root .env.
+// Load environment variables — root .env first (no override), then API-specific
+// .env second (also no override) so existing shell/CI vars always take precedence
+// over checked-in .env files. This prevents destructive commands (drop/fresh/reset)
+// from being redirected by local .env values when running in CI.
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: false });
 
 import { DatabaseManager } from './database-manager.js';
 

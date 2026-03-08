@@ -5,12 +5,21 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Textarea } from '@/shared/components/ui/textarea';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/shared/components/ui/form';
 import { Copy, Check } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { ProviderResponse } from '../api/connections.api';
 
-type UiPropType = 'SHORT_TEXT' | 'LONG_TEXT' | 'SECRET_TEXT' | 'NUMBER' | 'CHECKBOX';
+type UiPropType =
+    | 'SHORT_TEXT'
+    | 'LONG_TEXT'
+    | 'SECRET_TEXT'
+    | 'NUMBER'
+    | 'CHECKBOX'
+    | 'DROPDOWN'
+    | 'STATIC_DROPDOWN'
+    | 'JSON';
 
 interface UiSchemaProp {
     type: UiPropType;
@@ -18,6 +27,9 @@ interface UiSchemaProp {
     description?: string;
     required?: boolean;
     defaultValue?: string | number | boolean;
+    /** Options for DROPDOWN / STATIC_DROPDOWN */
+    options?: { label: string; value: string }[];
+    placeholder?: string;
 }
 
 // Build a Zod field definition for a single uiSchema property
@@ -29,13 +41,21 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
         const field = z.coerce.number();
         return prop.required ? field : field.optional();
     }
-    // SHORT_TEXT | LONG_TEXT | SECRET_TEXT
+    if (prop.type === 'JSON') {
+        // Validate that the value is parseable JSON when provided
+        const field = z.string().refine(
+            (v) => { try { JSON.parse(v); return true; } catch { return false; } },
+            { message: `${prop.displayName ?? key} must be valid JSON` },
+        );
+        return prop.required ? field : field.optional();
+    }
+    // SHORT_TEXT | LONG_TEXT | SECRET_TEXT | DROPDOWN | STATIC_DROPDOWN
     const field = z.string();
     if (prop.required) return field.min(1, `${prop.displayName ?? key} is required`);
-    return (field).optional();
+    return field.optional();
 }
 
-// Select the correct <Input> variant for a uiSchema property
+// Select the correct control for a uiSchema property
 function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChange: (v: unknown) => void }): React.ReactElement {
     if (prop.type === 'CHECKBOX') {
         return (
@@ -49,6 +69,40 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
             </div>
         );
     }
+    if (prop.type === 'DROPDOWN' || prop.type === 'STATIC_DROPDOWN') {
+        const options = prop.options ?? [];
+        return (
+            <Select value={(field.value as string) || ''} onValueChange={field.onChange}>
+                <SelectTrigger>
+                    <SelectValue placeholder={prop.placeholder ?? `Select ${prop.displayName ?? 'option'}`} />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        );
+    }
+    if (prop.type === 'JSON') {
+        return (
+            <Textarea
+                value={(field.value as string) || ''}
+                placeholder={prop.placeholder ?? '{}'}
+                className="font-mono text-xs min-h-[80px]"
+                onChange={(e) => field.onChange(e.target.value)}
+            />
+        );
+    }
+    if (prop.type === 'LONG_TEXT') {
+        return (
+            <Textarea
+                value={(field.value as string) || ''}
+                placeholder={prop.placeholder}
+                onChange={(e) => field.onChange(e.target.value)}
+            />
+        );
+    }
     let inputType = 'text';
     if (prop.type === 'SECRET_TEXT') inputType = 'password';
     if (prop.type === 'NUMBER') inputType = 'number';
@@ -56,6 +110,7 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
         <Input
             type={inputType}
             value={(field.value as string) || ''}
+            placeholder={prop.placeholder}
             onChange={(e) => {
                 const raw = e.target.value;
                 let coerced: string | number = raw;
@@ -69,14 +124,15 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
 }
 
 // Create zod schema dynamically from uiSchema properties
-function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>, isUpdate: boolean = false) {
+function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     const shape: Record<string, z.ZodTypeAny> = {
         connectionName: z.string().min(1, 'Connection name is required'),
         clientId: z.string().min(1, 'Client ID is required'),
     };
 
-    // In update mode, clientSecret isn't strictly required (often omitted to keep existing)
-    shape.clientSecret = isUpdate ? z.string().optional() : z.string().min(1, 'Client secret is required');
+    // clientSecret is always required — both new connects and reconnects must supply it
+    // because /connectors/oauth-exchange always expects a non-empty secret.
+    shape.clientSecret = z.string().min(1, 'Client secret is required');
     shape.env = z.string().optional();
 
     if (uiSchema) {
@@ -104,7 +160,7 @@ export interface DynamicAuthFormProps {
 }
 
 export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defaultValues, onCancel, onSubmit }: Readonly<DynamicAuthFormProps>) {
-    const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined, isUpdate), [provider.uiSchema, isUpdate]);
+    const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
 
     // Inject default values out of uiSchema definitions if not provided by existing values
     const mergedDefaults = { ...defaultValues };
@@ -129,6 +185,18 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
             ...mergedDefaults
         },
     });
+
+    // Re-hydrate the form when async credentials arrive (e.g. getConnectionCredentials resolves)
+    useEffect(() => {
+        form.reset({
+            connectionName: provider.displayName,
+            clientId: '',
+            clientSecret: '',
+            env: provider.environments?.[0]?.name,
+            ...mergedDefaults,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [defaultValues]);
 
     const [copied, setCopied] = useState(false);
     const handleCopy = async () => {
@@ -202,10 +270,10 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                     name="clientSecret"
                     render={({ field }) => (
                         <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
-                            <FormLabel className="text-right">Client Secret {!isUpdate && <span className="text-red-500">*</span>}</FormLabel>
+                            <FormLabel className="text-right">Client Secret <span className="text-red-500">*</span></FormLabel>
                             <div className="col-span-3">
                                 <FormControl>
-                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Unchanged)' : ''} />
+                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Unchanged — re-enter to reconnect)' : ''} />
                                 </FormControl>
                                 <FormMessage />
                             </div>
@@ -221,7 +289,10 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                             <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
                                 <FormLabel className="text-right">Environment</FormLabel>
                                 <div className="col-span-3">
-                                    <Select onValueChange={field.onChange} defaultValue={field.value as string}>
+                                    <Select
+                                        value={(field.value as string) || ''}
+                                        onValueChange={field.onChange}
+                                    >
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select environment" />
