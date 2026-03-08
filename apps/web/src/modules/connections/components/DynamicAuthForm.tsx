@@ -52,7 +52,20 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
     let inputType = 'text';
     if (prop.type === 'SECRET_TEXT') inputType = 'password';
     if (prop.type === 'NUMBER') inputType = 'number';
-    return <Input type={inputType} onChange={field.onChange} value={(field.value as string) || ''} />;
+    return (
+        <Input
+            type={inputType}
+            value={(field.value as string) || ''}
+            onChange={(e) => {
+                const raw = e.target.value;
+                let coerced: string | number = raw;
+                if (prop.type === 'NUMBER') {
+                    coerced = raw === '' ? '' : Number(raw);
+                }
+                field.onChange(coerced);
+            }}
+        />
+    );
 }
 
 // Create zod schema dynamically from uiSchema properties
@@ -118,12 +131,15 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
     });
 
     const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
+    const handleCopy = async () => {
         if (!callbackUrl) return;
-        navigator.clipboard.writeText(callbackUrl).then(() => {
+        try {
+            await navigator.clipboard.writeText(callbackUrl);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        });
+        } catch (err) {
+            console.warn('[DynamicAuthForm] Clipboard write failed:', err);
+        }
     };
 
     const handleValidSubmit = (values: z.infer<typeof schema>) => {

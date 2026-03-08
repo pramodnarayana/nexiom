@@ -291,10 +291,10 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Recommended Solution**:
 
-1. **Dynamic Install**: Update `PieceLoaderService` to shell out to `npm install @nexiom/piece-X@version --prefix ./plugins` before calling `import()`.
+1. **Out-of-Band Installer**: `PieceLoaderService` must **never** shell out to `npm install` during request handling — this mutates shared state and blocks the event loop. Instead, `PieceLoaderService.loadEnabledPieces()` should check whether `./plugins/@nexiom/piece-X` exists on disk and fail fast with a descriptive error (`"Piece X is not installed — trigger the admin installer job"`) if the artifact is missing. A dedicated admin job/service handles the actual `npm install` step out of band.
 2. **Security Allowlist**: Validate package names against a signed registry to prevent malicious arbitrary code execution.
-3. **Sandboxing**: A bug in a dynamically loaded piece can crash the main API process. True isolation requires running piece execution in child processes (e.g., `worker_threads`).
-4. **Persistent Storage**: Ensure the `./plugins` directory lives on a persistent volume (e.g., EFS) so container restarts don't trigger mass re-installs and slow cold starts.
+3. **Sandboxing**: A bug in a dynamically loaded piece can crash the main API process. **`worker_threads` do NOT provide crash isolation** — they run in the same Node.js process. True isolation requires separate processes or containers (e.g., `child_process`, containerized workers, or a dedicated worker microservice).
+4. **Persistent Storage**: Ensure the `./plugins` directory lives on a persistent volume (e.g., EFS) so container restarts don't re-trigger installs and cause slow cold starts.
 
 ---
 

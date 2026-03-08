@@ -78,7 +78,12 @@ export class PieceLoaderService {
     return (
       typeof v['name'] === 'string' &&
       typeof v['displayName'] === 'string' &&
-      typeof v['triggers'] === 'object'
+      typeof v['description'] === 'string' &&
+      typeof v['logoUrl'] === 'string' &&
+      typeof v['actions'] === 'object' &&
+      v['actions'] !== null &&
+      typeof v['triggers'] === 'object' &&
+      v['triggers'] !== null
     );
   }
 }

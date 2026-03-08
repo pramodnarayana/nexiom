@@ -71,15 +71,21 @@ describe('DatabaseManager', () => {
     process.env.DATABASE_URL = 'postgres://test:test@localhost:5432/test';
     manager = new DatabaseManager();
 
-    // Default mock behaviors — support the full insert chain:
-    // .insert(table).values(...).onConflictDoNothing() OR .returning()
+    // Default mock behaviors — mirror production Drizzle:
+    // values() is a PromiseLike (awaitable) AND exposes chainable methods.
     const makeInsertChain = () => ({
-      values: vi.fn().mockReturnValue({
-        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-        onConflictDoUpdate: vi.fn().mockReturnValue({
+      values: vi.fn().mockImplementation(() => {
+        const chain = {
+          // Thenable: allows `await db.insert(t).values(...)`
+          then: (resolve: (v: undefined) => void) => resolve(undefined),
+          // Chain methods
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+          }),
           returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
-        }),
-        returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+        };
+        return chain;
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);

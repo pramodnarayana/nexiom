@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load environment variables — root .env first, then API-specific .env with override
+// so that values in apps/api/.env always take precedence over the workspace root .env.
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 import { DatabaseManager } from './database-manager.js';
 

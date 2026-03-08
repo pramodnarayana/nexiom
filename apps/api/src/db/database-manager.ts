@@ -347,26 +347,6 @@ export class DatabaseManager {
         console.log('  ⚠️  Skipping bootstrap user: Missing env vars');
       }
 
-      // 4. Seed piece registry
-      await db
-        .insert(schema.pieces)
-        .values([
-          {
-            name: 'salesforce',
-            packageName: '@nexiom/piece-salesforce',
-            version: '0.5.1',
-            enabled: true,
-          },
-          {
-            name: 'quickbooks',
-            packageName: '@nexiom/piece-quickbooks',
-            version: '0.1.3',
-            enabled: true,
-          },
-        ])
-        .onConflictDoNothing();
-      console.log('  ✓ Piece registry seeded (salesforce, quickbooks)');
-
       console.log('  ✓ Seeding complete');
     } finally {
       await client.end();

@@ -46,9 +46,9 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
             if (connection.hasCredentials) {
                 getConnectionCredentials(connection.id)
                     .then((creds) => {
-                        setDefaultCreds({ clientId: creds.clientId });
+                        setDefaultCreds({ clientId: creds.clientId, env: creds.env });
                     })
-                    .catch(() => { /* silently ignore */ });
+                    .catch(() => { /* silently ignore — form will render without pre-filled creds */ });
             }
         }
         if (!isOpen) {

@@ -52,12 +52,24 @@ function assertPropValue(
 }
 
 function validateVendorParams(
-  props: Record<string, AnyProperty> | undefined,
+  schema: Record<string, AnyProperty> | undefined,
   vendorParams: Record<string, string> | undefined,
 ): void {
-  if (!props) return;
+  if (!schema) return;
   const params = vendorParams ?? {};
-  for (const [key, prop] of Object.entries(props)) {
+
+  // Reject keys not declared in the schema — prevents undeclared data reaching the value blob.
+  const declaredKeys = new Set(Object.keys(schema));
+  for (const key of Object.keys(params)) {
+    if (!declaredKeys.has(key)) {
+      throw new BadRequestException(
+        `Undeclared vendor parameter: "${key}" is not allowed`,
+      );
+    }
+  }
+
+  // Validate each declared field.
+  for (const [key, prop] of Object.entries(schema)) {
     assertPropValue(key, params[key], prop);
   }
 }
@@ -100,20 +112,40 @@ const MAX_EXTERNAL_ID_LENGTH = 100;
 
 /** Validates required fields of the oauth-exchange body. Returns derived `trimmedDisplayName` and `externalId`. */
 function validateExchangeBody(
-  providerName: string,
-  code: string,
-  clientId: string,
-  clientSecret: string,
-  state: string,
-  displayName: string,
+  providerName: unknown,
+  code: unknown,
+  clientId: unknown,
+  clientSecret: unknown,
+  state: unknown,
+  displayName: unknown,
 ): { trimmedDisplayName: string; externalId: string } {
-  if (!providerName || !code || !clientId || !clientSecret || !state) {
-    throw new BadRequestException('Missing required fields inside body');
+  // Runtime type guards — reject non-string payloads before any string methods are called.
+  // displayName is checked separately as it gets its own targeted error when blank.
+  for (const [field, val] of [
+    ['providerName', providerName],
+    ['code', code],
+    ['clientId', clientId],
+    ['clientSecret', clientSecret],
+    ['state', state],
+  ] as [string, unknown][]) {
+    if (typeof val !== 'string' || !val) {
+      throw new BadRequestException(
+        typeof val !== 'string'
+          ? `Field "${field}" must be a string`
+          : 'Missing required fields inside body',
+      );
+    }
   }
-  if (!/^[a-z0-9-]+$/.test(providerName)) {
+  if (typeof displayName !== 'string') {
+    throw new BadRequestException('Field "displayName" must be a string');
+  }
+  // From here all values are confirmed strings.
+  const safeProviderName = providerName as string;
+  const safeDisplayName = displayName;
+  if (!/^[a-z0-9-]+$/.test(safeProviderName)) {
     throw new BadRequestException('Invalid provider name format');
   }
-  const trimmedDisplayName = displayName?.trim();
+  const trimmedDisplayName = safeDisplayName.trim();
   if (!trimmedDisplayName) {
     throw new BadRequestException('displayName is required');
   }
@@ -122,7 +154,7 @@ function validateExchangeBody(
       `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
     );
   }
-  const externalId = toKebabSlug(`${providerName}-${trimmedDisplayName}`);
+  const externalId = toKebabSlug(`${safeProviderName}-${trimmedDisplayName}`);
   if (!externalId) {
     throw new BadRequestException(
       'displayName must contain at least one alphanumeric character',

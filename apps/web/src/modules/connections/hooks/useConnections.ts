@@ -11,7 +11,7 @@ export function useConnections() {
     const [loading, setLoading] = useState(false);
 
     // Store credentials temporarily while the popup is open
-    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; displayName: string; env?: string } | null>(null);
+    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; displayName: string; env?: string; vendorParams?: Record<string, string> } | null>(null);
 
     const refresh = useCallback(async () => {
         if (!user?.organizationId) return;
@@ -87,7 +87,7 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, env }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string }) => {
+        ({ providerName, clientId, clientSecret, displayName, env, vendorParams }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string; vendorParams?: Record<string, string> }) => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
@@ -95,11 +95,14 @@ export function useConnections() {
                 return;
             }
 
-            pendingCredentials.current = { clientId, clientSecret, displayName, env };
+            pendingCredentials.current = { clientId, clientSecret, displayName, env, vendorParams };
 
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (env) {
                 popupUrl += `&env=${encodeURIComponent(env)}`;
+            }
+            if (vendorParams && Object.keys(vendorParams).length > 0) {
+                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(vendorParams))}`;
             }
             // Initiate popup with BYOA credentials injected into the URL
             openPopup(popupUrl);

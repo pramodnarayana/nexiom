@@ -81,6 +81,9 @@ importers:
       '@nexiom/piece-quickbooks':
         specifier: workspace:*
         version: link:../../packages/pieces/quickbooks
+      '@nexiom/piece-salesforce':
+        specifier: workspace:*
+        version: link:../../packages/pieces/salesforce
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3

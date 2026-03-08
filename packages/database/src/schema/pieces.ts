@@ -25,4 +25,7 @@ export const pieces = pgTable('pieces', {
     enabled: boolean('enabled').notNull().default(true),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+
+    /** Last modification time. Must be set explicitly by application code on update. */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
