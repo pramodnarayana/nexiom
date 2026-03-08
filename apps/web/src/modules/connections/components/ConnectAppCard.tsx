@@ -16,7 +16,7 @@ import { DynamicAuthForm } from './DynamicAuthForm';
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string; vendorParams?: Record<string, string> }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; env?: string; vendorParams?: Record<string, string> }) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -70,7 +70,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
     const handleDynamicConnect = (data: {
         connectionName: string;
         clientId: string;
-        clientSecret?: string;
+        clientSecret: string;
         env?: string;
         vendorParams: Record<string, string>;
     }) => {

@@ -41,9 +41,11 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
         // Preprocess: convert empty string to undefined before coercing so that
         // empty optional fields become undefined (not 0) and are filtered out
         // by the submit handler rather than submitted as a zero value.
+        // The inner schema is always optional so preprocess→undefined never
+        // triggers a "Required" error when the field is empty.
         const field = z.preprocess(
             (v) => (v === '' ? undefined : v),
-            z.coerce.number(),
+            z.coerce.number().optional(),
         );
         return prop.required ? field : field.optional();
     }
@@ -78,7 +80,7 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
     if (prop.type === 'DROPDOWN' || prop.type === 'STATIC_DROPDOWN') {
         const options = prop.options ?? [];
         return (
-            <Select value={(field.value as string) || ''} onValueChange={field.onChange}>
+            <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
                 <SelectTrigger>
                     <SelectValue placeholder={prop.placeholder ?? `Select ${prop.displayName ?? 'option'}`} />
                 </SelectTrigger>
@@ -93,7 +95,7 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
     if (prop.type === 'JSON') {
         return (
             <Textarea
-                value={(field.value as string) || ''}
+                value={(field.value as string) ?? ''}
                 placeholder={prop.placeholder ?? '{}'}
                 className="font-mono text-xs min-h-[80px]"
                 onChange={(e) => field.onChange(e.target.value)}
@@ -103,7 +105,7 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
     if (prop.type === 'LONG_TEXT') {
         return (
             <Textarea
-                value={(field.value as string) || ''}
+                value={(field.value as string) ?? ''}
                 placeholder={prop.placeholder}
                 onChange={(e) => field.onChange(e.target.value)}
             />
@@ -115,7 +117,7 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
     return (
         <Input
             type={inputType}
-            value={(field.value as string) || ''}
+            value={field.value === 0 ? '0' : (field.value as string | undefined) ?? ''}
             placeholder={prop.placeholder}
             onChange={(e) => {
                 const raw = e.target.value;
@@ -159,7 +161,7 @@ export interface DynamicAuthFormProps {
     onSubmit: (data: {
         connectionName: string;
         clientId: string;
-        clientSecret?: string;
+        clientSecret: string;
         env?: string;
         vendorParams: Record<string, string>;
     }) => void;
@@ -229,7 +231,7 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
         onSubmit({
             connectionName: connectionName as string,
             clientId: clientId as string,
-            clientSecret: clientSecret as string | undefined,
+            clientSecret: clientSecret as string,
             env: env as string | undefined,
             vendorParams,
         });
