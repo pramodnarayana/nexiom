@@ -1,0 +1,407 @@
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Label } from '@/shared/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/shared/components/ui/form';
+import { Copy, Check } from 'lucide-react';
+import { type ReactElement, useState, useMemo, useEffect } from 'react';
+import type { ProviderResponse } from '../api/connections.api';
+
+type UiPropType =
+    | 'SHORT_TEXT'
+    | 'LONG_TEXT'
+    | 'SECRET_TEXT'
+    | 'NUMBER'
+    | 'CHECKBOX'
+    | 'DROPDOWN'
+    | 'STATIC_DROPDOWN'
+    | 'JSON';
+
+const SUPPORTED_UI_PROP_TYPES = new Set<string>([
+    'SHORT_TEXT', 'LONG_TEXT', 'SECRET_TEXT', 'NUMBER',
+    'CHECKBOX', 'DROPDOWN', 'STATIC_DROPDOWN', 'JSON',
+]);
+
+function isSupportedUiPropType(type: string): type is UiPropType {
+    return SUPPORTED_UI_PROP_TYPES.has(type);
+}
+
+interface UiSchemaProp {
+    type: UiPropType;
+    displayName?: string;
+    description?: string;
+    required?: boolean;
+    defaultValue?: string | number | boolean;
+    /** Options for DROPDOWN / STATIC_DROPDOWN */
+    options?: { label: string; value: string }[];
+    placeholder?: string;
+}
+
+// Build a Zod field definition for a single uiSchema property
+function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
+    if (prop.type === 'CHECKBOX') {
+        return z.boolean().default((prop.defaultValue as boolean | undefined) ?? false);
+    }
+    if (prop.type === 'NUMBER') {
+        // Preprocess '' → undefined before coercion so empty inputs are treated
+        // as missing rather than 0. Inner schema is required or optional based on
+        // prop.required so that empty required fields fail validation.
+        const inner = prop.required ? z.coerce.number() : z.coerce.number().optional();
+        const field = z.preprocess((v) => (v === '' ? undefined : v), inner);
+        return prop.required ? field : field.optional();
+    }
+    if (prop.type === 'JSON') {
+        // Preprocess: '' → undefined so optional JSON fields can be left blank
+        // without triggering the refine. The refine only runs on non-empty strings.
+        const field = z.preprocess(
+            (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+            z.string().refine(
+                (v) => { try { JSON.parse(v); return true; } catch { return false; } },
+                { message: `${prop.displayName ?? key} must be valid JSON` },
+            ).optional(),
+        );
+        return prop.required ? field : field.optional();
+    }
+    // SHORT_TEXT | LONG_TEXT | SECRET_TEXT | DROPDOWN | STATIC_DROPDOWN
+    const field = z.string();
+    if (prop.required) return field.min(1, `${prop.displayName ?? key} is required`);
+    return field.optional();
+}
+
+// Select the correct control for a uiSchema property
+function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChange: (v: unknown) => void }): ReactElement {
+    if (prop.type === 'CHECKBOX') {
+        return (
+            <div className="flex items-center h-10">
+                <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary focus:outline-none"
+                    checked={!!field.value}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                />
+            </div>
+        );
+    }
+    if (prop.type === 'DROPDOWN' || prop.type === 'STATIC_DROPDOWN') {
+        const options = prop.options ?? [];
+        return (
+            <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
+                <SelectTrigger>
+                    <SelectValue placeholder={prop.placeholder ?? `Select ${prop.displayName ?? 'option'}`} />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        );
+    }
+    if (prop.type === 'JSON') {
+        return (
+            <Textarea
+                value={(field.value as string) ?? ''}
+                placeholder={prop.placeholder ?? '{}'}
+                className="font-mono text-xs min-h-[80px]"
+                onChange={(e) => field.onChange(e.target.value)}
+            />
+        );
+    }
+    if (prop.type === 'LONG_TEXT') {
+        return (
+            <Textarea
+                value={(field.value as string) ?? ''}
+                placeholder={prop.placeholder}
+                onChange={(e) => field.onChange(e.target.value)}
+            />
+        );
+    }
+    let inputType = 'text';
+    if (prop.type === 'SECRET_TEXT') inputType = 'password';
+    if (prop.type === 'NUMBER') inputType = 'number';
+    return (
+        <Input
+            type={inputType}
+            value={field.value === 0 ? '0' : (field.value as string | undefined) ?? ''}
+            placeholder={prop.placeholder}
+            onChange={(e) => {
+                const raw = e.target.value;
+                let coerced: string | number = raw;
+                if (prop.type === 'NUMBER') {
+                    coerced = raw === '' ? '' : Number(raw);
+                }
+                field.onChange(coerced);
+            }}
+        />
+    );
+}
+
+// Create zod schema dynamically from uiSchema properties
+function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
+    const shape: Record<string, z.ZodTypeAny> = {
+        connectionName: z.string().min(1, 'Connection name is required'),
+        clientId: z.string().min(1, 'Client ID is required'),
+    };
+
+    // clientSecret is always required — both new connects and reconnects must supply it
+    // because /connectors/oauth-exchange always expects a non-empty secret.
+    shape.clientSecret = z.string().min(1, 'Client secret is required');
+    shape.env = z.string().optional();
+
+    if (uiSchema) {
+        for (const [key, prop] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
+            if (!isSupportedUiPropType(prop.type)) continue;
+            shape[key] = buildPropZodField(prop as UiSchemaProp, key);
+        }
+    }
+
+    return z.object(shape);
+}
+
+/** Extracts non-empty, non-null extra fields from a form value map into a flat string record. */
+function buildVendorParams(rest: Record<string, unknown>): Record<string, string> {
+    const params: Record<string, string> = {};
+    for (const [key, val] of Object.entries(rest)) {
+        if (val !== undefined && val !== null && val !== '') {
+            params[key] = String(val);
+        }
+    }
+    return params;
+}
+
+export interface DynamicAuthFormProps {
+    provider: ProviderResponse;
+    callbackUrl: string;
+    isUpdate?: boolean;
+    defaultValues?: Record<string, unknown>;
+    onCancel: () => void;
+    onSubmit: (data: {
+        connectionName: string;
+        clientId: string;
+        clientSecret: string;
+        env?: string;
+        vendorParams: Record<string, string>;
+    }) => void;
+}
+
+/**
+ * Merges uiSchema default values into a base defaults object.
+ * Skips props whose type is not in the supported union.
+ */
+function mergeUiSchemaDefaults(
+    base: Record<string, unknown>,
+    uiSchema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+    if (!uiSchema) return base;
+    const merged = { ...base };
+    for (const [key, rawProp] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
+        if (!isSupportedUiPropType(rawProp.type)) continue;
+        const prop = rawProp as UiSchemaProp;
+        if (merged[key] === undefined && prop.defaultValue !== undefined) {
+            merged[key] = prop.defaultValue;
+        }
+        if (prop.type === 'CHECKBOX' && merged[key] === undefined) {
+            merged[key] = false;
+        }
+    }
+    return merged;
+}
+
+export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defaultValues, onCancel, onSubmit }: Readonly<DynamicAuthFormProps>) {
+    const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
+
+    // Inject default values out of uiSchema definitions if not provided by existing values.
+    // Skip props whose type is unsupported — they have no schema field and should not be injected.
+    const mergedDefaults = mergeUiSchemaDefaults({ ...defaultValues }, provider.uiSchema as Record<string, unknown> | undefined);
+
+    const form = useForm<z.infer<typeof schema>>({
+        resolver: zodResolver(schema),
+        defaultValues: {
+            connectionName: provider.displayName,
+            clientId: '',
+            clientSecret: '',
+            env: provider.environments?.[0]?.name,
+            ...mergedDefaults
+        },
+    });
+
+    // Re-hydrate the form when async credentials arrive (e.g. getConnectionCredentials resolves)
+    useEffect(() => {
+        form.reset({
+            connectionName: provider.displayName,
+            clientId: '',
+            clientSecret: '',
+            env: provider.environments?.[0]?.name,
+            ...mergedDefaults,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [defaultValues]);
+
+    const [copied, setCopied] = useState(false);
+    const handleCopy = async () => {
+        if (!callbackUrl) return;
+        try {
+            await navigator.clipboard.writeText(callbackUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.warn('[DynamicAuthForm] Clipboard write failed:', err);
+        }
+    };
+
+    const handleValidSubmit = (values: z.infer<typeof schema>) => {
+        const { connectionName, clientId, clientSecret, env, ...rest } = values;
+        onSubmit({
+            connectionName: connectionName as string,
+            clientId: clientId as string,
+            clientSecret: clientSecret as string,
+            env: env as string | undefined,
+            vendorParams: buildVendorParams(rest as Record<string, unknown>),
+        });
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleValidSubmit)} className="space-y-4 py-4">
+
+                <FormField
+                    control={form.control}
+                    name="connectionName"
+                    render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                            <FormLabel className="text-right">Name <span className="text-red-500">*</span></FormLabel>
+                            <div className="col-span-3">
+                                <FormControl>
+                                    <Input placeholder={`e.g. ${provider.displayName}`} {...field} value={field.value as string || ''} />
+                                </FormControl>
+                                <FormMessage />
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="clientId"
+                    render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                            <FormLabel className="text-right">Client ID <span className="text-red-500">*</span></FormLabel>
+                            <div className="col-span-3">
+                                <FormControl>
+                                    <Input {...field} value={field.value as string || ''} />
+                                </FormControl>
+                                <FormMessage />
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="clientSecret"
+                    render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                            <FormLabel className="text-right">Client Secret <span className="text-red-500">*</span></FormLabel>
+                            <div className="col-span-3">
+                                <FormControl>
+                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Required — re-enter to reconnect)' : ''} />
+                                </FormControl>
+                                <FormMessage />
+                            </div>
+                        </FormItem>
+                    )}
+                />
+
+                {provider.environments && provider.environments.length > 0 && (
+                    <FormField
+                        control={form.control}
+                        name="env"
+                        render={({ field }) => (
+                            <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                                <FormLabel className="text-right">Environment</FormLabel>
+                                <div className="col-span-3">
+                                    <Select
+                                        value={(field.value as string) || ''}
+                                        onValueChange={field.onChange}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select environment" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {provider.environments!.map((e) => (
+                                                <SelectItem key={e.name} value={e.name}>
+                                                    {e.displayName}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </div>
+                            </FormItem>
+                        )}
+                    />
+                )}
+
+                {/* Render Dynamic UI Schema properties */}
+                {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>)).map(([key, prop]) => {
+                    return (
+                        <FormField
+                            key={key}
+                            control={form.control}
+                            name={key}
+                            render={({ field }) => (
+                                <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                                    <FormLabel className="text-right">{prop.displayName || key} {prop.required && <span className="text-red-500">*</span>}</FormLabel>
+                                    <div className="col-span-3">
+                                        <FormControl>
+                                            {renderFieldControl(prop, field)}
+                                        </FormControl>
+                                        {prop.description && <FormDescription className="mt-2">{prop.description}</FormDescription>}
+                                        <FormMessage />
+                                    </div>
+                                </FormItem>
+                            )}
+                        />
+                    );
+                })}
+
+                <div className="grid grid-cols-4 items-center gap-4 pt-2">
+                    <Label className="text-right">Callback URL</Label>
+                    <div className="col-span-3 flex items-center relative gap-2">
+                        <Input
+                            value={callbackUrl}
+                            readOnly
+                            className="bg-muted font-mono text-xs pr-10 truncate"
+                            title="Copy this and paste it into the external app configuration"
+                        />
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={handleCopy}
+                            type="button"
+                            title="Copy to clipboard"
+                        >
+                            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                    <Button type="button" variant="outline" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Button type="submit">
+                        {isUpdate ? 'Reconnect' : 'Connect'}
+                    </Button>
+                </div>
+            </form>
+        </Form>
+    );
+}

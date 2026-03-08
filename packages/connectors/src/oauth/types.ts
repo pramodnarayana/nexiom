@@ -8,6 +8,13 @@ interface BaseProviderDefinition {
     description: string;
     logoUrl: string;
     category: string;
+    /**
+     * Dynamically exposed JSON Schema (e.g. piece auth properties).
+     * TODO: Replace `Record<string, any>` with a dedicated `UiSchemaProp` or `JsonSchema`
+     * interface once this pattern is used across more providers, to improve type safety
+     * at all call sites that read/write uiSchema fields.
+     */
+    uiSchema?: Record<string, unknown>;
 }
 
 export interface ProviderEnvironment {

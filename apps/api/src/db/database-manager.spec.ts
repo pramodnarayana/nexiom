@@ -71,10 +71,28 @@ describe('DatabaseManager', () => {
     process.env.DATABASE_URL = 'postgres://test:test@localhost:5432/test';
     manager = new DatabaseManager();
 
-    // Default mock behaviors
-    drizzleMocks.insert.mockReturnValue({
-      values: vi.fn().mockResolvedValue(undefined),
+    // Default mock behaviors — mirror production Drizzle:
+    // values() returns a real Promise so await/catch/finally all work correctly.
+    // The resolved chain also exposes onConflictDoNothing/DoUpdate/returning for
+    // callers that chain further methods after await.
+    const makeInsertChain = () => ({
+      values: vi.fn().mockImplementation(() => {
+        const chain = {
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+          }),
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
+        };
+        // Return a genuine Promise that also carries the chain methods,
+        // supporting both `await values()` and `values().returning(...)`.
+        const promise = Promise.resolve(undefined) as Promise<undefined> &
+          typeof chain;
+        Object.assign(promise, chain);
+        return promise;
+      }),
     });
+    drizzleMocks.insert.mockImplementation(makeInsertChain);
     drizzleMocks.query.organization.findFirst.mockResolvedValue(null);
   });
 
@@ -220,7 +238,14 @@ describe('DatabaseManager', () => {
 
       await manager.seed();
 
-      expect(drizzleMocks.insert).not.toHaveBeenCalled();
+      // Pieces seeding always runs (idempotent via onConflictDoNothing),
+      // but the org insert should be skipped when org already exists.
+      const { organization } = await import('./schema.js');
+      const insertCalls = drizzleMocks.insert.mock.calls;
+      const orgInserted = insertCalls.some(
+        (args: unknown[]) => args[0] === organization,
+      );
+      expect(orgInserted).toBe(false);
       expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
     });
   });

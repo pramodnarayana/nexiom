@@ -4,14 +4,26 @@ import { listActiveConnections, exchangeOAuthCode, type ActiveConnectionResponse
 import { useOAuthPopup } from './useOAuthPopup';
 import { useToast } from '@/shared/hooks/use-toast';
 
+/** Credentials collected from the DynamicAuthForm, held while the OAuth popup is open. */
+type PendingCredential = {
+    clientId: string;
+    /** Always required — /oauth-exchange always expects a non-empty secret. */
+    clientSecret: string;
+    displayName: string;
+    env?: string;
+    vendorParams?: Record<string, string>;
+};
+
 export function useConnections() {
     const { user } = useAuth();
     const { toast } = useToast();
     const [connections, setConnections] = useState<ActiveConnectionResponse[]>([]);
     const [loading, setLoading] = useState(false);
 
-    // Store credentials temporarily while the popup is open
-    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; displayName: string; env?: string } | null>(null);
+    // Store credentials temporarily while the popup is open.
+    // The popup is inherently single-session (openPopup closes any stale window),
+    // so a single ref is safe here. connect() is guarded to reject concurrent calls.
+    const pendingCredentials = useRef<PendingCredential | null>(null);
 
     const refresh = useCallback(async () => {
         if (!user?.organizationId) return;
@@ -31,27 +43,37 @@ export function useConnections() {
         void (async () => {
             const { provider, code, state, vendorParams } = data;
             if (!pendingCredentials.current) {
+                console.error('[useConnections] handleSuccess fired but pendingCredentials is null — possible stale event');
                 toast({ title: 'Error', description: 'Missing pending credentials for exchange.', variant: 'destructive' });
                 return;
             }
+
+            const pending = pendingCredentials.current;
+            // Clear immediately so any concurrent invocation cannot reuse stale data.
+            pendingCredentials.current = null;
 
             toast({ title: 'Connecting...', description: `Exchanging code with ${provider}...` });
 
             try {
                 if (!user?.organizationId) {
                     toast({ title: 'Error', description: 'No organization context available.', variant: 'destructive' });
-                    pendingCredentials.current = null;
                     return;
                 }
                 await exchangeOAuthCode({
                     providerName: provider,
                     code,
                     state,
-                    vendorParams,
-                    clientId: pendingCredentials.current.clientId,
-                    clientSecret: pendingCredentials.current.clientSecret,
-                    displayName: pendingCredentials.current.displayName,
-                    env: pendingCredentials.current.env,
+                    // Merge vendorParams from the popup response with those stored
+                    // in pendingCredentials (user-entered SECRET_TEXT fields).
+                    // Popup params take precedence for fields that appear in both.
+                    vendorParams: {
+                        ...(pending.vendorParams),
+                        ...(vendorParams),
+                    },
+                    clientId: pending.clientId,
+                    clientSecret: pending.clientSecret,
+                    displayName: pending.displayName,
+                    env: pending.env,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
                 await refresh();
@@ -66,8 +88,6 @@ export function useConnections() {
                     }
                 }
                 toast({ title: 'Connection Setup Failed', description: msg, variant: 'destructive' });
-            } finally {
-                pendingCredentials.current = null;
             }
         })();
     }, [user?.organizationId, toast, refresh]);
@@ -81,27 +101,43 @@ export function useConnections() {
         });
     }, [toast]);
 
+    const handleClose = useCallback(() => {
+        // User dismissed the popup without completing the flow — release the guard.
+        pendingCredentials.current = null;
+    }, []);
+
     const { openPopup } = useOAuthPopup({
         onSuccess: handleSuccess,
         onError: handleError,
+        onClose: handleClose,
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, env }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string }) => {
+        ({ providerName, clientId, clientSecret, displayName, env, vendorParams }: { providerName: string } & PendingCredential) => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
-                pendingCredentials.current = null;
                 return;
             }
 
-            pendingCredentials.current = { clientId, clientSecret, displayName, env };
+            // Guard: block a second connect while a popup is already in progress.
+            // openPopup will close any stale window, so this prevents credential leaks
+            // where handleSuccess fires for the old flow after new credentials are stored.
+            if (pendingCredentials.current) {
+                toast({ title: 'Already connecting', description: 'Please complete or close the current connection popup first.', variant: 'destructive' });
+                return;
+            }
 
+            // Store credentials before opening the popup so handleSuccess always finds them.
+            pendingCredentials.current = { clientId, clientSecret, displayName, env, vendorParams };
+
+            // Build popup URL — do NOT include vendorParams here to avoid leaking
+            // SECRET_TEXT values into GET URLs, server logs, or browser history.
+            // vendorParams are merged server-side from pendingCredentials in handleSuccess.
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (env) {
                 popupUrl += `&env=${encodeURIComponent(env)}`;
             }
-            // Initiate popup with BYOA credentials injected into the URL
             openPopup(popupUrl);
         },
         [openPopup, toast],

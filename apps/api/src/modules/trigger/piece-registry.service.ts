@@ -1,22 +1,23 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import type { Piece, Trigger } from '@nexiom/connectors';
-import { salesforcePiece } from '@nexiom/connectors';
+
+/** NestJS injection token for the list of registered Pieces. */
+export const PIECES = 'PIECES';
 
 /**
- * In-memory piece registry — single source of truth for all registered Pieces.
- * Add new pieces to REGISTERED_PIECES; no database or config file required.
+ * Generic in-memory piece registry.
+ * Has no knowledge of specific integrations — pieces are injected via the PIECES token.
+ * Register pieces in the module that provides this service.
  */
-const REGISTERED_PIECES: Piece[] = [salesforcePiece];
-
 @Injectable()
 export class PieceRegistryService {
   private readonly logger = new Logger(PieceRegistryService.name);
   private readonly registry: Map<string, Piece>;
 
-  constructor() {
+  constructor(@Inject(PIECES) pieces: Piece[]) {
     // Fail fast on duplicate piece names — silent Map overwrites would hide bugs.
     const seen = new Set<string>();
-    for (const piece of REGISTERED_PIECES) {
+    for (const piece of pieces) {
       if (seen.has(piece.name)) {
         const msg = `Duplicate piece name detected: "${piece.name}". Each piece must have a unique name.`;
         this.logger.error(msg);
@@ -25,7 +26,7 @@ export class PieceRegistryService {
       seen.add(piece.name);
     }
 
-    this.registry = new Map(REGISTERED_PIECES.map((p) => [p.name, p]));
+    this.registry = new Map(pieces.map((p) => [p.name, p]));
     this.logger.log(
       `Piece registry initialised with ${this.registry.size} piece(s): ${[...this.registry.keys()].join(', ')}`,
     );

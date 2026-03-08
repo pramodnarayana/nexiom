@@ -5,36 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1770805598812,
-      "tag": "0000_initial_schema",
+      "when": 1772876049537,
+      "tag": "0000_tricky_hawkeye",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1771054684760,
-      "tag": "0001_daffy_carlie_cooper",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1771054795109,
-      "tag": "0002_lively_paper_doll",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1772346781000,
-      "tag": "0003_create_storage_registry",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1772347000000,
-      "tag": "0004_workspace_id_unique",
+      "when": 1741398537000,
+      "tag": "0001_add_composite_index_and_pieces_updated_at",
       "breakpoints": true
     }
   ]

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DrizzleUserAdapter } from "./drizzle-user.adapter.js";
 import * as schema from "../schema.js";
 import { UserNotFoundError } from "../interfaces/index.js";
+import type { IdentityModuleOptions } from "../identity.module.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type {
   IAuthProvider,
@@ -109,16 +110,21 @@ const mkUser = (over?: Partial<schema.User>): schema.User =>
     ...over,
   }) as unknown as schema.User;
 
-const mkOptions = () =>
-  ({
-    dbToken: "DB_TOKEN",
-    constants: {
-      systemTenantId: "system-tenant-id",
-      ownerRoleId: "owner-role-id",
-      adminRoleId: "admin-role-id", // Matches the mock role name in test case
-      memberRoleId: "member-role-id",
-    },
-  }) as any;
+const mkOptions = (): IdentityModuleOptions => ({
+  dbToken: "DB_TOKEN",
+  constants: {
+    systemTenantId: "system-tenant-id",
+    ownerRoleId: "owner-role-id",
+    adminRoleId: "admin-role-id",
+    memberRoleId: "member-role-id",
+  },
+  // Minimal stub — DrizzleUserAdapter does not use betterAuthConfig directly;
+  // it is required by IdentityModuleOptions but unused in this adapter's logic.
+  betterAuthConfig: {
+    allowedOrigins: [],
+    betterAuthUrl: "http://localhost:3000",
+  },
+});
 
 describe("DrizzleUserAdapter", () => {
   beforeEach(() => {

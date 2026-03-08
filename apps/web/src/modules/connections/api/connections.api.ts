@@ -45,8 +45,8 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
     return res.data.data;
 }
 
-export async function getConnectionCredentials(connectionId: string): Promise<{ clientId: string; hasClientSecret: boolean }> {
-    const res = await apiClient.get<{ clientId: string; hasClientSecret: boolean }>(`/connectors/active/${connectionId}/credentials`);
+export async function getConnectionCredentials(connectionId: string): Promise<{ clientId: string; hasClientSecret: boolean; env?: string }> {
+    const res = await apiClient.get<{ clientId: string; hasClientSecret: boolean; env?: string }>(`/connectors/active/${connectionId}/credentials`);
     return res.data;
 }
 

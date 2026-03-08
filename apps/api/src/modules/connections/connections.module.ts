@@ -14,6 +14,7 @@ import { ConnectorsController } from './connections/connectors.controller.js';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
+import { PiecesModule } from '../pieces/pieces.module.js';
 
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { type DrizzleDb } from '@nexiom/database';
@@ -27,7 +28,7 @@ import { type DrizzleDb } from '@nexiom/database';
  * close the socket on shutdown — closing it a second time would cause errors.
  */
 @Module({
-  imports: [DbModule],
+  imports: [DbModule, PiecesModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
     ProviderRegistryService,
