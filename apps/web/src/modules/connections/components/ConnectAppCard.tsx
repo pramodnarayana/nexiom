@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plug2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -148,11 +148,11 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             provider={provider}
                             callbackUrl={callbackUrl}
                             isUpdate={isConnected}
-                            defaultValues={{
+                            defaultValues={useMemo(() => ({
                                 connectionName: connection?.displayName || provider.displayName,
                                 clientId: defaultCreds?.clientId || '',
                                 env: defaultCreds?.env,
-                            }}
+                            }), [connection?.displayName, provider.displayName, defaultCreds?.clientId, defaultCreds?.env])}
                             onCancel={() => handleOpenChange(false)}
                             onSubmit={handleDynamicConnect}
                         />

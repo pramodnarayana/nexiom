@@ -101,9 +101,15 @@ export function useConnections() {
         });
     }, [toast]);
 
+    const handleClose = useCallback(() => {
+        // User dismissed the popup without completing the flow — release the guard.
+        pendingCredentials.current = null;
+    }, []);
+
     const { openPopup } = useOAuthPopup({
         onSuccess: handleSuccess,
         onError: handleError,
+        onClose: handleClose,
     });
 
     const connect = useCallback(

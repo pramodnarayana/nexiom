@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/shared/components/ui/form';
 import { Copy, Check } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { type ReactElement, useState, useMemo, useEffect } from 'react';
 import type { ProviderResponse } from '../api/connections.api';
 
 type UiPropType =
@@ -20,6 +20,15 @@ type UiPropType =
     | 'DROPDOWN'
     | 'STATIC_DROPDOWN'
     | 'JSON';
+
+const SUPPORTED_UI_PROP_TYPES = new Set<string>([
+    'SHORT_TEXT', 'LONG_TEXT', 'SECRET_TEXT', 'NUMBER',
+    'CHECKBOX', 'DROPDOWN', 'STATIC_DROPDOWN', 'JSON',
+]);
+
+function isSupportedUiPropType(type: string): type is UiPropType {
+    return SUPPORTED_UI_PROP_TYPES.has(type);
+}
 
 interface UiSchemaProp {
     type: UiPropType;
@@ -38,22 +47,22 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
         return z.boolean().default((prop.defaultValue as boolean | undefined) ?? false);
     }
     if (prop.type === 'NUMBER') {
-        // Preprocess: convert empty string to undefined before coercing so that
-        // empty optional fields become undefined (not 0) and are filtered out
-        // by the submit handler rather than submitted as a zero value.
-        // The inner schema is always optional so preprocess→undefined never
-        // triggers a "Required" error when the field is empty.
-        const field = z.preprocess(
-            (v) => (v === '' ? undefined : v),
-            z.coerce.number().optional(),
-        );
+        // Preprocess '' → undefined before coercion so empty inputs are treated
+        // as missing rather than 0. Inner schema is required or optional based on
+        // prop.required so that empty required fields fail validation.
+        const inner = prop.required ? z.coerce.number() : z.coerce.number().optional();
+        const field = z.preprocess((v) => (v === '' ? undefined : v), inner);
         return prop.required ? field : field.optional();
     }
     if (prop.type === 'JSON') {
-        // Validate that the value is parseable JSON when provided
-        const field = z.string().refine(
-            (v) => { try { JSON.parse(v); return true; } catch { return false; } },
-            { message: `${prop.displayName ?? key} must be valid JSON` },
+        // Preprocess: '' → undefined so optional JSON fields can be left blank
+        // without triggering the refine. The refine only runs on non-empty strings.
+        const field = z.preprocess(
+            (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+            z.string().refine(
+                (v) => { try { JSON.parse(v); return true; } catch { return false; } },
+                { message: `${prop.displayName ?? key} must be valid JSON` },
+            ).optional(),
         );
         return prop.required ? field : field.optional();
     }
@@ -64,7 +73,7 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
 }
 
 // Select the correct control for a uiSchema property
-function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChange: (v: unknown) => void }): React.ReactElement {
+function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChange: (v: unknown) => void }): ReactElement {
     if (prop.type === 'CHECKBOX') {
         return (
             <div className="flex items-center h-10">
@@ -144,12 +153,24 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     shape.env = z.string().optional();
 
     if (uiSchema) {
-        for (const [key, prop] of Object.entries(uiSchema)) {
-            shape[key] = buildPropZodField(prop, key);
+        for (const [key, prop] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
+            if (!isSupportedUiPropType(prop.type)) continue;
+            shape[key] = buildPropZodField(prop as UiSchemaProp, key);
         }
     }
 
     return z.object(shape);
+}
+
+/** Extracts non-empty, non-null extra fields from a form value map into a flat string record. */
+function buildVendorParams(rest: Record<string, unknown>): Record<string, string> {
+    const params: Record<string, string> = {};
+    for (const [key, val] of Object.entries(rest)) {
+        if (val !== undefined && val !== null && val !== '') {
+            params[key] = String(val);
+        }
+    }
+    return params;
 }
 
 export interface DynamicAuthFormProps {
@@ -167,21 +188,35 @@ export interface DynamicAuthFormProps {
     }) => void;
 }
 
+/**
+ * Merges uiSchema default values into a base defaults object.
+ * Skips props whose type is not in the supported union.
+ */
+function mergeUiSchemaDefaults(
+    base: Record<string, unknown>,
+    uiSchema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+    if (!uiSchema) return base;
+    const merged = { ...base };
+    for (const [key, rawProp] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
+        if (!isSupportedUiPropType(rawProp.type)) continue;
+        const prop = rawProp as UiSchemaProp;
+        if (merged[key] === undefined && prop.defaultValue !== undefined) {
+            merged[key] = prop.defaultValue;
+        }
+        if (prop.type === 'CHECKBOX' && merged[key] === undefined) {
+            merged[key] = false;
+        }
+    }
+    return merged;
+}
+
 export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defaultValues, onCancel, onSubmit }: Readonly<DynamicAuthFormProps>) {
     const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
 
-    // Inject default values out of uiSchema definitions if not provided by existing values
-    const mergedDefaults = { ...defaultValues };
-    if (provider.uiSchema) {
-        for (const [key, prop] of Object.entries(provider.uiSchema as Record<string, UiSchemaProp>)) {
-            if (mergedDefaults[key] === undefined && prop.defaultValue !== undefined) {
-                mergedDefaults[key] = prop.defaultValue;
-            }
-            if (prop.type === 'CHECKBOX' && mergedDefaults[key] === undefined) {
-                mergedDefaults[key] = false;
-            }
-        }
-    }
+    // Inject default values out of uiSchema definitions if not provided by existing values.
+    // Skip props whose type is unsupported — they have no schema field and should not be injected.
+    const mergedDefaults = mergeUiSchemaDefaults({ ...defaultValues }, provider.uiSchema as Record<string, unknown> | undefined);
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
@@ -220,20 +255,12 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
 
     const handleValidSubmit = (values: z.infer<typeof schema>) => {
         const { connectionName, clientId, clientSecret, env, ...rest } = values;
-        // Everything else belongs to vendorParams
-        const vendorParams: Record<string, string> = {};
-        for (const [key, val] of Object.entries(rest)) {
-            if (val !== undefined && val !== null && val !== '') {
-                vendorParams[key] = String(val);
-            }
-        }
-
         onSubmit({
             connectionName: connectionName as string,
             clientId: clientId as string,
             clientSecret: clientSecret as string,
             env: env as string | undefined,
-            vendorParams,
+            vendorParams: buildVendorParams(rest as Record<string, unknown>),
         });
     };
 

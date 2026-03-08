@@ -9,6 +9,8 @@ export type OAuthPopupOptions = {
     onSuccess: (data: { provider: string; code: string; state: string; vendorParams?: Record<string, string> }) => void;
     /** Called when the popup postMessages an error result */
     onError: (error: string) => void;
+    /** Called when the popup window is closed by the user without completing the flow */
+    onClose?: () => void;
 };
 
 /**
@@ -17,15 +19,28 @@ export type OAuthPopupOptions = {
  *
  * Architecture: docs/architecture/popup_oauth_strategy.md
  */
-export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
+export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions) {
     const popupRef = useRef<Window | null>(null);
     const onSuccessRef = useRef(onSuccess);
     const onErrorRef = useRef(onError);
+    const onCloseRef = useRef(onClose);
+    // Track whether the flow completed via postMessage so onClose is
+    // not called after a normal success/error path.
+    const completedRef = useRef(false);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopPoll = useCallback(() => {
+        if (pollRef.current !== null) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, []);
 
     useEffect(() => {
         onSuccessRef.current = onSuccess;
         onErrorRef.current = onError;
-    }, [onSuccess, onError]);
+        onCloseRef.current = onClose;
+    }, [onSuccess, onError, onClose]);
 
     // Stable message handler attached once via useEffect
     useEffect(() => {
@@ -42,31 +57,43 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
 
             if (data.status === 'success') {
                 if (typeof data.provider === 'string' && typeof data.code === 'string' && typeof data.state === 'string') {
+                    completedRef.current = true;
+                    stopPoll();
                     onSuccessRef.current({ provider: data.provider, code: data.code, state: data.state, vendorParams: data.vendorParams });
                 } else {
+                    completedRef.current = true;
+                    stopPoll();
                     onErrorRef.current('invalid_payload');
                 }
             } else if (data.status === 'error') {
+                completedRef.current = true;
+                stopPoll();
                 onErrorRef.current(typeof data.error === 'string' ? data.error : 'unknown_error');
             } else {
+                completedRef.current = true;
+                stopPoll();
                 onErrorRef.current('invalid_payload');
             }
         }
         window.addEventListener('message', handleMessage);
         return () => {
             window.removeEventListener('message', handleMessage);
+            stopPoll();
             if (popupRef.current && !popupRef.current.closed) {
                 popupRef.current.close();
             }
             popupRef.current = null;
         };
-    }, []);
+    }, [stopPoll]);
 
     const openPopup = useCallback((connectUrl: string) => {
-        // Close stale popup if it's still open
+        // Close stale popup and cancel any in-flight poll
+        stopPoll();
         if (popupRef.current && !popupRef.current.closed) {
             popupRef.current.close();
         }
+
+        completedRef.current = false;
 
         const width = 600;
         const height = 800;
@@ -80,9 +107,20 @@ export function useOAuthPopup({ onSuccess, onError }: OAuthPopupOptions) {
         );
         if (!popupRef.current) {
             onErrorRef.current('popup_blocked');
+            return;
         }
 
-    }, []);
+        // Poll every 500 ms to detect manual close (no postMessage fired)
+        pollRef.current = setInterval(() => {
+            if (popupRef.current?.closed) {
+                stopPoll();
+                if (!completedRef.current) {
+                    onCloseRef.current?.();
+                }
+                popupRef.current = null;
+            }
+        }, 500);
+    }, [stopPoll]);
 
     return { openPopup };
 }
