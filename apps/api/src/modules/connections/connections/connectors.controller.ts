@@ -518,14 +518,11 @@ export class ConnectorsController {
     // STRICT VALIDATION: validate vendor params against the same schema source
     // that getProviders exposes (p.uiSchema takes priority, then piece.auth.props).
     const piece = this.pieceRegistry.getPiece(restOfBody.providerName);
-    const providerForSchema = this.providerRegistry.getProvider(
-      restOfBody.providerName,
-    );
     const authProps =
       piece?.auth && 'props' in piece.auth
         ? (piece.auth.props as Record<string, AnyProperty>)
         : undefined;
-    const uiSchemaProps = providerForSchema?.uiSchema as
+    const uiSchemaProps = providerData.uiSchema as
       | Record<string, AnyProperty>
       | undefined;
     validateVendorParams(uiSchemaProps, vendorParams, authProps);

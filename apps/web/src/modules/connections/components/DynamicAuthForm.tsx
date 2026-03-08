@@ -38,7 +38,13 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
         return z.boolean().default((prop.defaultValue as boolean | undefined) ?? false);
     }
     if (prop.type === 'NUMBER') {
-        const field = z.coerce.number();
+        // Preprocess: convert empty string to undefined before coercing so that
+        // empty optional fields become undefined (not 0) and are filtered out
+        // by the submit handler rather than submitted as a zero value.
+        const field = z.preprocess(
+            (v) => (v === '' ? undefined : v),
+            z.coerce.number(),
+        );
         return prop.required ? field : field.optional();
     }
     if (prop.type === 'JSON') {
@@ -273,7 +279,7 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                             <FormLabel className="text-right">Client Secret <span className="text-red-500">*</span></FormLabel>
                             <div className="col-span-3">
                                 <FormControl>
-                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Unchanged — re-enter to reconnect)' : ''} />
+                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Required — re-enter to reconnect)' : ''} />
                                 </FormControl>
                                 <FormMessage />
                             </div>

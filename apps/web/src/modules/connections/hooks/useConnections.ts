@@ -4,6 +4,15 @@ import { listActiveConnections, exchangeOAuthCode, type ActiveConnectionResponse
 import { useOAuthPopup } from './useOAuthPopup';
 import { useToast } from '@/shared/hooks/use-toast';
 
+/** Credentials collected from the DynamicAuthForm, held while the OAuth popup is open. */
+type PendingCredential = {
+    clientId: string;
+    clientSecret?: string;
+    displayName: string;
+    env?: string;
+    vendorParams?: Record<string, string>;
+};
+
 export function useConnections() {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -11,7 +20,7 @@ export function useConnections() {
     const [loading, setLoading] = useState(false);
 
     // Store credentials temporarily while the popup is open
-    const pendingCredentials = useRef<{ clientId: string; clientSecret?: string; displayName: string; env?: string; vendorParams?: Record<string, string> } | null>(null);
+    const pendingCredentials = useRef<PendingCredential | null>(null);
 
     const refresh = useCallback(async () => {
         if (!user?.organizationId) return;
@@ -93,7 +102,7 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, env, vendorParams }: { providerName: string; clientId: string; clientSecret?: string; displayName: string; env?: string; vendorParams?: Record<string, string> }) => {
+        ({ providerName, clientId, clientSecret, displayName, env, vendorParams }: { providerName: string } & PendingCredential) => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
