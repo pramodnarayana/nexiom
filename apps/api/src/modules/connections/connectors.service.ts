@@ -193,18 +193,14 @@ export class ConnectorsService {
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
 
-      const response = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }).toString(),
-        signal: AbortSignal.timeout(10000),
-      });
+      const response = await this.executeTokenExchangeFetch(
+        tokenUrl,
+        redirectUri,
+        clientId,
+        clientSecret,
+        code,
+        providerName,
+      );
 
       if (!response.ok) {
         await this.handleTokenExchangeError(providerName, response);
@@ -419,7 +415,7 @@ export class ConnectorsService {
         );
       } catch (applyError) {
         this.logger.error(
-          `applyPlan failed for ${providerName}, rolling back provisioned records...`,
+          `applyPlan failed for ${providerName} (connectionId: ${workspaceProvisionInfo.connectionId}, createdRegistry: ${workspaceProvisionInfo.createdRegistry}, createdAppConnection: ${workspaceProvisionInfo.createdAppConnection}), rolling back provisioned records...`,
           applyError,
         );
         try {
@@ -463,6 +459,40 @@ export class ConnectorsService {
       throw new InternalServerErrorException(
         'Failed to save connection to database',
       );
+    }
+  }
+
+  private async executeTokenExchangeFetch(
+    tokenUrl: string,
+    redirectUri: string,
+    clientId: string,
+    clientSecret: string,
+    code: string,
+    providerName: string,
+  ): Promise<Response> {
+    try {
+      return await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }).toString(),
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        (err.name === 'AbortError' || err.name === 'TimeoutError')
+      ) {
+        throw new InternalServerErrorException(
+          `Token exchange timed out after 10s for ${providerName}`,
+        );
+      }
+      throw err;
     }
   }
 }

@@ -27,7 +27,7 @@ export class UniversalTriggerEngine {
         // 1. Determine Identity & Configuration
         const bulkThreshold = hint?.bulkThreshold ?? 5_000;
         const lowLimitThreshold = this.parseLimitThreshold(config.apiLimitThreshold);
-        const connectorLabel = config.connectorName ?? objectName;
+        const connectorLabel = this.resolveConnectorLabel(config, objectName);
 
         // --- BACKOFF & PROTECTION LOGIC ---
         const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, connectorLabel, config.checkApiLimits);
@@ -106,22 +106,22 @@ export class UniversalTriggerEngine {
         store: any,
         lowLimitThreshold: number,
         connectorName: string,
-        checkApiLimits?: (auth: any, store: any) => Promise<ApiRateLimit | null>
+        checkApiLimits?: (auth: any, store: any, signal?: AbortSignal) => Promise<ApiRateLimit | null>
     ): Promise<boolean> {
         if (!checkApiLimits) return true;
 
         let apiLimits: ApiRateLimit | null = null;
         try {
-            let timeoutId: ReturnType<typeof setTimeout>;
-            const timeoutPromise = new Promise<null>((_, reject) => {
-                timeoutId = setTimeout(() => reject(new TimeoutError('TIMEOUT')), 5000);
-            });
-            apiLimits = await Promise.race([
-                checkApiLimits(auth, store).finally(() => clearTimeout(timeoutId)),
-                timeoutPromise,
-            ]);
-        } catch (e) {
-            const isTimeout = e instanceof TimeoutError;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(new TimeoutError('TIMEOUT')), 5000);
+
+            try {
+                apiLimits = await checkApiLimits(auth, store, controller.signal);
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        } catch (e: any) {
+            const isTimeout = e instanceof TimeoutError || e?.name === 'AbortError' || e?.name === 'TimeoutError';
             log.debug(`Failed to verify API limits during preflight cache check${isTimeout ? ' (Timeout)' : ''}`, { error: String(e) });
             return true; // Fail open
         }
@@ -139,6 +139,12 @@ export class UniversalTriggerEngine {
             }
         }
         return true;
+    }
+
+    private static resolveConnectorLabel(config: UniversalEngineConfig<any>, fallbackObject: string): string {
+        return config.checkApiLimits && !config.connectorName
+            ? 'connector'
+            : (config.connectorName ?? fallbackObject);
     }
 
     private static parseLimitThreshold(envValue?: string | number): number {

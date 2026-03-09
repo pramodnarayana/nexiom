@@ -168,12 +168,8 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
         clientSecret: valueBlob.clientSecret,
         vendorParams: {
           ...(valueBlob.vendorParams ?? {}),
-          ...((valueBlob as unknown as Record<string, unknown>).environment
-            ? {
-                environment: String(
-                  (valueBlob as unknown as Record<string, unknown>).environment,
-                ),
-              }
+          ...('environment' in valueBlob && valueBlob.environment
+            ? { environment: String(valueBlob.environment) }
             : {}),
         },
       };

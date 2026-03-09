@@ -12,10 +12,11 @@ export class SalesforceAuthError extends Error {
 
 export type CheckApiLimitsFn = (
     auth: { instance_url: string; access_token: string },
-    store: TriggerStore
+    store: TriggerStore,
+    signal?: AbortSignal
 ) => Promise<{ remaining: number; total: number } | null>;
 
-export const checkSalesforceLimits: CheckApiLimitsFn = async (auth, store) => {
+export const checkSalesforceLimits: CheckApiLimitsFn = async (auth, store, signal) => {
     const CACHE_KEY = `sf_limits_${auth.instance_url}`;
     const POLL_INTERVAL = getPollIntervalMs();
 
@@ -27,7 +28,8 @@ export const checkSalesforceLimits: CheckApiLimitsFn = async (auth, store) => {
     try {
         const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/limits`;
         const response = await sfFetch(url, {
-            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' }
+            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
+            signal
         });
 
         // if we get here, response is OK because sfFetch throws on non-ok (except 403 maybe? Actually sfFetch only returns if ok)
@@ -98,6 +100,9 @@ export async function sfFetch(
         try {
             response = await executeFetchWithTimeout(url, init);
         } catch (err: unknown) {
+            if (init.signal?.aborted) {
+                throw err;
+            }
             // Sonarqube: Handle this exception or don't catch it at all
             const errMsg = parseNetworkErrorMsg(err);
             console.debug(`[sfFetch] Transient network error encountered: ${errMsg}`);

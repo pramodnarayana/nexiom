@@ -50,16 +50,23 @@ function assertPropValue(
   if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
-  if (String(prop.type) === 'STATIC_DROPDOWN' && 'options' in prop) {
-    const propWithOptions = prop as {
-      options?: { options?: { value: unknown }[] };
-    };
-    const opts = propWithOptions.options?.options;
-    if (Array.isArray(opts)) {
+  if (String(prop.type) === 'STATIC_DROPDOWN') {
+    const p = prop as Record<string, unknown>;
+    if (
+      typeof p.options === 'object' &&
+      p.options !== null &&
+      'options' in p.options &&
+      Array.isArray((p.options as Record<string, unknown>).options)
+    ) {
+      const opts = (p.options as Record<string, unknown>).options as Array<
+        Record<string, unknown>
+      >;
       const allowed = new Set(opts.map((o) => String(o.value)));
       if (!allowed.has(String(val))) {
         throw new BadRequestException(`Parameter ${key} has an invalid value`);
       }
+    } else {
+      throw new BadRequestException(`Parameter ${key} has malformed options`);
     }
   }
 }
@@ -573,7 +580,6 @@ export class ConnectorsController {
       state: string;
       /** User-provided human-readable name e.g. "TMS Salesforce" */
       displayName: string;
-      vendorParams?: Record<string, string>;
     },
   ) {
     const tenantId = ctx.user?.organizationId;
