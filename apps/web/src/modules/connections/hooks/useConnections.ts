@@ -11,7 +11,7 @@ type PendingCredential = {
     clientSecret: string;
     displayName: string;
     /** Vendor-specific parameters (e.g. { environment: 'test' }). */
-    vendorParams?: Record<string, string>;
+    vendorParams?: Record<string, string | boolean | number>;
 };
 
 export function useConnections() {
@@ -39,7 +39,7 @@ export function useConnections() {
         }
     }, [user?.organizationId, toast]);
 
-    const handleSuccess = useCallback((data: { provider: string; code: string; state: string; vendorParams?: Record<string, string> }) => {
+    const handleSuccess = useCallback((data: { provider: string; code: string; state: string; vendorParams?: Record<string, string | boolean | number> }) => {
         void (async () => {
             const { provider, code, state, vendorParams } = data;
             if (!pendingCredentials.current) {
@@ -132,7 +132,12 @@ export function useConnections() {
             // They are merged in handleSuccess from pendingCredentials instead.
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
             if (vendorParams && Object.keys(vendorParams).length > 0) {
-                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(vendorParams))}`;
+                const safeParams = Object.fromEntries(
+                    Object.entries(vendorParams).filter(([k]) => !/secret|password|token|key/i.test(k))
+                );
+                if (Object.keys(safeParams).length > 0) {
+                    popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(safeParams))}`;
+                }
             }
             openPopup(popupUrl);
         },

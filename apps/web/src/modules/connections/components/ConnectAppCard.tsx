@@ -38,7 +38,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
     const [open, setOpen] = useState(false);
     const [imgError, setImgError] = useState(false);
-    const [defaultCreds, setDefaultCreds] = useState<{ clientId: string; vendorParams?: Record<string, string> } | undefined>();
+    const [defaultCreds, setDefaultCreds] = useState<{ clientId: string; vendorParams?: Record<string, string | boolean | number> } | undefined>();
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
@@ -146,13 +146,31 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             provider={provider}
                             callbackUrl={callbackUrl}
                             isUpdate={isConnected}
-                            defaultValues={useMemo(() => ({
-                                connectionName: connection?.displayName || provider.displayName,
-                                clientId: defaultCreds?.clientId || '',
-                                // Spread all stored vendorParams so every uiSchema field
-                                // (e.g. environment dropdown) is pre-filled on reconnect.
-                                ...defaultCreds?.vendorParams,
-                            }), [connection?.displayName, provider.displayName, defaultCreds])}
+                            defaultValues={useMemo(() => {
+                                const coercedVendorParams: Record<string, string | boolean | number> = {};
+
+                                if (defaultCreds?.vendorParams) {
+                                    for (const [key, value] of Object.entries(defaultCreds.vendorParams)) {
+                                        const schemaDef = provider.uiSchema?.[key] as { type?: string } | undefined;
+                                        const type = schemaDef?.type;
+
+                                        if (type === 'CHECKBOX') {
+                                            coercedVendorParams[key] = value === 'true' || value === true;
+                                        } else if (type === 'NUMBER') {
+                                            const num = Number(value);
+                                            coercedVendorParams[key] = !Number.isNaN(num) ? num : value;
+                                        } else {
+                                            coercedVendorParams[key] = value;
+                                        }
+                                    }
+                                }
+
+                                return {
+                                    connectionName: connection?.displayName || provider.displayName,
+                                    clientId: defaultCreds?.clientId || '',
+                                    ...coercedVendorParams,
+                                };
+                            }, [connection?.displayName, provider.displayName, defaultCreds, provider.uiSchema])}
                             onCancel={() => handleOpenChange(false)}
                             onSubmit={handleDynamicConnect}
                         />

@@ -23,6 +23,11 @@ export function resolveOAuth2Url(
                 `OAuth2 URL template references prop "${key}" but no value was provided in vendorParams`,
             );
         }
+        if (/[@/?#:]/.test(value)) {
+            throw new Error(
+                `OAuth2 URL template prop "${key}" contains unsafe characters that could alter the URL structure.`,
+            );
+        }
         return value;
     });
 }

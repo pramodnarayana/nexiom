@@ -60,6 +60,12 @@ export interface IQueryAdapter {
     buildCountQuery(schema: ObjectSchema, spec: QuerySpec): string;
 }
 
+/** Information about the SaaS API rate limits. */
+export interface ApiRateLimit {
+    remaining: number;
+    total: number;
+}
+
 /** Executes queries using Bulk APIs for high-volume loads. */
 export interface IBulkAdapter<TAuth = unknown> {
     /** Starts or polls a bulk job and returns results when complete. Returns empty array if still polling. */
@@ -82,7 +88,7 @@ export interface UniversalEngineConfig<TAuth = unknown> {
     executeCountQuery?: (auth: TAuth, query: string) => Promise<number>;
 
     /** Checks API limits to prevent over-polling. Optional. */
-    checkApiLimits?: (auth: TAuth, store: TriggerStore) => Promise<{ remaining: number; total: number } | null>;
+    checkApiLimits?: (auth: TAuth, store: TriggerStore) => Promise<ApiRateLimit | null>;
 
     /** Adapter to discover the schema. */
     discoveryAdapter: IDiscoveryAdapter<TAuth>;

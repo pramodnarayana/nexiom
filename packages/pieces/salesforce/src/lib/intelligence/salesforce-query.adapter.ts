@@ -53,7 +53,17 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
-        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
+        let tbFormatted: string | null = null;
+
+        if (spec.tieBreakerField && spec.tieBreakerValue) {
+            const tbFieldDef = schema.fields.find(f => f.name === spec.tieBreakerField);
+            if (!tbFieldDef) {
+                throw new Error(`Invalid tieBreakerField: '${spec.tieBreakerField}' not found on object '${spec.objectName}'`);
+            }
+            this.validateCursor(spec.tieBreakerValue);
+            const isTbStringType = ['string', 'id', 'reference'].includes(tbFieldDef.type.toLowerCase());
+            tbFormatted = isTbStringType ? `'${spec.tieBreakerValue}'` : spec.tieBreakerValue;
+        }
 
         if (spec.tieBreakerField && tbFormatted) {
             return `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;

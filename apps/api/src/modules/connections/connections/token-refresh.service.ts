@@ -39,11 +39,7 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       throw new Error(`Provider not found for refresh: ${appName}`);
     }
 
-    if (
-      !piece.auth ||
-      piece.auth.type !== PropertyType.OAUTH2 ||
-      !piece.auth.tokenUrl
-    ) {
+    if (piece.auth?.type !== PropertyType.OAUTH2 || !piece.auth.tokenUrl) {
       throw new Error(
         `Provider ${appName} does not support OAuth refresh or lacks a token url`,
       );
@@ -170,7 +166,16 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       return {
         clientId: valueBlob.clientId,
         clientSecret: valueBlob.clientSecret,
-        vendorParams: valueBlob.vendorParams ?? {},
+        vendorParams: {
+          ...(valueBlob.vendorParams ?? {}),
+          ...((valueBlob as unknown as Record<string, unknown>).environment
+            ? {
+                environment: String(
+                  (valueBlob as unknown as Record<string, unknown>).environment,
+                ),
+              }
+            : {}),
+        },
       };
     } catch (error: unknown) {
       throw new Error(

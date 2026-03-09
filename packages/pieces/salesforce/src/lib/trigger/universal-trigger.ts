@@ -163,7 +163,7 @@ async function runUniversalTrigger(
         bulkAdapter,
         executeStandardQuery,
         executeCountQuery,
-        checkApiLimits: checkSalesforceLimits as (auth: any, store: any) => Promise<{ remaining: number; total: number } | null>
+        checkApiLimits: checkSalesforceLimits,
     });
 
     log.info('Poll completed', { object: objectName, records: String(records.length) });

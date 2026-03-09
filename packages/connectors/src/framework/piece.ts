@@ -39,7 +39,7 @@ export interface CreatePieceParams {
     logoUrl: string;
     authors?: string[];
     categories?: any[];
-    auth?: PieceAuthProperty;
+    auth: PieceAuthProperty;
     actions: Action[];
     triggers: Trigger[];
     description?: string;
@@ -90,7 +90,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         displayName: params.displayName,
         logoUrl: params.logoUrl,
         description: params.description || '',
-        auth: params.auth!,
+        auth: params.auth,
         categories: (params.categories ?? []).map(String),
         actions: actionsMap,
         triggers: triggersMap,

@@ -1,6 +1,6 @@
 import { SmartCursorSelector } from './smart-cursor-selector.js';
 import { IgtLogger } from './igt-logger.js';
-import type { UniversalEngineConfig } from './interfaces.js';
+import type { UniversalEngineConfig, ApiRateLimit } from './interfaces.js';
 
 const log = new IgtLogger({ app: 'universal-engine' });
 
@@ -98,15 +98,19 @@ export class UniversalTriggerEngine {
         store: any,
         lowLimitThreshold: number,
         objectName: string,
-        checkApiLimits?: (auth: any, store: any) => Promise<{ remaining: number; total: number } | null>
+        checkApiLimits?: (auth: any, store: any) => Promise<ApiRateLimit | null>
     ): Promise<boolean> {
         if (!checkApiLimits) return true;
 
-        let apiLimits: { remaining: number; total: number } | null = null;
+        let apiLimits: ApiRateLimit | null = null;
         try {
-            apiLimits = await checkApiLimits(auth, store);
+            apiLimits = await Promise.race([
+                checkApiLimits(auth, store),
+                new Promise<null>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+            ]);
         } catch (e) {
-            log.debug('Failed to verify API limits during preflight cache check', { error: String(e) });
+            const isTimeout = e instanceof Error && e.message === 'TIMEOUT';
+            log.debug(`Failed to verify API limits during preflight cache check${isTimeout ? ' (Timeout)' : ''}`, { error: String(e) });
             return true; // Fail open
         }
 

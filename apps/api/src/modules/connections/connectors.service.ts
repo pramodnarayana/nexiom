@@ -22,6 +22,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
+import { eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -371,14 +372,35 @@ export class ConnectorsService {
             target: connectionStorageRegistry.connectionId,
           });
 
-        return schemaName;
+        return { schemaName, connectionId: connection.id };
       });
 
       // 3. Apply the initial schema plan outside the transaction
-      await this.dbManager.applyPlan(
-        workspaceSchemaName,
-        SchemaPlan.NAMESPACE_ONLY,
-      );
+      try {
+        await this.dbManager.applyPlan(
+          workspaceSchemaName.schemaName,
+          SchemaPlan.NAMESPACE_ONLY,
+        );
+      } catch (applyError) {
+        this.logger.error(
+          `applyPlan failed for ${providerName}, rolling back records...`,
+          applyError,
+        );
+        await this.db
+          .delete(connectionStorageRegistry)
+          .where(
+            eq(
+              connectionStorageRegistry.connectionId,
+              workspaceSchemaName.connectionId,
+            ),
+          );
+        await this.db
+          .delete(appConnections)
+          .where(eq(appConnections.id, workspaceSchemaName.connectionId));
+        throw new InternalServerErrorException(
+          'Failed to provision workspace namespace',
+        );
+      }
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;

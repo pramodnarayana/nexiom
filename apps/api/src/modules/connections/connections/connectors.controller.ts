@@ -18,6 +18,7 @@ import {
 import type { Response } from 'express';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
+import { z } from 'zod';
 import type { AnyProperty } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
@@ -47,14 +48,35 @@ function assertPropValue(
   if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
+  if (String(prop.type) === 'STATIC_DROPDOWN' && 'options' in prop) {
+    const propWithOptions = prop as {
+      options?: { options?: { value: unknown }[] };
+    };
+    const opts = propWithOptions.options?.options;
+    if (Array.isArray(opts)) {
+      const allowed = new Set(opts.map((o) => String(o.value)));
+      if (!allowed.has(String(val))) {
+        throw new BadRequestException(`Parameter ${key} has an invalid value`);
+      }
+    }
+  }
 }
 
 function validateVendorParams(
   schema: Record<string, AnyProperty> | undefined,
   vendorParams: Record<string, string> | undefined,
 ): void {
-  if (!schema) return;
   const params = vendorParams ?? {};
+  const paramKeys = Object.keys(params);
+
+  if (!schema) {
+    if (paramKeys.length > 0) {
+      throw new BadRequestException(
+        'No vendor parameters are allowed for this provider',
+      );
+    }
+    return;
+  }
 
   // Reject keys not declared in the schema.
   const declaredKeys = new Set(Object.keys(schema));
@@ -405,7 +427,7 @@ export class ConnectorsController {
    * so they can be retrieved on the callback to resolve URL templates.
    */
   @Get(':providerName')
-  initiateOAuth(
+  async initiateOAuth(
     @AuthContext() ctx: RequestAuthContext,
     @Param('providerName') providerName: string,
     @Query('clientId') clientId: string,
@@ -430,22 +452,35 @@ export class ConnectorsController {
       throw new BadRequestException('clientId exceeds maximum allowed length');
     }
 
-    // vendorParams are JSON-serialised by the frontend and sent as a single query param
+    // vendorParams are JSON-serialised by the frontend and sent as a single queryParam
     let vendorParams: Record<string, string> = {};
     if (vendorParamsJson) {
       try {
         const parsed: unknown = JSON.parse(vendorParamsJson);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          vendorParams = parsed as Record<string, string>;
+        const parseResult = z
+          .record(z.string(), z.string())
+          .refine((obj) => Object.keys(obj).length <= 15, {
+            message: 'vendorParams cannot exceed 15 keys',
+          })
+          .safeParse(parsed);
+
+        if (!parseResult.success) {
+          throw new BadRequestException(
+            `Invalid vendorParams format: ${parseResult.error.issues[0]?.message}`,
+          );
         }
-      } catch {
-        throw new BadRequestException('Invalid vendorParams format');
+        vendorParams = parseResult.data;
+      } catch (err) {
+        if (err instanceof BadRequestException) {
+          throw err;
+        }
+        throw new BadRequestException('Invalid vendorParams JSON format');
       }
     }
 
     let authorizeUrl: string;
     try {
-      const jwtState = this.oauthStateService.generateState(
+      const jwtState = await this.oauthStateService.generateState(
         tenantId,
         providerName,
         vendorParams,
@@ -493,7 +528,7 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { vendorParams, ...restOfBody } = body;
+    const restOfBody = body;
 
     const { trimmedDisplayName, externalId } = validateExchangeBody(
       restOfBody.providerName,
@@ -512,7 +547,7 @@ export class ConnectorsController {
       );
     }
 
-    const decodedState = this.oauthStateService.verifyState(
+    const decodedState = await this.oauthStateService.verifyState(
       body.state,
       restOfBody.providerName,
     );
@@ -527,7 +562,7 @@ export class ConnectorsController {
       piece.auth && 'props' in piece.auth
         ? (piece.auth.props as Record<string, AnyProperty>)
         : undefined;
-    validateVendorParams(authProps, vendorParams);
+    validateVendorParams(authProps, decodedState.vendorParams);
 
     // Exchange the code for actual OAuth tokens
     let tokenResponse: Record<string, unknown>;
@@ -537,7 +572,7 @@ export class ConnectorsController {
         restOfBody.code,
         restOfBody.clientId,
         restOfBody.clientSecret,
-        vendorParams ?? {},
+        decodedState.vendorParams ?? {},
       );
     } catch (error) {
       if (
@@ -573,7 +608,7 @@ export class ConnectorsController {
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
       data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
-      vendorParams: vendorParams ?? {},
+      vendorParams: decodedState.vendorParams ?? {},
     };
 
     let encryptedValue: string;

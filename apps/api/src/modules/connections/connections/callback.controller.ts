@@ -89,7 +89,7 @@ export class OAuthCallbackController {
   }
 
   @Get()
-  handleCallback(@Req() req: Request, @Res() res: Response) {
+  async handleCallback(@Req() req: Request, @Res() res: Response) {
     const rawState = req.query.state as string | undefined;
 
     if (!rawState) {
@@ -165,7 +165,7 @@ export class OAuthCallbackController {
 
     // 2. Validate State (Tenant Context) using stateless JWT
     try {
-      this.oauthStateService.verifyState(rawState, provider);
+      await this.oauthStateService.verifyState(rawState, provider);
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(

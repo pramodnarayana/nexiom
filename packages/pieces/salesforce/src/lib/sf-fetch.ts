@@ -8,15 +8,14 @@ export class SalesforceAuthError extends Error {
     }
 }
 
-export interface ApiLimitsStore {
-    get<T>(key: string): Promise<T | null>;
-    put<T>(key: string, value: T): Promise<void>;
-}
+import type { TriggerStore } from '@nexiom/connectors/framework';
 
-export async function checkSalesforceLimits(
+export type CheckApiLimitsFn = (
     auth: { instance_url: string; access_token: string },
-    store: ApiLimitsStore
-): Promise<{ remaining: number; total: number } | null> {
+    store: TriggerStore
+) => Promise<{ remaining: number; total: number } | null>;
+
+export const checkSalesforceLimits: CheckApiLimitsFn = async (auth, store) => {
     const CACHE_KEY = `sf_limits_${auth.instance_url}`;
     const POLL_INTERVAL = getPollIntervalMs();
 
@@ -100,7 +99,14 @@ export async function sfFetch(
             response = await executeFetchWithTimeout(url, init);
         } catch (err: unknown) {
             // Sonarqube: Handle this exception or don't catch it at all
-            const errMsg = err instanceof Error ? err.message : String(err);
+            let errMsg: string;
+            if (err instanceof Error) {
+                errMsg = err.message;
+            } else if (typeof err === 'object' && err !== null) {
+                try { errMsg = JSON.stringify(err); } catch { errMsg = 'Unknown error object'; }
+            } else {
+                errMsg = String(err);
+            }
             console.debug(`[sfFetch] Transient network error encountered: ${errMsg}`);
             isTransientError = true;
         }

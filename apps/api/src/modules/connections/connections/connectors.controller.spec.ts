@@ -105,18 +105,18 @@ describe('ConnectorsController', () => {
   });
 
   describe('initiateOAuth', () => {
-    it('should create state, build auth URL and redirect', () => {
+    it('should create state, build auth URL and redirect', async () => {
       const mockRes = {
         redirect: vi.fn(),
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
-      mockOauthStateService.generateState.mockReturnValue('mocked_jwt_state');
+      mockOauthStateService.generateState.mockResolvedValue('mocked_jwt_state');
       mockConnectorsService.getAuthorizationUrl.mockReturnValue(
         'https://vendor.com/auth',
       );
 
-      controller.initiateOAuth(
+      await controller.initiateOAuth(
         mockCtx,
         'mock-piece',
         'mock-client-id',
@@ -138,13 +138,13 @@ describe('ConnectorsController', () => {
       expect(mockRes.redirect).toHaveBeenCalledWith('https://vendor.com/auth');
     });
 
-    it('should throw BadRequestException if tenant is missing', () => {
+    it('should throw BadRequestException if tenant is missing', async () => {
       const mockRes = {
         redirect: vi.fn(),
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
-      expect(() =>
+      await expect(
         controller.initiateOAuth(
           missingTenantCtx,
           'mock-piece',
@@ -152,32 +152,32 @@ describe('ConnectorsController', () => {
           undefined,
           mockRes,
         ),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if clientId is missing', () => {
+    it('should throw BadRequestException if clientId is missing', async () => {
       const mockRes = {
         redirect: vi.fn(),
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
-      expect(() =>
+      await expect(
         controller.initiateOAuth(mockCtx, 'mock-piece', '', undefined, mockRes),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw InternalServerErrorException if service fails', () => {
+    it('should throw InternalServerErrorException if service fails', async () => {
       const mockRes = {
         redirect: vi.fn(),
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
-      mockOauthStateService.generateState.mockReturnValue('state');
+      mockOauthStateService.generateState.mockResolvedValue('state');
       mockConnectorsService.getAuthorizationUrl.mockImplementation(() => {
         throw new Error('Config error');
       });
 
-      expect(() =>
+      await expect(
         controller.initiateOAuth(
           mockCtx,
           'mock-piece',
@@ -185,7 +185,7 @@ describe('ConnectorsController', () => {
           undefined,
           mockRes,
         ),
-      ).toThrow(InternalServerErrorException);
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 
@@ -325,7 +325,10 @@ describe('ConnectorsController', () => {
     beforeEach(() => {
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
-        auth: { type: 'OAUTH2' },
+        auth: {
+          type: 'OAUTH2',
+          props: { realmId: { type: 'SHORT_TEXT', required: false } },
+        },
       } as unknown as Piece);
     });
 
@@ -333,6 +336,10 @@ describe('ConnectorsController', () => {
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
       mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
       mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
 
@@ -413,7 +420,7 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if state token does not belong to this tenant', async () => {
-      mockOauthStateService.verifyState.mockReturnValueOnce({
+      mockOauthStateService.verifyState.mockResolvedValueOnce({
         tenantId: 'other-tenant',
       });
 

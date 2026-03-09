@@ -57,12 +57,12 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
 export async function getConnectionCredentials(connectionId: string): Promise<{
     clientId: string;
     hasClientSecret: boolean;
-    vendorParams?: Record<string, string>;
+    vendorParams?: Record<string, string | boolean | number>;
 }> {
     const res = await apiClient.get<{
         clientId: string;
         hasClientSecret: boolean;
-        vendorParams?: Record<string, string>;
+        vendorParams?: Record<string, string | boolean | number>;
     }>(`/connectors/active/${connectionId}/credentials`);
     return res.data;
 }
@@ -71,7 +71,7 @@ export async function exchangeOAuthCode(payload: {
     providerName: string;
     code: string;
     state: string;
-    vendorParams?: Record<string, string>;
+    vendorParams?: Record<string, string | boolean | number>;
     clientId: string;
     clientSecret: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */

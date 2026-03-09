@@ -66,8 +66,7 @@ export function ConnectionsPage() {
         <div className="space-y-8">
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
-                <div>
-                </div>
+                <h2 className="text-2xl font-bold tracking-tight">Connections</h2>
                 <Button
                     id="refresh-connections-btn"
                     variant="outline"

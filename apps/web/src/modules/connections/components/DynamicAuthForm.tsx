@@ -91,9 +91,13 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
         // We handle both direct arrays and the nested structure.
         const rawOptions = prop.options;
         interface NestedOptions { options?: { label: string; value: string }[] }
-        const optionsBody = (rawOptions && 'options' in rawOptions && Array.isArray((rawOptions as NestedOptions).options))
-            ? (rawOptions as NestedOptions).options!
-            : (Array.isArray(rawOptions) ? rawOptions : []);
+
+        let optionsBody: { label: string; value: string }[] = [];
+        if (rawOptions && 'options' in rawOptions && Array.isArray((rawOptions as NestedOptions).options)) {
+            optionsBody = (rawOptions as NestedOptions).options!;
+        } else if (Array.isArray(rawOptions)) {
+            optionsBody = rawOptions;
+        }
 
         return (
             <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
@@ -321,27 +325,29 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                 {/* Render Dynamic UI Schema properties — environment and other vendor-specific
                     fields are rendered generically here; no hardcoded field blocks needed. */}
 
-                {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>)).map(([key, prop]) => {
-                    return (
-                        <FormField
-                            key={key}
-                            control={form.control}
-                            name={key}
-                            render={({ field }) => (
-                                <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
-                                    <FormLabel className="text-right">{prop.displayName || key} {prop.required && <span className="text-red-500">*</span>}</FormLabel>
-                                    <div className="col-span-3">
-                                        <FormControl>
-                                            {renderFieldControl(prop, field)}
-                                        </FormControl>
-                                        {prop.description && <FormDescription className="mt-2">{prop.description}</FormDescription>}
-                                        <FormMessage />
-                                    </div>
-                                </FormItem>
-                            )}
-                        />
-                    );
-                })}
+                {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>))
+                    .filter(([, prop]) => isSupportedUiPropType(prop.type))
+                    .map(([key, prop]) => {
+                        return (
+                            <FormField
+                                key={key}
+                                control={form.control}
+                                name={key}
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                                        <FormLabel className="text-right">{prop.displayName || key} {prop.required && <span className="text-red-500">*</span>}</FormLabel>
+                                        <div className="col-span-3">
+                                            <FormControl>
+                                                {renderFieldControl(prop, field)}
+                                            </FormControl>
+                                            {prop.description && <FormDescription className="mt-2">{prop.description}</FormDescription>}
+                                            <FormMessage />
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
+                        );
+                    })}
 
                 <div className="grid grid-cols-4 items-center gap-4 pt-2">
                     <Label className="text-right">Callback URL</Label>
