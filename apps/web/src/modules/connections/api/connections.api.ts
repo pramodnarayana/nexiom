@@ -8,15 +8,15 @@ import { apiClient } from "@/shared/lib/api-client";
 export interface ProviderResponse {
     name: string;
     displayName: string;
-    authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
+    authType: string;
     description?: string;
     logoUrl?: string;
     category?: string;
-    environments?: {
-        name: string;
-        displayName: string;
-    }[];
     scopes?: string[];
+    /**
+     * Vendor-specific input schema derived from piece.auth.props.
+     * Rendered generically by DynamicAuthForm as dropdown/text/checkbox fields.
+     */
     uiSchema?: Record<string, unknown>;
 }
 
@@ -45,8 +45,25 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
     return res.data.data;
 }
 
-export async function getConnectionCredentials(connectionId: string): Promise<{ clientId: string; hasClientSecret: boolean; env?: string }> {
-    const res = await apiClient.get<{ clientId: string; hasClientSecret: boolean; env?: string }>(`/connectors/active/${connectionId}/credentials`);
+/**
+ * Fetches stored credentials for a connection so the reconnect form can pre-fill all fields.
+ *
+ * - clientId: safe to expose
+ * - hasClientSecret: whether a client secret is stored (the secret itself is never returned)
+ * - vendorParams: all stored vendor-specific parameters (e.g. environment selection)
+ *   that were submitted during the original OAuth flow; allows generic pre-filling of
+ *   all uiSchema fields without additional database columns.
+ */
+export async function getConnectionCredentials(connectionId: string): Promise<{
+    clientId: string;
+    hasClientSecret: boolean;
+    vendorParams?: Record<string, string>;
+}> {
+    const res = await apiClient.get<{
+        clientId: string;
+        hasClientSecret: boolean;
+        vendorParams?: Record<string, string>;
+    }>(`/connectors/active/${connectionId}/credentials`);
     return res.data;
 }
 
@@ -56,10 +73,9 @@ export async function exchangeOAuthCode(payload: {
     state: string;
     vendorParams?: Record<string, string>;
     clientId: string;
-    clientSecret?: string;
+    clientSecret: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */
     displayName: string;
-    env?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);
 }

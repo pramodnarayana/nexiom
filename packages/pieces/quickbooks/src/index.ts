@@ -1,6 +1,7 @@
 import {
   createPiece,
   createCustomApiCallAction,
+  PieceCategory
 } from '@nexiom/connectors/framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon } from './lib/common.js';
@@ -15,7 +16,7 @@ const customApiAction = createCustomApiCallAction({
       throw new Error('QuickBooks authentication missing or invalid companyId');
     }
 
-    const useSandbox = auth.props?.['useSandbox'] === true;
+    const useSandbox = auth.props?.['environment'] === 'test';
     const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
     return apiUrl;
   },
@@ -27,6 +28,7 @@ const customApiAction = createCustomApiCallAction({
 });
 
 export const quickbooks = createPiece({
+  name: "quickbooks",
   displayName: "Quickbooks Online",
   auth: quickbooksAuth,
   minimumSupportedRelease: '0.36.1',
@@ -34,6 +36,7 @@ export const quickbooks = createPiece({
   authors: [
     'onyedikachi-david'
   ],
+  categories: [PieceCategory.ACCOUNTING],
   actions: [
     customApiAction
   ],

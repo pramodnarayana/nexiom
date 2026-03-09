@@ -7,7 +7,7 @@ import * as jwt from 'jsonwebtoken';
 describe('OauthStateService', () => {
   let service: OauthStateService;
   const mockTenantId = 'tenant-123';
-  const mockProvider = 'salesforce';
+  const mockProvider = 'mock-piece';
 
   beforeEach(async () => {
     const mockConfigService = {
@@ -76,11 +76,9 @@ describe('OauthStateService', () => {
 
   describe('generateState', () => {
     it('should generate a valid JWT containing the tenantId, provider, and env', () => {
-      const stateToken = service.generateState(
-        mockTenantId,
-        mockProvider,
-        'sandbox',
-      );
+      const stateToken = service.generateState(mockTenantId, mockProvider, {
+        realmId: 'test-123',
+      });
 
       expect(typeof stateToken).toBe('string');
       expect(stateToken.split('.').length).toBe(3); // Header.Payload.Signature
@@ -89,7 +87,7 @@ describe('OauthStateService', () => {
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
       expect(decoded.tenantId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
-      expect(decoded.env).toBe('sandbox');
+      expect(decoded.vendorParams).toEqual({ realmId: 'test-123' });
       expect(decoded.purpose).toBe('oauth_state_handshake');
       expect(decoded.exp).toBeDefined();
     });
@@ -97,14 +95,15 @@ describe('OauthStateService', () => {
 
   describe('verifyState', () => {
     it('should successfully verify and extract a valid state token', () => {
-      const validToken = service.generateState(
-        mockTenantId,
-        mockProvider,
-        'sandbox',
-      );
+      const validToken = service.generateState(mockTenantId, mockProvider, {
+        realmId: 'test-123',
+      });
 
       const result = service.verifyState(validToken, mockProvider);
-      expect(result).toEqual({ tenantId: mockTenantId, env: 'sandbox' });
+      expect(result).toEqual({
+        tenantId: mockTenantId,
+        vendorParams: { realmId: 'test-123' },
+      });
     });
 
     it('should throw UnauthorizedException if token is completely missing', () => {

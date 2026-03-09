@@ -10,7 +10,7 @@ type PendingCredential = {
     /** Always required — /oauth-exchange always expects a non-empty secret. */
     clientSecret: string;
     displayName: string;
-    env?: string;
+    /** Vendor-specific parameters (e.g. { environment: 'test' }). */
     vendorParams?: Record<string, string>;
 };
 
@@ -63,9 +63,6 @@ export function useConnections() {
                     providerName: provider,
                     code,
                     state,
-                    // Merge vendorParams from the popup response with those stored
-                    // in pendingCredentials (user-entered SECRET_TEXT fields).
-                    // Popup params take precedence for fields that appear in both.
                     vendorParams: {
                         ...(pending.vendorParams),
                         ...(vendorParams),
@@ -73,7 +70,6 @@ export function useConnections() {
                     clientId: pending.clientId,
                     clientSecret: pending.clientSecret,
                     displayName: pending.displayName,
-                    env: pending.env,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
                 await refresh();
@@ -113,7 +109,7 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, env, vendorParams }: { providerName: string } & PendingCredential) => {
+        ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential) => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
@@ -121,22 +117,22 @@ export function useConnections() {
             }
 
             // Guard: block a second connect while a popup is already in progress.
-            // openPopup will close any stale window, so this prevents credential leaks
-            // where handleSuccess fires for the old flow after new credentials are stored.
             if (pendingCredentials.current) {
                 toast({ title: 'Already connecting', description: 'Please complete or close the current connection popup first.', variant: 'destructive' });
                 return;
             }
 
-            // Store credentials before opening the popup so handleSuccess always finds them.
-            pendingCredentials.current = { clientId, clientSecret, displayName, env, vendorParams };
+            pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams };
 
-            // Build popup URL — do NOT include vendorParams here to avoid leaking
-            // SECRET_TEXT values into GET URLs, server logs, or browser history.
-            // vendorParams are merged server-side from pendingCredentials in handleSuccess.
+            // Build popup URL.
+            // NON-secret vendorParams (e.g. environment dropdown) are sent as a JSON query param
+            // so the server can embed them in the signed OAuth state and resolve URL templates.
+            // SECRET_TEXT vendorParams (e.g. API keys) are intentionally excluded from the URL
+            // to avoid leaking them into GET params, server logs, and browser history.
+            // They are merged in handleSuccess from pendingCredentials instead.
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
-            if (env) {
-                popupUrl += `&env=${encodeURIComponent(env)}`;
+            if (vendorParams && Object.keys(vendorParams).length > 0) {
+                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(vendorParams))}`;
             }
             openPopup(popupUrl);
         },

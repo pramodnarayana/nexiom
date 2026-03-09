@@ -16,7 +16,7 @@ import { DynamicAuthForm } from './DynamicAuthForm';
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; env?: string; vendorParams?: Record<string, string> }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: Record<string, string> }) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -38,7 +38,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
 
     const [open, setOpen] = useState(false);
     const [imgError, setImgError] = useState(false);
-    const [defaultCreds, setDefaultCreds] = useState<{ clientId: string; env?: string } | undefined>();
+    const [defaultCreds, setDefaultCreds] = useState<{ clientId: string; vendorParams?: Record<string, string> } | undefined>();
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
@@ -46,7 +46,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
             if (connection.hasCredentials) {
                 getConnectionCredentials(connection.id)
                     .then((creds) => {
-                        setDefaultCreds({ clientId: creds.clientId, env: creds.env });
+                        setDefaultCreds({ clientId: creds.clientId, vendorParams: creds.vendorParams });
                     })
                     .catch(() => { /* silently ignore — form will render without pre-filled creds */ });
             }
@@ -71,7 +71,6 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
         connectionName: string;
         clientId: string;
         clientSecret: string;
-        env?: string;
         vendorParams: Record<string, string>;
     }) => {
         onConnect({
@@ -79,7 +78,6 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
             clientId: data.clientId,
             clientSecret: data.clientSecret,
             displayName: data.connectionName,
-            env: data.env,
             vendorParams: data.vendorParams,
         });
         handleOpenChange(false);
@@ -151,8 +149,10 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                             defaultValues={useMemo(() => ({
                                 connectionName: connection?.displayName || provider.displayName,
                                 clientId: defaultCreds?.clientId || '',
-                                env: defaultCreds?.env,
-                            }), [connection?.displayName, provider.displayName, defaultCreds?.clientId, defaultCreds?.env])}
+                                // Spread all stored vendorParams so every uiSchema field
+                                // (e.g. environment dropdown) is pre-filled on reconnect.
+                                ...defaultCreds?.vendorParams,
+                            }), [connection?.displayName, provider.displayName, defaultCreds])}
                             onCancel={() => handleOpenChange(false)}
                             onSubmit={handleDynamicConnect}
                         />

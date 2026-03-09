@@ -5,7 +5,7 @@ import {
 	Property
 } from '@nexiom/connectors/framework';
 import type { HttpResponse } from '@nexiom/connectors/framework';
-import { salesforceAuth } from '../..';
+import { salesforceAuth } from '../auth.js';
 
 export const salesforcesCommon = {
 	account: Property.Dropdown<string, true, typeof salesforceAuth>({

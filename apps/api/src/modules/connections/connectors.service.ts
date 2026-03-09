@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  ProviderRegistryService,
   AppCredentialError,
+  resolveOAuth2Url,
+  PropertyType,
 } from '@nexiom/connectors';
-import type { ProviderEnvironment } from '@nexiom/connectors';
+import type { OAuth2Auth } from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,
@@ -24,12 +25,8 @@ import {
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
-
-interface OAuthProviderConfig {
-  environments?: ProviderEnvironment[];
-  tokenUrl?: string;
-}
 
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
@@ -39,6 +36,12 @@ export interface ConnectionValueBlob {
   refreshToken?: string;
   /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
   data: Record<string, unknown>;
+  /**
+   * Vendor-specific auth parameters collected during the OAuth flow
+   * (e.g. environment selection). Stored here so the reconnect form
+   * can restore them without database round-trips.
+   */
+  vendorParams?: Record<string, string>;
 }
 
 export interface StoreOAuthConnectionOptions {
@@ -64,7 +67,7 @@ export class ConnectorsService {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-    private readonly providerRegistry: ProviderRegistryService,
+    private readonly pieceRegistry: PieceRegistryService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -76,69 +79,65 @@ export class ConnectorsService {
   }
 
   /**
+   * Resolves the OAuth2 auth config from the piece registry.
+   * Throws NotFoundException if the piece is not registered or is not an OAuth2 piece.
+   */
+  private resolveOAuth2Auth(providerName: string): OAuth2Auth {
+    const piece = this.pieceRegistry.getPiece(providerName);
+    if (!piece) {
+      throw new NotFoundException(
+        `Provider "${providerName}" is not registered`,
+      );
+    }
+    if (piece.auth.type !== PropertyType.OAUTH2) {
+      throw new BadRequestException(
+        `Provider "${providerName}" does not use OAuth2 authentication`,
+      );
+    }
+    return piece.auth;
+  }
+
+  /**
    * Generates the fully qualified Authorization URL for the vendor.
    * Redirects the user's browser to this URL to start the OAuth flow.
+   *
+   * vendorParams are used to resolve {key} template tokens in the piece's
+   * authUrl (e.g. 'https://{environment}.salesforce.com/...').
    */
   getAuthorizationUrl(
     providerName: string,
     state: string,
     clientId: string,
-    env?: string,
+    vendorParams: Record<string, string> = {},
   ): string {
-    if (!/^[a-z0-9-]+$/.test(providerName)) {
-      throw new BadRequestException('Invalid provider name format');
-    }
-
-    const provider = this.providerRegistry.getProvider(providerName);
-
-    if (!provider) {
-      throw new NotFoundException(
-        `Provider ${providerName} is not supported or not found`,
-      );
-    }
-
     if (!clientId) {
       throw new BadRequestException('clientId is required for authorization');
     }
-    if (provider.authType !== 'OAUTH2') {
-      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
+
+    const auth = this.resolveOAuth2Auth(providerName);
+
+    if (!auth.authUrl) {
       throw new InternalServerErrorException(
-        `Provider ${providerName} configuration is incomplete for OAuth.`,
+        `Provider "${providerName}" missing OAuth2 authorizeUrl`,
       );
     }
 
-    // Attempt to match the requested environment from the provider's defined environments array.
-    let authorizeUrl: string | undefined;
-    if (env) {
-      const environmentConfig = provider.environments?.find(
-        (envParam: ProviderEnvironment) => envParam.name === env,
-      );
-      if (!environmentConfig) {
-        throw new BadRequestException(
-          `Environment '${env}' is not configured for provider '${providerName}'`,
-        );
-      }
-      authorizeUrl = environmentConfig.authorizeUrl;
-    } else {
-      authorizeUrl = provider.authorizeUrl;
-    }
-
-    if (!authorizeUrl) {
-      this.logger.error(`Provider ${providerName} missing authorizeUrl.`);
-      throw new InternalServerErrorException(
-        `Provider ${providerName} configuration is incomplete for OAuth.`,
+    let authUrl: string;
+    try {
+      authUrl = resolveOAuth2Url(auth.authUrl, vendorParams);
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : 'Invalid OAuth2 URL template',
       );
     }
 
-    const url = new URL(authorizeUrl);
+    const url = new URL(authUrl);
     url.searchParams.append('response_type', 'code');
     url.searchParams.append('client_id', clientId);
     url.searchParams.append('state', state);
 
-    if (provider.scopes && provider.scopes.length > 0) {
-      // Vendors usually delimit scopes by space, but some require commas.
-      // Assuming space as standard OAuth2 practice for now.
-      url.searchParams.append('scope', provider.scopes.join(' '));
+    if (auth.scope && auth.scope.length > 0) {
+      url.searchParams.append('scope', auth.scope.join(' '));
     }
 
     url.searchParams.append('redirect_uri', this.buildRedirectUri());
@@ -148,29 +147,31 @@ export class ConnectorsService {
 
   /**
    * Exchanges the OAuth authorization code for real access and refresh tokens.
+   *
+   * vendorParams are used to resolve {key} template tokens in the piece's
+   * tokenUrl (e.g. 'https://{environment}.salesforce.com/...').
    */
   async exchangeCodeForTokens(
     providerName: string,
     code: string,
     clientId: string,
     clientSecret: string,
-    env?: string,
+    vendorParams: Record<string, string> = {},
   ): Promise<Record<string, unknown>> {
-    if (!/^[a-z0-9-]+$/.test(providerName)) {
-      throw new BadRequestException('Invalid provider name format');
-    }
+    const auth = this.resolveOAuth2Auth(providerName);
 
-    const provider = this.providerRegistry.getProvider(providerName);
-    if (!provider) {
-      throw new NotFoundException(
-        `Provider ${providerName} is not supported or not found`,
+    if (!auth.tokenUrl) {
+      throw new InternalServerErrorException(
+        `Provider "${providerName}" missing OAuth2 tokenUrl`,
       );
     }
 
-    if (provider.authType !== 'OAUTH2') {
-      this.logger.error(`Provider ${providerName} is not an OAuth provider.`);
-      throw new InternalServerErrorException(
-        `Provider ${providerName} configuration is incomplete.`,
+    let tokenUrl: string;
+    try {
+      tokenUrl = resolveOAuth2Url(auth.tokenUrl, vendorParams);
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : 'Invalid OAuth2 URL template',
       );
     }
 
@@ -178,7 +179,6 @@ export class ConnectorsService {
 
     try {
       this.logger.log(`Exchanging OAuth code for ${providerName}...`);
-      const tokenUrl = this.resolveTokenUrl(providerName, provider, env);
 
       const response = await fetch(tokenUrl, {
         method: 'POST',
@@ -199,50 +199,22 @@ export class ConnectorsService {
 
       const tokens = await this.parseTokenResponse(providerName, response);
 
-      if (
-        'validateConnectResponse' in provider &&
-        provider.validateConnectResponse
-      ) {
-        provider.validateConnectResponse(tokens);
+      if (auth.validateConnectResponse) {
+        try {
+          auth.validateConnectResponse(tokens);
+        } catch (validationError) {
+          throw new BadRequestException(
+            validationError instanceof Error
+              ? validationError.message
+              : `Token validation failed for ${providerName}`,
+          );
+        }
       }
 
       return tokens;
     } catch (error) {
       this.handleExchangeException(providerName, error);
     }
-  }
-
-  private resolveTokenUrl(
-    providerName: string,
-    provider: OAuthProviderConfig,
-    env?: string,
-  ): string {
-    let tokenUrl: string | undefined;
-
-    if (env) {
-      const environmentConfig = provider.environments?.find(
-        (envParam: ProviderEnvironment) => envParam.name === env,
-      );
-      if (!environmentConfig) {
-        throw new BadRequestException(
-          `Environment '${env}' is not configured for provider '${providerName}'`,
-        );
-      }
-      tokenUrl = environmentConfig.tokenUrl;
-    } else {
-      tokenUrl = provider.tokenUrl;
-    }
-
-    if (!tokenUrl) {
-      this.logger.error(
-        `Provider ${providerName} does not have a tokenUrl defined.`,
-      );
-      throw new InternalServerErrorException(
-        `Provider ${providerName} configuration is incomplete.`,
-      );
-    }
-
-    return tokenUrl;
   }
 
   private async handleTokenExchangeError(
@@ -300,6 +272,8 @@ export class ConnectorsService {
     if (
       error instanceof InternalServerErrorException ||
       error instanceof BadRequestException ||
+      error instanceof UnauthorizedException ||
+      error instanceof HttpException ||
       error instanceof AppCredentialError
     ) {
       throw error;
@@ -375,8 +349,6 @@ export class ConnectorsService {
         }
 
         // 2. Provision the Infrastructure Router (Storage Registry)
-        // If this is a new connection, it needs a physical place to live.
-        // We generate a deterministic but unique schema name: e.g. ws_salesforce_abc123...
         const hashedSuffix = crypto
           .createHash('sha256')
           .update(connection.id)
@@ -392,19 +364,17 @@ export class ConnectorsService {
           .values({
             connectionId: connection.id,
             workspaceId: schemaName,
-            databaseHostId: 'primary-cluster', // Can be parameterized later for regional sharding
+            databaseHostId: 'primary-cluster',
             regionContext: finalRegionContext,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,
-          }); // Already provisioned
+          });
 
         return schemaName;
       });
 
-      // 3. Apply the initial schema plan (NAMESPACE_ONLY) outside the transaction
-      // so the DDL runs on its own connection and does not silently escape the
-      // Drizzle tx scope (db.$client vs the transaction's dedicated connection).
+      // 3. Apply the initial schema plan outside the transaction
       await this.dbManager.applyPlan(
         workspaceSchemaName,
         SchemaPlan.NAMESPACE_ONLY,

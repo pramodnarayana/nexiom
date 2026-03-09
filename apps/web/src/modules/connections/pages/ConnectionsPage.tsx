@@ -67,10 +67,6 @@ export function ConnectionsPage() {
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Integrations</h1>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Connect your third-party apps to power your workflows.
-                    </p>
                 </div>
                 <Button
                     id="refresh-connections-btn"
@@ -89,7 +85,7 @@ export function ConnectionsPage() {
                 <input
                     id="provider-search"
                     type="text"
-                    placeholder="Search integrations..."
+                    placeholder="Search apps..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full rounded-lg border border-border bg-background px-4 py-2 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -105,16 +101,17 @@ export function ConnectionsPage() {
             )}
 
             {/* Provider grid */}
-            {providersError ? (
+            {providersError && (
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
                     <p className="font-semibold">Unable to load integrations</p>
                     <p>{providersError}</p>
                 </div>
-            ) : isLoading ? (
+            )}
+            {!providersError && isLoading && (
                 <div className="flex items-center justify-center py-24">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-            ) : null}
+            )}
             {!providersError && !isLoading && filtered.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
                     <Blocks className="h-12 w-12 text-muted-foreground/50" />

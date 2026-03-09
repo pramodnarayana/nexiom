@@ -7,7 +7,7 @@ export interface QuickBooksAuth {
     access_token: string;
     props: {
         companyId: string;
-        useSandbox?: boolean;
+        environment?: string;
     };
 }
 
@@ -84,7 +84,7 @@ function parseCursorState(lastCursorParams: Cursor | string | null): { since: st
 }
 
 async function executeQuickBooksFetch(auth: QuickBooksAuth, sql: string): Promise<QuickbooksEntityResponse<unknown>> {
-    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, auth.props.useSandbox === true)}/query`
+    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, auth.props.environment === 'test')}/query`
         + `?query=${encodeURIComponent(sql)}&minorversion=65`;
 
     const controller = new AbortController();

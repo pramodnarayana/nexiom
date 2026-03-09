@@ -1,16 +1,14 @@
 import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/connectors/framework';
 import { salesforcesCommon } from '../common/index.js';
-import { salesforceAuth } from '../../index.js';
+import { salesforceAuth } from '../auth.js';
 
 import {
-    optimizationService,
     UniversalTriggerEngine,
-    assertSafeSalesforceObject,
-    sfFetch,
-    SF_API_VERSION,
-    SalesforceAuthError,
+    optimizationService,
     IgtLogger,
 } from '@nexiom/connectors/intelligence';
+import { sfFetch, checkSalesforceLimits, SF_API_VERSION, SalesforceAuthError } from '../sf-fetch.js';
+import { assertSafeSalesforceObject } from './salesforce-polling.helper.js';
 
 import {
     SalesforceDiscoveryAdapter,
@@ -164,7 +162,8 @@ async function runUniversalTrigger(
         queryAdapter,
         bulkAdapter,
         executeStandardQuery,
-        executeCountQuery
+        executeCountQuery,
+        checkApiLimits: checkSalesforceLimits as (auth: any, store: any) => Promise<{ remaining: number; total: number } | null>
     });
 
     log.info('Poll completed', { object: objectName, records: String(records.length) });

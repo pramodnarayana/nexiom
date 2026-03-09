@@ -26,9 +26,7 @@ vi.mock('./igt-logger.js', () => ({
     }
 }));
 
-vi.mock('../apps/salesforce/sf-fetch.js', () => ({
-    checkSalesforceLimits: vi.fn().mockResolvedValue({ total: 15000, remaining: 14000 })
-}));
+// Removed hardcoded sf-fetch mock
 
 describe('UniversalTriggerEngine', () => {
     let mockStore: any;
@@ -237,11 +235,9 @@ describe('UniversalTriggerEngine', () => {
     });
 
     it('should block polling if API-limit gating triggers', async () => {
-        // Mock the bounds checker to return limits < threshold (e.g., extremely low ratio)
-        const checkSalesforceLimitsMock = await import('../apps/salesforce/sf-fetch.js');
-        vi.mocked(checkSalesforceLimitsMock.checkSalesforceLimits).mockResolvedValueOnce({ total: 10000, remaining: 100 });
-
-        const config = createConfig();
+        const config = createConfig({
+            checkApiLimits: vi.fn().mockResolvedValue({ total: 10000, remaining: 100 })
+        });
 
         const records = await UniversalTriggerEngine.execute(config);
 

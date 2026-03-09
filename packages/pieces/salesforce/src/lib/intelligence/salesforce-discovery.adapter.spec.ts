@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceDiscoveryAdapter } from './salesforce-discovery.adapter.js';
-import { sfFetch, SF_API_VERSION } from '@nexiom/connectors/intelligence';
-import type { SalesforceAuth } from '@nexiom/connectors/intelligence';
+import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
 import type { TriggerStore } from '@nexiom/connectors/framework';
 
 vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
     const mod = await importOriginal() as any;
     return {
         ...mod,
-        sfFetch: vi.fn(),
         IgtLogger: class {
             debug = vi.fn();
             info = vi.fn();
@@ -17,6 +16,12 @@ vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
         }
     };
 });
+
+vi.mock('../sf-fetch.js', () => ({
+    sfFetch: vi.fn(),
+    SF_API_VERSION: 'v59.0',
+    SalesforceAuthError: class extends Error { }
+}));
 
 describe('SalesforceDiscoveryAdapter', () => {
     let adapter: SalesforceDiscoveryAdapter;
@@ -106,14 +111,12 @@ describe('SalesforceDiscoveryAdapter', () => {
         it('should throw an error if the Salesforce API call fails', async () => {
             (mockStore.get as any).mockResolvedValue(null);
 
-            vi.mocked(sfFetch).mockResolvedValueOnce({
-                ok: false,
-                status: 404,
-                json: async () => [{ errorCode: 'NOT_FOUND', message: 'Not Found' }]
-            } as unknown as Response);
+            vi.mocked(sfFetch).mockRejectedValueOnce(
+                new Error('Salesforce API error (404): [{"errorCode":"NOT_FOUND","message":"Not Found"}]')
+            );
 
             await expect(adapter.describe(mockAuth, 'InvalidObject', mockStore))
-                .rejects.toThrow('[FieldNotFoundError] Salesforce describe failed for InvalidObject: Not Found');
+                .rejects.toThrow('[FieldNotFoundError] Salesforce describe failed for InvalidObject: Salesforce API error (404): [{"errorCode":"NOT_FOUND","message":"Not Found"}]');
         });
     });
 

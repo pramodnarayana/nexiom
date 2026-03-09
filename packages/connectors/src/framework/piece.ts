@@ -7,15 +7,31 @@ export interface Piece {
     name: string;
     displayName: string;
     logoUrl: string;
-    auth?: PieceAuthProperty;
+    description: string;
+    /** Auth definition — required for any registered piece. */
+    auth: PieceAuthProperty;
+    /** Piece categories (e.g. ['SALES_AND_CRM']). */
+    categories: string[];
     actions: Record<string, Action>;
     triggers: Record<string, Trigger>;
-    description: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
 }
 
-export const PieceCategory: any = {};
+export enum PieceCategory {
+    ARTIFICIAL_INTELLIGENCE = 'Artificial Intelligence',
+    BUSINESS_INTELLIGENCE = 'Business Intelligence',
+    COMMUNICATION = 'Communication',
+    CORE = 'Core',
+    DEVELOPER_TOOLS = 'Developer Tools',
+    HUMAN_RESOURCES = 'Human Resources',
+    MARKETING = 'Marketing',
+    PRODUCTIVITY = 'Productivity',
+    SALES_AND_CRM = 'Sales & CRM',
+    ACCOUNTING = 'Accounting',
+    FINANCE = 'Finance',
+    OTHER = 'Other'
+}
 
 export interface CreatePieceParams {
     name?: string;
@@ -73,10 +89,11 @@ export function createPiece(params: CreatePieceParams): Piece {
         name: params.name || '',
         displayName: params.displayName,
         logoUrl: params.logoUrl,
-        auth: params.auth,
+        description: params.description || '',
+        auth: params.auth!,
+        categories: (params.categories ?? []).map(String),
         actions: actionsMap,
         triggers: triggersMap,
-        description: params.description || '',
         minimumSupportedRelease: params.minimumSupportedRelease,
         maximumSupportedRelease: params.maximumSupportedRelease,
     };

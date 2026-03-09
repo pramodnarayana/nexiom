@@ -2,11 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
-import {
-  ProviderRegistryService,
-  EncryptionService,
-  AppCredentialError,
-} from '@nexiom/connectors';
+import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
+import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import type { Piece } from '@nexiom/connectors/framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import {
   InternalServerErrorException,
@@ -23,11 +21,9 @@ import {
   Mocked,
 } from 'vitest';
 
-type ProviderResult = ReturnType<ProviderRegistryService['getProvider']>;
-
 describe('ConnectorsService', () => {
   let service: ConnectorsService;
-  let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockPieceRegistry: Mocked<PieceRegistryService>;
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockDbInsert: ReturnType<typeof vi.fn>;
   let mockDbValues: ReturnType<typeof vi.fn>;
@@ -74,15 +70,15 @@ describe('ConnectorsService', () => {
       get: vi.fn().mockReturnValue('https://tenant.nexiom.app'),
     };
 
-    mockProviderRegistry = {
-      getProvider: vi.fn(),
-      getAllProviders: vi.fn(),
-    } as unknown as Mocked<ProviderRegistryService>;
+    mockPieceRegistry = {
+      getPiece: vi.fn(),
+      getAllPieces: vi.fn(),
+    } as unknown as Mocked<PieceRegistryService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConnectorsService,
-        { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+        { provide: PieceRegistryService, useValue: mockPieceRegistry },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
@@ -101,25 +97,27 @@ describe('ConnectorsService', () => {
           'mocked_jwt_state',
           'test-client-id',
         ),
-      ).toThrow(BadRequestException);
+      ).toThrow(NotFoundException);
     });
 
     it('should generate a valid OAuth URL with scopes', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        scopes: ['full', 'refresh_token'],
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          authUrl: 'https://login.mock-piece.com/services/oauth2/authorize',
+          scope: ['full', 'refresh_token'],
+        },
+      } as unknown as Piece);
 
       const result = service.getAuthorizationUrl(
-        'salesforce',
+        'mock-piece',
         'random-state-123',
         'test-client-id',
       );
 
       const url = new URL(result);
-      expect(url.origin).toBe('https://login.salesforce.com');
+      expect(url.origin).toBe('https://login.mock-piece.com');
       expect(url.pathname).toBe('/services/oauth2/authorize');
       expect(url.searchParams.get('response_type')).toBe('code');
       expect(url.searchParams.get('client_id')).toBe('test-client-id');
@@ -131,96 +129,80 @@ describe('ConnectorsService', () => {
     });
 
     it('should use environment specific authorizeUrl when env parameter is passed and matched', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        environments: [
-          {
-            name: 'sandbox',
-            displayName: 'Sandbox',
-            authorizeUrl:
-              'https://test.salesforce.com/services/oauth2/authorize',
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          authUrl:
+            'https://{environment}.mock-piece.com/services/oauth2/authorize',
+          props: {
+            environment: {
+              type: 'STATIC_DROPDOWN',
+              options: {
+                options: [{ label: 'Sandbox', value: 'test' }],
+              },
+            },
           },
-        ],
-      } as unknown as NonNullable<ProviderResult>);
+        },
+      } as unknown as Piece);
 
       const result = service.getAuthorizationUrl(
-        'salesforce',
+        'mock-piece',
         'random-state-123',
         'test-client-id',
-        'sandbox',
+        { environment: 'test' },
       );
 
       const url = new URL(result);
-      expect(url.origin).toBe('https://test.salesforce.com');
+      expect(url.origin).toBe('https://test.mock-piece.com');
       expect(url.pathname).toBe('/services/oauth2/authorize');
     });
 
-    it('should throw BadRequestException when env parameter is passed but does not match', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        environments: [
-          {
-            name: 'sandbox',
-            displayName: 'Sandbox',
-            authorizeUrl:
-              'https://test.salesforce.com/services/oauth2/authorize',
-          },
-        ],
-      } as unknown as NonNullable<ProviderResult>);
-
-      expect(() =>
-        service.getAuthorizationUrl(
-          'salesforce',
-          'random-state-123',
-          'test-client-id',
-          'production',
-        ),
-      ).toThrow(BadRequestException);
-    });
-
     it('should throw NotFoundException if provider does not exist', () => {
-      mockProviderRegistry.getProvider.mockReturnValue(null);
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
       expect(() =>
         service.getAuthorizationUrl('unknown', 'state', 'test-client-id'),
       ).toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException if clientId is missing', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          authUrl: 'https://login.mock-piece.com/services/oauth2/authorize',
+        },
+      } as unknown as Piece);
 
       expect(() =>
-        service.getAuthorizationUrl('salesforce', 'state', ''),
+        service.getAuthorizationUrl('mock-piece', 'state', ''),
       ).toThrow(BadRequestException);
     });
 
     it('should throw InternalServerErrorException if authType is not OAUTH2', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'API_KEY',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'API_KEY',
+          authUrl: 'https://login.mock-piece.com/services/oauth2/authorize',
+        },
+      } as unknown as Piece);
 
       expect(() =>
-        service.getAuthorizationUrl('salesforce', 'state', 'test-client-id'),
-      ).toThrow(InternalServerErrorException);
+        service.getAuthorizationUrl('mock-piece', 'state', 'test-client-id'),
+      ).toThrow(BadRequestException);
     });
 
     it('should throw InternalServerErrorException if authorizeUrl is missing', () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+        },
+      } as unknown as Piece);
 
       expect(() =>
-        service.getAuthorizationUrl('salesforce', 'state', 'test-client-id'),
+        service.getAuthorizationUrl('mock-piece', 'state', 'test-client-id'),
       ).toThrow(InternalServerErrorException);
     });
   });
@@ -242,11 +224,11 @@ describe('ConnectorsService', () => {
           'mock_client_id',
           'mock_client_secret',
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException if provider does not exist', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue(null);
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
       await expect(
         service.exchangeCodeForTokens(
           'unknown',
@@ -258,31 +240,35 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'API_KEY',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'API_KEY',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'auth-code',
           'mock_client_id',
           'mock_client_secret',
         ),
-      ).rejects.toThrow(InternalServerErrorException);
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw InternalServerErrorException if tokenUrl is missing', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+        },
+      } as unknown as Piece);
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'auth-code',
           'mock_client_id',
           'mock_client_secret',
@@ -291,11 +277,13 @@ describe('ConnectorsService', () => {
     });
 
     it('should successfully exchange a code for tokens', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
 
       const mockTokens = { access_token: 'abc', refresh_token: 'def' };
       vi.mocked(fetch).mockResolvedValue({
@@ -304,7 +292,7 @@ describe('ConnectorsService', () => {
       } as Response);
 
       const result = await service.exchangeCodeForTokens(
-        'salesforce',
+        'mock-piece',
         'auth-code',
         'mock_client_id',
         'mock_client_secret',
@@ -314,7 +302,7 @@ describe('ConnectorsService', () => {
 
       // Validate fetch call payload
       expect(fetch).toHaveBeenCalledWith(
-        'https://login.salesforce.com/services/oauth2/token',
+        'https://login.mock-piece.com/services/oauth2/token',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -333,18 +321,22 @@ describe('ConnectorsService', () => {
     });
 
     it('should route to environment specific tokenUrl when env is provided and matched', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-        environments: [
-          {
-            name: 'sandbox',
-            displayName: 'Sandbox',
-            tokenUrl: 'https://test.salesforce.com/services/oauth2/token',
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl:
+            'https://{environment}.mock-piece.com/services/oauth2/token',
+          props: {
+            environment: {
+              type: 'STATIC_DROPDOWN',
+              options: {
+                options: [{ label: 'Sandbox', value: 'test' }],
+              },
+            },
           },
-        ],
-      } as unknown as NonNullable<ProviderResult>);
+        },
+      } as unknown as Piece);
 
       vi.mocked(fetch).mockResolvedValue({
         ok: true,
@@ -352,44 +344,17 @@ describe('ConnectorsService', () => {
       } as Response);
 
       await service.exchangeCodeForTokens(
-        'salesforce',
+        'mock-piece',
         'code',
         'cl_id',
         'cl_secret',
-        'sandbox',
+        { environment: 'test' },
       );
 
       expect(fetch).toHaveBeenCalledWith(
-        'https://test.salesforce.com/services/oauth2/token',
+        'https://test.mock-piece.com/services/oauth2/token',
         expect.any(Object),
       );
-    });
-
-    it('should throw BadRequestException when env is provided but no match is found', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-        environments: [
-          {
-            name: 'sandbox',
-            displayName: 'Sandbox',
-            tokenUrl: 'https://test.salesforce.com/services/oauth2/token',
-          },
-        ],
-      } as unknown as NonNullable<ProviderResult>);
-
-      await expect(
-        service.exchangeCodeForTokens(
-          'salesforce',
-          'code',
-          'cl_id',
-          'cl_secret',
-          'unknown',
-        ),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('should invoke validateConnectResponse and throw if validation fails', async () => {
@@ -397,12 +362,14 @@ describe('ConnectorsService', () => {
         throw new AppCredentialError('Validation failed');
       });
 
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-        validateConnectResponse: mockValidate,
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+          validateConnectResponse: mockValidate,
+        },
+      } as unknown as Piece);
 
       const mockTokens = { access_token: 'abc' };
       vi.mocked(fetch).mockResolvedValue({
@@ -412,22 +379,24 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'auth-code',
           'mock_client_id',
           'mock_client_secret',
         ),
-      ).rejects.toThrow(AppCredentialError);
+      ).rejects.toThrow(BadRequestException);
 
       expect(mockValidate).toHaveBeenCalledWith(mockTokens);
     });
 
     it('should throw BadRequestException if the token exchange fails with a HTTP 400', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
 
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
@@ -437,7 +406,7 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'bad-code',
           'mock_client_id',
           'mock_client_secret',
@@ -446,11 +415,13 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw InternalServerErrorException if the token exchange fails with a HTTP 500', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
 
       vi.mocked(fetch).mockResolvedValue({
         ok: false,
@@ -460,7 +431,7 @@ describe('ConnectorsService', () => {
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'bad-code',
           'mock_client_id',
           'mock_client_secret',
@@ -469,17 +440,19 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw InternalServerErrorException on network/timeout errors', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        name: 'salesforce',
-        authType: 'OAUTH2',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-      } as unknown as NonNullable<ProviderResult>);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
 
       vi.mocked(fetch).mockRejectedValue(new Error('network unreachable'));
 
       await expect(
         service.exchangeCodeForTokens(
-          'salesforce',
+          'mock-piece',
           'timeout-code',
           'mock_client_id',
           'mock_client_secret',
@@ -497,9 +470,9 @@ describe('ConnectorsService', () => {
 
       await service.storeOAuthConnection({
         tenantId: 'tenant-123',
-        providerName: 'salesforce',
-        externalId: 'salesforce-tms',
-        displayName: 'TMS Salesforce',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         expiresAt: new Date(),
@@ -516,9 +489,9 @@ describe('ConnectorsService', () => {
         .calls[0]?.[0] as Record<string, unknown>;
       expect(insertedValues).toMatchObject({
         tenantId: 'tenant-123',
-        appName: 'salesforce',
-        externalId: 'salesforce-tms',
-        displayName: 'TMS Salesforce',
+        appName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         metadata: { env: 'sandbox' },
@@ -540,9 +513,9 @@ describe('ConnectorsService', () => {
       await expect(
         service.storeOAuthConnection({
           tenantId: 'tenant-123',
-          providerName: 'salesforce',
-          externalId: 'salesforce-tms',
-          displayName: 'TMS Salesforce',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
           authType: 'OAUTH2',
           value: 'encrypted-value-blob',
           expiresAt: new Date(),
@@ -575,9 +548,9 @@ describe('ConnectorsService', () => {
       await expect(
         service.storeOAuthConnection({
           tenantId: 'tenant-123',
-          providerName: 'salesforce',
-          externalId: 'salesforce-tms',
-          displayName: 'TMS Salesforce',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
           authType: 'OAUTH2',
           value: 'encrypted-value-blob',
           expiresAt: new Date(),
@@ -614,7 +587,7 @@ describe('ConnectorsService', () => {
       const moduleFail: TestingModule = await Test.createTestingModule({
         providers: [
           ConnectorsService,
-          { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+          { provide: PieceRegistryService, useValue: mockPieceRegistry },
           {
             provide: ConfigService,
             useValue: { get: vi.fn().mockReturnValue('mock-region-context') },
@@ -631,9 +604,9 @@ describe('ConnectorsService', () => {
       await expect(
         failingService.storeOAuthConnection({
           tenantId: 'tenant-123',
-          providerName: 'salesforce',
-          externalId: 'salesforce-tms',
-          displayName: 'TMS Salesforce',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
           authType: 'OAUTH2',
           value: 'encrypted-value-blob',
           expiresAt: new Date(),

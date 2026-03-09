@@ -1,7 +1,6 @@
 import { SmartCursorSelector } from './smart-cursor-selector.js';
 import { IgtLogger } from './igt-logger.js';
 import type { UniversalEngineConfig } from './interfaces.js';
-import { checkSalesforceLimits } from '../apps/salesforce/sf-fetch.js';
 
 const log = new IgtLogger({ app: 'universal-engine' });
 
@@ -23,7 +22,7 @@ export class UniversalTriggerEngine {
         const lowLimitThreshold = this.parseLimitThreshold(process.env.SF_API_LIMIT_THRESHOLD);
 
         // --- BACKOFF & PROTECTION LOGIC ---
-        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, objectName);
+        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, objectName, config.checkApiLimits);
         if (!isLimitSafe) return [];
 
         // 2. Discover / Warm Schema Cache
@@ -98,11 +97,14 @@ export class UniversalTriggerEngine {
         auth: any,
         store: any,
         lowLimitThreshold: number,
-        objectName: string
+        objectName: string,
+        checkApiLimits?: (auth: any, store: any) => Promise<{ remaining: number; total: number } | null>
     ): Promise<boolean> {
+        if (!checkApiLimits) return true;
+
         let apiLimits: { remaining: number; total: number } | null = null;
         try {
-            apiLimits = await checkSalesforceLimits(auth, store);
+            apiLimits = await checkApiLimits(auth, store);
         } catch (e) {
             log.debug('Failed to verify API limits during preflight cache check', { error: String(e) });
             return true; // Fail open

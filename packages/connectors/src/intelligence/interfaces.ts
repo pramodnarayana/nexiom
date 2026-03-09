@@ -81,6 +81,9 @@ export interface UniversalEngineConfig<TAuth = unknown> {
     /** Executes a lightweight count query. Optional. Returns total rows or 0. */
     executeCountQuery?: (auth: TAuth, query: string) => Promise<number>;
 
+    /** Checks API limits to prevent over-polling. Optional. */
+    checkApiLimits?: (auth: TAuth, store: TriggerStore) => Promise<{ remaining: number; total: number } | null>;
+
     /** Adapter to discover the schema. */
     discoveryAdapter: IDiscoveryAdapter<TAuth>;
     /** Adapter to build the query syntax. */

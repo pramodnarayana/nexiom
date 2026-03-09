@@ -1,27 +1,17 @@
 /**
  * @nexiom/connectors — public API
  *
- * BREAKING CHANGE (v2.0.0): The package has been refactored.
- * Update imports to use the public exported entrypoints:
- *
- *   - `@nexiom/connectors`
- *   - `@nexiom/connectors/framework`
- *
- * Subpath imports (like `/oauth/types.js`) are no longer exposed. All
- * previously deep-imported symbols are available directly via the root or framework entrypoints.
+ * Entrypoints:
+ *   - `@nexiom/connectors`           — runtime services (encryption, token manager)
+ *   - `@nexiom/connectors/framework` — piece/action/trigger/auth/property definitions
  */
-
-// OAuth runtime infrastructure
-export * from './oauth/types.js';
-export * from './oauth/token-manager.service.js';
-export * from './oauth/provider-registry.js';
 
 // Crypto utilities
 export * from './crypto/encryption.interface.js';
 export * from './crypto/encryption.service.js';
 
+// Token management (OAuth refresh, credential storage)
+export * from './oauth/token-manager.service.js';
+
 // Framework — Piece, Action, Trigger, Auth, Property definitions
 export * from './framework/index.js';
-
-// Registered app Pieces — one export per integrated app
-export { salesforcePiece } from './apps/salesforce/index.js';

@@ -1,11 +1,8 @@
+import type { Piece } from '@nexiom/connectors/framework';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
-import {
-  ProviderRegistryService,
-  EncryptionService,
-  ProviderDefinition,
-} from '@nexiom/connectors';
+import { EncryptionService } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';
@@ -41,7 +38,7 @@ const missingTenantCtx = {
 
 describe('ConnectorsController', () => {
   let controller: ConnectorsController;
-  let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockPieceRegistry: Mocked<PieceRegistryService>;
   let mockConnectorsService: Mocked<ConnectorsService>;
   let mockOauthStateService: Mocked<OauthStateService>;
   let mockEncryptionService: Mocked<EncryptionService>;
@@ -53,11 +50,10 @@ describe('ConnectorsController', () => {
   };
 
   beforeEach(async () => {
-    mockProviderRegistry = {
-      getAllProviders: vi.fn(),
-      getProvider: vi.fn(),
-      isAllowed: vi.fn(),
-    } as unknown as Mocked<ProviderRegistryService>;
+    mockPieceRegistry = {
+      getAllPieces: vi.fn(),
+      getPiece: vi.fn(),
+    } as unknown as Mocked<PieceRegistryService>;
 
     mockConnectorsService = {
       getAuthorizationUrl: vi.fn(),
@@ -91,15 +87,14 @@ describe('ConnectorsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ConnectorsController],
       providers: [
-        { provide: ProviderRegistryService, useValue: mockProviderRegistry },
+        { provide: PieceRegistryService, useValue: mockPieceRegistry },
         { provide: ConnectorsService, useValue: mockConnectorsService },
         { provide: OauthStateService, useValue: mockOauthStateService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: 'AuthService', useValue: {} },
-        // PieceRegistryService and its PIECES token
+        // PieceRegistryService and its PIECES token are now mocked above
         { provide: PIECES, useValue: [] },
-        PieceRegistryService,
       ],
     })
       .overrideGuard(AuthGuard)
@@ -113,7 +108,7 @@ describe('ConnectorsController', () => {
     it('should create state, build auth URL and redirect', () => {
       const mockRes = {
         redirect: vi.fn(),
-        req: { params: { providerName: 'salesforce' } },
+        req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('mocked_jwt_state');
@@ -123,7 +118,7 @@ describe('ConnectorsController', () => {
 
       controller.initiateOAuth(
         mockCtx,
-        'salesforce',
+        'mock-piece',
         'mock-client-id',
         undefined,
         mockRes,
@@ -131,14 +126,14 @@ describe('ConnectorsController', () => {
 
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
-        'salesforce',
-        undefined,
+        'mock-piece',
+        {},
       );
       expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
-        'salesforce',
+        'mock-piece',
         'mocked_jwt_state',
         'mock-client-id',
-        undefined,
+        {},
       );
       expect(mockRes.redirect).toHaveBeenCalledWith('https://vendor.com/auth');
     });
@@ -146,13 +141,13 @@ describe('ConnectorsController', () => {
     it('should throw BadRequestException if tenant is missing', () => {
       const mockRes = {
         redirect: vi.fn(),
-        req: { params: { providerName: 'salesforce' } },
+        req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
       expect(() =>
         controller.initiateOAuth(
           missingTenantCtx,
-          'salesforce',
+          'mock-piece',
           'mock-client-id',
           undefined,
           mockRes,
@@ -163,18 +158,18 @@ describe('ConnectorsController', () => {
     it('should throw BadRequestException if clientId is missing', () => {
       const mockRes = {
         redirect: vi.fn(),
-        req: { params: { providerName: 'salesforce' } },
+        req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
       expect(() =>
-        controller.initiateOAuth(mockCtx, 'salesforce', '', undefined, mockRes),
+        controller.initiateOAuth(mockCtx, 'mock-piece', '', undefined, mockRes),
       ).toThrow(BadRequestException);
     });
 
     it('should throw InternalServerErrorException if service fails', () => {
       const mockRes = {
         redirect: vi.fn(),
-        req: { params: { providerName: 'salesforce' } },
+        req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
       mockOauthStateService.generateState.mockReturnValue('state');
@@ -185,7 +180,7 @@ describe('ConnectorsController', () => {
       expect(() =>
         controller.initiateOAuth(
           mockCtx,
-          'salesforce',
+          'mock-piece',
           'mock-client-id',
           undefined,
           mockRes,
@@ -195,19 +190,18 @@ describe('ConnectorsController', () => {
   });
 
   describe('getProviders', () => {
-    it('should map provider data exactly as required by the frontend uiSchema', () => {
-      (mockProviderRegistry.getAllProviders as Mock).mockReturnValue([
+    it('should map piece data exactly as required by the frontend uiSchema', () => {
+      (mockPieceRegistry.getAllPieces as Mock).mockReturnValue([
         {
-          name: 'salesforce',
-          displayName: 'Salesforce',
-          authType: 'OAUTH2',
+          name: 'mock-piece',
+          displayName: 'MockPiece',
           description: 'CRM platform',
           logoUrl: 'https://logo.com/sf.png',
-          category: 'CRM',
-          scopes: [],
-          uiSchema: {},
-          authorizeUrl: '',
-          tokenUrl: '',
+          categories: ['CRM'],
+          auth: {
+            type: 'OAUTH2',
+            props: {},
+          },
         },
       ]);
 
@@ -215,20 +209,19 @@ describe('ConnectorsController', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        name: 'salesforce',
-        displayName: 'Salesforce',
+        name: 'mock-piece',
+        displayName: 'MockPiece',
         description: 'CRM platform',
         logoUrl: 'https://logo.com/sf.png',
         authType: 'OAUTH2',
         category: 'CRM',
-        environments: undefined,
       });
       expect(result[0]).not.toHaveProperty('tokenUrl');
       expect(result[0]).not.toHaveProperty('authorizeUrl');
     });
 
-    it('should bubble up InternalServerErrorException from the provider registry', () => {
-      mockProviderRegistry.getAllProviders.mockImplementation(() => {
+    it('should bubble up InternalServerErrorException from the piece registry', () => {
+      mockPieceRegistry.getAllPieces.mockImplementation(() => {
         throw new Error('Registry initialization error');
       });
 
@@ -247,9 +240,9 @@ describe('ConnectorsController', () => {
       const mockDate = new Date();
       const mockConnectionRow = {
         id: '1',
-        appName: 'salesforce',
-        externalId: 'salesforce-tms',
-        displayName: 'TMS Salesforce',
+        appName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
         authType: 'OAUTH2' as const,
         status: AppConnectionStatus.ACTIVE,
         value: 'dummy-encrypted-value',
@@ -300,8 +293,8 @@ describe('ConnectorsController', () => {
       // No credentials JOIN — value is encrypted and never returned to client
       expect(result.data[0]).not.toHaveProperty('value');
       expect(result.data[0]).not.toHaveProperty('encryptedCredentials');
-      expect(result.data[0]).toHaveProperty('externalId', 'salesforce-tms');
-      expect(result.data[0]).toHaveProperty('displayName', 'TMS Salesforce');
+      expect(result.data[0]).toHaveProperty('externalId', 'mock-piece-tms');
+      expect(result.data[0]).toHaveProperty('displayName', 'TMS MockPiece');
     });
 
     it('should throw BadRequestException if tenantId is missing', async () => {
@@ -313,12 +306,12 @@ describe('ConnectorsController', () => {
 
   describe('exchangeCode', () => {
     const validBody = {
-      providerName: 'salesforce',
+      providerName: 'mock-piece',
       code: 'auth-code-123',
       clientId: 'client-123',
       clientSecret: 'secret-123',
       state: 'valid-state',
-      displayName: 'TMS Salesforce',
+      displayName: 'TMS MockPiece',
       env: 'sandbox',
       vendorParams: { realmId: 'test-123' },
     };
@@ -329,10 +322,14 @@ describe('ConnectorsController', () => {
       expires_in: 3600,
     };
 
+    beforeEach(() => {
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: { type: 'OAUTH2' },
+      } as unknown as Piece);
+    });
+
     it('should successfully exchange the code and store a single connection row', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
@@ -343,15 +340,15 @@ describe('ConnectorsController', () => {
 
       expect(result).toEqual({ success: true });
       expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
-        'salesforce',
+        'mock-piece',
         'auth-code-123',
         'client-123',
         'secret-123',
-        'sandbox',
+        { realmId: 'test-123' },
       );
       expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
         'valid-state',
-        'salesforce',
+        'mock-piece',
       );
       // Single encrypt call — value blob contains clientId, clientSecret, tokens
       expect(mockEncryptionService.encrypt).toHaveBeenCalledTimes(1);
@@ -363,13 +360,13 @@ describe('ConnectorsController', () => {
       );
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
         tenantId: 'tenant-123',
-        providerName: 'salesforce',
-        externalId: 'salesforce-tms-salesforce', // auto-generated kebab slug (namespaced)
-        displayName: 'TMS Salesforce',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms-mockpiece', // auto-generated kebab slug (namespaced)
+        displayName: 'TMS MockPiece',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
-        metadata: { env: 'sandbox' },
+        metadata: {},
       });
     });
 
@@ -399,15 +396,13 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if provider is not registered', async () => {
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
-        new BadRequestException('Invalid provider name'),
+        new BadRequestException('Provider "mock-piece" is not registered'),
       );
     });
 
     it('should throw BadRequestException if verifyState throws', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockOauthStateService.verifyState.mockImplementationOnce(() => {
         throw new BadRequestException('Invalid state signature');
       });
@@ -418,9 +413,6 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw BadRequestException if state token does not belong to this tenant', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockOauthStateService.verifyState.mockReturnValueOnce({
         tenantId: 'other-tenant',
       });
@@ -431,9 +423,6 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw InternalServerErrorException if exchangeCodeForTokens throws', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockRejectedValue(
         new Error('Network error'),
       );
@@ -443,9 +432,6 @@ describe('ConnectorsController', () => {
     });
 
     it('should throw InternalServerErrorException if encrypt throws', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
@@ -458,9 +444,6 @@ describe('ConnectorsController', () => {
     });
 
     it('should propagate HttpException as-is if storeOAuthConnection fails', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
@@ -474,9 +457,6 @@ describe('ConnectorsController', () => {
     });
 
     it('should sanitize generic Errors thrown by storeOAuthConnection into InternalServerErrorException', async () => {
-      mockProviderRegistry.getProvider.mockReturnValue({
-        authType: 'OAUTH2',
-      } as unknown as ProviderDefinition);
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );

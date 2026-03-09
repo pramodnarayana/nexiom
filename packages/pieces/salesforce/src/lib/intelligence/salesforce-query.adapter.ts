@@ -1,9 +1,9 @@
 import {
     type IQueryAdapter,
     type ObjectSchema,
-    type QuerySpec,
-    assertSafeSalesforceObject
+    type QuerySpec
 } from '@nexiom/connectors/intelligence';
+import { assertSafeSalesforceObject } from '../trigger/salesforce-polling.helper.js';
 
 export class SalesforceQueryAdapter implements IQueryAdapter {
     buildQuery(schema: ObjectSchema, spec: QuerySpec): string {
@@ -23,35 +23,11 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         this.appendAutoJoins(schema, spec, columns);
 
         const selectClause = columns.join(', ');
-
-        const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
-        if (!cursorFieldDef) {
-            throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
-        }
-        const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
-        const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
-
-        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
-
-        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
-        if (spec.tieBreakerField && tbFormatted) {
-            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
-        }
+        const whereClause = this.buildWhereClause(schema, spec);
 
         let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${whereClause} ORDER BY ${spec.cursorField} ASC`;
 
-        let safeLimit = 200;
-        if (spec.limit !== undefined) {
-            if (spec.limit === 0) {
-                safeLimit = 0;
-            } else {
-                const parsed = Number(spec.limit);
-                if (!Number.isFinite(parsed) || parsed < 0) {
-                    throw new Error(`Invalid limit: ${spec.limit}`);
-                }
-                safeLimit = Math.max(1, Math.floor(parsed));
-            }
-        }
+        const safeLimit = this.calculateLimit(spec.limit);
 
         if (!spec.omitLimit && safeLimit !== 0) {
             query += ` LIMIT ${safeLimit}`;
@@ -64,6 +40,12 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         assertSafeSalesforceObject(spec.objectName);
         this.validateCursor(spec.cursorValue);
 
+        const whereClause = this.buildWhereClause(schema, spec);
+
+        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${whereClause}`;
+    }
+
+    private buildWhereClause(schema: ObjectSchema, spec: QuerySpec): string {
         const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
         if (!cursorFieldDef) {
             throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
@@ -73,12 +55,20 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
 
         const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
 
-        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
         if (spec.tieBreakerField && tbFormatted) {
-            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
+            return `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
         }
+        return `${spec.cursorField} > ${formattedCursorValue}`;
+    }
 
-        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${whereClause}`;
+    private calculateLimit(limit: number | undefined): number {
+        if (limit === undefined) return 200;
+        if (limit === 0) return 0;
+        const parsed = Number(limit);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            throw new Error(`Invalid limit: ${limit}`);
+        }
+        return Math.max(1, Math.floor(parsed));
     }
 
     private validateCursor(cursorValue: string): void {

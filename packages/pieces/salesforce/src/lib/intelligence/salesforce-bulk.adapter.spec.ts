@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceBulkAdapter } from './salesforce-bulk.adapter.js';
-import { sfFetch } from '@nexiom/connectors/intelligence';
-import type { SalesforceAuth } from '@nexiom/connectors/intelligence';
+import { sfFetch } from '../sf-fetch.js';
+import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
 import type { TriggerStore } from '@nexiom/connectors/framework';
 
 vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
     const mod = await importOriginal() as any;
     return {
         ...mod,
-        sfFetch: vi.fn(),
         IgtLogger: class {
             debug = vi.fn();
             info = vi.fn();
@@ -17,6 +16,11 @@ vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
         }
     };
 });
+
+vi.mock('../sf-fetch.js', () => ({
+    sfFetch: vi.fn(),
+    SF_API_VERSION: 'v59.0'
+}));
 
 describe('SalesforceBulkAdapter', () => {
     let adapter: SalesforceBulkAdapter;
@@ -65,6 +69,7 @@ describe('SalesforceBulkAdapter', () => {
 
             vi.mocked(sfFetch).mockResolvedValueOnce({
                 ok: true,
+                headers: { get: () => null },
                 text: async () => '"Id","Name"\n"1","Test"'
             } as unknown as Response);
 
@@ -77,7 +82,7 @@ describe('SalesforceBulkAdapter', () => {
 
         it('should recover from an aborted or failed active job and create a new one', async () => {
             // Run 1: Store has an active job, poll status -> Failed
-            (mockStore.get as any).mockResolvedValue({ jobId: 'job_failed_123', state: 'IN_PROGRESS' });
+            (mockStore.get as any).mockResolvedValue({ jobId: 'job_failed_123', state: 'IN_PROGRESS', soql: 'SELECT Id FROM Lead' });
 
             vi.mocked(sfFetch).mockResolvedValueOnce({
                 ok: true,
@@ -128,6 +133,7 @@ describe('SalesforceBulkAdapter', () => {
             const mockCsvData = `"Name","Notes"\n"Smith, John","Line1\nLine2"\n"Doe, Jane","Single Line"`;
             vi.mocked(sfFetch).mockResolvedValueOnce({
                 ok: true,
+                headers: { get: () => null },
                 text: async () => mockCsvData
             } as unknown as Response);
 

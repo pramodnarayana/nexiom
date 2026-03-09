@@ -86,6 +86,7 @@ describe('DatabaseManager', () => {
         };
         // Return a genuine Promise that also carries the chain methods,
         // supporting both `await values()` and `values().returning(...)`.
+
         const promise = Promise.resolve(undefined) as Promise<undefined> &
           typeof chain;
         Object.assign(promise, chain);

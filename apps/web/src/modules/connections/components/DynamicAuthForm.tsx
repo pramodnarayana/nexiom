@@ -87,14 +87,21 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
         );
     }
     if (prop.type === 'DROPDOWN' || prop.type === 'STATIC_DROPDOWN') {
-        const options = prop.options ?? [];
+        // Activepieces Framework nests dropdown options as { options: { options: [...] } }
+        // We handle both direct arrays and the nested structure.
+        const rawOptions = prop.options;
+        interface NestedOptions { options?: { label: string; value: string }[] }
+        const optionsBody = (rawOptions && 'options' in rawOptions && Array.isArray((rawOptions as NestedOptions).options))
+            ? (rawOptions as NestedOptions).options!
+            : (Array.isArray(rawOptions) ? rawOptions : []);
+
         return (
             <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
                 <SelectTrigger>
                     <SelectValue placeholder={prop.placeholder ?? `Select ${prop.displayName ?? 'option'}`} />
                 </SelectTrigger>
                 <SelectContent>
-                    {options.map((opt) => (
+                    {optionsBody.map((opt: { label: string; value: string }) => (
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                 </SelectContent>
@@ -145,12 +152,9 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     const shape: Record<string, z.ZodTypeAny> = {
         connectionName: z.string().min(1, 'Connection name is required'),
         clientId: z.string().min(1, 'Client ID is required'),
+        // Always required — /connectors/oauth-exchange always expects a non-empty secret.
+        clientSecret: z.string().min(1, 'Client secret is required'),
     };
-
-    // clientSecret is always required — both new connects and reconnects must supply it
-    // because /connectors/oauth-exchange always expects a non-empty secret.
-    shape.clientSecret = z.string().min(1, 'Client secret is required');
-    shape.env = z.string().optional();
 
     if (uiSchema) {
         for (const [key, prop] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
@@ -183,7 +187,7 @@ export interface DynamicAuthFormProps {
         connectionName: string;
         clientId: string;
         clientSecret: string;
-        env?: string;
+        /** All vendor-specific form values (e.g. { environment: 'test' }) flattened to strings. */
         vendorParams: Record<string, string>;
     }) => void;
 }
@@ -224,7 +228,6 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
             connectionName: provider.displayName,
             clientId: '',
             clientSecret: '',
-            env: provider.environments?.[0]?.name,
             ...mergedDefaults
         },
     });
@@ -235,7 +238,6 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
             connectionName: provider.displayName,
             clientId: '',
             clientSecret: '',
-            env: provider.environments?.[0]?.name,
             ...mergedDefaults,
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,12 +256,11 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
     };
 
     const handleValidSubmit = (values: z.infer<typeof schema>) => {
-        const { connectionName, clientId, clientSecret, env, ...rest } = values;
+        const { connectionName, clientId, clientSecret, ...rest } = values;
         onSubmit({
             connectionName: connectionName as string,
             clientId: clientId as string,
             clientSecret: clientSecret as string,
-            env: env as string | undefined,
             vendorParams: buildVendorParams(rest as Record<string, unknown>),
         });
     };
@@ -316,39 +317,10 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                     )}
                 />
 
-                {provider.environments && provider.environments.length > 0 && (
-                    <FormField
-                        control={form.control}
-                        name="env"
-                        render={({ field }) => (
-                            <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
-                                <FormLabel className="text-right">Environment</FormLabel>
-                                <div className="col-span-3">
-                                    <Select
-                                        value={(field.value as string) || ''}
-                                        onValueChange={field.onChange}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select environment" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {provider.environments!.map((e) => (
-                                                <SelectItem key={e.name} value={e.name}>
-                                                    {e.displayName}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </div>
-                            </FormItem>
-                        )}
-                    />
-                )}
 
-                {/* Render Dynamic UI Schema properties */}
+                {/* Render Dynamic UI Schema properties — environment and other vendor-specific
+                    fields are rendered generically here; no hardcoded field blocks needed. */}
+
                 {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>)).map(([key, prop]) => {
                     return (
                         <FormField

@@ -1,11 +1,10 @@
 import type { TriggerStore } from '@nexiom/connectors/framework';
 import {
     type IBulkAdapter,
-    type SalesforceAuth,
-    sfFetch,
-    SF_API_VERSION,
     IgtLogger
 } from '@nexiom/connectors/intelligence';
+import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
 
 const log = new IgtLogger({ app: 'salesforce' });
 

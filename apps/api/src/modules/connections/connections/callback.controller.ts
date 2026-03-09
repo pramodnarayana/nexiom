@@ -1,10 +1,7 @@
 import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import {
-  ProviderRegistryService,
-  type ProviderDefinition,
-} from '@nexiom/connectors';
+import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 
 import { OauthStateService } from '../oauth-state.service.js';
 
@@ -35,7 +32,7 @@ export class OAuthCallbackController {
   private readonly targetOrigin: string;
 
   constructor(
-    private readonly providerRegistry: ProviderRegistryService,
+    private readonly pieceRegistry: PieceRegistryService,
     private readonly oauthStateService: OauthStateService,
     private readonly configService: ConfigService,
   ) {
@@ -124,10 +121,9 @@ export class OAuthCallbackController {
       });
     }
 
-    let providerData: ProviderDefinition | null;
     try {
-      providerData = this.providerRegistry.getProvider(provider);
-      if (!providerData) {
+      const piece = this.pieceRegistry.getPiece(provider);
+      if (!piece) {
         this.logger.warn(`Rejected unauthorized provider: ${provider}`);
         return this.sendPopupMessage(res, {
           status: 'error',

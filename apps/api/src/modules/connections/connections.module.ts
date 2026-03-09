@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import {
-  ProviderRegistryService,
   EncryptionService,
   TokenManagerService,
   AesEncryptionService,
@@ -31,7 +30,6 @@ import { type DrizzleDb } from '@nexiom/database';
   imports: [DbModule, PiecesModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
-    ProviderRegistryService,
     {
       provide: TokenManagerService,
       useFactory: (
