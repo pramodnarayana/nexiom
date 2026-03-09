@@ -3,7 +3,7 @@
   "Environment": "Milieu",
   "Choose environment": "Kies omgeving",
   "Production": "Productie",
-  "Development": "Ontwikkeling",
+  "Sandbox": "Testomgeving",
   "Authenticate with Salesforce Production": "Authenticeer met Salesforce-productie",
   "Add Contact to Campaign": "Contact toevoegen aan campagne",
   "Add File to Record": "Voeg bestand toe aan Record",
