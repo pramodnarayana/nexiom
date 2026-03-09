@@ -20,7 +20,12 @@ vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
 vi.mock('../sf-fetch.js', () => ({
     sfFetch: vi.fn(),
     SF_API_VERSION: 'v59.0',
-    SalesforceAuthError: class extends Error { }
+    SalesforceAuthError: class extends Error {
+        constructor(message?: string) {
+            super(message);
+            this.name = 'SalesforceAuthError';
+        }
+    }
 }));
 
 describe('SalesforceDiscoveryAdapter', () => {

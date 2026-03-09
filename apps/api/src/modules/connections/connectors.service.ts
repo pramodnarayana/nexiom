@@ -22,7 +22,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -43,6 +43,10 @@ export interface ConnectionValueBlob {
    * can restore them without database round-trips.
    */
   vendorParams?: Record<string, string>;
+  /**
+   * Top-level legacy environment parameter (now merged into vendorParams).
+   */
+  environment?: string | number | boolean;
 }
 
 export interface StoreOAuthConnectionOptions {
@@ -325,8 +329,20 @@ export class ConnectorsService {
     }
 
     try {
-      const workspaceSchemaName = await this.db.transaction(async (tx) => {
+      const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
         // 1. Insert or update the business connection metadata
+        const existingAppConnection = await tx
+          .select({ id: appConnections.id })
+          .from(appConnections)
+          .where(
+            and(
+              eq(appConnections.tenantId, tenantId),
+              eq(appConnections.externalId, externalId),
+            ),
+          )
+          .limit(1);
+        const createdAppConnection = existingAppConnection.length === 0;
+
         const [connection] = await tx
           .insert(appConnections)
           .values({
@@ -368,6 +384,13 @@ export class ConnectorsService {
         const safeToken = finalProviderToken.substring(0, 40);
         const schemaName = `ws_${safeToken}_${hashedSuffix}`;
 
+        const existingRegistry = await tx
+          .select({ connectionId: connectionStorageRegistry.connectionId })
+          .from(connectionStorageRegistry)
+          .where(eq(connectionStorageRegistry.connectionId, connection.id))
+          .limit(1);
+        const createdRegistry = existingRegistry.length === 0;
+
         await tx
           .insert(connectionStorageRegistry)
           .values({
@@ -380,33 +403,44 @@ export class ConnectorsService {
             target: connectionStorageRegistry.connectionId,
           });
 
-        return { schemaName, connectionId: connection.id };
+        return {
+          schemaName,
+          connectionId: connection.id,
+          createdAppConnection,
+          createdRegistry,
+        };
       });
 
       // 3. Apply the initial schema plan outside the transaction
       try {
         await this.dbManager.applyPlan(
-          workspaceSchemaName.schemaName,
+          workspaceProvisionInfo.schemaName,
           SchemaPlan.NAMESPACE_ONLY,
         );
       } catch (applyError) {
         this.logger.error(
-          `applyPlan failed for ${providerName}, rolling back records...`,
+          `applyPlan failed for ${providerName}, rolling back provisioned records...`,
           applyError,
         );
         try {
           await this.db.transaction(async (tx) => {
-            await tx
-              .delete(connectionStorageRegistry)
-              .where(
-                eq(
-                  connectionStorageRegistry.connectionId,
-                  workspaceSchemaName.connectionId,
-                ),
-              );
-            await tx
-              .delete(appConnections)
-              .where(eq(appConnections.id, workspaceSchemaName.connectionId));
+            if (workspaceProvisionInfo.createdRegistry) {
+              await tx
+                .delete(connectionStorageRegistry)
+                .where(
+                  eq(
+                    connectionStorageRegistry.connectionId,
+                    workspaceProvisionInfo.connectionId,
+                  ),
+                );
+            }
+            if (workspaceProvisionInfo.createdAppConnection) {
+              await tx
+                .delete(appConnections)
+                .where(
+                  eq(appConnections.id, workspaceProvisionInfo.connectionId),
+                );
+            }
           });
         } catch (rollbackError) {
           this.logger.error(

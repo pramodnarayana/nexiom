@@ -99,18 +99,7 @@ export async function sfFetch(
             response = await executeFetchWithTimeout(url, init);
         } catch (err: unknown) {
             // Sonarqube: Handle this exception or don't catch it at all
-            let errMsg: string;
-            if (err instanceof Error) {
-                errMsg = err.message;
-            } else if (typeof err === 'object' && err !== null) {
-                if (typeof (err as any).message === 'string') {
-                    errMsg = (err as any).message;
-                } else {
-                    errMsg = 'Non-error thrown object';
-                }
-            } else {
-                errMsg = String(err);
-            }
+            const errMsg = parseNetworkErrorMsg(err);
             console.debug(`[sfFetch] Transient network error encountered: ${errMsg}`);
             isTransientError = true;
         }
@@ -139,6 +128,19 @@ function isRetriableError(isTransient: boolean, response?: Response): boolean {
     if (isTransient) return true;
     if (!response) return false;
     return response.status === 429 || response.status === 500 || response.status === 503;
+}
+
+function parseNetworkErrorMsg(err: unknown): string {
+    if (err instanceof Error) {
+        return err.message;
+    }
+    if (typeof err === 'object' && err !== null) {
+        if (typeof (err as any).message === 'string') {
+            return (err as any).message;
+        }
+        return 'Non-error thrown object';
+    }
+    return String(err);
 }
 
 async function buildSalesforceError(response?: Response): Promise<Error> {

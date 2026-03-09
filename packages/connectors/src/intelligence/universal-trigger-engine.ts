@@ -26,7 +26,7 @@ export class UniversalTriggerEngine {
 
         // 1. Determine Identity & Configuration
         const bulkThreshold = hint?.bulkThreshold ?? 5_000;
-        const lowLimitThreshold = config.apiLimitThreshold ?? this.parseLimitThreshold();
+        const lowLimitThreshold = this.parseLimitThreshold(config.apiLimitThreshold);
         const connectorLabel = config.connectorName ?? objectName;
 
         // --- BACKOFF & PROTECTION LOGIC ---
@@ -105,7 +105,7 @@ export class UniversalTriggerEngine {
         auth: any,
         store: any,
         lowLimitThreshold: number,
-        objectName: string,
+        connectorName: string,
         checkApiLimits?: (auth: any, store: any) => Promise<ApiRateLimit | null>
     ): Promise<boolean> {
         if (!checkApiLimits) return true;
@@ -133,7 +133,7 @@ export class UniversalTriggerEngine {
                     remaining: String(apiLimits.remaining),
                     total: String(apiLimits.total),
                     threshold: String(lowLimitThreshold),
-                    objectName
+                    connectorName
                 });
                 return false;
             }
@@ -141,9 +141,9 @@ export class UniversalTriggerEngine {
         return true;
     }
 
-    private static parseLimitThreshold(envValue?: string): number {
-        if (!envValue) return 0.2;
-        const parsed = Number.parseFloat(envValue);
+    private static parseLimitThreshold(envValue?: string | number): number {
+        if (envValue === undefined || envValue === null) return 0.2;
+        const parsed = typeof envValue === 'number' ? envValue : Number.parseFloat(envValue);
         if (!Number.isFinite(parsed) || Number.isNaN(parsed)) return 0.2;
         return Math.max(0, Math.min(1, parsed));
     }

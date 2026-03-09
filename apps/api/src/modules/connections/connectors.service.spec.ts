@@ -32,6 +32,7 @@ describe('ConnectorsService', () => {
     select: ReturnType<typeof vi.fn>;
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
+    limit: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
     transaction: ReturnType<typeof vi.fn>;
     execute: ReturnType<typeof vi.fn>;
@@ -50,7 +51,8 @@ describe('ConnectorsService', () => {
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockResolvedValue([]),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
       insert: mockDbInsert,
       transaction: vi
         .fn()

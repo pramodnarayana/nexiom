@@ -64,6 +64,63 @@ function assertPropValue(
   }
 }
 
+function parseConnectionCredentials(decrypted: string): {
+  clientId: string;
+  hasClientSecret: boolean;
+  vendorParams?: Record<string, string>;
+} {
+  const parsed = JSON.parse(decrypted) as ConnectionValueBlob;
+
+  const clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
+  const hasClientSecret =
+    typeof parsed.clientSecret === 'string' && parsed.clientSecret.length > 0;
+
+  let rawVendorParams: Record<string, string> | undefined;
+  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
+    rawVendorParams = parsed.vendorParams;
+  }
+
+  let vendorParams: Record<string, string> | undefined;
+  if (parsed.environment) {
+    vendorParams = rawVendorParams || {};
+    if (!vendorParams.environment) {
+      vendorParams.environment = String(parsed.environment);
+    }
+  } else {
+    vendorParams = rawVendorParams;
+  }
+
+  return { clientId, hasClientSecret, vendorParams };
+}
+
+function parseVendorParamsJson(
+  vendorParamsJson: string | undefined,
+): Record<string, string> {
+  if (!vendorParamsJson) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(vendorParamsJson);
+    const parseResult = z
+      .record(z.string(), z.string())
+      .refine((obj) => Object.keys(obj).length <= 15, {
+        message: 'vendorParams cannot exceed 15 keys',
+      })
+      .safeParse(parsed);
+
+    if (!parseResult.success) {
+      throw new BadRequestException(
+        `Invalid vendorParams format: ${parseResult.error.issues[0]?.message}`,
+      );
+    }
+    return parseResult.data;
+  } catch (err) {
+    if (err instanceof BadRequestException) {
+      throw err;
+    }
+    throw new BadRequestException('Invalid vendorParams JSON format');
+  }
+}
+
 function validateVendorParams(
   schema: Record<string, AnyProperty> | undefined,
   vendorParams: Record<string, string> | undefined,
@@ -390,16 +447,11 @@ export class ConnectorsController {
     if (connection.value) {
       try {
         const decrypted = await this.crypto.decrypt(connection.value);
-        const parsed = JSON.parse(decrypted) as ConnectionValueBlob;
+        const creds = parseConnectionCredentials(decrypted);
 
-        clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
-        hasClientSecret =
-          typeof parsed.clientSecret === 'string' &&
-          parsed.clientSecret.length > 0;
-        vendorParams =
-          parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0
-            ? parsed.vendorParams
-            : undefined;
+        clientId = creds.clientId;
+        hasClientSecret = creds.hasClientSecret;
+        vendorParams = creds.vendorParams;
 
         this.logger.log({
           message: `Credentials accessed for connection ${connection.id}`,
@@ -457,30 +509,7 @@ export class ConnectorsController {
     }
 
     // vendorParams are JSON-serialised by the frontend and sent as a single queryParam
-    let vendorParams: Record<string, string> = {};
-    if (vendorParamsJson) {
-      try {
-        const parsed: unknown = JSON.parse(vendorParamsJson);
-        const parseResult = z
-          .record(z.string(), z.string())
-          .refine((obj) => Object.keys(obj).length <= 15, {
-            message: 'vendorParams cannot exceed 15 keys',
-          })
-          .safeParse(parsed);
-
-        if (!parseResult.success) {
-          throw new BadRequestException(
-            `Invalid vendorParams format: ${parseResult.error.issues[0]?.message}`,
-          );
-        }
-        vendorParams = parseResult.data;
-      } catch (err) {
-        if (err instanceof BadRequestException) {
-          throw err;
-        }
-        throw new BadRequestException('Invalid vendorParams JSON format');
-      }
-    }
+    const vendorParams = parseVendorParamsJson(vendorParamsJson);
 
     // Validate vendorParams against the provider schema so only approved fields
     // are signed into the OAuth state and forwarded to the authorize URL.

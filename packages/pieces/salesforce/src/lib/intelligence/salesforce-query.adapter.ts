@@ -19,6 +19,13 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
             selectedFields.add(spec.cursorField);
         }
 
+        if (spec.tieBreakerField) {
+            if (!discoveredFieldNames.has(spec.tieBreakerField)) {
+                throw new Error(`Invalid tieBreakerField: '${spec.tieBreakerField}' not found on object '${spec.objectName}'`);
+            }
+            selectedFields.add(spec.tieBreakerField);
+        }
+
         const columns = Array.from(selectedFields);
         this.appendAutoJoins(schema, spec, columns);
 
@@ -58,22 +65,24 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
 
         let tbFormatted: string | null = null;
 
-        if (spec.tieBreakerField && spec.tieBreakerValue) {
+        if (spec.tieBreakerField) {
             const tbFieldDef = schema.fields.find(f => f.name === spec.tieBreakerField);
             if (!tbFieldDef) {
                 throw new Error(`Invalid tieBreakerField: '${spec.tieBreakerField}' not found on object '${spec.objectName}'`);
             }
-            this.validateCursor(spec.tieBreakerValue);
-            const isTbStringType = ['string', 'id', 'reference'].includes(tbFieldDef.type.toLowerCase());
-            tbFormatted = isTbStringType ? `'${spec.tieBreakerValue}'` : spec.tieBreakerValue;
-        } else if (spec.tieBreakerField && !spec.tieBreakerValue) {
-            // tieBreakerField was requested but no value is available yet (e.g. first poll).
-            // Fall back to cursor-only pagination so the caller is aware.
-            console.warn(
-                `[SalesforceQueryAdapter] tieBreakerField '${spec.tieBreakerField}' is set ` +
-                `but tieBreakerValue is missing for object '${spec.objectName}'. ` +
-                `Falling back to cursor-only pagination.`
-            );
+            if (spec.tieBreakerValue) {
+                this.validateCursor(spec.tieBreakerValue);
+                const isTbStringType = ['string', 'id', 'reference'].includes(tbFieldDef.type.toLowerCase());
+                tbFormatted = isTbStringType ? `'${spec.tieBreakerValue}'` : spec.tieBreakerValue;
+            } else {
+                // tieBreakerField was requested but no value is available yet (e.g. first poll).
+                // Fall back to cursor-only pagination so the caller is aware.
+                console.warn(
+                    `[SalesforceQueryAdapter] tieBreakerField '${spec.tieBreakerField}' is set ` +
+                    `but tieBreakerValue is missing for object '${spec.objectName}'. ` +
+                    `Falling back to cursor-only pagination.`
+                );
+            }
         }
 
         if (spec.tieBreakerField && tbFormatted) {

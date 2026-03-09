@@ -36,12 +36,12 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
 
     const piece = this.pieceRegistry.getPiece(appName);
     if (!piece) {
-      throw new Error(`Provider not found for refresh: ${appName}`);
+      throw new Error(`Piece not found for refresh: ${appName}`);
     }
 
     if (piece.auth?.type !== PropertyType.OAUTH2 || !piece.auth.tokenUrl) {
       throw new Error(
-        `Provider ${appName} does not support OAuth refresh or lacks a token url`,
+        `Piece ${appName} does not support OAuth refresh or lacks a token url`,
       );
     }
 

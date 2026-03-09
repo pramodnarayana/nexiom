@@ -83,7 +83,7 @@ describe('DefaultOAuthRefreshClient', () => {
     (mockPieceRegistry.getPiece as Mock).mockReturnValue(undefined);
     await expect(
       client.refresh('testTenant', 'unknown_app', 'test-ext', 'refresh123'),
-    ).rejects.toThrow('Provider not found for refresh: unknown_app');
+    ).rejects.toThrow('Piece not found for refresh: unknown_app');
   });
 
   it('should throw an error if the provider lacks a tokenUrl', async () => {
@@ -95,7 +95,7 @@ describe('DefaultOAuthRefreshClient', () => {
     await expect(
       client.refresh('testTenant', 'mock-oauth2', 'test-ext', 'refresh123'),
     ).rejects.toThrow(
-      'Provider mock-oauth2 does not support OAuth refresh or lacks a token url',
+      'Piece mock-oauth2 does not support OAuth refresh or lacks a token url',
     );
   });
 
