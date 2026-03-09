@@ -96,4 +96,16 @@ export interface UniversalEngineConfig<TAuth = unknown> {
     queryAdapter: IQueryAdapter;
     /** Adapter to handle Bulk API execution. Optional. */
     bulkAdapter?: IBulkAdapter<TAuth>;
+
+    /**
+     * The fraction of API calls remaining below which polling pauses (0–1, default 0.2).
+     * Replaces the Salesforce-specific SF_API_LIMIT_THRESHOLD env variable.
+     */
+    apiLimitThreshold?: number;
+
+    /**
+     * Human-readable connector/provider name used in log messages.
+     * Defaults to objectName when not provided.
+     */
+    connectorName?: string;
 }

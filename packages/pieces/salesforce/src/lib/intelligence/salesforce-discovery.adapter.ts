@@ -5,7 +5,7 @@ import {
     IgtLogger,
 } from '@nexiom/connectors/intelligence';
 import { SalesforceAuthError, sfFetch, SF_API_VERSION } from '../sf-fetch.js';
-import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
+import type { SalesforceAuth } from '../salesforce-types.js';
 
 const STORE_SCHEMA_KEY_PREFIX = 'igt_schema_';
 const log = new IgtLogger({ app: 'salesforce' });

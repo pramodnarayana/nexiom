@@ -552,28 +552,26 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const restOfBody = body;
-
     const { trimmedDisplayName, externalId } = validateExchangeBody(
-      restOfBody.providerName,
-      restOfBody.code,
-      restOfBody.clientId,
-      restOfBody.clientSecret,
+      body.providerName,
+      body.code,
+      body.clientId,
+      body.clientSecret,
       body.state,
       body.displayName,
     );
 
     // Verify piece exists in registry
-    const piece = this.pieceRegistry.getPiece(restOfBody.providerName);
+    const piece = this.pieceRegistry.getPiece(body.providerName);
     if (!piece) {
-      throw new BadRequestException(
-        `Provider "${restOfBody.providerName}" is not registered`,
+      throw new NotFoundException(
+        `Provider "${body.providerName}" is not registered`,
       );
     }
 
     const decodedState = await this.oauthStateService.verifyState(
       body.state,
-      restOfBody.providerName,
+      body.providerName,
     );
     if (decodedState.tenantId !== tenantId) {
       throw new BadRequestException(
@@ -592,10 +590,10 @@ export class ConnectorsController {
     let tokenResponse: Record<string, unknown>;
     try {
       tokenResponse = await this.connectorsService.exchangeCodeForTokens(
-        restOfBody.providerName,
-        restOfBody.code,
-        restOfBody.clientId,
-        restOfBody.clientSecret,
+        body.providerName,
+        body.code,
+        body.clientId,
+        body.clientSecret,
         decodedState.vendorParams ?? {},
       );
     } catch (error) {
@@ -606,7 +604,7 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Token exchange failed for ${restOfBody.providerName}`,
+        `Token exchange failed for ${body.providerName}`,
         error,
       );
       throw new InternalServerErrorException('Failed to exchange auth code');
@@ -627,8 +625,8 @@ export class ConnectorsController {
     // vendorParams are persisted inside the blob so the reconnect form
     // can restore all uiSchema fields without additional database columns.
     const valueBlob: ConnectionValueBlob = {
-      clientId: restOfBody.clientId,
-      clientSecret: restOfBody.clientSecret,
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
       data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
@@ -639,10 +637,7 @@ export class ConnectorsController {
     try {
       encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
     } catch (error) {
-      this.logger.error(
-        `Encryption failed for ${restOfBody.providerName}`,
-        error,
-      );
+      this.logger.error(`Encryption failed for ${body.providerName}`, error);
       throw new InternalServerErrorException('Failed to encrypt credentials');
     }
 
@@ -654,7 +649,7 @@ export class ConnectorsController {
     try {
       await this.connectorsService.storeOAuthConnection({
         tenantId,
-        providerName: restOfBody.providerName,
+        providerName: body.providerName,
         externalId,
         displayName: trimmedDisplayName,
         authType: 'OAUTH2',
@@ -670,7 +665,7 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${restOfBody.providerName}`,
+        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${body.providerName}`,
         error,
       );
       throw new InternalServerErrorException(
@@ -679,7 +674,7 @@ export class ConnectorsController {
     }
 
     this.logger.log(
-      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
+      `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
     );
     return { success: true };
   }

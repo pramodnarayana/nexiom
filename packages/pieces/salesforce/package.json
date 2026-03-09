@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./trigger": {
+      "types": "./dist/lib/trigger/index.d.ts",
+      "import": "./dist/lib/trigger/index.js",
+      "default": "./dist/lib/trigger/index.js"
     }
   },
   "scripts": {

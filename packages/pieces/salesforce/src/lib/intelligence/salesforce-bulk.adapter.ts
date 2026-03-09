@@ -4,7 +4,7 @@ import {
     IgtLogger
 } from '@nexiom/connectors/intelligence';
 import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
-import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
+import type { SalesforceAuth } from '../salesforce-types.js';
 
 const log = new IgtLogger({ app: 'salesforce' });
 
@@ -38,11 +38,20 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             return this.checkJobStatusAndDownload(auth, store, storeKey, checkpoint);
         }
 
-        log.warn('Unexpected bulk job checkpoint state — skipping poll cycle', {
+        log.warn('Unexpected bulk job checkpoint state — resetting checkpoint for next poll cycle', {
             state: checkpoint.state,
             jobId: checkpoint.jobId,
             storeKey,
         });
+        try {
+            await store.delete(storeKey);
+        } catch (error_) {
+            log.error('Failed to reset unexpected bulk job checkpoint', {
+                storeKey,
+                jobId: checkpoint.jobId,
+                error: String(error_),
+            });
+        }
         return [];
     }
 
@@ -240,7 +249,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
     }
 
     private mapCsvRowsToObjects(rows: string[][]): unknown[] {
-        const headers = rows[0].map(h => h.replaceAll(/^("|"$)/g, '').trim());
+        const headers = rows[0].map(h => h.replaceAll(/(?:^"|"$)/g, '').trim());
         const records: unknown[] = [];
 
         for (let i = 1; i < rows.length; i++) {

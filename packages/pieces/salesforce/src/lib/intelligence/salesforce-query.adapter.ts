@@ -66,6 +66,14 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
             this.validateCursor(spec.tieBreakerValue);
             const isTbStringType = ['string', 'id', 'reference'].includes(tbFieldDef.type.toLowerCase());
             tbFormatted = isTbStringType ? `'${spec.tieBreakerValue}'` : spec.tieBreakerValue;
+        } else if (spec.tieBreakerField && !spec.tieBreakerValue) {
+            // tieBreakerField was requested but no value is available yet (e.g. first poll).
+            // Fall back to cursor-only pagination so the caller is aware.
+            console.warn(
+                `[SalesforceQueryAdapter] tieBreakerField '${spec.tieBreakerField}' is set ` +
+                `but tieBreakerValue is missing for object '${spec.objectName}'. ` +
+                `Falling back to cursor-only pagination.`
+            );
         }
 
         if (spec.tieBreakerField && tbFormatted) {

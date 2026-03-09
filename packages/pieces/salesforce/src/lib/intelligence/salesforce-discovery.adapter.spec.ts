@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceDiscoveryAdapter } from './salesforce-discovery.adapter.js';
 import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
-import type { SalesforceAuth } from '../trigger/salesforce-polling.helper.js';
+import type { SalesforceAuth } from '../salesforce-types.js';
 import type { TriggerStore } from '@nexiom/connectors/framework';
 
 vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {

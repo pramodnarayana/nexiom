@@ -3,10 +3,7 @@ import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
 
 const SF_OBJECT_NAME_RE = /^\w{1,80}$/;
 
-export interface SalesforceAuth {
-    access_token: string;
-    instance_url: string;
-}
+import type { SalesforceAuth } from '../salesforce-types.js';
 
 export interface PollOptions {
     cursorKey: string;
@@ -43,6 +40,9 @@ function parseCursor(raw: string, fallbackDate: string): { sinceDate: string; si
         if (typeof parsed.sinceDate === 'string' && typeof parsed.sinceId === 'string') {
             return { sinceDate: parsed.sinceDate, sinceId: parsed.sinceId };
         }
+        // JSON parsed successfully but is missing required keys — reset to fallback
+        // rather than reusing the raw string, which could inject untrusted JSON into SOQL.
+        return { sinceDate: fallbackDate, sinceId: '' };
     } catch { /* not JSON — treat as plain ISO date string */ }
     return { sinceDate: raw || fallbackDate, sinceId: '' };
 }
@@ -91,8 +91,7 @@ export async function runSalesforce(
         ? parseCursor(lastCursorStr, defaultDate)
         : { sinceDate: defaultDate, sinceId: '' };
 
-    const formattedSince = `'${sinceDate}'`;
-    const whereClause = buildWhereClause(dateField, formattedSince, sinceId);
+    const whereClause = buildWhereClause(dateField, sinceDate, sinceId);
 
     const columns = ['Id', dateField, ...extraColumns].join(', ');
     const soql = encodeURIComponent(

@@ -26,10 +26,11 @@ export class UniversalTriggerEngine {
 
         // 1. Determine Identity & Configuration
         const bulkThreshold = hint?.bulkThreshold ?? 5_000;
-        const lowLimitThreshold = this.parseLimitThreshold(process.env.SF_API_LIMIT_THRESHOLD);
+        const lowLimitThreshold = config.apiLimitThreshold ?? this.parseLimitThreshold();
+        const connectorLabel = config.connectorName ?? objectName;
 
         // --- BACKOFF & PROTECTION LOGIC ---
-        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, objectName, config.checkApiLimits);
+        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, connectorLabel, config.checkApiLimits);
         if (!isLimitSafe) return [];
 
         // 2. Discover / Warm Schema Cache
@@ -111,9 +112,13 @@ export class UniversalTriggerEngine {
 
         let apiLimits: ApiRateLimit | null = null;
         try {
+            let timeoutId: ReturnType<typeof setTimeout>;
+            const timeoutPromise = new Promise<null>((_, reject) => {
+                timeoutId = setTimeout(() => reject(new TimeoutError('TIMEOUT')), 5000);
+            });
             apiLimits = await Promise.race([
-                checkApiLimits(auth, store),
-                new Promise<null>((_, reject) => setTimeout(() => reject(new TimeoutError('TIMEOUT')), 5000))
+                checkApiLimits(auth, store).finally(() => clearTimeout(timeoutId)),
+                timeoutPromise,
             ]);
         } catch (e) {
             const isTimeout = e instanceof TimeoutError;
@@ -124,7 +129,7 @@ export class UniversalTriggerEngine {
         if (apiLimits && apiLimits.total > 0) {
             const ratio = apiLimits.remaining / apiLimits.total;
             if (ratio < lowLimitThreshold) {
-                log.warn('Salesforce API Limit critically low — pausing poll', {
+                log.warn('API limit critically low — pausing poll', {
                     remaining: String(apiLimits.remaining),
                     total: String(apiLimits.total),
                     threshold: String(lowLimitThreshold),

@@ -238,7 +238,7 @@ describe('DefaultOAuthRefreshClient', () => {
 
     await client.refresh(
       'testTenant',
-      'mock-templated-oauth',
+      'mock-oauth2',
       'test-ext',
       'old_refresh',
     );
@@ -284,7 +284,7 @@ describe('DefaultOAuthRefreshClient', () => {
 
     await client.refresh(
       'testTenant',
-      'mock-templated-oauth',
+      'mock-oauth2',
       'test-ext',
       'old_refresh',
     );

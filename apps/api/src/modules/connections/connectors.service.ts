@@ -394,17 +394,26 @@ export class ConnectorsService {
           `applyPlan failed for ${providerName}, rolling back records...`,
           applyError,
         );
-        await this.db
-          .delete(connectionStorageRegistry)
-          .where(
-            eq(
-              connectionStorageRegistry.connectionId,
-              workspaceSchemaName.connectionId,
-            ),
+        try {
+          await this.db.transaction(async (tx) => {
+            await tx
+              .delete(connectionStorageRegistry)
+              .where(
+                eq(
+                  connectionStorageRegistry.connectionId,
+                  workspaceSchemaName.connectionId,
+                ),
+              );
+            await tx
+              .delete(appConnections)
+              .where(eq(appConnections.id, workspaceSchemaName.connectionId));
+          });
+        } catch (rollbackError) {
+          this.logger.error(
+            `Rollback transaction failed for ${providerName}`,
+            rollbackError,
           );
-        await this.db
-          .delete(appConnections)
-          .where(eq(appConnections.id, workspaceSchemaName.connectionId));
+        }
         throw new InternalServerErrorException(
           'Failed to provision workspace namespace',
         );
