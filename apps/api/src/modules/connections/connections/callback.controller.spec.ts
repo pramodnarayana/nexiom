@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthCallbackController } from './callback.controller.js';
-import { ProviderRegistryService } from '@nexiom/connectors';
+import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
+import type { Piece } from '@nexiom/connectors/framework';
 import type { Request, Response } from 'express';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { Mocked } from 'vitest';
@@ -63,24 +64,26 @@ function expectPopupMessage(
 
 describe('OAuthCallbackController', () => {
   let controller: OAuthCallbackController;
-  let mockProviderRegistry: Mocked<ProviderRegistryService>;
+  let mockPieceRegistry: Mocked<PieceRegistryService>;
   let mockOauthStateService: Mocked<OauthStateService>;
 
   beforeEach(async () => {
-    mockProviderRegistry = {
-      getProvider: vi.fn().mockReturnValue({
-        name: 'salesforce',
-        displayName: 'Salesforce',
+    mockPieceRegistry = {
+      getPiece: vi.fn().mockReturnValue({
+        name: 'mock-piece',
+        displayName: 'MockPiece',
         description: 'CRM',
         logoUrl: '',
-        category: 'CRM',
-        authType: 'OAUTH2',
-        authorizeUrl: 'https://login.salesforce.com/services/oauth2/authorize',
-        tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
-        scopes: ['api'],
-      } as any),
-      getAllProviders: vi.fn(),
-    } as unknown as Mocked<ProviderRegistryService>;
+        categories: ['CRM'],
+        auth: {
+          type: 'OAUTH2',
+          authUrl: 'https://login.mock-piece.com/services/oauth2/authorize',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+          scope: ['api'],
+        },
+      } as unknown as Piece),
+      getAllPieces: vi.fn(),
+    } as unknown as Mocked<PieceRegistryService>;
 
     mockOauthStateService = {
       extractProviderFromState: vi.fn(),
@@ -98,8 +101,8 @@ describe('OAuthCallbackController', () => {
       controllers: [OAuthCallbackController],
       providers: [
         {
-          provide: ProviderRegistryService,
-          useValue: mockProviderRegistry,
+          provide: PieceRegistryService,
+          useValue: mockPieceRegistry,
         },
         {
           provide: OauthStateService,
@@ -120,7 +123,7 @@ describe('OAuthCallbackController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should send error popup with invalid_state if extractProviderFromState throws', () => {
+  it('should send error popup with invalid_state if extractProviderFromState throws', async () => {
     mockOauthStateService.extractProviderFromState.mockImplementation(() => {
       throw new Error('bad state');
     });
@@ -128,124 +131,124 @@ describe('OAuthCallbackController', () => {
     const req = mockRequest({ state: 'valid-jwt' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'invalid_state' });
   });
 
-  it('should send error popup with invalid_provider if provider name is malformed', () => {
+  it('should send error popup with invalid_provider if provider name is malformed', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
       'invalid provider!',
     );
     const req = mockRequest({ state: 'valid-jwt' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'invalid_provider' });
   });
 
-  it('should send error popup with invalid_provider if provider is unsupported', () => {
+  it('should send error popup with invalid_provider if provider is unsupported', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
       'unknown-provider',
     );
-    mockProviderRegistry.getProvider.mockReturnValue(null);
+    mockPieceRegistry.getPiece.mockReturnValue(undefined);
     const req = mockRequest({ state: 'valid-jwt' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'invalid_provider' });
   });
 
-  it('should send error popup with internal_error if provider lookup fails', () => {
+  it('should send error popup with internal_error if provider lookup fails', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
+      'mock-piece',
     );
-    mockProviderRegistry.getProvider.mockImplementation(() => {
+    mockPieceRegistry.getPiece.mockImplementation(() => {
       throw new Error('Unexpected registry error');
     });
 
     const req = mockRequest({ state: 'valid-jwt' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'internal_error' });
   });
 
-  it('should send error popup with auth_failed if vendor returns an error in query', () => {
+  it('should send error popup with auth_failed if vendor returns an error in query', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
+      'mock-piece',
     );
     const req = mockRequest({ state: 'valid-jwt', error: 'access_denied' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'auth_failed' });
   });
 
-  it('should send error popup with missing_state if state is missing', () => {
+  it('should send error popup with missing_state if state is missing', async () => {
     const req = mockRequest({ code: '123' }); // Missing state
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'missing_state' });
   });
 
-  it('should send error popup with invalid_callback if code is missing', () => {
+  it('should send error popup with invalid_callback if code is missing', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
+      'mock-piece',
     );
     const req = mockRequest({ state: 'valid-jwt' }); // Missing code
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'invalid_callback' });
   });
 
-  it('should send error popup with invalid_state if JWT state verification fails', () => {
+  it('should send error popup with invalid_state if JWT state verification fails', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
+      'mock-piece',
     );
-    mockOauthStateService.verifyState.mockImplementation(() => {
-      throw new Error('CSRF exception');
-    });
+    mockOauthStateService.verifyState.mockRejectedValue(
+      new Error('CSRF exception'),
+    );
 
     const req = mockRequest({ code: '123', state: 'bad-jwt' });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
     expectPopupMessage(res, { status: 'error', error: 'invalid_state' });
   });
 
-  it('should successfully send success popup with code, provider, state, and vendorParams', () => {
+  it('should successfully send success popup with code, provider, state, and vendorParams', async () => {
     mockOauthStateService.extractProviderFromState.mockReturnValue(
-      'salesforce',
+      'mock-piece',
     );
-    mockOauthStateService.verifyState.mockReturnValue({
+    mockOauthStateService.verifyState.mockResolvedValue({
       tenantId: VALID_TENANT_ID,
-      env: 'sandbox',
+      vendorParams: { realmId: 'ext-realm-id' },
     });
 
     const req = mockRequest({
@@ -255,19 +258,19 @@ describe('OAuthCallbackController', () => {
     });
     const res = mockResponse();
 
-    controller.handleCallback(
+    await controller.handleCallback(
       req as unknown as Request,
       res as unknown as Response,
     );
 
     expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
       'valid-jwt',
-      'salesforce',
+      'mock-piece',
     );
 
     expectPopupMessage(res, {
       status: 'success',
-      provider: 'salesforce',
+      provider: 'mock-piece',
       code: 'oauth-code-xyz',
       state: 'valid-jwt',
       vendorParams: { realmId: 'ext-realm-id' },

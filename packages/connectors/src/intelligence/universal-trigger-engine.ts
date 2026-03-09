@@ -1,9 +1,15 @@
 import { SmartCursorSelector } from './smart-cursor-selector.js';
 import { IgtLogger } from './igt-logger.js';
-import type { UniversalEngineConfig } from './interfaces.js';
-import { checkSalesforceLimits } from '../apps/salesforce/sf-fetch.js';
+import type { UniversalEngineConfig, ApiRateLimit } from './interfaces.js';
 
 const log = new IgtLogger({ app: 'universal-engine' });
+
+export class TimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'TimeoutError';
+    }
+}
 
 export class UniversalTriggerEngine {
     /**
@@ -20,10 +26,11 @@ export class UniversalTriggerEngine {
 
         // 1. Determine Identity & Configuration
         const bulkThreshold = hint?.bulkThreshold ?? 5_000;
-        const lowLimitThreshold = this.parseLimitThreshold(process.env.SF_API_LIMIT_THRESHOLD);
+        const lowLimitThreshold = this.parseLimitThreshold(config.apiLimitThreshold);
+        const connectorLabel = this.resolveConnectorLabel(config, objectName);
 
         // --- BACKOFF & PROTECTION LOGIC ---
-        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, objectName);
+        const isLimitSafe = await this.verifyApiLimitsSafe(config.auth, config.store, lowLimitThreshold, connectorLabel, config.checkApiLimits);
         if (!isLimitSafe) return [];
 
         // 2. Discover / Warm Schema Cache
@@ -98,24 +105,35 @@ export class UniversalTriggerEngine {
         auth: any,
         store: any,
         lowLimitThreshold: number,
-        objectName: string
+        connectorName: string,
+        checkApiLimits?: (auth: any, store: any, signal?: AbortSignal) => Promise<ApiRateLimit | null>
     ): Promise<boolean> {
-        let apiLimits: { remaining: number; total: number } | null = null;
+        if (!checkApiLimits) return true;
+
+        let apiLimits: ApiRateLimit | null = null;
         try {
-            apiLimits = await checkSalesforceLimits(auth, store);
-        } catch (e) {
-            log.debug('Failed to verify API limits during preflight cache check', { error: String(e) });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(new TimeoutError('TIMEOUT')), 5000);
+
+            try {
+                apiLimits = await checkApiLimits(auth, store, controller.signal);
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        } catch (e: any) {
+            const isTimeout = e instanceof TimeoutError || e?.name === 'AbortError' || e?.name === 'TimeoutError';
+            log.debug(`Failed to verify API limits during preflight cache check${isTimeout ? ' (Timeout)' : ''}`, { error: String(e) });
             return true; // Fail open
         }
 
         if (apiLimits && apiLimits.total > 0) {
             const ratio = apiLimits.remaining / apiLimits.total;
             if (ratio < lowLimitThreshold) {
-                log.warn('Salesforce API Limit critically low — pausing poll', {
+                log.warn('API limit critically low — pausing poll', {
                     remaining: String(apiLimits.remaining),
                     total: String(apiLimits.total),
                     threshold: String(lowLimitThreshold),
-                    objectName
+                    connectorName
                 });
                 return false;
             }
@@ -123,9 +141,15 @@ export class UniversalTriggerEngine {
         return true;
     }
 
-    private static parseLimitThreshold(envValue?: string): number {
-        if (!envValue) return 0.2;
-        const parsed = Number.parseFloat(envValue);
+    private static resolveConnectorLabel(config: UniversalEngineConfig<any>, fallbackObject: string): string {
+        return config.checkApiLimits && !config.connectorName
+            ? 'connector'
+            : (config.connectorName ?? fallbackObject);
+    }
+
+    private static parseLimitThreshold(envValue?: string | number): number {
+        if (envValue === undefined || envValue === null) return 0.2;
+        const parsed = typeof envValue === 'number' ? envValue : Number.parseFloat(envValue);
         if (!Number.isFinite(parsed) || Number.isNaN(parsed)) return 0.2;
         return Math.max(0, Math.min(1, parsed));
     }

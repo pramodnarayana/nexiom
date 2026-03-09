@@ -1,9 +1,9 @@
 import {
     type IQueryAdapter,
     type ObjectSchema,
-    type QuerySpec,
-    assertSafeSalesforceObject
+    type QuerySpec
 } from '@nexiom/connectors/intelligence';
+import { assertSafeSalesforceObject } from '../trigger/salesforce-polling.helper.js';
 
 export class SalesforceQueryAdapter implements IQueryAdapter {
     buildQuery(schema: ObjectSchema, spec: QuerySpec): string {
@@ -19,39 +19,25 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
             selectedFields.add(spec.cursorField);
         }
 
+        if (spec.tieBreakerField) {
+            if (!discoveredFieldNames.has(spec.tieBreakerField)) {
+                throw new Error(`Invalid tieBreakerField: '${spec.tieBreakerField}' not found on object '${spec.objectName}'`);
+            }
+            selectedFields.add(spec.tieBreakerField);
+        }
+
         const columns = Array.from(selectedFields);
         this.appendAutoJoins(schema, spec, columns);
 
         const selectClause = columns.join(', ');
-
-        const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
-        if (!cursorFieldDef) {
-            throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
-        }
-        const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
-        const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
-
-        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
-
-        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
-        if (spec.tieBreakerField && tbFormatted) {
-            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
-        }
+        const whereClause = this.buildWhereClause(schema, spec);
 
         let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${whereClause} ORDER BY ${spec.cursorField} ASC`;
-
-        let safeLimit = 200;
-        if (spec.limit !== undefined) {
-            if (spec.limit === 0) {
-                safeLimit = 0;
-            } else {
-                const parsed = Number(spec.limit);
-                if (!Number.isFinite(parsed) || parsed < 0) {
-                    throw new Error(`Invalid limit: ${spec.limit}`);
-                }
-                safeLimit = Math.max(1, Math.floor(parsed));
-            }
+        if (spec.tieBreakerField) {
+            query += `, ${spec.tieBreakerField} ASC`;
         }
+
+        const safeLimit = this.calculateLimit(spec.limit);
 
         if (!spec.omitLimit && safeLimit !== 0) {
             query += ` LIMIT ${safeLimit}`;
@@ -64,6 +50,12 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         assertSafeSalesforceObject(spec.objectName);
         this.validateCursor(spec.cursorValue);
 
+        const whereClause = this.buildWhereClause(schema, spec);
+
+        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${whereClause}`;
+    }
+
+    private buildWhereClause(schema: ObjectSchema, spec: QuerySpec): string {
         const cursorFieldDef = schema.fields.find(f => f.name === spec.cursorField);
         if (!cursorFieldDef) {
             throw new Error(`Invalid cursorField: '${spec.cursorField}' not found on object '${spec.objectName}'`);
@@ -71,14 +63,42 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const isStringType = ['string', 'id', 'reference'].includes(cursorFieldDef.type.toLowerCase());
         const formattedCursorValue = isStringType ? `'${spec.cursorValue}'` : spec.cursorValue;
 
-        const tbFormatted = spec.tieBreakerField && spec.tieBreakerValue ? `'${spec.tieBreakerValue}'` : null;
+        let tbFormatted: string | null = null;
 
-        let whereClause = `${spec.cursorField} > ${formattedCursorValue}`;
-        if (spec.tieBreakerField && tbFormatted) {
-            whereClause = `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
+        if (spec.tieBreakerField) {
+            const tbFieldDef = schema.fields.find(f => f.name === spec.tieBreakerField);
+            if (!tbFieldDef) {
+                throw new Error(`Invalid tieBreakerField: '${spec.tieBreakerField}' not found on object '${spec.objectName}'`);
+            }
+            if (spec.tieBreakerValue) {
+                this.validateCursor(spec.tieBreakerValue);
+                const isTbStringType = ['string', 'id', 'reference'].includes(tbFieldDef.type.toLowerCase());
+                tbFormatted = isTbStringType ? `'${spec.tieBreakerValue}'` : spec.tieBreakerValue;
+            } else {
+                // tieBreakerField was requested but no value is available yet (e.g. first poll).
+                // Fall back to cursor-only pagination so the caller is aware.
+                console.warn(
+                    `[SalesforceQueryAdapter] tieBreakerField '${spec.tieBreakerField}' is set ` +
+                    `but tieBreakerValue is missing for object '${spec.objectName}'. ` +
+                    `Falling back to cursor-only pagination.`
+                );
+            }
         }
 
-        return `SELECT COUNT() FROM ${spec.objectName} WHERE ${whereClause}`;
+        if (spec.tieBreakerField && tbFormatted) {
+            return `(${spec.cursorField} > ${formattedCursorValue} OR (${spec.cursorField} = ${formattedCursorValue} AND ${spec.tieBreakerField} > ${tbFormatted}))`;
+        }
+        return `${spec.cursorField} > ${formattedCursorValue}`;
+    }
+
+    private calculateLimit(limit: number | undefined): number {
+        if (limit === undefined) return 200;
+        if (limit === 0) return 0;
+        const parsed = Number(limit);
+        if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+            throw new Error(`Invalid limit: ${limit} — must be an integer >= 0`);
+        }
+        return parsed;
     }
 
     private validateCursor(cursorValue: string): void {

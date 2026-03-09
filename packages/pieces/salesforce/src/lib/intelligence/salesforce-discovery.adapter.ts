@@ -2,12 +2,10 @@ import type { TriggerStore } from '@nexiom/connectors/framework';
 import {
     type IDiscoveryAdapter,
     type ObjectSchema,
-    type SalesforceAuth,
-    sfFetch,
-    SF_API_VERSION,
-    SalesforceAuthError,
-    IgtLogger
+    IgtLogger,
 } from '@nexiom/connectors/intelligence';
+import { SalesforceAuthError, sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import type { SalesforceAuth } from '../salesforce-types.js';
 
 const STORE_SCHEMA_KEY_PREFIX = 'igt_schema_';
 const log = new IgtLogger({ app: 'salesforce' });

@@ -1,10 +1,10 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import {
   OAuthRefreshClient,
-  ProviderRegistryService,
   OAuthRefreshError,
   EncryptionService,
 } from '@nexiom/connectors';
+import { PropertyType, resolveOAuth2Url } from '@nexiom/connectors/framework';
 import {
   appConnections,
   AppConnectionStatus,
@@ -14,13 +14,14 @@ import {
 } from '@nexiom/database';
 import { eq, and, desc } from 'drizzle-orm';
 import type { ConnectionValueBlob } from '../connectors.service.js';
+import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 
 @Injectable()
 export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
   private readonly logger = new Logger(DefaultOAuthRefreshClient.name);
 
   constructor(
-    private readonly providerRegistry: ProviderRegistryService,
+    private readonly pieceRegistry: PieceRegistryService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly crypto: EncryptionService,
   ) {}
@@ -33,25 +34,27 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
   ): Promise<Record<string, unknown>> {
     this.validateInputs(tenantId, appName, externalId, refreshToken);
 
-    const provider = this.providerRegistry.getProvider(appName);
-    if (!provider) {
-      throw new Error(`Provider not found for refresh: ${appName}`);
+    const piece = this.pieceRegistry.getPiece(appName);
+    if (!piece) {
+      throw new Error(`Piece not found for refresh: ${appName}`);
     }
 
-    if (provider.authType !== 'OAUTH2' || !provider.tokenUrl) {
+    if (piece.auth?.type !== PropertyType.OAUTH2 || !piece.auth.tokenUrl) {
       throw new Error(
-        `Provider ${appName} does not support OAuth refresh or lacks a token url`,
+        `Piece ${appName} does not support OAuth refresh or lacks a token url`,
       );
     }
 
     try {
-      const { clientId, clientSecret } = await this.getCredentials(
-        tenantId,
-        appName,
-        externalId,
+      const { clientId, clientSecret, vendorParams } =
+        await this.getCredentials(tenantId, appName, externalId);
+
+      const resolvedTokenUrl = resolveOAuth2Url(
+        piece.auth.tokenUrl,
+        vendorParams,
       );
 
-      const response = await fetch(provider.tokenUrl, {
+      const response = await fetch(resolvedTokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -116,7 +119,11 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
     tenantId: string,
     appName: string,
     externalId: string,
-  ): Promise<{ clientId: string; clientSecret: string }> {
+  ): Promise<{
+    clientId: string;
+    clientSecret: string;
+    vendorParams: Record<string, string>;
+  }> {
     try {
       const [connection] = await this.db
         .select({ value: appConnections.value })
@@ -159,6 +166,12 @@ export class DefaultOAuthRefreshClient implements OAuthRefreshClient {
       return {
         clientId: valueBlob.clientId,
         clientSecret: valueBlob.clientSecret,
+        vendorParams: {
+          ...(valueBlob.vendorParams ?? {}),
+          ...('environment' in valueBlob && valueBlob.environment
+            ? { environment: String(valueBlob.environment) }
+            : {}),
+        },
       };
     } catch (error: unknown) {
       throw new Error(

@@ -60,6 +60,12 @@ export interface IQueryAdapter {
     buildCountQuery(schema: ObjectSchema, spec: QuerySpec): string;
 }
 
+/** Information about the SaaS API rate limits. */
+export interface ApiRateLimit {
+    remaining: number;
+    total: number;
+}
+
 /** Executes queries using Bulk APIs for high-volume loads. */
 export interface IBulkAdapter<TAuth = unknown> {
     /** Starts or polls a bulk job and returns results when complete. Returns empty array if still polling. */
@@ -81,10 +87,25 @@ export interface UniversalEngineConfig<TAuth = unknown> {
     /** Executes a lightweight count query. Optional. Returns total rows or 0. */
     executeCountQuery?: (auth: TAuth, query: string) => Promise<number>;
 
+    /** Checks API limits to prevent over-polling. Optional. */
+    checkApiLimits?: (auth: TAuth, store: TriggerStore) => Promise<ApiRateLimit | null>;
+
     /** Adapter to discover the schema. */
     discoveryAdapter: IDiscoveryAdapter<TAuth>;
     /** Adapter to build the query syntax. */
     queryAdapter: IQueryAdapter;
     /** Adapter to handle Bulk API execution. Optional. */
     bulkAdapter?: IBulkAdapter<TAuth>;
+
+    /**
+     * The fraction of API calls remaining below which polling pauses (0–1, default 0.2).
+     * Replaces the Salesforce-specific SF_API_LIMIT_THRESHOLD env variable.
+     */
+    apiLimitThreshold?: number;
+
+    /**
+     * Human-readable connector/provider name used in log messages.
+     * Defaults to objectName when not provided.
+     */
+    connectorName?: string;
 }

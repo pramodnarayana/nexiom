@@ -87,14 +87,28 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
         );
     }
     if (prop.type === 'DROPDOWN' || prop.type === 'STATIC_DROPDOWN') {
-        const options = prop.options ?? [];
+        // Activepieces Framework nests dropdown options as { options: { options: [...] } }
+        // We handle both direct arrays and the nested structure.
+        const rawOptions = prop.options;
+        interface NestedOptions { options?: { label: string; value: string }[] | NestedOptions }
+        interface NestedNestedOptions { options?: { options?: { label: string; value: string }[] } }
+
+        let optionsBody: { label: string; value: string }[] = [];
+        if (rawOptions && 'options' in rawOptions && Array.isArray((rawOptions as NestedOptions).options)) {
+            optionsBody = (rawOptions as { options: { label: string; value: string }[] }).options;
+        } else if (rawOptions && 'options' in rawOptions && !Array.isArray((rawOptions as NestedOptions).options) && Array.isArray((rawOptions as NestedNestedOptions).options?.options)) {
+            optionsBody = (rawOptions as NestedNestedOptions).options!.options!;
+        } else if (Array.isArray(rawOptions)) {
+            optionsBody = rawOptions;
+        }
+
         return (
             <Select value={(field.value as string) ?? ''} onValueChange={field.onChange}>
                 <SelectTrigger>
                     <SelectValue placeholder={prop.placeholder ?? `Select ${prop.displayName ?? 'option'}`} />
                 </SelectTrigger>
                 <SelectContent>
-                    {options.map((opt) => (
+                    {optionsBody.map((opt: { label: string; value: string }) => (
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                 </SelectContent>
@@ -145,12 +159,9 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     const shape: Record<string, z.ZodTypeAny> = {
         connectionName: z.string().min(1, 'Connection name is required'),
         clientId: z.string().min(1, 'Client ID is required'),
+        // Always required — /connectors/oauth-exchange always expects a non-empty secret.
+        clientSecret: z.string().min(1, 'Client secret is required'),
     };
-
-    // clientSecret is always required — both new connects and reconnects must supply it
-    // because /connectors/oauth-exchange always expects a non-empty secret.
-    shape.clientSecret = z.string().min(1, 'Client secret is required');
-    shape.env = z.string().optional();
 
     if (uiSchema) {
         for (const [key, prop] of Object.entries(uiSchema as Record<string, { type: string } & Partial<UiSchemaProp>>)) {
@@ -162,12 +173,17 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     return z.object(shape);
 }
 
-/** Extracts non-empty, non-null extra fields from a form value map into a flat string record. */
-function buildVendorParams(rest: Record<string, unknown>): Record<string, string> {
-    const params: Record<string, string> = {};
+/** Extracts non-empty, non-null extra fields from a form value map into a flat primitive record.
+ * Preserves the original boolean/number/string types so checkboxes and number fields round-trip. */
+function buildVendorParams(rest: Record<string, unknown>): Record<string, string | number | boolean> {
+    const params: Record<string, string | number | boolean> = {};
     for (const [key, val] of Object.entries(rest)) {
         if (val !== undefined && val !== null && val !== '') {
-            params[key] = String(val);
+            if (typeof val === 'boolean' || typeof val === 'number') {
+                params[key] = val;
+            } else {
+                params[key] = String(val);
+            }
         }
     }
     return params;
@@ -183,8 +199,8 @@ export interface DynamicAuthFormProps {
         connectionName: string;
         clientId: string;
         clientSecret: string;
-        env?: string;
-        vendorParams: Record<string, string>;
+        /** All vendor-specific form values (e.g. { environment: 'test' }) — preserves original types. */
+        vendorParams: Record<string, string | number | boolean>;
     }) => void;
 }
 
@@ -224,7 +240,6 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
             connectionName: provider.displayName,
             clientId: '',
             clientSecret: '',
-            env: provider.environments?.[0]?.name,
             ...mergedDefaults
         },
     });
@@ -235,7 +250,6 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
             connectionName: provider.displayName,
             clientId: '',
             clientSecret: '',
-            env: provider.environments?.[0]?.name,
             ...mergedDefaults,
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,12 +268,11 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
     };
 
     const handleValidSubmit = (values: z.infer<typeof schema>) => {
-        const { connectionName, clientId, clientSecret, env, ...rest } = values;
+        const { connectionName, clientId, clientSecret, ...rest } = values;
         onSubmit({
             connectionName: connectionName as string,
             clientId: clientId as string,
             clientSecret: clientSecret as string,
-            env: env as string | undefined,
             vendorParams: buildVendorParams(rest as Record<string, unknown>),
         });
     };
@@ -316,60 +329,33 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                     )}
                 />
 
-                {provider.environments && provider.environments.length > 0 && (
-                    <FormField
-                        control={form.control}
-                        name="env"
-                        render={({ field }) => (
-                            <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
-                                <FormLabel className="text-right">Environment</FormLabel>
-                                <div className="col-span-3">
-                                    <Select
-                                        value={(field.value as string) || ''}
-                                        onValueChange={field.onChange}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select environment" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {provider.environments!.map((e) => (
-                                                <SelectItem key={e.name} value={e.name}>
-                                                    {e.displayName}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </div>
-                            </FormItem>
-                        )}
-                    />
-                )}
 
-                {/* Render Dynamic UI Schema properties */}
-                {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>)).map(([key, prop]) => {
-                    return (
-                        <FormField
-                            key={key}
-                            control={form.control}
-                            name={key}
-                            render={({ field }) => (
-                                <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
-                                    <FormLabel className="text-right">{prop.displayName || key} {prop.required && <span className="text-red-500">*</span>}</FormLabel>
-                                    <div className="col-span-3">
-                                        <FormControl>
-                                            {renderFieldControl(prop, field)}
-                                        </FormControl>
-                                        {prop.description && <FormDescription className="mt-2">{prop.description}</FormDescription>}
-                                        <FormMessage />
-                                    </div>
-                                </FormItem>
-                            )}
-                        />
-                    );
-                })}
+                {/* Render Dynamic UI Schema properties — environment and other vendor-specific
+                    fields are rendered generically here; no hardcoded field blocks needed. */}
+
+                {provider.uiSchema && (Object.entries(provider.uiSchema as Record<string, UiSchemaProp>))
+                    .filter(([, prop]) => isSupportedUiPropType(prop.type))
+                    .map(([key, prop]) => {
+                        return (
+                            <FormField
+                                key={key}
+                                control={form.control}
+                                name={key}
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-4 items-center gap-4 space-y-0">
+                                        <FormLabel className="text-right">{prop.displayName || key} {prop.required && <span className="text-red-500">*</span>}</FormLabel>
+                                        <div className="col-span-3">
+                                            <FormControl>
+                                                {renderFieldControl(prop, field)}
+                                            </FormControl>
+                                            {prop.description && <FormDescription className="mt-2">{prop.description}</FormDescription>}
+                                            <FormMessage />
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
+                        );
+                    })}
 
                 <div className="grid grid-cols-4 items-center gap-4 pt-2">
                     <Label className="text-right">Callback URL</Label>

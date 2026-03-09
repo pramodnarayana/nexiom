@@ -1,42 +1,14 @@
 import {
-    PieceAuth,
-    Property,
     createPiece,
-
     createCustomApiCallAction,
     PieceCategory
 } from '@nexiom/connectors/framework';
 
 
 import { salesforceUniversalTrigger } from './lib/trigger/universal-trigger.js';
+import { salesforceAuth } from './lib/auth.js';
 
-export const salesforceAuth = PieceAuth.OAuth2({
-    props: {
-        environment: Property.StaticDropdown({
-            displayName: 'Environment',
-            description: 'Choose environment',
-            required: true,
-            options: {
-                options: [
-                    {
-                        label: 'Production',
-                        value: 'login',
-                    },
-                    {
-                        label: 'Development',
-                        value: 'test',
-                    },
-                ],
-            },
-            defaultValue: 'login',
-        }),
-    },
-    required: true,
-    description: 'Authenticate with Salesforce Production',
-    authUrl: 'https://{environment}.salesforce.com/services/oauth2/authorize',
-    tokenUrl: 'https://{environment}.salesforce.com/services/oauth2/token',
-    scope: ['refresh_token', 'full', 'api'],
-});
+
 
 const customApiAction = createCustomApiCallAction({
     baseUrl: (auth) => (auth).data['instance_url'],
@@ -47,6 +19,7 @@ const customApiAction = createCustomApiCallAction({
 });
 
 export const salesforce = createPiece({
+    name: 'salesforce',
     displayName: 'Salesforce',
     description: 'CRM software solutions and enterprise cloud computing',
     minimumSupportedRelease: '0.30.0',
@@ -70,3 +43,4 @@ export const salesforce = createPiece({
         salesforceUniversalTrigger
     ],
 });
+export { salesforceAuth } from './lib/auth.js';

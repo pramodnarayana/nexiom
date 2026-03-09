@@ -1,5 +1,5 @@
 import type { TriggerStore } from '@nexiom/connectors/framework';
-import { quickbooksCommon, type QuickbooksEntityResponse } from '../lib/common.js';
+import { quickbooksCommon, resolveEnvironment, type QuickbooksEntityResponse } from '../lib/common.js';
 import { type ObjectHint } from '@nexiom/connectors/intelligence';
 import { QuickBooksQueryAdapter } from './quickbooks-query.adapter.js';
 
@@ -7,6 +7,7 @@ export interface QuickBooksAuth {
     access_token: string;
     props: {
         companyId: string;
+        environment?: 'test' | 'login';
         useSandbox?: boolean;
     };
 }
@@ -84,7 +85,8 @@ function parseCursorState(lastCursorParams: Cursor | string | null): { since: st
 }
 
 async function executeQuickBooksFetch(auth: QuickBooksAuth, sql: string): Promise<QuickbooksEntityResponse<unknown>> {
-    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, auth.props.useSandbox === true)}/query`
+    const env = resolveEnvironment(auth.props);
+    const url = `${quickbooksCommon.getApiUrl(auth.props.companyId, env === 'test')}/query`
         + `?query=${encodeURIComponent(sql)}&minorversion=65`;
 
     const controller = new AbortController();

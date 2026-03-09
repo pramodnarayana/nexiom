@@ -1,3 +1,5 @@
+import type { TriggerStore } from '@nexiom/connectors/framework';
+
 export const SF_API_VERSION = 'v59.0';
 
 /** Thrown when Salesforce returns 401. The caller must refresh / re-auth. */
@@ -8,15 +10,13 @@ export class SalesforceAuthError extends Error {
     }
 }
 
-export interface ApiLimitsStore {
-    get<T>(key: string): Promise<T | null>;
-    put<T>(key: string, value: T): Promise<void>;
-}
-
-export async function checkSalesforceLimits(
+export type CheckApiLimitsFn = (
     auth: { instance_url: string; access_token: string },
-    store: ApiLimitsStore
-): Promise<{ remaining: number; total: number } | null> {
+    store: TriggerStore,
+    signal?: AbortSignal
+) => Promise<{ remaining: number; total: number } | null>;
+
+export const checkSalesforceLimits: CheckApiLimitsFn = async (auth, store, signal) => {
     const CACHE_KEY = `sf_limits_${auth.instance_url}`;
     const POLL_INTERVAL = getPollIntervalMs();
 
@@ -28,7 +28,8 @@ export async function checkSalesforceLimits(
     try {
         const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/limits`;
         const response = await sfFetch(url, {
-            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' }
+            headers: { Authorization: `Bearer ${auth.access_token}`, Accept: 'application/json' },
+            signal
         });
 
         // if we get here, response is OK because sfFetch throws on non-ok (except 403 maybe? Actually sfFetch only returns if ok)
@@ -99,8 +100,11 @@ export async function sfFetch(
         try {
             response = await executeFetchWithTimeout(url, init);
         } catch (err: unknown) {
+            if (init.signal?.aborted) {
+                throw err;
+            }
             // Sonarqube: Handle this exception or don't catch it at all
-            const errMsg = err instanceof Error ? err.message : String(err);
+            const errMsg = parseNetworkErrorMsg(err);
             console.debug(`[sfFetch] Transient network error encountered: ${errMsg}`);
             isTransientError = true;
         }
@@ -129,6 +133,19 @@ function isRetriableError(isTransient: boolean, response?: Response): boolean {
     if (isTransient) return true;
     if (!response) return false;
     return response.status === 429 || response.status === 500 || response.status === 503;
+}
+
+function parseNetworkErrorMsg(err: unknown): string {
+    if (err instanceof Error) {
+        return err.message;
+    }
+    if (typeof err === 'object' && err !== null) {
+        if (typeof (err as any).message === 'string') {
+            return (err as any).message;
+        }
+        return 'Non-error thrown object';
+    }
+    return String(err);
 }
 
 async function buildSalesforceError(response?: Response): Promise<Error> {
@@ -198,4 +215,3 @@ function calculateRetryDelayMs(retryAfter: string | null | undefined, attempt: n
 
     return delayMs;
 }
-

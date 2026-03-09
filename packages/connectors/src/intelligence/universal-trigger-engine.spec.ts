@@ -26,9 +26,7 @@ vi.mock('./igt-logger.js', () => ({
     }
 }));
 
-vi.mock('../apps/salesforce/sf-fetch.js', () => ({
-    checkSalesforceLimits: vi.fn().mockResolvedValue({ total: 15000, remaining: 14000 })
-}));
+// Removed hardcoded sf-fetch mock
 
 describe('UniversalTriggerEngine', () => {
     let mockStore: any;
@@ -237,23 +235,32 @@ describe('UniversalTriggerEngine', () => {
     });
 
     it('should block polling if API-limit gating triggers', async () => {
-        // Mock the bounds checker to return limits < threshold (e.g., extremely low ratio)
-        const checkSalesforceLimitsMock = await import('../apps/salesforce/sf-fetch.js');
-        vi.mocked(checkSalesforceLimitsMock.checkSalesforceLimits).mockResolvedValueOnce({ total: 10000, remaining: 100 });
+        const originalThreshold = process.env.SF_API_LIMIT_THRESHOLD;
+        process.env.SF_API_LIMIT_THRESHOLD = '0.05';
 
-        const config = createConfig();
+        const config = createConfig({
+            checkApiLimits: vi.fn().mockResolvedValue({ total: 10000, remaining: 100 })
+        });
 
-        const records = await UniversalTriggerEngine.execute(config);
+        try {
+            const records = await UniversalTriggerEngine.execute(config);
 
-        // Expect empty array due to block
-        expect(records).toEqual([]);
+            // Expect empty array due to block
+            expect(records).toEqual([]);
 
-        // Assert core downstream polling adapters were completely bypassed
-        expect(mockDiscoveryAdapter.describe).not.toHaveBeenCalled();
-        expect(mockQueryAdapter.buildCountQuery).not.toHaveBeenCalled();
-        expect(mockExecuteCountQuery).not.toHaveBeenCalled();
-        expect(mockExecuteStandardQuery).not.toHaveBeenCalled();
-        expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
+            // Assert core downstream polling adapters were completely bypassed
+            expect(mockDiscoveryAdapter.describe).not.toHaveBeenCalled();
+            expect(mockQueryAdapter.buildCountQuery).not.toHaveBeenCalled();
+            expect(mockExecuteCountQuery).not.toHaveBeenCalled();
+            expect(mockExecuteStandardQuery).not.toHaveBeenCalled();
+            expect(mockBulkAdapter.runBulkJob).not.toHaveBeenCalled();
+        } finally {
+            if (originalThreshold !== undefined) {
+                process.env.SF_API_LIMIT_THRESHOLD = originalThreshold;
+            } else {
+                delete process.env.SF_API_LIMIT_THRESHOLD;
+            }
+        }
     });
 
     it('should fall back to standard path if count-query preflight throws', async () => {

@@ -1,11 +1,10 @@
 import type { TriggerStore } from '@nexiom/connectors/framework';
 import {
     type IBulkAdapter,
-    type SalesforceAuth,
-    sfFetch,
-    SF_API_VERSION,
     IgtLogger
 } from '@nexiom/connectors/intelligence';
+import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import type { SalesforceAuth } from '../salesforce-types.js';
 
 const log = new IgtLogger({ app: 'salesforce' });
 
@@ -39,6 +38,20 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             return this.checkJobStatusAndDownload(auth, store, storeKey, checkpoint);
         }
 
+        log.warn('Unexpected bulk job checkpoint state — resetting checkpoint for next poll cycle', {
+            state: checkpoint.state,
+            jobId: checkpoint.jobId,
+            storeKey,
+        });
+        try {
+            await store.delete(storeKey);
+        } catch (error_) {
+            log.error('Failed to reset unexpected bulk job checkpoint', {
+                storeKey,
+                jobId: checkpoint.jobId,
+                error: String(error_),
+            });
+        }
         return [];
     }
 
@@ -76,7 +89,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
             soql,
             startedAt: new Date().toISOString()
         };
-        await this.checkpoint(store, checkpoint);
+        await this.checkpoint(store, storeKey, checkpoint);
         log.info('Bulk job created', { jobId: checkpoint.jobId });
         return [];
     }
@@ -106,10 +119,10 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
 
         if (jobInfo.state === 'JobComplete') {
             checkpoint.state = 'AWAITING_RESULTS';
-            await this.checkpoint(store, checkpoint);
+            await this.checkpoint(store, storeKey, checkpoint);
             log.info('Bulk job complete — downloading results', { jobId: checkpoint.jobId });
 
-            const records = await this.downloadResults(auth, checkpoint.jobId, store);
+            const records = await this.downloadResults(auth, checkpoint.jobId, store, storeKey);
             await store.delete(storeKey);
             log.info('Bulk job results downloaded', { jobId: checkpoint.jobId, records: String(records.length) });
             return records;
@@ -125,11 +138,11 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
         return [];
     }
 
-    private async checkpoint(store: TriggerStore, data: BulkJobCheckpoint): Promise<void> {
-        await store.put('igt_bulk_job_checkpoint', data);
+    private async checkpoint(store: TriggerStore, storeKey: string, data: BulkJobCheckpoint): Promise<void> {
+        await store.put(storeKey, data);
     }
 
-    private async downloadResults(auth: SalesforceAuth, jobId: string, store: TriggerStore): Promise<unknown[]> {
+    private async downloadResults(auth: SalesforceAuth, jobId: string, store: TriggerStore, storeKey: string): Promise<unknown[]> {
         let locator: string | null = null;
         let allRecords: unknown[] = [];
 
@@ -146,7 +159,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
                 });
             } catch (e: any) {
                 if (e.message && (e.message.includes('(404)') || e.message.includes('(410)'))) {
-                    await store.delete('igt_bulk_job_checkpoint');
+                    await store.delete(storeKey);
                     throw new Error(`Salesforce bulk query job results expired or not found for jobId ${jobId}. State reset.`);
                 }
                 throw new Error(`Failed to download bulk job results: ${e}`);
@@ -236,7 +249,7 @@ export class SalesforceBulkAdapter implements IBulkAdapter<SalesforceAuth> {
     }
 
     private mapCsvRowsToObjects(rows: string[][]): unknown[] {
-        const headers = rows[0].map(h => h.replaceAll(/^"|"$/g, '').trim());
+        const headers = rows[0].map(h => h.replaceAll(/(?:^"|"$)/g, '').trim());
         const records: unknown[] = [];
 
         for (let i = 1; i < rows.length; i++) {

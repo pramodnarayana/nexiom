@@ -7,23 +7,39 @@ export interface Piece {
     name: string;
     displayName: string;
     logoUrl: string;
-    auth?: PieceAuthProperty;
+    description: string;
+    /** Auth definition — required for any registered piece. */
+    auth: PieceAuthProperty;
+    /** Piece categories (e.g. ['SALES_AND_CRM']). */
+    categories: PieceCategory[];
     actions: Record<string, Action>;
     triggers: Record<string, Trigger>;
-    description: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
 }
 
-export const PieceCategory: any = {};
+export enum PieceCategory {
+    ARTIFICIAL_INTELLIGENCE = 'Artificial Intelligence',
+    BUSINESS_INTELLIGENCE = 'Business Intelligence',
+    COMMUNICATION = 'Communication',
+    CORE = 'Core',
+    DEVELOPER_TOOLS = 'Developer Tools',
+    HUMAN_RESOURCES = 'Human Resources',
+    MARKETING = 'Marketing',
+    PRODUCTIVITY = 'Productivity',
+    SALES_AND_CRM = 'Sales & CRM',
+    ACCOUNTING = 'Accounting',
+    FINANCE = 'Finance',
+    OTHER = 'Other'
+}
 
 export interface CreatePieceParams {
     name?: string;
     displayName: string;
     logoUrl: string;
     authors?: string[];
-    categories?: any[];
-    auth?: PieceAuthProperty;
+    categories?: PieceCategory[];
+    auth: PieceAuthProperty;
     actions: Action[];
     triggers: Trigger[];
     description?: string;
@@ -73,10 +89,16 @@ export function createPiece(params: CreatePieceParams): Piece {
         name: params.name || '',
         displayName: params.displayName,
         logoUrl: params.logoUrl,
+        description: params.description || '',
         auth: params.auth,
+        categories: (params.categories ?? []).map((cat) => {
+            if (!Object.values(PieceCategory).includes(cat)) {
+                throw new InternalServerErrorException(`Invalid PieceCategory: ${String(cat)}`);
+            }
+            return cat;
+        }),
         actions: actionsMap,
         triggers: triggersMap,
-        description: params.description || '',
         minimumSupportedRelease: params.minimumSupportedRelease,
         maximumSupportedRelease: params.maximumSupportedRelease,
     };

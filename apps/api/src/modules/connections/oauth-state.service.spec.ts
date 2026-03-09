@@ -3,11 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { OauthStateService } from './oauth-state.service.js';
 import { UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { REDIS_CLIENT } from '@nexiom/cache';
 
 describe('OauthStateService', () => {
   let service: OauthStateService;
   const mockTenantId = 'tenant-123';
-  const mockProvider = 'salesforce';
+  const mockProvider = 'mock-piece';
 
   beforeEach(async () => {
     const mockConfigService = {
@@ -23,6 +24,16 @@ describe('OauthStateService', () => {
       providers: [
         OauthStateService,
         { provide: ConfigService, useValue: mockConfigService },
+        {
+          provide: REDIS_CLIENT,
+          useValue: {
+            set: vi.fn(),
+            getdel: vi
+              .fn()
+              .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
+            del: vi.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -43,13 +54,23 @@ describe('OauthStateService', () => {
         providers: [
           OauthStateService,
           { provide: ConfigService, useValue: explicitConfigService },
+          {
+            provide: REDIS_CLIENT,
+            useValue: {
+              set: vi.fn(),
+              getdel: vi
+                .fn()
+                .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
+              del: vi.fn(),
+            },
+          },
         ],
       }).compile();
 
       const explicitService =
         explicitModule.get<OauthStateService>(OauthStateService);
-      const token = explicitService.generateState('tenant', 'provider');
-      const verified = explicitService.verifyState(token, 'provider');
+      const token = await explicitService.generateState('tenant', 'provider');
+      const verified = await explicitService.verifyState(token, 'provider');
       expect(verified.tenantId).toBe('tenant');
     });
 
@@ -66,6 +87,10 @@ describe('OauthStateService', () => {
           providers: [
             OauthStateService,
             { provide: ConfigService, useValue: prodConfigService },
+            {
+              provide: REDIS_CLIENT,
+              useValue: { set: vi.fn(), getdel: vi.fn(), del: vi.fn() },
+            },
           ],
         }).compile(),
       ).rejects.toThrow(
@@ -75,11 +100,13 @@ describe('OauthStateService', () => {
   });
 
   describe('generateState', () => {
-    it('should generate a valid JWT containing the tenantId, provider, and env', () => {
-      const stateToken = service.generateState(
+    it('should generate a valid JWT containing the tenantId, provider, and env', async () => {
+      const stateToken = await service.generateState(
         mockTenantId,
         mockProvider,
-        'sandbox',
+        {
+          realmId: 'test-123',
+        },
       );
 
       expect(typeof stateToken).toBe('string');
@@ -89,42 +116,55 @@ describe('OauthStateService', () => {
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
       expect(decoded.tenantId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
-      expect(decoded.env).toBe('sandbox');
+      // generateState persists vendorParams (e.g. { realmId }) to Redis
+      // keyed by `oauth:state:<stateId>` — they are NOT embedded in the JWT
+      // payload itself. jwt.decode(stateToken) therefore will NOT expose
+      // vendorParams; callers must call verifyState() which atomically
+      // fetches-and-deletes the Redis entry to retrieve them.
+      expect(decoded.vendorParams).toBeUndefined();
       expect(decoded.purpose).toBe('oauth_state_handshake');
       expect(decoded.exp).toBeDefined();
     });
   });
 
   describe('verifyState', () => {
-    it('should successfully verify and extract a valid state token', () => {
-      const validToken = service.generateState(
+    it('should successfully verify and extract a valid state token', async () => {
+      const validToken = await service.generateState(
         mockTenantId,
         mockProvider,
-        'sandbox',
+        {
+          realmId: 'test-123',
+        },
       );
 
-      const result = service.verifyState(validToken, mockProvider);
-      expect(result).toEqual({ tenantId: mockTenantId, env: 'sandbox' });
+      const result = await service.verifyState(validToken, mockProvider);
+      expect(result).toEqual({
+        tenantId: mockTenantId,
+        vendorParams: { realmId: 'test-123' },
+      });
     });
 
-    it('should throw UnauthorizedException if token is completely missing', () => {
-      expect(() => service.verifyState('', mockProvider)).toThrow(
+    it('should throw UnauthorizedException if token is completely missing', async () => {
+      await expect(service.verifyState('', mockProvider)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(() =>
+      await expect(
         service.verifyState(undefined as unknown as string, mockProvider),
-      ).toThrow(UnauthorizedException);
+      ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw UnauthorizedException if the provider does not match the token payload', () => {
-      const validToken = service.generateState(mockTenantId, mockProvider);
+    it('should throw UnauthorizedException if the provider does not match the token payload', async () => {
+      const validToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+      );
 
-      expect(() => service.verifyState(validToken, 'hubspot')).toThrow(
+      await expect(service.verifyState(validToken, 'hubspot')).rejects.toThrow(
         new UnauthorizedException('OAuth state provider mismatch'),
       );
     });
 
-    it('should throw UnauthorizedException if the purpose is incorrect', () => {
+    it('should throw UnauthorizedException if the purpose is incorrect', async () => {
       // Simulate an internal attacker signing a generic JWT from somewhere else in the app
       const maliciousToken = jwt.sign(
         {
@@ -135,13 +175,18 @@ describe('OauthStateService', () => {
         (service as unknown as { jwtSecret: string }).jwtSecret,
       );
 
-      expect(() => service.verifyState(maliciousToken, mockProvider)).toThrow(
+      await expect(
+        service.verifyState(maliciousToken, mockProvider),
+      ).rejects.toThrow(
         new UnauthorizedException('Invalid OAuth state purpose'),
       );
     });
 
-    it('should throw UnauthorizedException if the token is tampered with (invalid signature)', () => {
-      const validToken = service.generateState(mockTenantId, mockProvider);
+    it('should throw UnauthorizedException if the token is tampered with (invalid signature)', async () => {
+      const validToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+      );
       const tokenParts = validToken.split('.');
 
       // Tamper with the payload specifically
@@ -154,14 +199,16 @@ describe('OauthStateService', () => {
       ).toString('base64url');
       const forgedToken = `${tokenParts[0]}.${tamperedPayload}.${tokenParts[2]}`;
 
-      expect(() => service.verifyState(forgedToken, mockProvider)).toThrow(
+      await expect(
+        service.verifyState(forgedToken, mockProvider),
+      ).rejects.toThrow(
         new UnauthorizedException(
           'Invalid OAuth state. Potential CSRF detected.',
         ),
       );
     });
 
-    it('should throw UnauthorizedException pointing to expiration if the JWT is expired', () => {
+    it('should throw UnauthorizedException pointing to expiration if the JWT is expired', async () => {
       // Create a token that expires instantly
       const expiredToken = jwt.sign(
         {
@@ -173,7 +220,9 @@ describe('OauthStateService', () => {
         { expiresIn: '-1s' }, // Expired 1 second ago
       );
 
-      expect(() => service.verifyState(expiredToken, mockProvider)).toThrow(
+      await expect(
+        service.verifyState(expiredToken, mockProvider),
+      ).rejects.toThrow(
         new UnauthorizedException(
           'OAuth login window expired. Please try connecting again.',
         ),

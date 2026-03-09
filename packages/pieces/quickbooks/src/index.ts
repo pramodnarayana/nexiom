@@ -1,9 +1,10 @@
 import {
   createPiece,
   createCustomApiCallAction,
+  PieceCategory
 } from '@nexiom/connectors/framework';
 import { quickbooksAuth } from './lib/auth.js';
-import { quickbooksCommon } from './lib/common.js';
+import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
 import type { QuickBooksAuth } from './triggers/quickbooks-polling.helper.js';
 
@@ -15,8 +16,8 @@ const customApiAction = createCustomApiCallAction({
       throw new Error('QuickBooks authentication missing or invalid companyId');
     }
 
-    const useSandbox = auth.props?.['useSandbox'] === true;
-    const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
+    const env = resolveEnvironment(auth.props);
+    const apiUrl = quickbooksCommon.getApiUrl(companyId, env === 'test');
     return apiUrl;
   },
   authMapping: async (auth: QuickBooksAuth) => {
@@ -27,6 +28,7 @@ const customApiAction = createCustomApiCallAction({
 });
 
 export const quickbooks = createPiece({
+  name: "quickbooks",
   displayName: "Quickbooks Online",
   auth: quickbooksAuth,
   minimumSupportedRelease: '0.36.1',
@@ -34,6 +36,7 @@ export const quickbooks = createPiece({
   authors: [
     'onyedikachi-david'
   ],
+  categories: [PieceCategory.ACCOUNTING],
   actions: [
     customApiAction
   ],

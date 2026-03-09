@@ -84,9 +84,13 @@ describe('DatabaseManager', () => {
           }),
           returning: vi.fn().mockResolvedValue([{ id: 'mock-id' }]),
         };
-        // Return a genuine Promise that also carries the chain methods,
-        // supporting both `await values()` and `values().returning(...)`.
-        const promise = Promise.resolve(undefined) as Promise<undefined> &
+        // values() is synchronously chainable (supports .returning(...) before await)
+        // but when the caller does `await values()` the resolved value is a plain
+        // execution result, NOT the builder chain — matching real Drizzle behaviour.
+        const executionResult = [{ id: 'mock-id' }];
+        const promise = Promise.resolve(executionResult) as Promise<
+          typeof executionResult
+        > &
           typeof chain;
         Object.assign(promise, chain);
         return promise;

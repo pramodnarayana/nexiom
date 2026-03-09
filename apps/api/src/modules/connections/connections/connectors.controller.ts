@@ -16,13 +16,12 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
+
+export const VALID_PROVIDER_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
-import {
-  ProviderRegistryService,
-  EncryptionService,
-  AppCredentialError,
-  AnyProperty,
-} from '@nexiom/connectors';
+import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
+import { z } from 'zod';
+import type { AnyProperty } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import {
@@ -33,6 +32,8 @@ import {
 } from '@nexiom/database';
 import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
+import type { ConnectionValueBlob } from '../connectors.service.js';
+
 function assertPropValue(
   key: string,
   val: string | undefined,
@@ -49,22 +50,102 @@ function assertPropValue(
   if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
+  if (String(prop.type) === 'STATIC_DROPDOWN') {
+    const p = prop as Record<string, unknown>;
+    if (
+      typeof p.options === 'object' &&
+      p.options !== null &&
+      'options' in p.options &&
+      Array.isArray((p.options as Record<string, unknown>).options)
+    ) {
+      const opts = (p.options as Record<string, unknown>).options as Array<
+        Record<string, unknown>
+      >;
+      const allowed = new Set(opts.map((o) => String(o.value)));
+      if (!allowed.has(String(val))) {
+        throw new BadRequestException(`Parameter ${key} has an invalid value`);
+      }
+    } else {
+      throw new BadRequestException(`Parameter ${key} has malformed options`);
+    }
+  }
+}
+
+function parseConnectionCredentials(decrypted: string): {
+  clientId: string;
+  hasClientSecret: boolean;
+  vendorParams?: Record<string, string>;
+} {
+  const parsed = JSON.parse(decrypted) as ConnectionValueBlob;
+
+  const clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
+  const hasClientSecret =
+    typeof parsed.clientSecret === 'string' && parsed.clientSecret.length > 0;
+
+  let rawVendorParams: Record<string, string> | undefined;
+  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
+    rawVendorParams = parsed.vendorParams;
+  }
+
+  let vendorParams: Record<string, string> | undefined;
+  if (parsed.environment) {
+    vendorParams = rawVendorParams || {};
+    if (!vendorParams.environment) {
+      vendorParams.environment = String(parsed.environment);
+    }
+  } else {
+    vendorParams = rawVendorParams;
+  }
+
+  return { clientId, hasClientSecret, vendorParams };
+}
+
+function parseVendorParamsJson(
+  vendorParamsJson: string | undefined,
+): Record<string, string> {
+  if (!vendorParamsJson) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(vendorParamsJson);
+    const parseResult = z
+      .record(z.string(), z.string())
+      .refine((obj) => Object.keys(obj).length <= 15, {
+        message: 'vendorParams cannot exceed 15 keys',
+      })
+      .safeParse(parsed);
+
+    if (!parseResult.success) {
+      throw new BadRequestException(
+        `Invalid vendorParams format: ${parseResult.error.issues[0]?.message}`,
+      );
+    }
+    return parseResult.data;
+  } catch (err) {
+    if (err instanceof BadRequestException) {
+      throw err;
+    }
+    throw new BadRequestException('Invalid vendorParams JSON format');
+  }
 }
 
 function validateVendorParams(
   schema: Record<string, AnyProperty> | undefined,
   vendorParams: Record<string, string> | undefined,
-  fallbackSchema?: Record<string, AnyProperty>,
 ): void {
-  // Use the primary schema if provided, otherwise fall back to uiSchema-derived props.
-  // This mirrors the same resolution logic used in getProviders so that
-  // vendors with only p.uiSchema are validated correctly.
-  const effectiveSchema = schema ?? fallbackSchema;
-  if (!effectiveSchema) return;
   const params = vendorParams ?? {};
+  const paramKeys = Object.keys(params);
 
-  // Reject keys not declared in the schema — prevents undeclared data reaching the value blob.
-  const declaredKeys = new Set(Object.keys(effectiveSchema));
+  if (!schema) {
+    if (paramKeys.length > 0) {
+      throw new BadRequestException(
+        'No vendor parameters are allowed for this provider',
+      );
+    }
+    return;
+  }
+
+  // Reject keys not declared in the schema.
+  const declaredKeys = new Set(Object.keys(schema));
   for (const key of Object.keys(params)) {
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
@@ -74,7 +155,7 @@ function validateVendorParams(
   }
 
   // Validate each declared field.
-  for (const [key, prop] of Object.entries(effectiveSchema)) {
+  for (const [key, prop] of Object.entries(schema)) {
     assertPropValue(key, params[key], prop);
   }
 }
@@ -112,6 +193,7 @@ function toKebabSlug(displayName: string): string {
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/^-+|-+$/g, '');
 }
+
 const MAX_DISPLAY_NAME_LENGTH = 100;
 const MAX_EXTERNAL_ID_LENGTH = 100;
 
@@ -124,8 +206,6 @@ function validateExchangeBody(
   state: unknown,
   displayName: unknown,
 ): { trimmedDisplayName: string; externalId: string } {
-  // Runtime type guards — reject non-string payloads before any string methods are called.
-  // displayName is checked separately as it gets its own targeted error when blank.
   for (const [field, val] of [
     ['providerName', providerName],
     ['code', code],
@@ -144,10 +224,9 @@ function validateExchangeBody(
   if (typeof displayName !== 'string') {
     throw new BadRequestException('Field "displayName" must be a string');
   }
-  // From here all values are confirmed strings.
   const safeProviderName = providerName as string;
   const safeDisplayName = displayName;
-  if (!/^[a-z0-9-]+$/.test(safeProviderName)) {
+  if (!VALID_PROVIDER_NAME_REGEX.test(safeProviderName)) {
     throw new BadRequestException('Invalid provider name format');
   }
   const trimmedDisplayName = safeDisplayName.trim();
@@ -173,20 +252,6 @@ function validateExchangeBody(
   return { trimmedDisplayName, externalId };
 }
 
-/** Safely extracts the `env` string from a connection's JSON metadata blob. */
-function parseEnvFromMetadata(metadata: unknown): string {
-  if (!metadata) return '';
-  try {
-    const meta =
-      typeof metadata === 'string'
-        ? (JSON.parse(metadata) as Record<string, unknown>)
-        : (metadata as Record<string, unknown>);
-    return typeof meta.env === 'string' ? meta.env : '';
-  } catch {
-    return '';
-  }
-}
-
 @Controller('connectors')
 @UseGuards(AuthGuard)
 export class ConnectorsController {
@@ -194,33 +259,41 @@ export class ConnectorsController {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    private readonly providerRegistry: ProviderRegistryService,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
     private readonly crypto: EncryptionService,
   ) {}
 
+  /**
+   * Returns all registered pieces as provider descriptors.
+   * The uiSchema is derived from piece.auth.props — the generic vendor-param
+   * schema that DynamicAuthForm renders.
+   */
   @Get('providers')
   getProviders() {
     try {
-      const providers = this.providerRegistry.getAllProviders();
-      return providers.map((p) => ({
-        name: p.name,
-        displayName: p.displayName,
-        description: p.description,
-        logoUrl: p.logoUrl,
-        authType: p.authType,
-        category: p.category,
-        environments: 'environments' in p ? p.environments : undefined,
-        uiSchema:
-          p.uiSchema ||
-          (
-            this.pieceRegistry.getPiece(p.name)?.auth as
-              | { props?: Record<string, unknown> }
-              | undefined
-          )?.props,
-      }));
+      const providers = this.pieceRegistry.getAllPieces().map((piece) => {
+        const authProps =
+          piece.auth && 'props' in piece.auth
+            ? (piece.auth.props as Record<string, AnyProperty>)
+            : undefined;
+
+        return {
+          name: piece.name,
+          displayName: piece.displayName,
+          description: piece.description,
+          logoUrl: piece.logoUrl,
+          authType: piece.auth.type,
+          category: piece.categories?.[0] ?? 'Other',
+          uiSchema: authProps,
+        };
+      });
+      this.logger.debug(
+        'GET PROVIDERS',
+        providers.map((p) => p.name),
+      );
+      return providers;
     } catch (error) {
       if (error instanceof Error) {
         this.logger.error('Failed to get providers', error.stack);
@@ -279,9 +352,7 @@ export class ConnectorsController {
           .select({
             id: appConnections.id,
             appName: appConnections.appName,
-
             externalId: appConnections.externalId,
-
             displayName: appConnections.displayName,
             authType: appConnections.authType,
             status: appConnections.status,
@@ -339,6 +410,15 @@ export class ConnectorsController {
     };
   }
 
+  /**
+   * Returns re-connectable credentials for a stored connection.
+   *
+   * Returns:
+   *  - clientId: the stored clientId (safe to expose)
+   *  - hasClientSecret: whether a client secret was stored (never expose the secret itself)
+   *  - vendorParams: all stored vendor-specific parameters (e.g. environment selection)
+   *    so the reconnect form can pre-fill every uiSchema field generically
+   */
   @Get('active/:id/credentials')
   async getConnectionCredentials(
     @AuthContext() ctx: RequestAuthContext,
@@ -353,7 +433,6 @@ export class ConnectorsController {
       .select({
         id: appConnections.id,
         value: appConnections.value,
-        metadata: appConnections.metadata,
       })
       .from(appConnections)
       .where(
@@ -370,19 +449,19 @@ export class ConnectorsController {
 
     let clientId = '';
     let hasClientSecret = false;
+    let vendorParams: Record<string, string> | undefined;
 
     if (connection.value) {
       try {
         const decrypted = await this.crypto.decrypt(connection.value);
-        const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-        clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
-        hasClientSecret =
-          typeof parsed.clientSecret === 'string' &&
-          parsed.clientSecret.length > 0;
+        const creds = parseConnectionCredentials(decrypted);
 
-        // Emit a structured access audit log indicating that a connection's credentials were reconstructed
+        clientId = creds.clientId;
+        hasClientSecret = creds.hasClientSecret;
+        vendorParams = creds.vendorParams;
+
         this.logger.log({
-          message: `User requested valid credentials payload for connection ${connection.id}`,
+          message: `Credentials accessed for connection ${connection.id}`,
           action: 'ACCESS_CREDENTIALS',
           userId: ctx.user?.id,
           tenantId,
@@ -400,27 +479,27 @@ export class ConnectorsController {
       }
     }
 
-    // Extract env from metadata stored on the connection row.
-    const env = parseEnvFromMetadata(connection.metadata);
-
-    return {
-      clientId,
-      hasClientSecret,
-      env,
-    };
+    return { clientId, hasClientSecret, vendorParams };
   }
 
+  /**
+   * Initiates the OAuth2 flow by redirecting the user's browser to the
+   * vendor's authorization URL.
+   *
+   * vendorParams (passed as query params) are embedded in the signed JWT state
+   * so they can be retrieved on the callback to resolve URL templates.
+   */
   @Get(':providerName')
-  initiateOAuth(
+  async initiateOAuth(
     @AuthContext() ctx: RequestAuthContext,
     @Param('providerName') providerName: string,
     @Query('clientId') clientId: string,
-    @Query('env') env: string | undefined,
+    @Query('vendorParams') vendorParamsJson: string | undefined,
     @Res() res: Response,
   ) {
     const tenantId = ctx.user?.organizationId;
 
-    if (!providerName || !/^[a-z0-9-]+$/.test(providerName)) {
+    if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
 
@@ -436,18 +515,41 @@ export class ConnectorsController {
       throw new BadRequestException('clientId exceeds maximum allowed length');
     }
 
+    // vendorParams are JSON-serialised by the frontend and sent as a single queryParam
+    const vendorParams = parseVendorParamsJson(vendorParamsJson);
+
+    // Validate vendorParams against the provider schema so only approved fields
+    // are signed into the OAuth state and forwarded to the authorize URL.
+    let validatedVendorParams: Record<string, string> = {};
+    try {
+      const providerDef =
+        this.connectorsService.getProviderDefinition(providerName);
+      // auth.props only exists on OAuth2Auth and CustomAuth, not SecretTextAuth
+      const auth = providerDef?.auth;
+      const authProps = auth && 'props' in auth ? auth.props : undefined;
+      validateVendorParams(authProps, vendorParams);
+      validatedVendorParams = vendorParams;
+    } catch (err) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        'vendorParams failed provider schema validation',
+      );
+    }
+
     let authorizeUrl: string;
     try {
-      const jwtState = this.oauthStateService.generateState(
+      const jwtState = await this.oauthStateService.generateState(
         tenantId,
         providerName,
-        env,
+        validatedVendorParams,
       );
       authorizeUrl = this.connectorsService.getAuthorizationUrl(
         providerName,
         jwtState,
         clientId,
-        env,
+        validatedVendorParams,
       );
     } catch (error) {
       if (
@@ -478,8 +580,6 @@ export class ConnectorsController {
       state: string;
       /** User-provided human-readable name e.g. "TMS Salesforce" */
       displayName: string;
-      env?: string;
-      vendorParams?: Record<string, string>;
     },
   ) {
     const tenantId = ctx.user?.organizationId;
@@ -487,27 +587,26 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { env, vendorParams, ...restOfBody } = body;
-
     const { trimmedDisplayName, externalId } = validateExchangeBody(
-      restOfBody.providerName,
-      restOfBody.code,
-      restOfBody.clientId,
-      restOfBody.clientSecret,
+      body.providerName,
+      body.code,
+      body.clientId,
+      body.clientSecret,
       body.state,
       body.displayName,
     );
 
-    const providerData = this.providerRegistry.getProvider(
-      restOfBody.providerName,
-    );
-    if (!providerData) {
-      throw new BadRequestException('Invalid provider name');
+    // Verify piece exists in registry
+    const piece = this.pieceRegistry.getPiece(body.providerName);
+    if (!piece) {
+      throw new NotFoundException(
+        `Provider "${body.providerName}" is not registered`,
+      );
     }
 
-    const decodedState = this.oauthStateService.verifyState(
+    const decodedState = await this.oauthStateService.verifyState(
       body.state,
-      restOfBody.providerName,
+      body.providerName,
     );
     if (decodedState.tenantId !== tenantId) {
       throw new BadRequestException(
@@ -515,27 +614,22 @@ export class ConnectorsController {
       );
     }
 
-    // STRICT VALIDATION: validate vendor params against the same schema source
-    // that getProviders exposes (p.uiSchema takes priority, then piece.auth.props).
-    const piece = this.pieceRegistry.getPiece(restOfBody.providerName);
+    // Validate vendorParams against piece.auth.props schema
     const authProps =
-      piece?.auth && 'props' in piece.auth
+      piece.auth && 'props' in piece.auth
         ? (piece.auth.props as Record<string, AnyProperty>)
         : undefined;
-    const uiSchemaProps = providerData.uiSchema as
-      | Record<string, AnyProperty>
-      | undefined;
-    validateVendorParams(uiSchemaProps, vendorParams, authProps);
+    validateVendorParams(authProps, decodedState.vendorParams);
 
-    // Exchange the code for actual OAuth tokens using user-provided credentials
+    // Exchange the code for actual OAuth tokens
     let tokenResponse: Record<string, unknown>;
     try {
       tokenResponse = await this.connectorsService.exchangeCodeForTokens(
-        restOfBody.providerName,
-        restOfBody.code,
-        restOfBody.clientId,
-        restOfBody.clientSecret,
-        env,
+        body.providerName,
+        body.code,
+        body.clientId,
+        body.clientSecret,
+        decodedState.vendorParams ?? {},
       );
     } catch (error) {
       if (
@@ -545,7 +639,7 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Token exchange failed for ${restOfBody.providerName}`,
+        `Token exchange failed for ${body.providerName}`,
         error,
       );
       throw new InternalServerErrorException('Failed to exchange auth code');
@@ -562,45 +656,41 @@ export class ConnectorsController {
 
     const validRefreshToken = extractRefreshToken(tokenResponse);
 
-    // Build the Activepieces-style encrypted value blob:
-    // Everything sensitive in one encrypted payload — clientId, secret, tokens, vendor-specific data
-    const valueBlob = {
-      clientId: restOfBody.clientId,
-      clientSecret: restOfBody.clientSecret,
+    // Build the encrypted value blob.
+    // vendorParams are persisted inside the blob so the reconnect form
+    // can restore all uiSchema fields without additional database columns.
+    const valueBlob: ConnectionValueBlob = {
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
-      data: { ...vendorParams, ...tokenResponse }, // vendor-specific: instance_url, realmId, id_token, etc.
+      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+      vendorParams: decodedState.vendorParams ?? {},
     };
 
     let encryptedValue: string;
     try {
       encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
     } catch (error) {
-      this.logger.error(
-        `Encryption failed for ${restOfBody.providerName}`,
-        error,
-      );
+      this.logger.error(`Encryption failed for ${body.providerName}`, error);
       throw new InternalServerErrorException('Failed to encrypt credentials');
     }
 
     const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
-
-    const MAX_EXPIRES_IN = 90 * 24 * 3600; // 90 days maximum
+    const MAX_EXPIRES_IN = 90 * 24 * 3600;
     const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    // NOTE: externalId and displayName bounds are checked earlier
 
     try {
       await this.connectorsService.storeOAuthConnection({
         tenantId,
-        providerName: restOfBody.providerName,
+        providerName: body.providerName,
         externalId,
         displayName: trimmedDisplayName,
-        authType: providerData.authType,
+        authType: 'OAUTH2',
         value: encryptedValue,
         expiresAt,
-        metadata: { env },
+        metadata: {},
       });
     } catch (error) {
       if (
@@ -610,7 +700,7 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${restOfBody.providerName}`,
+        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${body.providerName}`,
         error,
       );
       throw new InternalServerErrorException(
@@ -619,7 +709,7 @@ export class ConnectorsController {
     }
 
     this.logger.log(
-      `[OAuth Exchange] Success: ${restOfBody.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
+      `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
     );
     return { success: true };
   }

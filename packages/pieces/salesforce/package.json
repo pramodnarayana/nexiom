@@ -1,7 +1,21 @@
 {
   "name": "@nexiom/piece-salesforce",
   "version": "0.5.1",
-  "main": "src/index.ts",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./trigger": {
+      "types": "./dist/lib/trigger/index.d.ts",
+      "import": "./dist/lib/trigger/index.js",
+      "default": "./dist/lib/trigger/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.lib.json",
     "clean": "rm -rf dist",
