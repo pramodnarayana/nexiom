@@ -16,7 +16,7 @@ import { DynamicAuthForm } from './DynamicAuthForm';
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: Record<string, string> }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: Record<string, string | number | boolean> }) => void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -71,7 +71,7 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
         connectionName: string;
         clientId: string;
         clientSecret: string;
-        vendorParams: Record<string, string>;
+        vendorParams: Record<string, string | number | boolean>;
     }) => {
         onConnect({
             providerName: provider.name,
@@ -155,10 +155,15 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                                         const type = schemaDef?.type;
 
                                         if (type === 'CHECKBOX') {
-                                            coercedVendorParams[key] = value === 'true' || value === true;
+                                            coercedVendorParams[key] =
+                                                value === 'true' || value === true || value === '1' || value === 1;
                                         } else if (type === 'NUMBER') {
-                                            const num = Number(value);
-                                            coercedVendorParams[key] = !Number.isNaN(num) ? num : value;
+                                            if (value === '' || value === null || value === undefined) {
+                                                coercedVendorParams[key] = value;
+                                            } else {
+                                                const num = Number(value);
+                                                coercedVendorParams[key] = !Number.isNaN(num) ? num : value;
+                                            }
                                         } else {
                                             coercedVendorParams[key] = value;
                                         }

@@ -28,7 +28,7 @@ describe('OauthStateService', () => {
           provide: REDIS_CLIENT,
           useValue: {
             set: vi.fn(),
-            get: vi
+            getdel: vi
               .fn()
               .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
             del: vi.fn(),
@@ -58,7 +58,7 @@ describe('OauthStateService', () => {
             provide: REDIS_CLIENT,
             useValue: {
               set: vi.fn(),
-              get: vi
+              getdel: vi
                 .fn()
                 .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
               del: vi.fn(),
@@ -89,7 +89,7 @@ describe('OauthStateService', () => {
             { provide: ConfigService, useValue: prodConfigService },
             {
               provide: REDIS_CLIENT,
-              useValue: { set: vi.fn(), get: vi.fn(), del: vi.fn() },
+              useValue: { set: vi.fn(), getdel: vi.fn(), del: vi.fn() },
             },
           ],
         }).compile(),
@@ -116,6 +116,11 @@ describe('OauthStateService', () => {
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
       expect(decoded.tenantId).toBe(mockTenantId);
       expect(decoded.provider).toBe(mockProvider);
+      // generateState persists vendorParams (e.g. { realmId }) to Redis
+      // keyed by `oauth:state:<stateId>` — they are NOT embedded in the JWT
+      // payload itself. jwt.decode(stateToken) therefore will NOT expose
+      // vendorParams; callers must call verifyState() which atomically
+      // fetches-and-deletes the Redis entry to retrieve them.
       expect(decoded.vendorParams).toBeUndefined();
       expect(decoded.purpose).toBe('oauth_state_handshake');
       expect(decoded.exp).toBeDefined();

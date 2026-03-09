@@ -14,10 +14,11 @@ import { AnyProperty, PropertyType } from './property.js';
  */
 export function resolveOAuth2Url(
     template: string,
-    vendorParams: Record<string, string>,
+    vendorParams?: Record<string, string>,
 ): string {
+    const params = vendorParams ?? {};
     return template.replaceAll(/\{([^}]+)\}/g, (_match, key: string) => {
-        const value = vendorParams[key];
+        const value = params[key];
         if (value === undefined || value === '') {
             throw new Error(
                 `OAuth2 URL template references prop "${key}" but no value was provided in vendorParams`,

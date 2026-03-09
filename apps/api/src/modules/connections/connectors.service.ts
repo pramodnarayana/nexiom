@@ -99,6 +99,14 @@ export class ConnectorsService {
   }
 
   /**
+   * Returns the registered piece definition for the given provider name, or null if not found.
+   * Used by the controller to look up auth.props for vendorParams schema validation.
+   */
+  getProviderDefinition(providerName: string) {
+    return this.pieceRegistry.getPiece(providerName) ?? null;
+  }
+
+  /**
    * Generates the fully qualified Authorization URL for the vendor.
    * Redirects the user's browser to this URL to start the OAuth flow.
    *

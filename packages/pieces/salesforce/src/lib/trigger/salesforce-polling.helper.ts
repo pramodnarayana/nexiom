@@ -36,12 +36,48 @@ export function assertSafeSalesforceField(fieldName: string): void {
     }
 }
 
+/** Parses a compound or legacy cursor string into { sinceDate, sinceId }. */
+function parseCursor(raw: string, fallbackDate: string): { sinceDate: string; sinceId: string } {
+    try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof parsed.sinceDate === 'string' && typeof parsed.sinceId === 'string') {
+            return { sinceDate: parsed.sinceDate, sinceId: parsed.sinceId };
+        }
+    } catch { /* not JSON — treat as plain ISO date string */ }
+    return { sinceDate: raw || fallbackDate, sinceId: '' };
+}
+
+/** Builds the SOQL WHERE clause, adding a tie-breaker when a sinceId is available. */
+function buildWhereClause(dateField: string, formattedSince: string, sinceId: string): string {
+    if (!sinceId) {
+        return `${dateField} > ${formattedSince}`;
+    }
+    return `(${dateField} > ${formattedSince}) OR (${dateField} = ${formattedSince} AND Id > '${sinceId}')`;
+}
+
+/** Persists the compound cursor from the last record in the result set. */
+async function updateCursor(
+    store: TriggerStore,
+    cursorKey: string,
+    records: SalesforceRecord[],
+    dateField: string,
+): Promise<void> {
+    const last = records.at(-1);
+    if (!last) return;
+    const lastDate = last[dateField];
+    const lastId = last.Id;
+    if (typeof lastDate === 'string' && lastDate && typeof lastId === 'string' && lastId) {
+        await store.put(cursorKey, JSON.stringify({ sinceDate: lastDate, sinceId: lastId }));
+    }
+}
+
 export async function runSalesforce(
     auth: SalesforceAuth,
     object: string,
     opts: PollOptions,
     store: TriggerStore,
 ): Promise<unknown[]> {
+    assertSafeSalesforceObject(object);
     const { cursorKey, dateField, extraColumns = [] } = opts;
 
     assertSafeSalesforceField(dateField);
@@ -49,24 +85,27 @@ export async function runSalesforce(
         assertSafeSalesforceField(col);
     }
 
-    const lastCursor = await store.get<string>(cursorKey);
-    const since = lastCursor ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const defaultDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const lastCursorStr = await store.get<string>(cursorKey);
+    const { sinceDate, sinceId } = lastCursorStr
+        ? parseCursor(lastCursorStr, defaultDate)
+        : { sinceDate: defaultDate, sinceId: '' };
+
+    const formattedSince = `'${sinceDate}'`;
+    const whereClause = buildWhereClause(dateField, formattedSince, sinceId);
+
     const columns = ['Id', dateField, ...extraColumns].join(', ');
-    const soql = encodeURIComponent(`SELECT ${columns} FROM ${object} WHERE ${dateField} > ${since} ORDER BY ${dateField} ASC LIMIT 200`);
+    const soql = encodeURIComponent(
+        `SELECT ${columns} FROM ${object} WHERE ${whereClause} ORDER BY ${dateField} ASC, Id ASC LIMIT 200`,
+    );
     const url = `${auth.instance_url}/services/data/${SF_API_VERSION}/query?q=${soql}`;
 
     const response = await sfFetch(url, { headers: { Authorization: `Bearer ${auth.access_token}` } });
-
     const body = (await response.json()) as SalesforceQueryResponse;
     const records: SalesforceRecord[] = body.records ?? [];
+
     if (records.length > 0) {
-        const last = records.at(-1);
-        if (last) {
-            const sourceCursor = last[dateField];
-            if (typeof sourceCursor === 'string' && sourceCursor) {
-                await store.put(cursorKey, sourceCursor);
-            }
-        }
+        await updateCursor(store, cursorKey, records, dateField);
     }
     return records;
 }

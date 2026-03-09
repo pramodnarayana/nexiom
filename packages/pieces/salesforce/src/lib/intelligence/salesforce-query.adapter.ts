@@ -26,6 +26,9 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         const whereClause = this.buildWhereClause(schema, spec);
 
         let query = `SELECT ${selectClause} FROM ${spec.objectName} WHERE ${whereClause} ORDER BY ${spec.cursorField} ASC`;
+        if (spec.tieBreakerField) {
+            query += `, ${spec.tieBreakerField} ASC`;
+        }
 
         const safeLimit = this.calculateLimit(spec.limit);
 
@@ -75,10 +78,10 @@ export class SalesforceQueryAdapter implements IQueryAdapter {
         if (limit === undefined) return 200;
         if (limit === 0) return 0;
         const parsed = Number(limit);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-            throw new Error(`Invalid limit: ${limit}`);
+        if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+            throw new Error(`Invalid limit: ${limit} — must be an integer >= 0`);
         }
-        return Math.max(1, Math.floor(parsed));
+        return parsed;
     }
 
     private validateCursor(cursorValue: string): void {

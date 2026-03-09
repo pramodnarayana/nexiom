@@ -300,17 +300,17 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ### Completed Items
 
-*Items resolved will be moved here with completion date*
+Items proposed or resolved will be tracked here.
 
 ### 5. Frontend UI Unification (Legacy Provider Registry Deprecation)
 
 **Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`, `apps/web/src/modules/connections/components/DynamicAuthForm.tsx`  
 **Added**: 2026-03-07  
-**Completed**: 2026-03-09  
+**Status**: Proposed / In progress (see PR `#86`)  
 **Impact**: Unified generic UI, Developer Experience  
 **Effort**: Medium (About 15 files)
 
-**Resolution**:
+**Proposed Changes**:
 
-1. **API Modernization**: Fully deleted `ProviderRegistryService`. Updated `connectors.controller.ts` and `connectors.service.ts` to map `tokenUrl`, `authUrl`, and `clientId` dynamically using ONLY the `PieceAuth` definitions from `PieceRegistryService`.
-2. **Frontend Simplification**: Removed the hardcoded `env` fields from `DynamicAuthForm.tsx` and `oauth-state.service.ts`. The environment selector (or any custom field) now purely renders as generic `uiSchema` passed straight through to `vendorParams`.
+1. **API Modernization**: Proposed: delete `ProviderRegistryService` and update `connectors.controller.ts` and `connectors.service.ts` to use `PieceAuth` definitions from `PieceRegistryService` for mapping `tokenUrl`, `authUrl`, and `clientId` dynamically.
+2. **Frontend Simplification**: Proposed: remove hardcoded `env` in `DynamicAuthForm.tsx` and `oauth-state.service.ts`; render environment via `uiSchema`/`vendorParams` so any custom field flows through generically.

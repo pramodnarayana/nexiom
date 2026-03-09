@@ -23,8 +23,15 @@ describe('resolveOAuth2Url', () => {
 
     it('should handle undefined vendorParams gracefully', () => {
         const template = 'https://login.example.com/oauth2/authorize';
-        const result = resolveOAuth2Url(template, {});
+        const result = resolveOAuth2Url(template);
         expect(result).toBe('https://login.example.com/oauth2/authorize');
+    });
+
+    it('should throw an error when unsafe characters are passed in vendorParams', () => {
+        const template = 'https://{tenant}.example.com';
+        expect(() => resolveOAuth2Url(template, { tenant: 'bad@/?:#' })).toThrowError(
+            'OAuth2 URL template prop "tenant" contains unsafe characters that could alter the URL structure.'
+        );
     });
 
     it('should handle flat keys seamlessly', () => {

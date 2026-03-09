@@ -15,3 +15,15 @@ export * from './oauth/token-manager.service.js';
 
 // Framework — Piece, Action, Trigger, Auth, Property definitions
 export * from './framework/index.js';
+
+/**
+ * @deprecated The ProviderRegistry and dynamic `OAuthProvider` architectures have been removed in favor of the `PieceRegistry` flow.
+ * These types are exported merely as aliases for backwards compatibility.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface Provider { }
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface OAuthProvider { }
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+export class SalesforceConnector { }
+

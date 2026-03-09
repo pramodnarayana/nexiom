@@ -59,6 +59,8 @@ describe('ConnectorsController', () => {
       getAuthorizationUrl: vi.fn(),
       exchangeCodeForTokens: vi.fn(),
       storeOAuthConnection: vi.fn(),
+      // Returns null so vendorParams validation is skipped (no schema to validate against).
+      getProviderDefinition: vi.fn().mockReturnValue(null),
     } as unknown as Mocked<ConnectorsService>;
 
     mockOauthStateService = {
@@ -172,6 +174,8 @@ describe('ConnectorsController', () => {
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
+      // Ensure validation passes so the error comes from getAuthorizationUrl.
+      mockConnectorsService.getProviderDefinition.mockReturnValue(null);
       mockOauthStateService.generateState.mockResolvedValue('state');
       mockConnectorsService.getAuthorizationUrl.mockImplementation(() => {
         throw new Error('Config error');

@@ -16,6 +16,8 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
+
+export const VALID_PROVIDER_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import { z } from 'zod';
@@ -160,7 +162,7 @@ function validateExchangeBody(
   }
   const safeProviderName = providerName as string;
   const safeDisplayName = displayName;
-  if (!/^[a-z0-9-]+$/u.test(safeProviderName)) {
+  if (!VALID_PROVIDER_NAME_REGEX.test(safeProviderName)) {
     throw new BadRequestException('Invalid provider name format');
   }
   const trimmedDisplayName = safeDisplayName.trim();
@@ -223,8 +225,10 @@ export class ConnectorsController {
           uiSchema: authProps,
         };
       });
-      console.log('--- GET PROVIDERS CALLED ---');
-      console.log(providers.map((p) => p.name));
+      this.logger.debug(
+        'GET PROVIDERS',
+        providers.map((p) => p.name),
+      );
       return providers;
     } catch (error) {
       if (error instanceof Error) {
@@ -436,7 +440,7 @@ export class ConnectorsController {
   ) {
     const tenantId = ctx.user?.organizationId;
 
-    if (!providerName || !/^[\w-]+$/u.test(providerName)) {
+    if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
 
@@ -478,18 +482,38 @@ export class ConnectorsController {
       }
     }
 
+    // Validate vendorParams against the provider schema so only approved fields
+    // are signed into the OAuth state and forwarded to the authorize URL.
+    let validatedVendorParams: Record<string, string> = {};
+    try {
+      const providerDef =
+        this.connectorsService.getProviderDefinition(providerName);
+      // auth.props only exists on OAuth2Auth and CustomAuth, not SecretTextAuth
+      const auth = providerDef?.auth;
+      const authProps = auth && 'props' in auth ? auth.props : undefined;
+      validateVendorParams(authProps, vendorParams);
+      validatedVendorParams = vendorParams;
+    } catch (err) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        'vendorParams failed provider schema validation',
+      );
+    }
+
     let authorizeUrl: string;
     try {
       const jwtState = await this.oauthStateService.generateState(
         tenantId,
         providerName,
-        vendorParams,
+        validatedVendorParams,
       );
       authorizeUrl = this.connectorsService.getAuthorizationUrl(
         providerName,
         jwtState,
         clientId,
-        vendorParams,
+        validatedVendorParams,
       );
     } catch (error) {
       if (

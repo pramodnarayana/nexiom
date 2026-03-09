@@ -90,11 +90,14 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
         // Activepieces Framework nests dropdown options as { options: { options: [...] } }
         // We handle both direct arrays and the nested structure.
         const rawOptions = prop.options;
-        interface NestedOptions { options?: { label: string; value: string }[] }
+        interface NestedOptions { options?: { label: string; value: string }[] | NestedOptions }
+        interface NestedNestedOptions { options?: { options?: { label: string; value: string }[] } }
 
         let optionsBody: { label: string; value: string }[] = [];
         if (rawOptions && 'options' in rawOptions && Array.isArray((rawOptions as NestedOptions).options)) {
-            optionsBody = (rawOptions as NestedOptions).options!;
+            optionsBody = (rawOptions as { options: { label: string; value: string }[] }).options;
+        } else if (rawOptions && 'options' in rawOptions && !Array.isArray((rawOptions as NestedOptions).options) && Array.isArray((rawOptions as NestedNestedOptions).options?.options)) {
+            optionsBody = (rawOptions as NestedNestedOptions).options!.options!;
         } else if (Array.isArray(rawOptions)) {
             optionsBody = rawOptions;
         }
@@ -170,12 +173,17 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
     return z.object(shape);
 }
 
-/** Extracts non-empty, non-null extra fields from a form value map into a flat string record. */
-function buildVendorParams(rest: Record<string, unknown>): Record<string, string> {
-    const params: Record<string, string> = {};
+/** Extracts non-empty, non-null extra fields from a form value map into a flat primitive record.
+ * Preserves the original boolean/number/string types so checkboxes and number fields round-trip. */
+function buildVendorParams(rest: Record<string, unknown>): Record<string, string | number | boolean> {
+    const params: Record<string, string | number | boolean> = {};
     for (const [key, val] of Object.entries(rest)) {
         if (val !== undefined && val !== null && val !== '') {
-            params[key] = String(val);
+            if (typeof val === 'boolean' || typeof val === 'number') {
+                params[key] = val;
+            } else {
+                params[key] = String(val);
+            }
         }
     }
     return params;
@@ -191,8 +199,8 @@ export interface DynamicAuthFormProps {
         connectionName: string;
         clientId: string;
         clientSecret: string;
-        /** All vendor-specific form values (e.g. { environment: 'test' }) flattened to strings. */
-        vendorParams: Record<string, string>;
+        /** All vendor-specific form values (e.g. { environment: 'test' }) — preserves original types. */
+        vendorParams: Record<string, string | number | boolean>;
     }) => void;
 }
 

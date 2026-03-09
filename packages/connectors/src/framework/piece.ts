@@ -11,7 +11,7 @@ export interface Piece {
     /** Auth definition — required for any registered piece. */
     auth: PieceAuthProperty;
     /** Piece categories (e.g. ['SALES_AND_CRM']). */
-    categories: string[];
+    categories: PieceCategory[];
     actions: Record<string, Action>;
     triggers: Record<string, Trigger>;
     minimumSupportedRelease?: string;
@@ -38,7 +38,7 @@ export interface CreatePieceParams {
     displayName: string;
     logoUrl: string;
     authors?: string[];
-    categories?: any[];
+    categories?: PieceCategory[];
     auth: PieceAuthProperty;
     actions: Action[];
     triggers: Trigger[];
@@ -91,7 +91,12 @@ export function createPiece(params: CreatePieceParams): Piece {
         logoUrl: params.logoUrl,
         description: params.description || '',
         auth: params.auth,
-        categories: (params.categories ?? []).map(String),
+        categories: (params.categories ?? []).map((cat) => {
+            if (!Object.values(PieceCategory).includes(cat)) {
+                throw new InternalServerErrorException(`Invalid PieceCategory: ${String(cat)}`);
+            }
+            return cat;
+        }),
         actions: actionsMap,
         triggers: triggersMap,
         minimumSupportedRelease: params.minimumSupportedRelease,

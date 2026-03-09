@@ -16,7 +16,8 @@ const customApiAction = createCustomApiCallAction({
       throw new Error('QuickBooks authentication missing or invalid companyId');
     }
 
-    const useSandbox = auth.props?.['environment'] === 'test';
+    const env = auth.props?.['environment'] ?? (auth.props?.['useSandbox'] ? 'test' : 'login');
+    const useSandbox = env === 'test';
     const apiUrl = quickbooksCommon.getApiUrl(companyId, useSandbox);
     return apiUrl;
   },

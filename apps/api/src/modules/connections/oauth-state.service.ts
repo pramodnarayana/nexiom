@@ -64,14 +64,14 @@ export class OauthStateService {
       stateId,
     };
 
-    if (vendorParams && Object.keys(vendorParams).length > 0) {
-      await this.redis.set(
-        `oauth:state:${stateId}`,
-        JSON.stringify(vendorParams),
-        'EX',
-        15 * 60, // 15 minutes
-      );
-    }
+    await this.redis.set(
+      `oauth:state:${stateId}`,
+      vendorParams && Object.keys(vendorParams).length > 0
+        ? JSON.stringify(vendorParams)
+        : '{}', // Always persist a marker even for empty params
+      'EX',
+      15 * 60, // 15 minutes
+    );
 
     // State tokens exist simply to bridge the browser redirect.
     // A 10-15 minute expiry is plenty of time for a user to log in to Salesforce/HubSpot.
@@ -143,17 +143,26 @@ export class OauthStateService {
       let vendorParams: Record<string, string> | undefined;
 
       const redisKey = `oauth:state:${stateId}`;
-      const cachedParams = await this.redis.get(redisKey);
+      const cachedParams = await this.redis.getdel(redisKey);
 
-      if (cachedParams) {
-        try {
-          vendorParams = JSON.parse(cachedParams) as Record<string, string>;
-        } catch {
-          this.logger.warn(
-            `Failed to parse cached vendor params for stateId ${stateId}`,
-          );
+      if (!cachedParams) {
+        this.logger.warn(
+          `OAuth state marker for stateId ${stateId} was missing or already consumed (CSRF/Replay)`,
+        );
+        throw new UnauthorizedException(
+          'OAuth login window expired or state already consumed',
+        );
+      }
+
+      try {
+        const parsed = JSON.parse(cachedParams) as Record<string, string>;
+        if (Object.keys(parsed).length > 0) {
+          vendorParams = parsed;
         }
-        await this.redis.del(redisKey);
+      } catch {
+        this.logger.warn(
+          `Failed to parse cached vendor params for stateId ${stateId}`,
+        );
       }
 
       return {

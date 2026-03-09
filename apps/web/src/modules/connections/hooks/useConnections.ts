@@ -10,8 +10,10 @@ type PendingCredential = {
     /** Always required — /oauth-exchange always expects a non-empty secret. */
     clientSecret: string;
     displayName: string;
-    /** Vendor-specific parameters (e.g. { environment: 'test' }). */
+    /** All vendor-specific parameters, including secrets — kept in memory only. */
     vendorParams?: Record<string, string | boolean | number>;
+    /** Only the non-secret subset of vendorParams — safe to encode in the popup URL. */
+    safeVendorParams?: Record<string, string | boolean | number>;
 };
 
 export function useConnections() {
@@ -109,7 +111,7 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential) => {
+        ({ providerName, clientId, clientSecret, displayName, vendorParams, safeVendorParams }: { providerName: string } & PendingCredential) => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
@@ -122,22 +124,15 @@ export function useConnections() {
                 return;
             }
 
-            pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams };
+            pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams, safeVendorParams };
 
             // Build popup URL.
-            // NON-secret vendorParams (e.g. environment dropdown) are sent as a JSON query param
-            // so the server can embed them in the signed OAuth state and resolve URL templates.
-            // SECRET_TEXT vendorParams (e.g. API keys) are intentionally excluded from the URL
-            // to avoid leaking them into GET params, server logs, and browser history.
-            // They are merged in handleSuccess from pendingCredentials instead.
+            // Only the explicit safeVendorParams (non-SECRET_TEXT fields derived from the uiSchema)
+            // are appended to the URL so they can be embedded in the signed OAuth state.
+            // SECRET_TEXT vendorParams are held in pendingCredentials and merged in handleSuccess.
             let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
-            if (vendorParams && Object.keys(vendorParams).length > 0) {
-                const safeParams = Object.fromEntries(
-                    Object.entries(vendorParams).filter(([k]) => !/secret|password|token|key/i.test(k))
-                );
-                if (Object.keys(safeParams).length > 0) {
-                    popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(safeParams))}`;
-                }
+            if (safeVendorParams && Object.keys(safeVendorParams).length > 0) {
+                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(safeVendorParams))}`;
             }
             openPopup(popupUrl);
         },

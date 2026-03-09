@@ -103,7 +103,11 @@ export async function sfFetch(
             if (err instanceof Error) {
                 errMsg = err.message;
             } else if (typeof err === 'object' && err !== null) {
-                try { errMsg = JSON.stringify(err); } catch { errMsg = 'Unknown error object'; }
+                if (typeof (err as any).message === 'string') {
+                    errMsg = (err as any).message;
+                } else {
+                    errMsg = 'Non-error thrown object';
+                }
             } else {
                 errMsg = String(err);
             }

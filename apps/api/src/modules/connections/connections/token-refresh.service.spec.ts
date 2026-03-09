@@ -250,4 +250,50 @@ describe('DefaultOAuthRefreshClient', () => {
       }),
     );
   });
+
+  it('should resolve templated token URLs using legacy environment property backfilled into vendorParams', async () => {
+    const TEMPLATED_PIECE = {
+      ...MOCK_OAUTH2_PIECE,
+      auth: {
+        ...MOCK_OAUTH2_PIECE.auth,
+        // Uses {environment} to match what getCredentials backfills from legacy blobs.
+        tokenUrl: 'https://{environment}.mock.com/token',
+      },
+    } as unknown as Piece;
+
+    (mockPieceRegistry.getPiece as Mock).mockReturnValue(TEMPLATED_PIECE);
+
+    const decryptedLegacyBlob = JSON.stringify({
+      clientId: 'mock-client-id',
+      clientSecret: 'mock-client-secret',
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      environment: 'sandbox', // no vendorParams explicitly mapped
+    });
+    mockEncryptionService.decrypt.mockResolvedValue(decryptedLegacyBlob);
+
+    const mockResponsePayload = {
+      access_token: 'new_access',
+      refresh_token: 'new_refresh',
+      expires_in: 3600,
+    };
+    (globalThis.fetch as Mock).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponsePayload),
+    });
+
+    await client.refresh(
+      'testTenant',
+      'mock-templated-oauth',
+      'test-ext',
+      'old_refresh',
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://sandbox.mock.com/token',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+  });
 });

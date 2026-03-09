@@ -179,7 +179,7 @@ describe('ConnectorsService', () => {
       ).toThrow(BadRequestException);
     });
 
-    it('should throw InternalServerErrorException if authType is not OAUTH2', () => {
+    it('should throw BadRequestException if authType is not OAUTH2', () => {
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
         auth: {
@@ -239,7 +239,7 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw InternalServerErrorException if authType is not OAUTH2', async () => {
+    it('should throw BadRequestException if authType is not OAUTH2', async () => {
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
         auth: {

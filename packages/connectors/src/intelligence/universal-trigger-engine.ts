@@ -4,6 +4,13 @@ import type { UniversalEngineConfig, ApiRateLimit } from './interfaces.js';
 
 const log = new IgtLogger({ app: 'universal-engine' });
 
+export class TimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'TimeoutError';
+    }
+}
+
 export class UniversalTriggerEngine {
     /**
      * Executes the generic, intelligent polling flow using the provided adapter configuration.
@@ -106,10 +113,10 @@ export class UniversalTriggerEngine {
         try {
             apiLimits = await Promise.race([
                 checkApiLimits(auth, store),
-                new Promise<null>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 5000))
+                new Promise<null>((_, reject) => setTimeout(() => reject(new TimeoutError('TIMEOUT')), 5000))
             ]);
         } catch (e) {
-            const isTimeout = e instanceof Error && e.message === 'TIMEOUT';
+            const isTimeout = e instanceof TimeoutError;
             log.debug(`Failed to verify API limits during preflight cache check${isTimeout ? ' (Timeout)' : ''}`, { error: String(e) });
             return true; // Fail open
         }
