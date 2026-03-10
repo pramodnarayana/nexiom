@@ -14,6 +14,7 @@ import {
   HttpException,
   Param,
   ParseUUIDPipe,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -73,14 +74,16 @@ function assertPropValue(
 
 function parseConnectionCredentials(decrypted: string): {
   clientId: string;
+  clientSecret: string;
   hasClientSecret: boolean;
   vendorParams?: Record<string, string>;
 } {
   const parsed = JSON.parse(decrypted) as ConnectionValueBlob;
 
   const clientId = typeof parsed.clientId === 'string' ? parsed.clientId : '';
-  const hasClientSecret =
-    typeof parsed.clientSecret === 'string' && parsed.clientSecret.length > 0;
+  const clientSecret =
+    typeof parsed.clientSecret === 'string' ? parsed.clientSecret : '';
+  const hasClientSecret = clientSecret.length > 0;
 
   let rawVendorParams: Record<string, string> | undefined;
   if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
@@ -97,10 +100,10 @@ function parseConnectionCredentials(decrypted: string): {
     vendorParams = rawVendorParams;
   }
 
-  return { clientId, hasClientSecret, vendorParams };
+  return { clientId, clientSecret, hasClientSecret, vendorParams };
 }
 
-function parseVendorParamsJson(
+function _parseVendorParamsJson(
   vendorParamsJson: string | undefined,
 ): Record<string, string> {
   if (!vendorParamsJson) return {};
@@ -215,9 +218,9 @@ function validateExchangeBody(
   ] as [string, unknown][]) {
     if (typeof val !== 'string' || !val) {
       throw new BadRequestException(
-        typeof val !== 'string'
-          ? `Field "${field}" must be a string`
-          : 'Missing required fields inside body',
+        typeof val === 'string'
+          ? 'Missing required fields inside body'
+          : `Field "${field}" must be a string`,
       );
     }
   }
@@ -448,6 +451,7 @@ export class ConnectorsController {
     }
 
     let clientId = '';
+    let clientSecret = '';
     let hasClientSecret = false;
     let vendorParams: Record<string, string> | undefined;
 
@@ -457,6 +461,7 @@ export class ConnectorsController {
         const creds = parseConnectionCredentials(decrypted);
 
         clientId = creds.clientId;
+        clientSecret = creds.clientSecret;
         hasClientSecret = creds.hasClientSecret;
         vendorParams = creds.vendorParams;
 
@@ -479,22 +484,77 @@ export class ConnectorsController {
       }
     }
 
-    return { clientId, hasClientSecret, vendorParams };
+    return { clientId, clientSecret, hasClientSecret, vendorParams };
   }
 
   /**
-   * Initiates the OAuth2 flow by redirecting the user's browser to the
-   * vendor's authorization URL.
-   *
-   * vendorParams (passed as query params) are embedded in the signed JWT state
-   * so they can be retrieved on the callback to resolve URL templates.
+   * Pre-flights an OAuth session by securely storing connection credentials in Redis
+   * ahead of the browser redirect.
+   */
+  @Post(':providerName/session')
+  async createOAuthSession(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('providerName') providerName: string,
+    @Body() body: { clientId: string; vendorParams?: Record<string, string> },
+  ) {
+    const tenantId = ctx.user?.organizationId;
+
+    if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
+      throw new BadRequestException('Invalid provider name format');
+    }
+
+    if (!tenantId) {
+      throw new BadRequestException('tenantId context is missing');
+    }
+
+    const { clientId, vendorParams } = body;
+
+    if (!clientId || clientId.trim().length === 0) {
+      throw new BadRequestException('clientId is required');
+    }
+
+    if (clientId.length > 512) {
+      throw new BadRequestException('clientId exceeds maximum allowed length');
+    }
+
+    let validatedVendorParams: Record<string, string> = {};
+    try {
+      if (vendorParams) {
+        const providerDef =
+          this.connectorsService.getProviderDefinition(providerName);
+        const auth = providerDef?.auth;
+        const authProps = auth && 'props' in auth ? auth.props : undefined;
+        validateVendorParams(authProps, vendorParams);
+        validatedVendorParams = vendorParams;
+      }
+    } catch (err) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        'vendorParams failed provider schema validation',
+      );
+    }
+
+    const sessionId = await this.oauthStateService.createPreFlightSession(
+      tenantId,
+      providerName,
+      clientId,
+      validatedVendorParams,
+    );
+
+    return { sessionId };
+  }
+
+  /**
+   * Initiates the OAuth2 flow by redirecting the user's browser to the vendor's authorization URL.
+   * Consumers an opaque session ID to fetch securely vaulted parameters.
    */
   @Get(':providerName')
   async initiateOAuth(
     @AuthContext() ctx: RequestAuthContext,
     @Param('providerName') providerName: string,
-    @Query('clientId') clientId: string,
-    @Query('vendorParams') vendorParamsJson: string | undefined,
+    @Query('session') sessionId: string,
     @Res() res: Response,
   ) {
     const tenantId = ctx.user?.organizationId;
@@ -507,49 +567,50 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    if (!clientId || clientId.trim().length === 0) {
-      throw new BadRequestException('clientId query parameter is required');
+    if (!sessionId || sessionId.trim().length === 0) {
+      throw new BadRequestException('session query parameter is required');
     }
 
-    if (clientId.length > 512) {
-      throw new BadRequestException('clientId exceeds maximum allowed length');
-    }
-
-    // vendorParams are JSON-serialised by the frontend and sent as a single queryParam
-    const vendorParams = parseVendorParamsJson(vendorParamsJson);
-
-    // Validate vendorParams against the provider schema so only approved fields
-    // are signed into the OAuth state and forwarded to the authorize URL.
-    let validatedVendorParams: Record<string, string> = {};
+    let sessionData;
     try {
-      const providerDef =
-        this.connectorsService.getProviderDefinition(providerName);
-      // auth.props only exists on OAuth2Auth and CustomAuth, not SecretTextAuth
-      const auth = providerDef?.auth;
-      const authProps = auth && 'props' in auth ? auth.props : undefined;
-      validateVendorParams(authProps, vendorParams);
-      validatedVendorParams = vendorParams;
-    } catch (err) {
-      if (err instanceof BadRequestException) {
-        throw err;
+      sessionData =
+        await this.oauthStateService.consumePreFlightSession(sessionId);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new UnauthorizedException(
+          `Invalid or expired OAuth session: ${error.message}`,
+        );
       }
-      throw new BadRequestException(
-        'vendorParams failed provider schema validation',
+      throw new UnauthorizedException(
+        'Invalid or expired OAuth session. Please try connecting again.',
       );
     }
+
+    // Safety constraint ensuring the session belongs to this specific tenant & provider
+    if (
+      sessionData.tenantId !== tenantId ||
+      sessionData.provider !== providerName
+    ) {
+      this.logger.warn(
+        `Session Hijack attempt detected. Session tied to ${sessionData.tenantId}/${sessionData.provider} accessed by ${tenantId}/${providerName}`,
+      );
+      throw new UnauthorizedException('OAuth session context mismatch');
+    }
+
+    const { clientId, vendorParams } = sessionData;
 
     let authorizeUrl: string;
     try {
       const jwtState = await this.oauthStateService.generateState(
         tenantId,
         providerName,
-        validatedVendorParams,
+        vendorParams,
       );
       authorizeUrl = this.connectorsService.getAuthorizationUrl(
         providerName,
         jwtState,
         clientId,
-        validatedVendorParams,
+        vendorParams,
       );
     } catch (error) {
       if (
@@ -559,10 +620,12 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Failed to build authorization URL for ${providerName}`,
+        `Failed to build authorization URL for ${providerName}. INNER ERROR: ${(error as Error).stack || error}`,
         error,
       );
-      throw new InternalServerErrorException('Failed to initiate OAuth flow');
+      throw new InternalServerErrorException(
+        `Failed to initiate OAuth flow: ${(error as Error).message || error}`,
+      );
     }
 
     res.redirect(authorizeUrl);

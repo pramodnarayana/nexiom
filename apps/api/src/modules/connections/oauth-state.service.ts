@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import * as crypto from 'node:crypto';
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 
 @Injectable()
 export class OauthStateService {
@@ -38,6 +38,67 @@ export class OauthStateService {
         );
       }
       this.jwtSecret = 'nexiom-local-dev-oauth-state-secret-do-not-use-in-prod';
+    }
+  }
+
+  /**
+   * Generates a pre-flight session ID to hold sensitive OAuth connection parameters securely in Redis
+   * before the browser redirect happens, preventing secrets from being leaked in the URL query string.
+   */
+  async createPreFlightSession(
+    tenantId: string,
+    provider: string,
+    clientId: string,
+    vendorParams?: Record<string, any>,
+  ): Promise<string> {
+    const sessionId = crypto.randomUUID();
+    const payload = JSON.stringify({
+      tenantId,
+      provider,
+      clientId,
+      vendorParams,
+    });
+
+    // Sessions exist purely to bridge the gap between the form submission
+    // and the popup opening (a few seconds). We use 10 minutes to be safe.
+    await this.redis.set(`oauth:session:${sessionId}`, payload, 'EX', 10 * 60);
+    return sessionId;
+  }
+
+  /**
+   * Retrieves and immediately deletes a pre-flight session from Redis.
+   * Throws UnauthorizedException if the session does not exist or has expired.
+   */
+  async consumePreFlightSession(sessionId: string): Promise<{
+    tenantId: string;
+    provider: string;
+    clientId: string;
+    vendorParams?: Record<string, any>;
+  }> {
+    if (!sessionId || typeof sessionId !== 'string') {
+      throw new UnauthorizedException('Missing or invalid session ID');
+    }
+
+    const data = await this.redis.getdel(`oauth:session:${sessionId}`);
+
+    if (!data) {
+      throw new UnauthorizedException(
+        'OAuth session expired or invalid. Please try connecting again.',
+      );
+    }
+
+    try {
+      return JSON.parse(data) as {
+        tenantId: string;
+        provider: string;
+        clientId: string;
+        vendorParams?: Record<string, unknown>;
+      };
+    } catch {
+      this.logger.error(
+        `Failed to parse cached session data for sessionId ${sessionId}`,
+      );
+      throw new UnauthorizedException('Invalid OAuth session data.');
     }
   }
 
@@ -143,7 +204,7 @@ export class OauthStateService {
       let vendorParams: Record<string, string> | undefined;
 
       const redisKey = `oauth:state:${stateId}`;
-      const cachedParams = await this.redis.getdel(redisKey);
+      const cachedParams = await this.redis.get(redisKey);
 
       if (!cachedParams) {
         this.logger.warn(

@@ -313,14 +313,16 @@ export class ConnectorsService {
     regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
     const finalRegionContext =
-      regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
+      regionContext ||
+      this.configService.get<string>('DEFAULT_REGION_CONTEXT') ||
+      'local';
 
-    if (!finalRegionContext) {
-      this.logger.error(
-        `regionContext is missing and no DEFAULT_REGION_CONTEXT is configured`,
-      );
-      throw new InternalServerErrorException(
-        'Infrastructure configuration error: missing region context',
+    if (
+      !regionContext &&
+      !this.configService.get<string>('DEFAULT_REGION_CONTEXT')
+    ) {
+      this.logger.warn(
+        `regionContext is not configured — falling back to 'local'. Set DEFAULT_REGION_CONTEXT in your .env for production.`,
       );
     }
 

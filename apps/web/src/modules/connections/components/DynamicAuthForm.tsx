@@ -9,7 +9,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/shared/components/ui/form';
 import { Copy, Check } from 'lucide-react';
 import { type ReactElement, useState, useMemo, useEffect } from 'react';
-import type { ProviderResponse } from '../api/connections.api';
+import type { ProviderResponse, VendorParams } from '../api/connections.api';
 
 type UiPropType =
     | 'SHORT_TEXT'
@@ -67,9 +67,19 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
         return prop.required ? field : field.optional();
     }
     // SHORT_TEXT | LONG_TEXT | SECRET_TEXT | DROPDOWN | STATIC_DROPDOWN
-    const field = z.string();
-    if (prop.required) return field.min(1, `${prop.displayName ?? key} is required`);
-    return field.optional();
+    let field = z.string();
+    if (prop.required) {
+        field = field.min(1, `${prop.displayName ?? key} is required`) as unknown as z.ZodString;
+    }
+
+    // If the server explicitly declared a default value (e.g. environment: 'login'),
+    // we MUST bind it into the zod schema so react-hook-form doesn't strip it
+    // if the user submits without interacting with the input.
+    if (prop.defaultValue !== undefined) {
+        return field.default(String(prop.defaultValue));
+    }
+
+    return prop.required ? field : field.optional();
 }
 
 // Select the correct control for a uiSchema property
@@ -175,8 +185,8 @@ function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
 
 /** Extracts non-empty, non-null extra fields from a form value map into a flat primitive record.
  * Preserves the original boolean/number/string types so checkboxes and number fields round-trip. */
-function buildVendorParams(rest: Record<string, unknown>): Record<string, string | number | boolean> {
-    const params: Record<string, string | number | boolean> = {};
+function buildVendorParams(rest: Record<string, unknown>): VendorParams {
+    const params: VendorParams = {};
     for (const [key, val] of Object.entries(rest)) {
         if (val !== undefined && val !== null && val !== '') {
             if (typeof val === 'boolean' || typeof val === 'number') {
@@ -200,7 +210,7 @@ export interface DynamicAuthFormProps {
         clientId: string;
         clientSecret: string;
         /** All vendor-specific form values (e.g. { environment: 'test' }) — preserves original types. */
-        vendorParams: Record<string, string | number | boolean>;
+        vendorParams: VendorParams;
     }) => void;
 }
 
@@ -230,30 +240,27 @@ function mergeUiSchemaDefaults(
 export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defaultValues, onCancel, onSubmit }: Readonly<DynamicAuthFormProps>) {
     const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
 
-    // Inject default values out of uiSchema definitions if not provided by existing values.
-    // Skip props whose type is unsupported — they have no schema field and should not be injected.
+    // Inject default values from uiSchema definitions when not provided by existing DB values.
     const mergedDefaults = mergeUiSchemaDefaults({ ...defaultValues }, provider.uiSchema as Record<string, unknown> | undefined);
+
+    const initialValues = useMemo(() => ({
+        connectionName: provider.displayName,
+        clientId: '',
+        clientSecret: '',
+        ...mergedDefaults, // DB/uiSchema values take priority
+    }), [provider.displayName, mergedDefaults]);
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
-        defaultValues: {
-            connectionName: provider.displayName,
-            clientId: '',
-            clientSecret: '',
-            ...mergedDefaults
-        },
+        defaultValues: initialValues,
     });
 
-    // Re-hydrate the form when async credentials arrive (e.g. getConnectionCredentials resolves)
+    // Re-hydrate the form when async credentials arrive (i.e. getConnectionCredentials resolves for an existing connection).
     useEffect(() => {
-        form.reset({
-            connectionName: provider.displayName,
-            clientId: '',
-            clientSecret: '',
-            ...mergedDefaults,
-        });
+        if (!isUpdate) return;
+        form.reset(initialValues);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [defaultValues]);
+    }, [defaultValues, isUpdate]);
 
     const [copied, setCopied] = useState(false);
     const handleCopy = async () => {

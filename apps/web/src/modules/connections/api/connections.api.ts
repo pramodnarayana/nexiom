@@ -20,6 +20,12 @@ export interface ProviderResponse {
     uiSchema?: Record<string, unknown>;
 }
 
+/** 
+ * Represents all vendor-specific form values (e.g. environment selection) 
+ * submitted during the OAuth flow.
+ */
+export type VendorParams = Record<string, string | boolean | number>;
+
 export interface ActiveConnectionResponse {
     id: string;
     appName: string;
@@ -48,22 +54,34 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
 /**
  * Fetches stored credentials for a connection so the reconnect form can pre-fill all fields.
  *
- * - clientId: safe to expose
- * - hasClientSecret: whether a client secret is stored (the secret itself is never returned)
+ * - clientId: safe to expose to the authenticated tenant owner
+ * - clientSecret: returned to the authenticated tenant owner to pre-fill the reconnect form
  * - vendorParams: all stored vendor-specific parameters (e.g. environment selection)
- *   that were submitted during the original OAuth flow; allows generic pre-filling of
- *   all uiSchema fields without additional database columns.
  */
 export async function getConnectionCredentials(connectionId: string): Promise<{
     clientId: string;
+    clientSecret: string;
     hasClientSecret: boolean;
-    vendorParams?: Record<string, string | boolean | number>;
+    vendorParams?: VendorParams;
 }> {
     const res = await apiClient.get<{
         clientId: string;
+        clientSecret: string;
         hasClientSecret: boolean;
-        vendorParams?: Record<string, string | boolean | number>;
+        vendorParams?: VendorParams;
     }>(`/connectors/active/${connectionId}/credentials`);
+    return res.data;
+}
+
+export async function createOAuthSession(payload: {
+    providerName: string;
+    clientId: string;
+    vendorParams?: VendorParams;
+}): Promise<{ sessionId: string }> {
+    const res = await apiClient.post<{ sessionId: string }>(`/connectors/${payload.providerName}/session`, {
+        clientId: payload.clientId,
+        vendorParams: payload.vendorParams,
+    });
     return res.data;
 }
 
@@ -71,7 +89,7 @@ export async function exchangeOAuthCode(payload: {
     providerName: string;
     code: string;
     state: string;
-    vendorParams?: Record<string, string | boolean | number>;
+    vendorParams?: VendorParams;
     clientId: string;
     clientSecret: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */

@@ -64,6 +64,8 @@ describe('ConnectorsController', () => {
     } as unknown as Mocked<ConnectorsService>;
 
     mockOauthStateService = {
+      createPreFlightSession: vi.fn(),
+      consumePreFlightSession: vi.fn(),
       generateState: vi.fn(),
       verifyState: vi.fn().mockReturnValue({ tenantId: 'tenant-123' }),
     } as unknown as Mocked<OauthStateService>;
@@ -113,6 +115,12 @@ describe('ConnectorsController', () => {
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
+      mockOauthStateService.consumePreFlightSession.mockResolvedValue({
+        tenantId: 'tenant-123',
+        provider: 'mock-piece',
+        clientId: 'mock-client-id',
+        vendorParams: {},
+      });
       mockOauthStateService.generateState.mockResolvedValue('mocked_jwt_state');
       mockConnectorsService.getAuthorizationUrl.mockReturnValue(
         'https://vendor.com/auth',
@@ -121,11 +129,13 @@ describe('ConnectorsController', () => {
       await controller.initiateOAuth(
         mockCtx,
         'mock-piece',
-        'mock-client-id',
-        undefined,
+        'mock-session-id',
         mockRes,
       );
 
+      expect(
+        mockOauthStateService.consumePreFlightSession,
+      ).toHaveBeenCalledWith('mock-session-id');
       expect(mockOauthStateService.generateState).toHaveBeenCalledWith(
         'tenant-123',
         'mock-piece',
@@ -150,21 +160,20 @@ describe('ConnectorsController', () => {
         controller.initiateOAuth(
           missingTenantCtx,
           'mock-piece',
-          'mock-client-id',
-          undefined,
+          'mock-session-id',
           mockRes,
         ),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if clientId is missing', async () => {
+    it('should throw BadRequestException if sessionId is missing', async () => {
       const mockRes = {
         redirect: vi.fn(),
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
       await expect(
-        controller.initiateOAuth(mockCtx, 'mock-piece', '', undefined, mockRes),
+        controller.initiateOAuth(mockCtx, 'mock-piece', '', mockRes),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -174,6 +183,12 @@ describe('ConnectorsController', () => {
         req: { params: { providerName: 'mock-piece' } },
       } as unknown as Response;
 
+      mockOauthStateService.consumePreFlightSession.mockResolvedValue({
+        tenantId: 'tenant-123',
+        provider: 'mock-piece',
+        clientId: 'mock-client-id',
+        vendorParams: {},
+      });
       // Ensure validation passes so the error comes from getAuthorizationUrl.
       mockConnectorsService.getProviderDefinition.mockReturnValue(null);
       mockOauthStateService.generateState.mockResolvedValue('state');
@@ -185,8 +200,7 @@ describe('ConnectorsController', () => {
         controller.initiateOAuth(
           mockCtx,
           'mock-piece',
-          'mock-client-id',
-          undefined,
+          'mock-session-id',
           mockRes,
         ),
       ).rejects.toThrow(InternalServerErrorException);

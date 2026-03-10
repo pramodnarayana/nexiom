@@ -28,6 +28,9 @@ describe('OauthStateService', () => {
           provide: REDIS_CLIENT,
           useValue: {
             set: vi.fn(),
+            get: vi
+              .fn()
+              .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
             getdel: vi
               .fn()
               .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
@@ -58,6 +61,9 @@ describe('OauthStateService', () => {
             provide: REDIS_CLIENT,
             useValue: {
               set: vi.fn(),
+              get: vi
+                .fn()
+                .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
               getdel: vi
                 .fn()
                 .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
@@ -89,7 +95,12 @@ describe('OauthStateService', () => {
             { provide: ConfigService, useValue: prodConfigService },
             {
               provide: REDIS_CLIENT,
-              useValue: { set: vi.fn(), getdel: vi.fn(), del: vi.fn() },
+              useValue: {
+                set: vi.fn(),
+                get: vi.fn(),
+                getdel: vi.fn(),
+                del: vi.fn(),
+              },
             },
           ],
         }).compile(),
