@@ -206,6 +206,29 @@ describe('ConnectorsController', () => {
       ).rejects.toThrow(UnauthorizedException);
     });
 
+    it('should throw UnauthorizedException if consumePreFlightSession rejects', async () => {
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'mock-piece' } },
+      } as unknown as Response;
+
+      mockOauthStateService.consumePreFlightSession.mockRejectedValue(
+        new Error('rejected-session'),
+      );
+
+      await expect(
+        controller.initiateOAuth(
+          mockCtx,
+          'mock-piece',
+          'mock-session-id',
+          mockRes,
+        ),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(mockOauthStateService.generateState).not.toHaveBeenCalled();
+      expect(mockConnectorsService.getAuthorizationUrl).not.toHaveBeenCalled();
+    });
+
     it('should throw InternalServerErrorException if service fails', async () => {
       const mockRes = {
         redirect: vi.fn(),

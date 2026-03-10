@@ -35,6 +35,32 @@ import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
 
+function assertStaticDropdownValue(
+  key: string,
+  val: string,
+  prop: AnyProperty,
+): void {
+  const p = prop as Record<string, unknown>;
+
+  if (
+    typeof p.options !== 'object' ||
+    p.options === null ||
+    !('options' in p.options) ||
+    !Array.isArray((p.options as Record<string, unknown>).options)
+  ) {
+    throw new BadRequestException(`Parameter ${key} has malformed options`);
+  }
+
+  const opts = (p.options as Record<string, unknown>).options as Array<
+    Record<string, unknown>
+  >;
+
+  const allowed = new Set(opts.map((o) => String(o.value)));
+  if (!allowed.has(String(val))) {
+    throw new BadRequestException(`Parameter ${key} has an invalid value`);
+  }
+}
+
 function assertPropValue(
   key: string,
   val: string | undefined,
@@ -44,6 +70,18 @@ function assertPropValue(
     throw new BadRequestException(`Missing required vendor parameter: ${key}`);
   }
   if (val === undefined || val === null || val === '') return;
+
+  if (
+    typeof val !== 'string' &&
+    String(prop.type) !== 'CHECKBOX' &&
+    String(prop.type) !== 'NUMBER' &&
+    String(prop.type) !== 'STATIC_DROPDOWN'
+  ) {
+    throw new BadRequestException(
+      `Parameter ${key} must be a string, received ${typeof val}`,
+    );
+  }
+
   if (String(prop.type) === 'NUMBER' && Number.isNaN(Number(val))) {
     throw new BadRequestException(`Parameter ${key} must be a number`);
   }
@@ -52,23 +90,7 @@ function assertPropValue(
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
   if (String(prop.type) === 'STATIC_DROPDOWN') {
-    const p = prop as Record<string, unknown>;
-    if (
-      typeof p.options === 'object' &&
-      p.options !== null &&
-      'options' in p.options &&
-      Array.isArray((p.options as Record<string, unknown>).options)
-    ) {
-      const opts = (p.options as Record<string, unknown>).options as Array<
-        Record<string, unknown>
-      >;
-      const allowed = new Set(opts.map((o) => String(o.value)));
-      if (!allowed.has(String(val))) {
-        throw new BadRequestException(`Parameter ${key} has an invalid value`);
-      }
-    } else {
-      throw new BadRequestException(`Parameter ${key} has malformed options`);
-    }
+    assertStaticDropdownValue(key, val, prop);
   }
 }
 
@@ -116,6 +138,13 @@ function validateVendorParams(
         'No vendor parameters are allowed for this provider',
       );
     }
+    for (const [key, val] of Object.entries(params)) {
+      if (typeof val !== 'string') {
+        throw new BadRequestException(
+          `vendorParams.${key} must be a string, received ${typeof val}`,
+        );
+      }
+    }
     return;
   }
 
@@ -125,6 +154,15 @@ function validateVendorParams(
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
         `Undeclared vendor parameter: "${key}" is not allowed`,
+      );
+    }
+  }
+
+  // Reject non-strings across the board before granular parsing.
+  for (const [key, val] of Object.entries(params)) {
+    if (typeof val !== 'string') {
+      throw new BadRequestException(
+        `vendorParams.${key} must be a string, received ${typeof val}`,
       );
     }
   }
@@ -443,6 +481,7 @@ export class ConnectorsController {
     }
 
     let clientId = '';
+    let clientSecret = '';
     let hasClientSecret = false;
     let vendorParams: Record<string, string> | undefined;
 
@@ -452,6 +491,7 @@ export class ConnectorsController {
         const creds = parseConnectionCredentials(decrypted);
 
         clientId = creds.clientId;
+        clientSecret = creds.clientSecret;
         hasClientSecret = creds.hasClientSecret;
         vendorParams = creds.vendorParams;
 
@@ -474,7 +514,7 @@ export class ConnectorsController {
       }
     }
 
-    return { clientId, hasClientSecret, vendorParams };
+    return { clientId, clientSecret, hasClientSecret, vendorParams };
   }
 
   /**
