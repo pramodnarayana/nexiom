@@ -321,8 +321,11 @@ export class ConnectorsService {
       !regionContext &&
       !this.configService.get<string>('DEFAULT_REGION_CONTEXT')
     ) {
-      this.logger.warn(
-        `regionContext is not configured — falling back to 'local'. Set DEFAULT_REGION_CONTEXT in your .env for production.`,
+      this.logger.error(
+        `Failed to store connection: regionContext is falsy and DEFAULT_REGION_CONTEXT is not configured.`,
+      );
+      throw new Error(
+        'Database region routing failed. The connection storage cannot be provisioned without a valid region context.',
       );
     }
 

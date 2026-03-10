@@ -52,11 +52,10 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
 }
 
 /**
- * Fetches stored credentials for a connection so the reconnect form can pre-fill all fields.
+ * Fetches existing credentials for a connection to pre-fill the reconnect/update form.
  *
- * - clientId: safe to expose to the authenticated tenant owner
- * - clientSecret: returned to the authenticated tenant owner to pre-fill the reconnect form
- * - vendorParams: all stored vendor-specific parameters (e.g. environment selection)
+ * NOTE: For security reasons, the backend returns the actual `clientSecret`
+ * ONLY to authenticated tenant owners/admins so they can edit it seamlessly.
  */
 export async function getConnectionCredentials(connectionId: string): Promise<{
     clientId: string;

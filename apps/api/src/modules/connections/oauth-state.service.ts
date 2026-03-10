@@ -204,7 +204,7 @@ export class OauthStateService {
       let vendorParams: Record<string, string> | undefined;
 
       const redisKey = `oauth:state:${stateId}`;
-      const cachedParams = await this.redis.get(redisKey);
+      const cachedParams = await this.redis.getdel(redisKey);
 
       if (!cachedParams) {
         this.logger.warn(

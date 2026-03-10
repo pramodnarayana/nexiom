@@ -64,15 +64,45 @@ export default defineConfig([
             'See .agents/coder.md for the enterprise credential persistence pattern.',
         },
         {
+          selector: "MemberExpression[object.name='window'][computed=true][property.value='localStorage']",
+          message:
+            '[Enterprise Policy] Do not use window["localStorage"] in the connections module. ' +
+            'See .agents/coder.md for the enterprise credential persistence pattern.',
+        },
+        {
           selector: "MemberExpression[object.name='window'][property.name='sessionStorage']",
           message:
             '[Enterprise Policy] Do not use window.sessionStorage in the connections module. ' +
             'See .agents/coder.md for the enterprise credential persistence pattern.',
         },
         {
+          selector: "MemberExpression[object.name='window'][computed=true][property.value='sessionStorage']",
+          message:
+            '[Enterprise Policy] Do not use window["sessionStorage"] in the connections module. ' +
+            'See .agents/coder.md for the enterprise credential persistence pattern.',
+        },
+        {
           selector: "MemberExpression[object.name='globalThis'][property.name='localStorage']",
           message:
             '[Enterprise Policy] globalThis.localStorage is forbidden in the connections module. ' +
+            'See .agents/coder.md for the enterprise credential persistence pattern.',
+        },
+        {
+          selector: "MemberExpression[object.name='globalThis'][computed=true][property.value='localStorage']",
+          message:
+            '[Enterprise Policy] globalThis["localStorage"] is forbidden in the connections module. ' +
+            'See .agents/coder.md for the enterprise credential persistence pattern.',
+        },
+        {
+          selector: "MemberExpression[object.name='globalThis'][property.name='sessionStorage']",
+          message:
+            '[Enterprise Policy] globalThis.sessionStorage is forbidden in the connections module. ' +
+            'See .agents/coder.md for the enterprise credential persistence pattern.',
+        },
+        {
+          selector: "MemberExpression[object.name='globalThis'][computed=true][property.value='sessionStorage']",
+          message:
+            '[Enterprise Policy] globalThis["sessionStorage"] is forbidden in the connections module. ' +
             'See .agents/coder.md for the enterprise credential persistence pattern.',
         },
       ],

@@ -109,17 +109,17 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        async ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential) => {
+        async ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential): Promise<void> => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
-                return;
+                throw new Error('Missing VITE_API_URL');
             }
 
             // Guard: block a second connect while a popup is already in progress.
             if (pendingCredentials.current) {
                 toast({ title: 'Already connecting', description: 'Please complete or close the current connection popup first.', variant: 'destructive' });
-                return;
+                throw new Error('Already connecting');
             }
 
             try {
@@ -138,6 +138,8 @@ export function useConnections() {
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : 'Failed to establish secure OAuth pre-flight session';
                 toast({ title: 'Connection Error', description: msg, variant: 'destructive' });
+                pendingCredentials.current = null;
+                throw err;
             }
         },
         [openPopup, toast],

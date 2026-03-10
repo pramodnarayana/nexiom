@@ -21,7 +21,6 @@ import type { Response } from 'express';
 export const VALID_PROVIDER_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
-import { z } from 'zod';
 import type { AnyProperty } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
@@ -30,6 +29,7 @@ import {
   AppConnectionStatus,
   DATABASE_CONNECTION,
   type DrizzleDb,
+  member,
 } from '@nexiom/database';
 import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
@@ -101,34 +101,6 @@ function parseConnectionCredentials(decrypted: string): {
   }
 
   return { clientId, clientSecret, hasClientSecret, vendorParams };
-}
-
-function _parseVendorParamsJson(
-  vendorParamsJson: string | undefined,
-): Record<string, string> {
-  if (!vendorParamsJson) return {};
-
-  try {
-    const parsed: unknown = JSON.parse(vendorParamsJson);
-    const parseResult = z
-      .record(z.string(), z.string())
-      .refine((obj) => Object.keys(obj).length <= 15, {
-        message: 'vendorParams cannot exceed 15 keys',
-      })
-      .safeParse(parsed);
-
-    if (!parseResult.success) {
-      throw new BadRequestException(
-        `Invalid vendorParams format: ${parseResult.error.issues[0]?.message}`,
-      );
-    }
-    return parseResult.data;
-  } catch (err) {
-    if (err instanceof BadRequestException) {
-      throw err;
-    }
-    throw new BadRequestException('Invalid vendorParams JSON format');
-  }
 }
 
 function validateVendorParams(
@@ -428,8 +400,28 @@ export class ConnectorsController {
     @Param('id', ParseUUIDPipe) connectionId: string,
   ) {
     const tenantId = ctx.user?.organizationId;
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    if (!tenantId || !ctx.user?.id) {
+      throw new BadRequestException('tenantId or user context is missing');
+    }
+
+    const [orgMember] = await this.db
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, ctx.user.id),
+          eq(member.organizationId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (
+      !orgMember ||
+      (orgMember.role !== 'admin' && orgMember.role !== 'owner')
+    ) {
+      throw new UnauthorizedException(
+        'Only organization admins or owners can view connection metadata',
+      );
     }
 
     const [connection] = await this.db
@@ -624,7 +616,7 @@ export class ConnectorsController {
         error,
       );
       throw new InternalServerErrorException(
-        `Failed to initiate OAuth flow: ${(error as Error).message || error}`,
+        'Failed to initiate OAuth flow. Please try again later.',
       );
     }
 

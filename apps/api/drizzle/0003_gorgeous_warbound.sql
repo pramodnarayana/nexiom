@@ -8,4 +8,9 @@ CREATE TABLE "connection_storage_registry" (
 	CONSTRAINT "connection_storage_registry_workspace_id_unique" UNIQUE("workspace_id")
 );
 --> statement-breakpoint
+INSERT INTO "connection_storage_registry" (connection_id, workspace_id, database_host_id, region_context, created_at, updated_at)
+SELECT id, workspace_id, 'primary-cluster', 'local', now(), now()
+FROM "public"."app_connection"
+WHERE id NOT IN (SELECT connection_id FROM "connection_storage_registry");
+--> statement-breakpoint
 ALTER TABLE "connection_storage_registry" ADD CONSTRAINT "connection_storage_registry_connection_id_app_connection_id_fk" FOREIGN KEY ("connection_id") REFERENCES "public"."app_connection"("id") ON DELETE cascade ON UPDATE no action;

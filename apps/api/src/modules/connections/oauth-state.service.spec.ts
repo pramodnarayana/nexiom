@@ -155,6 +155,32 @@ describe('OauthStateService', () => {
       });
     });
 
+    it('should throw UnauthorizedException on second use of the same state token (anti-replay)', async () => {
+      const validToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const redisGetdelMock = vi.spyOn((service as any).redis, 'getdel');
+      redisGetdelMock
+        .mockResolvedValueOnce(JSON.stringify({ realmId: 'test-123' }))
+        .mockResolvedValueOnce(null);
+
+      // First verification succeeds
+      const firstResult = await service.verifyState(validToken, mockProvider);
+      expect(firstResult.tenantId).toBe(mockTenantId);
+
+      // Second verification fails because getdel has consumed the token
+      await expect(
+        service.verifyState(validToken, mockProvider),
+      ).rejects.toThrow(
+        new UnauthorizedException(
+          'OAuth login window expired or state already consumed',
+        ),
+      );
+    });
+
     it('should throw UnauthorizedException if token is completely missing', async () => {
       await expect(service.verifyState('', mockProvider)).rejects.toThrow(
         UnauthorizedException,

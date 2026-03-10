@@ -69,7 +69,7 @@ function buildPropZodField(prop: UiSchemaProp, key: string): z.ZodTypeAny {
     // SHORT_TEXT | LONG_TEXT | SECRET_TEXT | DROPDOWN | STATIC_DROPDOWN
     let field = z.string();
     if (prop.required) {
-        field = field.min(1, `${prop.displayName ?? key} is required`) as unknown as z.ZodString;
+        field = field.min(1, `${prop.displayName ?? key} is required`);
     }
 
     // If the server explicitly declared a default value (e.g. environment: 'login'),
@@ -203,15 +203,9 @@ export interface DynamicAuthFormProps {
     provider: ProviderResponse;
     callbackUrl: string;
     isUpdate?: boolean;
-    defaultValues?: Record<string, unknown>;
+    defaultValues?: Partial<Record<string, unknown>>;
     onCancel: () => void;
-    onSubmit: (data: {
-        connectionName: string;
-        clientId: string;
-        clientSecret: string;
-        /** All vendor-specific form values (e.g. { environment: 'test' }) — preserves original types. */
-        vendorParams: VendorParams;
-    }) => void;
+    onSubmit: (values: { connectionName: string; clientId: string; clientSecret: string; vendorParams: VendorParams }) => Promise<void> | void;
 }
 
 /**
@@ -241,7 +235,10 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
     const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
 
     // Inject default values from uiSchema definitions when not provided by existing DB values.
-    const mergedDefaults = mergeUiSchemaDefaults({ ...defaultValues }, provider.uiSchema as Record<string, unknown> | undefined);
+    const mergedDefaults = useMemo(
+        () => mergeUiSchemaDefaults({ ...defaultValues }, provider.uiSchema as Record<string, unknown> | undefined),
+        [defaultValues, provider.uiSchema]
+    );
 
     const initialValues = useMemo(() => ({
         connectionName: provider.displayName,
@@ -260,7 +257,7 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
         if (!isUpdate) return;
         form.reset(initialValues);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [defaultValues, isUpdate]);
+    }, [initialValues, isUpdate]);
 
     const [copied, setCopied] = useState(false);
     const handleCopy = async () => {
@@ -274,14 +271,21 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
         }
     };
 
-    const handleValidSubmit = (values: z.infer<typeof schema>) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleValidSubmit = async (values: z.infer<typeof schema>) => {
         const { connectionName, clientId, clientSecret, ...rest } = values;
-        onSubmit({
-            connectionName: connectionName as string,
-            clientId: clientId as string,
-            clientSecret: clientSecret as string,
-            vendorParams: buildVendorParams(rest as Record<string, unknown>),
-        });
+        setIsSubmitting(true);
+        try {
+            await onSubmit({
+                connectionName: connectionName as string,
+                clientId: clientId as string,
+                clientSecret: clientSecret as string,
+                vendorParams: buildVendorParams(rest as Record<string, unknown>),
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -386,12 +390,12 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-                    <Button type="button" variant="outline" onClick={onCancel}>
+                <div className="flex justify-end gap-3 pt-6 border-t">
+                    <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                         Cancel
                     </Button>
-                    <Button type="submit">
-                        {isUpdate ? 'Reconnect' : 'Connect'}
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? 'Connecting...' : (isUpdate ? 'Update Connection' : 'Connect')}
                     </Button>
                 </div>
             </form>

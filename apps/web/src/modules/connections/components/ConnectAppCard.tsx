@@ -16,7 +16,7 @@ import { DynamicAuthForm } from './DynamicAuthForm';
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: VendorParams }) => void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: VendorParams }) => Promise<void> | void;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -41,7 +41,7 @@ function coerceVendorParams(
             coerced[key] = value === 'true' || value === true || value === '1' || value === 1;
         } else if (type === 'NUMBER') {
             if (value === '' || value === null || value === undefined) {
-                coerced[key] = value;
+                // skip — do not set empty values for NUMBER fields to respect VendorParams typing
             } else {
                 const num = Number(value);
                 coerced[key] = Number.isNaN(num) ? value : num;
@@ -75,7 +75,9 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
                     .then((creds) => {
                         setDefaultCreds({ clientId: creds.clientId, clientSecret: creds.clientSecret, vendorParams: creds.vendorParams });
                     })
-                    .catch(() => { /* silently ignore — form will render without pre-filled creds */ });
+                    .catch((err) => {
+                        console.error(`[ConnectAppCard] Failed to fetch credentials for connection ${connection.id} (${connection.displayName}):`, err);
+                    });
             }
         }
         if (!isOpen) {
@@ -94,13 +96,13 @@ export function ConnectAppCard({ provider, connection, onConnect }: Readonly<Con
         callbackUrl = `${apiUrl}/connect/callback`;
     }
 
-    const handleDynamicConnect = (data: {
+    const handleDynamicConnect = async (data: {
         connectionName: string;
         clientId: string;
         clientSecret: string;
         vendorParams: VendorParams;
     }) => {
-        onConnect({
+        await onConnect({
             providerName: provider.name,
             clientId: data.clientId,
             clientSecret: data.clientSecret,
