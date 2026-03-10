@@ -538,6 +538,16 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId or userId context is missing');
     }
 
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      throw new BadRequestException('Invalid request body');
+    }
+
+    const providerDef =
+      this.connectorsService.getProviderDefinition(providerName);
+    if (!providerDef) {
+      throw new BadRequestException(`Unknown provider: ${providerName}`);
+    }
+
     const { clientId, vendorParams } = body;
 
     if (!clientId || clientId.trim().length === 0) {
@@ -551,9 +561,7 @@ export class ConnectorsController {
     let validatedVendorParams: Record<string, string> = {};
     try {
       if (vendorParams) {
-        const providerDef =
-          this.connectorsService.getProviderDefinition(providerName);
-        const auth = providerDef?.auth;
+        const auth = providerDef.auth;
         const authProps = auth && 'props' in auth ? auth.props : undefined;
         validateVendorParams(authProps, vendorParams);
         validatedVendorParams = vendorParams;
