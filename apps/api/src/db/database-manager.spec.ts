@@ -92,8 +92,7 @@ describe('DatabaseManager', () => {
           typeof executionResult
         > &
           typeof chain;
-        Object.assign(promise, chain);
-        return promise;
+        return Object.assign(promise, chain);
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);

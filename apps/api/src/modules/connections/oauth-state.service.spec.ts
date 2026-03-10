@@ -28,6 +28,9 @@ describe('OauthStateService', () => {
           provide: REDIS_CLIENT,
           useValue: {
             set: vi.fn(),
+            get: vi
+              .fn()
+              .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
             getdel: vi
               .fn()
               .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
@@ -58,6 +61,9 @@ describe('OauthStateService', () => {
             provide: REDIS_CLIENT,
             useValue: {
               set: vi.fn(),
+              get: vi
+                .fn()
+                .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
               getdel: vi
                 .fn()
                 .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
@@ -89,7 +95,12 @@ describe('OauthStateService', () => {
             { provide: ConfigService, useValue: prodConfigService },
             {
               provide: REDIS_CLIENT,
-              useValue: { set: vi.fn(), getdel: vi.fn(), del: vi.fn() },
+              useValue: {
+                set: vi.fn(),
+                get: vi.fn(),
+                getdel: vi.fn(),
+                del: vi.fn(),
+              },
             },
           ],
         }).compile(),
@@ -142,6 +153,32 @@ describe('OauthStateService', () => {
         tenantId: mockTenantId,
         vendorParams: { realmId: 'test-123' },
       });
+    });
+
+    it('should throw UnauthorizedException on second use of the same state token (anti-replay)', async () => {
+      const validToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const redisGetdelMock = vi.spyOn((service as any).redis, 'getdel');
+      redisGetdelMock
+        .mockResolvedValueOnce(JSON.stringify({ realmId: 'test-123' }))
+        .mockResolvedValueOnce(null);
+
+      // First verification succeeds
+      const firstResult = await service.verifyState(validToken, mockProvider);
+      expect(firstResult.tenantId).toBe(mockTenantId);
+
+      // Second verification fails because getdel has consumed the token
+      await expect(
+        service.verifyState(validToken, mockProvider),
+      ).rejects.toThrow(
+        new UnauthorizedException(
+          'OAuth login window expired or state already consumed',
+        ),
+      );
     });
 
     it('should throw UnauthorizedException if token is completely missing', async () => {

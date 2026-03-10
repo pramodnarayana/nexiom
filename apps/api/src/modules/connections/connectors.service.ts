@@ -315,12 +315,15 @@ export class ConnectorsService {
     const finalRegionContext =
       regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
 
-    if (!finalRegionContext) {
+    if (
+      !regionContext &&
+      !this.configService.get<string>('DEFAULT_REGION_CONTEXT')
+    ) {
       this.logger.error(
-        `regionContext is missing and no DEFAULT_REGION_CONTEXT is configured`,
+        `Failed to store connection: regionContext is falsy and DEFAULT_REGION_CONTEXT is not configured.`,
       );
       throw new InternalServerErrorException(
-        'Infrastructure configuration error: missing region context',
+        'Database region routing failed. The connection storage cannot be provisioned without a valid region context.',
       );
     }
 
@@ -393,7 +396,7 @@ export class ConnectorsService {
             connectionId: connection.id,
             workspaceId: schemaName,
             databaseHostId: 'primary-cluster',
-            regionContext: finalRegionContext,
+            regionContext: finalRegionContext!,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,

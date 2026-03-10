@@ -17,7 +17,7 @@ export const connectionStorageRegistry = pgTable(
 
         // 2. The physical Postgres Schema name (e.g., 'ws_sf_101')
         // This is used by sync workers for 'SET search_path TO ...'
-        workspaceId: varchar('workspace_id', { length: 128 }).notNull().unique(),
+        workspaceId: varchar('workspace_id', { length: 128 }).notNull(),
 
         // 3. The Physical RDS/Cluster ID
         // Tells the DB Manager which instance to target for migrations/queries

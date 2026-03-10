@@ -15,6 +15,13 @@
       "when": 1741398537000,
       "tag": "0001_add_composite_index_and_pieces_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773125825105,
+      "tag": "0003_gorgeous_warbound",
+      "breakpoints": true
     }
   ]
 }

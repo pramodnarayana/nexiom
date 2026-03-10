@@ -44,3 +44,6 @@ export { appConnections } from '@nexiom/database';
 
 // Piece registry
 export { pieces } from '@nexiom/database';
+
+// Infrastructure registry — maps connection IDs to physical DB schema + region
+export { connectionStorageRegistry } from '@nexiom/database';

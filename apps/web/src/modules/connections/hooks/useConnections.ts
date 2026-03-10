@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/shared/lib/auth/context';
-import { listActiveConnections, exchangeOAuthCode, type ActiveConnectionResponse } from '../api/connections.api';
+import { listActiveConnections, exchangeOAuthCode, createOAuthSession, type ActiveConnectionResponse } from '../api/connections.api';
 import { useOAuthPopup } from './useOAuthPopup';
 import { useToast } from '@/shared/hooks/use-toast';
 
@@ -12,8 +12,6 @@ type PendingCredential = {
     displayName: string;
     /** All vendor-specific parameters, including secrets — kept in memory only. */
     vendorParams?: Record<string, string | boolean | number>;
-    /** Only the non-secret subset of vendorParams — safe to encode in the popup URL. */
-    safeVendorParams?: Record<string, string | boolean | number>;
 };
 
 export function useConnections() {
@@ -111,30 +109,47 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        ({ providerName, clientId, clientSecret, displayName, vendorParams, safeVendorParams }: { providerName: string } & PendingCredential) => {
+        async ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential): Promise<void> => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
-                return;
+                throw new Error('Missing VITE_API_URL');
             }
 
             // Guard: block a second connect while a popup is already in progress.
             if (pendingCredentials.current) {
                 toast({ title: 'Already connecting', description: 'Please complete or close the current connection popup first.', variant: 'destructive' });
-                return;
+                throw new Error('Already connecting');
             }
 
-            pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams, safeVendorParams };
+            try {
+                // Reserve the slot immediately so concurrent calls are blocked
+                pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams };
 
-            // Build popup URL.
-            // Only the explicit safeVendorParams (non-SECRET_TEXT fields derived from the uiSchema)
-            // are appended to the URL so they can be embedded in the signed OAuth state.
-            // SECRET_TEXT vendorParams are held in pendingCredentials and merged in handleSuccess.
-            let popupUrl = `${apiUrl}/connectors/${providerName}?clientId=${encodeURIComponent(clientId)}`;
-            if (safeVendorParams && Object.keys(safeVendorParams).length > 0) {
-                popupUrl += `&vendorParams=${encodeURIComponent(JSON.stringify(safeVendorParams))}`;
+                // Synchronously open a placeholder popup before awaiting to prevent popup-blockers
+                // The openPopup hook/function must be capable of receiving an empty string or 'about:blank'
+                // and returning a reference, or allowing us to set its location later.
+                // Assuming openPopup handles the window manipulation based on the URL being empty/placeholder,
+                // we set it to empty initially.
+                openPopup('');
+
+                // Pre-flight session: securely persist all vendor parameters (including secrets/environments)
+                // in the backend Redis cache and get an opaque short-lived sessionId back.
+                const { sessionId } = await createOAuthSession({
+                    providerName,
+                    clientId,
+                    vendorParams,
+                });
+
+                const popupUrl = `${apiUrl}/connectors/${providerName}?session=${sessionId}`;
+                // Re-call openPopup with the actual URL to redirect the already-opened window
+                openPopup(popupUrl);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Failed to establish secure OAuth pre-flight session';
+                toast({ title: 'Connection Error', description: msg, variant: 'destructive' });
+                pendingCredentials.current = null;
+                throw err;
             }
-            openPopup(popupUrl);
         },
         [openPopup, toast],
     );
