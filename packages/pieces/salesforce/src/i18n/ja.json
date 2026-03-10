@@ -3,7 +3,7 @@
   "Environment": "環境",
   "Choose environment": "環境を選択",
   "Production": "Production",
-  "Development": "開発",
+  "Sandbox": "Sandbox",
   "Authenticate with Salesforce Production": "Salesforce Productionによる認証",
   "Add Contact to Campaign": "キャンペーンに連絡先を追加",
   "Add File to Record": "ファイルをレコードに追加",

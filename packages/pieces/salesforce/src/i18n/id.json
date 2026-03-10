@@ -4,7 +4,7 @@
   "Environment": "Environment",
   "Choose environment": "Choose environment",
   "Production": "Production",
-  "Development": "Development",
+  "Sandbox": "Sandbox",
   "Authenticate with Salesforce Production": "Authenticate with Salesforce Production",
   "Run Query (Advanced)": "Run Query (Advanced)",
   "Create Object (Advanced)": "Create Object (Advanced)",

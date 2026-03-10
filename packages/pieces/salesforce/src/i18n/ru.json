@@ -4,7 +4,7 @@
   "Environment": "Среда",
   "Choose environment": "Выберите окружение",
   "Production": "Производство",
-  "Development": "Развитие",
+  "Sandbox": "Sandbox",
   "Authenticate with Salesforce Production": "Аутентифицироваться с производством Salesforce",
   "Run Query (Advanced)": "Запуск запроса (Дополнительно)",
   "Create Object (Advanced)": "Создать объект (Дополнительно)",

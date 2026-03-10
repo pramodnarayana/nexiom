@@ -3,7 +3,7 @@
   "Environment": "Environnement",
   "Choose environment": "Choisir un environnement",
   "Production": "Production",
-  "Development": "Développement",
+  "Sandbox": "Sandbox",
   "Authenticate with Salesforce Production": "S'authentifier avec la production de Salesforce",
   "Add Contact to Campaign": "Ajouter un contact à la campagne",
   "Add File to Record": "Ajouter un fichier à l'enregistrement",
