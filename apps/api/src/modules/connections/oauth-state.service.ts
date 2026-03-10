@@ -47,6 +47,7 @@ export class OauthStateService {
    */
   async createPreFlightSession(
     tenantId: string,
+    userId: string,
     provider: string,
     clientId: string,
     vendorParams?: Record<string, any>,
@@ -54,6 +55,7 @@ export class OauthStateService {
     const sessionId = crypto.randomUUID();
     const payload = JSON.stringify({
       tenantId,
+      userId,
       provider,
       clientId,
       vendorParams,
@@ -71,6 +73,7 @@ export class OauthStateService {
    */
   async consumePreFlightSession(sessionId: string): Promise<{
     tenantId: string;
+    userId: string;
     provider: string;
     clientId: string;
     vendorParams?: Record<string, any>;
@@ -90,6 +93,7 @@ export class OauthStateService {
     try {
       return JSON.parse(data) as {
         tenantId: string;
+        userId: string;
         provider: string;
         clientId: string;
         vendorParams?: Record<string, unknown>;

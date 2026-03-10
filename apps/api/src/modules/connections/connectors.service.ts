@@ -324,7 +324,7 @@ export class ConnectorsService {
       this.logger.error(
         `Failed to store connection: regionContext is falsy and DEFAULT_REGION_CONTEXT is not configured.`,
       );
-      throw new Error(
+      throw new InternalServerErrorException(
         'Database region routing failed. The connection storage cannot be provisioned without a valid region context.',
       );
     }

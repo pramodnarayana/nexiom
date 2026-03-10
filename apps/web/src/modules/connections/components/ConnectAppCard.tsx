@@ -16,7 +16,7 @@ import { DynamicAuthForm } from './DynamicAuthForm';
 interface ConnectAppCardProps {
     provider: ProviderResponse;
     connection?: ActiveConnectionResponse;
-    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: VendorParams }) => Promise<void> | void;
+    onConnect: (args: { providerName: string; clientId: string; clientSecret: string; displayName: string; vendorParams?: VendorParams }) => Promise<void>;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {

@@ -205,7 +205,7 @@ export interface DynamicAuthFormProps {
     isUpdate?: boolean;
     defaultValues?: Partial<Record<string, unknown>>;
     onCancel: () => void;
-    onSubmit: (values: { connectionName: string; clientId: string; clientSecret: string; vendorParams: VendorParams }) => Promise<void> | void;
+    onSubmit: (values: { connectionName: string; clientId: string; clientSecret: string; vendorParams: VendorParams }) => Promise<void>;
 }
 
 /**
@@ -283,6 +283,8 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                 clientSecret: clientSecret as string,
                 vendorParams: buildVendorParams(rest as Record<string, unknown>),
             });
+        } catch (error) {
+            console.error('[DynamicAuthForm] Submit failed:', error);
         } finally {
             setIsSubmitting(false);
         }

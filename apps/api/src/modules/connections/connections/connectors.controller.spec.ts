@@ -28,12 +28,15 @@ import type { Response } from 'express';
 
 const mockCtx = {
   user: {
+    id: 'user-123',
     organizationId: 'tenant-123',
   },
 } as unknown as RequestAuthContext;
 
 const missingTenantCtx = {
-  user: {},
+  user: {
+    id: 'user-123',
+  },
 } as unknown as RequestAuthContext;
 
 describe('ConnectorsController', () => {
@@ -117,6 +120,7 @@ describe('ConnectorsController', () => {
 
       mockOauthStateService.consumePreFlightSession.mockResolvedValue({
         tenantId: 'tenant-123',
+        userId: 'user-123',
         provider: 'mock-piece',
         clientId: 'mock-client-id',
         vendorParams: {},
@@ -185,6 +189,7 @@ describe('ConnectorsController', () => {
 
       mockOauthStateService.consumePreFlightSession.mockResolvedValue({
         tenantId: 'tenant-123',
+        userId: 'user-123',
         provider: 'mock-piece',
         clientId: 'mock-client-id',
         vendorParams: {},

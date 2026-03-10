@@ -490,13 +490,14 @@ export class ConnectorsController {
     @Body() body: { clientId: string; vendorParams?: Record<string, string> },
   ) {
     const tenantId = ctx.user?.organizationId;
+    const userId = ctx.user?.id;
 
     if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
 
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    if (!tenantId || !userId) {
+      throw new BadRequestException('tenantId or userId context is missing');
     }
 
     const { clientId, vendorParams } = body;
@@ -530,6 +531,7 @@ export class ConnectorsController {
 
     const sessionId = await this.oauthStateService.createPreFlightSession(
       tenantId,
+      userId,
       providerName,
       clientId,
       validatedVendorParams,
@@ -550,13 +552,14 @@ export class ConnectorsController {
     @Res() res: Response,
   ) {
     const tenantId = ctx.user?.organizationId;
+    const userId = ctx.user?.id;
 
     if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
       throw new BadRequestException('Invalid provider name format');
     }
 
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    if (!tenantId || !userId) {
+      throw new BadRequestException('tenantId or userId context is missing');
     }
 
     if (!sessionId || sessionId.trim().length === 0) {
@@ -568,23 +571,23 @@ export class ConnectorsController {
       sessionData =
         await this.oauthStateService.consumePreFlightSession(sessionId);
     } catch (error) {
-      if (error instanceof Error) {
-        throw new UnauthorizedException(
-          `Invalid or expired OAuth session: ${error.message}`,
-        );
-      }
+      this.logger.error(
+        'Failed to consume pre-flight session',
+        error instanceof Error ? error.stack : String(error),
+      );
       throw new UnauthorizedException(
         'Invalid or expired OAuth session. Please try connecting again.',
       );
     }
 
-    // Safety constraint ensuring the session belongs to this specific tenant & provider
+    // Safety constraint ensuring the session belongs to this specific tenant & provider & user
     if (
       sessionData.tenantId !== tenantId ||
-      sessionData.provider !== providerName
+      sessionData.provider !== providerName ||
+      sessionData.userId !== userId
     ) {
       this.logger.warn(
-        `Session Hijack attempt detected. Session tied to ${sessionData.tenantId}/${sessionData.provider} accessed by ${tenantId}/${providerName}`,
+        `Session Hijack attempt detected. Session tied to ${sessionData.tenantId}/${sessionData.provider}/${sessionData.userId} accessed by ${tenantId}/${providerName}/${userId}`,
       );
       throw new UnauthorizedException('OAuth session context mismatch');
     }
