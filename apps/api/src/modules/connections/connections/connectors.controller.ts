@@ -443,7 +443,6 @@ export class ConnectorsController {
     }
 
     let clientId = '';
-    let clientSecret = '';
     let hasClientSecret = false;
     let vendorParams: Record<string, string> | undefined;
 
@@ -453,7 +452,6 @@ export class ConnectorsController {
         const creds = parseConnectionCredentials(decrypted);
 
         clientId = creds.clientId;
-        clientSecret = creds.clientSecret;
         hasClientSecret = creds.hasClientSecret;
         vendorParams = creds.vendorParams;
 
@@ -476,7 +474,7 @@ export class ConnectorsController {
       }
     }
 
-    return { clientId, clientSecret, hasClientSecret, vendorParams };
+    return { clientId, hasClientSecret, vendorParams };
   }
 
   /**
@@ -592,7 +590,10 @@ export class ConnectorsController {
       throw new UnauthorizedException('OAuth session context mismatch');
     }
 
-    const { clientId, vendorParams } = sessionData;
+    const { clientId, vendorParams } = sessionData as {
+      clientId: string;
+      vendorParams?: Record<string, string>;
+    };
 
     let authorizeUrl: string;
     try {

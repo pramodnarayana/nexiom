@@ -9,6 +9,7 @@ import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';
 import {
   BadRequestException,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   PieceRegistryService,
@@ -179,6 +180,30 @@ describe('ConnectorsController', () => {
       await expect(
         controller.initiateOAuth(mockCtx, 'mock-piece', '', mockRes),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw UnauthorizedException if session context belongs to another tenant or user', async () => {
+      const mockRes = {
+        redirect: vi.fn(),
+        req: { params: { providerName: 'mock-piece' } },
+      } as unknown as Response;
+
+      mockOauthStateService.consumePreFlightSession.mockResolvedValue({
+        tenantId: 'tenant-123',
+        userId: 'different-user',
+        provider: 'mock-piece',
+        clientId: 'mock-client-id',
+        vendorParams: {},
+      });
+
+      await expect(
+        controller.initiateOAuth(
+          mockCtx,
+          'mock-piece',
+          'mock-session-id',
+          mockRes,
+        ),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw InternalServerErrorException if service fails', async () => {

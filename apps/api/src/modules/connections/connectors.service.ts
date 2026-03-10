@@ -313,9 +313,7 @@ export class ConnectorsService {
     regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
     const finalRegionContext =
-      regionContext ||
-      this.configService.get<string>('DEFAULT_REGION_CONTEXT') ||
-      'local';
+      regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
 
     if (
       !regionContext &&
@@ -398,7 +396,7 @@ export class ConnectorsService {
             connectionId: connection.id,
             workspaceId: schemaName,
             databaseHostId: 'primary-cluster',
-            regionContext: finalRegionContext,
+            regionContext: finalRegionContext!,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,

@@ -76,7 +76,7 @@ export class OauthStateService {
     userId: string;
     provider: string;
     clientId: string;
-    vendorParams?: Record<string, any>;
+    vendorParams?: Record<string, unknown>;
   }> {
     if (!sessionId || typeof sessionId !== 'string') {
       throw new UnauthorizedException('Missing or invalid session ID');

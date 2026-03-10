@@ -11,6 +11,7 @@ INSERT INTO "connection_storage_registry" (connection_id, workspace_id, database
 SELECT DISTINCT ON (workspace_id) id, workspace_id, 'primary-cluster', NULL, now(), now()
 FROM "public"."app_connection"
 WHERE id NOT IN (SELECT connection_id FROM "connection_storage_registry")
+ORDER BY workspace_id, created_at ASC, id ASC
 ON CONFLICT (connection_id) DO NOTHING;
 --> statement-breakpoint
 ALTER TABLE "connection_storage_registry" ADD CONSTRAINT "connection_storage_registry_workspace_id_unique" UNIQUE("workspace_id");
