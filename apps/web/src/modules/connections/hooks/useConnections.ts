@@ -7,8 +7,9 @@ import { useToast } from '@/shared/hooks/use-toast';
 /** Credentials collected from the DynamicAuthForm, held while the OAuth popup is open. */
 type PendingCredential = {
     clientId: string;
-    /** Always required — /oauth-exchange always expects a non-empty secret. */
-    clientSecret: string;
+    /** Optional — only include when the user explicitly provides or rotates the secret.
+     *  When omitted, the backend uses the persisted secret it already holds. */
+    clientSecret?: string;
     displayName: string;
     /** All vendor-specific parameters, including secrets — kept in memory only. */
     vendorParams?: Record<string, string | boolean | number>;
@@ -70,7 +71,7 @@ export function useConnections() {
                         ...(vendorParams),
                     },
                     clientId: pending.clientId,
-                    clientSecret: pending.clientSecret,
+                    ...(pending.clientSecret ? { clientSecret: pending.clientSecret } : {}),
                     displayName: pending.displayName,
                     connectionId: pending.id,
                 });

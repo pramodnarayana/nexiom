@@ -335,12 +335,11 @@ export class ConnectorsService {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
         // 1. Check if we're doing an explicit update via connectionId
         if (id) {
-          // Check for naming conflicts when updating
-          const existingConnections = await tx
+          // 1a. Check displayName conflicts scoped to this provider
+          const sameProviderConns = await tx
             .select({
               id: appConnections.id,
               displayName: appConnections.displayName,
-              externalId: appConnections.externalId,
             })
             .from(appConnections)
             .where(
@@ -350,27 +349,37 @@ export class ConnectorsService {
               ),
             );
 
-          const toKebabSlug = (name: string) =>
-            name
-              .toLowerCase()
-              .trim()
-              .replaceAll(/[^a-z0-9]+/g, '-')
-              .replaceAll(/(^-+)|(-+$)/g, '');
-          const derivedExternalId = toKebabSlug(displayName);
-
-          const conflict = existingConnections.find(
+          const displayConflict = sameProviderConns.find(
             (c) =>
-              c.id !== id && // Exclude self
-              (c.displayName.toLowerCase() === displayName.toLowerCase() ||
-                c.externalId === derivedExternalId),
+              c.id !== id &&
+              c.displayName.toLowerCase() === displayName.toLowerCase(),
           );
-
-          if (conflict) {
+          if (displayConflict) {
             throw new HttpException(
-              `A connection with the name "${displayName}" (or identifier "${derivedExternalId}") already exists. Please choose a unique name.`,
+              `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
               409,
             );
           }
+
+          // 1b. Check externalId conflicts tenant-wide (cross-provider uniqueness)
+          const tenantExtConns = await tx
+            .select({
+              id: appConnections.id,
+              externalId: appConnections.externalId,
+            })
+            .from(appConnections)
+            .where(eq(appConnections.tenantId, tenantId));
+
+          const extConflict = tenantExtConns.find(
+            (c) => c.id !== id && c.externalId === externalId,
+          );
+          if (extConflict) {
+            throw new HttpException(
+              `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+              409,
+            );
+          }
+
           const [updated] = await tx
             .update(appConnections)
             .set({
@@ -387,6 +396,7 @@ export class ConnectorsService {
               and(
                 eq(appConnections.id, id),
                 eq(appConnections.tenantId, tenantId),
+                eq(appConnections.appName, providerName),
               ),
             )
             .returning({ id: appConnections.id });
@@ -402,12 +412,11 @@ export class ConnectorsService {
           };
         }
 
-        // 2. We're creating a new connection. Check for naming conflicts.
-        const existingConnections = await tx
+        // 2a. displayName conflict scoped to this provider
+        const sameProviderConns = await tx
           .select({
             id: appConnections.id,
             displayName: appConnections.displayName,
-            externalId: appConnections.externalId,
           })
           .from(appConnections)
           .where(
@@ -417,24 +426,31 @@ export class ConnectorsService {
             ),
           );
 
-        // A conflict occurs if any existing connection shares the same internal/display name.
-        const toKebabSlug = (name: string) =>
-          name
-            .toLowerCase()
-            .trim()
-            .replaceAll(/[^a-z0-9]+/g, '-')
-            .replaceAll(/(^-+)|(-+$)/g, '');
-        const derivedExternalId = toKebabSlug(displayName);
-
-        const conflict = existingConnections.find(
-          (c) =>
-            c.displayName.toLowerCase() === displayName.toLowerCase() ||
-            c.externalId === derivedExternalId,
+        const displayConflict = sameProviderConns.find(
+          (c) => c.displayName.toLowerCase() === displayName.toLowerCase(),
         );
-
-        if (conflict) {
+        if (displayConflict) {
           throw new HttpException(
-            `A connection with the name "${displayName}" (or identifier "${derivedExternalId}") already exists. Please choose a unique name.`,
+            `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+            409,
+          );
+        }
+
+        // 2b. externalId conflict checked tenant-wide (cross-provider)
+        const tenantExtConns = await tx
+          .select({
+            id: appConnections.id,
+            externalId: appConnections.externalId,
+          })
+          .from(appConnections)
+          .where(eq(appConnections.tenantId, tenantId));
+
+        const extConflict = tenantExtConns.find(
+          (c) => c.externalId === externalId,
+        );
+        if (extConflict) {
+          throw new HttpException(
+            `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
             409,
           );
         }

@@ -82,6 +82,12 @@ export function ActiveConnectionsPage() {
         );
     }, [connections, search]);
 
+    // O(1) provider lookup — avoids O(n×m) providers.find() in the render loop.
+    const providerMap = useMemo(
+        () => new Map(providers.map((p) => [p.name, p])),
+        [providers],
+    );
+
     const isLoadingConnections = connectionsLoading;
     const isRefreshing = providersLoading || connectionsLoading;
 
@@ -139,7 +145,7 @@ export function ActiveConnectionsPage() {
             {!providersError && !isLoadingConnections && activeConnections.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {activeConnections.map((conn) => {
-                        const provider = providers.find((p) => p.name === conn.appName);
+                        const provider = providerMap.get(conn.appName);
                         return (
                             <ActiveConnectionCard
                                 key={conn.id}

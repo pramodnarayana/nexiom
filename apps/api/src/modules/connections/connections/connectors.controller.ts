@@ -125,7 +125,7 @@ function parseConnectionCredentials(decrypted: string): {
 
   let vendorParams: Record<string, string> | undefined;
 
-  if (parsed.environment) {
+  if (parsed.environment !== undefined && parsed.environment !== null) {
     vendorParams = { environment: String(parsed.environment) };
   }
 
@@ -434,7 +434,6 @@ export class ConnectorsController {
 
     return {
       clientId: '',
-      clientSecret: '',
       hasClientSecret: false,
       vendorParams: undefined,
     };
@@ -474,13 +473,13 @@ export class ConnectorsController {
     tenantId: string,
   ): Promise<{
     clientId: string;
-    clientSecret: string;
     hasClientSecret: boolean;
     vendorParams?: Record<string, string>;
   }> {
     try {
       const decrypted = await this.crypto.decrypt(encryptedValue);
-      const creds = parseConnectionCredentials(decrypted);
+      const { clientSecret: _clientSecret, ...creds } =
+        parseConnectionCredentials(decrypted);
       this.logger.log({
         message: `Credentials accessed for connection ${connectionId}`,
         action: 'ACCESS_CREDENTIALS',
@@ -649,6 +648,9 @@ export class ConnectorsController {
     }
 
     const trimmedDisplayName = body.displayName.trim();
+    if (trimmedDisplayName.length === 0) {
+      throw new BadRequestException('displayName cannot be blank');
+    }
     if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
       throw new BadRequestException(
         `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`,
@@ -660,7 +662,7 @@ export class ConnectorsController {
     // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
     // Use the explicit connectionId if available to scope updates uniquely.
     const idempotencySuffix = body.connectionId
-      ? `update:${body.connectionId}`
+      ? `update:${body.connectionId}:${body.code}`
       : `create:${body.code}`;
     const idempotencyKey = `oauth:idempotency:${tenantId}:${idempotencySuffix}`;
     const acquired = await this.redis.set(

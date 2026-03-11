@@ -539,19 +539,91 @@ describe('ConnectorsService', () => {
       expect(mockDbInsert).not.toHaveBeenCalled(); // No inserts, no registry creation
     });
 
+    it('should throw HttpException 409 on displayName conflict when updating', async () => {
+      // 1st where call: sameProviderConns — a different connection has the same display name
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce(
+          Object.assign(
+            Promise.resolve([
+              { id: 'another-id', displayName: 'TMS MockPiece' },
+            ]),
+            { limit: vi.fn().mockResolvedValue([]) },
+          ),
+        )
+        .mockReturnValueOnce(
+          Object.assign(Promise.resolve([]), {
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        );
+
+      await expect(
+        service.storeOAuthConnection({
+          id: 'mock-updated-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should throw HttpException 409 on externalId collision tenant-wide when updating', async () => {
+      // 1st where call: sameProviderConns — no displayName conflict
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce(
+          Object.assign(Promise.resolve([]), {
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        )
+        // 2nd where call: tenantExtConns — a different connection holds the same externalId
+        .mockReturnValueOnce(
+          Object.assign(
+            Promise.resolve([
+              { id: 'another-id', externalId: 'mock-piece-tms' },
+            ]),
+            { limit: vi.fn().mockResolvedValue([]) },
+          ),
+        );
+
+      await expect(
+        service.storeOAuthConnection({
+          id: 'mock-updated-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece Renamed',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
     it('should throw HttpException 409 if a connection with the same displayName exists', async () => {
-      mockDb.where = vi.fn().mockReturnValue(
-        Object.assign(
-          Promise.resolve([
-            {
-              id: 'another-id',
-              displayName: 'TMS MockPiece',
-              externalId: 'tms-mockpiece',
-            },
-          ]),
-          { limit: vi.fn().mockResolvedValue([]) },
-        ),
-      );
+      // 1st where call: sameProviderConns (displayName check) returns a matching row
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce(
+          Object.assign(
+            Promise.resolve([
+              { id: 'another-id', displayName: 'TMS MockPiece' },
+            ]),
+            { limit: vi.fn().mockResolvedValue([]) },
+          ),
+        )
+        // 2nd where call: tenantExtConns (externalId check) — not reached, but stub anyway
+        .mockReturnValueOnce(
+          Object.assign(Promise.resolve([]), {
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        );
 
       await expect(
         service.storeOAuthConnection({
@@ -567,27 +639,31 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(HttpException);
     });
 
-    it('should throw HttpException 409 if a connection with the same normalized externalId exists (different casing/spacing)', async () => {
-      // "TMS  MockPiece" (double space) slugifies to "tms-mockpiece" — same as "TMS MockPiece"
-      mockDb.where = vi.fn().mockReturnValue(
-        Object.assign(
-          Promise.resolve([
-            {
-              id: 'another-id',
-              displayName: 'TMS MockPiece',
-              externalId: 'tms-mockpiece',
-            },
-          ]),
-          { limit: vi.fn().mockResolvedValue([]) },
-        ),
-      );
+    it('should throw HttpException 409 if externalId collision exists tenant-wide', async () => {
+      // 1st where call: sameProviderConns (displayName check) returns empty — no name conflict
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce(
+          Object.assign(Promise.resolve([]), {
+            limit: vi.fn().mockResolvedValue([]),
+          }),
+        )
+        // 2nd where call: tenantExtConns (externalId check) returns a collision
+        .mockReturnValueOnce(
+          Object.assign(
+            Promise.resolve([
+              { id: 'another-id', externalId: 'tms-mockpiece' },
+            ]),
+            { limit: vi.fn().mockResolvedValue([]) },
+          ),
+        );
 
       await expect(
         service.storeOAuthConnection({
           tenantId: 'tenant-123',
           providerName: 'mock-piece',
           externalId: 'tms-mockpiece',
-          displayName: 'TMS  MockPiece', // double space — same slug, different display
+          displayName: 'TMS  MockPiece', // different display name, same externalId
           authType: 'OAUTH2',
           value: 'encrypted-value-blob',
           expiresAt: new Date(),

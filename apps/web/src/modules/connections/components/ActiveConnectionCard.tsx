@@ -42,7 +42,7 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
     const [reconnecting, setReconnecting] = useState(false);
     const [manageOpen, setManageOpen] = useState(false);
     const [loadingManage, setLoadingManage] = useState(false);
-    const [manageCreds, setManageCreds] = useState<{ clientId: string; clientSecret: string; vendorParams?: VendorParams } | null>(null);
+    const [manageCreds, setManageCreds] = useState<{ clientId: string; hasClientSecret: boolean; vendorParams?: VendorParams } | null>(null);
 
     let callbackUrl = '';
     if (globalThis.window !== undefined) {
@@ -83,10 +83,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
         return {
             connectionName: connection.displayName,
             clientId: manageCreds?.clientId ?? '',
-            clientSecret: manageCreds?.clientSecret ?? '',
+            // clientSecret intentionally left blank — never round-trip the stored secret.
+            // The user must explicitly enter a new one if they want to rotate it.
+            clientSecret: '',
             ...extras,
         };
-    }, [connection.displayName, manageCreds?.clientId, manageCreds?.clientSecret, manageCreds?.vendorParams]);
+    }, [connection.displayName, manageCreds?.clientId, manageCreds?.vendorParams]);
 
     const handleDynamicManage = async (data: {
         connectionName: string;
@@ -99,10 +101,13 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
             return;
         }
 
+        // Only forward a new clientSecret if the user explicitly typed one.
+        // An empty string means "keep the server-side secret as-is".
+        const secretToSend = data.clientSecret.trim().length > 0 ? data.clientSecret : undefined;
         await connect({
             providerName: provider.name,
             clientId: data.clientId,
-            clientSecret: data.clientSecret,
+            ...(secretToSend !== undefined && { clientSecret: secretToSend }),
             displayName: data.connectionName,
             vendorParams: data.vendorParams,
             id: connection.id,
@@ -123,10 +128,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
         try {
             setReconnecting(true);
             const creds = await getConnectionCredentials(connection.id);
+            // Do NOT pass down the stored clientSecret — the server will use
+            // the persisted secret it holds. We only pass the clientId so the
+            // OAuth popup knows which app to authenticate against.
             await connect({
                 providerName: provider.name,
                 clientId: creds.clientId,
-                clientSecret: creds.clientSecret,
                 vendorParams: creds.vendorParams,
                 displayName: connection.displayName,
                 id: connection.id,
