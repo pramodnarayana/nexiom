@@ -34,6 +34,7 @@ import {
 import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
+import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 
 function assertStaticDropdownValue(
   key: string,
@@ -204,7 +205,7 @@ function toKebabSlug(displayName: string): string {
     .toLowerCase()
     .trim()
     .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+    .replaceAll(/(^-+)|(-+$)/g, '');
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 100;
@@ -276,6 +277,7 @@ export class ConnectorsController {
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
     private readonly crypto: EncryptionService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -703,6 +705,18 @@ export class ConnectorsController {
       body.displayName,
     );
 
+    // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
+    // If we've already successfully processed this exact (tenantId, code) pair recently,
+    // return a 200 OK immediately instead of failing verification.
+    const idempotencyKey = `oauth:idempotency:${tenantId}:${body.code}`;
+    const alreadyProcessed = await this.redis.get(idempotencyKey);
+    if (alreadyProcessed) {
+      this.logger.debug(
+        `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName}`,
+      );
+      return { success: true, message: 'Connection established (Idempotent)' };
+    }
+
     // Verify piece exists in registry
     const piece = this.pieceRegistry.getPiece(body.providerName);
     if (!piece) {
@@ -815,9 +829,12 @@ export class ConnectorsController {
       );
     }
 
+    // Mark as processed to prevent StrictMode duplicates from failing
+    await this.redis.set(idempotencyKey, 'true', 'EX', 60);
+
     this.logger.log(
       `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
     );
-    return { success: true };
+    return { success: true, message: 'Connection established' };
   }
 }

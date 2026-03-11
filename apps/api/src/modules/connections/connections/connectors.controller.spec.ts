@@ -6,6 +6,7 @@ import { EncryptionService } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';
+import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {
   BadRequestException,
   InternalServerErrorException,
@@ -46,6 +47,7 @@ describe('ConnectorsController', () => {
   let mockConnectorsService: Mocked<ConnectorsService>;
   let mockOauthStateService: Mocked<OauthStateService>;
   let mockEncryptionService: Mocked<EncryptionService>;
+  let mockRedis: Mocked<Redis>;
   let mockDb: {
     select: Mock;
     from: Mock;
@@ -79,6 +81,12 @@ describe('ConnectorsController', () => {
       decrypt: vi.fn(),
     } as unknown as Mocked<EncryptionService>;
 
+    mockRedis = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue('OK'),
+      // Add other mocked methods if needed or use as unknown as Mocked<Redis>
+    } as unknown as Mocked<Redis>;
+
     const dataChain = {
       orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
@@ -100,6 +108,7 @@ describe('ConnectorsController', () => {
         { provide: OauthStateService, useValue: mockOauthStateService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb },
+        { provide: REDIS_CLIENT, useValue: mockRedis },
         { provide: 'AuthService', useValue: {} },
         // PieceRegistryService and its PIECES token are now mocked above
         { provide: PIECES, useValue: [] },
@@ -416,7 +425,10 @@ describe('ConnectorsController', () => {
 
       const result = await controller.exchangeCode(mockCtx, validBody);
 
-      expect(result).toEqual({ success: true });
+      expect(result).toEqual({
+        success: true,
+        message: 'Connection established',
+      });
       expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
         'mock-piece',
         'auth-code-123',

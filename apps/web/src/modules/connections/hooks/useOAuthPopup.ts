@@ -87,9 +87,14 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
     }, [stopPoll]);
 
     const openPopup = useCallback((connectUrl: string) => {
-        // If an existing popup is open, just navigate it to the new URL
+        // If an existing popup is open...
         if (popupRef.current && !popupRef.current.closed) {
-            popupRef.current.location.href = connectUrl;
+            // ...navigate it to the new URL if provided, otherwise just focus it
+            if (connectUrl) {
+                popupRef.current.location.href = connectUrl;
+            } else {
+                popupRef.current.focus();
+            }
             return;
         }
 
