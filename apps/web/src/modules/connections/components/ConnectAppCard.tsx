@@ -28,9 +28,19 @@ interface ConnectAppCardProps {
 export function ConnectAppCard({ provider, onConnect }: Readonly<ConnectAppCardProps>) {
     const [open, setOpen] = useState(false);
     const [imgError, setImgError] = useState(false);
+    const [connectError, setConnectError] = useState<string | null>(null);
+
+    const defaultFormValues = useMemo(() => ({
+        connectionName: provider.displayName,
+        clientId: '',
+        clientSecret: '',
+    }), [provider.displayName]);
 
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen);
+        if (!isOpen) {
+            setConnectError(null);
+        }
     };
 
     // Compute the callback URL dynamically based on the current window origin.
@@ -43,14 +53,6 @@ export function ConnectAppCard({ provider, onConnect }: Readonly<ConnectAppCardP
         const apiUrl = import.meta.env.VITE_API_URL || `${globalThis.window.location.origin}/api`;
         callbackUrl = `${apiUrl}/connect/callback`;
     }
-
-    const [connectError, setConnectError] = useState<string | null>(null);
-
-    const defaultFormValues = useMemo(() => ({
-        connectionName: provider.displayName,
-        clientId: '',
-        clientSecret: '',
-    }), [provider.displayName]);
 
     const handleDynamicConnect = async (data: {
         connectionName: string;

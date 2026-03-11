@@ -422,41 +422,83 @@ export class ConnectorsController {
       throw new NotFoundException('Connection not found');
     }
 
-    let clientId = '';
-    let clientSecret = '';
-    let hasClientSecret = false;
-    let vendorParams: Record<string, string> | undefined;
-
     if (connection.value) {
-      try {
-        const decrypted = await this.crypto.decrypt(connection.value);
-        const creds = parseConnectionCredentials(decrypted);
+      const creds = await this.decryptConnectionValue(
+        connection.id,
+        connection.value,
+        ctx.user?.id,
+        tenantId,
+      );
+      return creds;
+    }
 
-        clientId = creds.clientId;
-        clientSecret = creds.clientSecret;
-        hasClientSecret = creds.hasClientSecret;
-        vendorParams = creds.vendorParams;
+    return {
+      clientId: '',
+      clientSecret: '',
+      hasClientSecret: false,
+      vendorParams: undefined,
+    };
+  }
 
-        this.logger.log({
-          message: `Credentials accessed for connection ${connection.id}`,
-          action: 'ACCESS_CREDENTIALS',
-          userId: ctx.user?.id,
-          tenantId,
-          connectionId: connection.id,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        this.logger.error(
-          `Failed to decrypt credentials for connection ${connection.id}: ${errMsg}`,
-        );
-        throw new InternalServerErrorException(
-          'Failed to decrypt connection credentials',
-        );
+  private resolveVendorParams(
+    providerDef: ReturnType<ConnectorsService['getProviderDefinition']>,
+    rawParams: Record<string, string | number | boolean> | undefined,
+  ): Record<string, string> {
+    if (!rawParams) return {};
+
+    const stringified: Record<string, string> = {};
+    for (const [key, val] of Object.entries(rawParams)) {
+      if (val !== undefined && val !== null) {
+        stringified[key] = String(val);
       }
     }
 
-    return { clientId, clientSecret, hasClientSecret, vendorParams };
+    try {
+      const auth = providerDef?.auth;
+      const authProps = auth && 'props' in auth ? auth.props : undefined;
+      validateVendorParams(authProps, stringified);
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        'vendorParams failed provider schema validation',
+      );
+    }
+
+    return stringified;
+  }
+
+  private async decryptConnectionValue(
+    connectionId: string,
+    encryptedValue: string,
+    userId: string | undefined,
+    tenantId: string,
+  ): Promise<{
+    clientId: string;
+    clientSecret: string;
+    hasClientSecret: boolean;
+    vendorParams?: Record<string, string>;
+  }> {
+    try {
+      const decrypted = await this.crypto.decrypt(encryptedValue);
+      const creds = parseConnectionCredentials(decrypted);
+      this.logger.log({
+        message: `Credentials accessed for connection ${connectionId}`,
+        action: 'ACCESS_CREDENTIALS',
+        userId,
+        tenantId,
+        connectionId,
+        timestamp: new Date().toISOString(),
+      });
+      return creds;
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(
+        `Failed to decrypt credentials for connection ${connectionId}: ${errMsg}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to decrypt connection credentials',
+      );
+    }
   }
 
   /**
@@ -491,30 +533,10 @@ export class ConnectorsController {
       throw new BadRequestException(`Unknown provider: ${providerName}`);
     }
 
-    let validatedVendorParams: Record<string, string> = {};
-    try {
-      if (vendorParams) {
-        // Force stringify primitives mapped from the dynamic ConnectAppCard frontend
-        const stringifiedParams: Record<string, string> = {};
-        for (const [key, val] of Object.entries(vendorParams)) {
-          if (val !== undefined && val !== null) {
-            stringifiedParams[key] = String(val);
-          }
-        }
-
-        const auth = providerDef.auth;
-        const authProps = auth && 'props' in auth ? auth.props : undefined;
-        validateVendorParams(authProps, stringifiedParams);
-        validatedVendorParams = stringifiedParams;
-      }
-    } catch (err) {
-      if (err instanceof BadRequestException) {
-        throw err;
-      }
-      throw new BadRequestException(
-        'vendorParams failed provider schema validation',
-      );
-    }
+    const validatedVendorParams = this.resolveVendorParams(
+      providerDef,
+      vendorParams,
+    );
 
     const sessionId = await this.oauthStateService.createPreFlightSession(
       tenantId,

@@ -6,7 +6,7 @@ import {
   Matches,
 } from 'class-validator';
 
-const VALID_PROVIDER_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
+import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
 
 export class ExchangeOAuthCode {
   @IsString()

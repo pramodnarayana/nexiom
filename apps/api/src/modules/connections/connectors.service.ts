@@ -335,6 +335,42 @@ export class ConnectorsService {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
         // 1. Check if we're doing an explicit update via connectionId
         if (id) {
+          // Check for naming conflicts when updating
+          const existingConnections = await tx
+            .select({
+              id: appConnections.id,
+              displayName: appConnections.displayName,
+              externalId: appConnections.externalId,
+            })
+            .from(appConnections)
+            .where(
+              and(
+                eq(appConnections.tenantId, tenantId),
+                eq(appConnections.appName, providerName),
+              ),
+            );
+
+          const toKebabSlug = (name: string) =>
+            name
+              .toLowerCase()
+              .trim()
+              .replaceAll(/[^a-z0-9]+/g, '-')
+              .replaceAll(/(^-+)|(-+$)/g, '');
+          const derivedExternalId = toKebabSlug(displayName);
+
+          const conflict = existingConnections.find(
+            (c) =>
+              c.id !== id && // Exclude self
+              (c.displayName.toLowerCase() === displayName.toLowerCase() ||
+                c.externalId === derivedExternalId),
+          );
+
+          if (conflict) {
+            throw new HttpException(
+              `A connection with the name "${displayName}" (or identifier "${derivedExternalId}") already exists. Please choose a unique name.`,
+              409,
+            );
+          }
           const [updated] = await tx
             .update(appConnections)
             .set({

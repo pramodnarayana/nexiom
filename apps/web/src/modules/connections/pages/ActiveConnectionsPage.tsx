@@ -10,6 +10,26 @@ function useProviders() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const fetchProviders = () => {
+        setLoading(true);
+        listProviders()
+            .then((data) => {
+                setProviders(data);
+                setError(null);
+            })
+            .catch((e: unknown) => {
+                console.error(e);
+                if (e instanceof Error) {
+                    setError(e.message);
+                } else {
+                    setError('Failed to load integrations.');
+                }
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+    };
+
     useEffect(() => {
         let isMounted = true;
         listProviders()
@@ -37,17 +57,22 @@ function useProviders() {
         };
     }, []);
 
-    return { providers, loading, error };
+    return { providers, loading, error, refreshProviders: fetchProviders };
 }
 
 export function ActiveConnectionsPage() {
     const { connections, loading: connectionsLoading, refresh } = useConnections();
-    const { providers, loading: providersLoading, error: providersError } = useProviders();
+    const { providers, loading: providersLoading, error: providersError, refreshProviders } = useProviders();
     const [search, setSearch] = useState('');
 
     useEffect(() => {
         void refresh();
     }, [refresh]);
+
+    const handleRefreshAll = () => {
+        refreshProviders();
+        void refresh();
+    };
 
     const activeConnections = useMemo(() => {
         return connections.filter(
@@ -57,7 +82,8 @@ export function ActiveConnectionsPage() {
         );
     }, [connections, search]);
 
-    const isLoading = providersLoading || connectionsLoading;
+    const isLoadingConnections = connectionsLoading;
+    const isRefreshing = providersLoading || connectionsLoading;
 
     return (
         <div className="space-y-8">
@@ -67,10 +93,10 @@ export function ActiveConnectionsPage() {
                     id="refresh-active-connections-btn"
                     variant="outline"
                     size="sm"
-                    onClick={() => void refresh()}
-                    disabled={isLoading}
+                    onClick={handleRefreshAll}
+                    disabled={isRefreshing}
                 >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
             </div>
@@ -78,13 +104,14 @@ export function ActiveConnectionsPage() {
             <div className="relative">
                 <input
                     id="connection-search"
+                    aria-label="Search active connections"
                     type="text"
                     placeholder="Search active connections..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full rounded-lg border border-border bg-background px-4 py-2 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <Blocks className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Blocks aria-hidden="true" className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             </div>
 
             {providersError && (
@@ -94,13 +121,13 @@ export function ActiveConnectionsPage() {
                 </div>
             )}
 
-            {!providersError && isLoading && (
+            {isLoadingConnections && (
                 <div className="flex items-center justify-center py-24">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             )}
 
-            {!providersError && !isLoading && activeConnections.length === 0 && (
+            {!providersError && !isLoadingConnections && activeConnections.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
                     <Blocks className="h-12 w-12 text-muted-foreground/50" />
                     <p className="text-muted-foreground">
@@ -109,7 +136,7 @@ export function ActiveConnectionsPage() {
                 </div>
             )}
 
-            {!providersError && !isLoading && activeConnections.length > 0 && (
+            {!providersError && !isLoadingConnections && activeConnections.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {activeConnections.map((conn) => {
                         const provider = providers.find((p) => p.name === conn.appName);

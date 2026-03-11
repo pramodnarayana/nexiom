@@ -52,6 +52,15 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
 
     const handleOpenManage = async () => {
         if (!provider) return;
+
+        if (connection.authType !== 'OAUTH2' || provider.authType !== 'OAUTH2') {
+            toast({
+                title: 'Operation unavailable',
+                description: 'Managing non-OAuth connections is not currently supported.',
+            });
+            return;
+        }
+
         try {
             setLoadingManage(true);
             const creds = await getConnectionCredentials(connection.id);
@@ -70,11 +79,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
     };
 
     const manageDefaultValues = useMemo(() => {
+        const extras = manageCreds?.vendorParams ? { ...manageCreds.vendorParams } : {};
         return {
             connectionName: connection.displayName,
             clientId: manageCreds?.clientId ?? '',
             clientSecret: manageCreds?.clientSecret ?? '',
-            ...(manageCreds?.vendorParams || {}),
+            ...extras,
         };
     }, [connection.displayName, manageCreds?.clientId, manageCreds?.clientSecret, manageCreds?.vendorParams]);
 
@@ -85,6 +95,10 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
         vendorParams: VendorParams;
     }) => {
         if (!provider) return;
+        if (connection.authType !== 'OAUTH2' || provider.authType !== 'OAUTH2') {
+            return;
+        }
+
         await connect({
             providerName: provider.name,
             clientId: data.clientId,
@@ -98,6 +112,14 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
 
     const handleReconnect = async () => {
         if (!provider) return;
+        if (connection.authType !== 'OAUTH2' || provider.authType !== 'OAUTH2') {
+            toast({
+                title: 'Operation unavailable',
+                description: 'Reconnecting non-OAuth connections is not currently supported.',
+            });
+            return;
+        }
+
         try {
             setReconnecting(true);
             const creds = await getConnectionCredentials(connection.id);

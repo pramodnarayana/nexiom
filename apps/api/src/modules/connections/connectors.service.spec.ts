@@ -540,16 +540,18 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw HttpException 409 if a connection with the same displayName exists', async () => {
-      mockDb.where = vi
-        .fn()
-        .mockReturnValue(
-          Object.assign(
-            Promise.resolve([
-              { id: 'another-id', displayName: 'TMS MockPiece' },
-            ]),
-            { limit: vi.fn().mockResolvedValue([]) },
-          ),
-        );
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(
+          Promise.resolve([
+            {
+              id: 'another-id',
+              displayName: 'TMS MockPiece',
+              externalId: 'tms-mockpiece',
+            },
+          ]),
+          { limit: vi.fn().mockResolvedValue([]) },
+        ),
+      );
 
       await expect(
         service.storeOAuthConnection({
@@ -557,6 +559,35 @@ describe('ConnectorsService', () => {
           providerName: 'mock-piece',
           externalId: 'mock-piece-tms',
           displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should throw HttpException 409 if a connection with the same normalized externalId exists (different casing/spacing)', async () => {
+      // "TMS  MockPiece" (double space) slugifies to "tms-mockpiece" — same as "TMS MockPiece"
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(
+          Promise.resolve([
+            {
+              id: 'another-id',
+              displayName: 'TMS MockPiece',
+              externalId: 'tms-mockpiece',
+            },
+          ]),
+          { limit: vi.fn().mockResolvedValue([]) },
+        ),
+      );
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'tms-mockpiece',
+          displayName: 'TMS  MockPiece', // double space — same slug, different display
           authType: 'OAUTH2',
           value: 'encrypted-value-blob',
           expiresAt: new Date(),
