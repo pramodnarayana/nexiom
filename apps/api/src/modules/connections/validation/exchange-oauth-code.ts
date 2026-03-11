@@ -21,12 +21,12 @@ export class ExchangeOAuthCode {
   code!: string;
 
   @IsString()
-  @IsNotEmpty()
-  clientId!: string;
+  @IsOptional()
+  clientId?: string;
 
   @IsString()
-  @IsNotEmpty()
-  clientSecret!: string;
+  @IsOptional()
+  clientSecret?: string;
 
   @IsString()
   @IsNotEmpty()

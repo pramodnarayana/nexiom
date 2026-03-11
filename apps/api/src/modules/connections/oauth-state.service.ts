@@ -173,6 +173,7 @@ export class OauthStateService {
   async verifyState(
     stateToken: string,
     expectedProvider: string,
+    consume = true,
   ): Promise<{ tenantId: string; vendorParams?: Record<string, string> }> {
     if (!stateToken) {
       this.logger.error('OAuth state token is missing entirely');
@@ -211,7 +212,9 @@ export class OauthStateService {
       let vendorParams: Record<string, string> | undefined;
 
       const redisKey = `oauth:state:${stateId}`;
-      const cachedParams = await this.redis.getdel(redisKey);
+      const cachedParams = consume
+        ? await this.redis.getdel(redisKey)
+        : await this.redis.get(redisKey);
 
       if (!cachedParams) {
         this.logger.warn(

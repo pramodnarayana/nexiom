@@ -195,13 +195,18 @@ function extractRefreshToken(
   return rt;
 }
 
-/** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
-function toKebabSlug(displayName: string): string {
-  return displayName
+import { randomBytes } from 'crypto';
+
+/** Converts a human-readable display name to an enterprise-safe URL slug used as externalId */
+function toKebabSlug(providerName: string, displayName: string): string {
+  const baseSlug = displayName
     .toLowerCase()
     .trim()
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/(^-+)|(-+$)/g, '');
+
+  const uniqueSuffix = randomBytes(2).toString('hex'); // 4 characters
+  return `${providerName}-${baseSlug}-${uniqueSuffix}`;
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 100;
@@ -541,7 +546,7 @@ export class ConnectorsController {
       tenantId,
       userId,
       providerName,
-      clientId,
+      clientId ?? '',
       validatedVendorParams,
     );
 
@@ -642,6 +647,8 @@ export class ConnectorsController {
     @AuthContext() ctx: RequestAuthContext,
     @Body(new ValidationPipe({ whitelist: true })) body: ExchangeOAuthCode,
   ) {
+    this.logger.debug('oauth-exchange body received: ' + JSON.stringify(body));
+
     const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
       throw new BadRequestException('tenantId context is missing');
@@ -656,7 +663,30 @@ export class ConnectorsController {
         `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`,
       );
     }
-    const externalId = toKebabSlug(trimmedDisplayName);
+    let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
+    if (body.connectionId) {
+      try {
+        const [existing] = await this.db
+          .select({ externalId: appConnections.externalId })
+          .from(appConnections)
+          .where(
+            and(
+              eq(appConnections.id, body.connectionId),
+              eq(appConnections.tenantId, tenantId),
+            ),
+          );
+
+        if (existing) {
+          // Preserve the original unique slug to avoid falsely colliding with
+          // another provider's connection that shares the same displayName.
+          externalId = existing.externalId;
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Could not find existing connection ${body.connectionId} to inherit externalId: ${(err as Error).message}`,
+        );
+      }
+    }
 
     // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
     // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
@@ -702,6 +732,11 @@ export class ConnectorsController {
       );
       return { success: true, message: 'Connection established' };
     } catch (processError) {
+      this.logger.error(
+        'processOAuthExchange failed fundamentally:',
+        processError,
+      );
+
       // If any step of the exchange/provisioning fails, remove the idempotency
       // "processing" lock so the user can immediately try again without waiting for the EX TTL.
       try {
@@ -747,12 +782,22 @@ export class ConnectorsController {
         : undefined;
     validateVendorParams(authProps, decodedState.vendorParams);
 
+    // For reconnect flows, clientSecret may not be provided (browser never received it).
+    // If connectionId is present, resolve the stored credentials server-side.
+    const { effectiveClientId, effectiveClientSecret } =
+      await this.resolveCredentialsForExchange(
+        tenantId,
+        body.clientId,
+        body.clientSecret,
+        body.connectionId,
+      );
+
     // Exchange the code for actual OAuth tokens
     const tokenResponse = await this.executeTokenExchange(
       body.providerName,
       body.code,
-      body.clientId,
-      body.clientSecret,
+      effectiveClientId,
+      effectiveClientSecret,
       decodedState.vendorParams ?? {},
     );
 
@@ -771,8 +816,8 @@ export class ConnectorsController {
     // vendorParams are persisted inside the blob so the reconnect form
     // can restore all uiSchema fields without additional database columns.
     const valueBlob: ConnectionValueBlob = {
-      clientId: body.clientId,
-      clientSecret: body.clientSecret,
+      clientId: effectiveClientId,
+      clientSecret: effectiveClientSecret,
       accessToken: tokenResponse.access_token,
       refreshToken: validRefreshToken,
       data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
@@ -812,6 +857,61 @@ export class ConnectorsController {
         `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
       );
     }
+  }
+
+  /**
+   * For reconnect flows where the browser does not send `clientSecret`,
+   * resolve the effective credentials from the stored (encrypted) connection.
+   * Falls back to the request values when no stored connection is needed or found.
+   */
+  private async resolveCredentialsForExchange(
+    tenantId: string,
+    requestClientId: string | undefined,
+    requestClientSecret: string | undefined,
+    connectionId: string | undefined,
+  ): Promise<{ effectiveClientId: string; effectiveClientSecret: string }> {
+    // If a new secret was explicitly supplied, use it as-is.
+    if (requestClientSecret) {
+      return {
+        effectiveClientId: requestClientId ?? '',
+        effectiveClientSecret: requestClientSecret,
+      };
+    }
+
+    // No secret from the browser — fall back to the stored credential if we have a connectionId.
+    if (connectionId) {
+      try {
+        const [existing] = await this.db
+          .select({ value: appConnections.value })
+          .from(appConnections)
+          .where(
+            and(
+              eq(appConnections.id, connectionId),
+              eq(appConnections.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+
+        if (existing?.value) {
+          const decrypted = await this.crypto.decrypt(existing.value);
+          const stored = parseConnectionCredentials(decrypted);
+          return {
+            effectiveClientId: requestClientId || stored.clientId,
+            effectiveClientSecret: stored.clientSecret,
+          };
+        }
+      } catch (err) {
+        this.logger.warn(
+          `resolveCredentialsForExchange: failed to load stored credential for ${connectionId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    // No stored secret available — proceed with whatever was provided (may fail at token exchange).
+    return {
+      effectiveClientId: requestClientId ?? '',
+      effectiveClientSecret: requestClientSecret ?? '',
+    };
   }
 
   private async executeTokenExchange(

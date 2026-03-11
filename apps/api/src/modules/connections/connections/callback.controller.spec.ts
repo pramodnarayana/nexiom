@@ -266,6 +266,7 @@ describe('OAuthCallbackController', () => {
     expect(mockOauthStateService.verifyState).toHaveBeenCalledWith(
       'valid-jwt',
       'mock-piece',
+      false,
     );
 
     expectPopupMessage(res, {

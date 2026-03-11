@@ -165,12 +165,12 @@ function renderFieldControl(prop: UiSchemaProp, field: { value: unknown; onChang
 }
 
 // Create zod schema dynamically from uiSchema properties
-function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>) {
+function buildZodSchema(uiSchema?: Record<string, UiSchemaProp>, isUpdate?: boolean) {
     const shape: Record<string, z.ZodTypeAny> = {
         connectionName: z.string().min(1, 'Connection name is required'),
         clientId: z.string().min(1, 'Client ID is required'),
-        // Always required — /connectors/oauth-exchange always expects a non-empty secret.
-        clientSecret: z.string().min(1, 'Client secret is required'),
+        // Optional during updates since the backend will fall back to the vaulted secret.
+        clientSecret: isUpdate ? z.string().optional() : z.string().min(1, 'Client secret is required'),
     };
 
     if (uiSchema) {
@@ -232,7 +232,7 @@ function mergeUiSchemaDefaults(
 }
 
 export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defaultValues, onCancel, onSubmit }: Readonly<DynamicAuthFormProps>) {
-    const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined), [provider.uiSchema]);
+    const schema = useMemo(() => buildZodSchema(provider.uiSchema as Record<string, UiSchemaProp> | undefined, isUpdate), [provider.uiSchema, isUpdate]);
 
     // Inject default values from uiSchema definitions when not provided by existing DB values.
     const mergedDefaults = useMemo(
@@ -334,8 +334,9 @@ export function DynamicAuthForm({ provider, callbackUrl, isUpdate = false, defau
                             <FormLabel className="text-right">Client Secret <span className="text-red-500">*</span></FormLabel>
                             <div className="col-span-3">
                                 <FormControl>
-                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? '(Required — re-enter to reconnect)' : ''} />
+                                    <Input type="password" {...field} value={field.value as string || ''} placeholder={isUpdate ? 'Leave blank to use saved secret' : ''} />
                                 </FormControl>
+                                {isUpdate && <FormDescription className="mt-2 text-xs text-muted-foreground">Your secret is securely vaulted. Only enter a new one if it has changed.</FormDescription>}
                                 <FormMessage />
                             </div>
                         </FormItem>

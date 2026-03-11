@@ -456,7 +456,9 @@ describe('ConnectorsController', () => {
         id: undefined,
         tenantId: 'tenant-123',
         providerName: 'mock-piece',
-        externalId: 'tms-mockpiece', // auto-generated kebab slug (namespaced)
+        externalId: expect.stringMatching(
+          /^mock-piece-tms-mockpiece-[a-f0-9]{4}$/,
+        ) as unknown as string, // auto-generated kebab slug (namespaced + UUID)
         displayName: 'TMS MockPiece',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
@@ -465,8 +467,111 @@ describe('ConnectorsController', () => {
       });
     });
 
+    it('should preserve existing externalId during a reconnect flow (connectionId provided)', async () => {
+      // Mock the essential services that processOAuthExchange relies on
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      // Mock the database returning an existing connection with a specific externalId
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+
+      const reconnectBody = {
+        ...validBody,
+        connectionId: 'existing-connection-id',
+      };
+
+      const result = await controller.exchangeCode(mockCtx, reconnectBody);
+
+      expect(result).toEqual({
+        success: true,
+        message: 'Connection established',
+      });
+      // Ensure the DB was queried to fetch the old externalId
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.from).toHaveBeenCalled();
+      expect(mockDb.where).toHaveBeenCalled();
+
+      // Ensure that the original externalId from the DB was preserved instead of randomly generated
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'existing-connection-id', // ensure it passes the id along
+          externalId: 'existing-slug-123', // Expect the mocked existing slug
+        }),
+      );
+    });
+    it('should fall back to generated externalId if reconnect connectionId is not found in DB', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      // Mock DB returning nothing
+      mockDb.where.mockResolvedValueOnce([]);
+
+      const reconnectBody = {
+        ...validBody,
+        connectionId: 'missing-id',
+      };
+
+      await controller.exchangeCode(mockCtx, reconnectBody);
+
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'missing-id',
+          externalId: expect.stringMatching(
+            /^mock-piece-tms-mockpiece-[a-f0-9]{4}$/,
+          ) as unknown as string,
+        }),
+      );
+    });
+
+    it('should catch and log DB errors during reconnect lookups gracefully', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      // Mock DB throwing an error
+      mockDb.where.mockRejectedValueOnce(new Error('DB Timeout'));
+
+      const reconnectBody = {
+        ...validBody,
+        connectionId: 'error-id',
+      };
+
+      await controller.exchangeCode(mockCtx, reconnectBody);
+
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'error-id',
+          externalId: expect.stringMatching(
+            /^mock-piece-tms-mockpiece-[a-f0-9]{4}$/,
+          ) as unknown as string,
+        }),
+      );
+    });
+
     // Note: DTO validation (ValidationPipe) tests are typically handled in e2e tests
-    // because ValidationPipe executes at the framework level before hitting the controller.
 
     it('should throw BadRequestException if provider is not registered', async () => {
       mockPieceRegistry.getPiece.mockReturnValue(undefined);

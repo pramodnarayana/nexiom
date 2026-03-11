@@ -165,7 +165,9 @@ export class OAuthCallbackController {
 
     // 2. Validate State (Tenant Context) using stateless JWT
     try {
-      await this.oauthStateService.verifyState(rawState, provider);
+      // Pass false so the callback only PEEKS at the state.
+      // The final /oauth-exchange endpoint will do the secure consume (getdel).
+      await this.oauthStateService.verifyState(rawState, provider, false);
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : String(error);
       this.logger.warn(
