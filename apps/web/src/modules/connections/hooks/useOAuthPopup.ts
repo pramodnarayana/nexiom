@@ -87,12 +87,14 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
     }, [stopPoll]);
 
     const openPopup = useCallback((connectUrl: string) => {
-        // Close stale popup and cancel any in-flight poll
-        stopPoll();
+        // If an existing popup is open, just navigate it to the new URL
         if (popupRef.current && !popupRef.current.closed) {
-            popupRef.current.close();
+            popupRef.current.location.href = connectUrl;
+            return;
         }
 
+        // Cancel any in-flight poll since we are opening a fresh window
+        stopPoll();
         completedRef.current = false;
 
         const width = 600;

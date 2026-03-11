@@ -313,19 +313,9 @@ export class ConnectorsService {
     regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
     const finalRegionContext =
-      regionContext || this.configService.get<string>('DEFAULT_REGION_CONTEXT');
-
-    if (
-      !regionContext &&
-      !this.configService.get<string>('DEFAULT_REGION_CONTEXT')
-    ) {
-      this.logger.error(
-        `Failed to store connection: regionContext is falsy and DEFAULT_REGION_CONTEXT is not configured.`,
-      );
-      throw new InternalServerErrorException(
-        'Database region routing failed. The connection storage cannot be provisioned without a valid region context.',
-      );
-    }
+      regionContext ||
+      this.configService.get<string>('DEFAULT_REGION_CONTEXT') ||
+      'unknown';
 
     try {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
@@ -396,7 +386,7 @@ export class ConnectorsService {
             connectionId: connection.id,
             workspaceId: schemaName,
             databaseHostId: 'primary-cluster',
-            regionContext: finalRegionContext!,
+            regionContext: finalRegionContext,
           })
           .onConflictDoNothing({
             target: connectionStorageRegistry.connectionId,

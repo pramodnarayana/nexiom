@@ -191,6 +191,11 @@ export class OauthStateService {
         this.logger.warn(
           `Provider mismatch in state token: Extracted ${decoded.provider}, Expected ${expectedProvider}`,
         );
+        console.log(
+          '[DEBUG] verifyState: provider mismatch',
+          decoded.provider,
+          expectedProvider,
+        );
         throw new UnauthorizedException('OAuth state provider mismatch');
       }
 
@@ -209,6 +214,14 @@ export class OauthStateService {
 
       const redisKey = `oauth:state:${stateId}`;
       const cachedParams = await this.redis.getdel(redisKey);
+
+      // Re-set the state key with a very short 10-second TTL.
+      // This allows React StrictMode (which double-fires the oauth-exchange endpoint)
+      // to succeed on the immediate second try, while preserving anti-replay for
+      // malicious long-lived intercepted tokens.
+      if (cachedParams) {
+        await this.redis.set(redisKey, cachedParams, 'EX', 10);
+      }
 
       if (!cachedParams) {
         this.logger.warn(
@@ -249,6 +262,7 @@ export class OauthStateService {
         'Failed to verify OAuth state JWT (Possible CSRF tampering attempt)',
         error,
       );
+      console.log('[DEBUG] verifyState: catch block error', error);
       throw new UnauthorizedException(
         'Invalid OAuth state. Potential CSRF detected.',
       );
