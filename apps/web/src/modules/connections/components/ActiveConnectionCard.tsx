@@ -113,7 +113,7 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
             console.error('Failed to reconnect:', err);
             toast({
                 title: 'Reconnect failed',
-                description: 'Failed to fetch existing connection credentials.',
+                description: 'Could not reconnect to this provider. Please try again.',
                 variant: 'destructive',
             });
         } finally {

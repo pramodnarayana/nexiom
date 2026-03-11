@@ -22,5 +22,5 @@ export class CreateOAuthSession {
 
   @IsObject()
   @IsOptional()
-  vendorParams?: Record<string, string>;
+  vendorParams?: Record<string, string | boolean | number>;
 }

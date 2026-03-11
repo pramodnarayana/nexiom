@@ -67,7 +67,7 @@ function assertStaticDropdownValue(
 
 function assertPropValue(
   key: string,
-  val: string | undefined,
+  val: string | number | boolean | undefined,
   prop: AnyProperty,
 ): void {
   if (prop.required && (val === undefined || val === null || val === '')) {
@@ -77,24 +77,36 @@ function assertPropValue(
 
   if (
     typeof val !== 'string' &&
-    String(prop.type) !== 'CHECKBOX' &&
-    String(prop.type) !== 'NUMBER' &&
-    String(prop.type) !== 'STATIC_DROPDOWN'
+    typeof val !== 'number' &&
+    typeof val !== 'boolean'
   ) {
     throw new BadRequestException(
-      `Parameter ${key} must be a string, received ${typeof val}`,
+      `Parameter ${key} must be a primitive, received ${typeof val}`,
     );
   }
 
-  if (String(prop.type) === 'NUMBER' && Number.isNaN(Number(val))) {
+  if (
+    String(prop.type) === 'NUMBER' &&
+    typeof val !== 'number' &&
+    Number.isNaN(Number(val))
+  ) {
     throw new BadRequestException(`Parameter ${key} must be a number`);
   }
-  const BOOLEAN_VALUES = new Set(['true', 'false', '1', '0']);
+  const BOOLEAN_VALUES = new Set([
+    'true',
+    'false',
+    '1',
+    '0',
+    true,
+    false,
+    1,
+    0,
+  ]);
   if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
   if (String(prop.type) === 'STATIC_DROPDOWN') {
-    assertStaticDropdownValue(key, val, prop);
+    assertStaticDropdownValue(key, String(val), prop);
   }
 }
 
@@ -111,19 +123,19 @@ function parseConnectionCredentials(decrypted: string): {
     typeof parsed.clientSecret === 'string' ? parsed.clientSecret : '';
   const hasClientSecret = clientSecret.length > 0;
 
-  let rawVendorParams: Record<string, string> | undefined;
-  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
-    rawVendorParams = parsed.vendorParams;
+  let vendorParams: Record<string, string> | undefined;
+
+  if (parsed.environment) {
+    vendorParams = { environment: String(parsed.environment) };
   }
 
-  let vendorParams: Record<string, string> | undefined;
-  if (parsed.environment) {
-    vendorParams = rawVendorParams || {};
-    if (!vendorParams.environment) {
-      vendorParams.environment = String(parsed.environment);
+  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
+    vendorParams = vendorParams || {};
+    for (const [key, val] of Object.entries(parsed.vendorParams)) {
+      if (!vendorParams[key] && val !== undefined && val !== null) {
+        vendorParams[key] = String(val);
+      }
     }
-  } else {
-    vendorParams = rawVendorParams;
   }
 
   return { clientId, clientSecret, hasClientSecret, vendorParams };
@@ -142,38 +154,19 @@ function validateVendorParams(
         'No vendor parameters are allowed for this provider',
       );
     }
-    for (const [key, val] of Object.entries(params)) {
-      if (typeof val !== 'string') {
-        throw new BadRequestException(
-          `vendorParams.${key} must be a string, received ${typeof val}`,
-        );
-      }
-    }
     return;
   }
 
   // Reject keys not declared in the schema.
   const declaredKeys = new Set(Object.keys(schema));
-  for (const key of Object.keys(params)) {
+  for (const [key, val] of Object.entries(params)) {
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
         `Undeclared vendor parameter: "${key}" is not allowed`,
       );
     }
-  }
-
-  // Reject non-strings across the board before granular parsing.
-  for (const [key, val] of Object.entries(params)) {
-    if (typeof val !== 'string') {
-      throw new BadRequestException(
-        `vendorParams.${key} must be a string, received ${typeof val}`,
-      );
-    }
-  }
-
-  // Validate each declared field.
-  for (const [key, prop] of Object.entries(schema)) {
-    assertPropValue(key, params[key], prop);
+    // Validate each declared field using string assertions.
+    assertPropValue(key, val, schema[key]);
   }
 }
 
@@ -501,10 +494,18 @@ export class ConnectorsController {
     let validatedVendorParams: Record<string, string> = {};
     try {
       if (vendorParams) {
+        // Force stringify primitives mapped from the dynamic ConnectAppCard frontend
+        const stringifiedParams: Record<string, string> = {};
+        for (const [key, val] of Object.entries(vendorParams)) {
+          if (val !== undefined && val !== null) {
+            stringifiedParams[key] = String(val);
+          }
+        }
+
         const auth = providerDef.auth;
         const authProps = auth && 'props' in auth ? auth.props : undefined;
-        validateVendorParams(authProps, vendorParams);
-        validatedVendorParams = vendorParams;
+        validateVendorParams(authProps, stringifiedParams);
+        validatedVendorParams = stringifiedParams;
       }
     } catch (err) {
       if (err instanceof BadRequestException) {
@@ -763,9 +764,9 @@ export class ConnectorsController {
     }
 
     const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
-    const MathMin = Math.min;
     const MAX_EXPIRES_IN = 90 * 24 * 3600;
-    const expiresIn = MathMin(parsedExpiresIn, MAX_EXPIRES_IN);
+    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
+
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
     await this.persistConnection(

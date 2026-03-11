@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Blocks, Loader2 } from 'lucide-react';
+import { Blocks, Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
 import { ActiveConnectionCard } from '../components/ActiveConnectionCard';
 import { useConnections } from '../hooks/useConnections';
 import { listProviders, type ProviderResponse } from '../api/connections.api';
@@ -62,6 +63,16 @@ export function ActiveConnectionsPage() {
         <div className="space-y-8">
             <div className="flex items-center justify-between gap-4">
                 <h2 className="text-2xl font-bold tracking-tight">Active Connections</h2>
+                <Button
+                    id="refresh-active-connections-btn"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void refresh()}
+                    disabled={isLoading}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
             </div>
 
             <div className="relative">

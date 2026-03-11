@@ -44,20 +44,33 @@ export function ConnectAppCard({ provider, onConnect }: Readonly<ConnectAppCardP
         callbackUrl = `${apiUrl}/connect/callback`;
     }
 
+    const [connectError, setConnectError] = useState<string | null>(null);
+
+    const defaultFormValues = useMemo(() => ({
+        connectionName: provider.displayName,
+        clientId: '',
+        clientSecret: '',
+    }), [provider.displayName]);
+
     const handleDynamicConnect = async (data: {
         connectionName: string;
         clientId: string;
         clientSecret: string;
         vendorParams: VendorParams;
     }) => {
-        await onConnect({
-            providerName: provider.name,
-            clientId: data.clientId,
-            clientSecret: data.clientSecret,
-            displayName: data.connectionName,
-            vendorParams: data.vendorParams,
-        });
-        handleOpenChange(false);
+        setConnectError(null);
+        try {
+            await onConnect({
+                providerName: provider.name,
+                clientId: data.clientId,
+                clientSecret: data.clientSecret,
+                displayName: data.connectionName,
+                vendorParams: data.vendorParams,
+            });
+            handleOpenChange(false);
+        } catch (error: unknown) {
+            setConnectError(error instanceof Error ? error.message : 'Failed to save connection details.');
+        }
     };
 
     return (
@@ -111,17 +124,16 @@ export function ConnectAppCard({ provider, onConnect }: Readonly<ConnectAppCardP
                                 Information is securely encrypted.
                             </DialogDescription>
                         </DialogHeader>
+                        {connectError && (
+                            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive border border-destructive/20 mt-2">
+                                {connectError}
+                            </div>
+                        )}
                         <DynamicAuthForm
                             provider={provider}
                             callbackUrl={callbackUrl}
                             isUpdate={false}
-                            defaultValues={useMemo(() => {
-                                return {
-                                    connectionName: provider.displayName,
-                                    clientId: '',
-                                    clientSecret: '',
-                                };
-                            }, [provider.displayName])}
+                            defaultValues={defaultFormValues}
                             onCancel={() => handleOpenChange(false)}
                             onSubmit={handleDynamicConnect}
                         />

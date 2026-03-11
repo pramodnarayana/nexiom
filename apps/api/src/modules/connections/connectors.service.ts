@@ -371,6 +371,7 @@ export class ConnectorsService {
           .select({
             id: appConnections.id,
             displayName: appConnections.displayName,
+            externalId: appConnections.externalId,
           })
           .from(appConnections)
           .where(
@@ -381,13 +382,23 @@ export class ConnectorsService {
           );
 
         // A conflict occurs if any existing connection shares the same internal/display name.
+        const toKebabSlug = (name: string) =>
+          name
+            .toLowerCase()
+            .trim()
+            .replaceAll(/[^a-z0-9]+/g, '-')
+            .replaceAll(/(^-+)|(-+$)/g, '');
+        const derivedExternalId = toKebabSlug(displayName);
+
         const conflict = existingConnections.find(
-          (c) => c.displayName.toLowerCase() === displayName.toLowerCase(),
+          (c) =>
+            c.displayName.toLowerCase() === displayName.toLowerCase() ||
+            c.externalId === derivedExternalId,
         );
 
         if (conflict) {
           throw new HttpException(
-            `A connection named "${displayName}" already exists. Please choose a unique name.`,
+            `A connection with the name "${displayName}" (or identifier "${derivedExternalId}") already exists. Please choose a unique name.`,
             409,
           );
         }

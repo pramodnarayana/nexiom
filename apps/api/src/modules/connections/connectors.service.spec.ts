@@ -477,54 +477,49 @@ describe('ConnectorsService', () => {
 
   describe('storeOAuthConnection', () => {
     it('should insert a single connection row on the happy path', async () => {
-      try {
-        // Mock the returning closure for Drizzle
-        mockDbInsert.mockReturnValueOnce({
-          values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
-          }),
-        });
-        // Mock the conflict check (no existing rows)
-        mockDb.where = vi.fn().mockReturnValue(
-          Object.assign(Promise.resolve([]), {
-            limit: vi.fn().mockResolvedValue([]),
-          }),
-        );
+      // Mock the returning closure for Drizzle
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
+        }),
+      });
+      // Mock the conflict check (no existing rows)
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
 
-        await service.storeOAuthConnection({
-          tenantId: 'tenant-123',
-          providerName: 'mock-piece',
-          externalId: 'mock-piece-tms',
-          displayName: 'TMS MockPiece',
-          authType: 'OAUTH2',
-          value: 'encrypted-value-blob',
-          expiresAt: new Date(),
-          metadata: { env: 'sandbox' },
-        });
+      await service.storeOAuthConnection({
+        tenantId: 'tenant-123',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
+        authType: 'OAUTH2',
+        value: 'encrypted-value-blob',
+        expiresAt: new Date(),
+        metadata: { env: 'sandbox' },
+      });
 
-        expect(mockDbInsert).toHaveBeenCalledTimes(2);
+      expect(mockDbInsert).toHaveBeenCalledTimes(2);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        const insertedValues = insertedCall.values.mock.calls[0]?.[0] as Record<
-          string,
-          unknown
-        >;
-        expect(insertedValues).toMatchObject({
-          tenantId: 'tenant-123',
-          appName: 'mock-piece',
-          externalId: 'mock-piece-tms',
-          displayName: 'TMS MockPiece',
-          authType: 'OAUTH2',
-          value: 'encrypted-value-blob',
-          metadata: { env: 'sandbox' },
-          status: 'ACTIVE',
-        });
-      } catch (err) {
-        console.error('TEST FAILURE: ', err);
-        throw err;
-      }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const insertedValues = insertedCall.values.mock.calls[0]?.[0] as Record<
+        string,
+        unknown
+      >;
+      expect(insertedValues).toMatchObject({
+        tenantId: 'tenant-123',
+        appName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
+        authType: 'OAUTH2',
+        value: 'encrypted-value-blob',
+        metadata: { env: 'sandbox' },
+        status: 'ACTIVE',
+      });
     });
 
     it('should update an existing connection explicitly using an ID', async () => {
