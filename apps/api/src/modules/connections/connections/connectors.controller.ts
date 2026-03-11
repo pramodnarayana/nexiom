@@ -718,10 +718,17 @@ export class ConnectorsController {
 
     // If we didn't acquire the lock, another request is already processing this code
     if (!acquired) {
-      this.logger.debug(
-        `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName} (won by another request)`,
-      );
-      return { success: true, message: 'Connection established (Idempotent)' };
+      const status = await this.redis.get(idempotencyKey);
+      if (status === 'completed') {
+        this.logger.debug(
+          `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName} (already completed)`,
+        );
+        return {
+          success: true,
+          message: 'Connection established (Idempotent)',
+        };
+      }
+      throw new HttpException('OAuth exchange already in progress', 409);
     }
 
     // Verify piece exists in registry

@@ -36,6 +36,19 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         }
     }, []);
 
+    const startCloseWatcher = useCallback(() => {
+        stopPoll();
+        pollRef.current = setInterval(() => {
+            if (popupRef.current?.closed) {
+                stopPoll();
+                if (!completedRef.current) {
+                    onCloseRef.current?.();
+                }
+                popupRef.current = null;
+            }
+        }, 500);
+    }, [stopPoll]);
+
     useEffect(() => {
         onSuccessRef.current = onSuccess;
         onErrorRef.current = onError;
@@ -101,15 +114,7 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
             }
 
             // Restart the close watcher for the reused window
-            pollRef.current = setInterval(() => {
-                if (popupRef.current?.closed) {
-                    stopPoll();
-                    if (!completedRef.current) {
-                        onCloseRef.current?.();
-                    }
-                    popupRef.current = null;
-                }
-            }, 500);
+            startCloseWatcher();
 
             return;
         }
@@ -130,16 +135,8 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         }
 
         // Poll every 500 ms to detect manual close (no postMessage fired)
-        pollRef.current = setInterval(() => {
-            if (popupRef.current?.closed) {
-                stopPoll();
-                if (!completedRef.current) {
-                    onCloseRef.current?.();
-                }
-                popupRef.current = null;
-            }
-        }, 500);
-    }, [stopPoll]);
+        startCloseWatcher();
+    }, [stopPoll, startCloseWatcher]);
 
     return { openPopup };
 }

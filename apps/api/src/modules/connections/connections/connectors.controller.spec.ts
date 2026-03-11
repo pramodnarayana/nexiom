@@ -11,6 +11,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   UnauthorizedException,
+  HttpException,
 } from '@nestjs/common';
 import {
   PieceRegistryService,
@@ -561,9 +562,10 @@ describe('ConnectorsController', () => {
       );
     });
 
-    it('should return immediately if the idempotency lock cannot be acquired (duplicate request)', async () => {
+    it('should return immediately if the idempotency lock cannot be acquired (already completed)', async () => {
       // Simulate another request having already acquired the lock (NX returns null/undefined)
       mockRedis.set.mockResolvedValue(null);
+      mockRedis.get.mockResolvedValue('completed');
 
       const result = await controller.exchangeCode(mockCtx, validBody);
 
@@ -580,6 +582,15 @@ describe('ConnectorsController', () => {
       ).not.toHaveBeenCalled();
       expect(mockEncryptionService.encrypt).not.toHaveBeenCalled();
       expect(mockConnectorsService.storeOAuthConnection).not.toHaveBeenCalled();
+    });
+
+    it('should throw 409 Conflict if the idempotency lock cannot be acquired (currently processing)', async () => {
+      mockRedis.set.mockResolvedValue(null);
+      mockRedis.get.mockResolvedValue('processing');
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        new HttpException('OAuth exchange already in progress', 409),
+      );
     });
   });
 });
