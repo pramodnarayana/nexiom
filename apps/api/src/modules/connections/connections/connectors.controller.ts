@@ -706,13 +706,20 @@ export class ConnectorsController {
     );
 
     // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
-    // If we've already successfully processed this exact (tenantId, code) pair recently,
-    // return a 200 OK immediately instead of failing verification.
+    // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
     const idempotencyKey = `oauth:idempotency:${tenantId}:${body.code}`;
-    const alreadyProcessed = await this.redis.get(idempotencyKey);
-    if (alreadyProcessed) {
+    const acquired = await this.redis.set(
+      idempotencyKey,
+      'processing',
+      'EX',
+      60,
+      'NX',
+    );
+
+    // If we didn't acquire the lock, another request is already processing this code
+    if (!acquired) {
       this.logger.debug(
-        `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName}`,
+        `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName} (won by another request)`,
       );
       return { success: true, message: 'Connection established (Idempotent)' };
     }
@@ -829,8 +836,15 @@ export class ConnectorsController {
       );
     }
 
-    // Mark as processed to prevent StrictMode duplicates from failing
-    await this.redis.set(idempotencyKey, 'true', 'EX', 60);
+    // Mark as fully processed to prevent StrictMode duplicates from failing.
+    // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
+    try {
+      await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
+    } catch (redisError) {
+      this.logger.warn(
+        `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
+      );
+    }
 
     this.logger.log(
       `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,

@@ -413,6 +413,8 @@ describe('ConnectorsController', () => {
     });
 
     it('should successfully exchange the code and store a single connection row', async () => {
+      // Simulate acquiring the idempotency lock
+      mockRedis.set.mockResolvedValue('OK');
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
       );
@@ -557,6 +559,27 @@ describe('ConnectorsController', () => {
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         InternalServerErrorException,
       );
+    });
+
+    it('should return immediately if the idempotency lock cannot be acquired (duplicate request)', async () => {
+      // Simulate another request having already acquired the lock (NX returns null/undefined)
+      mockRedis.set.mockResolvedValue(null);
+
+      const result = await controller.exchangeCode(mockCtx, validBody);
+
+      // Verify it returns the idempotent success message
+      expect(result).toEqual({
+        success: true,
+        message: 'Connection established (Idempotent)',
+      });
+
+      // Verify no downstream services were called
+      expect(mockOauthStateService.verifyState).not.toHaveBeenCalled();
+      expect(
+        mockConnectorsService.exchangeCodeForTokens,
+      ).not.toHaveBeenCalled();
+      expect(mockEncryptionService.encrypt).not.toHaveBeenCalled();
+      expect(mockConnectorsService.storeOAuthConnection).not.toHaveBeenCalled();
     });
   });
 });

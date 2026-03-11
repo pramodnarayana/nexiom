@@ -87,6 +87,10 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
     }, [stopPoll]);
 
     const openPopup = useCallback((connectUrl: string) => {
+        // Cancel any in-flight poll to prepare for fresh state
+        stopPoll();
+        completedRef.current = false;
+
         // If an existing popup is open...
         if (popupRef.current && !popupRef.current.closed) {
             // ...navigate it to the new URL if provided, otherwise just focus it
@@ -95,12 +99,20 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
             } else {
                 popupRef.current.focus();
             }
+
+            // Restart the close watcher for the reused window
+            pollRef.current = setInterval(() => {
+                if (popupRef.current?.closed) {
+                    stopPoll();
+                    if (!completedRef.current) {
+                        onCloseRef.current?.();
+                    }
+                    popupRef.current = null;
+                }
+            }, 500);
+
             return;
         }
-
-        // Cancel any in-flight poll since we are opening a fresh window
-        stopPoll();
-        completedRef.current = false;
 
         const width = 600;
         const height = 800;
