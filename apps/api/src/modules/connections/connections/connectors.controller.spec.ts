@@ -85,6 +85,7 @@ describe('ConnectorsController', () => {
     mockRedis = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn().mockResolvedValue('OK'),
+      del: vi.fn().mockResolvedValue(1),
       // Add other mocked methods if needed or use as unknown as Mocked<Redis>
     } as unknown as Mocked<Redis>;
 
@@ -590,6 +591,25 @@ describe('ConnectorsController', () => {
 
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
         new HttpException('OAuth exchange already in progress', 409),
+      );
+    });
+
+    it('should remove the idempotency marker if a downstream service throws an error', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
+      mockConnectorsService.exchangeCodeForTokens.mockRejectedValue(
+        new Error('Unexpected external API failure'),
+      );
+
+      await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        `oauth:idempotency:tenant-123:${validBody.code}`,
       );
     });
   });
