@@ -36,7 +36,7 @@ function useProviders() {
 }
 
 export function ConnectionsPage() {
-    const { connections, loading: connectionsLoading, refresh, connect } = useConnections();
+    const { loading: connectionsLoading, refresh, connect } = useConnections();
     const { providers, loading: providersLoading, error: providersError } = useProviders();
     const [search, setSearch] = useState('');
 
@@ -45,10 +45,7 @@ export function ConnectionsPage() {
         void refresh();
     }, [refresh]);
 
-    // Build a map: providerName → active connection
-    const connectionMap = useMemo(() =>
-        Object.fromEntries(connections.map((c) => [c.appName, c])),
-        [connections]);
+
 
     // Filter providers by search
     const filtered = useMemo(() =>
@@ -60,13 +57,12 @@ export function ConnectionsPage() {
         [providers, search]);
 
     const isLoading = providersLoading || connectionsLoading;
-    const activeCount = connections.filter((c) => c.status === 'ACTIVE').length;
 
     return (
         <div className="space-y-8">
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold tracking-tight">Connections</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Apps</h2>
                 <Button
                     id="refresh-connections-btn"
                     variant="outline"
@@ -92,12 +88,7 @@ export function ConnectionsPage() {
                 <Blocks className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             </div>
 
-            {/* Active connections count */}
-            {activeCount > 0 && (
-                <p className="text-sm text-muted-foreground">
-                    {activeCount} active {activeCount === 1 ? 'connection' : 'connections'}
-                </p>
-            )}
+
 
             {/* Provider grid */}
             {providersError && (
@@ -125,7 +116,6 @@ export function ConnectionsPage() {
                         <ConnectAppCard
                             key={provider.name}
                             provider={provider}
-                            connection={connectionMap[provider.name]}
                             onConnect={connect}
                         />
                     ))}

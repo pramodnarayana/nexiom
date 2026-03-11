@@ -93,6 +93,7 @@ export async function exchangeOAuthCode(payload: {
     clientSecret: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */
     displayName: string;
+    connectionId?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);
 }

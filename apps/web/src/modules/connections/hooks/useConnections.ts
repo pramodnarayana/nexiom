@@ -12,6 +12,8 @@ type PendingCredential = {
     displayName: string;
     /** All vendor-specific parameters, including secrets — kept in memory only. */
     vendorParams?: Record<string, string | boolean | number>;
+    /** Optional existing connection ID to explicitly overwrite */
+    id?: string;
 };
 
 export function useConnections() {
@@ -70,6 +72,7 @@ export function useConnections() {
                     clientId: pending.clientId,
                     clientSecret: pending.clientSecret,
                     displayName: pending.displayName,
+                    connectionId: pending.id,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
                 await refresh();
@@ -109,7 +112,7 @@ export function useConnections() {
     });
 
     const connect = useCallback(
-        async ({ providerName, clientId, clientSecret, displayName, vendorParams }: { providerName: string } & PendingCredential): Promise<void> => {
+        async ({ providerName, clientId, clientSecret, displayName, vendorParams, id }: { providerName: string } & PendingCredential): Promise<void> => {
             const apiUrl = import.meta.env.VITE_API_URL;
             if (!apiUrl) {
                 toast({ title: 'Configuration Error', description: 'Missing VITE_API_URL environment variable.', variant: 'destructive' });
@@ -124,7 +127,7 @@ export function useConnections() {
 
             try {
                 // Reserve the slot immediately so concurrent calls are blocked
-                pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams };
+                pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams, id };
 
                 // Synchronously open a placeholder popup before awaiting to prevent popup-blockers
                 // The openPopup hook/function now supports navigating an existing window.

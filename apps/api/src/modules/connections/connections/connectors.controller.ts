@@ -15,6 +15,7 @@ import {
   Param,
   ParseUUIDPipe,
   UnauthorizedException,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -35,6 +36,8 @@ import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { CreateOAuthSession } from '../validation/create-oauth-session.js';
+import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
 
 function assertStaticDropdownValue(
   key: string,
@@ -209,62 +212,6 @@ function toKebabSlug(displayName: string): string {
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 100;
-const MAX_EXTERNAL_ID_LENGTH = 100;
-
-/** Validates required fields of the oauth-exchange body. Returns derived `trimmedDisplayName` and `externalId`. */
-function validateExchangeBody(
-  providerName: unknown,
-  code: unknown,
-  clientId: unknown,
-  clientSecret: unknown,
-  state: unknown,
-  displayName: unknown,
-): { trimmedDisplayName: string; externalId: string } {
-  for (const [field, val] of [
-    ['providerName', providerName],
-    ['code', code],
-    ['clientId', clientId],
-    ['clientSecret', clientSecret],
-    ['state', state],
-  ] as [string, unknown][]) {
-    if (typeof val !== 'string' || !val) {
-      throw new BadRequestException(
-        typeof val === 'string'
-          ? 'Missing required fields inside body'
-          : `Field "${field}" must be a string`,
-      );
-    }
-  }
-  if (typeof displayName !== 'string') {
-    throw new BadRequestException('Field "displayName" must be a string');
-  }
-  const safeProviderName = providerName as string;
-  const safeDisplayName = displayName;
-  if (!VALID_PROVIDER_NAME_REGEX.test(safeProviderName)) {
-    throw new BadRequestException('Invalid provider name format');
-  }
-  const trimmedDisplayName = safeDisplayName.trim();
-  if (!trimmedDisplayName) {
-    throw new BadRequestException('displayName is required');
-  }
-  if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
-    throw new BadRequestException(
-      `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
-    );
-  }
-  const externalId = toKebabSlug(`${safeProviderName}-${trimmedDisplayName}`);
-  if (!externalId) {
-    throw new BadRequestException(
-      'displayName must contain at least one alphanumeric character',
-    );
-  }
-  if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
-    throw new BadRequestException(
-      `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
-    );
-  }
-  return { trimmedDisplayName, externalId };
-}
 
 @Controller('connectors')
 @UseGuards(AuthGuard)
@@ -527,37 +474,28 @@ export class ConnectorsController {
   async createOAuthSession(
     @AuthContext() ctx: RequestAuthContext,
     @Param('providerName') providerName: string,
-    @Body() body: { clientId: string; vendorParams?: Record<string, string> },
+    @Body(new ValidationPipe({ whitelist: true })) body: CreateOAuthSession,
   ) {
     const tenantId = ctx.user?.organizationId;
     const userId = ctx.user?.id;
-
-    if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
-      throw new BadRequestException('Invalid provider name format');
-    }
 
     if (!tenantId || !userId) {
       throw new BadRequestException('tenantId or userId context is missing');
     }
 
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-      throw new BadRequestException('Invalid request body');
+    const { clientId, vendorParams } = body;
+
+    // validate that the path parameter matches the body payload for consistency
+    if (providerName !== body.providerName) {
+      throw new BadRequestException(
+        'Path providerName must match body providerName',
+      );
     }
 
     const providerDef =
       this.connectorsService.getProviderDefinition(providerName);
     if (!providerDef) {
       throw new BadRequestException(`Unknown provider: ${providerName}`);
-    }
-
-    const { clientId, vendorParams } = body;
-
-    if (!clientId || clientId.trim().length === 0) {
-      throw new BadRequestException('clientId is required');
-    }
-
-    if (clientId.length > 512) {
-      throw new BadRequestException('clientId exceeds maximum allowed length');
     }
 
     let validatedVendorParams: Record<string, string> = {};
@@ -680,34 +618,28 @@ export class ConnectorsController {
   @Post('oauth-exchange')
   async exchangeCode(
     @AuthContext() ctx: RequestAuthContext,
-    @Body()
-    body: {
-      providerName: string;
-      code: string;
-      clientId: string;
-      clientSecret: string;
-      state: string;
-      /** User-provided human-readable name e.g. "TMS Salesforce" */
-      displayName: string;
-    },
+    @Body(new ValidationPipe({ whitelist: true })) body: ExchangeOAuthCode,
   ) {
     const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { trimmedDisplayName, externalId } = validateExchangeBody(
-      body.providerName,
-      body.code,
-      body.clientId,
-      body.clientSecret,
-      body.state,
-      body.displayName,
-    );
+    const trimmedDisplayName = body.displayName.trim();
+    if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+      throw new BadRequestException(
+        `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`,
+      );
+    }
+    const externalId = toKebabSlug(trimmedDisplayName);
 
     // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
     // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
-    const idempotencyKey = `oauth:idempotency:${tenantId}:${body.code}`;
+    // Use the explicit connectionId if available to scope updates uniquely.
+    const idempotencySuffix = body.connectionId
+      ? `update:${body.connectionId}`
+      : `create:${body.code}`;
+    const idempotencyKey = `oauth:idempotency:${tenantId}:${idempotencySuffix}`;
     const acquired = await this.redis.set(
       idempotencyKey,
       'processing',
@@ -732,94 +664,13 @@ export class ConnectorsController {
     }
 
     try {
-      // Verify piece exists in registry
-      const piece = this.pieceRegistry.getPiece(body.providerName);
-      if (!piece) {
-        throw new NotFoundException(
-          `Provider "${body.providerName}" is not registered`,
-        );
-      }
-
-      const decodedState = await this.oauthStateService.verifyState(
-        body.state,
-        body.providerName,
-      );
-      if (decodedState.tenantId !== tenantId) {
-        throw new BadRequestException(
-          'State token does not belong to this tenant',
-        );
-      }
-
-      // Validate vendorParams against piece.auth.props schema
-      const authProps =
-        piece.auth && 'props' in piece.auth
-          ? (piece.auth.props as Record<string, AnyProperty>)
-          : undefined;
-      validateVendorParams(authProps, decodedState.vendorParams);
-
-      // Exchange the code for actual OAuth tokens
-      const tokenResponse = await this.executeTokenExchange(
-        body.providerName,
-        body.code,
-        body.clientId,
-        body.clientSecret,
-        decodedState.vendorParams ?? {},
-      );
-
-      if (
-        typeof tokenResponse.access_token !== 'string' ||
-        !tokenResponse.access_token.trim()
-      ) {
-        throw new BadRequestException(
-          'Invalid or missing access_token returned from vendor',
-        );
-      }
-
-      const validRefreshToken = extractRefreshToken(tokenResponse);
-
-      // Build the encrypted value blob.
-      // vendorParams are persisted inside the blob so the reconnect form
-      // can restore all uiSchema fields without additional database columns.
-      const valueBlob: ConnectionValueBlob = {
-        clientId: body.clientId,
-        clientSecret: body.clientSecret,
-        accessToken: tokenResponse.access_token,
-        refreshToken: validRefreshToken,
-        data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
-        vendorParams: decodedState.vendorParams ?? {},
-      };
-
-      let encryptedValue: string;
-      try {
-        encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
-      } catch (error) {
-        this.logger.error(`Encryption failed for ${body.providerName}`, error);
-        throw new InternalServerErrorException('Failed to encrypt credentials');
-      }
-
-      const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
-      const MAX_EXPIRES_IN = 90 * 24 * 3600;
-      const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-      await this.persistConnection(
+      await this.processOAuthExchange(
         tenantId,
-        body.providerName,
-        trimmedDisplayName,
         externalId,
-        encryptedValue,
-        expiresAt,
+        trimmedDisplayName,
+        body,
+        idempotencyKey,
       );
-
-      // Mark as fully processed to prevent StrictMode duplicates from failing.
-      // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
-      try {
-        await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
-      } catch (redisError) {
-        this.logger.warn(
-          `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
-        );
-      }
 
       this.logger.log(
         `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
@@ -836,6 +687,105 @@ export class ConnectorsController {
         );
       }
       throw processError; // Rethrow to let the standard NestJS exception filters handle it
+    }
+  }
+
+  private async processOAuthExchange(
+    tenantId: string,
+    externalId: string,
+    trimmedDisplayName: string,
+    body: ExchangeOAuthCode,
+    idempotencyKey: string,
+  ) {
+    // Verify piece exists in registry
+    const piece = this.pieceRegistry.getPiece(body.providerName);
+    if (!piece) {
+      throw new NotFoundException(
+        `Provider "${body.providerName}" is not registered`,
+      );
+    }
+
+    const decodedState = await this.oauthStateService.verifyState(
+      body.state,
+      body.providerName,
+    );
+    if (decodedState.tenantId !== tenantId) {
+      throw new BadRequestException(
+        'State token does not belong to this tenant',
+      );
+    }
+
+    // Validate vendorParams against piece.auth.props schema
+    const authProps =
+      piece.auth && 'props' in piece.auth
+        ? (piece.auth.props as Record<string, AnyProperty>)
+        : undefined;
+    validateVendorParams(authProps, decodedState.vendorParams);
+
+    // Exchange the code for actual OAuth tokens
+    const tokenResponse = await this.executeTokenExchange(
+      body.providerName,
+      body.code,
+      body.clientId,
+      body.clientSecret,
+      decodedState.vendorParams ?? {},
+    );
+
+    if (
+      typeof tokenResponse.access_token !== 'string' ||
+      !tokenResponse.access_token.trim()
+    ) {
+      throw new BadRequestException(
+        'Invalid or missing access_token returned from vendor',
+      );
+    }
+
+    const validRefreshToken = extractRefreshToken(tokenResponse);
+
+    // Build the encrypted value blob.
+    // vendorParams are persisted inside the blob so the reconnect form
+    // can restore all uiSchema fields without additional database columns.
+    const valueBlob: ConnectionValueBlob = {
+      clientId: body.clientId,
+      clientSecret: body.clientSecret,
+      accessToken: tokenResponse.access_token,
+      refreshToken: validRefreshToken,
+      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+      vendorParams: decodedState.vendorParams ?? {},
+    };
+
+    let encryptedValue: string;
+    try {
+      encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
+    } catch (error) {
+      this.logger.error(`Encryption failed for ${body.providerName}`, error);
+      throw new InternalServerErrorException('Failed to encrypt credentials');
+    }
+
+    const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
+    const MathMin = Math.min;
+    const MAX_EXPIRES_IN = 90 * 24 * 3600;
+    const expiresIn = MathMin(parsedExpiresIn, MAX_EXPIRES_IN);
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    await this.persistConnection(
+      tenantId,
+      body.providerName,
+      trimmedDisplayName,
+      externalId,
+      encryptedValue,
+      expiresAt,
+      body.connectionId,
+    );
+
+    // Mark as fully processed to prevent StrictMode duplicates from failing.
+    // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
+    try {
+      await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
+    } catch (redisError) {
+      this.logger.warn(
+        `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
+      );
     }
   }
 
@@ -873,9 +823,11 @@ export class ConnectorsController {
     externalId: string,
     encryptedValue: string,
     expiresAt: Date,
+    connectionId?: string,
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
+        id: connectionId,
         tenantId,
         providerName,
         externalId,

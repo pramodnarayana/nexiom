@@ -50,6 +50,7 @@ export interface ConnectionValueBlob {
 }
 
 export interface StoreOAuthConnectionOptions {
+  id?: string;
   tenantId: string;
   providerName: string;
   /** User-defined kebab slug e.g. "salesforce-tms" — unique per tenant */
@@ -298,10 +299,11 @@ export class ConnectorsService {
 
   /**
    * Persists an OAuth connection in a single upsert.
-   * Conflicts on (tenantId, externalId) — updating the same named connection
-   * refreshes its tokens and metadata (e.g. re-connect flow).
+   * If `id` is provided, explicit update is intended.
+   * If `id` is not provided, conflicts on `displayName` or `externalId` will throw a 409 Conflict.
    */
   async storeOAuthConnection({
+    id,
     tenantId,
     providerName,
     externalId,
@@ -331,19 +333,66 @@ export class ConnectorsService {
 
     try {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
-        // 1. Insert or update the business connection metadata
-        const existingAppConnection = await tx
-          .select({ id: appConnections.id })
+        // 1. Check if we're doing an explicit update via connectionId
+        if (id) {
+          const [updated] = await tx
+            .update(appConnections)
+            .set({
+              displayName,
+              externalId,
+              authType,
+              value,
+              expiresAt,
+              metadata,
+              status: AppConnectionStatus.ACTIVE,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(appConnections.id, id),
+                eq(appConnections.tenantId, tenantId),
+              ),
+            )
+            .returning({ id: appConnections.id });
+
+          if (!updated) {
+            throw new NotFoundException(`Connection with ID ${id} not found.`);
+          }
+          return {
+            connectionId: updated.id,
+            createdRegistry: false,
+            schemaName: '',
+            createdAppConnection: false,
+          };
+        }
+
+        // 2. We're creating a new connection. Check for naming conflicts.
+        const existingConnections = await tx
+          .select({
+            id: appConnections.id,
+            displayName: appConnections.displayName,
+          })
           .from(appConnections)
           .where(
             and(
               eq(appConnections.tenantId, tenantId),
-              eq(appConnections.externalId, externalId),
+              eq(appConnections.appName, providerName),
             ),
-          )
-          .limit(1);
-        const createdAppConnection = existingAppConnection.length === 0;
+          );
 
+        // A conflict occurs if any existing connection shares the same internal/display name.
+        const conflict = existingConnections.find(
+          (c) => c.displayName.toLowerCase() === displayName.toLowerCase(),
+        );
+
+        if (conflict) {
+          throw new HttpException(
+            `A connection named "${displayName}" already exists. Please choose a unique name.`,
+            409,
+          );
+        }
+
+        // 3. Create the net-new connection
         const [connection] = await tx
           .insert(appConnections)
           .values({
@@ -357,21 +406,10 @@ export class ConnectorsService {
             metadata,
             status: AppConnectionStatus.ACTIVE,
           })
-          .onConflictDoUpdate({
-            target: [appConnections.tenantId, appConnections.externalId],
-            set: {
-              authType,
-              value,
-              expiresAt,
-              metadata,
-              status: AppConnectionStatus.ACTIVE,
-              updatedAt: new Date(),
-            },
-          })
           .returning({ id: appConnections.id });
 
         if (!connection) {
-          throw new Error('Failed to retrieve connection ID after upsert');
+          throw new Error('Failed to retrieve connection ID after insert');
         }
 
         // 2. Provision the Infrastructure Router (Storage Registry)
@@ -407,12 +445,16 @@ export class ConnectorsService {
         return {
           schemaName,
           connectionId: connection.id,
-          createdAppConnection,
+          createdAppConnection: true,
           createdRegistry,
         };
       });
 
       // 3. Apply the initial schema plan outside the transaction
+      if (!workspaceProvisionInfo.schemaName) {
+        // If schemaName is empty, it means this was an explicit update and no new registry was created.
+        return;
+      }
       try {
         await this.dbManager.applyPlan(
           workspaceProvisionInfo.schemaName,

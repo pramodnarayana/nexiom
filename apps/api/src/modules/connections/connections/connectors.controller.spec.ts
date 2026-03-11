@@ -453,9 +453,10 @@ describe('ConnectorsController', () => {
         expect.stringMatching(/access-123/), // tokenResponse.access_token
       );
       expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith({
+        id: undefined,
         tenantId: 'tenant-123',
         providerName: 'mock-piece',
-        externalId: 'mock-piece-tms-mockpiece', // auto-generated kebab slug (namespaced)
+        externalId: 'tms-mockpiece', // auto-generated kebab slug (namespaced)
         displayName: 'TMS MockPiece',
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
@@ -464,30 +465,8 @@ describe('ConnectorsController', () => {
       });
     });
 
-    it('should throw BadRequestException for missing required body fields', async () => {
-      const invalidBody = { ...validBody, code: '' };
-      await expect(
-        controller.exchangeCode(mockCtx, invalidBody),
-      ).rejects.toThrow(
-        new BadRequestException('Missing required fields inside body'),
-      );
-    });
-
-    it('should throw BadRequestException if displayName is missing', async () => {
-      const invalidBody = { ...validBody, displayName: '' };
-      await expect(
-        controller.exchangeCode(mockCtx, invalidBody),
-      ).rejects.toThrow(new BadRequestException('displayName is required'));
-    });
-
-    it('should throw BadRequestException if provider name format is invalid', async () => {
-      const invalidBody = { ...validBody, providerName: 'Invalid Name!' };
-      await expect(
-        controller.exchangeCode(mockCtx, invalidBody),
-      ).rejects.toThrow(
-        new BadRequestException('Invalid provider name format'),
-      );
-    });
+    // Note: DTO validation (ValidationPipe) tests are typically handled in e2e tests
+    // because ValidationPipe executes at the framework level before hitting the controller.
 
     it('should throw BadRequestException if provider is not registered', async () => {
       mockPieceRegistry.getPiece.mockReturnValue(undefined);
@@ -609,7 +588,7 @@ describe('ConnectorsController', () => {
       );
 
       expect(mockRedis.del).toHaveBeenCalledWith(
-        `oauth:idempotency:tenant-123:${validBody.code}`,
+        `oauth:idempotency:tenant-123:create:${validBody.code}`,
       );
     });
   });
