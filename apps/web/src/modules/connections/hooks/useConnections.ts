@@ -127,10 +127,7 @@ export function useConnections() {
                 pendingCredentials.current = { clientId, clientSecret, displayName, vendorParams };
 
                 // Synchronously open a placeholder popup before awaiting to prevent popup-blockers
-                // The openPopup hook/function must be capable of receiving an empty string or 'about:blank'
-                // and returning a reference, or allowing us to set its location later.
-                // Assuming openPopup handles the window manipulation based on the URL being empty/placeholder,
-                // we set it to empty initially.
+                // The openPopup hook/function now supports navigating an existing window.
                 openPopup('');
 
                 // Pre-flight session: securely persist all vendor parameters (including secrets/environments)

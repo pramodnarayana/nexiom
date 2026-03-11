@@ -191,6 +191,9 @@ export class OauthStateService {
         this.logger.warn(
           `Provider mismatch in state token: Extracted ${decoded.provider}, Expected ${expectedProvider}`,
         );
+        this.logger.debug(
+          `verifyState: provider mismatch - decoded: ${decoded.provider}, expected: ${expectedProvider}`,
+        );
         throw new UnauthorizedException('OAuth state provider mismatch');
       }
 
@@ -249,6 +252,7 @@ export class OauthStateService {
         'Failed to verify OAuth state JWT (Possible CSRF tampering attempt)',
         error,
       );
+      this.logger.debug('verifyState: catch block error', error);
       throw new UnauthorizedException(
         'Invalid OAuth state. Potential CSRF detected.',
       );

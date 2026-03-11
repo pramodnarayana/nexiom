@@ -36,6 +36,19 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         }
     }, []);
 
+    const startCloseWatcher = useCallback(() => {
+        stopPoll();
+        pollRef.current = setInterval(() => {
+            if (popupRef.current?.closed) {
+                stopPoll();
+                if (!completedRef.current) {
+                    onCloseRef.current?.();
+                }
+                popupRef.current = null;
+            }
+        }, 500);
+    }, [stopPoll]);
+
     useEffect(() => {
         onSuccessRef.current = onSuccess;
         onErrorRef.current = onError;
@@ -87,13 +100,24 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
     }, [stopPoll]);
 
     const openPopup = useCallback((connectUrl: string) => {
-        // Close stale popup and cancel any in-flight poll
+        // Cancel any in-flight poll to prepare for fresh state
         stopPoll();
-        if (popupRef.current && !popupRef.current.closed) {
-            popupRef.current.close();
-        }
-
         completedRef.current = false;
+
+        // If an existing popup is open...
+        if (popupRef.current && !popupRef.current.closed) {
+            // ...navigate it to the new URL if provided, otherwise just focus it
+            if (connectUrl) {
+                popupRef.current.location.href = connectUrl;
+            } else {
+                popupRef.current.focus();
+            }
+
+            // Restart the close watcher for the reused window
+            startCloseWatcher();
+
+            return;
+        }
 
         const width = 600;
         const height = 800;
@@ -111,16 +135,8 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         }
 
         // Poll every 500 ms to detect manual close (no postMessage fired)
-        pollRef.current = setInterval(() => {
-            if (popupRef.current?.closed) {
-                stopPoll();
-                if (!completedRef.current) {
-                    onCloseRef.current?.();
-                }
-                popupRef.current = null;
-            }
-        }, 500);
-    }, [stopPoll]);
+        startCloseWatcher();
+    }, [stopPoll, startCloseWatcher]);
 
     return { openPopup };
 }

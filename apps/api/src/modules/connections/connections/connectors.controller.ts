@@ -34,6 +34,7 @@ import {
 import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
+import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 
 function assertStaticDropdownValue(
   key: string,
@@ -204,7 +205,7 @@ function toKebabSlug(displayName: string): string {
     .toLowerCase()
     .trim()
     .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-+|-+$/g, '');
+    .replaceAll(/(^-+)|(-+$)/g, '');
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 100;
@@ -276,6 +277,7 @@ export class ConnectorsController {
     private readonly connectorsService: ConnectorsService,
     private readonly oauthStateService: OauthStateService,
     private readonly crypto: EncryptionService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -703,40 +705,154 @@ export class ConnectorsController {
       body.displayName,
     );
 
-    // Verify piece exists in registry
-    const piece = this.pieceRegistry.getPiece(body.providerName);
-    if (!piece) {
-      throw new NotFoundException(
-        `Provider "${body.providerName}" is not registered`,
-      );
-    }
-
-    const decodedState = await this.oauthStateService.verifyState(
-      body.state,
-      body.providerName,
+    // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
+    // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
+    const idempotencyKey = `oauth:idempotency:${tenantId}:${body.code}`;
+    const acquired = await this.redis.set(
+      idempotencyKey,
+      'processing',
+      'EX',
+      60,
+      'NX',
     );
-    if (decodedState.tenantId !== tenantId) {
-      throw new BadRequestException(
-        'State token does not belong to this tenant',
-      );
+
+    // If we didn't acquire the lock, another request is already processing this code
+    if (!acquired) {
+      const status = await this.redis.get(idempotencyKey);
+      if (status === 'completed') {
+        this.logger.debug(
+          `Idempotency catch: Ignoring duplicate oauth-exchange request for ${body.providerName} (already completed)`,
+        );
+        return {
+          success: true,
+          message: 'Connection established (Idempotent)',
+        };
+      }
+      throw new HttpException('OAuth exchange already in progress', 409);
     }
 
-    // Validate vendorParams against piece.auth.props schema
-    const authProps =
-      piece.auth && 'props' in piece.auth
-        ? (piece.auth.props as Record<string, AnyProperty>)
-        : undefined;
-    validateVendorParams(authProps, decodedState.vendorParams);
-
-    // Exchange the code for actual OAuth tokens
-    let tokenResponse: Record<string, unknown>;
     try {
-      tokenResponse = await this.connectorsService.exchangeCodeForTokens(
+      // Verify piece exists in registry
+      const piece = this.pieceRegistry.getPiece(body.providerName);
+      if (!piece) {
+        throw new NotFoundException(
+          `Provider "${body.providerName}" is not registered`,
+        );
+      }
+
+      const decodedState = await this.oauthStateService.verifyState(
+        body.state,
+        body.providerName,
+      );
+      if (decodedState.tenantId !== tenantId) {
+        throw new BadRequestException(
+          'State token does not belong to this tenant',
+        );
+      }
+
+      // Validate vendorParams against piece.auth.props schema
+      const authProps =
+        piece.auth && 'props' in piece.auth
+          ? (piece.auth.props as Record<string, AnyProperty>)
+          : undefined;
+      validateVendorParams(authProps, decodedState.vendorParams);
+
+      // Exchange the code for actual OAuth tokens
+      const tokenResponse = await this.executeTokenExchange(
         body.providerName,
         body.code,
         body.clientId,
         body.clientSecret,
         decodedState.vendorParams ?? {},
+      );
+
+      if (
+        typeof tokenResponse.access_token !== 'string' ||
+        !tokenResponse.access_token.trim()
+      ) {
+        throw new BadRequestException(
+          'Invalid or missing access_token returned from vendor',
+        );
+      }
+
+      const validRefreshToken = extractRefreshToken(tokenResponse);
+
+      // Build the encrypted value blob.
+      // vendorParams are persisted inside the blob so the reconnect form
+      // can restore all uiSchema fields without additional database columns.
+      const valueBlob: ConnectionValueBlob = {
+        clientId: body.clientId,
+        clientSecret: body.clientSecret,
+        accessToken: tokenResponse.access_token,
+        refreshToken: validRefreshToken,
+        data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+        vendorParams: decodedState.vendorParams ?? {},
+      };
+
+      let encryptedValue: string;
+      try {
+        encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
+      } catch (error) {
+        this.logger.error(`Encryption failed for ${body.providerName}`, error);
+        throw new InternalServerErrorException('Failed to encrypt credentials');
+      }
+
+      const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
+      const MAX_EXPIRES_IN = 90 * 24 * 3600;
+      const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
+      const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+      await this.persistConnection(
+        tenantId,
+        body.providerName,
+        trimmedDisplayName,
+        externalId,
+        encryptedValue,
+        expiresAt,
+      );
+
+      // Mark as fully processed to prevent StrictMode duplicates from failing.
+      // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
+      try {
+        await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
+      } catch (redisError) {
+        this.logger.warn(
+          `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
+        );
+      }
+
+      this.logger.log(
+        `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
+      );
+      return { success: true, message: 'Connection established' };
+    } catch (processError) {
+      // If any step of the exchange/provisioning fails, remove the idempotency
+      // "processing" lock so the user can immediately try again without waiting for the EX TTL.
+      try {
+        await this.redis.del(idempotencyKey);
+      } catch (redisError) {
+        this.logger.warn(
+          `Failed to release idempotency lock after connection failure for ${body.providerName}: ${(redisError as Error).message}`,
+        );
+      }
+      throw processError; // Rethrow to let the standard NestJS exception filters handle it
+    }
+  }
+
+  private async executeTokenExchange(
+    providerName: string,
+    code: string,
+    clientId: string,
+    clientSecret: string,
+    vendorParams: Record<string, string>,
+  ): Promise<Record<string, unknown>> {
+    try {
+      return await this.connectorsService.exchangeCodeForTokens(
+        providerName,
+        code,
+        clientId,
+        clientSecret,
+        vendorParams,
       );
     } catch (error) {
       if (
@@ -745,55 +861,25 @@ export class ConnectorsController {
       ) {
         throw error;
       }
-      this.logger.error(
-        `Token exchange failed for ${body.providerName}`,
-        error,
-      );
+      this.logger.error(`Token exchange failed for ${providerName}`, error);
       throw new InternalServerErrorException('Failed to exchange auth code');
     }
+  }
 
-    if (
-      typeof tokenResponse.access_token !== 'string' ||
-      !tokenResponse.access_token.trim()
-    ) {
-      throw new BadRequestException(
-        'Invalid or missing access_token returned from vendor',
-      );
-    }
-
-    const validRefreshToken = extractRefreshToken(tokenResponse);
-
-    // Build the encrypted value blob.
-    // vendorParams are persisted inside the blob so the reconnect form
-    // can restore all uiSchema fields without additional database columns.
-    const valueBlob: ConnectionValueBlob = {
-      clientId: body.clientId,
-      clientSecret: body.clientSecret,
-      accessToken: tokenResponse.access_token,
-      refreshToken: validRefreshToken,
-      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
-      vendorParams: decodedState.vendorParams ?? {},
-    };
-
-    let encryptedValue: string;
-    try {
-      encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
-    } catch (error) {
-      this.logger.error(`Encryption failed for ${body.providerName}`, error);
-      throw new InternalServerErrorException('Failed to encrypt credentials');
-    }
-
-    const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
-    const MAX_EXPIRES_IN = 90 * 24 * 3600;
-    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
+  private async persistConnection(
+    tenantId: string,
+    providerName: string,
+    displayName: string,
+    externalId: string,
+    encryptedValue: string,
+    expiresAt: Date,
+  ) {
     try {
       await this.connectorsService.storeOAuthConnection({
         tenantId,
-        providerName: body.providerName,
+        providerName,
         externalId,
-        displayName: trimmedDisplayName,
+        displayName,
         authType: 'OAUTH2',
         value: encryptedValue,
         expiresAt,
@@ -807,17 +893,12 @@ export class ConnectorsController {
         throw error;
       }
       this.logger.error(
-        `Failed to store connection "${trimmedDisplayName}" (${externalId}) for ${body.providerName}`,
+        `Failed to store connection "${displayName}" (${externalId}) for ${providerName}`,
         error,
       );
       throw new InternalServerErrorException(
         'Failed to save connection to database',
       );
     }
-
-    this.logger.log(
-      `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
-    );
-    return { success: true };
   }
 }
