@@ -54,18 +54,16 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
 /**
  * Fetches existing credentials for a connection to pre-fill the reconnect/update form.
  *
- * NOTE: For security reasons, the backend returns the actual `clientSecret`
- * ONLY to authenticated tenant owners/admins so they can edit it seamlessly.
+ * NOTE: clientSecret is intentionally never returned — the backend holds it
+ * server-side. `hasClientSecret` indicates whether one is stored.
  */
 export async function getConnectionCredentials(connectionId: string): Promise<{
     clientId: string;
-    clientSecret: string;
     hasClientSecret: boolean;
     vendorParams?: VendorParams;
 }> {
     const res = await apiClient.get<{
         clientId: string;
-        clientSecret: string;
         hasClientSecret: boolean;
         vendorParams?: VendorParams;
     }>(`/connectors/active/${connectionId}/credentials`);
@@ -90,9 +88,11 @@ export async function exchangeOAuthCode(payload: {
     state: string;
     vendorParams?: VendorParams;
     clientId: string;
-    clientSecret: string;
+    /** Optional — omit to use the server-persisted secret (reconnect/update without rotation) */
+    clientSecret?: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */
     displayName: string;
+    connectionId?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);
 }

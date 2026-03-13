@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
-import { LayoutDashboard, Users, Settings, Blocks } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Blocks, Plug2 } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { RESOURCES } from '@/shared/constants/resources';
 
@@ -17,6 +17,7 @@ import { TenantSettingsPage } from '../../modules/identity/pages/TenantSettingsP
 import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
 import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
 import { ConnectionsPage as MarketplacePage } from '../../modules/connections/pages/ConnectionsPage';
+import { ActiveConnectionsPage } from '../../modules/connections/pages/ActiveConnectionsPage';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -26,6 +27,7 @@ export function TenantRoutes() {
                 { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
                 { label: 'Users', href: '/dashboard/users', icon: Users },
                 { label: 'Marketplace', href: '/dashboard/marketplace', icon: Blocks },
+                { label: 'Active Connections', href: '/dashboard/active-connections', icon: Plug2 },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ]
         }
@@ -70,6 +72,7 @@ export function TenantRoutes() {
                             <Route path="settings" element={<TenantSettingsPage />} />
                             <Route path="profile" element={<UserProfilePage />} />
                             <Route path="marketplace" element={<MarketplacePage />} />
+                            <Route path="active-connections" element={<ActiveConnectionsPage />} />
                         </Route>
                     </Routes>
                 </Refine>

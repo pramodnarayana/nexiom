@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process';
 const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
   drizzleMocks: {
     insert: vi.fn(),
+    transaction: vi.fn(),
     query: {
       organization: {
         findFirst: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('pg', () => {
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
     insert: drizzleMocks.insert,
+    transaction: drizzleMocks.transaction,
     query: drizzleMocks.query,
   })),
 }));
@@ -96,6 +98,10 @@ describe('DatabaseManager', () => {
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);
+    drizzleMocks.transaction.mockImplementation(
+      async (cb: (tx: typeof drizzleMocks) => Promise<unknown>) =>
+        cb(drizzleMocks),
+    );
     drizzleMocks.query.organization.findFirst.mockResolvedValue(null);
   });
 

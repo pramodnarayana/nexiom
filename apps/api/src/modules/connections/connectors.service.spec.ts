@@ -10,6 +10,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import {
   vi,
@@ -27,33 +28,46 @@ describe('ConnectorsService', () => {
   let mockEncryptionService: Mocked<EncryptionService>;
   let mockDbInsert: ReturnType<typeof vi.fn>;
   let mockDbValues: ReturnType<typeof vi.fn>;
-  let mockDbOnConflictDoUpdate: ReturnType<typeof vi.fn>;
+  let mockDbUpdate: ReturnType<typeof vi.fn>;
   let mockDb: {
     select: ReturnType<typeof vi.fn>;
     from: ReturnType<typeof vi.fn>;
     where: ReturnType<typeof vi.fn>;
     limit: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     transaction: ReturnType<typeof vi.fn>;
     execute: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
-    mockDbOnConflictDoUpdate = vi.fn().mockReturnValue({
-      returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
-    });
-
     mockDbValues = vi.fn().mockReturnValue({
-      onConflictDoUpdate: mockDbOnConflictDoUpdate,
       onConflictDoNothing: vi.fn(), // for connectionStorageRegistry
     });
-    mockDbInsert = vi.fn().mockReturnValue({ values: mockDbValues });
+    mockDbUpdate = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-updated-id' }]),
+        }),
+      }),
+    });
+    mockDbInsert = vi.fn().mockReturnValue({
+      values: mockDbValues,
+      onConflictDoNothing: vi.fn(),
+    });
     mockDb = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      ),
       limit: vi.fn().mockResolvedValue([]),
+      update: mockDbUpdate,
       insert: mockDbInsert,
+      delete: vi.fn().mockReturnThis(),
       transaction: vi
         .fn()
         .mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -464,11 +478,19 @@ describe('ConnectorsService', () => {
   });
 
   describe('storeOAuthConnection', () => {
-    it('should upsert a single connection row on the happy path', async () => {
+    it('should insert a single connection row on the happy path', async () => {
       // Mock the returning closure for Drizzle
-      mockDbOnConflictDoUpdate.mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid-conn-id' }]),
+        }),
       });
+      // Mock the conflict check (no existing rows)
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
 
       await service.storeOAuthConnection({
         tenantId: 'tenant-123',
@@ -481,14 +503,15 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      // The transaction will hit the main mockDb context for both inserts
-      // appConnections and connectionStorageRegistry
       expect(mockDbInsert).toHaveBeenCalledTimes(2);
-      expect(mockDbValues).toHaveBeenCalledTimes(2);
-      expect(mockDbOnConflictDoUpdate).toHaveBeenCalled();
 
-      const insertedValues = vi.mocked(mockDbValues).mock
-        .calls[0]?.[0] as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const insertedValues = insertedCall.values.mock.calls[0]?.[0] as Record<
+        string,
+        unknown
+      >;
       expect(insertedValues).toMatchObject({
         tenantId: 'tenant-123',
         appName: 'mock-piece',
@@ -501,14 +524,161 @@ describe('ConnectorsService', () => {
       });
     });
 
-    it('should throw InternalServerErrorException and abort if appConnection insert fails', async () => {
-      mockDbInsert.mockReturnValue({
-        values: vi.fn().mockReturnValue({
-          onConflictDoUpdate: vi.fn().mockReturnValue({
-            returning: vi
-              .fn()
-              .mockRejectedValue(new Error('appConnection DB write failed')),
+    it('should update an existing connection explicitly using an ID', async () => {
+      await service.storeOAuthConnection({
+        id: 'mock-updated-id',
+        tenantId: 'tenant-123',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
+        authType: 'OAUTH2',
+        value: 'encrypted-value-blob',
+        expiresAt: new Date(),
+        metadata: { env: 'sandbox' },
+      });
+      expect(mockDb.update).toHaveBeenCalled();
+      expect(mockDbInsert).not.toHaveBeenCalled(); // No inserts, no registry creation
+    });
+    it('should throw HttpException 409 on displayName conflict when updating', async () => {
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique violation'), {
+                code: '23505',
+                constraint: 'tenant_app_display_name_lower_idx',
+              }),
+            ),
           }),
+        }),
+      });
+      await expect(
+        service.storeOAuthConnection({
+          id: 'mock-updated-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+    it('should throw HttpException 409 on externalId collision tenant-wide when updating', async () => {
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique violation'), {
+                code: '23505',
+                constraint: 'tenant_external_id_unique_idx',
+              }),
+            ),
+          }),
+        }),
+      });
+      await expect(
+        service.storeOAuthConnection({
+          id: 'mock-updated-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece Renamed',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+    it('should throw NotFoundException when the explicit update target does not exist', async () => {
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+      await expect(
+        service.storeOAuthConnection({
+          id: 'missing-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw HttpException 409 if a connection with the same displayName exists', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'tenant_app_display_name_lower_idx',
+            }),
+          ),
+        }),
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should throw HttpException 409 if externalId collision exists tenant-wide', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'tenant_external_id_unique_idx',
+            }),
+          ),
+        }),
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'tms-mockpiece',
+          displayName: 'TMS  MockPiece', // different display name, same externalId
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should throw InternalServerErrorException and abort if appConnection insert fails', async () => {
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi
+            .fn()
+            .mockRejectedValue(new Error('appConnection DB write failed')),
         }),
       });
 
@@ -527,14 +697,15 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw InternalServerErrorException and abort if connectionStorageRegistry insert fails', async () => {
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
       // Mock the appConnection insert succeeding:
       mockDbInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
-          onConflictDoUpdate: vi.fn().mockReturnValue({
-            returning: vi
-              .fn()
-              .mockResolvedValue([{ id: 'mock-connection-id' }]),
-          }),
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),
         }),
       });
 
@@ -562,14 +733,15 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw InternalServerErrorException and abort if DB manager applyPlan fails', async () => {
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
       // Mock appConnection insert succeeding:
       mockDbInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
-          onConflictDoUpdate: vi.fn().mockReturnValue({
-            returning: vi
-              .fn()
-              .mockResolvedValue([{ id: 'mock-connection-id' }]),
-          }),
+          returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),
         }),
       });
 

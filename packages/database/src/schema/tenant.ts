@@ -1,4 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organization } from './identity.js';
 
 // Auth type enum — matches Activepieces' AppConnectionType pattern
@@ -63,4 +64,6 @@ export const appConnections = pgTable('app_connection', {
     index('tenant_status_idx').on(table.tenantId, table.status),
     // One named connection per tenant — the externalId is the unique discriminator
     uniqueIndex('tenant_external_id_unique_idx').on(table.tenantId, table.externalId),
+    // Ensure displayNames are unique per provider per tenant, ignoring case
+    uniqueIndex('tenant_app_display_name_lower_idx').on(table.tenantId, table.appName, sql`lower(${table.displayName})`),
 ]);

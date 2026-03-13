@@ -1,0 +1,139 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Blocks, Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import { ActiveConnectionCard } from '../components/ActiveConnectionCard';
+import { useConnections } from '../hooks/useConnections';
+import { listProviders, type ProviderResponse } from '../api/connections.api';
+
+function useProviders() {
+    const [providers, setProviders] = useState<ProviderResponse[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchProviders = useCallback(async (signal?: AbortSignal) => {
+        setLoading(true);
+        try {
+            const data = await listProviders();
+            if (signal?.aborted) return;
+            setProviders(data);
+            setError(null);
+        } catch (e: unknown) {
+            if (signal?.aborted) return;
+            console.error(e);
+            setError(e instanceof Error ? e.message : 'Failed to load integrations.');
+        } finally {
+            if (!signal?.aborted) setLoading(false);
+        }
+    }, []);
+    useEffect(() => {
+        const controller = new AbortController();
+        void fetchProviders(controller.signal);
+        return () => controller.abort();
+    }, [fetchProviders]);
+    return { providers, loading, error, refreshProviders: () => void fetchProviders() };
+}
+
+export function ActiveConnectionsPage() {
+    const { connections, loading: connectionsLoading, refresh } = useConnections();
+    const { providers, loading: providersLoading, error: providersError, refreshProviders } = useProviders();
+    const [search, setSearch] = useState('');
+    const didFetchRef = useRef(false);
+
+    useEffect(() => {
+        if (!didFetchRef.current) {
+            didFetchRef.current = true;
+            void refresh();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleRefreshAll = () => {
+        refreshProviders();
+        void refresh();
+    };
+
+    const activeConnections = useMemo(() => {
+        return connections.filter(
+            (c) =>
+                c.displayName.toLowerCase().includes(search.toLowerCase()) ||
+                c.appName.toLowerCase().includes(search.toLowerCase())
+        );
+    }, [connections, search]);
+
+    // O(1) provider lookup — avoids O(n×m) providers.find() in the render loop.
+    const providerMap = useMemo(
+        () => new Map(providers.map((p) => [p.name, p])),
+        [providers],
+    );
+
+    const isLoadingConnections = connectionsLoading;
+    const isRefreshing = providersLoading || connectionsLoading;
+
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-bold tracking-tight">Active Connections</h2>
+                <Button
+                    id="refresh-active-connections-btn"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshAll}
+                    disabled={isRefreshing}
+                >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
+            </div>
+
+            <div className="relative">
+                <input
+                    id="connection-search"
+                    aria-label="Search active connections"
+                    type="text"
+                    placeholder="Search active connections..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-2 pl-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <Blocks aria-hidden="true" className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            </div>
+
+            {providersError && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+                    <p className="font-semibold">Unable to load integrations</p>
+                    <p>{providersError}</p>
+                </div>
+            )}
+
+            {isLoadingConnections && (
+                <div className="flex items-center justify-center py-24">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            )}
+
+            {!isLoadingConnections && activeConnections.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                    <Blocks aria-hidden="true" className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="text-muted-foreground">
+                        {search ? `No connections matching "${search}"` : "You don't have any active connections yet."}
+                    </p>
+                </div>
+            )}
+
+            {!isLoadingConnections && activeConnections.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {activeConnections.map((conn) => {
+                        const provider = providerMap.get(conn.appName);
+                        return (
+                            <ActiveConnectionCard
+                                key={conn.id}
+                                connection={conn}
+                                provider={provider}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}

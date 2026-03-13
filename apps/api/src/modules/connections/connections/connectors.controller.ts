@@ -15,6 +15,7 @@ import {
   Param,
   ParseUUIDPipe,
   UnauthorizedException,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -35,6 +36,8 @@ import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { CreateOAuthSession } from '../validation/create-oauth-session.js';
+import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
 
 function assertStaticDropdownValue(
   key: string,
@@ -64,7 +67,7 @@ function assertStaticDropdownValue(
 
 function assertPropValue(
   key: string,
-  val: string | undefined,
+  val: string | number | boolean | undefined,
   prop: AnyProperty,
 ): void {
   if (prop.required && (val === undefined || val === null || val === '')) {
@@ -74,24 +77,36 @@ function assertPropValue(
 
   if (
     typeof val !== 'string' &&
-    String(prop.type) !== 'CHECKBOX' &&
-    String(prop.type) !== 'NUMBER' &&
-    String(prop.type) !== 'STATIC_DROPDOWN'
+    typeof val !== 'number' &&
+    typeof val !== 'boolean'
   ) {
     throw new BadRequestException(
-      `Parameter ${key} must be a string, received ${typeof val}`,
+      `Parameter ${key} must be a primitive, received ${typeof val}`,
     );
   }
 
-  if (String(prop.type) === 'NUMBER' && Number.isNaN(Number(val))) {
+  if (
+    String(prop.type) === 'NUMBER' &&
+    typeof val !== 'number' &&
+    Number.isNaN(Number(val))
+  ) {
     throw new BadRequestException(`Parameter ${key} must be a number`);
   }
-  const BOOLEAN_VALUES = new Set(['true', 'false', '1', '0']);
+  const BOOLEAN_VALUES = new Set([
+    'true',
+    'false',
+    '1',
+    '0',
+    true,
+    false,
+    1,
+    0,
+  ]);
   if (String(prop.type) === 'CHECKBOX' && !BOOLEAN_VALUES.has(val)) {
     throw new BadRequestException(`Parameter ${key} must be a boolean`);
   }
   if (String(prop.type) === 'STATIC_DROPDOWN') {
-    assertStaticDropdownValue(key, val, prop);
+    assertStaticDropdownValue(key, String(val), prop);
   }
 }
 
@@ -108,19 +123,19 @@ function parseConnectionCredentials(decrypted: string): {
     typeof parsed.clientSecret === 'string' ? parsed.clientSecret : '';
   const hasClientSecret = clientSecret.length > 0;
 
-  let rawVendorParams: Record<string, string> | undefined;
-  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
-    rawVendorParams = parsed.vendorParams;
+  let vendorParams: Record<string, string> | undefined;
+
+  if (parsed.environment !== undefined && parsed.environment !== null) {
+    vendorParams = { environment: String(parsed.environment) };
   }
 
-  let vendorParams: Record<string, string> | undefined;
-  if (parsed.environment) {
-    vendorParams = rawVendorParams || {};
-    if (!vendorParams.environment) {
-      vendorParams.environment = String(parsed.environment);
+  if (parsed.vendorParams && Object.keys(parsed.vendorParams).length > 0) {
+    vendorParams = vendorParams || {};
+    for (const [key, val] of Object.entries(parsed.vendorParams)) {
+      if (!vendorParams[key] && val !== undefined && val !== null) {
+        vendorParams[key] = String(val);
+      }
     }
-  } else {
-    vendorParams = rawVendorParams;
   }
 
   return { clientId, clientSecret, hasClientSecret, vendorParams };
@@ -139,38 +154,32 @@ function validateVendorParams(
         'No vendor parameters are allowed for this provider',
       );
     }
-    for (const [key, val] of Object.entries(params)) {
-      if (typeof val !== 'string') {
-        throw new BadRequestException(
-          `vendorParams.${key} must be a string, received ${typeof val}`,
-        );
-      }
-    }
     return;
   }
 
-  // Reject keys not declared in the schema.
+  // Check for any schema keys with required=true that are missing from params.
   const declaredKeys = new Set(Object.keys(schema));
-  for (const key of Object.keys(params)) {
+  const missingKeys: string[] = [];
+  for (const [key, prop] of Object.entries(schema)) {
+    if (prop.required && !(key in params)) {
+      missingKeys.push(key);
+    }
+  }
+  if (missingKeys.length > 0) {
+    throw new BadRequestException(
+      `Missing required vendor parameters: ${missingKeys.join(', ')}`,
+    );
+  }
+
+  // Reject keys not declared in the schema.
+  for (const [key, val] of Object.entries(params)) {
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
         `Undeclared vendor parameter: "${key}" is not allowed`,
       );
     }
-  }
-
-  // Reject non-strings across the board before granular parsing.
-  for (const [key, val] of Object.entries(params)) {
-    if (typeof val !== 'string') {
-      throw new BadRequestException(
-        `vendorParams.${key} must be a string, received ${typeof val}`,
-      );
-    }
-  }
-
-  // Validate each declared field.
-  for (const [key, prop] of Object.entries(schema)) {
-    assertPropValue(key, params[key], prop);
+    // Validate each declared field using string assertions.
+    assertPropValue(key, val, schema[key]);
   }
 }
 
@@ -199,72 +208,21 @@ function extractRefreshToken(
   return rt;
 }
 
-/** Converts a human-readable display name to a URL-safe kebab slug used as externalId */
-function toKebabSlug(displayName: string): string {
-  return displayName
+import { randomBytes } from 'crypto';
+
+/** Converts a human-readable display name to an enterprise-safe URL slug used as externalId */
+function toKebabSlug(providerName: string, displayName: string): string {
+  const baseSlug = displayName
     .toLowerCase()
     .trim()
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/(^-+)|(-+$)/g, '');
+
+  const uniqueSuffix = randomBytes(2).toString('hex'); // 4 characters
+  return `${providerName}-${baseSlug}-${uniqueSuffix}`;
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 100;
-const MAX_EXTERNAL_ID_LENGTH = 100;
-
-/** Validates required fields of the oauth-exchange body. Returns derived `trimmedDisplayName` and `externalId`. */
-function validateExchangeBody(
-  providerName: unknown,
-  code: unknown,
-  clientId: unknown,
-  clientSecret: unknown,
-  state: unknown,
-  displayName: unknown,
-): { trimmedDisplayName: string; externalId: string } {
-  for (const [field, val] of [
-    ['providerName', providerName],
-    ['code', code],
-    ['clientId', clientId],
-    ['clientSecret', clientSecret],
-    ['state', state],
-  ] as [string, unknown][]) {
-    if (typeof val !== 'string' || !val) {
-      throw new BadRequestException(
-        typeof val === 'string'
-          ? 'Missing required fields inside body'
-          : `Field "${field}" must be a string`,
-      );
-    }
-  }
-  if (typeof displayName !== 'string') {
-    throw new BadRequestException('Field "displayName" must be a string');
-  }
-  const safeProviderName = providerName as string;
-  const safeDisplayName = displayName;
-  if (!VALID_PROVIDER_NAME_REGEX.test(safeProviderName)) {
-    throw new BadRequestException('Invalid provider name format');
-  }
-  const trimmedDisplayName = safeDisplayName.trim();
-  if (!trimmedDisplayName) {
-    throw new BadRequestException('displayName is required');
-  }
-  if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
-    throw new BadRequestException(
-      `displayName exceeds maximum length of ${MAX_DISPLAY_NAME_LENGTH} characters`,
-    );
-  }
-  const externalId = toKebabSlug(`${safeProviderName}-${trimmedDisplayName}`);
-  if (!externalId) {
-    throw new BadRequestException(
-      'displayName must contain at least one alphanumeric character',
-    );
-  }
-  if (externalId.length > MAX_EXTERNAL_ID_LENGTH) {
-    throw new BadRequestException(
-      `Auto-generated externalId exceeds maximum length of ${MAX_EXTERNAL_ID_LENGTH} characters`,
-    );
-  }
-  return { trimmedDisplayName, externalId };
-}
 
 @Controller('connectors')
 @UseGuards(AuthGuard)
@@ -482,41 +440,82 @@ export class ConnectorsController {
       throw new NotFoundException('Connection not found');
     }
 
-    let clientId = '';
-    let clientSecret = '';
-    let hasClientSecret = false;
-    let vendorParams: Record<string, string> | undefined;
-
     if (connection.value) {
-      try {
-        const decrypted = await this.crypto.decrypt(connection.value);
-        const creds = parseConnectionCredentials(decrypted);
+      const creds = await this.decryptConnectionValue(
+        connection.id,
+        connection.value,
+        ctx.user?.id,
+        tenantId,
+      );
+      return creds;
+    }
 
-        clientId = creds.clientId;
-        clientSecret = creds.clientSecret;
-        hasClientSecret = creds.hasClientSecret;
-        vendorParams = creds.vendorParams;
+    return {
+      clientId: '',
+      hasClientSecret: false,
+      vendorParams: undefined,
+    };
+  }
 
-        this.logger.log({
-          message: `Credentials accessed for connection ${connection.id}`,
-          action: 'ACCESS_CREDENTIALS',
-          userId: ctx.user?.id,
-          tenantId,
-          connectionId: connection.id,
-          timestamp: new Date().toISOString(),
-        });
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        this.logger.error(
-          `Failed to decrypt credentials for connection ${connection.id}: ${errMsg}`,
-        );
-        throw new InternalServerErrorException(
-          'Failed to decrypt connection credentials',
-        );
+  private resolveVendorParams(
+    providerDef: ReturnType<ConnectorsService['getProviderDefinition']>,
+    rawParams: Record<string, string | number | boolean> | undefined,
+  ): Record<string, string> {
+    if (!rawParams) return {};
+
+    const stringified: Record<string, string> = {};
+    for (const [key, val] of Object.entries(rawParams)) {
+      if (val !== undefined && val !== null) {
+        stringified[key] = String(val);
       }
     }
 
-    return { clientId, clientSecret, hasClientSecret, vendorParams };
+    try {
+      const auth = providerDef?.auth;
+      const authProps = auth && 'props' in auth ? auth.props : undefined;
+      validateVendorParams(authProps, stringified);
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        'vendorParams failed provider schema validation',
+      );
+    }
+
+    return stringified;
+  }
+
+  private async decryptConnectionValue(
+    connectionId: string,
+    encryptedValue: string,
+    userId: string | undefined,
+    tenantId: string,
+  ): Promise<{
+    clientId: string;
+    hasClientSecret: boolean;
+    vendorParams?: Record<string, string>;
+  }> {
+    try {
+      const decrypted = await this.crypto.decrypt(encryptedValue);
+      const { clientSecret: _clientSecret, ...creds } =
+        parseConnectionCredentials(decrypted);
+      this.logger.log({
+        message: `Credentials accessed for connection ${connectionId}`,
+        action: 'ACCESS_CREDENTIALS',
+        userId,
+        tenantId,
+        connectionId,
+        timestamp: new Date().toISOString(),
+      });
+      return creds;
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(
+        `Failed to decrypt credentials for connection ${connectionId}: ${errMsg}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to decrypt connection credentials',
+      );
+    }
   }
 
   /**
@@ -527,21 +526,22 @@ export class ConnectorsController {
   async createOAuthSession(
     @AuthContext() ctx: RequestAuthContext,
     @Param('providerName') providerName: string,
-    @Body() body: { clientId: string; vendorParams?: Record<string, string> },
+    @Body(new ValidationPipe({ whitelist: true })) body: CreateOAuthSession,
   ) {
     const tenantId = ctx.user?.organizationId;
     const userId = ctx.user?.id;
-
-    if (!providerName || !VALID_PROVIDER_NAME_REGEX.test(providerName)) {
-      throw new BadRequestException('Invalid provider name format');
-    }
 
     if (!tenantId || !userId) {
       throw new BadRequestException('tenantId or userId context is missing');
     }
 
-    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-      throw new BadRequestException('Invalid request body');
+    const { clientId, vendorParams } = body;
+
+    // validate that the path parameter matches the body payload for consistency
+    if (providerName !== body.providerName) {
+      throw new BadRequestException(
+        'Path providerName must match body providerName',
+      );
     }
 
     const providerDef =
@@ -550,32 +550,10 @@ export class ConnectorsController {
       throw new BadRequestException(`Unknown provider: ${providerName}`);
     }
 
-    const { clientId, vendorParams } = body;
-
-    if (!clientId || clientId.trim().length === 0) {
-      throw new BadRequestException('clientId is required');
-    }
-
-    if (clientId.length > 512) {
-      throw new BadRequestException('clientId exceeds maximum allowed length');
-    }
-
-    let validatedVendorParams: Record<string, string> = {};
-    try {
-      if (vendorParams) {
-        const auth = providerDef.auth;
-        const authProps = auth && 'props' in auth ? auth.props : undefined;
-        validateVendorParams(authProps, vendorParams);
-        validatedVendorParams = vendorParams;
-      }
-    } catch (err) {
-      if (err instanceof BadRequestException) {
-        throw err;
-      }
-      throw new BadRequestException(
-        'vendorParams failed provider schema validation',
-      );
-    }
+    const validatedVendorParams = this.resolveVendorParams(
+      providerDef,
+      vendorParams,
+    );
 
     const sessionId = await this.oauthStateService.createPreFlightSession(
       tenantId,
@@ -680,34 +658,69 @@ export class ConnectorsController {
   @Post('oauth-exchange')
   async exchangeCode(
     @AuthContext() ctx: RequestAuthContext,
-    @Body()
-    body: {
-      providerName: string;
-      code: string;
-      clientId: string;
-      clientSecret: string;
-      state: string;
-      /** User-provided human-readable name e.g. "TMS Salesforce" */
-      displayName: string;
-    },
+    @Body(new ValidationPipe({ whitelist: true })) body: ExchangeOAuthCode,
   ) {
+    this.logger.debug(
+      `oauth-exchange body received for provider: ${body.providerName}, connectionId: ${body.connectionId || 'none'}, displayName: ${body.displayName}`,
+    );
+
     const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
       throw new BadRequestException('tenantId context is missing');
     }
 
-    const { trimmedDisplayName, externalId } = validateExchangeBody(
-      body.providerName,
-      body.code,
-      body.clientId,
-      body.clientSecret,
-      body.state,
-      body.displayName,
-    );
+    const trimmedDisplayName = body.displayName.trim();
+    if (trimmedDisplayName.length === 0) {
+      throw new BadRequestException('displayName cannot be blank');
+    }
+    if (trimmedDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+      throw new BadRequestException(
+        `displayName exceeds ${MAX_DISPLAY_NAME_LENGTH} characters`,
+      );
+    }
+    let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
+    if (body.connectionId) {
+      try {
+        const [existing] = await this.db
+          .select({ externalId: appConnections.externalId })
+          .from(appConnections)
+          .where(
+            and(
+              eq(appConnections.id, body.connectionId),
+              eq(appConnections.tenantId, tenantId),
+              eq(appConnections.appName, body.providerName),
+            ),
+          );
+
+        if (!existing) {
+          throw new NotFoundException(
+            `Connection ${body.connectionId} not found for provider "${body.providerName}"`,
+          );
+        }
+
+        // Preserve the original unique slug to avoid falsely colliding with
+        // another provider's connection that shares the same displayName.
+        externalId = existing.externalId;
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          throw err;
+        }
+        this.logger.error(
+          `Could not find existing connection ${body.connectionId} to inherit externalId: ${(err as Error).message}`,
+        );
+        throw new BadRequestException(
+          'Database error verifying existing connection for reconnect',
+        );
+      }
+    }
 
     // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
     // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
-    const idempotencyKey = `oauth:idempotency:${tenantId}:${body.code}`;
+    // Use the explicit connectionId if available to scope updates uniquely.
+    const idempotencySuffix = body.connectionId
+      ? `update:${body.connectionId}:${body.code}`
+      : `create:${body.code}`;
+    const idempotencyKey = `oauth:idempotency:${tenantId}:${idempotencySuffix}`;
     const acquired = await this.redis.set(
       idempotencyKey,
       'processing',
@@ -732,100 +745,24 @@ export class ConnectorsController {
     }
 
     try {
-      // Verify piece exists in registry
-      const piece = this.pieceRegistry.getPiece(body.providerName);
-      if (!piece) {
-        throw new NotFoundException(
-          `Provider "${body.providerName}" is not registered`,
-        );
-      }
-
-      const decodedState = await this.oauthStateService.verifyState(
-        body.state,
-        body.providerName,
-      );
-      if (decodedState.tenantId !== tenantId) {
-        throw new BadRequestException(
-          'State token does not belong to this tenant',
-        );
-      }
-
-      // Validate vendorParams against piece.auth.props schema
-      const authProps =
-        piece.auth && 'props' in piece.auth
-          ? (piece.auth.props as Record<string, AnyProperty>)
-          : undefined;
-      validateVendorParams(authProps, decodedState.vendorParams);
-
-      // Exchange the code for actual OAuth tokens
-      const tokenResponse = await this.executeTokenExchange(
-        body.providerName,
-        body.code,
-        body.clientId,
-        body.clientSecret,
-        decodedState.vendorParams ?? {},
-      );
-
-      if (
-        typeof tokenResponse.access_token !== 'string' ||
-        !tokenResponse.access_token.trim()
-      ) {
-        throw new BadRequestException(
-          'Invalid or missing access_token returned from vendor',
-        );
-      }
-
-      const validRefreshToken = extractRefreshToken(tokenResponse);
-
-      // Build the encrypted value blob.
-      // vendorParams are persisted inside the blob so the reconnect form
-      // can restore all uiSchema fields without additional database columns.
-      const valueBlob: ConnectionValueBlob = {
-        clientId: body.clientId,
-        clientSecret: body.clientSecret,
-        accessToken: tokenResponse.access_token,
-        refreshToken: validRefreshToken,
-        data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
-        vendorParams: decodedState.vendorParams ?? {},
-      };
-
-      let encryptedValue: string;
-      try {
-        encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
-      } catch (error) {
-        this.logger.error(`Encryption failed for ${body.providerName}`, error);
-        throw new InternalServerErrorException('Failed to encrypt credentials');
-      }
-
-      const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
-      const MAX_EXPIRES_IN = 90 * 24 * 3600;
-      const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
-      const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-      await this.persistConnection(
+      await this.processOAuthExchange(
         tenantId,
-        body.providerName,
-        trimmedDisplayName,
         externalId,
-        encryptedValue,
-        expiresAt,
+        trimmedDisplayName,
+        body,
+        idempotencyKey,
       );
-
-      // Mark as fully processed to prevent StrictMode duplicates from failing.
-      // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
-      try {
-        await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
-      } catch (redisError) {
-        this.logger.warn(
-          `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
-        );
-      }
 
       this.logger.log(
         `[OAuth Exchange] Success: ${body.providerName} "${trimmedDisplayName}" (${externalId}) for tenant ${tenantId}`,
       );
       return { success: true, message: 'Connection established' };
     } catch (processError) {
+      this.logger.error(
+        'processOAuthExchange failed fundamentally:',
+        processError,
+      );
+
       // If any step of the exchange/provisioning fails, remove the idempotency
       // "processing" lock so the user can immediately try again without waiting for the EX TTL.
       try {
@@ -837,6 +774,196 @@ export class ConnectorsController {
       }
       throw processError; // Rethrow to let the standard NestJS exception filters handle it
     }
+  }
+
+  private async processOAuthExchange(
+    tenantId: string,
+    externalId: string,
+    trimmedDisplayName: string,
+    body: ExchangeOAuthCode,
+    idempotencyKey: string,
+  ) {
+    // Verify piece exists in registry
+    const piece = this.pieceRegistry.getPiece(body.providerName);
+    if (!piece) {
+      throw new NotFoundException(
+        `Provider "${body.providerName}" is not registered`,
+      );
+    }
+
+    const decodedState = await this.oauthStateService.verifyState(
+      body.state,
+      body.providerName,
+    );
+    if (decodedState.tenantId !== tenantId) {
+      throw new BadRequestException(
+        'State token does not belong to this tenant',
+      );
+    }
+
+    // Validate vendorParams against piece.auth.props schema
+    const authProps =
+      piece.auth && 'props' in piece.auth
+        ? (piece.auth.props as Record<string, AnyProperty>)
+        : undefined;
+    validateVendorParams(authProps, decodedState.vendorParams);
+
+    // For reconnect flows, clientSecret may not be provided (browser never received it).
+    // If connectionId is present, resolve the stored credentials server-side.
+    const { effectiveClientId, effectiveClientSecret } =
+      await this.resolveCredentialsForExchange(
+        tenantId,
+        body.clientId,
+        body.clientSecret,
+        body.connectionId,
+      );
+
+    // Exchange the code for actual OAuth tokens
+    const tokenResponse = await this.executeTokenExchange(
+      body.providerName,
+      body.code,
+      effectiveClientId,
+      effectiveClientSecret,
+      decodedState.vendorParams ?? {},
+    );
+
+    if (
+      typeof tokenResponse.access_token !== 'string' ||
+      !tokenResponse.access_token.trim()
+    ) {
+      throw new BadRequestException(
+        'Invalid or missing access_token returned from vendor',
+      );
+    }
+
+    const validRefreshToken = extractRefreshToken(tokenResponse);
+
+    // Build the encrypted value blob.
+    // vendorParams are persisted inside the blob so the reconnect form
+    // can restore all uiSchema fields without additional database columns.
+    const valueBlob: ConnectionValueBlob = {
+      clientId: effectiveClientId,
+      clientSecret: effectiveClientSecret,
+      accessToken: tokenResponse.access_token,
+      refreshToken: validRefreshToken,
+      data: tokenResponse, // vendor-specific: instance_url, realmId, id_token, etc.
+      vendorParams: decodedState.vendorParams ?? {},
+    };
+
+    let encryptedValue: string;
+    try {
+      encryptedValue = await this.crypto.encrypt(JSON.stringify(valueBlob));
+    } catch (error) {
+      this.logger.error(`Encryption failed for ${body.providerName}`, error);
+      throw new InternalServerErrorException('Failed to encrypt credentials');
+    }
+
+    const parsedExpiresIn = parseExpiresIn(tokenResponse.expires_in);
+    const MAX_EXPIRES_IN = 90 * 24 * 3600;
+    const expiresIn = Math.min(parsedExpiresIn, MAX_EXPIRES_IN);
+
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    await this.persistConnection(
+      tenantId,
+      body.providerName,
+      trimmedDisplayName,
+      externalId,
+      encryptedValue,
+      expiresAt,
+      body.connectionId,
+    );
+
+    // Mark as fully processed to prevent StrictMode duplicates from failing.
+    // Wrap in try/catch so a Redis failure here doesn't turn a successful connection into a 500 error.
+    try {
+      await this.redis.set(idempotencyKey, 'completed', 'EX', 60);
+    } catch (redisError) {
+      this.logger.warn(
+        `Failed to update idempotency cache for connection "${trimmedDisplayName}" (${externalId}): ${(redisError as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * For reconnect flows where the browser does not send `clientSecret`,
+   * resolve the effective credentials from the stored (encrypted) connection.
+   * Falls back to the request values when no stored connection is needed or found.
+   */
+  private async resolveCredentialsForExchange(
+    tenantId: string,
+    requestClientId: string | undefined,
+    requestClientSecret: string | undefined,
+    connectionId: string | undefined,
+  ): Promise<{ effectiveClientId: string; effectiveClientSecret: string }> {
+    // If a new secret was explicitly supplied, use it as-is.
+    if (requestClientSecret) {
+      return {
+        effectiveClientId: requestClientId ?? '',
+        effectiveClientSecret: requestClientSecret,
+      };
+    }
+
+    // No secret from the browser — resolve the stored credential from the connectionId.
+    if (connectionId) {
+      let row: { value: string } | undefined;
+      try {
+        const [existing] = await this.db
+          .select({ value: appConnections.value })
+          .from(appConnections)
+          .where(
+            and(
+              eq(appConnections.id, connectionId),
+              eq(appConnections.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+        row = existing;
+      } catch (err) {
+        this.logger.error(
+          `resolveCredentialsForExchange: DB error for ${connectionId}: ${(err as Error).message}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to load stored credentials for reconnect',
+        );
+      }
+
+      if (!row?.value) {
+        throw new NotFoundException(
+          `Stored credentials not found for connection ${connectionId}`,
+        );
+      }
+
+      let stored: ReturnType<typeof parseConnectionCredentials>;
+      try {
+        const decrypted = await this.crypto.decrypt(row.value);
+        stored = parseConnectionCredentials(decrypted);
+      } catch (err) {
+        this.logger.error(
+          `resolveCredentialsForExchange: failed to decrypt/parse for ${connectionId}: ${(err as Error).message}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to decrypt stored credentials for reconnect',
+        );
+      }
+
+      if (!stored.clientSecret) {
+        throw new BadRequestException(
+          `No stored client secret found for connection ${connectionId}. Please provide a new client secret.`,
+        );
+      }
+
+      return {
+        effectiveClientId: requestClientId || stored.clientId,
+        effectiveClientSecret: stored.clientSecret,
+      };
+    }
+
+    // No connectionId and no secret — pass through whatever was provided (may fail at token exchange).
+    return {
+      effectiveClientId: requestClientId ?? '',
+      effectiveClientSecret: requestClientSecret ?? '',
+    };
   }
 
   private async executeTokenExchange(
@@ -873,9 +1000,11 @@ export class ConnectorsController {
     externalId: string,
     encryptedValue: string,
     expiresAt: Date,
+    connectionId?: string,
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
+        id: connectionId,
         tenantId,
         providerName,
         externalId,

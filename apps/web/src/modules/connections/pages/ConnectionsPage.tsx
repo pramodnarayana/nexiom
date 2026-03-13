@@ -32,23 +32,15 @@ function useProviders() {
         void load();
     }, [load]);
 
-    return { providers, loading, error };
+    return { providers, loading, error, refreshProviders: load };
 }
 
 export function ConnectionsPage() {
-    const { connections, loading: connectionsLoading, refresh, connect } = useConnections();
-    const { providers, loading: providersLoading, error: providersError } = useProviders();
+    const { connect } = useConnections();
+    const { providers, loading: providersLoading, error: providersError, refreshProviders } = useProviders();
     const [search, setSearch] = useState('');
 
-    // Load active connections on mount
-    useEffect(() => {
-        void refresh();
-    }, [refresh]);
 
-    // Build a map: providerName → active connection
-    const connectionMap = useMemo(() =>
-        Object.fromEntries(connections.map((c) => [c.appName, c])),
-        [connections]);
 
     // Filter providers by search
     const filtered = useMemo(() =>
@@ -59,22 +51,21 @@ export function ConnectionsPage() {
         ),
         [providers, search]);
 
-    const isLoading = providersLoading || connectionsLoading;
-    const activeCount = connections.filter((c) => c.status === 'ACTIVE').length;
+    const isLoading = providersLoading;
 
     return (
         <div className="space-y-8">
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold tracking-tight">Connections</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Marketplace</h2>
                 <Button
                     id="refresh-connections-btn"
                     variant="outline"
                     size="sm"
-                    onClick={() => void refresh()}
-                    disabled={connectionsLoading}
+                    onClick={() => void refreshProviders()}
+                    disabled={isLoading}
                 >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${connectionsLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
             </div>
@@ -92,12 +83,7 @@ export function ConnectionsPage() {
                 <Blocks className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             </div>
 
-            {/* Active connections count */}
-            {activeCount > 0 && (
-                <p className="text-sm text-muted-foreground">
-                    {activeCount} active {activeCount === 1 ? 'connection' : 'connections'}
-                </p>
-            )}
+
 
             {/* Provider grid */}
             {providersError && (
@@ -125,7 +111,6 @@ export function ConnectionsPage() {
                         <ConnectAppCard
                             key={provider.name}
                             provider={provider}
-                            connection={connectionMap[provider.name]}
                             onConnect={connect}
                         />
                     ))}

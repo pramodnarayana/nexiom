@@ -29,6 +29,20 @@ import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
 
+interface PgError {
+  code: string;
+  constraint?: string;
+}
+
+function isPgError(err: unknown): err is PgError {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    typeof (err as Record<string, unknown>).code === 'string'
+  );
+}
+
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
   clientId: string;
@@ -50,6 +64,7 @@ export interface ConnectionValueBlob {
 }
 
 export interface StoreOAuthConnectionOptions {
+  id?: string;
   tenantId: string;
   providerName: string;
   /** User-defined kebab slug e.g. "salesforce-tms" — unique per tenant */
@@ -297,11 +312,12 @@ export class ConnectorsService {
   }
 
   /**
-   * Persists an OAuth connection in a single upsert.
-   * Conflicts on (tenantId, externalId) — updating the same named connection
-   * refreshes its tokens and metadata (e.g. re-connect flow).
+   * Persists an OAuth connection.
+   * If `id` is provided, explicit update is intended (may throw 404 if not found).
+   * If `id` is not provided, conflicts on `displayName` or `externalId` will throw a 409 Conflict.
    */
   async storeOAuthConnection({
+    id,
     tenantId,
     providerName,
     externalId,
@@ -331,47 +347,96 @@ export class ConnectorsService {
 
     try {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
-        // 1. Insert or update the business connection metadata
-        const existingAppConnection = await tx
-          .select({ id: appConnections.id })
-          .from(appConnections)
-          .where(
-            and(
-              eq(appConnections.tenantId, tenantId),
-              eq(appConnections.externalId, externalId),
-            ),
-          )
-          .limit(1);
-        const createdAppConnection = existingAppConnection.length === 0;
+        // 1. Check if we're doing an explicit update via connectionId
+        if (id) {
+          let updated;
+          try {
+            [updated] = await tx
+              .update(appConnections)
+              .set({
+                displayName,
+                externalId,
+                authType,
+                value,
+                expiresAt,
+                metadata,
+                status: AppConnectionStatus.ACTIVE,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(appConnections.id, id),
+                  eq(appConnections.tenantId, tenantId),
+                  eq(appConnections.appName, providerName),
+                ),
+              )
+              .returning({ id: appConnections.id });
+          } catch (err: unknown) {
+            if (isPgError(err) && err.code === '23505') {
+              if (err.constraint === 'tenant_app_display_name_lower_idx') {
+                throw new HttpException(
+                  `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+                  409,
+                );
+              }
+              if (err.constraint === 'tenant_external_id_unique_idx') {
+                throw new HttpException(
+                  `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+                  409,
+                );
+              }
+            }
+            throw err;
+          }
 
-        const [connection] = await tx
-          .insert(appConnections)
-          .values({
-            tenantId,
-            appName: providerName,
-            externalId,
-            displayName,
-            authType,
-            value,
-            expiresAt,
-            metadata,
-            status: AppConnectionStatus.ACTIVE,
-          })
-          .onConflictDoUpdate({
-            target: [appConnections.tenantId, appConnections.externalId],
-            set: {
+          if (!updated) {
+            throw new NotFoundException(`Connection with ID ${id} not found.`);
+          }
+          return {
+            connectionId: updated.id,
+            createdRegistry: false,
+            schemaName: '',
+            createdAppConnection: false,
+          };
+        }
+
+        // 2. Create the net-new connection
+        let connection;
+        try {
+          [connection] = await tx
+            .insert(appConnections)
+            .values({
+              tenantId,
+              appName: providerName,
+              externalId,
+              displayName,
               authType,
               value,
               expiresAt,
               metadata,
               status: AppConnectionStatus.ACTIVE,
-              updatedAt: new Date(),
-            },
-          })
-          .returning({ id: appConnections.id });
+            })
+            .returning({ id: appConnections.id });
+        } catch (err: unknown) {
+          if (isPgError(err) && err.code === '23505') {
+            if (err.constraint === 'tenant_app_display_name_lower_idx') {
+              throw new HttpException(
+                `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+                409,
+              );
+            }
+            if (err.constraint === 'tenant_external_id_unique_idx') {
+              throw new HttpException(
+                `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+                409,
+              );
+            }
+          }
+          throw err;
+        }
 
         if (!connection) {
-          throw new Error('Failed to retrieve connection ID after upsert');
+          throw new Error('Failed to retrieve connection ID after insert');
         }
 
         // 2. Provision the Infrastructure Router (Storage Registry)
@@ -407,12 +472,16 @@ export class ConnectorsService {
         return {
           schemaName,
           connectionId: connection.id,
-          createdAppConnection,
+          createdAppConnection: true,
           createdRegistry,
         };
       });
 
       // 3. Apply the initial schema plan outside the transaction
+      if (!workspaceProvisionInfo.schemaName) {
+        // If schemaName is empty, it means this was an explicit update and no new registry was created.
+        return;
+      }
       try {
         await this.dbManager.applyPlan(
           workspaceProvisionInfo.schemaName,
