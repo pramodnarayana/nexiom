@@ -133,7 +133,7 @@ export function ActiveConnectionsPage() {
                 </div>
             )}
 
-            {!providersError && !isLoadingConnections && activeConnections.length === 0 && (
+            {!isLoadingConnections && activeConnections.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
                     <Blocks className="h-12 w-12 text-muted-foreground/50" />
                     <p className="text-muted-foreground">
@@ -142,7 +142,7 @@ export function ActiveConnectionsPage() {
                 </div>
             )}
 
-            {!providersError && !isLoadingConnections && activeConnections.length > 0 && (
+            {!isLoadingConnections && activeConnections.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {activeConnections.map((conn) => {
                         const provider = providerMap.get(conn.appName);

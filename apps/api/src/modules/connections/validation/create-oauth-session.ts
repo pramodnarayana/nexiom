@@ -1,12 +1,8 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsObject,
-  IsOptional,
-  Matches,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, Matches } from 'class-validator';
 
 import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
+
+import { IsVendorConfig } from './vendor-config.validator.js';
 
 export class CreateOAuthSession {
   @IsString()
@@ -21,7 +17,7 @@ export class CreateOAuthSession {
   @IsOptional()
   clientId?: string;
 
-  @IsObject()
+  @IsVendorConfig()
   @IsOptional()
   vendorParams?: Record<string, string | boolean | number>;
 }

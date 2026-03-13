@@ -127,7 +127,10 @@ export function ConnectAppCard({ provider, onConnect }: Readonly<ConnectAppCardP
                             </DialogDescription>
                         </DialogHeader>
                         {connectError && (
-                            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive border border-destructive/20 mt-2">
+                            <div
+                                aria-live="assertive"
+                                className="rounded-md bg-destructive/15 p-3 text-sm text-destructive border border-destructive/20 mt-2"
+                            >
                                 {connectError}
                             </div>
                         )}

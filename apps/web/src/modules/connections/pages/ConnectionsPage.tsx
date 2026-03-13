@@ -36,14 +36,9 @@ function useProviders() {
 }
 
 export function ConnectionsPage() {
-    const { loading: connectionsLoading, refresh, connect } = useConnections();
+    const { connect } = useConnections();
     const { providers, loading: providersLoading, error: providersError } = useProviders();
     const [search, setSearch] = useState('');
-
-    // Load active connections on mount
-    useEffect(() => {
-        void refresh();
-    }, [refresh]);
 
 
 
@@ -56,21 +51,21 @@ export function ConnectionsPage() {
         ),
         [providers, search]);
 
-    const isLoading = providersLoading || connectionsLoading;
+    const isLoading = providersLoading;
 
     return (
         <div className="space-y-8">
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold tracking-tight">Apps</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Marketplace</h2>
                 <Button
                     id="refresh-connections-btn"
                     variant="outline"
                     size="sm"
-                    onClick={() => void refresh()}
-                    disabled={connectionsLoading}
+                    onClick={() => void window.location.reload()}
+                    disabled={isLoading}
                 >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${connectionsLoading ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
             </div>

@@ -17,6 +17,7 @@ export default defineConfig({
     test: {
         globals: true,
         fileParallelism: true,
+        pool: 'forks',
         environment: './src/test/environments/jsdom-msw.ts',
         setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
         exclude: ['e2e/**', 'node_modules/**'],

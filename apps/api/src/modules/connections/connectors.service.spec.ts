@@ -36,6 +36,7 @@ describe('ConnectorsService', () => {
     limit: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     insert: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     transaction: ReturnType<typeof vi.fn>;
     execute: ReturnType<typeof vi.fn>;
   };
@@ -66,6 +67,7 @@ describe('ConnectorsService', () => {
       limit: vi.fn().mockResolvedValue([]),
       update: mockDbUpdate,
       insert: mockDbInsert,
+      delete: vi.fn().mockReturnThis(),
       transaction: vi
         .fn()
         .mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -540,22 +542,18 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw HttpException 409 on displayName conflict when updating', async () => {
-      // 1st where call: sameProviderConns — a different connection has the same display name
-      mockDb.where = vi
-        .fn()
-        .mockReturnValueOnce(
-          Object.assign(
-            Promise.resolve([
-              { id: 'another-id', displayName: 'TMS MockPiece' },
-            ]),
-            { limit: vi.fn().mockResolvedValue([]) },
-          ),
-        )
-        .mockReturnValueOnce(
-          Object.assign(Promise.resolve([]), {
-            limit: vi.fn().mockResolvedValue([]),
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique violation'), {
+                code: '23505',
+                constraint: 'tenant_app_display_name_lower_idx',
+              }),
+            ),
           }),
-        );
+        }),
+      });
 
       await expect(
         service.storeOAuthConnection({
@@ -573,23 +571,18 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw HttpException 409 on externalId collision tenant-wide when updating', async () => {
-      // 1st where call: sameProviderConns — no displayName conflict
-      mockDb.where = vi
-        .fn()
-        .mockReturnValueOnce(
-          Object.assign(Promise.resolve([]), {
-            limit: vi.fn().mockResolvedValue([]),
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockRejectedValue(
+              Object.assign(new Error('Unique violation'), {
+                code: '23505',
+                constraint: 'tenant_external_id_unique_idx',
+              }),
+            ),
           }),
-        )
-        // 2nd where call: tenantExtConns — a different connection holds the same externalId
-        .mockReturnValueOnce(
-          Object.assign(
-            Promise.resolve([
-              { id: 'another-id', externalId: 'mock-piece-tms' },
-            ]),
-            { limit: vi.fn().mockResolvedValue([]) },
-          ),
-        );
+        }),
+      });
 
       await expect(
         service.storeOAuthConnection({
@@ -607,23 +600,16 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw HttpException 409 if a connection with the same displayName exists', async () => {
-      // 1st where call: sameProviderConns (displayName check) returns a matching row
-      mockDb.where = vi
-        .fn()
-        .mockReturnValueOnce(
-          Object.assign(
-            Promise.resolve([
-              { id: 'another-id', displayName: 'TMS MockPiece' },
-            ]),
-            { limit: vi.fn().mockResolvedValue([]) },
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'tenant_app_display_name_lower_idx',
+            }),
           ),
-        )
-        // 2nd where call: tenantExtConns (externalId check) — not reached, but stub anyway
-        .mockReturnValueOnce(
-          Object.assign(Promise.resolve([]), {
-            limit: vi.fn().mockResolvedValue([]),
-          }),
-        );
+        }),
+      });
 
       await expect(
         service.storeOAuthConnection({
@@ -640,23 +626,16 @@ describe('ConnectorsService', () => {
     });
 
     it('should throw HttpException 409 if externalId collision exists tenant-wide', async () => {
-      // 1st where call: sameProviderConns (displayName check) returns empty — no name conflict
-      mockDb.where = vi
-        .fn()
-        .mockReturnValueOnce(
-          Object.assign(Promise.resolve([]), {
-            limit: vi.fn().mockResolvedValue([]),
-          }),
-        )
-        // 2nd where call: tenantExtConns (externalId check) returns a collision
-        .mockReturnValueOnce(
-          Object.assign(
-            Promise.resolve([
-              { id: 'another-id', externalId: 'tms-mockpiece' },
-            ]),
-            { limit: vi.fn().mockResolvedValue([]) },
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'tenant_external_id_unique_idx',
+            }),
           ),
-        );
+        }),
+      });
 
       await expect(
         service.storeOAuthConnection({

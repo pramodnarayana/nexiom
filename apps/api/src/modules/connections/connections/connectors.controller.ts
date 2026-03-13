@@ -157,8 +157,21 @@ function validateVendorParams(
     return;
   }
 
-  // Reject keys not declared in the schema.
+  // Check for any schema keys with required=true that are missing from params.
   const declaredKeys = new Set(Object.keys(schema));
+  const missingKeys: string[] = [];
+  for (const [key, prop] of Object.entries(schema)) {
+    if (prop.required && !(key in params)) {
+      missingKeys.push(key);
+    }
+  }
+  if (missingKeys.length > 0) {
+    throw new BadRequestException(
+      `Missing required vendor parameters: ${missingKeys.join(', ')}`,
+    );
+  }
+
+  // Reject keys not declared in the schema.
   for (const [key, val] of Object.entries(params)) {
     if (!declaredKeys.has(key)) {
       throw new BadRequestException(
@@ -647,7 +660,9 @@ export class ConnectorsController {
     @AuthContext() ctx: RequestAuthContext,
     @Body(new ValidationPipe({ whitelist: true })) body: ExchangeOAuthCode,
   ) {
-    this.logger.debug('oauth-exchange body received: ' + JSON.stringify(body));
+    this.logger.debug(
+      `oauth-exchange body received for provider: ${body.providerName}, connectionId: ${body.connectionId || 'none'}, displayName: ${body.displayName}`,
+    );
 
     const tenantId = ctx.user?.organizationId;
     if (!tenantId) {
@@ -682,8 +697,11 @@ export class ConnectorsController {
           externalId = existing.externalId;
         }
       } catch (err) {
-        this.logger.warn(
+        this.logger.error(
           `Could not find existing connection ${body.connectionId} to inherit externalId: ${(err as Error).message}`,
+        );
+        throw new BadRequestException(
+          'Database error verifying existing connection for reconnect',
         );
       }
     }

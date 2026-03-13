@@ -29,6 +29,20 @@ import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
 
+interface PgError {
+  code: string;
+  constraint?: string;
+}
+
+function isPgError(err: unknown): err is PgError {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    typeof (err as Record<string, unknown>).code === 'string'
+  );
+}
+
 /** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
 export interface ConnectionValueBlob {
   clientId: string;
@@ -298,8 +312,8 @@ export class ConnectorsService {
   }
 
   /**
-   * Persists an OAuth connection in a single upsert.
-   * If `id` is provided, explicit update is intended.
+   * Persists an OAuth connection.
+   * If `id` is provided, explicit update is intended (may throw 404 if not found).
    * If `id` is not provided, conflicts on `displayName` or `externalId` will throw a 409 Conflict.
    */
   async storeOAuthConnection({
@@ -335,71 +349,45 @@ export class ConnectorsService {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
         // 1. Check if we're doing an explicit update via connectionId
         if (id) {
-          // 1a. Check displayName conflicts scoped to this provider
-          const sameProviderConns = await tx
-            .select({
-              id: appConnections.id,
-              displayName: appConnections.displayName,
-            })
-            .from(appConnections)
-            .where(
-              and(
-                eq(appConnections.tenantId, tenantId),
-                eq(appConnections.appName, providerName),
-              ),
-            );
-
-          const displayConflict = sameProviderConns.find(
-            (c) =>
-              c.id !== id &&
-              c.displayName.toLowerCase() === displayName.toLowerCase(),
-          );
-          if (displayConflict) {
-            throw new HttpException(
-              `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-              409,
-            );
+          let updated;
+          try {
+            [updated] = await tx
+              .update(appConnections)
+              .set({
+                displayName,
+                externalId,
+                authType,
+                value,
+                expiresAt,
+                metadata,
+                status: AppConnectionStatus.ACTIVE,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(appConnections.id, id),
+                  eq(appConnections.tenantId, tenantId),
+                  eq(appConnections.appName, providerName),
+                ),
+              )
+              .returning({ id: appConnections.id });
+          } catch (err: unknown) {
+            if (isPgError(err) && err.code === '23505') {
+              if (err.constraint === 'tenant_app_display_name_lower_idx') {
+                throw new HttpException(
+                  `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+                  409,
+                );
+              }
+              if (err.constraint === 'tenant_external_id_unique_idx') {
+                throw new HttpException(
+                  `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+                  409,
+                );
+              }
+            }
+            throw err;
           }
-
-          // 1b. Check externalId conflicts tenant-wide (cross-provider uniqueness)
-          const tenantExtConns = await tx
-            .select({
-              id: appConnections.id,
-              externalId: appConnections.externalId,
-            })
-            .from(appConnections)
-            .where(eq(appConnections.tenantId, tenantId));
-
-          const extConflict = tenantExtConns.find(
-            (c) => c.id !== id && c.externalId === externalId,
-          );
-          if (extConflict) {
-            throw new HttpException(
-              `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-              409,
-            );
-          }
-
-          const [updated] = await tx
-            .update(appConnections)
-            .set({
-              displayName,
-              externalId,
-              authType,
-              value,
-              expiresAt,
-              metadata,
-              status: AppConnectionStatus.ACTIVE,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(appConnections.id, id),
-                eq(appConnections.tenantId, tenantId),
-                eq(appConnections.appName, providerName),
-              ),
-            )
-            .returning({ id: appConnections.id });
 
           if (!updated) {
             throw new NotFoundException(`Connection with ID ${id} not found.`);
@@ -412,64 +400,40 @@ export class ConnectorsService {
           };
         }
 
-        // 2a. displayName conflict scoped to this provider
-        const sameProviderConns = await tx
-          .select({
-            id: appConnections.id,
-            displayName: appConnections.displayName,
-          })
-          .from(appConnections)
-          .where(
-            and(
-              eq(appConnections.tenantId, tenantId),
-              eq(appConnections.appName, providerName),
-            ),
-          );
-
-        const displayConflict = sameProviderConns.find(
-          (c) => c.displayName.toLowerCase() === displayName.toLowerCase(),
-        );
-        if (displayConflict) {
-          throw new HttpException(
-            `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-            409,
-          );
+        // 2. Create the net-new connection
+        let connection;
+        try {
+          [connection] = await tx
+            .insert(appConnections)
+            .values({
+              tenantId,
+              appName: providerName,
+              externalId,
+              displayName,
+              authType,
+              value,
+              expiresAt,
+              metadata,
+              status: AppConnectionStatus.ACTIVE,
+            })
+            .returning({ id: appConnections.id });
+        } catch (err: unknown) {
+          if (isPgError(err) && err.code === '23505') {
+            if (err.constraint === 'tenant_app_display_name_lower_idx') {
+              throw new HttpException(
+                `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+                409,
+              );
+            }
+            if (err.constraint === 'tenant_external_id_unique_idx') {
+              throw new HttpException(
+                `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+                409,
+              );
+            }
+          }
+          throw err;
         }
-
-        // 2b. externalId conflict checked tenant-wide (cross-provider)
-        const tenantExtConns = await tx
-          .select({
-            id: appConnections.id,
-            externalId: appConnections.externalId,
-          })
-          .from(appConnections)
-          .where(eq(appConnections.tenantId, tenantId));
-
-        const extConflict = tenantExtConns.find(
-          (c) => c.externalId === externalId,
-        );
-        if (extConflict) {
-          throw new HttpException(
-            `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-            409,
-          );
-        }
-
-        // 3. Create the net-new connection
-        const [connection] = await tx
-          .insert(appConnections)
-          .values({
-            tenantId,
-            appName: providerName,
-            externalId,
-            displayName,
-            authType,
-            value,
-            expiresAt,
-            metadata,
-            status: AppConnectionStatus.ACTIVE,
-          })
-          .returning({ id: appConnections.id });
 
         if (!connection) {
           throw new Error('Failed to retrieve connection ID after insert');

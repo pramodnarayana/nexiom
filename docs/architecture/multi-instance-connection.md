@@ -29,7 +29,7 @@ Each instance (e.g., "Salesforce - North America") is represented by its own car
 * **Actions Available:**
   * **Manage:** Opens specific instance settings (scopes, display names).
   * **Reconnect:** Triggers a fresh OAuth flow for that specific instance.
-  * **Delete:** Permanently wipes the physical schema and credentials for that instance.
+  * **Delete:** (Pending UI implementation) Handled manually by administrators to disable tokens and drop physical schemas.
 
 ## 3. Recognition via Display Name
 

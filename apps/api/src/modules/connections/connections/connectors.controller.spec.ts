@@ -10,6 +10,7 @@ import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {
   BadRequestException,
   InternalServerErrorException,
+  NotFoundException,
   UnauthorizedException,
   HttpException,
 } from '@nestjs/common';
@@ -539,7 +540,7 @@ describe('ConnectorsController', () => {
       );
     });
 
-    it('should catch and log DB errors during reconnect lookups gracefully', async () => {
+    it('should throw BadRequestException on DB errors during reconnect lookups', async () => {
       mockRedis.set.mockResolvedValue('OK');
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
         mockTokenResponse,
@@ -559,24 +560,17 @@ describe('ConnectorsController', () => {
         connectionId: 'error-id',
       };
 
-      await controller.exchangeCode(mockCtx, reconnectBody);
-
-      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'error-id',
-          externalId: expect.stringMatching(
-            /^mock-piece-tms-mockpiece-[a-f0-9]{4}$/,
-          ) as unknown as string,
-        }),
-      );
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBody),
+      ).rejects.toThrow(BadRequestException);
     });
 
     // Note: DTO validation (ValidationPipe) tests are typically handled in e2e tests
 
-    it('should throw BadRequestException if provider is not registered', async () => {
+    it('should throw NotFoundException if provider is not registered', async () => {
       mockPieceRegistry.getPiece.mockReturnValue(undefined);
       await expect(controller.exchangeCode(mockCtx, validBody)).rejects.toThrow(
-        new BadRequestException('Provider "mock-piece" is not registered'),
+        new NotFoundException('Provider "mock-piece" is not registered'),
       );
     });
 
