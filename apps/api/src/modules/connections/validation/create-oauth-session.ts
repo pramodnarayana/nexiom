@@ -12,10 +12,9 @@ export class CreateOAuthSession {
   })
   providerName!: string;
 
-  /** Optional — may be empty on reconnect when the server already holds the stored credential. */
   @IsString()
-  @IsOptional()
-  clientId?: string;
+  @IsNotEmpty()
+  clientId!: string;
 
   @IsVendorConfig()
   @IsOptional()

@@ -8,21 +8,14 @@ import {
 
 @ValidatorConstraint({ async: false })
 export class IsVendorConfigConstraint implements ValidatorConstraintInterface {
-  private failedKey: string | null = null;
-  private failedType: string | null = null;
-
-  validate(value: any) {
+  validate(value: unknown): boolean {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      this.failedKey = 'root object';
-      this.failedType = typeof value;
       return false;
     }
 
-    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    for (const val of Object.values(value as Record<string, unknown>)) {
       const type = typeof val;
       if (type !== 'string' && type !== 'number' && type !== 'boolean') {
-        this.failedKey = key;
-        this.failedType = Array.isArray(val) ? 'array' : type;
         return false;
       }
     }
@@ -30,11 +23,23 @@ export class IsVendorConfigConstraint implements ValidatorConstraintInterface {
     return true;
   }
 
-  defaultMessage(args: ValidationArguments) {
-    if (this.failedKey === 'root object') {
-      return `${args.property} must be a valid primitive configuration record, received [${this.failedType}]`;
+  defaultMessage(args: ValidationArguments): string {
+    const value = args.value as unknown;
+
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      const receivedType = Array.isArray(value) ? 'array' : typeof value;
+      return `${args.property} must be a valid primitive configuration record, received [${receivedType}]`;
     }
-    return `Parameter ${this.failedKey} must be a primitive, received [${this.failedType}]`;
+
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      const type = typeof val;
+      if (type !== 'string' && type !== 'number' && type !== 'boolean') {
+        const receivedType = Array.isArray(val) ? 'array' : type;
+        return `Parameter ${key} must be a primitive, received [${receivedType}]`;
+      }
+    }
+
+    return `${args.property} must be a valid primitive configuration record`;
   }
 }
 

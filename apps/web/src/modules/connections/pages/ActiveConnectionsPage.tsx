@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Blocks, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ActiveConnectionCard } from '../components/ActiveConnectionCard';
@@ -10,64 +10,42 @@ function useProviders() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchProviders = () => {
+    const fetchProviders = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
-        listProviders()
-            .then((data) => {
-                setProviders(data);
-                setError(null);
-            })
-            .catch((e: unknown) => {
-                console.error(e);
-                if (e instanceof Error) {
-                    setError(e.message);
-                } else {
-                    setError('Failed to load integrations.');
-                }
-            })
-            .finally(() => {
-                setLoading(false);
-            });
-    };
-
-    useEffect(() => {
-        let isMounted = true;
-        listProviders()
-            .then((data) => {
-                if (isMounted) {
-                    setProviders(data);
-                    setError(null);
-                }
-            })
-            .catch((e: unknown) => {
-                console.error(e);
-                if (isMounted) {
-                    if (e instanceof Error) {
-                        setError(e.message);
-                    } else {
-                        setError('Failed to load integrations.');
-                    }
-                }
-            })
-            .finally(() => {
-                if (isMounted) setLoading(false);
-            });
-        return () => {
-            isMounted = false;
-        };
+        try {
+            const data = await listProviders();
+            if (signal?.aborted) return;
+            setProviders(data);
+            setError(null);
+        } catch (e: unknown) {
+            if (signal?.aborted) return;
+            console.error(e);
+            setError(e instanceof Error ? e.message : 'Failed to load integrations.');
+        } finally {
+            if (!signal?.aborted) setLoading(false);
+        }
     }, []);
-
-    return { providers, loading, error, refreshProviders: fetchProviders };
+    useEffect(() => {
+        const controller = new AbortController();
+        void fetchProviders(controller.signal);
+        return () => controller.abort();
+    }, [fetchProviders]);
+    return { providers, loading, error, refreshProviders: () => void fetchProviders() };
 }
 
 export function ActiveConnectionsPage() {
     const { connections, loading: connectionsLoading, refresh } = useConnections();
     const { providers, loading: providersLoading, error: providersError, refreshProviders } = useProviders();
     const [search, setSearch] = useState('');
+    const didFetchRef = useRef(false);
 
     useEffect(() => {
-        void refresh();
-    }, [refresh]);
+        if (!didFetchRef.current) {
+            didFetchRef.current = true;
+            void refresh();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleRefreshAll = () => {
         refreshProviders();
@@ -135,7 +113,7 @@ export function ActiveConnectionsPage() {
 
             {!isLoadingConnections && activeConnections.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-                    <Blocks className="h-12 w-12 text-muted-foreground/50" />
+                    <Blocks aria-hidden="true" className="h-12 w-12 text-muted-foreground/50" />
                     <p className="text-muted-foreground">
                         {search ? `No connections matching "${search}"` : "You don't have any active connections yet."}
                     </p>

@@ -7,8 +7,11 @@ import { ExchangeOAuthCode } from './exchange-oauth-code.js';
 import { IsVendorConfigConstraint } from './vendor-config.validator.js';
 
 describe('CreateOAuthSession', () => {
-  it('passes with valid providerName only', async () => {
-    const dto = plainToInstance(CreateOAuthSession, { providerName: 'google' });
+  it('passes with providerName and clientId', async () => {
+    const dto = plainToInstance(CreateOAuthSession, {
+      providerName: 'google',
+      clientId: 'my-client-id',
+    });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });
@@ -23,16 +26,19 @@ describe('CreateOAuthSession', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('fails with missing providerName', async () => {
+  it('fails with missing providerName and clientId', async () => {
     const dto = plainToInstance(CreateOAuthSession, {});
     const errors = await validate(dto);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].property).toBe('providerName');
+    const props = errors.map((e) => e.property);
+    expect(props).toContain('providerName');
+    expect(props).toContain('clientId');
   });
 
   it('fails with invalid providerName format', async () => {
     const dto = plainToInstance(CreateOAuthSession, {
       providerName: 'invalid name!',
+      clientId: 'my-client-id',
     });
     const errors = await validate(dto);
     expect(errors.some((e) => e.property === 'providerName')).toBe(true);
@@ -41,6 +47,7 @@ describe('CreateOAuthSession', () => {
   it('fails when vendorParams contains non-primitive values', async () => {
     const dto = plainToInstance(CreateOAuthSession, {
       providerName: 'google',
+      clientId: 'my-client-id',
       vendorParams: { nested: { key: 'value' } },
     });
     const errors = await validate(dto);
@@ -132,27 +139,27 @@ describe('IsVendorConfigConstraint', () => {
   });
 
   it('defaultMessage returns root object message when root is invalid', () => {
-    constraint.validate(null);
     const msg = constraint.defaultMessage({
       property: 'vendorParams',
+      value: null,
     } as ValidationArguments);
     expect(msg).toContain('vendorParams');
     expect(msg).toContain('primitive configuration record');
   });
 
   it('defaultMessage returns key message when a key value is invalid', () => {
-    constraint.validate({ myKey: { nested: true } });
     const msg = constraint.defaultMessage({
       property: 'vendorParams',
+      value: { myKey: { nested: true } },
     } as ValidationArguments);
     expect(msg).toContain('myKey');
     expect(msg).toContain('object');
   });
 
   it('defaultMessage reports array type for array values', () => {
-    constraint.validate({ myKey: [1, 2] });
     const msg = constraint.defaultMessage({
       property: 'vendorParams',
+      value: { myKey: [1, 2] },
     } as ValidationArguments);
     expect(msg).toContain('array');
   });

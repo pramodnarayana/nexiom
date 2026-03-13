@@ -508,19 +508,13 @@ describe('ConnectorsController', () => {
         }),
       );
     });
-    it('should fall back to generated externalId if reconnect connectionId is not found in DB', async () => {
-      mockRedis.set.mockResolvedValue('OK');
-      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
-        mockTokenResponse,
-      );
+    it('should throw NotFoundException if reconnect connectionId is not found in DB', async () => {
       mockOauthStateService.verifyState.mockResolvedValue({
         tenantId: 'tenant-123',
         vendorParams: { realmId: 'test-123' },
       });
-      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
-      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
 
-      // Mock DB returning nothing
+      // Mock DB returning nothing for the reconnect lookup
       mockDb.where.mockResolvedValueOnce([]);
 
       const reconnectBody = {
@@ -528,16 +522,9 @@ describe('ConnectorsController', () => {
         connectionId: 'missing-id',
       };
 
-      await controller.exchangeCode(mockCtx, reconnectBody);
-
-      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'missing-id',
-          externalId: expect.stringMatching(
-            /^mock-piece-tms-mockpiece-[a-f0-9]{4}$/,
-          ) as unknown as string,
-        }),
-      );
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBody),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException on DB errors during reconnect lookups', async () => {

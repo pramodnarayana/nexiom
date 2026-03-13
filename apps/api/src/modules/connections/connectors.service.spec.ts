@@ -536,11 +536,9 @@ describe('ConnectorsService', () => {
         expiresAt: new Date(),
         metadata: { env: 'sandbox' },
       });
-
       expect(mockDb.update).toHaveBeenCalled();
       expect(mockDbInsert).not.toHaveBeenCalled(); // No inserts, no registry creation
     });
-
     it('should throw HttpException 409 on displayName conflict when updating', async () => {
       mockDbUpdate.mockReturnValueOnce({
         set: vi.fn().mockReturnValue({
@@ -554,7 +552,6 @@ describe('ConnectorsService', () => {
           }),
         }),
       });
-
       await expect(
         service.storeOAuthConnection({
           id: 'mock-updated-id',
@@ -569,7 +566,6 @@ describe('ConnectorsService', () => {
         }),
       ).rejects.toThrow(HttpException);
     });
-
     it('should throw HttpException 409 on externalId collision tenant-wide when updating', async () => {
       mockDbUpdate.mockReturnValueOnce({
         set: vi.fn().mockReturnValue({
@@ -583,7 +579,6 @@ describe('ConnectorsService', () => {
           }),
         }),
       });
-
       await expect(
         service.storeOAuthConnection({
           id: 'mock-updated-id',
@@ -597,6 +592,28 @@ describe('ConnectorsService', () => {
           metadata: { env: 'sandbox' },
         }),
       ).rejects.toThrow(HttpException);
+    });
+    it('should throw NotFoundException when the explicit update target does not exist', async () => {
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+      await expect(
+        service.storeOAuthConnection({
+          id: 'missing-id',
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw HttpException 409 if a connection with the same displayName exists', async () => {

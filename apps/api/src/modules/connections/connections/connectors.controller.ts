@@ -559,7 +559,7 @@ export class ConnectorsController {
       tenantId,
       userId,
       providerName,
-      clientId ?? '',
+      clientId,
       validatedVendorParams,
     );
 
@@ -688,15 +688,23 @@ export class ConnectorsController {
             and(
               eq(appConnections.id, body.connectionId),
               eq(appConnections.tenantId, tenantId),
+              eq(appConnections.appName, body.providerName),
             ),
           );
 
-        if (existing) {
-          // Preserve the original unique slug to avoid falsely colliding with
-          // another provider's connection that shares the same displayName.
-          externalId = existing.externalId;
+        if (!existing) {
+          throw new NotFoundException(
+            `Connection ${body.connectionId} not found for provider "${body.providerName}"`,
+          );
         }
+
+        // Preserve the original unique slug to avoid falsely colliding with
+        // another provider's connection that shares the same displayName.
+        externalId = existing.externalId;
       } catch (err) {
+        if (err instanceof NotFoundException) {
+          throw err;
+        }
         this.logger.error(
           `Could not find existing connection ${body.connectionId} to inherit externalId: ${(err as Error).message}`,
         );
@@ -896,8 +904,9 @@ export class ConnectorsController {
       };
     }
 
-    // No secret from the browser — fall back to the stored credential if we have a connectionId.
+    // No secret from the browser — resolve the stored credential from the connectionId.
     if (connectionId) {
+      let row: { value: string } | undefined;
       try {
         const [existing] = await this.db
           .select({ value: appConnections.value })
@@ -909,23 +918,48 @@ export class ConnectorsController {
             ),
           )
           .limit(1);
-
-        if (existing?.value) {
-          const decrypted = await this.crypto.decrypt(existing.value);
-          const stored = parseConnectionCredentials(decrypted);
-          return {
-            effectiveClientId: requestClientId || stored.clientId,
-            effectiveClientSecret: stored.clientSecret,
-          };
-        }
+        row = existing;
       } catch (err) {
-        this.logger.warn(
-          `resolveCredentialsForExchange: failed to load stored credential for ${connectionId}: ${(err as Error).message}`,
+        this.logger.error(
+          `resolveCredentialsForExchange: DB error for ${connectionId}: ${(err as Error).message}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to load stored credentials for reconnect',
         );
       }
+
+      if (!row?.value) {
+        throw new NotFoundException(
+          `Stored credentials not found for connection ${connectionId}`,
+        );
+      }
+
+      let stored: ReturnType<typeof parseConnectionCredentials>;
+      try {
+        const decrypted = await this.crypto.decrypt(row.value);
+        stored = parseConnectionCredentials(decrypted);
+      } catch (err) {
+        this.logger.error(
+          `resolveCredentialsForExchange: failed to decrypt/parse for ${connectionId}: ${(err as Error).message}`,
+        );
+        throw new InternalServerErrorException(
+          'Failed to decrypt stored credentials for reconnect',
+        );
+      }
+
+      if (!stored.clientSecret) {
+        throw new BadRequestException(
+          `No stored client secret found for connection ${connectionId}. Please provide a new client secret.`,
+        );
+      }
+
+      return {
+        effectiveClientId: requestClientId || stored.clientId,
+        effectiveClientSecret: stored.clientSecret,
+      };
     }
 
-    // No stored secret available — proceed with whatever was provided (may fail at token exchange).
+    // No connectionId and no secret — pass through whatever was provided (may fail at token exchange).
     return {
       effectiveClientId: requestClientId ?? '',
       effectiveClientSecret: requestClientSecret ?? '',

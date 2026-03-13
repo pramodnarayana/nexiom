@@ -32,12 +32,12 @@ function useProviders() {
         void load();
     }, [load]);
 
-    return { providers, loading, error };
+    return { providers, loading, error, refreshProviders: load };
 }
 
 export function ConnectionsPage() {
     const { connect } = useConnections();
-    const { providers, loading: providersLoading, error: providersError } = useProviders();
+    const { providers, loading: providersLoading, error: providersError, refreshProviders } = useProviders();
     const [search, setSearch] = useState('');
 
 
@@ -62,7 +62,7 @@ export function ConnectionsPage() {
                     id="refresh-connections-btn"
                     variant="outline"
                     size="sm"
-                    onClick={() => void window.location.reload()}
+                    onClick={() => void refreshProviders()}
                     disabled={isLoading}
                 >
                     <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
