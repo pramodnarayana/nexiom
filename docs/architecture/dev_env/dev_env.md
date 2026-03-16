@@ -1,6 +1,6 @@
 # Architecture: AWS Emulation & Local Environment Parity
 
-To ensure high developer velocity and "Zero Cloud Friction," FluxNex emulates its production AWS footprint entirely within a local Docker-based environment. This allows engineers to build, test, and debug the 6-layer pipeline on a laptop while remaining 100% binary-compatible with the Production cloud.
+To ensure high developer velocity and "Zero Cloud Friction," FluxNex emulates its production AWS footprint entirely within a local Docker-based environment. This allows engineers to build, test, and debug the pipeline on a laptop while remaining 100% binary-compatible with the Production cloud.
 
 ---
 
@@ -11,10 +11,12 @@ We map every production-grade AWS service to an open-source local equivalent.
 | AWS Production Service | Local Emulation Tool | Port | Implementation Detail |
 | --- | --- | --- | --- |
 | Amazon Aurora (PG) | PostgreSQL (Alpine) | `5432` | Standard container with all `ws_{id}` schemas. |
-| AWS SQS | LocalStack | `4566` | Emulates the SQS API for the 6-layer SEDA queues. |
+| AWS SQS | LocalStack | `4566` | Emulates the SQS API for the SEDA pipeline queues. |
 | AWS KMS | LocalStack / Crypto | `4566` | Provides local encryption keys for credential storage. |
 | AWS ElastiCache | Redis (Alpine) | `6379` | Handles refresh locks and BullMQ job tracking. |
-| AWS Fargate | Docker Compose | N/A | Runs the API Gateway and Engine Workers. |
+| AWS Fargate (API) | Docker Compose | `4000` | Runs the API Gateway — webhook ingestion at `localhost:4000/webhooks`. |
+| AWS Fargate (Workers) | Docker Compose | N/A | Runs the Engine Workers (L2–L6 pipeline). |
+| CloudFront / S3 SPA | Vite Dev Server | `3000` | Local Dashboard — sync traces visible at `localhost:3000`. |
 | External APIs | Prism (Stoplight) | `4010` | Mocks Salesforce and QuickBooks OpenAPI specs. |
 
 ---
@@ -27,11 +29,24 @@ The Platform Kernel (`packages/core-kernel`) never calls the AWS SDK directly wi
 
 The kernel uses an `INFRA_MODE` environment variable to decide which class to instantiate at runtime.
 
+**Accepted `INFRA_MODE` values:**
+
+| Value | Behavior | Dependencies |
+| --- | --- | --- |
+| `local` | Uses local emulation — `LocalCryptoAdapter` (Node.js `crypto`) and SQS pointed at LocalStack (`localhost:4566`). No AWS credentials required. | Node.js built-in `crypto` module |
+| `production` | Uses live AWS services — `AwsKmsAdapter` and SQS pointed at AWS. Requires `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`. | `@aws-sdk/client-kms`, `@aws-sdk/client-sqs` |
+
+**Default:** `local` (set in `.env.local` or `docker-compose.yml` environment block).
+
+**Where to set it:** Add `INFRA_MODE=local` to your `.env` file or to the `environment:` section of the relevant service in `docker-compose.yml`. The API and all worker containers must share the same value.
+
 ```typescript
 // Example: Encryption Service Factory
 const EncryptionServiceProvider = {
   provide: 'ENCRYPTION_SERVICE',
   useFactory: () => {
+    // INFRA_MODE=local  → LocalCryptoAdapter (Node.js 'crypto', no AWS credentials needed)
+    // INFRA_MODE=production → AwsKmsAdapter ('@aws-sdk/client-kms', requires IAM role/keys)
     return process.env.INFRA_MODE === 'local'
       ? new LocalCryptoAdapter() // Uses Node.js 'crypto' module
       : new AwsKmsAdapter();     // Uses '@aws-sdk/client-kms'
@@ -90,6 +105,8 @@ To initialize the full simulated cloud, run:
 
 ```bash
 docker-compose up -d
-pnpm run db:provision:local
+pnpm run db:fresh
 pnpm run dev
 ```
+
+> `db:fresh` drops the existing database, re-runs all Drizzle migrations, and seeds development fixtures (connections, workspace, test credentials). Use `pnpm run db:migrate` instead if you only need to apply new migrations without resetting data.

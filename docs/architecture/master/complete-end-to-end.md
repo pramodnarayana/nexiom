@@ -138,21 +138,21 @@ Used by customers and support agents to sync business data. This happens entirel
 | Concept | Definition | Physical Reality |
 | --- | --- | --- |
 | Organization | The legal/billing entity (e.g., Envoy Logistics). | A row in the `public.organization` table. |
-| Connection | An authenticated instance of an app (e.g., "Salesforce - US"). | Credential in `public.app_connection`; physical schema in `ws_{id}`. |
+| Connection | An authenticated instance of an app (e.g., "Salesforce - US"). | Credential in `public.app_connection`; data-plane tables in a dedicated schema identified by `dataNamespace`. |
 | Workspace | A logical folder used to group related integrations and team access. | A row in `public.ui_workspace`; acts as a metadata filter. |
 | Route | A defined data path between a Source and Destination. | Metadata in `public.integration_route`. |
-| Mapping | The field-level logic for a specific route. | JSONB template in the Tenant's Database. |
+| Mapping | The field-level logic for a specific route. | Rows in `public.field_mapping` — stored in the control-plane public schema, not in per-connection tenant schemas. |
 
 ### 4. Physical Data Architecture (Storage Registry)
 
 FluxNex utilizes the **Infrastructure Router** pattern to ensure physical data isolation.
 
-- **Public Schema (Control Plane):** Global registry for identity, routing rules, and the Storage Registry.
-- **Storage Registry:** Maps every `connection_id` to a specific `database_host_id` (Server) and `workspace_id` (Postgres Schema).
-- **Data Workspace (The Silo):** Every connection gets its own dedicated Postgres schema.
-  - **Isolation:** Uses native PostgreSQL `search_path`.
+- **Public Schema (Control Plane):** Global registry for identity, routing rules, field mappings, and the Storage Registry. All control-plane tables (including `public.field_mapping`) live here and are queried without a `search_path` switch.
+- **Storage Registry (`public.connection_storage_registry`):** Maps every `connection_id` to a specific `database_host_id` (Server) and `dataNamespace` (logical namespace — the Postgres schema name provisioned for that connection, e.g. `ws_salesforce_a1b2c3`).
+- **Data Namespace (The Silo):** Every connection gets its own dedicated Postgres schema, identified by `dataNamespace`.
+  - **Isolation:** Workers switch into the correct silo using `SET LOCAL search_path TO {dataNamespace}` scoped to the transaction — the session search_path is never permanently changed.
   - **Search:** JSONB data is protected by GIN Indexes for sub-100ms lookups across custom fields.
-  - **Residency:** Connections can be pinned to specific AWS regions (e.g., Frankfurt) via the registry.
+  - **Residency:** Connections can be pinned to specific AWS regions (e.g., Frankfurt) via the `regionContext` column in the registry.
 
 ### 5. The 6-Layer Sync Engine (SEDA Architecture)
 

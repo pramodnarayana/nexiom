@@ -51,8 +51,8 @@ sequenceDiagram
     Dest-->>Worker: 201 Created { id: "QB-99" }
 
     Note over Worker, DB_Silo: [LAYER 6: DEST GATEWAY]
-    Worker->>DB_Silo: SET search_path TO ws_dest; UPDATE outbound_gateway (response_payload, status='SUCCESS')
-    Worker->>DB_Silo: INSERT INTO global_entity_map (SF_ID <-> QB_ID)
+    Worker->>DB_Silo: SET LOCAL search_path TO ws_dest; UPDATE outbound_gateway (response_payload, status='SUCCESS')
+    Worker->>DB_Pub: INSERT INTO public.global_entity_map (SF_ID <-> QB_ID)
 ```
 
 ---
@@ -98,10 +98,10 @@ This phase handles the transition from internal data to the external internet.
 
 This phase "notarizes" the transaction results and updates the platform's relationship memory.
 
-- **Outcome Logging:** The engine switches the `search_path` to the Target Silo. It updates the `outbound_gateway` record created in L4, saving the `response_payload` and `status_code`.
+- **Outcome Logging:** The engine uses `SET LOCAL search_path TO {dataNamespace}` scoped to the transaction to update the `outbound_gateway` record created in L4, saving the `response_payload` and `status_code`. After the transaction commits, the search_path reverts automatically.
 - **GEM Mapping (Idempotency):**
   1. The engine parses the external ID from the response (e.g., `QB-99`).
-  2. It creates/updates a row in the Global Entity Map (GEM).
+  2. It writes to `public.global_entity_map` — the GEM lives in the **control-plane public schema**, not in any tenant silo, because it links records across two different connections (source and destination).
   3. **The Moat:** If this Salesforce record is updated again later, the engine will check the GEM, find `QB-99`, and know to perform an `UPDATE` API call instead of a `CREATE` call, preventing duplicates in the customer's financial system.
 - **Sync Ledger Completion:** The final entry is written to `sync_log` with a status of `COMPLETED`, which updates the "Green Checkmark" on the user's dashboard.
 
@@ -113,20 +113,24 @@ The core of the end-to-end flow is the Storage Resolver. Every worker follows th
 
 ```typescript
 async function process(job) {
-  // 1. Where does the data go?
-  const schemaName = await storageResolver.resolve(job.connectionId);
+  // 1. Resolve the dataNamespace (Postgres schema name) for this connection.
+  const dataNamespace = await storageResolver.resolve(job.connectionId);
 
-  // 2. Open a transaction and scope it
+  // 2. Open a transaction and scope the search_path to this transaction only.
+  //    SET LOCAL means the change is rolled back automatically when the
+  //    transaction ends — the pooled connection's session search_path is
+  //    never permanently altered, preventing tenant routing leaks.
   await db.transaction(async (tx) => {
-    await tx.execute(sql`SET search_path TO ${schemaName}`);
+    await tx.execute(sql`SET LOCAL search_path TO ${sql.identifier(dataNamespace)}`);
 
-    // 3. Now INSERT/UPDATE automatically goes to the correct isolated silo.
+    // 3. All subsequent DML in this transaction targets the correct silo.
     await tx.insert(outboundGateway).values({
       traceId: job.traceId,
       requestPayload: job.hydratedPayload,
       status: 'PENDING',
     });
   });
+  // search_path reverts to the connection default after the transaction ends.
 }
 ```
 
