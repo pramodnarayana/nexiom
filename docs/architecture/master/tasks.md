@@ -188,15 +188,16 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/routes/routes.controller.ts`, `apps/api/src/modules/routes/routes.service.ts`
 - Depends: T017
 
-### T021 · api: Schedule endpoints on `RoutesController`
+### T021 · api: Schedule endpoints on `RoutesController` (stub)
 
-- [ ] `PATCH /routes/:id/schedule` — customer: `intervalMinutes` (must be in allowed set) + `enabled`
-- [ ] `PATCH /admin/routes/:id/schedule` — support team: any interval value
-- [ ] `POST /routes/:id/schedule/trigger` — enqueue immediate one-off poll job
+- [ ] `PATCH /routes/:id/schedule` — validate body, persist `syncIntervalMinutes` / `scheduleEnabled` to `integration_route` via `RoutesService`
+- [ ] `PATCH /admin/routes/:id/schedule` — same, no interval restrictions
+- [ ] `POST /routes/:id/schedule/trigger` — stub returns `202`; full enqueue wired in T029
 - [ ] `UpdateScheduleDto` with `@IsIn([30,60,120,240,360,720,1440])` validation
-- [ ] Calls `SchedulerService.reschedule()` / `disable()` / `register()`
+- [ ] Leave `// TODO(T029): call SchedulerService.reschedule/disable/register` comments at the call sites — `SchedulerService` does not exist yet
 - Files: `apps/api/src/modules/routes/routes.controller.ts`, `apps/api/src/modules/routes/dto/update-schedule.dto.ts`
 - Depends: T020
+- Note: `SchedulerService` integration is completed in T029, which adds `SchedulerService` calls to these endpoints
 
 ### T022 · api: `FieldMappingsController`
 
@@ -265,11 +266,12 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T029 · api: `SchedulerModule` + `SchedulerService`
 
-- [ ] BullMQ queue `scheduler-queue`
-- [ ] `register(routeId, intervalMinutes)` — adds repeatable job `poll-route`
-- [ ] `reschedule(routeId, newInterval)` — removes old + adds new atomically
-- [ ] `disable(routeId)` — removes repeatable job
-- [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` routes on startup
+- [ ] BullMQ `scheduler-queue` backed by Redis
+- [ ] `register(routeId, intervalMinutes)` — `queue.upsertJobScheduler(`schedule:${routeId}`, { every: ms }, { name: 'poll-route', data: { routeId } })`
+- [ ] `reschedule(routeId, newInterval)` — `queue.upsertJobScheduler(...)` atomically updates interval (no remove-then-add race)
+- [ ] `disable(routeId)` — `queue.removeJobScheduler(`schedule:${routeId}`)`
+- [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` routes via `upsertJobScheduler` (idempotent on restart)
+- [ ] Wire into `RoutesController` schedule endpoints (T021 stubs): replace TODO comments with `SchedulerService.reschedule()`/`disable()`/`register()` calls
 - Files: `apps/api/src/modules/scheduler/scheduler.module.ts`, `apps/api/src/modules/scheduler/scheduler.service.ts`
 - Depends: T003, T020
 
@@ -277,12 +279,12 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 - [ ] Consumes `poll-route` jobs from `scheduler-queue`
 - [ ] Guards: check `schedule_enabled` + `status=ACTIVE` before proceeding
-- [ ] Reads `sync_cursor` for high-water mark
+- [ ] Reads `sync_cursor` for high-water mark (table created by T026 `REPLICA_ACTIVE` plan)
 - [ ] Calls `piece.poll(credentials, cursor)` → fan out each record into `inbound_gateway` + `Inbound_Queue`
 - [ ] Advances `sync_cursor` only after DB commit
 - [ ] Updates `integration_route.last_scheduled_at`
 - Files: `apps/api/src/modules/scheduler/scheduler.worker.ts`
-- Depends: T028, T029
+- Depends: T026, T028, T029
 
 ### T031 · api: `ReplicaService` — L2 worker
 

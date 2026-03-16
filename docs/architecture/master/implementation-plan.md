@@ -177,7 +177,10 @@ Normalised_Q   → L4 Fan-Out Worker   ECS service  (target: 50  msgs/task)
 Delivery_Queue → L5 Delivery Worker  ECS service  (target: 25  msgs/task)
 ```
 
-Local: fixed concurrency via BullMQ `worker.concurrency`. Production: ECS Application Auto Scaling target tracking policy on `ApproximateNumberOfMessages`.
+Both local and production use the same SQS substrate via `QueueService` — local points at LocalStack (`INFRA_MODE=local`), production points at AWS. This ensures retry counts, visibility timeout handling, and DLQ activation after 5 failures behave identically in both environments.
+
+- **Local concurrency:** `QueueService.consume()` polls LocalStack with a `maxConcurrent` option (e.g., `{ maxConcurrent: 5 }`) per worker process — no separate queue library needed.
+- **Production scaling:** ECS Application Auto Scaling target tracking policy on `ApproximateNumberOfMessages`.
 
 #### 3.0.9 PgBouncer (Connection Pool)
 
@@ -341,7 +344,7 @@ class UpdateScheduleDto {
 }
 ```
 
-When `intervalMinutes` changes, `RoutesService` calls `SchedulerService.reschedule(routeId, newInterval)` which removes the old BullMQ repeatable job and registers a new one atomically.
+When `intervalMinutes` changes, `RoutesService` persists the new value to `integration_route` and then calls `SchedulerService.reschedule(routeId, newInterval)`, which calls `queue.upsertJobScheduler()` to atomically update the interval in Redis — no remove-then-add race.
 
 #### 3.7 Frontend — Mapping Canvas (`apps/web/src/modules/routes/`)
 
@@ -385,34 +388,41 @@ The key architectural constraints from `end-to-end-tech-flow.md`:
 1. **L1 is non-blocking** — returns `202 Accepted` immediately, enqueues a pointer (`{ traceId, connectionId }`). The raw JSON payload stays in the DB, never in the queue message.
 2. **L4 writes `outbound_gateway` (status=`PENDING`) BEFORE enqueuing to `Delivery_Queue`** — crash safety. If the system dies between L4 and L5, the record is visible as "Pending Delivery" in the UI and can be retried.
 3. **L5 reads the payload from `outbound_gateway`**, not from the queue message — prevents queue payload size limits and guarantees consistency.
-4. **L6 writes to the DESTINATION silo** (`SET search_path TO ws_dest`) — the `outbound_gateway` update and GEM write both happen in the target connection's schema.
+4. **L6 writes to the DESTINATION silo** using `SET LOCAL search_path TO ws_dest` inside the transaction — `outbound_gateway` update goes to the destination tenant schema; the `global_entity_map` INSERT goes to `public.global_entity_map` (control plane). `SET LOCAL` ensures the search_path change is transaction-scoped and reverts automatically on commit/rollback, preventing tenant routing leaks through PgBouncer connection pools.
 5. **`sync_log`** — one row written per layer transition; this is what powers the Route Intelligence dashboard "green checkmark."
 
 #### 3.8 Sync Scheduler Service
 
 New service: `SchedulerService` in `apps/api/src/modules/scheduler/`.
 
-**Technology:** BullMQ repeatable jobs backed by Redis. BullMQ stores the next-run time in Redis sorted sets — only one worker fires per interval even if multiple API instances are running. No external cron daemon needed.
+**Technology:** BullMQ Job Schedulers (v5+) backed by Redis. BullMQ stores the next-run time in Redis sorted sets — only one worker fires per interval even if multiple API instances are running. No external cron daemon needed.
+
+Use `queue.upsertJobScheduler()` / `queue.removeJobScheduler()` — the v5 Job Schedulers API. **Do not use** `queue.add(..., { repeat })` + `queue.removeRepeatable()` — the old repeatable job API requires passing the exact same repeat options to remove a job and has a race condition between remove and re-add on reschedule.
 
 ```typescript
 // apps/api/src/modules/scheduler/scheduler.service.ts
 export class SchedulerService {
   async register(routeId: string, intervalMinutes: number): Promise<void> {
-    await this.schedulerQueue.add(
-      'poll-route',
-      { routeId },
-      { repeat: { every: intervalMinutes * 60_000 }, jobId: `schedule:${routeId}` },
+    // upsertJobScheduler is idempotent — safe to call on startup bootstrap
+    // and on re-enable. Uses routeId as the stable scheduler key.
+    await this.schedulerQueue.upsertJobScheduler(
+      `schedule:${routeId}`,
+      { every: intervalMinutes * 60_000 },
+      { name: 'poll-route', data: { routeId } },
     );
   }
 
   async reschedule(routeId: string, newIntervalMinutes: number): Promise<void> {
-    // Remove old repeatable job first, then re-register
-    await this.schedulerQueue.removeRepeatable('poll-route', { jobId: `schedule:${routeId}` });
-    await this.register(routeId, newIntervalMinutes);
+    // upsertJobScheduler atomically updates the interval — no remove-then-add race.
+    await this.schedulerQueue.upsertJobScheduler(
+      `schedule:${routeId}`,
+      { every: newIntervalMinutes * 60_000 },
+      { name: 'poll-route', data: { routeId } },
+    );
   }
 
   async disable(routeId: string): Promise<void> {
-    await this.schedulerQueue.removeRepeatable('poll-route', { jobId: `schedule:${routeId}` });
+    await this.schedulerQueue.removeJobScheduler(`schedule:${routeId}`);
   }
 }
 ```
@@ -434,7 +444,7 @@ export class SchedulerService {
 await this.schedulerQueue.add('poll-route', { routeId }, { jobId: `manual:${routeId}:${Date.now()}` });
 ```
 
-**Bootstrap:** On API startup, `SchedulerService.onModuleInit()` loads all `ACTIVE` routes with `schedule_enabled = true` and registers any that are missing from BullMQ Redis (handles server restarts without losing schedules).
+**Bootstrap:** On API startup, `SchedulerService.onModuleInit()` loads all `ACTIVE` routes with `schedule_enabled = true` and calls `upsertJobScheduler()` for each — idempotent, so restarting the API never creates duplicate schedulers or loses existing ones.
 
 **Lifecycle:**
 
