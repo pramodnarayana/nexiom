@@ -62,6 +62,8 @@ export const appConnections = pgTable('app_connection', {
 }, (table) => [
     index('app_name_idx').on(table.appName),
     index('tenant_status_idx').on(table.tenantId, table.status),
+    // TokenRefreshService scans for soon-expiring tokens — needs this to avoid full-table scans
+    index('connection_expires_at_idx').on(table.expiresAt),
     // One named connection per tenant — the externalId is the unique discriminator
     uniqueIndex('tenant_external_id_unique_idx').on(table.tenantId, table.externalId),
     // Ensure displayNames are unique per provider per tenant, ignoring case

@@ -34,8 +34,8 @@ describe('StorageResolverService', () => {
   });
 
   describe('resolveSchemaName', () => {
-    it('should return the workspaceId for a valid connectionId', async () => {
-      mockDb.limit.mockResolvedValue([{ workspaceId: 'ws_salesforce_123' }]);
+    it('should return the schemaName for a valid connectionId', async () => {
+      mockDb.limit.mockResolvedValue([{ dataNamespace: 'ws_salesforce_123' }]);
 
       const result = await service.resolveSchemaName('conn-123');
       expect(result).toBe('ws_salesforce_123');
@@ -56,7 +56,7 @@ describe('StorageResolverService', () => {
     it('should return the full host and region mapping', async () => {
       const mockEntry = {
         connectionId: 'conn-123',
-        workspaceId: 'ws_salesforce_123',
+        dataNamespace: 'ws_salesforce_123',
         databaseHostId: 'primary-cluster',
         regionContext: 'eu-central-1',
         createdAt: new Date('2024-01-01T00:00:00Z'),

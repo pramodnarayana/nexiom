@@ -461,7 +461,7 @@ export class ConnectorsService {
           .insert(connectionStorageRegistry)
           .values({
             connectionId: connection.id,
-            workspaceId: schemaName,
+            dataNamespace: schemaName,
             databaseHostId: 'primary-cluster',
             regionContext: resolvedRegionContext,
           })

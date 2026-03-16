@@ -13,23 +13,23 @@ export class StorageResolverService {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
 
   /**
-   * Resolves the physical PostgreSQL schema name (workspaceId) for a connection.
+   * Resolves the physical PostgreSQL schema name for a connection.
    * Used by Ingestion and Replica workers for 'SET search_path'.
    */
   async resolveSchemaName(connectionId: string): Promise<string> {
     const registryEntry = await this.db
-      .select({ workspaceId: connectionStorageRegistry.workspaceId })
+      .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
       .from(connectionStorageRegistry)
       .where(eq(connectionStorageRegistry.connectionId, connectionId))
       .limit(1);
 
     if (registryEntry.length === 0) {
       throw new NotFoundException(
-        `Infrastructure Error: Connection ${connectionId} has no physical storage workspace assigned.`,
+        `Infrastructure Error: Connection ${connectionId} has no physical storage schema assigned.`,
       );
     }
 
-    return registryEntry[0].workspaceId;
+    return registryEntry[0].dataNamespace;
   }
 
   /**

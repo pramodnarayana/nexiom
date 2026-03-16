@@ -57,26 +57,37 @@ export function defineHints(appName: string, hints: AppHints): void {
 }
 
 export class OptimizationService {
-    async getHint(appName: string, objectName: string): Promise<ObjectHint | undefined> {
-        try {
-            const db = getDb();
-            const result = await db.select()
-                .from(connectorObjectProfiles)
-                .where(
-                    and(
-                        eq(connectorObjectProfiles.appName, appName),
-                        eq(connectorObjectProfiles.objectName, objectName)
+    /**
+     * Look up execution hints for a specific object.
+     *
+     * @param appName      - Canonical app name (used for static OPTIMIZATION_REGISTRY fallback).
+     * @param objectName   - Vendor object name e.g. 'rtms__Load__c'.
+     * @param connectionId - Optional app_connection.id. When provided, queries the DB-backed
+     *                       profile cache (scoped per-connection for custom object support).
+     *                       When absent, falls straight through to the static registry.
+     */
+    async getHint(appName: string, objectName: string, connectionId?: string): Promise<ObjectHint | undefined> {
+        if (connectionId) {
+            try {
+                const db = getDb();
+                const result = await db.select()
+                    .from(connectorObjectProfiles)
+                    .where(
+                        and(
+                            eq(connectorObjectProfiles.connectionId, connectionId),
+                            eq(connectorObjectProfiles.objectName, objectName)
+                        )
                     )
-                )
-                .limit(1);
+                    .limit(1);
 
-            if (result.length > 0) {
-                return result[0].profile as ObjectHint;
+                if (result.length > 0) {
+                    return result[0].profile as ObjectHint;
+                }
+            } catch (e) {
+                console.debug('Failed to fetch ObjectHint from Database:', e);
+                // DB might not be connected or missing environment variables.
+                // Safe fallback to static registry.
             }
-        } catch (e) {
-            console.debug('Failed to fetch ObjectHint from Database:', e);
-            // DB might not be connected or missing environment variables.
-            // Safe fallback to static registry.
         }
 
         return OPTIMIZATION_REGISTRY[appName]?.[objectName];
