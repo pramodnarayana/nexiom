@@ -18,8 +18,8 @@ This document traces the complete lifecycle of a complex enterprise integration�
 
 The Admin logs into fluxnex.com and creates two isolated logical environments:
 
-- **Logistics-US Workspace:** Assigned to the US Finance team. System provisions physical schema `ws_us_101`.
-- **Logistics-CA Workspace:** Assigned to the Canada Finance team. System provisions physical schema `ws_ca_102`.
+- **Logistics-US Workspace:** Assigned to the US Finance team. Physical isolation is connection-scoped, not workspace-scoped — when a connection is authenticated and registered, the Storage Registry provisions a dedicated Postgres schema and records its `dataNamespace` (e.g. `ws_salesforce_a1b2c3` for the Salesforce connection, `ws_quickbooks_us_d4e5f6` for QuickBooks US).
+- **Logistics-CA Workspace:** Assigned to the Canada Finance team. Its QuickBooks Canada connection gets its own `dataNamespace` (e.g. `ws_quickbooks_ca_g7h8i9`) — a completely separate schema that the US team cannot reach.
 
 ### 2. Connection Assignment (Scoping)
 
@@ -56,7 +56,7 @@ The UI renders the mapping table. Because of Discovery, the left column shows th
 
 - **Mapping Rule:** The user maps `rtms__Total_Amount__c` → `TotalAmt`.
 - **Sync Condition:** The user adds a filter: `IF Region == 'US'`.
-- **Storage:** This logic is saved as a JSON metadata bundle in the workspace.
+- **Storage:** The mapping rule and sync condition are persisted as rows in the control-plane table `public.field_mapping` (linked to the route via `route_id`). The workspace stores no canonical mapping data — `public.field_mapping` is the single source of truth.
 
 ---
 
@@ -103,7 +103,7 @@ The engine evaluates active routes across all workspaces for this organization.
 | UI Workspace | Logistics-US | Logistics-CA |
 | Object Type | Account (Discovered) | `rtms__Load__c` (Discovered) |
 | Mapping | `US_Template.json` | `CA_Template.json` |
-| Database Silo | `ws_us_101` (Schema) | `ws_ca_102` (Schema) |
+| Database Silo | `ws_quickbooks_us_d4e5f6` (dataNamespace) | `ws_quickbooks_ca_g7h8i9` (dataNamespace) |
 | Credentials | US-Production-Key | CA-Production-Key |
 
 ---

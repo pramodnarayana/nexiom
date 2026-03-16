@@ -3,6 +3,7 @@ import {
     pgEnum,
     uuid,
     varchar,
+    text,
     timestamp,
     primaryKey,
     index,
@@ -30,7 +31,8 @@ export const envTypeEnum = pgEnum('env_type_enum', ['PRODUCTION', 'SANDBOX']);
  */
 export const uiWorkspaces = pgTable('ui_workspace', {
     id: uuid('id').defaultRandom().primaryKey(),
-    orgId: varchar('org_id', { length: 255 })
+    // text — matches organization.id which is also text
+    orgId: text('org_id')
         .notNull()
         .references(() => organization.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 255 }).notNull(),
@@ -39,6 +41,9 @@ export const uiWorkspaces = pgTable('ui_workspace', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     uniqueIndex('ui_workspace_org_name_unique_idx').on(table.orgId, table.name),
+    // Composite unique on (id, orgId) — required target for the composite FK
+    // in integration_route that enforces workspace ↔ org co-ownership.
+    uniqueIndex('ui_workspace_id_org_unique_idx').on(table.id, table.orgId),
     index('ui_workspace_org_idx').on(table.orgId),
     index('ui_workspace_env_idx').on(table.orgId, table.envType),
 ]);

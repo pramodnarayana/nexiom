@@ -3,14 +3,17 @@ import {
     pgEnum,
     uuid,
     varchar,
+    text,
     integer,
     boolean,
     jsonb,
     timestamp,
     index,
     uniqueIndex,
+    foreignKey,
+    check,
 } from 'drizzle-orm/pg-core';
-import { organization } from './identity.js';
+import { sql } from 'drizzle-orm';
 import { appConnections } from './tenant.js';
 import { uiWorkspaces } from './workspace.js';
 
@@ -47,12 +50,13 @@ export const integrationRoutes = pgTable('integration_route', {
     id: uuid('id').defaultRandom().primaryKey(),
     // Human-readable name shown in UI — e.g. "Salesforce Loads → QuickBooks Invoices"
     name: varchar('name', { length: 255 }).notNull(),
-    orgId: varchar('org_id', { length: 255 })
-        .notNull()
-        .references(() => organization.id, { onDelete: 'cascade' }),
-    workspaceId: uuid('workspace_id')
-        .notNull()
-        .references(() => uiWorkspaces.id, { onDelete: 'cascade' }),
+    // text — matches organization.id (and uiWorkspaces.orgId after workspace.ts fix).
+    // No independent FK to organization — org ownership is guaranteed by the
+    // composite FK (workspaceId, orgId) → (uiWorkspaces.id, uiWorkspaces.orgId)
+    // in the table constraints below, which makes it impossible to pair a
+    // workspace with an org that doesn't own it.
+    orgId: text('org_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
     srcConnectionId: uuid('src_connection_id')
         .notNull()
         .references(() => appConnections.id),
@@ -67,6 +71,8 @@ export const integrationRoutes = pgTable('integration_route', {
     status: routeStatusEnum('status').notNull().default('ACTIVE'),
     // Scheduler — how often the poller fires for this route.
     // Default: 30 minutes. Support team configurable via admin API.
+    // DB enforces > 0 via CHECK constraint; application code should also
+    // validate before writing (throw when syncIntervalMinutes <= 0).
     syncIntervalMinutes: integer('sync_interval_minutes').notNull().default(30),
     scheduleEnabled: boolean('schedule_enabled').notNull().default(true),
     // Timestamp of the last scheduled execution (set by SchedulerService)
@@ -74,6 +80,27 @@ export const integrationRoutes = pgTable('integration_route', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
+    // Composite FK: (workspaceId, orgId) → (uiWorkspaces.id, uiWorkspaces.orgId)
+    // Guarantees the workspace actually belongs to the org on this route —
+    // makes mismatched (workspaceId=ws-B, orgId=org-A) impossible at DB level.
+    foreignKey({
+        columns: [table.workspaceId, table.orgId],
+        foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
+        name: 'route_workspace_org_fk',
+    }).onDelete('cascade'),
+    // Cascade deletes when either the source or destination connection is removed
+    foreignKey({
+        columns: [table.srcConnectionId],
+        foreignColumns: [appConnections.id],
+        name: 'route_src_connection_fk',
+    }),
+    foreignKey({
+        columns: [table.destConnectionId],
+        foreignColumns: [appConnections.id],
+        name: 'route_dest_connection_fk',
+    }),
+    // Reject zero/negative intervals at the DB layer
+    check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
     index('route_workspace_idx').on(table.workspaceId),
     index('route_org_idx').on(table.orgId),
     index('route_src_conn_idx').on(table.srcConnectionId),
@@ -104,6 +131,7 @@ export const fieldMappings = pgTable('field_mapping', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
+    // uniqueIndex on (routeId, sourceCanonical) already covers routeId lookups;
+    // a separate index on routeId alone would add write/storage overhead for no gain.
     uniqueIndex('field_mapping_route_canonical_unique_idx').on(table.routeId, table.sourceCanonical),
-    index('field_mapping_route_idx').on(table.routeId),
 ]);

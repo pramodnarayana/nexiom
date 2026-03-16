@@ -74,8 +74,12 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 - [ ] `apps/api/src/core/shutdown.service.ts`
 - [ ] Registers `SIGTERM` + `SIGINT` handlers
+- [ ] Registers `SIGTERM` + `SIGINT` handlers that trigger combined drain sequence
 - [ ] Signals all BullMQ workers to stop accepting new jobs
-- [ ] Waits up to 30s for in-flight jobs to complete, then calls `app.close()`
+- [ ] Calls `QueueService.stopConsuming()` to halt SQS consumer polling
+- [ ] Awaits in-flight SQS messages and BullMQ jobs to drain (shared 30s timeout)
+- [ ] Force-closes if 30s deadline elapses before drain completes
+- [ ] Calls `app.close()` after drain (or force-close timeout)
 - Files: `apps/api/src/core/shutdown.service.ts`, `apps/api/src/main.ts`
 - Depends: —
 
@@ -273,7 +277,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` routes via `upsertJobScheduler` (idempotent on restart)
 - [ ] Wire into `RoutesController` schedule endpoints (T021 stubs): replace TODO comments with `SchedulerService.reschedule()`/`disable()`/`register()` calls
 - Files: `apps/api/src/modules/scheduler/scheduler.module.ts`, `apps/api/src/modules/scheduler/scheduler.service.ts`
-- Depends: T003, T020
+- Depends: T003, T020, T021
 
 ### T030 · api: `SchedulerWorker` — poll execution
 
@@ -336,7 +340,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T035 · api: L6 — GEM write + final audit in `DeliveryService`
 
-- [ ] After successful vendor response: `SET search_path TO ws_dest`
+- [ ] After successful vendor response: `SET LOCAL search_path TO ws_dest` (transaction-scoped; safe for PgBouncer)
 - [ ] `UPDATE outbound_gateway SET res_payload, status_code, status='SUCCESS'`
 - [ ] `INSERT INTO global_entity_map` (source vendor ID ↔ dest vendor ID)
 - [ ] Write `sync_log` row `{ layer: 'L6', status: 'SUCCESS' }` — drives dashboard green checkmark

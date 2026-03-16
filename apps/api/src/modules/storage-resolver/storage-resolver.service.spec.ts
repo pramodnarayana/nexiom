@@ -57,6 +57,7 @@ describe('StorageResolverService', () => {
       const mockEntry = {
         connectionId: 'conn-123',
         dataNamespace: 'ws_salesforce_123',
+        schemaPlan: 'NAMESPACE_ONLY',
         databaseHostId: 'primary-cluster',
         regionContext: 'eu-central-1',
         createdAt: new Date('2024-01-01T00:00:00Z'),

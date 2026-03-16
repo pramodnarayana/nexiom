@@ -194,10 +194,8 @@ export function buildTenantSchema(schemaName: string) {
 // These are queried without a dynamic search_path.
 // ---------------------------------------------------------------------------
 
-/**
- * CONNECTOR OBJECT PROFILES
- * Metadata cache for vendor object/field schemas discovered via the
- * Metadata Discovery Service. Keyed on (appName, objectName).
- * TTL-invalidated via application code (not a DB concern).
- */
-export { connectorObjectProfiles } from './connector_object_profiles.js';
+// connectorObjectProfiles is exported from './schema/connector_object_profiles.js'
+// via the barrel (index.ts). Do NOT re-export it here — that creates an
+// ambiguous duplicate export in the barrel.
+// Import it directly in this file when needed:
+//   import { connectorObjectProfiles } from './connector_object_profiles.js';

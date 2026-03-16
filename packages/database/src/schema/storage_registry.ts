@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { appConnections } from './tenant.js';
 
 /**
@@ -43,6 +43,9 @@ export const connectionStorageRegistry = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     },
     (table) => [
+        // Each Postgres schema is owned by exactly one connection — prevent accidental
+        // reuse of a data_namespace across connections (would cause tenant data leaks).
+        uniqueIndex('registry_namespace_unique_idx').on(table.dataNamespace),
         // Storage Resolver looks up by databaseHostId when routing to env-specific pools
         index('registry_host_idx').on(table.databaseHostId),
         // Region routing and compliance queries

@@ -67,6 +67,9 @@ export class OptimizationService {
      *                       When absent, falls straight through to the static registry.
      */
     async getHint(appName: string, objectName: string, connectionId?: string): Promise<ObjectHint | undefined> {
+        // Always resolve the static hint first — it is the baseline.
+        const staticHint = OPTIMIZATION_REGISTRY[appName]?.[objectName];
+
         if (connectionId) {
             try {
                 const db = getDb();
@@ -81,7 +84,33 @@ export class OptimizationService {
                     .limit(1);
 
                 if (result.length > 0) {
-                    return result[0].profile as ObjectHint;
+                    // profile stores the full Metadata Discovery payload — do NOT cast
+                    // it wholesale to ObjectHint. Pick only the known optimization keys
+                    // so discovery data never silently overrides engine behaviour.
+                    const raw = result[0].profile as Record<string, unknown>;
+                    const dbHint: ObjectHint = {};
+
+                    if (Array.isArray(raw['cursorPrecedence'])) {
+                        dbHint.cursorPrecedence = raw['cursorPrecedence'] as CursorStrategy[];
+                    }
+                    if (typeof raw['bulkThreshold'] === 'number') {
+                        dbHint.bulkThreshold = raw['bulkThreshold'];
+                    }
+                    if (Array.isArray(raw['autoJoin'])) {
+                        dbHint.autoJoin = raw['autoJoin'] as string[];
+                    }
+                    if (typeof raw['preferPath'] === 'string') {
+                        dbHint.preferPath = raw['preferPath'] as ExecutionPath;
+                    }
+                    if (Array.isArray(raw['requiredFields'])) {
+                        dbHint.requiredFields = raw['requiredFields'] as string[];
+                    }
+
+                    // DB-backed optimization keys take precedence over static registry
+                    // for matched keys; static registry fills in any gaps.
+                    if (Object.keys(dbHint).length > 0) {
+                        return { ...staticHint, ...dbHint };
+                    }
                 }
             } catch (e) {
                 console.debug('Failed to fetch ObjectHint from Database:', e);
@@ -90,7 +119,7 @@ export class OptimizationService {
             }
         }
 
-        return OPTIMIZATION_REGISTRY[appName]?.[objectName];
+        return staticHint;
     }
 }
 

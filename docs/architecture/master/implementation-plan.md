@@ -51,7 +51,7 @@ New package: `packages/queue/` — thin wrapper around the AWS SQS SDK with `INF
 // packages/queue/src/queue.service.ts
 interface QueueService {
   send(queueName: QueueName, message: unknown): Promise<void>;
-  consume(queueName: QueueName, handler: (msg: unknown) => Promise<void>): void;
+  consume(queueName: QueueName, handler: (msg: unknown) => Promise<void>, options?: { maxConcurrent?: number }): void;
 }
 ```
 
@@ -482,7 +482,7 @@ New service: `ReplicaService` in `apps/api/src/modules/pipeline/`.
 
 - Consumes `Inbound_Queue`.
 - Resolves schema via `storageResolver.resolve(connectionId)`.
-- In a transaction: `SET search_path TO {schema}`, then `UPSERT` into `replica_entity` on `(entity_type, source_id)` — increments `version` on conflict.
+- In a transaction: `SET LOCAL search_path TO {schema}`, then `UPSERT` into `replica_entity` on `(entity_type, source_id)` — increments `version` on conflict.
 - Updates `inbound_gateway.status` → `REPLICATED`.
 - Writes a `sync_log` row: `{ traceId, layer: 'L2', status: 'SUCCESS', durationMs }`.
 - Pushes `{ traceId }` to `Replica_Queue`.
@@ -508,7 +508,7 @@ New service: `FanOutService` in `apps/api/src/modules/pipeline/`.
 - For each matched route: evaluates `syncCondition` rules in-memory (`eq`, `neq`, `gt`, `lt`, `contains`).
 - **For each passing route:**
   1. Hydrates the target JSON payload using `field_mapping` rules.
-  2. **Writes `outbound_gateway` row** (status=`PENDING`, `req_payload`=hydrated JSON) in the **destination silo** (`SET search_path TO ws_dest`).
+  2. **Writes `outbound_gateway` row** (status=`PENDING`, `req_payload`=hydrated JSON) in the **destination silo** (`SET LOCAL search_path TO ws_dest`).
   3. Pushes `{ traceId, outboundGatewayId }` to `Delivery_Queue`.
 - Routes that fail the condition: write `sync_log` row with `status: 'SKIPPED'`.
 
@@ -529,7 +529,7 @@ New service: `DeliveryService` in `apps/api/src/modules/pipeline/`.
 
 Still within `DeliveryService`, after a successful vendor response:
 
-- In a transaction on the **destination silo** (`SET search_path TO ws_dest`):
+- In a transaction on the **destination silo** (`SET LOCAL search_path TO ws_dest`):
   1. `UPDATE outbound_gateway SET res_payload=..., status_code=..., status='SUCCESS'`.
   2. `INSERT INTO global_entity_map` linking the source vendor ID to the destination vendor ID.
 - Writes `sync_log` row: `{ traceId, layer: 'L6', status: 'SUCCESS', durationMs }` — this is what drives the "Green Checkmark" on the dashboard.
@@ -678,7 +678,7 @@ Phase 6 (Environments) ← can run in parallel with Phase 1
 | `apps/api/src/modules/workspaces/` | Workspaces CRUD module |
 | `apps/api/src/modules/routes/` | Routes CRUD + Metadata Discovery |
 | `apps/api/src/core/shutdown.service.ts` | `SIGTERM` handler — drains in-flight workers before exit |
-| `apps/api/src/modules/scheduler/scheduler.service.ts` | BullMQ repeatable jobs — fires `poll-route` per route interval |
+| `apps/api/src/modules/scheduler/scheduler.service.ts` | BullMQ Job Schedulers (uses `upsertJobScheduler`/`removeJobScheduler`) — fires `poll-route` per route interval |
 | `apps/api/src/modules/scheduler/scheduler.worker.ts` | Consumes `poll-route`, advances `sync_cursor`, enqueues to L1 |
 | `apps/api/src/modules/pipeline/replica.service.ts` | L2 — Consumes `Inbound_Queue`, upserts `replica_entity` |
 | `apps/api/src/modules/pipeline/normalization.service.ts` | L3 — Consumes `Replica_Queue`, writes `normalized_entity` |

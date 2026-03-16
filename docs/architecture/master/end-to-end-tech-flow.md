@@ -20,26 +20,26 @@ sequenceDiagram
     Note over Source, API: [LAYER 1: INGESTION]
     Source->>API: HTTP POST Webhook
     API->>API: Generate Trace ID
-    API->>DB_Silo: SET search_path TO ws_source; INSERT INTO inbound_gateway
+    API->>DB_Silo: SET LOCAL search_path TO ws_source; INSERT INTO inbound_gateway
     API->>SQS: Push { traceId, connectionId } to Inbound_Queue
     API-->>Source: 202 Accepted
 
     Note over Worker: [LAYER 2: REPLICA]
     SQS->>Worker: Consume Inbound_Queue
-    Worker->>DB_Silo: SET search_path TO ws_source; UPSERT INTO replica_entity
+    Worker->>DB_Silo: SET LOCAL search_path TO ws_source; UPSERT INTO replica_entity
     Worker->>SQS: Push { traceId } to Replica_Queue
 
     Note over Worker: [LAYER 3: NORMALIZATION]
     SQS->>Worker: Consume Replica_Queue
     Worker->>Worker: Map to Canonical (e.g., TMS_LOAD)
-    Worker->>DB_Silo: SET search_path TO ws_source; INSERT INTO normalized_entity
+    Worker->>DB_Silo: SET LOCAL search_path TO ws_source; INSERT INTO normalized_entity
     Worker->>SQS: Push { traceId } to Normalised_Queue
 
     Note over Worker: [LAYER 4: OUTBOUND PREP]
     SQS->>Worker: Consume Normalised_Queue
     Worker->>DB_Pub: SELECT * FROM integration_route WHERE src_id = ...
     Worker->>Worker: Evaluate sync_condition & Hydrate JSON
-    Worker->>DB_Silo: SET search_path TO ws_dest; INSERT INTO outbound_gateway (request_payload, status='PENDING')
+    Worker->>DB_Silo: SET LOCAL search_path TO ws_dest; INSERT INTO outbound_gateway (request_payload, status='PENDING')
     Worker->>SQS: Push { traceId, outboundGatewayId } to Delivery_Queue
 
     Note over Worker, Dest: [LAYER 5: DELIVERY]
