@@ -20,6 +20,7 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+.metadata_never_index
 *.suo
 *.ntvs*
 *.njsproj
@@ -44,4 +45,3 @@ n8n-reference/
 
 # TypeScript Build Info
 *.tsbuildinfo
-.metadata_never_index

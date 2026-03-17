@@ -23,6 +23,7 @@ describe("EncryptionModule.forRootAsync", () => {
       useFactory: () => ({ mode: "local", encryptionKey: KEY_32 }),
     });
 
+    expect(mod.global).toBe(true);
     expect(mod.module).toBe(EncryptionModule);
     expect(mod.exports).toContain(ENCRYPTION_SERVICE);
   });

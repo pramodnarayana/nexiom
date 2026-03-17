@@ -24,6 +24,13 @@ export class LocalCryptoAdapter implements IEncryptionService {
   private readonly keyBuffer: Buffer;
 
   constructor(options: LocalCryptoAdapterOptions) {
+    if (
+      !options?.encryptionKey ||
+      typeof options.encryptionKey !== "string" ||
+      options.encryptionKey.length === 0
+    ) {
+      throw new Error("LocalCryptoAdapter: missing or invalid encryptionKey");
+    }
     const buf = Buffer.from(options.encryptionKey);
     if (buf.length !== 32) {
       throw new Error(

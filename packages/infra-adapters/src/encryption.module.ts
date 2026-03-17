@@ -56,6 +56,7 @@ export interface EncryptionModuleAsyncOptions extends Pick<
 export class EncryptionModule {
   static forRootAsync(options: EncryptionModuleAsyncOptions): DynamicModule {
     return {
+      global: true,
       module: EncryptionModule,
       imports: options.imports ?? [],
       providers: [

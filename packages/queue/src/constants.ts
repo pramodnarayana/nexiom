@@ -3,16 +3,16 @@
  * (LocalStack creates queues by these names on startup).
  */
 export enum QueueName {
-  Inbound_Queue = "inbound-queue",
-  Replica_Queue = "replica-queue",
-  Normalized_Queue = "normalized-queue",
-  Delivery_Queue = "delivery-queue",
+  InboundQueue = "inbound-queue",
+  ReplicaQueue = "replica-queue",
+  NormalizedQueue = "normalized-queue",
+  DeliveryQueue = "delivery-queue",
 
   // Dead-letter queues — activated after 5 failed attempts
-  Inbound_Queue_DLQ = "inbound-queue-dlq",
-  Replica_Queue_DLQ = "replica-queue-dlq",
-  Normalized_Queue_DLQ = "normalized-queue-dlq",
-  Delivery_Queue_DLQ = "delivery-queue-dlq",
+  InboundQueueDLQ = "inbound-queue-dlq",
+  ReplicaQueueDLQ = "replica-queue-dlq",
+  NormalizedQueueDLQ = "normalized-queue-dlq",
+  DeliveryQueueDLQ = "delivery-queue-dlq",
 }
 
 /** Injection token — use to inject QueueService across the application. */

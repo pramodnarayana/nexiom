@@ -48,22 +48,23 @@ Each queue has a corresponding Dead Letter Queue (DLQ) activated after **5 faile
 `packages/queue/` is a NestJS dynamic module — `QueueService` is `@Injectable()` and registered via `QueueModule.forRootAsync()`, so callers use standard DI and tests can `overrideProvider(QueueService)` without any manual wiring.
 
 ```typescript
-// packages/queue/src/queue.interfaces.ts
+// packages/queue/src/constants.ts
 export enum QueueName {
-  Inbound_Queue    = 'Inbound_Queue',
-  Replica_Queue    = 'Replica_Queue',
-  Normalized_Queue = 'Normalized_Queue',
-  Delivery_Queue   = 'Delivery_Queue',
-  // DLQ variants
-  Inbound_DLQ      = 'Inbound_DLQ',
-  Replica_DLQ      = 'Replica_DLQ',
-  Normalized_DLQ   = 'Normalized_DLQ',
-  Delivery_DLQ     = 'Delivery_DLQ',
+  Inbound_Queue        = 'inbound-queue',
+  Replica_Queue        = 'replica-queue',
+  Normalized_Queue     = 'normalized-queue',
+  Delivery_Queue       = 'delivery-queue',
+  // Dead-letter queues — activated after 5 failed attempts
+  Inbound_Queue_DLQ    = 'inbound-queue-dlq',
+  Replica_Queue_DLQ    = 'replica-queue-dlq',
+  Normalized_Queue_DLQ = 'normalized-queue-dlq',
+  Delivery_Queue_DLQ   = 'delivery-queue-dlq',
 }
 
+// packages/queue/src/interfaces/queue-service.interface.ts
 export interface IQueueService {
-  send(queueName: QueueName, message: unknown): Promise<void>;
-  consume(queueName: QueueName, handler: (msg: unknown) => Promise<void>, options?: { maxConcurrent?: number }): void;
+  send(queueName: QueueName, payload: unknown, options?: SendOptions): Promise<void>;
+  consume(queueName: QueueName, handler: (payload: unknown) => Promise<void>, options?: ConsumeOptions): void;
   /** Called by ShutdownService — stops polling and awaits in-flight completions. */
   stopConsuming(): Promise<void>;
 }
@@ -110,19 +111,34 @@ All infrastructure clients switch behaviour via a single `INFRA_MODE=local|produ
 `packages/infra-adapters/` is a NestJS dynamic module — `EncryptionModule.forRootAsync()` registers the correct adapter as the `ENCRYPTION_SERVICE` provider. Consumers inject via token, never import a concrete adapter directly.
 
 ```typescript
-// packages/infra-adapters/src/encryption/encryption.module.ts
+// packages/infra-adapters/src/encryption.module.ts
+@Global()
 @Module({})
 export class EncryptionModule {
-  static forRootAsync(options: AsyncEncryptionModuleOptions): DynamicModule {
+  static forRootAsync(options: EncryptionModuleAsyncOptions): DynamicModule {
     return {
       module: EncryptionModule,
+      imports: options.imports ?? [],
       providers: [
-        { provide: ENCRYPTION_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        { provide: ENCRYPTION_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
         {
           provide: ENCRYPTION_SERVICE,
-          useFactory: (opts: EncryptionOptions) =>
-            opts.infraMode === 'local' ? new LocalCryptoAdapter() : new AwsKmsAdapter(opts.kmsKeyId),
-          inject: [ENCRYPTION_OPTIONS],
+          useFactory: (opts: EncryptionModuleOptions) => {
+            if (opts.mode === 'local') {
+              if (!opts.encryptionKey) {
+                throw new Error('EncryptionModule: encryptionKey is required when mode is "local"');
+              }
+              return new LocalCryptoAdapter({ encryptionKey: opts.encryptionKey });
+            }
+            if (opts.mode === 'kms') {
+              if (!opts.kmsKeyId) {
+                throw new Error('EncryptionModule: kmsKeyId is required when mode is "kms"');
+              }
+              return new AwsKmsAdapter({ keyId: opts.kmsKeyId, region: opts.region, endpoint: opts.kmsEndpoint });
+            }
+            throw new Error(`EncryptionModule: unknown mode "${(opts as { mode: string }).mode}"`);
+          },
+          inject: [ENCRYPTION_MODULE_OPTIONS],
         },
       ],
       exports: [ENCRYPTION_SERVICE],
@@ -134,8 +150,11 @@ export class EncryptionModule {
 EncryptionModule.forRootAsync({
   inject: [ConfigService],
   useFactory: (config: ConfigService) => ({
-    infraMode: config.get<string>('INFRA_MODE'),
-    kmsKeyId: config.get<string>('KMS_KEY_ID'),
+    mode:          config.get<string>('MODE') === 'local' ? 'local' : 'kms',
+    encryptionKey: config.get<string>('ENCRYPTION_KEY'),   // required when mode = 'local'
+    kmsKeyId:      config.get<string>('KMS_KEY_ID'),       // required when mode = 'kms'
+    region:        config.get<string>('KMS_REGION'),
+    kmsEndpoint:   config.get<string>('KMS_ENDPOINT'),     // set to http://localhost:4566 locally
   }),
 })
 

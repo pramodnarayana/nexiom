@@ -16,6 +16,8 @@ import type { QueueModuleOptions } from "./queue.module.js";
 interface ConsumerHandle {
   running: boolean;
   inFlight: Set<Promise<void>>;
+  /** Resolves when the poll loop exits — used by stopConsuming() to drain cleanly. */
+  pollerPromise: Promise<void>;
 }
 
 @Injectable()
@@ -70,23 +72,43 @@ export class QueueService implements IQueueService, OnModuleDestroy {
       return;
     }
 
-    const handle: ConsumerHandle = { running: true, inFlight: new Set() };
+    const handle: ConsumerHandle = {
+      running: true,
+      inFlight: new Set(),
+      pollerPromise: Promise.resolve(),
+    };
     this.consumers.set(queueName, handle);
 
-    void this.poll(queueName, handler, handle, options);
+    // Attach rejection handler so a startup failure (e.g. invalid options or
+    // queueUrl() throwing) removes the stale entry rather than leaving an
+    // orphaned consumer in the map.
+    handle.pollerPromise = this.poll(queueName, handler, handle, options).catch(
+      (err: unknown) => {
+        this.logger.error(`Consumer for ${queueName} exited with error`, err);
+        this.consumers.delete(queueName);
+      },
+    );
   }
 
   async stopConsuming(): Promise<void> {
+    // 1. Signal all poll loops to exit after their current receive completes.
     for (const handle of this.consumers.values()) {
       handle.running = false;
     }
 
+    // 2. Await every poller loop — guarantees no new processMessage() calls
+    //    are scheduled after this point.
+    await Promise.allSettled(
+      Array.from(this.consumers.values()).map((h) => h.pollerPromise),
+    );
+
+    // 3. Await any handlers that were already in-flight when the loops exited.
     const allInFlight = Array.from(this.consumers.values()).flatMap((h) =>
       Array.from(h.inFlight),
     );
     await Promise.allSettled(allInFlight);
-    this.consumers.clear();
 
+    this.consumers.clear();
     this.logger.log("All consumers stopped");
   }
 
@@ -105,12 +127,19 @@ export class QueueService implements IQueueService, OnModuleDestroy {
     handle: ConsumerHandle,
     options?: ConsumeOptions,
   ): Promise<void> {
-    const maxConcurrent = options?.maxConcurrent ?? 1;
+    const raw = options?.maxConcurrent ?? 1;
+    const maxConcurrent = Math.floor(raw);
+    if (!Number.isFinite(maxConcurrent) || maxConcurrent <= 0) {
+      throw new Error(
+        `QueueService: maxConcurrent must be a positive integer, got ${raw}`,
+      );
+    }
+
     const waitTimeSeconds = options?.waitTimeSeconds ?? 20;
     const url = this.queueUrl(queueName);
 
     while (handle.running) {
-      // Back-pressure — wait until a concurrency slot is free
+      // Back-pressure — wait until a concurrency slot is free.
       while (handle.inFlight.size >= maxConcurrent) {
         await new Promise<void>((r) => setTimeout(r, 50));
         if (!handle.running) return;
@@ -127,6 +156,9 @@ export class QueueService implements IQueueService, OnModuleDestroy {
             WaitTimeSeconds: waitTimeSeconds,
           }),
         );
+
+        // Re-check after the long-poll wait — stopConsuming() may have fired.
+        if (!handle.running) return;
 
         for (const msg of Messages) {
           const task = this.processMessage(url, msg, handler, queueName);

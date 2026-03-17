@@ -54,6 +54,7 @@ export interface QueueModuleAsyncOptions extends Pick<
 export class QueueModule {
   static forRootAsync(options: QueueModuleAsyncOptions): DynamicModule {
     return {
+      global: true,
       module: QueueModule,
       imports: options.imports ?? [],
       providers: [
@@ -67,8 +68,12 @@ export class QueueModule {
           provide: QUEUE_SERVICE,
           useClass: QueueService,
         },
+        {
+          provide: QueueService,
+          useExisting: QUEUE_SERVICE,
+        },
       ],
-      exports: [QUEUE_SERVICE],
+      exports: [QUEUE_SERVICE, QueueService],
     };
   }
 }

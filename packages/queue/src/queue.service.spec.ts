@@ -50,7 +50,7 @@ describe("QueueService", () => {
     it("sends a JSON-serialised message to the correct queue URL", async () => {
       mockSend.mockResolvedValueOnce({});
 
-      await service.send(QueueName.Inbound_Queue, { traceId: "abc" });
+      await service.send(QueueName.InboundQueue, { traceId: "abc" });
 
       expect(mockSend).toHaveBeenCalledOnce();
       const [cmd] = mockSend.mock.calls[0] as [
@@ -63,7 +63,7 @@ describe("QueueService", () => {
     it("includes DelaySeconds when option is provided", async () => {
       mockSend.mockResolvedValueOnce({});
 
-      await service.send(QueueName.Delivery_Queue, {}, { delaySeconds: 5 });
+      await service.send(QueueName.DeliveryQueue, {}, { delaySeconds: 5 });
 
       const [cmd] = mockSend.mock.calls[0] as [{ DelaySeconds?: number }];
       expect(cmd.DelaySeconds).toBe(5);
@@ -72,7 +72,7 @@ describe("QueueService", () => {
     it("omits DelaySeconds when option is not provided", async () => {
       mockSend.mockResolvedValueOnce({});
 
-      await service.send(QueueName.Delivery_Queue, {});
+      await service.send(QueueName.DeliveryQueue, {});
 
       const [cmd] = mockSend.mock.calls[0] as [{ DelaySeconds?: number }];
       expect(cmd.DelaySeconds).toBeUndefined();
@@ -82,7 +82,7 @@ describe("QueueService", () => {
   describe("queueUrl()", () => {
     it("builds LocalStack URL with account 000000000000", async () => {
       mockSend.mockResolvedValueOnce({});
-      await service.send(QueueName.Replica_Queue, {});
+      await service.send(QueueName.ReplicaQueue, {});
       const [cmd] = mockSend.mock.calls[0] as [{ QueueUrl: string }];
       expect(cmd.QueueUrl).toBe(
         "http://localhost:4566/000000000000/replica-queue",
@@ -95,7 +95,7 @@ describe("QueueService", () => {
         region: "us-east-1",
       });
       await expect(
-        prodService.send(QueueName.Inbound_Queue, {}),
+        prodService.send(QueueName.InboundQueue, {}),
       ).rejects.toThrow("accountId");
     });
 
@@ -106,7 +106,7 @@ describe("QueueService", () => {
         region: "eu-west-1",
         accountId: "123456789012",
       });
-      await prodService.send(QueueName.Inbound_Queue, {});
+      await prodService.send(QueueName.InboundQueue, {});
       const [cmd] = mockSend.mock.calls[0] as [{ QueueUrl: string }];
       expect(cmd.QueueUrl).toBe(
         "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound-queue",
@@ -122,10 +122,14 @@ describe("QueueService", () => {
 
   describe("consume()", () => {
     it("logs a warning and ignores a duplicate consume() call for the same queue", () => {
+      const pollSpy = vi
+        .spyOn(service as any, "poll")
+        .mockResolvedValue(undefined);
       const warnSpy = vi.spyOn((service as any).logger, "warn");
-      service.consume(QueueName.Inbound_Queue, async () => {});
-      service.consume(QueueName.Inbound_Queue, async () => {});
+      service.consume(QueueName.InboundQueue, async () => {});
+      service.consume(QueueName.InboundQueue, async () => {});
       expect(warnSpy).toHaveBeenCalledOnce();
+      pollSpy.mockRestore();
     });
   });
 
