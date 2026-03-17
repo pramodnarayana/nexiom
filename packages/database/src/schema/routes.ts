@@ -93,12 +93,12 @@ export const integrationRoutes = pgTable('integration_route', {
         columns: [table.srcConnectionId],
         foreignColumns: [appConnections.id],
         name: 'route_src_connection_fk',
-    }),
+    }).onDelete('cascade'),
     foreignKey({
         columns: [table.destConnectionId],
         foreignColumns: [appConnections.id],
         name: 'route_dest_connection_fk',
-    }),
+    }).onDelete('cascade'),
     // Reject zero/negative intervals at the DB layer
     check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
     index('route_workspace_idx').on(table.workspaceId),

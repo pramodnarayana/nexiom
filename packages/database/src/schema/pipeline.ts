@@ -41,7 +41,29 @@ export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [
 // for a given schema, enabling type-safe queries with SET search_path.
 // ---------------------------------------------------------------------------
 
+/**
+ * Allowed schema name pattern — must be provisioned by DBManager.
+ * Enforced before passing to pgSchema() to prevent SQL injection via
+ * untrusted schema names reaching the Postgres identifier quoting path.
+ */
+export const TENANT_SCHEMA_PATTERN = /^ws_[a-z0-9_]+$/;
+
+/**
+ * Asserts that a schema name is safe to pass to pgSchema() / SET LOCAL search_path.
+ * Throws if the name was not provisioned by DBManager (wrong prefix or characters).
+ * Export this to reuse the same check in StorageResolverService and DBManager.
+ */
+export function assertValidSchemaName(schemaName: string): void {
+    if (!TENANT_SCHEMA_PATTERN.test(schemaName)) {
+        throw new Error(
+            `Invalid tenant schema name "${schemaName}". ` +
+            `Must match ${TENANT_SCHEMA_PATTERN.toString()} — only DBManager-provisioned names are allowed.`
+        );
+    }
+}
+
 export function buildTenantSchema(schemaName: string) {
+    assertValidSchemaName(schemaName);
     const schema = pgSchema(schemaName);
 
     /**
@@ -61,7 +83,7 @@ export function buildTenantSchema(schemaName: string) {
         headers: jsonb('headers'),
         // Vendor batch/event ID — used for idempotency
         extReqId: varchar('ext_req_id', { length: 255 }),
-        status: varchar('status', { length: 50 }).notNull().default('RECEIVED'),
+        status: pipelineStatusEnum('status').notNull().default('RECEIVED'),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
         uniqueIndex('idx_l1_ext_id').on(table.connectionId, table.extReqId),
@@ -131,7 +153,7 @@ export function buildTenantSchema(schemaName: string) {
         reqPayload: jsonb('req_payload').notNull(),
         resPayload: jsonb('res_payload'),
         statusCode: integer('status_code'),
-        status: varchar('status', { length: 50 }).notNull().default('PENDING'),
+        status: pipelineStatusEnum('status').notNull().default('PENDING'),
         attemptCount: integer('attempt_count').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
@@ -150,9 +172,10 @@ export function buildTenantSchema(schemaName: string) {
     const syncLog = schema.table('sync_log', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
-        routeId: uuid('route_id').notNull(),
-        layer: varchar('layer', { length: 10 }).notNull(),    // L1 … L6
-        status: varchar('status', { length: 50 }).notNull(),
+        // Nullable — early-layer entries (L1/L2) may be logged before a route is resolved
+        routeId: uuid('route_id'),
+        layer: pipelineLayerEnum('layer').notNull(),
+        status: pipelineStatusEnum('status').notNull(),
         durationMs: integer('duration_ms'),
         timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [

@@ -27,7 +27,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] Create `packages/queue/src/queue.service.ts` — `send()` + `consume()` interface
 - [ ] `INFRA_MODE=local` → points SQS client to `http://localhost:4566`
 - [ ] `INFRA_MODE=production` → uses AWS endpoint
-- [ ] Export `QueueName` enum: `Inbound_Queue`, `Replica_Queue`, `Normalised_Queue`, `Delivery_Queue` (each with DLQ variant)
+- [ ] Export `QueueName` enum: `Inbound_Queue`, `Replica_Queue`, `Normalized_Queue`, `Delivery_Queue` (each with DLQ variant)
 - Files: `packages/queue/src/**`, `packages/queue/package.json`
 - Depends: T001
 
@@ -73,7 +73,6 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 ### T008 · api: `ShutdownService` — graceful SIGTERM drain
 
 - [ ] `apps/api/src/core/shutdown.service.ts`
-- [ ] Registers `SIGTERM` + `SIGINT` handlers
 - [ ] Registers `SIGTERM` + `SIGINT` handlers that trigger combined drain sequence
 - [ ] Signals all BullMQ workers to stop accepting new jobs
 - [ ] Calls `QueueService.stopConsuming()` to halt SQS consumer polling
@@ -308,14 +307,14 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] Calls `piece.normalize(entityType, data)`
 - [ ] Writes to `normalized_entity`
 - [ ] Writes `sync_log` row `{ layer: 'L3' }`
-- [ ] Pushes `{ traceId }` to `Normalised_Queue`
+- [ ] Pushes `{ traceId }` to `Normalized_Queue`
 - [ ] Unit tests
 - Files: `apps/api/src/modules/pipeline/normalization.service.ts`, `apps/api/src/modules/pipeline/normalization.service.spec.ts`
 - Depends: T028, T031
 
 ### T033 · api: `FanOutService` — L4 worker (crash-safe)
 
-- [ ] Consumes `Normalised_Queue`
+- [ ] Consumes `Normalized_Queue`
 - [ ] Queries `integration_route` for active routes matching `src_connection_id`
 - [ ] Evaluates `syncCondition` rules in-memory (`eq`, `neq`, `gt`, `lt`, `contains`)
 - [ ] Per matching route: hydrate payload via `field_mapping` rules

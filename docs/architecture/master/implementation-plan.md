@@ -40,7 +40,7 @@ The pipeline is a **SEDA architecture** — each layer reads from one named queu
 | --- | --- | --- | --- |
 | `Inbound_Queue` | L1 Webhook/Poll handler | L2 Replica Worker | `{ traceId, connectionId }` |
 | `Replica_Queue` | L2 Replica Worker | L3 Normalization Worker | `{ traceId }` |
-| `Normalised_Queue` | L3 Normalization Worker | L4 Fan-Out Engine | `{ traceId }` |
+| `Normalized_Queue` | L3 Normalization Worker | L4 Fan-Out Engine | `{ traceId }` |
 | `Delivery_Queue` | L4 Fan-Out Engine | L5 Delivery Engine | `{ traceId, outboundGatewayId }` |
 
 Each queue has a corresponding Dead Letter Queue (DLQ) activated after **5 failed attempts**.
@@ -357,7 +357,7 @@ When `intervalMinutes` changes, `RoutesService` persists the new value to `integ
 
 **Schedule Panel** (on `RouteDetailPage`):
 
-```
+```text
 ┌─ Sync Schedule ─────────────────────────────────┐
 │  Frequency:  [ Every 30 min ▼ ]                  │
 │              30min / 1hr / 2hr / 4hr / 6hr /    │
@@ -495,7 +495,7 @@ New service: `NormalizationService` in `apps/api/src/modules/pipeline/`.
 - Calls `piece.normalize(entityType, data)` (new piece interface method) → returns `{ canonicalType, data }`.
 - Writes to `normalized_entity`.
 - Writes `sync_log` row: `{ traceId, layer: 'L3', status: 'SUCCESS', durationMs }`.
-- Pushes `{ traceId }` to `Normalised_Queue`.
+- Pushes `{ traceId }` to `Normalized_Queue`.
 
 Canonical model interfaces live in `packages/connectors/framework/canonical/`.
 
@@ -503,7 +503,7 @@ Canonical model interfaces live in `packages/connectors/framework/canonical/`.
 
 New service: `FanOutService` in `apps/api/src/modules/pipeline/`.
 
-- Consumes `Normalised_Queue`.
+- Consumes `Normalized_Queue`.
 - Queries `integration_route` (public schema) for all active routes where `src_connection_id` matches.
 - For each matched route: evaluates `syncCondition` rules in-memory (`eq`, `neq`, `gt`, `lt`, `contains`).
 - **For each passing route:**
@@ -682,7 +682,7 @@ Phase 6 (Environments) ← can run in parallel with Phase 1
 | `apps/api/src/modules/scheduler/scheduler.worker.ts` | Consumes `poll-route`, advances `sync_cursor`, enqueues to L1 |
 | `apps/api/src/modules/pipeline/replica.service.ts` | L2 — Consumes `Inbound_Queue`, upserts `replica_entity` |
 | `apps/api/src/modules/pipeline/normalization.service.ts` | L3 — Consumes `Replica_Queue`, writes `normalized_entity` |
-| `apps/api/src/modules/pipeline/fanout.service.ts` | L4 — Consumes `Normalised_Queue`, evaluates conditions, writes `outbound_gateway` |
+| `apps/api/src/modules/pipeline/fanout.service.ts` | L4 — Consumes `Normalized_Queue`, evaluates conditions, writes `outbound_gateway` |
 | `apps/api/src/modules/pipeline/delivery.service.ts` | L5+L6 — Consumes `Delivery_Queue`, calls vendor API, writes GEM + `sync_log` |
 | `apps/api/src/modules/pipeline/exception.service.ts` | DLQ handler — surfaces failed jobs to Exception Center |
 | `apps/api/src/modules/intelligence/mcp.controller.ts` | MCP tool server |

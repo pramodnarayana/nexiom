@@ -113,9 +113,14 @@ export class OptimizationService {
                     }
                 }
             } catch (e) {
-                console.debug('Failed to fetch ObjectHint from Database:', e);
                 // DB might not be connected or missing environment variables.
                 // Safe fallback to static registry.
+                console.debug('OptimizationService.getHint: DB lookup failed, falling back to static registry', {
+                    appName,
+                    objectName,
+                    connectionId,
+                    err: e instanceof Error ? e.message : String(e),
+                });
             }
         }
 
