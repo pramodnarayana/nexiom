@@ -50,15 +50,15 @@ Each queue has a corresponding Dead Letter Queue (DLQ) activated after **5 faile
 ```typescript
 // packages/queue/src/constants.ts
 export enum QueueName {
-  Inbound_Queue        = 'inbound-queue',
-  Replica_Queue        = 'replica-queue',
-  Normalized_Queue     = 'normalized-queue',
-  Delivery_Queue       = 'delivery-queue',
+  InboundQueue        = 'inbound-queue',
+  ReplicaQueue        = 'replica-queue',
+  NormalizedQueue     = 'normalized-queue',
+  DeliveryQueue       = 'delivery-queue',
   // Dead-letter queues — activated after 5 failed attempts
-  Inbound_Queue_DLQ    = 'inbound-queue-dlq',
-  Replica_Queue_DLQ    = 'replica-queue-dlq',
-  Normalized_Queue_DLQ = 'normalized-queue-dlq',
-  Delivery_Queue_DLQ   = 'delivery-queue-dlq',
+  InboundQueueDLQ     = 'inbound-queue-dlq',
+  ReplicaQueueDLQ     = 'replica-queue-dlq',
+  NormalizedQueueDLQ  = 'normalized-queue-dlq',
+  DeliveryQueueDLQ    = 'delivery-queue-dlq',
 }
 
 // packages/queue/src/interfaces/queue-service.interface.ts
@@ -74,12 +74,14 @@ export interface IQueueService {
 export class QueueModule {
   static forRootAsync(options: AsyncQueueModuleOptions): DynamicModule {
     return {
+      global: true,
       module: QueueModule,
       providers: [
         { provide: QUEUE_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
-        QueueService,
+        { provide: QUEUE_SERVICE, useClass: QueueService },
+        { provide: QueueService, useExisting: QUEUE_SERVICE },
       ],
-      exports: [QueueService],
+      exports: [QUEUE_SERVICE, QueueService],
     };
   }
 }

@@ -2,7 +2,7 @@ version: '3.8'
 
 x-common-env: &common-env
   DATABASE_URL: postgres://user:password@postgres:5432/nexiom_local
-  DATABASE_POOLED_URL: postgres://user:password@pgbouncer:5432/nexiom_local
+  DATABASE_POOLED_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 

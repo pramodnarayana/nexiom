@@ -23,7 +23,7 @@ QUEUES=(
 # QueueAlreadyExists by creating without attributes then setting them.
 for QUEUE in "${QUEUES[@]}"; do
   DLQ_NAME="${QUEUE}-dlq"
-  $AWS sqs create-queue --queue-name "$DLQ_NAME" > /dev/null 2>&1 || true
+  $AWS sqs create-queue --queue-name "$DLQ_NAME" > /dev/null
   echo "[init-localstack]   ✓ $DLQ_NAME"
 done
 
@@ -42,7 +42,7 @@ for QUEUE in "${QUEUES[@]}"; do
 
   REDRIVE_POLICY="{\"deadLetterTargetArn\":\"${DLQ_ARN}\",\"maxReceiveCount\":\"5\"}"
 
-  $AWS sqs create-queue --queue-name "$QUEUE" > /dev/null 2>&1 || true
+  $AWS sqs create-queue --queue-name "$QUEUE" > /dev/null
 
   QUEUE_URL=$($AWS sqs get-queue-url --queue-name "$QUEUE" --query 'QueueUrl' --output text)
   $AWS sqs set-queue-attributes \

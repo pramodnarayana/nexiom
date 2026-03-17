@@ -16,6 +16,12 @@ export default defineConfig({
                 'src/**/index.ts',
                 'src/interfaces/**',
             ],
+            thresholds: {
+                statements: 80,
+                branches: 80,
+                functions: 80,
+                lines: 80,
+            },
         },
     },
     plugins: [swc.vite({ module: { type: 'es6' } })],
