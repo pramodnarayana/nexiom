@@ -15,6 +15,12 @@ export const pieces = pgTable('pieces', {
     /** Piece's canonical name — must match Piece.name in its source code */
     name: varchar('name', { length: 100 }).notNull().unique(),
 
+    /** Human-readable label shown in the UI e.g. "QuickBooks Online" */
+    displayName: varchar('display_name', { length: 255 }).notNull(),
+
+    /** CDN URL of the piece's logo for the connection selector UI */
+    logoUrl: varchar('logo_url', { length: 1024 }),
+
     /** npm package name e.g. "@nexiom/piece-quickbooks" */
     packageName: varchar('package_name', { length: 255 }).notNull(),
 

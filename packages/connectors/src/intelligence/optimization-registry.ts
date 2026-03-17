@@ -1,5 +1,6 @@
 export type CursorStrategy = 'SystemModstamp' | 'LastModifiedDate' | 'CreatedDate' | (string & Record<never, never>);
 export type ExecutionPath = 'REST' | 'BULK_V2' | 'CDC';
+const VALID_EXECUTION_PATHS: ReadonlySet<string> = new Set<ExecutionPath>(['REST', 'BULK_V2', 'CDC']);
 
 import { getDb, connectorObjectProfiles } from '@nexiom/database';
 import { eq, and } from 'drizzle-orm';
@@ -57,29 +58,74 @@ export function defineHints(appName: string, hints: AppHints): void {
 }
 
 export class OptimizationService {
-    async getHint(appName: string, objectName: string): Promise<ObjectHint | undefined> {
-        try {
-            const db = getDb();
-            const result = await db.select()
-                .from(connectorObjectProfiles)
-                .where(
-                    and(
-                        eq(connectorObjectProfiles.appName, appName),
-                        eq(connectorObjectProfiles.objectName, objectName)
-                    )
-                )
-                .limit(1);
+    /**
+     * Look up execution hints for a specific object.
+     *
+     * @param appName      - Canonical app name (used for static OPTIMIZATION_REGISTRY fallback).
+     * @param objectName   - Vendor object name e.g. 'rtms__Load__c'.
+     * @param connectionId - Optional app_connection.id. When provided, queries the DB-backed
+     *                       profile cache (scoped per-connection for custom object support).
+     *                       When absent, falls straight through to the static registry.
+     */
+    async getHint(appName: string, objectName: string, connectionId?: string): Promise<ObjectHint | undefined> {
+        // Always resolve the static hint first — it is the baseline.
+        const staticHint = OPTIMIZATION_REGISTRY[appName]?.[objectName];
 
-            if (result.length > 0) {
-                return result[0].profile as ObjectHint;
+        if (connectionId) {
+            try {
+                const db = getDb();
+                const result = await db.select()
+                    .from(connectorObjectProfiles)
+                    .where(
+                        and(
+                            eq(connectorObjectProfiles.connectionId, connectionId),
+                            eq(connectorObjectProfiles.objectName, objectName)
+                        )
+                    )
+                    .limit(1);
+
+                if (result.length > 0) {
+                    // profile stores the full Metadata Discovery payload — do NOT cast
+                    // it wholesale to ObjectHint. Pick only the known optimization keys
+                    // so discovery data never silently overrides engine behaviour.
+                    const raw = result[0].profile as Record<string, unknown>;
+                    const dbHint: ObjectHint = {};
+
+                    if (Array.isArray(raw['cursorPrecedence'])) {
+                        dbHint.cursorPrecedence = raw['cursorPrecedence'] as CursorStrategy[];
+                    }
+                    if (typeof raw['bulkThreshold'] === 'number') {
+                        dbHint.bulkThreshold = raw['bulkThreshold'];
+                    }
+                    if (Array.isArray(raw['autoJoin'])) {
+                        dbHint.autoJoin = raw['autoJoin'] as string[];
+                    }
+                    if (typeof raw['preferPath'] === 'string' && VALID_EXECUTION_PATHS.has(raw['preferPath'])) {
+                        dbHint.preferPath = raw['preferPath'] as ExecutionPath;
+                    }
+                    if (Array.isArray(raw['requiredFields'])) {
+                        dbHint.requiredFields = raw['requiredFields'] as string[];
+                    }
+
+                    // DB-backed optimization keys take precedence over static registry
+                    // for matched keys; static registry fills in any gaps.
+                    if (Object.keys(dbHint).length > 0) {
+                        return { ...staticHint, ...dbHint };
+                    }
+                }
+            } catch (e) {
+                // DB might not be connected or missing environment variables.
+                // Safe fallback to static registry.
+                console.debug('OptimizationService.getHint: DB lookup failed, falling back to static registry', {
+                    appName,
+                    objectName,
+                    connectionId,
+                    err: e instanceof Error ? e.message : String(e),
+                });
             }
-        } catch (e) {
-            console.debug('Failed to fetch ObjectHint from Database:', e);
-            // DB might not be connected or missing environment variables.
-            // Safe fallback to static registry.
         }
 
-        return OPTIMIZATION_REGISTRY[appName]?.[objectName];
+        return staticHint;
     }
 }
 
