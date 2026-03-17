@@ -57,12 +57,11 @@ export const integrationRoutes = pgTable('integration_route', {
     // workspace with an org that doesn't own it.
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    srcConnectionId: uuid('src_connection_id')
-        .notNull()
-        .references(() => appConnections.id),
-    destConnectionId: uuid('dest_connection_id')
-        .notNull()
-        .references(() => appConnections.id),
+    // FKs to appConnections are defined as explicit named foreignKey() constraints
+    // below (route_src_connection_fk / route_dest_connection_fk) — no inline
+    // .references() here to avoid duplicate constraints on the same columns.
+    srcConnectionId: uuid('src_connection_id').notNull(),
+    destConnectionId: uuid('dest_connection_id').notNull(),
     // Vendor object names resolved at route-creation time via describe API
     sourceObject: varchar('source_object', { length: 255 }).notNull(),
     targetObject: varchar('target_object', { length: 255 }).notNull(),

@@ -1,5 +1,6 @@
 export type CursorStrategy = 'SystemModstamp' | 'LastModifiedDate' | 'CreatedDate' | (string & Record<never, never>);
 export type ExecutionPath = 'REST' | 'BULK_V2' | 'CDC';
+const VALID_EXECUTION_PATHS: ReadonlySet<string> = new Set<ExecutionPath>(['REST', 'BULK_V2', 'CDC']);
 
 import { getDb, connectorObjectProfiles } from '@nexiom/database';
 import { eq, and } from 'drizzle-orm';
@@ -99,7 +100,7 @@ export class OptimizationService {
                     if (Array.isArray(raw['autoJoin'])) {
                         dbHint.autoJoin = raw['autoJoin'] as string[];
                     }
-                    if (typeof raw['preferPath'] === 'string') {
+                    if (typeof raw['preferPath'] === 'string' && VALID_EXECUTION_PATHS.has(raw['preferPath'])) {
                         dbHint.preferPath = raw['preferPath'] as ExecutionPath;
                     }
                     if (Array.isArray(raw['requiredFields'])) {

@@ -48,6 +48,9 @@ export interface TriggerContext<AuthT = any, PropsT = any> {
         triggerName: string;
         appName: string;
         objectType?: string;
+        /** app_connection.id — populated for polling triggers so OptimizationService
+         *  can load per-connection hints from the DB profile cache. */
+        connectionId?: string;
     };
 }
 
