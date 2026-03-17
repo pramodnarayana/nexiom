@@ -19,14 +19,17 @@ QUEUES=(
   "delivery-queue"
 )
 
-# Step 1: Create all DLQs first (no redrive policy)
+# Step 1: Create all DLQs first (no redrive policy); idempotent — ignore
+# QueueAlreadyExists by creating without attributes then setting them.
 for QUEUE in "${QUEUES[@]}"; do
   DLQ_NAME="${QUEUE}-dlq"
-  $AWS sqs create-queue --queue-name "$DLQ_NAME" > /dev/null
+  $AWS sqs create-queue --queue-name "$DLQ_NAME" > /dev/null 2>&1 || true
   echo "[init-localstack]   ✓ $DLQ_NAME"
 done
 
-# Step 2: Create main queues with redrive policies pointing to their DLQs
+# Step 2: Create main queues and apply redrive policies pointing to their DLQs.
+# Two-step approach (create then set-queue-attributes) avoids failure when the
+# queue already exists with different attributes (QueueAlreadyExists error).
 for QUEUE in "${QUEUES[@]}"; do
   DLQ_NAME="${QUEUE}-dlq"
 
@@ -39,15 +42,25 @@ for QUEUE in "${QUEUES[@]}"; do
 
   REDRIVE_POLICY="{\"deadLetterTargetArn\":\"${DLQ_ARN}\",\"maxReceiveCount\":\"5\"}"
 
-  $AWS sqs create-queue \
-    --queue-name "$QUEUE" \
+  $AWS sqs create-queue --queue-name "$QUEUE" > /dev/null 2>&1 || true
+
+  QUEUE_URL=$($AWS sqs get-queue-url --queue-name "$QUEUE" --query 'QueueUrl' --output text)
+  $AWS sqs set-queue-attributes \
+    --queue-url "$QUEUE_URL" \
     --attributes "RedrivePolicy=${REDRIVE_POLICY}" > /dev/null
   echo "[init-localstack]   ✓ $QUEUE (redrive → $DLQ_NAME)"
 done
 
 echo "[init-localstack] Creating KMS key..."
-KEY_ID=$($AWS kms create-key --description "nexiom-local-dev-key" --query 'KeyMetadata.KeyId' --output text)
-$AWS kms create-alias --alias-name "alias/nexiom-local" --target-key-id "$KEY_ID"
+# Idempotent: reuse the existing alias/nexiom-local key if it already exists.
+KEY_ID=$($AWS kms list-aliases \
+  --query "Aliases[?AliasName=='alias/nexiom-local'].TargetKeyId | [0]" \
+  --output text)
+
+if [ "$KEY_ID" = "None" ] || [ -z "$KEY_ID" ]; then
+  KEY_ID=$($AWS kms create-key --description "nexiom-local-dev-key" --query 'KeyMetadata.KeyId' --output text)
+  $AWS kms create-alias --alias-name "alias/nexiom-local" --target-key-id "$KEY_ID"
+fi
 echo "[init-localstack]   ✓ alias/nexiom-local → $KEY_ID"
 
 echo "[init-localstack] Done."

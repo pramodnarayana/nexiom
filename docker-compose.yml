@@ -2,6 +2,7 @@ version: '3.8'
 
 x-common-env: &common-env
   DATABASE_URL: postgres://user:password@postgres:5432/nexiom_local
+  DATABASE_POOLED_URL: postgres://user:password@pgbouncer:5432/nexiom_local
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 
@@ -26,9 +27,10 @@ services:
       - nexiom-network
 
   # --- PgBouncer (transaction-mode connection pooler) ---
-  # Accepts connections on host port 5433 and pools them to postgres:5432.
-  # Workers use DATABASE_POOLED_URL (port 5433) so SET LOCAL search_path
-  # is safe — PgBouncer transaction mode resets session state between clients.
+  # Accepts connections on Docker-internal port 5432 (exposed as host port 5433)
+  # and pools them to postgres:5432.
+  # DATABASE_POOLED_URL points here; use it for services that benefit from
+  # connection pooling (e.g. high-concurrency workers).
   pgbouncer:
     image: bitnami/pgbouncer:1.23.1
     environment:
@@ -66,7 +68,7 @@ services:
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
     healthcheck:
-      test: [ "CMD", "awslocal", "sqs", "list-queues", "--region", "us-east-1" ]
+      test: ["CMD", "awslocal", "sqs", "list-queues", "--region", "us-east-1"]
       interval: 10s
       timeout: 5s
       retries: 5

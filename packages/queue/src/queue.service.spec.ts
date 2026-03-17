@@ -138,6 +138,7 @@ describe("QueueService", () => {
       const stopSpy = vi.spyOn(service, "stopConsuming").mockResolvedValue();
       await service.onModuleDestroy();
       expect(stopSpy).toHaveBeenCalledOnce();
+      expect((service as any).client.destroy).toHaveBeenCalledOnce();
     });
   });
 });

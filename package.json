@@ -40,11 +40,6 @@
 		"overrides": {
 			"axios": "1.13.2",
 			"esbuild": "0.25.12"
-		},
-		"peerDependencyRules": {
-			"allowedVersions": {
-				"@refinedev/react-router>@refinedev/core": "4"
-			}
 		}
 	}
 }

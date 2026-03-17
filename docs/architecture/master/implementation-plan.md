@@ -76,7 +76,7 @@ export class QueueModule {
     return {
       module: QueueModule,
       providers: [
-        { provide: QUEUE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        { provide: QUEUE_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
         QueueService,
       ],
       exports: [QueueService],
@@ -150,7 +150,7 @@ export class EncryptionModule {
 EncryptionModule.forRootAsync({
   inject: [ConfigService],
   useFactory: (config: ConfigService) => ({
-    mode:          config.get<string>('MODE') === 'local' ? 'local' : 'kms',
+    mode:          config.get<string>('INFRA_MODE') === 'local' ? 'local' : 'kms',
     encryptionKey: config.get<string>('ENCRYPTION_KEY'),   // required when mode = 'local'
     kmsKeyId:      config.get<string>('KMS_KEY_ID'),       // required when mode = 'kms'
     region:        config.get<string>('KMS_REGION'),
