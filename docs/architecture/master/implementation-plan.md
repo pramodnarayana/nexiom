@@ -45,18 +45,57 @@ The pipeline is a **SEDA architecture** — each layer reads from one named queu
 
 Each queue has a corresponding Dead Letter Queue (DLQ) activated after **5 failed attempts**.
 
-New package: `packages/queue/` — thin wrapper around the AWS SQS SDK with `INFRA_MODE` switching:
+`packages/queue/` is a NestJS dynamic module — `QueueService` is `@Injectable()` and registered via `QueueModule.forRootAsync()`, so callers use standard DI and tests can `overrideProvider(QueueService)` without any manual wiring.
 
 ```typescript
-// packages/queue/src/queue.service.ts
-interface QueueService {
+// packages/queue/src/queue.interfaces.ts
+export enum QueueName {
+  Inbound_Queue    = 'Inbound_Queue',
+  Replica_Queue    = 'Replica_Queue',
+  Normalized_Queue = 'Normalized_Queue',
+  Delivery_Queue   = 'Delivery_Queue',
+  // DLQ variants
+  Inbound_DLQ      = 'Inbound_DLQ',
+  Replica_DLQ      = 'Replica_DLQ',
+  Normalized_DLQ   = 'Normalized_DLQ',
+  Delivery_DLQ     = 'Delivery_DLQ',
+}
+
+export interface IQueueService {
   send(queueName: QueueName, message: unknown): Promise<void>;
   consume(queueName: QueueName, handler: (msg: unknown) => Promise<void>, options?: { maxConcurrent?: number }): void;
+  /** Called by ShutdownService — stops polling and awaits in-flight completions. */
+  stopConsuming(): Promise<void>;
 }
+
+// packages/queue/src/queue.module.ts
+@Module({})
+export class QueueModule {
+  static forRootAsync(options: AsyncQueueModuleOptions): DynamicModule {
+    return {
+      module: QueueModule,
+      providers: [
+        { provide: QUEUE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        QueueService,
+      ],
+      exports: [QueueService],
+    };
+  }
+}
+
+// Registered in AppModule:
+QueueModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    infraMode: config.get<string>('INFRA_MODE'),
+    endpoint: config.get<string>('SQS_ENDPOINT'),   // set to http://localhost:4566 locally
+    region:   config.get<string>('AWS_REGION', 'us-east-1'),
+  }),
+})
 ```
 
-- **Production:** Uses `@aws-sdk/client-sqs` pointing to AWS.
-- **Local:** Uses `@aws-sdk/client-sqs` pointed at `http://localhost:4566` (LocalStack).
+- **Production:** `QueueService` uses `@aws-sdk/client-sqs` pointing to AWS.
+- **Local:** Same client pointed at `http://localhost:4566` (LocalStack) via `INFRA_MODE=local`.
 
 #### 3.0.2 `INFRA_MODE` Adapter Pattern
 
@@ -68,23 +107,40 @@ All infrastructure clients switch behaviour via a single `INFRA_MODE=local|produ
 | Queue | SQS → LocalStack port `4566` | SQS → AWS |
 | API Mocks | Piece HTTP calls → Prism `localhost:4010` | Piece HTTP calls → vendor URLs |
 
-Create `packages/infra-adapters/`:
+`packages/infra-adapters/` is a NestJS dynamic module — `EncryptionModule.forRootAsync()` registers the correct adapter as the `ENCRYPTION_SERVICE` provider. Consumers inject via token, never import a concrete adapter directly.
 
 ```typescript
-// Encryption adapter factory
-export function createEncryptionService(): EncryptionService {
-  return process.env.INFRA_MODE === 'local'
-    ? new LocalCryptoAdapter()
-    : new AwsKmsAdapter();
+// packages/infra-adapters/src/encryption/encryption.module.ts
+@Module({})
+export class EncryptionModule {
+  static forRootAsync(options: AsyncEncryptionModuleOptions): DynamicModule {
+    return {
+      module: EncryptionModule,
+      providers: [
+        { provide: ENCRYPTION_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        {
+          provide: ENCRYPTION_SERVICE,
+          useFactory: (opts: EncryptionOptions) =>
+            opts.infraMode === 'local' ? new LocalCryptoAdapter() : new AwsKmsAdapter(opts.kmsKeyId),
+          inject: [ENCRYPTION_OPTIONS],
+        },
+      ],
+      exports: [ENCRYPTION_SERVICE],
+    };
+  }
 }
 
-// SQS client factory
-export function createSqsClient(): SQSClient {
-  return new SQSClient({
-    region: process.env.AWS_REGION ?? 'us-east-1',
-    endpoint: process.env.INFRA_MODE === 'local' ? 'http://localhost:4566' : undefined,
-  });
-}
+// Registered in AppModule:
+EncryptionModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    infraMode: config.get<string>('INFRA_MODE'),
+    kmsKeyId: config.get<string>('KMS_KEY_ID'),
+  }),
+})
+
+// Consumed in any service:
+constructor(@Inject(ENCRYPTION_SERVICE) private readonly encryption: IEncryptionService) {}
 ```
 
 #### 3.0.3 Docker Compose & Local Stack

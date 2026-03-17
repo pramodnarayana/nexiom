@@ -25,9 +25,53 @@ services:
     networks:
       - nexiom-network
 
+  # --- PgBouncer (transaction-mode connection pooler) ---
+  # Accepts connections on host port 5433 and pools them to postgres:5432.
+  # Workers use DATABASE_POOLED_URL (port 5433) so SET LOCAL search_path
+  # is safe — PgBouncer transaction mode resets session state between clients.
+  pgbouncer:
+    image: bitnami/pgbouncer:1.23.1
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: user
+      POSTGRESQL_PASSWORD: password
+      POSTGRESQL_DATABASE: nexiom_local
+      PGBOUNCER_AUTH_TYPE: trust
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "200"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
+      PGBOUNCER_PORT: 5432
+    ports:
+      - "5433:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
+  # --- LocalStack (SQS + KMS) ---
+  # SQS queues are auto-created on startup via the init script.
+  # Endpoint: http://localhost:4566 — matches INFRA_MODE=local in QueueService / AwsKmsAdapter.
+  localstack:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: sqs,kms
+      DEBUG: "0"
+      DEFAULT_REGION: us-east-1
+      LOCALSTACK_HOST: localstack
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
+    networks:
+      - nexiom-network
+
   # --- Cache/Queue ---
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
@@ -134,3 +178,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  localstack_data:

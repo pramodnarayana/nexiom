@@ -9,7 +9,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T001 · docker-compose: Postgres, Redis, PgBouncer, LocalStack
 
-- [ ] Add `docker-compose.yml` at repo root
+- [x] Add `docker-compose.yml` at repo root
 - Services: `postgres:16-alpine` (5432), `redis:7-alpine` (6379), `pgbouncer` (5433 → 5432), `localstack` (4566, SERVICES=sqs,kms)
 - Files: `docker-compose.yml`, `pgbouncer/pgbouncer.ini`
 - Depends: —
@@ -22,23 +22,27 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `docker-compose.yml`, `packages/pieces/salesforce/openapi.json`, `packages/pieces/quickbooks/openapi.json`
 - Depends: T001
 
-### T003 · package: `packages/queue/` — SQS wrapper with INFRA_MODE
+### T003 · module: `packages/queue/` — `QueueModule` NestJS dynamic module
 
-- [ ] Create `packages/queue/src/queue.service.ts` — `send()` + `consume()` interface
-- [ ] `INFRA_MODE=local` → points SQS client to `http://localhost:4566`
-- [ ] `INFRA_MODE=production` → uses AWS endpoint
-- [ ] Export `QueueName` enum: `Inbound_Queue`, `Replica_Queue`, `Normalized_Queue`, `Delivery_Queue` (each with DLQ variant)
-- Files: `packages/queue/src/**`, `packages/queue/package.json`
+- [x] `queue.constants.ts` — `QUEUE_OPTIONS` injection token
+- [x] `queue.interfaces.ts` — `QueueName` enum (`Inbound_Queue`, `Replica_Queue`, `Normalized_Queue`, `Delivery_Queue` + DLQ variants), `IQueueOptions`, `IQueueService` interface with `send()`, `consume()`, `stopConsuming()`
+- [x] `queue.service.ts` — `@Injectable() QueueService implements IQueueService`; `INFRA_MODE=local` → LocalStack `http://localhost:4566`; `INFRA_MODE=production` → AWS SQS; implements `stopConsuming()` for graceful shutdown
+- [x] `queue.module.ts` — `QueueModule.forRootAsync(options: AsyncQueueModuleOptions): DynamicModule`; registers `QueueService` with `QUEUE_OPTIONS` factory provider; exports `QueueService`
+- [x] Unit tests — mock SQS client, verify `send`/`consume`/`stopConsuming` behaviour; test `forRootAsync` wiring
+- Files: `packages/queue/src/queue.constants.ts`, `packages/queue/src/queue.interfaces.ts`, `packages/queue/src/queue.service.ts`, `packages/queue/src/queue.module.ts`, `packages/queue/src/index.ts`, `packages/queue/package.json`
 - Depends: T001
 
-### T004 · package: `packages/infra-adapters/` — Encryption + SQS factories
+### T004 · module: `packages/infra-adapters/` — `EncryptionModule` NestJS dynamic module
 
-- [ ] `LocalCryptoAdapter` — Node.js `crypto` AES-256-GCM
-- [ ] `AwsKmsAdapter` — `@aws-sdk/client-kms`
-- [ ] `createEncryptionService()` factory (switches on `INFRA_MODE`)
-- [ ] `createSqsClient()` factory
-- Files: `packages/infra-adapters/src/**`, `packages/infra-adapters/package.json`
-- Depends: T003
+- [x] `encryption.constants.ts` — `ENCRYPTION_SERVICE` injection token
+- [x] `encryption.interface.ts` — `IEncryptionService` with `encrypt(plaintext: string): Promise<string>` and `decrypt(ciphertext: string): Promise<string>`
+- [x] `local-crypto.adapter.ts` — `@Injectable() LocalCryptoAdapter` using Node.js `crypto` AES-256-GCM (dev/test only)
+- [x] `aws-kms.adapter.ts` — `@Injectable() AwsKmsAdapter` using `@aws-sdk/client-kms`; key ID from `KMS_KEY_ID` env
+- [x] `encryption.module.ts` — `EncryptionModule.forRootAsync(options): DynamicModule`; factory provider selects adapter via `INFRA_MODE`; exports `ENCRYPTION_SERVICE` token
+- [x] Consumers inject via `@Inject(ENCRYPTION_SERVICE) private readonly encryption: IEncryptionService`
+- [x] Unit tests — verify encrypt/decrypt round-trip for both adapters; test module wiring with `overrideProvider`
+- Files: `packages/infra-adapters/src/encryption/**`, `packages/infra-adapters/src/index.ts`, `packages/infra-adapters/package.json`
+- Depends: T001
 
 ### T005 · script: `db:provision:local`
 

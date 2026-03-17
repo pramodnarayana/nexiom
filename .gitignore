@@ -44,3 +44,4 @@ n8n-reference/
 
 # TypeScript Build Info
 *.tsbuildinfo
+.metadata_never_index
