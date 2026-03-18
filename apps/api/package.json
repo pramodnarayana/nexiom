@@ -25,6 +25,7 @@
     "db:seed": "tsx src/db/db-cli.ts seed",
     "db:fresh": "tsx src/db/db-cli.ts fresh",
     "db:reset": "tsx src/db/db-cli.ts reset",
+    "db:provision:local": "tsx src/db/db-cli.ts provision:local",
     "db:check-role": "tsx src/db/db-cli.ts check-role",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
