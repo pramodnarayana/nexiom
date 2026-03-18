@@ -1,8 +1,15 @@
 version: '3.8'
 
+# Top-level variables — resolved by Compose at parse time from .env or the
+# host shell, so x-common-env interpolation and service envs stay in sync.
+x-db-vars: &db-vars
+  POSTGRES_USER: ${POSTGRES_USER:-user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+  POSTGRES_DB: ${POSTGRES_DB:-nexiom_local}
+
 x-common-env: &common-env
-  DATABASE_URL: postgres://user:password@postgres:5432/nexiom_local
-  DATABASE_POOLED_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
+  DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-nexiom_local}
+  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/${POSTGRES_DB:-nexiom_local}
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 
@@ -11,15 +18,13 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: nexiom_local
+      <<: *db-vars
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U user -d nexiom_local" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-nexiom_local}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -36,9 +41,9 @@ services:
     environment:
       POSTGRESQL_HOST: postgres
       POSTGRESQL_PORT: 5432
-      POSTGRESQL_USERNAME: user
-      POSTGRESQL_PASSWORD: password
-      POSTGRESQL_DATABASE: nexiom_local
+      POSTGRESQL_USERNAME: ${POSTGRES_USER:-user}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-nexiom_local}
       PGBOUNCER_AUTH_TYPE: trust
       PGBOUNCER_POOL_MODE: transaction
       PGBOUNCER_MAX_CLIENT_CONN: "200"
@@ -68,7 +73,7 @@ services:
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
     healthcheck:
-      test: ["CMD", "awslocal", "sqs", "list-queues", "--region", "us-east-1"]
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name inbound-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
       interval: 10s
       timeout: 5s
       retries: 5

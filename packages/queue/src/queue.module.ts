@@ -1,4 +1,8 @@
-import type { DynamicModule, ModuleMetadata, Type } from "@nestjs/common";
+import type {
+  DynamicModule,
+  InjectionToken,
+  ModuleMetadata,
+} from "@nestjs/common";
 import { Global, Module } from "@nestjs/common";
 import { QUEUE_MODULE_OPTIONS, QUEUE_SERVICE } from "./constants.js";
 import { QueueService } from "./queue.service.js";
@@ -25,7 +29,7 @@ export interface QueueModuleAsyncOptions extends Pick<
   useFactory: (
     ...args: unknown[]
   ) => Promise<QueueModuleOptions> | QueueModuleOptions;
-  inject?: (string | symbol | Type<unknown>)[];
+  inject?: InjectionToken[];
 }
 
 /**
@@ -62,7 +66,7 @@ export class QueueModule {
           provide: QUEUE_MODULE_OPTIONS,
           useFactory: options.useFactory,
 
-          inject: (options.inject ?? []) as any[],
+          inject: options.inject ?? [],
         },
         {
           provide: QUEUE_SERVICE,

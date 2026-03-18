@@ -150,6 +150,7 @@ describe("QueueService", () => {
       await expect(
         prodService.send(QueueName.InboundQueue, {}),
       ).rejects.toThrow("accountId");
+      await prodService.onModuleDestroy();
     });
 
     it("builds production URL using accountId", async () => {
@@ -164,6 +165,7 @@ describe("QueueService", () => {
       expect(cmd.QueueUrl).toBe(
         "https://sqs.eu-west-1.amazonaws.com/123456789012/inbound-queue",
       );
+      await prodService.onModuleDestroy();
     });
   });
 
@@ -226,7 +228,13 @@ describe("QueueService", () => {
     });
 
     it("dispatches received messages to the handler and deletes them", async () => {
-      const handler = vi.fn().mockResolvedValue(undefined);
+      const handler = vi.fn<(payload: unknown) => Promise<void>>();
+      const handlerDone = new Promise<void>((resolve) => {
+        handler.mockImplementation((_payload: unknown) => {
+          resolve();
+          return Promise.resolve();
+        });
+      });
       mockSend
         .mockResolvedValueOnce({
           Messages: [{ Body: '{"n":42}', ReceiptHandle: "rh-x" }],
@@ -234,7 +242,7 @@ describe("QueueService", () => {
         .mockResolvedValue({ Messages: [] });
 
       service.consume(QueueName.InboundQueue, handler);
-      await new Promise<void>((r) => setTimeout(r, 20));
+      await handlerDone;
       await service.stopConsuming();
 
       expect(handler).toHaveBeenCalledWith({ n: 42 });
@@ -243,7 +251,13 @@ describe("QueueService", () => {
     });
 
     it("defaults to an empty-object payload when the message Body is absent", async () => {
-      const handler = vi.fn().mockResolvedValue(undefined);
+      const handler = vi.fn<(payload: unknown) => Promise<void>>();
+      const handlerDone = new Promise<void>((resolve) => {
+        handler.mockImplementation((_payload: unknown) => {
+          resolve();
+          return Promise.resolve();
+        });
+      });
       mockSend
         .mockResolvedValueOnce({
           Messages: [{ ReceiptHandle: "rh-nobody" }],
@@ -251,14 +265,20 @@ describe("QueueService", () => {
         .mockResolvedValue({ Messages: [] });
 
       service.consume(QueueName.InboundQueue, handler);
-      await new Promise<void>((r) => setTimeout(r, 20));
+      await handlerDone;
       await service.stopConsuming();
 
       expect(handler).toHaveBeenCalledWith({});
     });
 
     it("does not delete the message when the handler rejects", async () => {
-      const handler = vi.fn().mockRejectedValue(new Error("boom"));
+      const handler = vi.fn<(payload: unknown) => Promise<void>>();
+      const handlerCalled = new Promise<void>((resolve) => {
+        handler.mockImplementation((_payload: unknown) => {
+          resolve();
+          return Promise.reject(new Error("boom"));
+        });
+      });
       mockSend
         .mockResolvedValueOnce({
           Messages: [{ Body: "{}", ReceiptHandle: "rh-fail" }],
@@ -266,7 +286,7 @@ describe("QueueService", () => {
         .mockResolvedValue({ Messages: [] });
 
       service.consume(QueueName.InboundQueue, handler);
-      await new Promise<void>((r) => setTimeout(r, 20));
+      await handlerCalled;
       await service.stopConsuming();
 
       const commandTypes = mockSend.mock.calls.map(([c]) => c._type);
@@ -278,7 +298,7 @@ describe("QueueService", () => {
     it("exits the poll loop cleanly when stopConsuming() fires after a receive", async () => {
       service.consume(QueueName.InboundQueue, async () => {});
       await service.stopConsuming();
-      // Reaching here without hanging confirms the running re-check path works
+      await expect(service.stopConsuming()).resolves.toBeUndefined();
     });
 
     it("logs a poll error and backs off when the receive call throws", async () => {

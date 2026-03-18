@@ -23,15 +23,15 @@ function migrationsPath(): string {
 export const databaseProvider: Provider = {
   provide: DATABASE_CONNECTION,
   useFactory: async () => {
-    if (!process.env.DATABASE_URL) {
+    const connectionString =
+      process.env.DATABASE_POOLED_URL ?? process.env.DATABASE_URL;
+    if (!connectionString) {
       throw new Error(
         'FATAL: DATABASE_URL is not defined. Set it in your .env before starting the server.',
       );
     }
 
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
+    const pool = new Pool({ connectionString });
 
     const db = drizzle(pool, { schema });
 

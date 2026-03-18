@@ -76,6 +76,7 @@ export class QueueModule {
     return {
       global: true,
       module: QueueModule,
+      imports: options.imports ?? [],
       providers: [
         { provide: QUEUE_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
         { provide: QUEUE_SERVICE, useClass: QueueService },
@@ -90,7 +91,7 @@ export class QueueModule {
 QueueModule.forRootAsync({
   inject: [ConfigService],
   useFactory: (config: ConfigService) => ({
-    infraMode: config.get<string>('INFRA_MODE'),
+    infraMode: config.get<string>('INFRA_MODE') === 'local' ? 'local' : 'production',
     endpoint: config.get<string>('SQS_ENDPOINT'),   // set to http://localhost:4566 locally
     region:   config.get<string>('AWS_REGION', 'us-east-1'),
   }),
