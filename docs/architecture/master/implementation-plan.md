@@ -72,7 +72,7 @@ export interface IQueueService {
 // packages/queue/src/queue.module.ts
 @Module({})
 export class QueueModule {
-  static forRootAsync(options: AsyncQueueModuleOptions): DynamicModule {
+  static forRootAsync(options: QueueModuleAsyncOptions): DynamicModule {
     return {
       global: true,
       module: QueueModule,
