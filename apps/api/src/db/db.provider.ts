@@ -7,8 +7,6 @@ import * as schema from './schema.js';
 
 import { DATABASE_CONNECTION } from '@nexiom/database';
 
-export const DRIZZLE_DB = DATABASE_CONNECTION;
-
 const logger = new Logger('DatabaseProvider');
 
 /**
@@ -23,14 +21,19 @@ function migrationsPath(): string {
 export const databaseProvider: Provider = {
   provide: DATABASE_CONNECTION,
   useFactory: async () => {
-    if (!process.env.DATABASE_URL) {
+    const connectionString =
+      process.env.DATABASE_POOLED_URL ?? process.env.DATABASE_URL;
+    if (!connectionString) {
       throw new Error(
-        'FATAL: DATABASE_URL is not defined. Set it in your .env before starting the server.',
+        'FATAL: DATABASE_POOLED_URL or DATABASE_URL is not defined. Set at least one in your .env before starting the server.',
       );
     }
 
     const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
+      max: 20,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
     });
 
     const db = drizzle(pool, { schema });

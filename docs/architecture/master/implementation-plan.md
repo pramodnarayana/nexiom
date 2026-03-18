@@ -45,18 +45,61 @@ The pipeline is a **SEDA architecture** — each layer reads from one named queu
 
 Each queue has a corresponding Dead Letter Queue (DLQ) activated after **5 failed attempts**.
 
-New package: `packages/queue/` — thin wrapper around the AWS SQS SDK with `INFRA_MODE` switching:
+`packages/queue/` is a NestJS dynamic module — `QueueService` is `@Injectable()` and registered via `QueueModule.forRootAsync()`, so callers use standard DI and tests can `overrideProvider(QueueService)` without any manual wiring.
 
 ```typescript
-// packages/queue/src/queue.service.ts
-interface QueueService {
-  send(queueName: QueueName, message: unknown): Promise<void>;
-  consume(queueName: QueueName, handler: (msg: unknown) => Promise<void>, options?: { maxConcurrent?: number }): void;
+// packages/queue/src/constants.ts
+export enum QueueName {
+  InboundQueue        = 'inbound-queue',
+  ReplicaQueue        = 'replica-queue',
+  NormalizedQueue     = 'normalized-queue',
+  DeliveryQueue       = 'delivery-queue',
+  // Dead-letter queues — activated after 5 failed attempts
+  InboundQueueDLQ     = 'inbound-queue-dlq',
+  ReplicaQueueDLQ     = 'replica-queue-dlq',
+  NormalizedQueueDLQ  = 'normalized-queue-dlq',
+  DeliveryQueueDLQ    = 'delivery-queue-dlq',
 }
+
+// packages/queue/src/interfaces/queue-service.interface.ts
+export interface IQueueService {
+  send(queueName: QueueName, payload: unknown, options?: SendOptions): Promise<void>;
+  consume(queueName: QueueName, handler: (payload: unknown) => Promise<void>, options?: ConsumeOptions): void;
+  /** Called by ShutdownService — stops polling and awaits in-flight completions. */
+  stopConsuming(): Promise<void>;
+}
+
+// packages/queue/src/queue.module.ts
+@Module({})
+export class QueueModule {
+  static forRootAsync(options: QueueModuleAsyncOptions): DynamicModule {
+    return {
+      global: true,
+      module: QueueModule,
+      imports: options.imports ?? [],
+      providers: [
+        { provide: QUEUE_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        { provide: QUEUE_SERVICE, useClass: QueueService },
+        { provide: QueueService, useExisting: QUEUE_SERVICE },
+      ],
+      exports: [QUEUE_SERVICE, QueueService],
+    };
+  }
+}
+
+// Registered in AppModule:
+QueueModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    infraMode: config.get<string>('INFRA_MODE') === 'local' ? 'local' : 'production',
+    endpoint: config.get<string>('SQS_ENDPOINT'),   // set to http://localhost:4566 locally
+    region:   config.get<string>('AWS_REGION', 'us-east-1'),
+  }),
+})
 ```
 
-- **Production:** Uses `@aws-sdk/client-sqs` pointing to AWS.
-- **Local:** Uses `@aws-sdk/client-sqs` pointed at `http://localhost:4566` (LocalStack).
+- **Production:** `QueueService` uses `@aws-sdk/client-sqs` pointing to AWS.
+- **Local:** Same client pointed at `http://localhost:4566` (LocalStack) via `INFRA_MODE=local`.
 
 #### 3.0.2 `INFRA_MODE` Adapter Pattern
 
@@ -68,23 +111,58 @@ All infrastructure clients switch behaviour via a single `INFRA_MODE=local|produ
 | Queue | SQS → LocalStack port `4566` | SQS → AWS |
 | API Mocks | Piece HTTP calls → Prism `localhost:4010` | Piece HTTP calls → vendor URLs |
 
-Create `packages/infra-adapters/`:
+`packages/infra-adapters/` is a NestJS dynamic module — `EncryptionModule.forRootAsync()` registers the correct adapter as the `ENCRYPTION_SERVICE` provider. Consumers inject via token, never import a concrete adapter directly.
 
 ```typescript
-// Encryption adapter factory
-export function createEncryptionService(): EncryptionService {
-  return process.env.INFRA_MODE === 'local'
-    ? new LocalCryptoAdapter()
-    : new AwsKmsAdapter();
+// packages/infra-adapters/src/encryption.module.ts
+@Global()
+@Module({})
+export class EncryptionModule {
+  static forRootAsync(options: EncryptionModuleAsyncOptions): DynamicModule {
+    return {
+      module: EncryptionModule,
+      imports: options.imports ?? [],
+      providers: [
+        { provide: ENCRYPTION_MODULE_OPTIONS, useFactory: options.useFactory, inject: options.inject ?? [] },
+        {
+          provide: ENCRYPTION_SERVICE,
+          useFactory: (opts: EncryptionModuleOptions) => {
+            if (opts.mode === 'local') {
+              if (!opts.encryptionKey) {
+                throw new Error('EncryptionModule: encryptionKey is required when mode is "local"');
+              }
+              return new LocalCryptoAdapter({ encryptionKey: opts.encryptionKey });
+            }
+            if (opts.mode === 'kms') {
+              if (!opts.kmsKeyId) {
+                throw new Error('EncryptionModule: kmsKeyId is required when mode is "kms"');
+              }
+              return new AwsKmsAdapter({ keyId: opts.kmsKeyId, region: opts.region, endpoint: opts.kmsEndpoint });
+            }
+            throw new Error(`EncryptionModule: unknown mode "${(opts as { mode: string }).mode}"`);
+          },
+          inject: [ENCRYPTION_MODULE_OPTIONS],
+        },
+      ],
+      exports: [ENCRYPTION_SERVICE],
+    };
+  }
 }
 
-// SQS client factory
-export function createSqsClient(): SQSClient {
-  return new SQSClient({
-    region: process.env.AWS_REGION ?? 'us-east-1',
-    endpoint: process.env.INFRA_MODE === 'local' ? 'http://localhost:4566' : undefined,
-  });
-}
+// Registered in AppModule:
+EncryptionModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    mode:          config.get<string>('INFRA_MODE') === 'local' ? 'local' : 'kms',
+    encryptionKey: config.get<string>('ENCRYPTION_KEY'),   // required when mode = 'local'
+    kmsKeyId:      config.get<string>('KMS_KEY_ID'),       // required when mode = 'kms'
+    region:        config.get<string>('KMS_REGION'),
+    kmsEndpoint:   config.get<string>('KMS_ENDPOINT'),     // set to http://localhost:4566 locally
+  }),
+})
+
+// Consumed in any service:
+constructor(@Inject(ENCRYPTION_SERVICE) private readonly encryption: IEncryptionService) {}
 ```
 
 #### 3.0.3 Docker Compose & Local Stack
