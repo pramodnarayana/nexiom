@@ -15,19 +15,13 @@ export class PermissionSeeder implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Only seed if RBAC data is missing (performance optimization)
-    // Check for existence of any role assignments to ensure complete seeding
+    // Always run seedSystemRbac — it is fully idempotent (read-filter-insert),
+    // so it safely picks up any new permissions added to ALL_PERMISSIONS without
+    // touching rows that already exist.
     try {
-      const existingAssignments = await this.db.query.rolePermission.findMany({
-        limit: 1,
-      });
-      if (existingAssignments.length === 0) {
-        await this.seed();
-      } else {
-        this.logger.log("RBAC data already exists, skipping seed");
-      }
+      await this.seed();
     } catch (error) {
-      this.logger.error("Failed to check existing RBAC data", error);
+      this.logger.error("Failed to seed RBAC data", error);
       throw error;
     }
   }

@@ -9,6 +9,7 @@ import {
     index,
     uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 import { organization } from './identity.js';
 import { appConnections } from './tenant.js';
 
@@ -40,7 +41,8 @@ export const uiWorkspaces = pgTable('ui_workspace', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
-    uniqueIndex('ui_workspace_org_name_unique_idx').on(table.orgId, table.name),
+    // Case-insensitive uniqueness per env — same name allowed in PRODUCTION vs SANDBOX
+    uniqueIndex('ui_workspace_org_name_lower_unique_idx').on(table.orgId, table.envType, sql`lower(${table.name})`),
     // Composite unique on (id, orgId) — required target for the composite FK
     // in integration_route that enforces workspace ↔ org co-ownership.
     uniqueIndex('ui_workspace_id_org_unique_idx').on(table.id, table.orgId),
@@ -67,3 +69,22 @@ export const uiWorkspaceConnections = pgTable('ui_workspace_connection', {
     primaryKey({ columns: [table.workspaceId, table.connectionId] }),
     index('workspace_connection_conn_idx').on(table.connectionId),
 ]);
+
+// ---------------------------------------------------------------------------
+// Relations
+// ---------------------------------------------------------------------------
+
+export const uiWorkspaceRelations = relations(uiWorkspaces, ({ many }) => ({
+    connections: many(uiWorkspaceConnections),
+}));
+
+export const uiWorkspaceConnectionRelations = relations(uiWorkspaceConnections, ({ one }) => ({
+    workspace: one(uiWorkspaces, {
+        fields: [uiWorkspaceConnections.workspaceId],
+        references: [uiWorkspaces.id],
+    }),
+    connection: one(appConnections, {
+        fields: [uiWorkspaceConnections.connectionId],
+        references: [appConnections.id],
+    }),
+}));

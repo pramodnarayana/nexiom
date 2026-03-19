@@ -1,0 +1,120 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  NotFoundException,
+  ConflictException,
+  Inject,
+} from '@nestjs/common';
+import {
+  AuthGuard,
+  PermissionsGuard,
+  RequirePermission,
+  AuthContext,
+  type RequestAuthContext,
+} from '@nexiom/auth';
+import { and, eq } from 'drizzle-orm';
+import {
+  DATABASE_CONNECTION,
+  type DrizzleDb,
+  uiWorkspaceConnections,
+  appConnections,
+} from '@nexiom/database';
+import { WorkspacesService } from './workspaces.service.js';
+import { requireOrgId } from './workspace.utils.js';
+
+@UseGuards(AuthGuard, PermissionsGuard)
+@Controller('workspaces/:workspaceId/connections')
+export class WorkspaceConnectionsController {
+  constructor(
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    private readonly workspacesService: WorkspacesService,
+  ) {}
+
+  @Get()
+  @RequirePermission('workspaces', 'read')
+  listConnections(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ) {
+    return this.workspacesService.listConnections(
+      requireOrgId(auth),
+      workspaceId,
+    );
+  }
+
+  @Post(':connectionId')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('workspaces', 'manage')
+  async assign(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+  ) {
+    const orgId = requireOrgId(auth);
+
+    // Verify workspace belongs to this org
+    await this.workspacesService.findOne(orgId, workspaceId);
+
+    // Verify connection belongs to this org
+    const connection = await this.db.query.appConnections.findFirst({
+      where: and(
+        eq(appConnections.id, connectionId),
+        eq(appConnections.tenantId, orgId),
+      ),
+    });
+    if (!connection) {
+      throw new NotFoundException(`Connection ${connectionId} not found.`);
+    }
+
+    try {
+      const [assignment] = await this.db
+        .insert(uiWorkspaceConnections)
+        .values({ workspaceId, connectionId })
+        .returning();
+      return assignment;
+    } catch (err: unknown) {
+      // PG unique-violation → already assigned
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        (err as { code: string }).code === '23505'
+      ) {
+        throw new ConflictException(
+          'Connection is already assigned to this workspace.',
+        );
+      }
+      throw err;
+    }
+  }
+
+  @Delete(':connectionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('workspaces', 'manage')
+  async unassign(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+  ) {
+    const orgId = requireOrgId(auth);
+
+    // Verify workspace belongs to this org
+    await this.workspacesService.findOne(orgId, workspaceId);
+
+    await this.db
+      .delete(uiWorkspaceConnections)
+      .where(
+        and(
+          eq(uiWorkspaceConnections.workspaceId, workspaceId),
+          eq(uiWorkspaceConnections.connectionId, connectionId),
+        ),
+      );
+  }
+}

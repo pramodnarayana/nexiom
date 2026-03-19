@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
-import { LayoutDashboard, Users, Settings, Blocks, Plug2 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Blocks, Plug2, Building2 } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { RESOURCES } from '@/shared/constants/resources';
 
@@ -18,6 +18,8 @@ import { UserProfilePage } from '../../modules/identity/pages/UserProfilePage';
 import { AppScopeProvider } from '@/shared/contexts/AppScopeContext';
 import { ConnectionsPage as MarketplacePage } from '../../modules/connections/pages/ConnectionsPage';
 import { ActiveConnectionsPage } from '../../modules/connections/pages/ActiveConnectionsPage';
+import { WorkspacesPage } from '../../modules/workspaces/pages/WorkspacesPage';
+import { WorkspaceDetailPage } from '../../modules/workspaces/pages/WorkspaceDetailPage';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -28,6 +30,7 @@ export function TenantRoutes() {
                 { label: 'Users', href: '/dashboard/users', icon: Users },
                 { label: 'Marketplace', href: '/dashboard/marketplace', icon: Blocks },
                 { label: 'Active Connections', href: '/dashboard/active-connections', icon: Plug2 },
+                { label: 'Workspaces', href: '/dashboard/workspaces', icon: Building2 },
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ]
         }
@@ -73,6 +76,8 @@ export function TenantRoutes() {
                             <Route path="profile" element={<UserProfilePage />} />
                             <Route path="marketplace" element={<MarketplacePage />} />
                             <Route path="active-connections" element={<ActiveConnectionsPage />} />
+                            <Route path="workspaces" element={<WorkspacesPage />} />
+                            <Route path="workspaces/:id" element={<WorkspaceDetailPage />} />
                         </Route>
                     </Routes>
                 </Refine>

@@ -82,30 +82,25 @@ describe("PermissionSeeder", () => {
     vi.restoreAllMocks();
   });
 
-  it("onModuleInit calls seed if no permissions exist", async () => {
-    // Mock db.query.rolePermission to return empty (triggering seed)
-    db.query = {
-      rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
-    } as unknown as typeof db.query;
+  it("onModuleInit always calls seed", async () => {
     const spy = vi.spyOn(seeder, "seed").mockResolvedValue(undefined);
     await seeder.onModuleInit();
-    expect(spy).toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledOnce();
   });
 
-  it("onModuleInit skips seed if permissions exist", async () => {
-    // Mock db.query.rolePermission to return data (skipping seed)
-    db.query = {
-      rolePermission: { findMany: vi.fn().mockResolvedValue([{ id: "1" }]) },
-    } as unknown as typeof db.query;
-    const seedSpy = vi.spyOn(seeder, "seed");
-    const logSpy = vi.spyOn(Logger.prototype, "log");
-
+  it("onModuleInit calls seed even when permissions already exist", async () => {
+    // seedSystemRbac is idempotent — onModuleInit always seeds regardless of existing data
+    const spy = vi.spyOn(seeder, "seed").mockResolvedValue(undefined);
     await seeder.onModuleInit();
+    expect(spy).toHaveBeenCalledOnce();
+  });
 
-    expect(seedSpy).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(
-      "RBAC data already exists, skipping seed",
-    );
+  it("onModuleInit re-throws seed errors after logging", async () => {
+    const err = new Error("DB Error");
+    vi.spyOn(seeder, "seed").mockRejectedValue(err);
+    const logSpy = vi.spyOn(Logger.prototype, "error");
+    await expect(seeder.onModuleInit()).rejects.toThrow("DB Error");
+    expect(logSpy).toHaveBeenCalledWith("Failed to seed RBAC data", err);
   });
 
   it("seed inserts roles, permissions, and rolePermissions", async () => {
@@ -203,6 +198,7 @@ describe("PermissionSeeder", () => {
           "users:read",
           "tenants:read",
           "dashboard:read",
+          "workspaces:read",
           "admin_dashboard:view",
           "system_users:read",
           "system_tenants:read",
@@ -233,6 +229,11 @@ describe("PermissionSeeder", () => {
           permissionId: "dashboard:read",
           organizationId: null,
         },
+        {
+          roleId: "member",
+          permissionId: "workspaces:read",
+          organizationId: null,
+        },
         // member system perms (organizationId: "sys")
         {
           roleId: "member",
@@ -256,6 +257,11 @@ describe("PermissionSeeder", () => {
           {
             roleId: role,
             permissionId: "dashboard:read",
+            organizationId: null,
+          },
+          {
+            roleId: role,
+            permissionId: "workspaces:read",
             organizationId: null,
           },
           {

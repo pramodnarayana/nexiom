@@ -8,5 +8,9 @@
 -- Environments that already ran 0000 will receive these changes here.
 
 --> statement-breakpoint
-CREATE INDEX "tenant_status_created_at_id_idx" ON "app_connection" USING btree ("tenant_id","status","created_at" DESC,"id" DESC);--> statement-breakpoint
-ALTER TABLE "pieces" ADD COLUMN "updated_at" timestamp with time zone DEFAULT now() NOT NULL;
+CREATE INDEX IF NOT EXISTS "tenant_status_created_at_id_idx" ON "app_connection" USING btree ("tenant_id","status","created_at" DESC,"id" DESC);
+--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "pieces" ADD COLUMN "updated_at" timestamp with time zone DEFAULT now() NOT NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
