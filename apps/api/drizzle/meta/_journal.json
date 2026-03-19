@@ -54,14 +54,14 @@
     {
       "idx": 7,
       "version": "7",
-      "when": 1742300000000,
+      "when": 1773600000000,
       "tag": "0008_workspaces",
       "breakpoints": true
     },
     {
       "idx": 8,
       "version": "7",
-      "when": 1742386800000,
+      "when": 1773700000000,
       "tag": "0009_workspace_name_unique_per_env",
       "breakpoints": true
     }

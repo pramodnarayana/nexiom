@@ -47,3 +47,18 @@ CREATE INDEX IF NOT EXISTS "ui_workspace_org_idx" ON "ui_workspace" USING btree 
 CREATE INDEX IF NOT EXISTS "ui_workspace_env_idx" ON "ui_workspace" USING btree ("org_id","env_type");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "workspace_connection_conn_idx" ON "ui_workspace_connection" USING btree ("connection_id");
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TRIGGER workspaces_updated_at_trigger
+    BEFORE UPDATE ON "ui_workspace"
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

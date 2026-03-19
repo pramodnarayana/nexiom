@@ -4,10 +4,7 @@ import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
-import type { RequestAuthContext } from '@nexiom/auth';
-
-const ORG_ID = 'org-1';
-const WS_ID = 'ws-uuid-1';
+import { ORG_ID, WS_ID, makeAuth } from './workspace-test-fixtures.js';
 
 const WORKSPACE = {
   id: WS_ID,
@@ -17,14 +14,6 @@ const WORKSPACE = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
-
-function makeAuth(): RequestAuthContext {
-  return {
-    headers: {} as unknown as Headers,
-    user: { organizationId: ORG_ID } as RequestAuthContext['user'],
-    session: {} as RequestAuthContext['session'],
-  };
-}
 
 describe('WorkspacesController', () => {
   let controller: WorkspacesController;

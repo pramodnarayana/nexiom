@@ -103,7 +103,7 @@ export function WorkspacesPage() {
         </div>
       )}
 
-      {!loading && workspaces.length === 0 && (
+      {!loading && !error && workspaces.length === 0 && (
         <div className="border rounded-lg p-10 text-center text-muted-foreground">
           <Building2 className="mx-auto h-8 w-8 mb-3 opacity-40" />
           <p className="font-medium">No workspaces yet</p>
@@ -118,7 +118,7 @@ export function WorkspacesPage() {
               <div className="flex items-center gap-3">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
                 <Link
-                  to={`/workspaces/${ws.id}`}
+                  to={`/dashboard/workspaces/${ws.id}`}
                   className="font-medium hover:underline"
                 >
                   {ws.name}

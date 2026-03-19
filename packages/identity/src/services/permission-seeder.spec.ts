@@ -88,13 +88,6 @@ describe("PermissionSeeder", () => {
     expect(spy).toHaveBeenCalledOnce();
   });
 
-  it("onModuleInit calls seed even when permissions already exist", async () => {
-    // seedSystemRbac is idempotent — onModuleInit always seeds regardless of existing data
-    const spy = vi.spyOn(seeder, "seed").mockResolvedValue(undefined);
-    await seeder.onModuleInit();
-    expect(spy).toHaveBeenCalledOnce();
-  });
-
   it("onModuleInit re-throws seed errors after logging", async () => {
     const err = new Error("DB Error");
     vi.spyOn(seeder, "seed").mockRejectedValue(err);

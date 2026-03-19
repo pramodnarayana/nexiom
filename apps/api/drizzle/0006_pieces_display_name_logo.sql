@@ -29,7 +29,18 @@ UPDATE "pieces" SET "display_name" = initcap("name") WHERE "display_name" IS NUL
 --> statement-breakpoint
 
 -- UP — Phase 3: harden to NOT NULL once every row has a value ----------------
-ALTER TABLE "pieces" ALTER COLUMN "display_name" SET NOT NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'pieces'
+      AND column_name  = 'display_name'
+      AND is_nullable  = 'YES'
+  ) THEN
+    ALTER TABLE "pieces" ALTER COLUMN "display_name" SET NOT NULL;
+  END IF;
+END $$;
 --> statement-breakpoint
 
 -- logo_url — nullable by design; no backfill needed -------------------------

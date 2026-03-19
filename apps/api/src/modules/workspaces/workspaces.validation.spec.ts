@@ -28,6 +28,12 @@ describe('CreateWorkspaceSchema', () => {
     expect(CreateWorkspaceSchema.safeParse({ name: '' }).success).toBe(false);
   });
 
+  it('accepts a name of exactly 255 characters', () => {
+    expect(
+      CreateWorkspaceSchema.safeParse({ name: 'a'.repeat(255) }).success,
+    ).toBe(true);
+  });
+
   it('rejects a name exceeding 255 characters', () => {
     expect(
       CreateWorkspaceSchema.safeParse({ name: 'a'.repeat(256) }).success,

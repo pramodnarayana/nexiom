@@ -12,6 +12,7 @@ import {
   uiWorkspaces,
   uiWorkspaceConnections,
   appConnections,
+  AppConnectionStatus,
 } from '@nexiom/database';
 import type {
   CreateWorkspace,
@@ -133,6 +134,7 @@ export class WorkspacesService {
         and(
           eq(uiWorkspaceConnections.connectionId, appConnections.id),
           eq(appConnections.tenantId, orgId),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
         ),
       )
       .where(eq(uiWorkspaceConnections.workspaceId, workspaceId))

@@ -5,11 +5,7 @@ import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import type { RequestAuthContext } from '@nexiom/auth';
-
-const ORG_ID = 'org-1';
-const WS_ID = 'ws-uuid-1';
-const CONN_ID = 'conn-uuid-1';
+import { ORG_ID, WS_ID, CONN_ID, makeAuth } from './workspace-test-fixtures.js';
 
 const WORKSPACE = {
   id: WS_ID,
@@ -19,14 +15,6 @@ const WORKSPACE = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
-
-function makeAuth(): RequestAuthContext {
-  return {
-    headers: {} as unknown as Headers,
-    user: { organizationId: ORG_ID } as RequestAuthContext['user'],
-    session: {} as RequestAuthContext['session'],
-  };
-}
 
 function buildMockDb() {
   const findFirst = vi.fn();

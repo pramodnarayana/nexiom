@@ -15,6 +15,7 @@ import {
   assignConnection,
   unassignConnection,
   type WorkspaceResponse,
+  type WorkspaceConnectionResponse,
 } from '../api/workspaces.api';
 import { EnvBadge } from '../components/EnvBadge';
 import {
@@ -27,7 +28,7 @@ export function WorkspaceDetailPage() {
 
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [wsLoading, setWsLoading] = useState(true);
-  const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+  const [assignedConnections, setAssignedConnections] = useState<WorkspaceConnectionResponse[]>([]);
   const [allConnections, setAllConnections] = useState<ActiveConnectionResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -42,7 +43,7 @@ export function WorkspaceDetailPage() {
         listWorkspaceConnections(id),
       ]);
       setWorkspace(ws);
-      setAssignedIds(new Set(assigned.map((c) => c.id)));
+      setAssignedConnections(assigned);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load workspace.');
@@ -64,7 +65,7 @@ export function WorkspaceDetailPage() {
     void fetchConnections();
   }, [fetchWorkspace, fetchConnections]);
 
-  const assignedConnections = allConnections.filter((c) => assignedIds.has(c.id));
+  const assignedIds = new Set(assignedConnections.map((c) => c.id));
   const unassignedConnections = allConnections.filter((c) => !assignedIds.has(c.id));
 
   const handleAssign = async (connectionId: string) => {
@@ -72,7 +73,21 @@ export function WorkspaceDetailPage() {
     setAssigning(connectionId);
     try {
       await assignConnection(id, connectionId);
-      setAssignedIds((prev) => new Set([...prev, connectionId]));
+      const source = allConnections.find((c) => c.id === connectionId);
+      if (source) {
+        setAssignedConnections((prev) => [
+          ...prev,
+          {
+            id: source.id,
+            appName: source.appName,
+            externalId: source.externalId,
+            displayName: source.displayName,
+            authType: source.authType,
+            status: source.status,
+            assignedAt: new Date().toISOString(),
+          },
+        ]);
+      }
       setDialogOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to assign connection.');
@@ -85,11 +100,7 @@ export function WorkspaceDetailPage() {
     if (!id) return;
     try {
       await unassignConnection(id, connectionId);
-      setAssignedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(connectionId);
-        return next;
-      });
+      setAssignedConnections((prev) => prev.filter((c) => c.id !== connectionId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove connection.');
     }
@@ -111,7 +122,7 @@ export function WorkspaceDetailPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link to="/workspaces" className="text-muted-foreground hover:text-foreground">
+        <Link to="/dashboard/workspaces" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <Building2 className="h-5 w-5 text-muted-foreground" />

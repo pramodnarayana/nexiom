@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 
 export const CreateWorkspaceSchema = z.object({
-  name: z.string().min(1).max(255),
+  name: z.string().trim().min(1).max(255),
   envType: z.enum(['PRODUCTION', 'SANDBOX']).optional(),
 });
 

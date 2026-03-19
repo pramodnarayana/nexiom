@@ -587,13 +587,15 @@ export class DatabaseManager {
         },
       ] as const;
 
+      const { eq } = await import('drizzle-orm');
+
       for (const fixture of fixtures) {
         const encryptedValue = this.encryptFixture(
           JSON.stringify(fixture.credentials),
           encryptionKey,
         );
 
-        await db
+        const [inserted] = await db
           .insert(dbSchema.appConnections)
           .values({
             id: fixture.id,
@@ -605,13 +607,27 @@ export class DatabaseManager {
             value: encryptedValue,
             status: 'ACTIVE',
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning();
 
-        const schemaName = `ws_${fixture.id.replaceAll('-', '_')}`;
+        // onConflictDoNothing returns nothing on conflict — fetch the existing row
+        const resolved =
+          inserted ??
+          (await db.query.appConnections.findFirst({
+            where: eq(dbSchema.appConnections.externalId, fixture.externalId),
+          }));
+
+        if (!resolved) {
+          throw new Error(
+            `Failed to resolve app connection for externalId=${fixture.externalId}`,
+          );
+        }
+
+        const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
         await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
 
         console.log(
-          `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
+          `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
         );
       }
 
