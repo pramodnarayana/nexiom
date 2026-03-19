@@ -614,8 +614,6 @@ export class DatabaseManager {
         },
       ] as const;
 
-      const { eq, and } = await import('drizzle-orm');
-
       for (const fixture of fixtures) {
         const encryptedValue = this.encryptFixture(
           JSON.stringify(fixture.credentials),
@@ -634,29 +632,28 @@ export class DatabaseManager {
             value: encryptedValue,
             status: 'ACTIVE',
           })
-          .onConflictDoNothing({
+          .onConflictDoUpdate({
             target: [
               dbSchema.appConnections.tenantId,
               dbSchema.appConnections.externalId,
             ],
+            set: {
+              value: encryptedValue,
+              displayName: fixture.displayName,
+              appName: fixture.appName,
+              authType: 'OAUTH2',
+              status: 'ACTIVE',
+            },
           })
           .returning();
 
-        // onConflictDoNothing returns nothing on conflict — fetch the existing row scoped to this tenant
-        const resolved =
-          inserted ??
-          (await db.query.appConnections.findFirst({
-            where: and(
-              eq(dbSchema.appConnections.tenantId, systemTenantId),
-              eq(dbSchema.appConnections.externalId, fixture.externalId),
-            ),
-          }));
-
-        if (!resolved) {
+        if (!inserted) {
           throw new Error(
-            `Failed to resolve app connection for externalId=${fixture.externalId}`,
+            `Upsert returned no row for externalId=${fixture.externalId}`,
           );
         }
+
+        const resolved = inserted;
 
         const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
         await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -31,12 +31,18 @@ export function WorkspacesPage() {
   const [deleteTarget, setDeleteTarget] = useState<WorkspaceResponse | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const fetchSeqRef = useRef(0);
+
   const fetchWorkspaces = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
     setLoading(true);
     try {
-      setWorkspaces(await listWorkspaces());
+      const data = await listWorkspaces();
+      if (seq !== fetchSeqRef.current) return;
+      setWorkspaces(data);
       setError(null);
     } catch (e: unknown) {
+      if (seq !== fetchSeqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load workspaces.');
     } finally {
       setLoading(false);

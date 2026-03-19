@@ -88,7 +88,7 @@ export function WorkspaceDetailPage() {
   const unassignedConnections = allConnections.filter((c) => !assignedIds.has(c.id));
 
   const handleAssign = async (connectionId: string) => {
-    if (!id) return;
+    if (!id || assigning !== null) return;
     setAssigning(connectionId);
     try {
       await assignConnection(id, connectionId);
@@ -98,7 +98,8 @@ export function WorkspaceDetailPage() {
       return;
     }
 
-    // Assignment succeeded — close the dialog immediately before refreshing
+    // Assignment succeeded — clear any stale error and close the dialog
+    setError(null);
     setDialogOpen(false);
 
     try {
@@ -116,6 +117,7 @@ export function WorkspaceDetailPage() {
     try {
       await unassignConnection(id, connectionId);
       setAssignedConnections((prev) => prev.filter((c) => c.id !== connectionId));
+      setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove connection.');
     } finally {

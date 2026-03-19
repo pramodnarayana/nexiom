@@ -225,4 +225,24 @@ describe('WorkspacesService', () => {
       NotFoundException,
     );
   });
+
+  it('returns empty array when workspace exists but all connection columns are null (left-join sentinel)', async () => {
+    // Workspace exists but has no assigned connections — left join produces a sentinel row
+    // with workspaceId present but all appConnections columns null.
+    const sentinelRow = {
+      workspaceId: WS_ID,
+      id: null,
+      appName: null,
+      externalId: null,
+      displayName: null,
+      authType: null,
+      status: null,
+      assignedAt: new Date(),
+    };
+    mocks.selectOrderBy.mockResolvedValue([sentinelRow]);
+
+    const result = await service.listConnections(ORG_ID, WS_ID);
+
+    expect(result).toEqual([]);
+  });
 });
