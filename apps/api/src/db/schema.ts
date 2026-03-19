@@ -47,3 +47,10 @@ export { pieces } from '@nexiom/database';
 
 // Infrastructure registry — maps connection IDs to physical DB schema + region
 export { connectionStorageRegistry } from '@nexiom/database';
+
+// Workspaces — logical folders grouping connections per team/environment
+export {
+  uiWorkspaces,
+  uiWorkspaceConnections,
+  envTypeEnum,
+} from '@nexiom/database';

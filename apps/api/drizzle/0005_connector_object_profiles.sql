@@ -10,7 +10,7 @@
 -- repopulate on next request).
 
 -- UP -------------------------------------------------------------------------
-CREATE TABLE "connector_object_profiles" (
+CREATE TABLE IF NOT EXISTS "connector_object_profiles" (
     "connection_id" uuid NOT NULL,
     "object_name" varchar(255) NOT NULL,
     "profile" jsonb DEFAULT '{}'::jsonb NOT NULL,
@@ -19,15 +19,18 @@ CREATE TABLE "connector_object_profiles" (
     CONSTRAINT "connector_object_profiles_pkey" PRIMARY KEY ("connection_id","object_name")
 );
 --> statement-breakpoint
-ALTER TABLE "connector_object_profiles"
+DO $$ BEGIN
+  ALTER TABLE "connector_object_profiles"
     ADD CONSTRAINT "connector_object_profiles_connection_id_app_connection_id_fk"
     FOREIGN KEY ("connection_id")
     REFERENCES "public"."app_connection"("id")
     ON DELETE cascade
     ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 --> statement-breakpoint
 -- Allows MetadataDiscoveryService to list all cached objects for a connection
-CREATE INDEX "cop_connection_idx" ON "connector_object_profiles" USING btree ("connection_id");
+CREATE INDEX IF NOT EXISTS "cop_connection_idx" ON "connector_object_profiles" USING btree ("connection_id");
 
 -- DOWN -----------------------------------------------------------------------
 -- DROP INDEX  "cop_connection_idx";

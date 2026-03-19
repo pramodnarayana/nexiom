@@ -22,6 +22,7 @@ import { EmailModule } from '../modules/email/email.module.js';
 import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module.js';
 import { CacheModule } from '@nexiom/cache';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
+import { WorkspacesModule } from '../modules/workspaces/workspaces.module.js';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
     TriggerModule,
     StorageResolverModule,
     DbManagerModule,
+    WorkspacesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

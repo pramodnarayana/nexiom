@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createCipheriv, randomBytes } from 'node:crypto';
 import { Client } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema.js';
@@ -492,6 +493,185 @@ export class DatabaseManager {
     console.log();
 
     console.log('✅ Reset complete!');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Local dev fixture provisioning
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Encrypts a string using AES-256-GCM — same algorithm as LocalCryptoAdapter.
+   * Wire format: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
+   */
+  private encryptFixture(plaintext: string, encryptionKey: string): string {
+    const keyBuffer = Buffer.from(encryptionKey);
+    if (keyBuffer.length !== 32) {
+      throw new Error(
+        `ENCRYPTION_KEY must be exactly 32 bytes, got ${keyBuffer.length}. ` +
+          `Set a 32-character string in your .env file.`,
+      );
+    }
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', keyBuffer, iv);
+    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+  }
+
+  /**
+   * Provision local dev fixture:
+   *   1. Upserts one Salesforce + one QuickBooks connection under the system tenant.
+   *   2. Creates `ws_{connectionId}` schemas (GATEWAY_ACTIVE plan) for each.
+   *
+   * Idempotent — safe to run multiple times. Skips connections that already exist.
+   */
+  async provisionLocal(): Promise<void> {
+    this.assertSafeEnvironment();
+
+    // Require an explicit opt-in flag OR confirm the DB host is local.
+    const dbUrl = process.env.DATABASE_URL ?? '';
+    const forceFlag = process.env.FORCE_PROVISION_LOCAL === 'true';
+    if (!forceFlag) {
+      let host: string | null = null;
+      try {
+        host = new URL(dbUrl).hostname;
+      } catch {
+        // unparseable URL — host stays null, treated as non-local below
+      }
+      // null  → parse failed (non-local)
+      // ''    → Unix socket path in the URL (local)
+      // other → compare against known local hostnames
+      const isLocal =
+        host === '' ||
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1';
+      if (!isLocal) {
+        throw new Error(
+          `provisionLocal() refused: DATABASE_URL points to a non-local host ("${host ?? 'unparseable'}"). ` +
+            `Set FORCE_PROVISION_LOCAL=true to override.`,
+        );
+      }
+    }
+
+    console.log('🔧 Provisioning local dev fixtures...\n');
+
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      throw new Error(
+        'ENCRYPTION_KEY is not set. Add a 32-character string to your .env file.',
+      );
+    }
+
+    const systemTenantId = process.env.SYSTEM_TENANT_ID;
+    if (!systemTenantId) {
+      throw new Error(
+        'SYSTEM_TENANT_ID is not set. Run `db:seed` first to create the system tenant.',
+      );
+    }
+
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const dbSchema = await import('./schema.js');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      // SqlDatabaseManager only calls db.$client.query() — the schema generic mismatch
+      // between the local schema and @nexiom/database's schema is safe to cast here.
+      const schemaMgr = new SqlDatabaseManager(
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
+
+      const fixtures = [
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          appName: 'salesforce',
+          externalId: 'dev-salesforce',
+          displayName: 'Dev Salesforce',
+          credentials: {
+            clientId: 'dev-sf-client-id',
+            clientSecret: 'dev-sf-client-secret',
+            accessToken: 'dev-sf-access-token',
+            refreshToken: 'dev-sf-refresh-token',
+            data: { instance_url: 'https://test.salesforce.com' },
+          },
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000002',
+          appName: 'quickbooks',
+          externalId: 'dev-quickbooks',
+          displayName: 'Dev QuickBooks',
+          credentials: {
+            clientId: 'dev-qb-client-id',
+            clientSecret: 'dev-qb-client-secret',
+            accessToken: 'dev-qb-access-token',
+            refreshToken: 'dev-qb-refresh-token',
+            data: { realmId: 'dev-realm-id' },
+          },
+        },
+      ] as const;
+
+      for (const fixture of fixtures) {
+        const encryptedValue = this.encryptFixture(
+          JSON.stringify(fixture.credentials),
+          encryptionKey,
+        );
+
+        const [inserted] = await db
+          .insert(dbSchema.appConnections)
+          .values({
+            id: fixture.id,
+            tenantId: systemTenantId,
+            appName: fixture.appName,
+            externalId: fixture.externalId,
+            displayName: fixture.displayName,
+            authType: 'OAUTH2',
+            value: encryptedValue,
+            status: 'ACTIVE',
+          })
+          .onConflictDoUpdate({
+            target: [
+              dbSchema.appConnections.tenantId,
+              dbSchema.appConnections.externalId,
+            ],
+            set: {
+              value: encryptedValue,
+              displayName: fixture.displayName,
+              appName: fixture.appName,
+              authType: 'OAUTH2',
+              status: 'ACTIVE',
+            },
+          })
+          .returning();
+
+        if (!inserted) {
+          throw new Error(
+            `Upsert returned no row for externalId=${fixture.externalId}`,
+          );
+        }
+
+        const resolved = inserted;
+
+        const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
+        await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+
+        console.log(
+          `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
+        );
+      }
+
+      console.log('\n✅ Local dev fixtures provisioned.');
+      console.log(
+        '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
+          '   and update app_connection.value with the resulting ciphertext.\n' +
+          '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
+      );
+    } finally {
+      await client.end();
+    }
   }
 
   /**

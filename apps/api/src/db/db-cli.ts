@@ -21,6 +21,7 @@ const COMMANDS = [
   'seed',
   'fresh',
   'reset',
+  'provision:local',
   'check-user',
   'check-role',
   'seed:abac',
@@ -59,6 +60,9 @@ async function main() {
         break;
       case 'reset':
         await manager.reset();
+        break;
+      case 'provision:local':
+        await manager.provisionLocal();
         break;
       case 'check-user': {
         const identifier = process.argv[3];

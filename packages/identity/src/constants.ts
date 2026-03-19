@@ -38,6 +38,8 @@ export const ALL_PERMISSIONS = [
   "roles:read",
   "invitations:read",
   "invitations:create",
+  "workspaces:read",
+  "workspaces:manage",
 ] as const;
 
 export enum RoleScope {

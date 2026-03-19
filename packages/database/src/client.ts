@@ -4,8 +4,9 @@ import * as tenantSchema from './schema/tenant.js';
 import * as registrySchema from './schema/storage_registry.js';
 import * as profileSchema from './schema/connector_object_profiles.js';
 import * as piecesSchema from './schema/pieces.js';
+import * as workspaceSchema from './schema/workspace.js';
 
-const schemaBundle = { ...tenantSchema, ...registrySchema, ...profileSchema, ...piecesSchema };
+const schemaBundle = { ...tenantSchema, ...registrySchema, ...profileSchema, ...piecesSchema, ...workspaceSchema };
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;
