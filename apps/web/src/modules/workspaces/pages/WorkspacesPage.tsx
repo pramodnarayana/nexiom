@@ -51,11 +51,12 @@ export function WorkspacesPage() {
     if (creating || !newName.trim()) return;
     setCreating(true);
     try {
-      await createWorkspace({ name: newName.trim(), envType: newEnvType });
+      const created = await createWorkspace({ name: newName.trim(), envType: newEnvType });
+      setWorkspaces((prev) => [...prev, created]);
       setDialogOpen(false);
       setNewName('');
       setNewEnvType('PRODUCTION');
-      await fetchWorkspaces();
+      void fetchWorkspaces();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace.');
     } finally {
@@ -66,10 +67,12 @@ export function WorkspacesPage() {
   const handleDeleteConfirm = async () => {
     if (deleting || !deleteTarget) return;
     setDeleting(true);
+    const targetId = deleteTarget.id;
     try {
-      await deleteWorkspace(deleteTarget.id);
+      await deleteWorkspace(targetId);
+      setWorkspaces((prev) => prev.filter((ws) => ws.id !== targetId));
       setDeleteTarget(null);
-      await fetchWorkspaces();
+      void fetchWorkspaces();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete workspace.');
     } finally {

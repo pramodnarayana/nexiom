@@ -533,20 +533,23 @@ export class DatabaseManager {
     const dbUrl = process.env.DATABASE_URL ?? '';
     const forceFlag = process.env.FORCE_PROVISION_LOCAL === 'true';
     if (!forceFlag) {
-      let host = '';
+      let host: string | null = null;
       try {
         host = new URL(dbUrl).hostname;
       } catch {
-        // unparseable URL — treat as non-local
+        // unparseable URL — host stays null, treated as non-local below
       }
+      // null  → parse failed (non-local)
+      // ''    → Unix socket path in the URL (local)
+      // other → compare against known local hostnames
       const isLocal =
+        host === '' ||
         host === 'localhost' ||
         host === '127.0.0.1' ||
-        host === '::1' ||
-        host === '';
+        host === '::1';
       if (!isLocal) {
         throw new Error(
-          `provisionLocal() refused: DATABASE_URL points to a non-local host ("${host}"). ` +
+          `provisionLocal() refused: DATABASE_URL points to a non-local host ("${host ?? 'unparseable'}"). ` +
             `Set FORCE_PROVISION_LOCAL=true to override.`,
         );
       }

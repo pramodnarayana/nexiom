@@ -39,9 +39,11 @@ function buildMockDb() {
       }),
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
-          innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: selectOrderBy,
+          leftJoin: vi.fn().mockReturnValue({
+            leftJoin: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                orderBy: selectOrderBy,
+              }),
             }),
           }),
         }),
@@ -194,26 +196,30 @@ describe('WorkspacesService', () => {
   // ── listConnections ───────────────────────────────────────────────────────
 
   it('returns connections assigned to the workspace', async () => {
-    const row = {
+    const assignedAt = new Date();
+    // Raw row includes workspaceId (selected for the exists-check); service strips it
+    const rawRow = {
+      workspaceId: WS_ID,
       id: CONN_ID,
       appName: 'salesforce',
       externalId: 'sf-slug',
       displayName: 'Salesforce Master',
       authType: 'OAUTH2',
       status: 'ACTIVE',
-      assignedAt: new Date(),
+      assignedAt,
     };
-    mocks.findFirst.mockResolvedValue(WORKSPACE);
-    mocks.selectOrderBy.mockResolvedValue([row]);
+    mocks.selectOrderBy.mockResolvedValue([rawRow]);
 
     const result = await service.listConnections(ORG_ID, WS_ID);
 
-    expect(result).toEqual([row]);
+    // workspaceId is stripped from returned objects
+    const { workspaceId: _ws, ...expectedRow } = rawRow;
+    expect(result).toEqual([expectedRow]);
     expect(mocks.db.select).toHaveBeenCalled();
   });
 
   it('throws NotFoundException when listing connections for a non-existent workspace', async () => {
-    mocks.findFirst.mockResolvedValue(null);
+    mocks.selectOrderBy.mockResolvedValue([]);
 
     await expect(service.listConnections(ORG_ID, WS_ID)).rejects.toThrow(
       NotFoundException,

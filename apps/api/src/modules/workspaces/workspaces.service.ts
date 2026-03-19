@@ -122,10 +122,9 @@ export class WorkspacesService {
 
   /** Returns active connections assigned to the workspace, scoped to the org. */
   async listConnections(orgId: string, workspaceId: string) {
-    await this.findOne(orgId, workspaceId);
-
     const rows = await this.db
       .select({
+        workspaceId: uiWorkspaces.id,
         id: appConnections.id,
         appName: appConnections.appName,
         externalId: appConnections.externalId,
@@ -134,8 +133,12 @@ export class WorkspacesService {
         status: appConnections.status,
         assignedAt: uiWorkspaceConnections.assignedAt,
       })
-      .from(uiWorkspaceConnections)
-      .innerJoin(
+      .from(uiWorkspaces)
+      .leftJoin(
+        uiWorkspaceConnections,
+        eq(uiWorkspaces.id, uiWorkspaceConnections.workspaceId),
+      )
+      .leftJoin(
         appConnections,
         and(
           eq(uiWorkspaceConnections.connectionId, appConnections.id),
@@ -143,9 +146,18 @@ export class WorkspacesService {
           eq(appConnections.status, AppConnectionStatus.ACTIVE),
         ),
       )
-      .where(eq(uiWorkspaceConnections.workspaceId, workspaceId))
+      .where(
+        and(eq(uiWorkspaces.id, workspaceId), eq(uiWorkspaces.orgId, orgId)),
+      )
       .orderBy(asc(uiWorkspaceConnections.assignedAt));
 
-    return rows;
+    if (rows.length === 0) {
+      throw new NotFoundException(`Workspace ${workspaceId} not found.`);
+    }
+
+    // Filter out the sentinel row produced when no connections are assigned
+    return rows
+      .filter((r) => r.id !== null)
+      .map(({ workspaceId: _ws, ...rest }) => rest);
   }
 }

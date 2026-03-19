@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Building2, Loader2, Plus, Unlink } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -36,29 +36,41 @@ export function WorkspaceDetailPage() {
   const [assigning, setAssigning] = useState<string | null>(null);
   const [unassigningId, setUnassigningId] = useState<string | null>(null);
 
+  const fetchSeqRef = useRef(0);
+  const connSeqRef = useRef(0);
+
   const fetchWorkspace = useCallback(async () => {
     if (!id) return;
+    const seq = ++fetchSeqRef.current;
+    setWorkspace(null);
+    setAssignedConnections([]);
     setWsLoading(true);
     try {
       const [ws, assigned] = await Promise.all([
         getWorkspace(id),
         listWorkspaceConnections(id),
       ]);
+      if (seq !== fetchSeqRef.current) return;
       setWorkspace(ws);
       setAssignedConnections(assigned);
       setError(null);
     } catch (e: unknown) {
+      if (seq !== fetchSeqRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load workspace.');
     } finally {
-      setWsLoading(false);
+      if (seq === fetchSeqRef.current) setWsLoading(false);
     }
   }, [id]);
 
   const fetchConnections = useCallback(async () => {
+    const seq = ++connSeqRef.current;
     try {
-      setAllConnections(await listActiveConnections());
+      const connections = await listActiveConnections();
+      if (seq !== connSeqRef.current) return;
+      setAllConnections(connections);
       setConnectionsError(null);
     } catch (e: unknown) {
+      if (seq !== connSeqRef.current) return;
       setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
     }
   }, []);
@@ -66,6 +78,10 @@ export function WorkspaceDetailPage() {
   useEffect(() => {
     void fetchWorkspace();
     void fetchConnections();
+    return () => {
+      fetchSeqRef.current++;
+      connSeqRef.current++;
+    };
   }, [fetchWorkspace, fetchConnections]);
 
   const assignedIds = new Set(assignedConnections.map((c) => c.id));
@@ -76,10 +92,19 @@ export function WorkspaceDetailPage() {
     setAssigning(connectionId);
     try {
       await assignConnection(id, connectionId);
-      setAssignedConnections(await listWorkspaceConnections(id));
-      setDialogOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to assign connection.');
+      setAssigning(null);
+      return;
+    }
+
+    // Assignment succeeded — close the dialog immediately before refreshing
+    setDialogOpen(false);
+
+    try {
+      setAssignedConnections(await listWorkspaceConnections(id));
+    } catch {
+      setError('Connection assigned, but failed to refresh the list. Try reloading.');
     } finally {
       setAssigning(null);
     }
@@ -155,7 +180,7 @@ export function WorkspaceDetailPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link to="/dashboard/workspaces" className="text-muted-foreground hover:text-foreground">
+        <Link to="/dashboard/workspaces" aria-label="Back to workspaces" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <Building2 className="h-5 w-5 text-muted-foreground" />
