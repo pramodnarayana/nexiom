@@ -28,6 +28,12 @@ describe('CreateWorkspaceSchema', () => {
     expect(CreateWorkspaceSchema.safeParse({ name: '' }).success).toBe(false);
   });
 
+  it('rejects a whitespace-only name', () => {
+    expect(CreateWorkspaceSchema.safeParse({ name: '   ' }).success).toBe(
+      false,
+    );
+  });
+
   it('accepts a name of exactly 255 characters', () => {
     expect(
       CreateWorkspaceSchema.safeParse({ name: 'a'.repeat(255) }).success,
@@ -71,6 +77,12 @@ describe('UpdateWorkspaceSchema', () => {
 
   it('rejects an empty name string', () => {
     expect(UpdateWorkspaceSchema.safeParse({ name: '' }).success).toBe(false);
+  });
+
+  it('rejects a whitespace-only name', () => {
+    expect(UpdateWorkspaceSchema.safeParse({ name: '   ' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects an invalid envType', () => {

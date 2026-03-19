@@ -587,7 +587,7 @@ export class DatabaseManager {
         },
       ] as const;
 
-      const { eq } = await import('drizzle-orm');
+      const { eq, and } = await import('drizzle-orm');
 
       for (const fixture of fixtures) {
         const encryptedValue = this.encryptFixture(
@@ -607,14 +607,22 @@ export class DatabaseManager {
             value: encryptedValue,
             status: 'ACTIVE',
           })
-          .onConflictDoNothing()
+          .onConflictDoNothing({
+            target: [
+              dbSchema.appConnections.tenantId,
+              dbSchema.appConnections.externalId,
+            ],
+          })
           .returning();
 
-        // onConflictDoNothing returns nothing on conflict — fetch the existing row
+        // onConflictDoNothing returns nothing on conflict — fetch the existing row scoped to this tenant
         const resolved =
           inserted ??
           (await db.query.appConnections.findFirst({
-            where: eq(dbSchema.appConnections.externalId, fixture.externalId),
+            where: and(
+              eq(dbSchema.appConnections.tenantId, systemTenantId),
+              eq(dbSchema.appConnections.externalId, fixture.externalId),
+            ),
           }));
 
         if (!resolved) {

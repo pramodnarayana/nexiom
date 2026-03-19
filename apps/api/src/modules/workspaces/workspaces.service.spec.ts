@@ -12,7 +12,7 @@ function buildMockDb() {
   const findMany = vi.fn();
   const returningInsert = vi.fn();
   const returningUpdate = vi.fn();
-  const deleteWhere = vi.fn();
+  const deleteReturning = vi.fn();
   const selectOrderBy = vi.fn();
 
   return {
@@ -20,7 +20,7 @@ function buildMockDb() {
     findMany,
     returningInsert,
     returningUpdate,
-    deleteWhere,
+    deleteReturning,
     selectOrderBy,
     db: {
       query: {
@@ -35,7 +35,7 @@ function buildMockDb() {
         }),
       }),
       delete: vi.fn().mockReturnValue({
-        where: deleteWhere,
+        where: vi.fn().mockReturnValue({ returning: deleteReturning }),
       }),
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -148,7 +148,6 @@ describe('WorkspacesService', () => {
 
   it('updates a workspace name', async () => {
     const updated = { ...WORKSPACE, name: 'Logistics-EU' };
-    mocks.findFirst.mockResolvedValue(WORKSPACE);
     mocks.returningUpdate.mockResolvedValue([updated]);
 
     const result = await service.update(ORG_ID, WS_ID, {
@@ -159,7 +158,6 @@ describe('WorkspacesService', () => {
   });
 
   it('throws ConflictException when update raises a unique-violation (23505)', async () => {
-    mocks.findFirst.mockResolvedValue(WORKSPACE);
     const pgUniqueError = Object.assign(new Error('unique'), { code: '23505' });
     mocks.returningUpdate.mockRejectedValue(pgUniqueError);
 
@@ -169,34 +167,24 @@ describe('WorkspacesService', () => {
   });
 
   it('throws NotFoundException when updating non-existent workspace', async () => {
-    mocks.findFirst.mockResolvedValue(null);
+    mocks.returningUpdate.mockResolvedValue([]);
 
     await expect(
       service.update(ORG_ID, WS_ID, { name: 'New' }),
     ).rejects.toThrow(NotFoundException);
   });
 
-  it('throws InternalServerErrorException if update returns no row', async () => {
-    mocks.findFirst.mockResolvedValue(WORKSPACE);
-    mocks.returningUpdate.mockResolvedValue([]);
-
-    await expect(
-      service.update(ORG_ID, WS_ID, { name: 'New' }),
-    ).rejects.toThrow('Update did not return a row.');
-  });
-
   // ── remove ────────────────────────────────────────────────────────────────
 
   it('deletes a workspace', async () => {
-    mocks.findFirst.mockResolvedValue(WORKSPACE);
-    mocks.deleteWhere.mockResolvedValue(undefined);
+    mocks.deleteReturning.mockResolvedValue([WORKSPACE]);
 
     await expect(service.remove(ORG_ID, WS_ID)).resolves.toBeUndefined();
     expect(mocks.db.delete).toHaveBeenCalled();
   });
 
   it('throws NotFoundException when deleting non-existent workspace', async () => {
-    mocks.findFirst.mockResolvedValue(null);
+    mocks.deleteReturning.mockResolvedValue([]);
 
     await expect(service.remove(ORG_ID, WS_ID)).rejects.toThrow(
       NotFoundException,

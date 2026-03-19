@@ -78,8 +78,6 @@ export class WorkspacesService {
   }
 
   async update(orgId: string, id: string, body: UpdateWorkspace) {
-    const existing = await this.findOne(orgId, id);
-
     try {
       const [updated] = await this.db
         .update(uiWorkspaces)
@@ -92,15 +90,13 @@ export class WorkspacesService {
         .returning();
 
       if (!updated) {
-        throw new InternalServerErrorException('Update did not return a row.');
+        throw new NotFoundException(`Workspace ${id} not found.`);
       }
       return updated;
     } catch (err) {
       if (isUniqueViolation(err)) {
-        const name = body.name ?? existing.name;
-        const envType = body.envType ?? existing.envType;
         throw new ConflictException(
-          `A ${envType} workspace named "${name}" already exists in this organisation.`,
+          `A ${body.envType ?? 'PRODUCTION'} workspace named "${body.name}" already exists in this organisation.`,
         );
       }
       throw err;
@@ -108,10 +104,14 @@ export class WorkspacesService {
   }
 
   async remove(orgId: string, id: string) {
-    await this.findOne(orgId, id);
-    await this.db
+    const [deleted] = await this.db
       .delete(uiWorkspaces)
-      .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)));
+      .where(and(eq(uiWorkspaces.id, id), eq(uiWorkspaces.orgId, orgId)))
+      .returning();
+
+    if (!deleted) {
+      throw new NotFoundException(`Workspace ${id} not found.`);
+    }
   }
 
   /** Returns active connections assigned to the workspace, scoped to the org. */

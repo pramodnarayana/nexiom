@@ -192,6 +192,7 @@ describe("PermissionSeeder", () => {
           "tenants:read",
           "dashboard:read",
           "workspaces:read",
+          "workspaces:manage",
           "admin_dashboard:view",
           "system_users:read",
           "system_tenants:read",
@@ -227,6 +228,11 @@ describe("PermissionSeeder", () => {
           permissionId: "workspaces:read",
           organizationId: null,
         },
+        {
+          roleId: "member",
+          permissionId: "workspaces:manage",
+          organizationId: null,
+        },
         // member system perms (organizationId: "sys")
         {
           roleId: "member",
@@ -255,6 +261,11 @@ describe("PermissionSeeder", () => {
           {
             roleId: role,
             permissionId: "workspaces:read",
+            organizationId: null,
+          },
+          {
+            roleId: role,
+            permissionId: "workspaces:manage",
             organizationId: null,
           },
           {

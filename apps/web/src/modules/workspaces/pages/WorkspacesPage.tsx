@@ -48,7 +48,7 @@ export function WorkspacesPage() {
   }, [fetchWorkspaces]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
+    if (creating || !newName.trim()) return;
     setCreating(true);
     try {
       await createWorkspace({ name: newName.trim(), envType: newEnvType });
@@ -177,7 +177,7 @@ export function WorkspacesPage() {
                 placeholder="e.g. Logistics-US"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !creating) void handleCreate(); }}
               />
             </div>
             <div className="space-y-1.5">

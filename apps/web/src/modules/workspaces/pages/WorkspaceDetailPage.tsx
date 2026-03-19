@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Building2, Loader2, Plus, Unlink } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -30,6 +30,7 @@ export function WorkspaceDetailPage() {
   const [wsLoading, setWsLoading] = useState(true);
   const [assignedConnections, setAssignedConnections] = useState<WorkspaceConnectionResponse[]>([]);
   const [allConnections, setAllConnections] = useState<ActiveConnectionResponse[]>([]);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
@@ -55,8 +56,9 @@ export function WorkspaceDetailPage() {
   const fetchConnections = useCallback(async () => {
     try {
       setAllConnections(await listActiveConnections());
-    } catch {
-      // non-fatal — connections list is for assignment dialog
+      setConnectionsError(null);
+    } catch (e: unknown) {
+      setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
     }
   }, []);
 
@@ -73,21 +75,7 @@ export function WorkspaceDetailPage() {
     setAssigning(connectionId);
     try {
       await assignConnection(id, connectionId);
-      const source = allConnections.find((c) => c.id === connectionId);
-      if (source) {
-        setAssignedConnections((prev) => [
-          ...prev,
-          {
-            id: source.id,
-            appName: source.appName,
-            externalId: source.externalId,
-            displayName: source.displayName,
-            authType: source.authType,
-            status: source.status,
-            assignedAt: new Date().toISOString(),
-          },
-        ]);
-      }
+      setAssignedConnections(await listWorkspaceConnections(id));
       setDialogOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to assign connection.');
@@ -117,6 +105,47 @@ export function WorkspaceDetailPage() {
 
   if (!workspace) {
     return <p className="p-6 text-destructive">{error ?? 'Workspace not found.'}</p>;
+  }
+
+  let dialogContent: ReactNode;
+  if (connectionsError) {
+    dialogContent = (
+      <div className="text-center py-4 space-y-2">
+        <p className="text-sm text-destructive">{connectionsError}</p>
+        <Button size="sm" variant="outline" onClick={() => void fetchConnections()}>
+          Retry
+        </Button>
+      </div>
+    );
+  } else if (unassignedConnections.length === 0) {
+    dialogContent = (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        All connections are already assigned.
+      </p>
+    );
+  } else {
+    dialogContent = unassignedConnections.map((conn) => (
+      <div
+        key={conn.id}
+        className="flex items-center justify-between rounded-md border px-3 py-2"
+      >
+        <div>
+          <p className="text-sm font-medium">{conn.displayName}</p>
+          <p className="text-xs text-muted-foreground">{conn.appName}</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={assigning === conn.id}
+          onClick={() => void handleAssign(conn.id)}
+        >
+          {assigning === conn.id && (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          )}
+          Assign
+        </Button>
+      </div>
+    ));
   }
 
   return (
@@ -174,34 +203,7 @@ export function WorkspaceDetailPage() {
             <DialogTitle>Assign Connection</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-72 overflow-y-auto py-1">
-            {unassignedConnections.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                All connections are already assigned.
-              </p>
-            ) : (
-              unassignedConnections.map((conn) => (
-                <div
-                  key={conn.id}
-                  className="flex items-center justify-between rounded-md border px-3 py-2"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{conn.displayName}</p>
-                    <p className="text-xs text-muted-foreground">{conn.appName}</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={assigning === conn.id}
-                    onClick={() => void handleAssign(conn.id)}
-                  >
-                    {assigning === conn.id && (
-                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    )}
-                    Assign
-                  </Button>
-                </div>
-              ))
-            )}
+            {dialogContent}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
