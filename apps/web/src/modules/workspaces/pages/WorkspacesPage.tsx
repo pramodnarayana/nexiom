@@ -64,7 +64,7 @@ export function WorkspacesPage() {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
+    if (deleting || !deleteTarget) return;
     setDeleting(true);
     try {
       await deleteWorkspace(deleteTarget.id);
@@ -168,6 +168,9 @@ export function WorkspacesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Workspace</DialogTitle>
+            <DialogDescription>
+              Create a new workspace by providing a name and environment setting.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -195,6 +198,7 @@ export function WorkspacesPage() {
                     <button
                       key={env}
                       type="button"
+                      aria-pressed={newEnvType === env}
                       onClick={() => setNewEnvType(env)}
                       className={className}
                     >

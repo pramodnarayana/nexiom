@@ -34,6 +34,7 @@ export function WorkspaceDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [unassigningId, setUnassigningId] = useState<string | null>(null);
 
   const fetchWorkspace = useCallback(async () => {
     if (!id) return;
@@ -86,11 +87,14 @@ export function WorkspaceDetailPage() {
 
   const handleUnassign = async (connectionId: string) => {
     if (!id) return;
+    setUnassigningId(connectionId);
     try {
       await unassignConnection(id, connectionId);
       setAssignedConnections((prev) => prev.filter((c) => c.id !== connectionId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove connection.');
+    } finally {
+      setUnassigningId(null);
     }
   };
 
@@ -186,9 +190,14 @@ export function WorkspaceDetailPage() {
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground"
+                  disabled={unassigningId === conn.id}
                   onClick={() => void handleUnassign(conn.id)}
                 >
-                  <Unlink className="h-3.5 w-3.5 mr-1" />
+                  {unassigningId === conn.id ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Unlink className="h-3.5 w-3.5 mr-1" />
+                  )}
                   Remove
                 </Button>
               </div>

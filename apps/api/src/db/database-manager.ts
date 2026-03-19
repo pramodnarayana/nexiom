@@ -528,6 +528,30 @@ export class DatabaseManager {
    */
   async provisionLocal(): Promise<void> {
     this.assertSafeEnvironment();
+
+    // Require an explicit opt-in flag OR confirm the DB host is local.
+    const dbUrl = process.env.DATABASE_URL ?? '';
+    const forceFlag = process.env.FORCE_PROVISION_LOCAL === 'true';
+    if (!forceFlag) {
+      let host = '';
+      try {
+        host = new URL(dbUrl).hostname;
+      } catch {
+        // unparseable URL — treat as non-local
+      }
+      const isLocal =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '::1' ||
+        host === '';
+      if (!isLocal) {
+        throw new Error(
+          `provisionLocal() refused: DATABASE_URL points to a non-local host ("${host}"). ` +
+            `Set FORCE_PROVISION_LOCAL=true to override.`,
+        );
+      }
+    }
+
     console.log('🔧 Provisioning local dev fixtures...\n');
 
     const encryptionKey = process.env.ENCRYPTION_KEY;
@@ -641,7 +665,9 @@ export class DatabaseManager {
 
       console.log('\n✅ Local dev fixtures provisioned.');
       console.log(
-        '   Update credentials in app_connection table with real sandbox tokens when needed.',
+        '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
+          '   and update app_connection.value with the resulting ciphertext.\n' +
+          '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
       );
     } finally {
       await client.end();

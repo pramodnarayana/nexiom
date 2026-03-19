@@ -228,11 +228,6 @@ describe("PermissionSeeder", () => {
           permissionId: "workspaces:read",
           organizationId: null,
         },
-        {
-          roleId: "member",
-          permissionId: "workspaces:manage",
-          organizationId: null,
-        },
         // member system perms (organizationId: "sys")
         {
           roleId: "member",

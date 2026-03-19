@@ -3,6 +3,7 @@ import {
   Inject,
   NotFoundException,
   ConflictException,
+  BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { eq, and, asc } from 'drizzle-orm';
@@ -78,6 +79,11 @@ export class WorkspacesService {
   }
 
   async update(orgId: string, id: string, body: UpdateWorkspace) {
+    const hasChanges = body.name !== undefined || body.envType !== undefined;
+    if (!hasChanges) {
+      throw new BadRequestException('No updatable fields provided.');
+    }
+
     try {
       const [updated] = await this.db
         .update(uiWorkspaces)
@@ -96,7 +102,7 @@ export class WorkspacesService {
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new ConflictException(
-          `A ${body.envType ?? 'PRODUCTION'} workspace named "${body.name}" already exists in this organisation.`,
+          'Workspace with the provided identifier already exists.',
         );
       }
       throw err;
