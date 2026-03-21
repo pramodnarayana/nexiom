@@ -1,5 +1,4 @@
 import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/connectors/framework';
-import { salesforcesCommon } from '../common/index.js';
 import { salesforceAuth } from '../auth.js';
 
 import {
@@ -7,7 +6,8 @@ import {
     optimizationService,
     IgtLogger,
 } from '@nexiom/connectors/intelligence';
-import { sfFetch, checkSalesforceLimits, SF_API_VERSION, SalesforceAuthError } from '../sf-fetch.js';
+import { sfFetch, checkSalesforceLimits, SalesforceAuthError } from '../sf-fetch.js';
+import { salesforcesCommon, SF_API_VERSION } from '../common/index.js';
 import { assertSafeSalesforceObject } from './salesforce-polling.helper.js';
 
 import {

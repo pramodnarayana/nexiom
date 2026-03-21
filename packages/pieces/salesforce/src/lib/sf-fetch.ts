@@ -1,6 +1,5 @@
 import type { TriggerStore } from '@nexiom/connectors/framework';
-
-export const SF_API_VERSION = 'v59.0';
+import { SF_API_VERSION } from './common/index.js';
 
 /** Thrown when Salesforce returns 401. The caller must refresh / re-auth. */
 export class SalesforceAuthError extends Error {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceDiscoveryAdapter } from './salesforce-discovery.adapter.js';
-import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import { sfFetch } from '../sf-fetch.js';
+import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';
 import type { TriggerStore } from '@nexiom/connectors/framework';
 

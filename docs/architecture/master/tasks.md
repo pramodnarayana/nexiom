@@ -453,7 +453,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 0 — Infrastructure | T001–T005 | Local dev environment boots end-to-end |
 | 0.5 — Hardening | T006–T012 | Production-safe observability, security, graceful ops |
 | 1 — Workspaces | T013–T016 | Multi-workspace CRUD + UI |
-| 2 — Routes | T017–T025 | Route + field mapping + schedule config |
+| 2 — Stitches & Mapping Canvas | T017–T025 | Stitch + field mapping + schedule config |
 | 3 — Pipeline | T026–T035 | Full L1→L6 data flow + scheduler execution |
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |

@@ -205,14 +205,15 @@ describe('StitchesService', () => {
   });
 
   it('excludes archived stitches by default', async () => {
-    const archived = { ...STITCH, status: 'ARCHIVED' as const };
-    // Service applies the ARCHIVED filter; the mock returns only non-archived
     mocks.findManyStitches.mockResolvedValue([STITCH]);
 
     const result = await service.list(ORG_ID);
 
-    expect(result).not.toContain(archived);
-    expect(mocks.findManyStitches).toHaveBeenCalled();
+    expect(result).toEqual([STITCH]);
+    // No item in the result should carry ARCHIVED status
+    expect(result).not.toContainEqual(
+      expect.objectContaining({ status: 'ARCHIVED' }),
+    );
   });
 
   it('includes archived stitches when includeArchived is true', async () => {

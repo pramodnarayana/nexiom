@@ -8,14 +8,14 @@ import type { HttpResponse } from '@nexiom/connectors/framework';
 import { salesforceAuth } from '../auth.js';
 
 /** Salesforce REST API version — must match the version in openapi.json. */
-const SF_API_VERSION = 'v59.0';
+export const SF_API_VERSION = 'v59.0';
 
 /**
  * Salesforce Bulk API 2.0 version.
  * Kept separate from SF_API_VERSION because the Bulk API follows its own
  * release cadence and is not always at parity with the REST API version.
  */
-const SF_BULK_API_VERSION = 'v58.0';
+export const SF_BULK_API_VERSION = 'v58.0';
 
 export const salesforcesCommon = {
 	account: Property.Dropdown<string, true, typeof salesforceAuth>({
