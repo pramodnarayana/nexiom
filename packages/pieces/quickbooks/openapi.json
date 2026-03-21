@@ -27,6 +27,13 @@
             "required": true,
             "schema": { "type": "string" },
             "example": "SELECT * FROM Customer"
+          },
+          {
+            "name": "minorversion",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "65"
           }
         ],
         "responses": {

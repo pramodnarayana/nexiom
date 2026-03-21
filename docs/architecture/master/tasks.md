@@ -324,7 +324,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] Per matching stitch: hydrate payload via `field_mapping` rules
 - [ ] **Writes `outbound_gateway` (status=`PENDING`) BEFORE enqueuing** — crash safety
 - [ ] Pushes `{ traceId, outboundGatewayId }` to `Delivery_Queue`
-- [ ] Skipped routes: write `sync_log` row `{ status: 'SKIPPED' }`
+- [ ] Skipped stitches: write `sync_log` row `{ status: 'SKIPPED' }`
 - [ ] Unit tests — including crash-safety (write before enqueue)
 - Files: `apps/api/src/modules/pipeline/fanout.service.ts`, `apps/api/src/modules/pipeline/fanout.service.spec.ts`
 - Depends: T022, T032
@@ -358,8 +358,8 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T036 · api: Trace API
 
-- [ ] `GET /routes/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
-- [ ] `GET /routes/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
+- [ ] `GET /stitches/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
+- [ ] `GET /stitches/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
 - Files: `apps/api/src/modules/intelligence/trace.controller.ts`, `apps/api/src/modules/intelligence/trace.service.ts`
 - Depends: T035
 
@@ -403,7 +403,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T041 · api: `MappingSuggestService` + endpoint
 
-- [ ] `POST /routes/:id/mappings/suggest`
+- [ ] `POST /flows/:id/mappings/suggest`
 - [ ] Request: `{ sourceFields: string[], targetFields: string[] }`
 - [ ] Calls Claude with field lists + existing `field_mapping` rows as few-shot examples
 - [ ] Response: `{ suggestions: [{ sourceField, targetField, confidence }] }`
@@ -412,10 +412,10 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T042 · web: "Suggest Mappings" button on Mapping Canvas
 
-- [ ] Button calls `POST /routes/:id/mappings/suggest`
+- [ ] Button calls `POST /flows/:id/mappings/suggest`
 - [ ] Renders suggestions as pending rows with confidence badge
 - [ ] User clicks checkmark to accept, X to reject each suggestion
-- Files: `apps/web/src/modules/routes/MappingCanvas.tsx` (extend T023)
+- Files: `apps/web/src/modules/stitches/MappingCanvas.tsx` (extend T023)
 - Depends: T041
 
 ---

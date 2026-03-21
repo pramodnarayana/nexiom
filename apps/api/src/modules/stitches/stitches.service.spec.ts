@@ -102,10 +102,11 @@ describe('StitchesService', () => {
 
   it('creates a stitch after verifying workspace and connections', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections.mockResolvedValue({
-      id: SRC_CONN_ID,
-      tenantId: ORG_ID,
-    });
+    // Return distinct objects for each parallel lookup so the test catches
+    // any ID-mixing bug (e.g. both checks accidentally using srcConnectionId)
+    mocks.findFirstConnections
+      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
+      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
     mocks.returningInsert.mockResolvedValue([STITCH]);
 
     const result = await service.create(ORG_ID, CREATE_BODY);
@@ -124,9 +125,22 @@ describe('StitchesService', () => {
     );
   });
 
-  it('throws NotFoundException when a connection does not belong to org', async () => {
+  it('throws NotFoundException when srcConnection does not belong to org', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections.mockResolvedValue(null);
+    mocks.findFirstConnections
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+
+    await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('throws NotFoundException when destConnection does not belong to org', async () => {
+    mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
+    mocks.findFirstConnections
+      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
+      .mockResolvedValueOnce(null);
 
     await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
       NotFoundException,
@@ -135,11 +149,8 @@ describe('StitchesService', () => {
 
   it('throws BadRequestException when src and dest connections are the same', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections.mockResolvedValue({
-      id: SRC_CONN_ID,
-      tenantId: ORG_ID,
-    });
 
+    // Same-connection guard fires before the DB lookup, so no connection mock needed
     await expect(
       service.create(ORG_ID, {
         ...CREATE_BODY,
@@ -150,10 +161,9 @@ describe('StitchesService', () => {
 
   it('throws InternalServerErrorException if insert returns no row', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections.mockResolvedValue({
-      id: SRC_CONN_ID,
-      tenantId: ORG_ID,
-    });
+    mocks.findFirstConnections
+      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
+      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
     mocks.returningInsert.mockResolvedValue([]);
 
     await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
@@ -163,10 +173,9 @@ describe('StitchesService', () => {
 
   it('throws ConflictException when DB raises a unique-violation (23505)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections.mockResolvedValue({
-      id: SRC_CONN_ID,
-      tenantId: ORG_ID,
-    });
+    mocks.findFirstConnections
+      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
+      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
     });

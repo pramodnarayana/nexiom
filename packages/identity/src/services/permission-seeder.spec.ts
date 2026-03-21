@@ -5,6 +5,11 @@ import { Logger } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema.js";
 import { IdentityModuleOptions } from "../identity.module.js";
+import { ALL_PERMISSIONS, isSystemPermission } from "../constants.js";
+import {
+  MEMBER_BASE_PERMS,
+  MEMBER_SYSTEM_PERMS,
+} from "../utils/rbac-seeding.js";
 
 // Mock constants removed (using vi.doMock in test instead)
 
@@ -181,135 +186,47 @@ describe("PermissionSeeder", () => {
   });
 
   it("seed skips rolePermission insertion if all exist", async () => {
-    vi.resetModules();
-    vi.doMock("../constants.js", async (importOriginal) => {
-      const actual = await importOriginal<typeof import("../constants.js")>();
-      return {
-        ...actual,
-        // Include all permissions referenced by the member role in rbac-seeding
-        ALL_PERMISSIONS: [
-          "users:read",
-          "tenants:read",
-          "dashboard:read",
-          "workspaces:read",
-          "workspaces:manage",
-          "stitches:read",
-          "stitches:manage",
-          "admin_dashboard:view",
-          "system_users:read",
-          "system_tenants:read",
-        ],
-        isSystemPermission: (p: string) =>
-          p.startsWith("system_") || p.startsWith("admin_dashboard:"),
-      };
-    });
+    const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+    const dbMock = mkDb();
+    const optionsMock = mkOptions();
+    const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
+      optionsMock.constants;
 
-    try {
-      // Re-import to pickup mock
-      const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+    // Derive every role-permission row that seedSystemRbac would attempt to insert,
+    // using the canonical exports so this fixture stays in sync automatically.
+    const existingRows = [
+      // member: base perms (null-scoped) — derived from MEMBER_BASE_PERMS
+      ...MEMBER_BASE_PERMS.map((permissionId) => ({
+        roleId: memberRoleId,
+        permissionId,
+        organizationId: null,
+      })),
+      // member: system perms (systemTenant-scoped) — derived from MEMBER_SYSTEM_PERMS
+      ...MEMBER_SYSTEM_PERMS.map((permissionId) => ({
+        roleId: memberRoleId,
+        permissionId,
+        organizationId: systemTenantId,
+      })),
+      // admin & owner: all permissions, scoped by isSystemPermission
+      ...[adminRoleId, ownerRoleId].flatMap((roleId) =>
+        ALL_PERMISSIONS.map((permissionId) => ({
+          roleId,
+          permissionId,
+          organizationId: isSystemPermission(permissionId)
+            ? systemTenantId
+            : null,
+        })),
+      ),
+    ];
+    dbMock.select.mockReturnValue(mockChainedQuery(existingRows));
 
-      const dbMock = mkDb();
+    const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
 
-      // Return existing rows covering every permission that seedSystemRbac would generate
-      // for owner, admin, and member roles so the deduplication sees them all as existing.
-      const existingRows = [
-        // member base perms (organizationId: null)
-        { roleId: "member", permissionId: "users:read", organizationId: null },
-        {
-          roleId: "member",
-          permissionId: "tenants:read",
-          organizationId: null,
-        },
-        {
-          roleId: "member",
-          permissionId: "dashboard:read",
-          organizationId: null,
-        },
-        {
-          roleId: "member",
-          permissionId: "workspaces:read",
-          organizationId: null,
-        },
-        {
-          roleId: "member",
-          permissionId: "stitches:read",
-          organizationId: null,
-        },
-        // member system perms (organizationId: "sys")
-        {
-          roleId: "member",
-          permissionId: "admin_dashboard:view",
-          organizationId: "sys",
-        },
-        {
-          roleId: "member",
-          permissionId: "system_users:read",
-          organizationId: "sys",
-        },
-        {
-          roleId: "member",
-          permissionId: "system_tenants:read",
-          organizationId: "sys",
-        },
-        // admin & owner — all perms (null + sys scoped)
-        ...["admin", "owner"].flatMap((role) => [
-          { roleId: role, permissionId: "users:read", organizationId: null },
-          { roleId: role, permissionId: "tenants:read", organizationId: null },
-          {
-            roleId: role,
-            permissionId: "dashboard:read",
-            organizationId: null,
-          },
-          {
-            roleId: role,
-            permissionId: "workspaces:read",
-            organizationId: null,
-          },
-          {
-            roleId: role,
-            permissionId: "workspaces:manage",
-            organizationId: null,
-          },
-          {
-            roleId: role,
-            permissionId: "stitches:read",
-            organizationId: null,
-          },
-          {
-            roleId: role,
-            permissionId: "stitches:manage",
-            organizationId: null,
-          },
-          {
-            roleId: role,
-            permissionId: "admin_dashboard:view",
-            organizationId: "sys",
-          },
-          {
-            roleId: role,
-            permissionId: "system_users:read",
-            organizationId: "sys",
-          },
-          {
-            roleId: role,
-            permissionId: "system_tenants:read",
-            organizationId: "sys",
-          },
-        ]),
-      ];
-      dbMock.select.mockReturnValue(mockChainedQuery(existingRows));
+    await seedSystemRbac(dbMock, optionsMock.constants, loggerMock);
 
-      const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
-      const optionsMock = mkOptions();
-
-      await seedSystemRbac(dbMock, optionsMock.constants, loggerMock);
-
-      expect(loggerMock.log).toHaveBeenCalledWith(
-        "No new role permissions to insert.",
-      );
-    } finally {
-      vi.doUnmock("../constants.js");
-    }
+    expect(loggerMock.log).toHaveBeenCalledWith(
+      "No new role permissions to insert.",
+    );
   });
 
   it("seed throws error on invalid permission format", async () => {

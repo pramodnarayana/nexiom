@@ -100,6 +100,8 @@ export const integrationStitches = pgTable('integration_stitch', {
     }).onDelete('cascade'),
     // Reject zero/negative intervals at the DB layer
     check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
+    // Case-insensitive uniqueness per workspace — same name allowed across workspaces
+    uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
     index('stitch_src_conn_idx').on(table.srcConnectionId),

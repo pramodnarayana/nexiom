@@ -139,6 +139,12 @@ export class StitchesService {
     return stitch;
   }
 
+  /**
+   * Mutable fields: name, status, syncCondition, syncIntervalMinutes, scheduleEnabled.
+   * Immutable fields: sourceObject, targetObject, srcConnectionId, destConnectionId,
+   * workspaceId — these define the stitch identity. To change them, archive this
+   * stitch and create a new one.
+   */
   async update(orgId: string, id: string, body: UpdateStitch) {
     const hasChanges =
       body.name !== undefined ||

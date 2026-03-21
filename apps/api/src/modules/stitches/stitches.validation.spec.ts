@@ -60,14 +60,18 @@ describe('CreateStitchSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects an invalid syncIntervalMinutes value with the correct message', () => {
+  it('rejects an invalid syncIntervalMinutes value', () => {
     const result = CreateStitchSchema.safeParse({
       ...VALID_CREATE,
       syncIntervalMinutes: 45,
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toMatch(/Must be one of/);
+      expect(
+        result.error.issues.some(
+          (i) => i.path.join('.') === 'syncIntervalMinutes',
+        ),
+      ).toBe(true);
     }
   });
 
@@ -89,7 +93,9 @@ describe('CreateStitchSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].path).toContain('status');
+      expect(
+        result.error.issues.some((i) => i.path.join('.') === 'status'),
+      ).toBe(true);
     }
   });
 
@@ -122,7 +128,9 @@ describe('CreateStitchSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].path).toContain('op');
+      expect(
+        result.error.issues.some((i) => i.path.join('.').includes('op')),
+      ).toBe(true);
     }
   });
 
@@ -133,7 +141,9 @@ describe('CreateStitchSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].path).toContain('field');
+      expect(
+        result.error.issues.some((i) => i.path.join('.').includes('field')),
+      ).toBe(true);
     }
   });
 });

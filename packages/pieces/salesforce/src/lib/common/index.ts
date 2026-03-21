@@ -7,6 +7,9 @@ import {
 import type { HttpResponse } from '@nexiom/connectors/framework';
 import { salesforceAuth } from '../auth.js';
 
+/** Salesforce REST API version — must match the version in openapi.json. */
+const SF_API_VERSION = 'v59.0';
+
 export const salesforcesCommon = {
 	account: Property.Dropdown<string, true, typeof salesforceAuth>({
 		auth: salesforceAuth,
@@ -706,7 +709,7 @@ export async function querySalesforceApi<T>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/query`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/query`,
 		queryParams: {
 			q: query,
 		},
@@ -790,7 +793,7 @@ async function getSalesforceObjects(
 ): Promise<HttpResponse<any>> {
 	return await httpClient.sendRequest<any>({
 		method: HttpMethod.GET,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/sobjects`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],
@@ -804,7 +807,7 @@ async function getSalesforceFields(
 ): Promise<HttpResponse<any>> {
 	return await httpClient.sendRequest<any>({
 		method: HttpMethod.GET,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/sobjects/${object}/describe`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects/${object}/describe`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],

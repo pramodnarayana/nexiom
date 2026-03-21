@@ -89,6 +89,9 @@ END $$;
 --> statement-breakpoint
 
 -- Indexes --------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS "stitch_name_workspace_unique_idx"
+  ON "integration_stitch" USING btree ("workspace_id", lower("name"));
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stitch_workspace_idx"   ON "integration_stitch" USING btree ("workspace_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stitch_org_idx"         ON "integration_stitch" USING btree ("org_id");
