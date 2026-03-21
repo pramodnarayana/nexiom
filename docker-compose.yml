@@ -87,6 +87,32 @@ services:
     networks:
       - nexiom-network
 
+  # --- Prism (OpenAPI Mock Server) ---
+  # Serves mock Salesforce / QuickBooks API responses for local dev.
+  # Hit http://localhost:4010/services/data/v59.0/sobjects (Salesforce)
+  # or http://localhost:4011/v3/company/... (QuickBooks) to test metadata discovery.
+  prism-salesforce:
+    image: stoplight/prism:4
+    command: mock -h 0.0.0.0 /specs/openapi.json
+    ports:
+      - "4010:4010"
+    volumes:
+      - ./packages/pieces/salesforce/openapi.json:/specs/openapi.json:ro
+    networks:
+      - nexiom-network
+
+  prism-quickbooks:
+    image: stoplight/prism:4
+    # Prism defaults to internal port 4010; -p 4010 is explicit for clarity.
+    # Host port 4011 maps to container port 4010 — distinct from prism-salesforce.
+    command: mock -h 0.0.0.0 -p 4010 /specs/openapi.json
+    ports:
+      - "4011:4010"
+    volumes:
+      - ./packages/pieces/quickbooks/openapi.json:/specs/openapi.json:ro
+    networks:
+      - nexiom-network
+
   # --- Cache/Queue ---
   redis:
     image: redis:7-alpine

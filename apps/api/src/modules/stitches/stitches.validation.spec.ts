@@ -1,0 +1,190 @@
+import { describe, it, expect } from 'vitest';
+import {
+  CreateStitchSchema,
+  UpdateStitchSchema,
+} from './stitches.validation.js';
+
+const VALID_CREATE = {
+  name: 'SF Loads → QB Invoices',
+  workspaceId: '11111111-1111-4111-8111-111111111111',
+  srcConnectionId: '22222222-2222-4222-8222-222222222222',
+  destConnectionId: '33333333-3333-4333-8333-333333333333',
+  sourceObject: 'rtms__Load__c',
+  targetObject: 'Invoice',
+};
+
+describe('CreateStitchSchema', () => {
+  it('accepts a valid stitch with required fields only', () => {
+    expect(CreateStitchSchema.safeParse(VALID_CREATE).success).toBe(true);
+  });
+
+  it('accepts all optional fields', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      syncCondition: [{ field: 'Region', op: 'eq', value: 'US' }],
+      status: 'PAUSED',
+      syncIntervalMinutes: 60,
+      scheduleEnabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty name', () => {
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, name: '' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a whitespace-only name', () => {
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, name: '   ' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a name exceeding 255 characters', () => {
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, name: 'a'.repeat(256) })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects missing required fields', () => {
+    expect(CreateStitchSchema.safeParse({}).success).toBe(false);
+    expect(CreateStitchSchema.safeParse({ name: 'test' }).success).toBe(false);
+  });
+
+  it('rejects an invalid UUID for workspaceId', () => {
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, workspaceId: 'bad' })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects an invalid syncIntervalMinutes value with the correct message', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      syncIntervalMinutes: 45,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/Must be one of/);
+    }
+  });
+
+  it('accepts each valid syncIntervalMinutes value', () => {
+    for (const minutes of [30, 60, 120, 240, 360, 720, 1440]) {
+      expect(
+        CreateStitchSchema.safeParse({
+          ...VALID_CREATE,
+          syncIntervalMinutes: minutes,
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it('rejects ARCHIVED status on create', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      status: 'ARCHIVED',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain('status');
+    }
+  });
+
+  it('accepts ACTIVE and PAUSED status on create', () => {
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'ACTIVE' })
+        .success,
+    ).toBe(true);
+    expect(
+      CreateStitchSchema.safeParse({ ...VALID_CREATE, status: 'PAUSED' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('accepts a well-formed syncCondition array', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      syncCondition: [
+        { field: 'Region', op: 'eq', value: 'US', logic: 'AND' },
+        { field: 'Amount', op: 'gt', value: 100 },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects syncCondition with an unknown op', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      syncCondition: [{ field: 'Region', op: 'startsWith', value: 'US' }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain('op');
+    }
+  });
+
+  it('rejects syncCondition rule missing required field', () => {
+    const result = CreateStitchSchema.safeParse({
+      ...VALID_CREATE,
+      syncCondition: [{ op: 'eq', value: 'US' }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain('field');
+    }
+  });
+});
+
+describe('UpdateStitchSchema', () => {
+  it('accepts an empty object (all fields optional)', () => {
+    expect(UpdateStitchSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('accepts a partial update with name only', () => {
+    expect(
+      UpdateStitchSchema.safeParse({ name: 'New Stitch Name' }).success,
+    ).toBe(true);
+  });
+
+  it('accepts ARCHIVED status on update', () => {
+    expect(UpdateStitchSchema.safeParse({ status: 'ARCHIVED' }).success).toBe(
+      true,
+    );
+  });
+
+  it('accepts a well-formed syncCondition update', () => {
+    expect(
+      UpdateStitchSchema.safeParse({
+        syncCondition: [
+          { field: 'Amount', op: 'gt', value: 100, logic: 'AND' },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a syncCondition rule with an invalid op on update', () => {
+    const result = UpdateStitchSchema.safeParse({
+      syncCondition: [{ field: 'Amount', op: 'between', value: 100 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts scheduleEnabled update', () => {
+    expect(
+      UpdateStitchSchema.safeParse({ scheduleEnabled: false }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an empty name string', () => {
+    expect(UpdateStitchSchema.safeParse({ name: '' }).success).toBe(false);
+  });
+
+  it('rejects an invalid syncIntervalMinutes value', () => {
+    expect(
+      UpdateStitchSchema.safeParse({ syncIntervalMinutes: 15 }).success,
+    ).toBe(false);
+  });
+});

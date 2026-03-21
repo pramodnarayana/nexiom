@@ -6,7 +6,7 @@ import {
     index,
     uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { integrationRoutes } from './routes.js';
+import { integrationStitches } from './stitches.js';
 import { appConnections } from './tenant.js';
 
 /**
@@ -25,10 +25,10 @@ import { appConnections } from './tenant.js';
 export const globalEntityMap = pgTable('global_entity_map', {
     id: uuid('id').defaultRandom().primaryKey(),
 
-    // Route that produced this mapping
-    routeId: uuid('route_id')
+    // Stitch that produced this mapping
+    stitchId: uuid('stitch_id')
         .notNull()
-        .references(() => integrationRoutes.id, { onDelete: 'cascade' }),
+        .references(() => integrationStitches.id, { onDelete: 'cascade' }),
 
     // ── Source side ──────────────────────────────────────────────────────────
     sourceAppName: varchar('source_app_name', { length: 100 }).notNull(),
@@ -59,7 +59,7 @@ export const globalEntityMap = pgTable('global_entity_map', {
 }, (table) => [
     // One mapping per (source record, destination app+type) pair per route
     uniqueIndex('gem_unique_mapping_idx').on(
-        table.routeId,
+        table.stitchId,
         table.sourceAppId,
         table.sourceEntityId,
         table.destAppId,
@@ -69,5 +69,5 @@ export const globalEntityMap = pgTable('global_entity_map', {
     index('gem_dest_lookup_idx').on(table.destEntityId, table.destAppId),
     index('gem_src_trace_idx').on(table.sourceTraceId),
     index('gem_dest_trace_idx').on(table.destTraceId),
-    index('gem_route_idx').on(table.routeId),
+    index('gem_stitch_idx').on(table.stitchId),
 ]);

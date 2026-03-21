@@ -13,7 +13,7 @@ import {
     foreignKey,
     check,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { appConnections } from './tenant.js';
 import { uiWorkspaces } from './workspace.js';
 
@@ -21,13 +21,13 @@ import { uiWorkspaces } from './workspace.js';
 // Enums
 // ---------------------------------------------------------------------------
 
-export const routeStatusEnum = pgEnum('route_status_enum', ['ACTIVE', 'PAUSED', 'ARCHIVED']);
+export const stitchStatusEnum = pgEnum('stitch_status_enum', ['ACTIVE', 'PAUSED', 'ARCHIVED']);
 
 /**
  * Allowed sync intervals in minutes.
  * Stored as an integer so the scheduler can use it directly:
  *   BullMQ: `repeat: { every: syncIntervalMinutes * 60_000 }`
- * Support team can override per-route via the admin API.
+ * Support team can override per-stitch via the admin API.
  */
 export const SYNC_INTERVAL_OPTIONS = [30, 60, 120, 240, 360, 720, 1440] as const;
 export type SyncIntervalMinutes = typeof SYNC_INTERVAL_OPTIONS[number];
@@ -35,10 +35,10 @@ export type SyncIntervalMinutes = typeof SYNC_INTERVAL_OPTIONS[number];
 // ---------------------------------------------------------------------------
 
 /**
- * INTEGRATION ROUTES
+ * INTEGRATION STITCHES
  *
  * Defines the logical sync path between a source and destination connection.
- * Lives at the workspace level — one workspace can have many routes.
+ * Lives at the workspace level — one workspace can have many stitches.
  *
  * `syncCondition` is a JSONB array of rule objects evaluated at L4:
  *   [{ "field": "Region", "op": "eq", "value": "US", "logic": "AND" }]
@@ -46,7 +46,7 @@ export type SyncIntervalMinutes = typeof SYNC_INTERVAL_OPTIONS[number];
  * `sourceObject` / `targetObject` are vendor object names resolved via
  * the Metadata Discovery Service (e.g. 'rtms__Load__c', 'Invoice').
  */
-export const integrationRoutes = pgTable('integration_route', {
+export const integrationStitches = pgTable('integration_stitch', {
     id: uuid('id').defaultRandom().primaryKey(),
     // Human-readable name shown in UI — e.g. "Salesforce Loads → QuickBooks Invoices"
     name: varchar('name', { length: 255 }).notNull(),
@@ -58,17 +58,17 @@ export const integrationRoutes = pgTable('integration_route', {
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
     // FKs to appConnections are defined as explicit named foreignKey() constraints
-    // below (route_src_connection_fk / route_dest_connection_fk) — no inline
+    // below (stitch_src_connection_fk / stitch_dest_connection_fk) — no inline
     // .references() here to avoid duplicate constraints on the same columns.
     srcConnectionId: uuid('src_connection_id').notNull(),
     destConnectionId: uuid('dest_connection_id').notNull(),
-    // Vendor object names resolved at route-creation time via describe API
+    // Vendor object names resolved at stitch-creation time via describe API
     sourceObject: varchar('source_object', { length: 255 }).notNull(),
     targetObject: varchar('target_object', { length: 255 }).notNull(),
     // Array of filter rules evaluated at L4 (Fan-Out Decision)
     syncCondition: jsonb('sync_condition').notNull().default([]),
-    status: routeStatusEnum('status').notNull().default('ACTIVE'),
-    // Scheduler — how often the poller fires for this route.
+    status: stitchStatusEnum('status').notNull().default('ACTIVE'),
+    // Scheduler — how often the poller fires for this stitch.
     // Default: 30 minutes. Support team configurable via admin API.
     // DB enforces > 0 via CHECK constraint; application code should also
     // validate before writing (throw when syncIntervalMinutes <= 0).
@@ -80,49 +80,50 @@ export const integrationRoutes = pgTable('integration_route', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     // Composite FK: (workspaceId, orgId) → (uiWorkspaces.id, uiWorkspaces.orgId)
-    // Guarantees the workspace actually belongs to the org on this route —
+    // Guarantees the workspace actually belongs to the org on this stitch —
     // makes mismatched (workspaceId=ws-B, orgId=org-A) impossible at DB level.
     foreignKey({
         columns: [table.workspaceId, table.orgId],
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
-        name: 'route_workspace_org_fk',
+        name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
     // Cascade deletes when either the source or destination connection is removed
     foreignKey({
         columns: [table.srcConnectionId],
         foreignColumns: [appConnections.id],
-        name: 'route_src_connection_fk',
+        name: 'stitch_src_connection_fk',
     }).onDelete('cascade'),
     foreignKey({
         columns: [table.destConnectionId],
         foreignColumns: [appConnections.id],
-        name: 'route_dest_connection_fk',
+        name: 'stitch_dest_connection_fk',
     }).onDelete('cascade'),
     // Reject zero/negative intervals at the DB layer
     check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
-    index('route_workspace_idx').on(table.workspaceId),
-    index('route_org_idx').on(table.orgId),
-    index('route_src_conn_idx').on(table.srcConnectionId),
-    index('route_dest_conn_idx').on(table.destConnectionId),
-    index('route_status_idx').on(table.orgId, table.status),
+    index('stitch_workspace_idx').on(table.workspaceId),
+    index('stitch_org_idx').on(table.orgId),
+    index('stitch_src_conn_idx').on(table.srcConnectionId),
+    index('stitch_dest_conn_idx').on(table.destConnectionId),
+    index('stitch_status_idx').on(table.orgId, table.status),
 ]);
 
 /**
  * FIELD MAPPINGS
  *
- * The field-level transformation template for a route.
+ * The field-level transformation template for a stitch.
  *
  * `sourceCanonical` is the canonical type this mapping applies to
- * (e.g. 'TMS_INVOICE'), scoping mappings per object type on a route.
+ * (e.g. 'TMS_INVOICE'), scoping mappings per object type on a stitch.
  *
  * `mappingRules` is a JSONB array of JSONPath transformation rules:
  *   [{ "src": "$.rtms__Total_Amount__c", "dest": "$.TotalAmt" }]
  */
 export const fieldMappings = pgTable('field_mapping', {
     id: uuid('id').defaultRandom().primaryKey(),
-    routeId: uuid('route_id')
-        .notNull()
-        .references(() => integrationRoutes.id, { onDelete: 'cascade' }),
+    // No inline .references() — FK is declared as an explicit named foreignKey()
+    // below to match the migration constraint name exactly and avoid Drizzle
+    // drift detection generating a duplicate FK on the same column.
+    stitchId: uuid('stitch_id').notNull(),
     // The canonical object type this template applies to
     sourceCanonical: varchar('source_canonical', { length: 100 }).notNull(),
     // Array of { src: JSONPath, dest: JSONPath, transform?: expression }
@@ -130,7 +131,41 @@ export const fieldMappings = pgTable('field_mapping', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
-    // uniqueIndex on (routeId, sourceCanonical) already covers routeId lookups;
-    // a separate index on routeId alone would add write/storage overhead for no gain.
-    uniqueIndex('field_mapping_route_canonical_unique_idx').on(table.routeId, table.sourceCanonical),
+    foreignKey({
+        columns: [table.stitchId],
+        foreignColumns: [integrationStitches.id],
+        name: 'field_mapping_stitch_id_integration_stitch_id_fk',
+    }).onDelete('cascade'),
+    // uniqueIndex on (stitchId, sourceCanonical) already covers stitchId lookups;
+    // a separate index on stitchId alone would add write/storage overhead for no gain.
+    uniqueIndex('field_mapping_stitch_canonical_unique_idx').on(table.stitchId, table.sourceCanonical),
 ]);
+
+// ---------------------------------------------------------------------------
+// Relations
+// ---------------------------------------------------------------------------
+
+export const integrationStitchesRelations = relations(integrationStitches, ({ one, many }) => ({
+    workspace: one(uiWorkspaces, {
+        fields: [integrationStitches.workspaceId],
+        references: [uiWorkspaces.id],
+    }),
+    srcConnection: one(appConnections, {
+        fields: [integrationStitches.srcConnectionId],
+        references: [appConnections.id],
+        relationName: 'stitch_src_connection',
+    }),
+    destConnection: one(appConnections, {
+        fields: [integrationStitches.destConnectionId],
+        references: [appConnections.id],
+        relationName: 'stitch_dest_connection',
+    }),
+    fieldMappings: many(fieldMappings),
+}));
+
+export const fieldMappingsRelations = relations(fieldMappings, ({ one }) => ({
+    stitch: one(integrationStitches, {
+        fields: [fieldMappings.stitchId],
+        references: [integrationStitches.id],
+    }),
+}));

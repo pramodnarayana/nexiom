@@ -1,0 +1,352 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "QuickBooks Online Accounting API (stub)",
+    "description": "Minimal mock spec for local Prism development — covers query and entity read endpoints.",
+    "version": "3.0"
+  },
+  "servers": [
+    { "url": "http://localhost:4010" }
+  ],
+  "paths": {
+    "/v3/company/{realmId}/query": {
+      "get": {
+        "operationId": "query",
+        "summary": "Run a QuickBooks query",
+        "parameters": [
+          {
+            "name": "realmId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "1234567890"
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "SELECT * FROM Customer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Query results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QueryResponse" },
+                "example": {
+                  "QueryResponse": {
+                    "startPosition": 1,
+                    "maxResults": 3,
+                    "Customer": [
+                      {
+                        "Id": "1",
+                        "DisplayName": "Acme Corp",
+                        "PrimaryEmailAddr": { "Address": "acme@example.com" },
+                        "Balance": 1500.00,
+                        "Active": true
+                      },
+                      {
+                        "Id": "2",
+                        "DisplayName": "Globex Inc",
+                        "PrimaryEmailAddr": { "Address": "globex@example.com" },
+                        "Balance": 3200.50,
+                        "Active": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v3/company/{realmId}/companyinfo/{companyId}": {
+      "get": {
+        "operationId": "getCompanyInfo",
+        "summary": "Read company info",
+        "parameters": [
+          {
+            "name": "realmId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "1234567890"
+          },
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "1234567890"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Company information",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CompanyInfoResponse" },
+                "example": {
+                  "CompanyInfo": {
+                    "CompanyName": "Mock Company",
+                    "LegalName": "Mock Company LLC",
+                    "Country": "US",
+                    "FiscalYearStartMonth": "January",
+                    "Id": "1234567890",
+                    "SyncToken": "0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v3/company/{realmId}/customer/{customerId}": {
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Read a single Customer",
+        "parameters": [
+          {
+            "name": "realmId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer entity",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CustomerResponse" },
+                "example": {
+                  "Customer": {
+                    "Id": "1",
+                    "DisplayName": "Acme Corp",
+                    "GivenName": "John",
+                    "FamilyName": "Doe",
+                    "PrimaryEmailAddr": { "Address": "acme@example.com" },
+                    "PrimaryPhone": { "FreeFormNumber": "(555) 123-4567" },
+                    "Balance": 1500.00,
+                    "Active": true,
+                    "SyncToken": "0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v3/company/{realmId}/invoice/{invoiceId}": {
+      "get": {
+        "operationId": "getInvoice",
+        "summary": "Read a single Invoice",
+        "parameters": [
+          {
+            "name": "realmId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice entity",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/InvoiceResponse" },
+                "example": {
+                  "Invoice": {
+                    "Id": "101",
+                    "DocNumber": "INV-001",
+                    "TxnDate": "2025-01-15",
+                    "DueDate": "2025-02-15",
+                    "TotalAmt": 2500.00,
+                    "Balance": 2500.00,
+                    "CustomerRef": { "value": "1", "name": "Acme Corp" },
+                    "Line": [
+                      {
+                        "Id": "1",
+                        "LineNum": 1,
+                        "Amount": 2500.00,
+                        "Description": "Freight charges",
+                        "DetailType": "SalesItemLineDetail",
+                        "SalesItemLineDetail": {
+                          "ItemRef": { "value": "10", "name": "Freight" },
+                          "Qty": 1,
+                          "UnitPrice": 2500.00
+                        }
+                      }
+                    ],
+                    "SyncToken": "0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v3/company/{realmId}/item/{itemId}": {
+      "get": {
+        "operationId": "getItem",
+        "summary": "Read a single Item",
+        "parameters": [
+          {
+            "name": "realmId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item entity",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ItemResponse" },
+                "example": {
+                  "Item": {
+                    "Id": "10",
+                    "Name": "Freight",
+                    "Description": "Freight / shipping charges",
+                    "Type": "Service",
+                    "UnitPrice": 0,
+                    "Active": true,
+                    "SyncToken": "0"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "QueryResponse": {
+        "type": "object",
+        "properties": {
+          "QueryResponse": {
+            "type": "object",
+            "properties": {
+              "startPosition": { "type": "integer" },
+              "maxResults": { "type": "integer" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "CompanyInfoResponse": {
+        "type": "object",
+        "properties": {
+          "CompanyInfo": {
+            "type": "object",
+            "properties": {
+              "CompanyName": { "type": "string" },
+              "LegalName": { "type": "string" },
+              "Country": { "type": "string" },
+              "FiscalYearStartMonth": { "type": "string" },
+              "Id": { "type": "string" },
+              "SyncToken": { "type": "string" }
+            }
+          }
+        }
+      },
+      "CustomerResponse": {
+        "type": "object",
+        "properties": {
+          "Customer": {
+            "type": "object",
+            "properties": {
+              "Id": { "type": "string" },
+              "DisplayName": { "type": "string" },
+              "GivenName": { "type": "string" },
+              "FamilyName": { "type": "string" },
+              "PrimaryEmailAddr": {
+                "type": "object",
+                "properties": { "Address": { "type": "string" } }
+              },
+              "PrimaryPhone": {
+                "type": "object",
+                "properties": { "FreeFormNumber": { "type": "string" } }
+              },
+              "Balance": { "type": "number" },
+              "Active": { "type": "boolean" },
+              "SyncToken": { "type": "string" }
+            }
+          }
+        }
+      },
+      "InvoiceResponse": {
+        "type": "object",
+        "properties": {
+          "Invoice": {
+            "type": "object",
+            "properties": {
+              "Id": { "type": "string" },
+              "DocNumber": { "type": "string" },
+              "TxnDate": { "type": "string", "format": "date" },
+              "DueDate": { "type": "string", "format": "date" },
+              "TotalAmt": { "type": "number" },
+              "Balance": { "type": "number" },
+              "CustomerRef": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string" },
+                  "name": { "type": "string" }
+                }
+              },
+              "Line": {
+                "type": "array",
+                "items": { "type": "object", "additionalProperties": true }
+              },
+              "SyncToken": { "type": "string" }
+            }
+          }
+        }
+      },
+      "ItemResponse": {
+        "type": "object",
+        "properties": {
+          "Item": {
+            "type": "object",
+            "properties": {
+              "Id": { "type": "string" },
+              "Name": { "type": "string" },
+              "Description": { "type": "string" },
+              "Type": { "type": "string" },
+              "UnitPrice": { "type": "number" },
+              "Active": { "type": "boolean" },
+              "SyncToken": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

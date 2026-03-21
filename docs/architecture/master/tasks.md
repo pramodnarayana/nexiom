@@ -16,9 +16,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T002 · docker-compose: Add Prism mock server + OpenAPI specs
 
-- [ ] Add `prism` service to `docker-compose.yml` (port 4010)
-- [ ] Add stub `packages/pieces/salesforce/openapi.json`
-- [ ] Add stub `packages/pieces/quickbooks/openapi.json`
+- [x] Add `prism` service to `docker-compose.yml` (port 4010 SF, 4011 QB)
+- [x] Add stub `packages/pieces/salesforce/openapi.json`
+- [x] Add stub `packages/pieces/quickbooks/openapi.json`
 - Files: `docker-compose.yml`, `packages/pieces/salesforce/openapi.json`, `packages/pieces/quickbooks/openapi.json`
 - Depends: T001
 
@@ -46,10 +46,10 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T005 · script: `db:provision:local`
 
-- [ ] `apps/api/src/db/db-cli.ts` command `provision:local`
-- [ ] Creates all `ws_{id}` schemas for dev fixture connections
-- [ ] Seeds one Salesforce + one QuickBooks connection with test credentials
-- [ ] Add `"db:provision:local": "tsx src/db/db-cli.ts provision:local"` to `apps/api/package.json`
+- [x] `apps/api/src/db/db-cli.ts` command `provision:local`
+- [x] Creates all `ws_{id}` schemas for dev fixture connections
+- [x] Seeds one Salesforce + one QuickBooks connection with test credentials
+- [x] Add `"db:provision:local": "tsx src/db/db-cli.ts provision:local"` to `apps/api/package.json`
 - Files: `apps/api/src/db/db-cli.ts`, `apps/api/package.json`
 - Depends: T001
 
@@ -128,45 +128,45 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T013 · db: migration `0005_workspaces`
 
-- [ ] Run `pnpm --filter api db:generate` after `workspace.ts` schema is confirmed
-- [ ] Review generated SQL, commit migration file
-- Files: `apps/api/drizzle/0005_workspaces.sql`, `apps/api/drizzle/meta/_journal.json`
+- [x] Run `pnpm --filter api db:generate` after `workspace.ts` schema is confirmed
+- [x] Review generated SQL, commit migration file
+- Files: `apps/api/drizzle/0008_workspaces.sql`, `apps/api/drizzle/0009_workspace_name_unique_per_env.sql`, `apps/api/drizzle/meta/_journal.json`
 - Depends: —
 
 ### T014 · api: `WorkspacesModule` — CRUD
 
-- [ ] `WorkspacesController`: `POST /workspaces`, `GET /workspaces`, `PATCH /workspaces/:id`, `DELETE /workspaces/:id`
-- [ ] `WorkspacesService`: create, list (scoped to `orgId`), update name/envType, soft-delete
-- [ ] DTOs: `CreateWorkspaceDto`, `UpdateWorkspaceDto`
-- [ ] Unit tests for service
+- [x] `WorkspacesController`: `POST /workspaces`, `GET /workspaces`, `PATCH /workspaces/:id`, `DELETE /workspaces/:id`
+- [x] `WorkspacesService`: create, list (scoped to `orgId`), update name/envType, soft-delete
+- [x] DTOs: `CreateWorkspaceBody`, `UpdateWorkspaceBody` (validation files)
+- [x] Unit tests for service
 - Files: `apps/api/src/modules/workspaces/**`
 - Depends: T013
 
 ### T015 · api: `WorkspaceConnectionsController` — assign connections to workspace
 
-- [ ] `POST /workspaces/:id/connections` — assign an existing connection
-- [ ] `DELETE /workspaces/:id/connections/:connId` — remove assignment
-- [ ] Validates connection belongs to same org
+- [x] `POST /workspaces/:id/connections` — assign an existing connection
+- [x] `DELETE /workspaces/:id/connections/:connId` — remove assignment
+- [x] Validates connection belongs to same org
 - Files: `apps/api/src/modules/workspaces/workspace-connections.controller.ts`
 - Depends: T014
 
 ### T016 · web: `WorkspacesPage` + `WorkspaceDetailPage`
 
-- [ ] `WorkspacesPage` — list workspaces, "+ New Workspace" dialog (name + env toggle)
-- [ ] `WorkspaceDetailPage` — assigned connections list, "Assign Connection" button
+- [x] `WorkspacesPage` — list workspaces, "+ New Workspace" dialog (name + env toggle)
+- [x] `WorkspaceDetailPage` — assigned connections list, "Assign Connection" button
 - [ ] Add workspace switcher to sidebar nav
 - Files: `apps/web/src/modules/workspaces/**`
 - Depends: T014
 
 ---
 
-## Phase 2 — Routes & Mapping Canvas
+## Phase 2 — Stitches & Mapping Canvas
 
-### T017 · db: migration `0006_routes` (includes scheduler columns)
+### T017 · db: migration `0010_stitches` (includes scheduler columns)
 
-- [ ] Run `pnpm --filter api db:generate`
-- [ ] Creates `integration_route` (with `sync_interval_minutes`, `schedule_enabled`, `last_scheduled_at`), `field_mapping`
-- Files: `apps/api/drizzle/0006_routes.sql`, `apps/api/drizzle/meta/_journal.json`
+- [x] Run `pnpm --filter api db:generate`
+- [x] Creates `integration_stitch` (with `sync_interval_minutes`, `schedule_enabled`, `last_scheduled_at`), `field_mapping`
+- Files: `apps/api/drizzle/0010_stitches.sql`, `apps/api/drizzle/meta/_journal.json`
 - Depends: T013
 
 ### T018 · piece-framework: Add `describeObjects` + `describeFields` interface methods
@@ -179,63 +179,63 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T019 · api: `MetadataDiscoveryService`
 
-- [ ] `GET /routes/metadata/:connectionId/objects`
-- [ ] `GET /routes/metadata/:connectionId/objects/:objectName/fields`
+- [ ] `GET /stitches/metadata/:connectionId/objects`
+- [ ] `GET /stitches/metadata/:connectionId/objects/:objectName/fields`
 - [ ] Calls `piece.describeObjects()` / `piece.describeFields()`
 - [ ] Caches in `connector_object_profiles` + Redis `meta:{connectionId}:{objectName}` (5-min TTL)
-- Files: `apps/api/src/modules/routes/metadata-discovery.service.ts`, `apps/api/src/modules/routes/metadata.controller.ts`
+- Files: `apps/api/src/modules/stitches/metadata-discovery.service.ts`, `apps/api/src/modules/stitches/metadata.controller.ts`
 - Depends: T017, T018
 
-### T020 · api: `RoutesModule` — CRUD
+### T020 · api: `StitchesModule` — CRUD
 
-- [ ] `POST /routes`, `GET /routes?workspaceId=...`, `GET /routes/:id`, `PATCH /routes/:id`, `DELETE /routes/:id`
-- [ ] `RoutesService`: create, list, update, archive
-- [ ] DTOs: `CreateRouteDto`, `UpdateRouteDto`
-- [ ] Unit tests
-- Files: `apps/api/src/modules/routes/routes.controller.ts`, `apps/api/src/modules/routes/routes.service.ts`
+- [x] `POST /stitches`, `GET /stitches?workspaceId=...`, `GET /stitches/:id`, `PATCH /stitches/:id`, `DELETE /stitches/:id`
+- [x] `StitchesService`: create, list, update, archive
+- [x] Validation: `CreateStitch`, `UpdateStitch` (Zod + nestjs-zod)
+- [x] Unit tests
+- Files: `apps/api/src/modules/stitches/stitches.controller.ts`, `apps/api/src/modules/stitches/stitches.service.ts`
 - Depends: T017
 
-### T021 · api: Schedule endpoints on `RoutesController` (stub)
+### T021 · api: Schedule endpoints on `StitchesController` (stub)
 
-- [ ] `PATCH /routes/:id/schedule` — validate body, persist `syncIntervalMinutes` / `scheduleEnabled` to `integration_route` via `RoutesService`
-- [ ] `PATCH /admin/routes/:id/schedule` — same, no interval restrictions
-- [ ] `POST /routes/:id/schedule/trigger` — stub returns `202`; full enqueue wired in T029
-- [ ] `UpdateScheduleDto` with `@IsIn([30,60,120,240,360,720,1440])` validation
+- [ ] `PATCH /stitches/:id/schedule` — validate body, persist `syncIntervalMinutes` / `scheduleEnabled` to `integration_stitch` via `StitchesService`
+- [ ] `PATCH /admin/stitches/:id/schedule` — same, no interval restrictions
+- [ ] `POST /stitches/:id/schedule/trigger` — stub returns `202`; full enqueue wired in T029
+- [ ] `UpdateScheduleBody` with `@IsIn([30,60,120,240,360,720,1440])` validation
 - [ ] Leave `// TODO(T029): call SchedulerService.reschedule/disable/register` comments at the call sites — `SchedulerService` does not exist yet
-- Files: `apps/api/src/modules/routes/routes.controller.ts`, `apps/api/src/modules/routes/dto/update-schedule.dto.ts`
+- Files: `apps/api/src/modules/stitches/stitches.controller.ts`, `apps/api/src/modules/stitches/update-schedule.validation.ts`
 - Depends: T020
 - Note: `SchedulerService` integration is completed in T029, which adds `SchedulerService` calls to these endpoints
 
 ### T022 · api: `FieldMappingsController`
 
-- [ ] `POST /routes/:id/mappings`, `PATCH /routes/:id/mappings`
-- [ ] Upserts `field_mapping` row on `(routeId, sourceCanonical)`
-- Files: `apps/api/src/modules/routes/field-mappings.controller.ts`
+- [ ] `POST /stitches/:id/mappings`, `PATCH /stitches/:id/mappings`
+- [ ] Upserts `field_mapping` row on `(stitchId, sourceCanonical)`
+- Files: `apps/api/src/modules/stitches/field-mappings.controller.ts`
 - Depends: T020
 
-### T023 · web: `RoutesPage` + `NewRoutePage` 3-step wizard
+### T023 · web: `StitchesPage` + `NewStitchPage` 3-step wizard
 
 - [ ] Step 1: Pick source connection → source object (from metadata API)
 - [ ] Step 2: Pick target connection → target object
 - [ ] Step 3: Mapping Canvas — two-column field table, drag-to-connect, "+ Add Condition" row
-- Files: `apps/web/src/modules/routes/RoutesPage.tsx`, `apps/web/src/modules/routes/NewRoutePage.tsx`, `apps/web/src/modules/routes/MappingCanvas.tsx`
+- Files: `apps/web/src/modules/stitches/StitchesPage.tsx`, `apps/web/src/modules/stitches/NewStitchPage.tsx`, `apps/web/src/modules/stitches/MappingCanvas.tsx`
 - Depends: T019, T022
 
-### T024 · web: Schedule Panel on `RouteDetailPage`
+### T024 · web: Schedule Panel on `StitchDetailPage`
 
 - [ ] Frequency dropdown (30min / 1hr / 2hr / 4hr / 6hr / 12hr / 24hr)
 - [ ] Enable / Pause toggle
 - [ ] "Last synced" + "Next sync in ~X min" display (computed from `last_scheduled_at + interval`)
-- [ ] "Run now" button → calls `POST /routes/:id/schedule/trigger`
-- Files: `apps/web/src/modules/routes/RouteDetailPage.tsx`, `apps/web/src/modules/routes/components/SchedulePanel.tsx`
+- [ ] "Run now" button → calls `POST /stitches/:id/schedule/trigger`
+- Files: `apps/web/src/modules/stitches/StitchDetailPage.tsx`, `apps/web/src/modules/stitches/components/SchedulePanel.tsx`
 - Depends: T021, T023
 
 ### T025 · web: Admin/Support schedule override page
 
-- [ ] `/admin/routes` — table of all routes across all orgs with `last_scheduled_at`
+- [ ] `/admin/stitches` — table of all stitches across all orgs with `last_scheduled_at`
 - [ ] Per-row schedule edit with no interval restrictions
-- [ ] Bulk interval override for all routes in an org
-- Files: `apps/web/src/modules/admin/AdminRoutesPage.tsx`
+- [ ] Bulk interval override for all stitches in an org
+- Files: `apps/web/src/modules/admin/AdminStitchesPage.tsx`
 - Depends: T021
 
 ---
@@ -274,22 +274,22 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 ### T029 · api: `SchedulerModule` + `SchedulerService`
 
 - [ ] BullMQ `scheduler-queue` backed by Redis
-- [ ] `register(routeId, intervalMinutes)` — `queue.upsertJobScheduler(`schedule:${routeId}`, { every: ms }, { name: 'poll-route', data: { routeId } })`
-- [ ] `reschedule(routeId, newInterval)` — `queue.upsertJobScheduler(...)` atomically updates interval (no remove-then-add race)
-- [ ] `disable(routeId)` — `queue.removeJobScheduler(`schedule:${routeId}`)`
-- [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` routes via `upsertJobScheduler` (idempotent on restart)
-- [ ] Wire into `RoutesController` schedule endpoints (T021 stubs): replace TODO comments with `SchedulerService.reschedule()`/`disable()`/`register()` calls
+- [ ] `register(stitchId, intervalMinutes)` — `queue.upsertJobScheduler(`schedule:${stitchId}`, { every: ms }, { name: 'poll-stitch', data: { stitchId } })`
+- [ ] `reschedule(stitchId, newInterval)` — `queue.upsertJobScheduler(...)` atomically updates interval (no remove-then-add race)
+- [ ] `disable(stitchId)` — `queue.removeJobScheduler(`schedule:${stitchId}`)`
+- [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` stitches via `upsertJobScheduler` (idempotent on restart)
+- [ ] Wire into `StitchesController` schedule endpoints (T021 stubs): replace TODO comments with `SchedulerService.reschedule()`/`disable()`/`register()` calls
 - Files: `apps/api/src/modules/scheduler/scheduler.module.ts`, `apps/api/src/modules/scheduler/scheduler.service.ts`
 - Depends: T003, T020, T021
 
 ### T030 · api: `SchedulerWorker` — poll execution
 
-- [ ] Consumes `poll-route` jobs from `scheduler-queue`
+- [ ] Consumes `poll-stitch` jobs from `scheduler-queue`
 - [ ] Guards: check `schedule_enabled` + `status=ACTIVE` before proceeding
 - [ ] Reads `sync_cursor` for high-water mark (table created by T026 `REPLICA_ACTIVE` plan)
 - [ ] Calls `piece.poll(credentials, cursor)` → fan out each record into `inbound_gateway` + `Inbound_Queue`
 - [ ] Advances `sync_cursor` only after DB commit
-- [ ] Updates `integration_route.last_scheduled_at`
+- [ ] Updates `integration_stitch.last_scheduled_at`
 - Files: `apps/api/src/modules/scheduler/scheduler.worker.ts`
 - Depends: T026, T028, T029
 
@@ -319,9 +319,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 ### T033 · api: `FanOutService` — L4 worker (crash-safe)
 
 - [ ] Consumes `Normalized_Queue`
-- [ ] Queries `integration_route` for active routes matching `src_connection_id`
+- [ ] Queries `integration_stitch` for active stitches matching `src_connection_id`
 - [ ] Evaluates `syncCondition` rules in-memory (`eq`, `neq`, `gt`, `lt`, `contains`)
-- [ ] Per matching route: hydrate payload via `field_mapping` rules
+- [ ] Per matching stitch: hydrate payload via `field_mapping` rules
 - [ ] **Writes `outbound_gateway` (status=`PENDING`) BEFORE enqueuing** — crash safety
 - [ ] Pushes `{ traceId, outboundGatewayId }` to `Delivery_Queue`
 - [ ] Skipped routes: write `sync_log` row `{ status: 'SKIPPED' }`

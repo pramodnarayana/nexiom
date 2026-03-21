@@ -125,6 +125,7 @@ export async function seedSystemRbac(
         "tenants:read",
         "dashboard:read",
         "workspaces:read",
+        "stitches:read",
       ];
 
       // System-scoped read-only perms — only visible when member is in the system tenant.
