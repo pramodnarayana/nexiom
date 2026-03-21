@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
-import { LayoutDashboard, Users, Settings, Blocks, Plug2, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Blocks, Plug2 } from 'lucide-react';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { RESOURCES } from '@/shared/constants/resources';
 
@@ -30,7 +30,14 @@ export function TenantRoutes() {
                 { label: 'Users', href: '/dashboard/users', icon: Users },
                 { label: 'Marketplace', href: '/dashboard/marketplace', icon: Blocks },
                 { label: 'Active Connections', href: '/dashboard/active-connections', icon: Plug2 },
-                { label: 'Workspaces', href: '/dashboard/workspaces', icon: Building2 },
+            ]
+        }
+    ];
+
+    const bottomNavGroups = [
+        {
+            title: "",
+            items: [
                 { label: 'Settings', href: '/dashboard/settings', icon: Settings },
             ]
         }
@@ -67,7 +74,7 @@ export function TenantRoutes() {
                     }}
                 >
                     <Routes>
-                        <Route element={<TenantLayout navGroups={navGroups} />}>
+                        <Route element={<TenantLayout navGroups={navGroups} bottomNavGroups={bottomNavGroups} />}>
                             <Route index element={<DashboardPage />} />
                             <Route path="users" element={<UserList />} />
                             <Route path="users/show/:id" element={<UserShow />} />

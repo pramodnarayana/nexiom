@@ -67,3 +67,19 @@ export async function assignConnection(workspaceId: string, connectionId: string
 export async function unassignConnection(workspaceId: string, connectionId: string): Promise<void> {
   await apiClient.delete(`/workspaces/${workspaceId}/connections/${connectionId}`);
 }
+
+/** Connections available to assign: env-type matched, not yet assigned to this workspace. */
+export interface AvailableConnectionResponse {
+  id: string;
+  appName: string;
+  externalId: string;
+  displayName: string;
+  authType: string;
+  status: string;
+  envType: EnvType;
+}
+
+export async function listAvailableConnections(workspaceId: string): Promise<AvailableConnectionResponse[]> {
+  const res = await apiClient.get<AvailableConnectionResponse[]>(`/workspaces/${workspaceId}/connections/available`);
+  return res.data;
+}

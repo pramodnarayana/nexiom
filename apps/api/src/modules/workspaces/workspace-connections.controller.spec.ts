@@ -45,6 +45,7 @@ describe('WorkspaceConnectionsController', () => {
   const mockService = {
     findOne: vi.fn(),
     listConnections: vi.fn(),
+    listAvailableConnections: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -87,7 +88,11 @@ describe('WorkspaceConnectionsController', () => {
       assignedAt: new Date(),
     };
     mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.findFirst.mockResolvedValue({ id: CONN_ID, tenantId: ORG_ID });
+    mocks.findFirst.mockResolvedValue({
+      id: CONN_ID,
+      tenantId: ORG_ID,
+      envType: 'PRODUCTION',
+    });
     mocks.returning.mockResolvedValue([assignment]);
 
     const result = await controller.assign(makeAuth(), WS_ID, CONN_ID);
@@ -103,9 +108,26 @@ describe('WorkspaceConnectionsController', () => {
     );
   });
 
+  it('assign — throws ConflictException when connection env_type does not match workspace env_type', async () => {
+    mockService.findOne.mockResolvedValue(WORKSPACE); // envType: 'PRODUCTION'
+    mocks.findFirst.mockResolvedValue({
+      id: CONN_ID,
+      tenantId: ORG_ID,
+      envType: 'SANDBOX',
+    });
+
+    await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
   it('assign — throws ConflictException on PG unique violation', async () => {
     mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.findFirst.mockResolvedValue({ id: CONN_ID, tenantId: ORG_ID });
+    mocks.findFirst.mockResolvedValue({
+      id: CONN_ID,
+      tenantId: ORG_ID,
+      envType: 'PRODUCTION',
+    });
     mocks.returning.mockRejectedValue(
       Object.assign(new Error('unique'), { code: '23505' }),
     );
@@ -117,11 +139,31 @@ describe('WorkspaceConnectionsController', () => {
 
   it('assign — re-throws unexpected errors', async () => {
     mockService.findOne.mockResolvedValue(WORKSPACE);
-    mocks.findFirst.mockResolvedValue({ id: CONN_ID, tenantId: ORG_ID });
+    mocks.findFirst.mockResolvedValue({
+      id: CONN_ID,
+      tenantId: ORG_ID,
+      envType: 'PRODUCTION',
+    });
     mocks.returning.mockRejectedValue(new Error('db down'));
 
     await expect(controller.assign(makeAuth(), WS_ID, CONN_ID)).rejects.toThrow(
       'db down',
+    );
+  });
+
+  // ── listAvailable ─────────────────────────────────────────────────────────
+
+  it('listAvailable — delegates to service', async () => {
+    const rows = [
+      { id: CONN_ID, appName: 'salesforce', envType: 'PRODUCTION' },
+    ];
+    mockService.listAvailableConnections.mockResolvedValue(rows);
+
+    const result = await controller.listAvailable(makeAuth(), WS_ID);
+    expect(result).toBe(rows);
+    expect(mockService.listAvailableConnections).toHaveBeenCalledWith(
+      ORG_ID,
+      WS_ID,
     );
   });
 

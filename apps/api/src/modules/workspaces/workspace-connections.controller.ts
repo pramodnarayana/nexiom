@@ -49,6 +49,19 @@ export class WorkspaceConnectionsController {
     );
   }
 
+  /** Active connections for this org that match the workspace env_type and are not yet assigned. */
+  @Get('available')
+  @RequirePermission('workspaces', 'read')
+  listAvailable(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ) {
+    return this.workspacesService.listAvailableConnections(
+      requireOrgId(auth),
+      workspaceId,
+    );
+  }
+
   @Post(':connectionId')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('workspaces', 'manage')
@@ -60,7 +73,7 @@ export class WorkspaceConnectionsController {
     const orgId = requireOrgId(auth);
 
     // Verify workspace belongs to this org
-    await this.workspacesService.findOne(orgId, workspaceId);
+    const workspace = await this.workspacesService.findOne(orgId, workspaceId);
 
     // Verify connection belongs to this org
     const connection = await this.db.query.appConnections.findFirst({
@@ -71,6 +84,14 @@ export class WorkspaceConnectionsController {
     });
     if (!connection) {
       throw new NotFoundException(`Connection ${connectionId} not found.`);
+    }
+
+    // Enforce env-type parity — sandbox connections may not be assigned to production
+    // workspaces and vice versa.
+    if (connection.envType !== workspace.envType) {
+      throw new ConflictException(
+        `Cannot assign a ${connection.envType} connection to a ${workspace.envType} workspace.`,
+      );
     }
 
     try {

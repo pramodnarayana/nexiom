@@ -7,12 +7,14 @@ import { Button } from '@/shared/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sidebar, type NavGroup } from './Sidebar';
 import { type NavigateFunction, useLocation } from 'react-router-dom';
-
+import { type WorkspaceItem } from './WorkspaceExplorer';
 import { type AppUser } from './types';
 
 interface NavbarProps {
     title?: string;
     navGroups: NavGroup[];
+    bottomNavGroups?: NavGroup[];
+    workspaces?: WorkspaceItem[];
     user: AppUser | null;
     logout: () => void;
     navigate: NavigateFunction;
@@ -20,11 +22,13 @@ interface NavbarProps {
     actions?: React.ReactNode;
 }
 
-export function Navbar({ title, navGroups, user, logout, navigate, headerContent, actions }: Readonly<NavbarProps>) {
+export function Navbar({ title, navGroups, bottomNavGroups, workspaces, user, logout, navigate, headerContent, actions }: Readonly<NavbarProps>) {
     const location = useLocation();
 
+    const allItems = [...navGroups, ...(bottomNavGroups ?? [])].flatMap(g => g.items);
+
     // Find current active item title for breadcrumb behavior
-    const currentItem = navGroups.flatMap(g => g.items)
+    const currentItem = allItems
         .filter(i => location.pathname === i.href || location.pathname.startsWith(`${i.href}/`))
         .sort((a, b) => b.href.length - a.href.length)[0];
 
@@ -42,6 +46,8 @@ export function Navbar({ title, navGroups, user, logout, navigate, headerContent
                     <SheetContent side="left" className="p-0 border-r-0 w-64">
                         <Sidebar
                             navGroups={navGroups}
+                            bottomNavGroups={bottomNavGroups}
+                            workspaces={workspaces}
                             user={user}
                             logout={logout}
                             navigate={navigate}

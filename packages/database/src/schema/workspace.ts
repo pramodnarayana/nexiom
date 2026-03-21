@@ -1,6 +1,5 @@
 import {
     pgTable,
-    pgEnum,
     uuid,
     varchar,
     text,
@@ -11,13 +10,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { organization } from './identity.js';
-import { appConnections } from './tenant.js';
-
-// ---------------------------------------------------------------------------
-// Enums
-// ---------------------------------------------------------------------------
-
-export const envTypeEnum = pgEnum('env_type_enum', ['PRODUCTION', 'SANDBOX']);
+import { appConnections, envTypeEnum } from './tenant.js';
+export { envTypeEnum } from './tenant.js';
 
 // ---------------------------------------------------------------------------
 

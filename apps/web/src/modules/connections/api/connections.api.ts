@@ -35,6 +35,7 @@ export interface ActiveConnectionResponse {
     displayName: string;
     authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
     status: 'ACTIVE' | 'INACTIVE' | 'REVOKED' | 'EXPIRED';
+    envType: 'PRODUCTION' | 'SANDBOX';
     hasCredentials?: boolean;
     metadata?: Record<string, unknown>;
     expiresAt?: string;
@@ -81,6 +82,7 @@ export async function createOAuthSession(payload: {
     });
     return res.data;
 }
+
 
 export async function exchangeOAuthCode(payload: {
     providerName: string;

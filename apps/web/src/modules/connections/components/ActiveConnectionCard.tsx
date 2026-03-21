@@ -154,6 +154,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
         <div className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5">
             {/* Context Menu — top-right corner */}
             <div className="absolute top-3 right-3 flex items-center gap-2">
+                <Badge
+                    variant="outline"
+                    className={`text-[10px] px-1.5 py-0 ${connection.envType === 'SANDBOX' ? 'border-amber-400 text-amber-600' : 'border-green-500 text-green-700'}`}
+                >
+                    {connection.envType}
+                </Badge>
                 <Badge variant={statusInfo.variant} className="text-[10px] px-1.5 py-0">
                     {statusInfo.label}
                 </Badge>

@@ -147,16 +147,19 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `POST /workspaces/:id/connections` — assign an existing connection
 - [x] `DELETE /workspaces/:id/connections/:connId` — remove assignment
 - [x] Validates connection belongs to same org
+- [ ] Validates `connection.env_type === workspace.env_type` — reject with `409` if mismatched (sandbox connection cannot be assigned to a production workspace and vice versa)
+- [ ] `GET /workspaces/:id/connections/available` — returns connections for the org filtered to matching `env_type`; used by the UI connection picker
 - Files: `apps/api/src/modules/workspaces/workspace-connections.controller.ts`
 - Depends: T014
 
-### T016 · web: `WorkspacesPage` + `WorkspaceDetailPage`
+### T016 · web: `WorkspacesPage` + `WorkspaceDetailPage` + sidebar directory
 
 - [x] `WorkspacesPage` — list workspaces, "+ New Workspace" dialog (name + env toggle)
 - [x] `WorkspaceDetailPage` — assigned connections list, "Assign Connection" button
-- [ ] Add workspace switcher to sidebar nav
-- Files: `apps/web/src/modules/workspaces/**`
-- Depends: T014
+- [ ] Sidebar nav: each workspace renders as a **collapsible directory node** (folder icon + workspace name + env badge). Expanding a node reveals its stitches as child rows. Active route is highlighted. Only one workspace can be expanded at a time (accordion behaviour)
+- [ ] "Assign Connection" picker calls `GET /workspaces/:id/connections/available` so only env-type-matched connections appear — sandbox picker never shows production connections and vice versa
+- Files: `apps/web/src/modules/workspaces/**`, `apps/web/src/components/layout/Sidebar.tsx`
+- Depends: T014, T015
 
 ---
 
@@ -441,6 +444,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 - [ ] `NewWorkspaceDialog` — radio: `Production` (green) / `Sandbox` (amber)
 - [ ] All workspace-scoped pages show a badge: amber "SANDBOX" or green "PRODUCTION"
+- [ ] Sidebar directory node for a sandbox workspace renders with amber accent; production with green — visually distinct at a glance without opening the node
 - Files: `apps/web/src/modules/workspaces/WorkspacesPage.tsx`, `apps/web/src/modules/workspaces/components/EnvBadge.tsx`
 - Depends: T016
 

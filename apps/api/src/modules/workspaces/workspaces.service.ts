@@ -6,7 +6,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, notInArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -118,6 +118,47 @@ export class WorkspacesService {
     if (!deleted) {
       throw new NotFoundException(`Workspace ${id} not found.`);
     }
+  }
+
+  /**
+   * Returns active connections for the org that match the workspace's env_type
+   * and have not yet been assigned to this workspace.
+   * Used to populate the "Assign Connection" picker in the UI.
+   */
+  async listAvailableConnections(orgId: string, workspaceId: string) {
+    const workspace = await this.findOne(orgId, workspaceId);
+
+    const assigned = await this.db
+      .select({ connectionId: uiWorkspaceConnections.connectionId })
+      .from(uiWorkspaceConnections)
+      .where(eq(uiWorkspaceConnections.workspaceId, workspaceId));
+
+    const assignedIds = assigned.map((r) => r.connectionId);
+
+    const conditions = [
+      eq(appConnections.tenantId, orgId),
+      eq(appConnections.status, AppConnectionStatus.ACTIVE),
+      eq(appConnections.envType, workspace.envType),
+    ];
+
+    if (assignedIds.length > 0) {
+      conditions.push(notInArray(appConnections.id, assignedIds));
+    }
+
+    // Explicit select — never expose the encrypted `value` blob or other sensitive columns.
+    return this.db
+      .select({
+        id: appConnections.id,
+        appName: appConnections.appName,
+        externalId: appConnections.externalId,
+        displayName: appConnections.displayName,
+        authType: appConnections.authType,
+        status: appConnections.status,
+        envType: appConnections.envType,
+      })
+      .from(appConnections)
+      .where(and(...conditions))
+      .orderBy(asc(appConnections.displayName));
   }
 
   /** Returns active connections assigned to the workspace, scoped to the org. */

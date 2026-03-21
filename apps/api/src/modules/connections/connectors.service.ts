@@ -76,6 +76,8 @@ export interface StoreOAuthConnectionOptions {
   value: string;
   expiresAt: Date;
   metadata: Record<string, unknown>;
+  /** Whether this connection targets a sandbox or production environment. Defaults to PRODUCTION. */
+  envType?: 'PRODUCTION' | 'SANDBOX';
   /** Physical target region for database infrastructure mapping (optional) */
   regionContext?: string;
 }
@@ -326,6 +328,7 @@ export class ConnectorsService {
     value,
     expiresAt,
     metadata,
+    envType,
     regionContext,
   }: StoreOAuthConnectionOptions): Promise<void> {
     const finalRegionContext =
@@ -362,6 +365,7 @@ export class ConnectorsService {
                 metadata,
                 status: AppConnectionStatus.ACTIVE,
                 updatedAt: new Date(),
+                ...(envType !== undefined && { envType }),
               })
               .where(
                 and(
@@ -414,6 +418,7 @@ export class ConnectorsService {
               value,
               expiresAt,
               metadata,
+              envType: envType ?? 'PRODUCTION',
               status: AppConnectionStatus.ACTIVE,
             })
             .returning({ id: appConnections.id });

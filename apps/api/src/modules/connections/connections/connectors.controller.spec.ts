@@ -465,6 +465,8 @@ describe('ConnectorsController', () => {
         value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
         metadata: {},
+        // No environment vendorParam in mock → deriveEnvType defaults to PRODUCTION
+        envType: 'PRODUCTION',
       });
     });
 
