@@ -84,12 +84,14 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                             </Link>
                         </div>
 
-                        {/* Children — placeholder until sub-routes are wired (T020+) */}
                         {isExpanded && (
                             <div className="ml-6 mt-0.5 border-l border-border pl-3 space-y-0.5 pb-1">
-                                <span className="block text-xs text-muted-foreground/50 py-1 px-2 cursor-default select-none">
-                                    Stitches <span className="italic">(soon)</span>
-                                </span>
+                                <Link
+                                    to={`${wsHref}/stitches`}
+                                    className="block text-xs text-muted-foreground hover:text-foreground py-1 px-2 rounded hover:bg-muted/50"
+                                >
+                                    Stitches
+                                </Link>
                                 <Link
                                     to={wsHref}
                                     className="block text-xs text-muted-foreground hover:text-foreground py-1 px-2 rounded hover:bg-muted/50"

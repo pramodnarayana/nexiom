@@ -298,4 +298,70 @@ describe('StitchesService', () => {
       NotFoundException,
     );
   });
+
+  // ── updateSchedule ──────────────────────────────────────────────────────
+
+  it('updateSchedule — updates syncIntervalMinutes', async () => {
+    const updated = { ...STITCH, syncIntervalMinutes: 60 };
+    mocks.returningUpdate.mockResolvedValue([updated]);
+
+    const result = await service.updateSchedule(ORG_ID, STITCH_ID, {
+      syncIntervalMinutes: 60,
+    });
+
+    expect(result).toEqual(updated);
+    expect(mocks.db.update).toHaveBeenCalled();
+  });
+
+  it('updateSchedule — updates scheduleEnabled', async () => {
+    const updated = { ...STITCH, scheduleEnabled: true };
+    mocks.returningUpdate.mockResolvedValue([updated]);
+
+    const result = await service.updateSchedule(ORG_ID, STITCH_ID, {
+      scheduleEnabled: true,
+    });
+
+    expect(result.scheduleEnabled).toBe(true);
+  });
+
+  it('updateSchedule — throws BadRequestException when no fields provided', async () => {
+    await expect(service.updateSchedule(ORG_ID, STITCH_ID, {})).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('updateSchedule — throws NotFoundException when stitch not found', async () => {
+    mocks.returningUpdate.mockResolvedValue([]);
+
+    await expect(
+      service.updateSchedule(ORG_ID, STITCH_ID, { syncIntervalMinutes: 60 }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  // ── updateScheduleAdmin ────────────────────────────────────────────────
+
+  it('updateScheduleAdmin — updates without org scoping', async () => {
+    const updated = { ...STITCH, syncIntervalMinutes: 15 };
+    mocks.returningUpdate.mockResolvedValue([updated]);
+
+    const result = await service.updateScheduleAdmin(STITCH_ID, {
+      syncIntervalMinutes: 15,
+    });
+
+    expect(result).toEqual(updated);
+  });
+
+  it('updateScheduleAdmin — throws BadRequestException when no fields provided', async () => {
+    await expect(service.updateScheduleAdmin(STITCH_ID, {})).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('updateScheduleAdmin — throws NotFoundException when stitch not found', async () => {
+    mocks.returningUpdate.mockResolvedValue([]);
+
+    await expect(
+      service.updateScheduleAdmin(STITCH_ID, { scheduleEnabled: false }),
+    ).rejects.toThrow(NotFoundException);
+  });
 });

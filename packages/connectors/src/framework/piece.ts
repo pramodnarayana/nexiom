@@ -3,6 +3,23 @@ import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
 import { InternalServerErrorException } from '@nestjs/common';
 
+/** A SaaS object available for metadata discovery. */
+export interface ObjectDescriptor {
+    name: string;
+    label: string;
+    queryable: boolean;
+}
+
+/** A single field within a SaaS object schema. */
+export interface FieldDescriptor {
+    name: string;
+    label: string;
+    type: string;
+    filterable: boolean;
+    sortable: boolean;
+    nillable: boolean;
+}
+
 export interface Piece {
     name: string;
     displayName: string;
@@ -16,6 +33,10 @@ export interface Piece {
     triggers: Record<string, Trigger>;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
+    /** Returns available objects for this connection. Credentials are decrypted by the caller. */
+    describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
+    /** Returns the field schema for a specific object. */
+    describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
 }
 
 export enum PieceCategory {
@@ -45,6 +66,8 @@ export interface CreatePieceParams {
     description?: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
+    describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
+    describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
 }
 
 /**
@@ -101,5 +124,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         triggers: triggersMap,
         minimumSupportedRelease: params.minimumSupportedRelease,
         maximumSupportedRelease: params.maximumSupportedRelease,
+        ...(params.describeObjects && { describeObjects: params.describeObjects }),
+        ...(params.describeFields && { describeFields: params.describeFields }),
     };
 }

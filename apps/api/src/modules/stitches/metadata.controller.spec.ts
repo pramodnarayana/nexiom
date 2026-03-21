@@ -1,0 +1,73 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Test } from '@nestjs/testing';
+import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { MetadataController } from './metadata.controller.js';
+import { MetadataDiscoveryService } from './metadata-discovery.service.js';
+import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
+
+const CONN_ID = 'conn-uuid-1';
+
+const mockService = {
+  describeObjects: vi.fn(),
+  describeFields: vi.fn(),
+};
+
+describe('MetadataController', () => {
+  let controller: MetadataController;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      controllers: [MetadataController],
+      providers: [{ provide: MetadataDiscoveryService, useValue: mockService }],
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(PermissionsGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    controller = module.get(MetadataController);
+    vi.clearAllMocks();
+  });
+
+  it('describeObjects — delegates to service with orgId, connectionId, and limit', async () => {
+    const objects = [{ name: 'Contact', label: 'Contact', queryable: true }];
+    mockService.describeObjects.mockResolvedValue(objects);
+
+    const result = await controller.describeObjects(makeAuth(), CONN_ID, 500);
+
+    expect(result).toBe(objects);
+    expect(mockService.describeObjects).toHaveBeenCalledWith(
+      ORG_ID,
+      CONN_ID,
+      500,
+    );
+  });
+
+  it('describeFields — delegates to service with orgId, connectionId, and objectName', async () => {
+    const fields = [
+      {
+        name: 'Id',
+        label: 'ID',
+        type: 'string',
+        filterable: true,
+        sortable: true,
+        nillable: false,
+      },
+    ];
+    mockService.describeFields.mockResolvedValue(fields);
+
+    const result = await controller.describeFields(
+      makeAuth(),
+      CONN_ID,
+      'Contact',
+    );
+
+    expect(result).toBe(fields);
+    expect(mockService.describeFields).toHaveBeenCalledWith(
+      ORG_ID,
+      CONN_ID,
+      'Contact',
+    );
+  });
+});

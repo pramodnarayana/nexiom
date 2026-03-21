@@ -147,8 +147,8 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `POST /workspaces/:id/connections` — assign an existing connection
 - [x] `DELETE /workspaces/:id/connections/:connId` — remove assignment
 - [x] Validates connection belongs to same org
-- [ ] Validates `connection.env_type === workspace.env_type` — reject with `409` if mismatched (sandbox connection cannot be assigned to a production workspace and vice versa)
-- [ ] `GET /workspaces/:id/connections/available` — returns connections for the org filtered to matching `env_type`; used by the UI connection picker
+- [x] Validates `connection.env_type === workspace.env_type` — reject with `409` if mismatched (sandbox connection cannot be assigned to a production workspace and vice versa)
+- [x] `GET /workspaces/:id/connections/available` — returns connections for the org filtered to matching `env_type`; used by the UI connection picker
 - Files: `apps/api/src/modules/workspaces/workspace-connections.controller.ts`
 - Depends: T014
 
@@ -156,8 +156,8 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 - [x] `WorkspacesPage` — list workspaces, "+ New Workspace" dialog (name + env toggle)
 - [x] `WorkspaceDetailPage` — assigned connections list, "Assign Connection" button
-- [ ] Sidebar nav: each workspace renders as a **collapsible directory node** (folder icon + workspace name + env badge). Expanding a node reveals its stitches as child rows. Active route is highlighted. Only one workspace can be expanded at a time (accordion behaviour)
-- [ ] "Assign Connection" picker calls `GET /workspaces/:id/connections/available` so only env-type-matched connections appear — sandbox picker never shows production connections and vice versa
+- [x] Sidebar nav: each workspace renders as a **collapsible directory node** (folder icon + workspace name + env badge). Expanding a node reveals its stitches as child rows. Active route is highlighted. Only one workspace can be expanded at a time (accordion behaviour)
+- [x] "Assign Connection" picker calls `GET /workspaces/:id/connections/available` so only env-type-matched connections appear — sandbox picker never shows production connections and vice versa
 - Files: `apps/web/src/modules/workspaces/**`, `apps/web/src/components/layout/Sidebar.tsx`
 - Depends: T014, T015
 
@@ -174,18 +174,18 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T018 · piece-framework: Add `describeObjects` + `describeFields` interface methods
 
-- [ ] Add to `Piece` interface in `packages/connectors/framework/`
-- [ ] Salesforce piece: stub implementation (returns Prism response in local mode)
-- [ ] QuickBooks piece: stub implementation
+- [x] Add to `Piece` interface in `packages/connectors/framework/`
+- [x] Salesforce piece: stub implementation (returns Prism response in local mode)
+- [x] QuickBooks piece: stub implementation
 - Files: `packages/connectors/framework/src/piece.interface.ts`, `packages/pieces/salesforce/src/**`, `packages/pieces/quickbooks/src/**`
 - Depends: T002
 
 ### T019 · api: `MetadataDiscoveryService`
 
-- [ ] `GET /stitches/metadata/:connectionId/objects`
-- [ ] `GET /stitches/metadata/:connectionId/objects/:objectName/fields`
-- [ ] Calls `piece.describeObjects()` / `piece.describeFields()`
-- [ ] Caches in `connector_object_profiles` + Redis `meta:{connectionId}:{objectName}` (5-min TTL)
+- [x] `GET /stitches/metadata/:connectionId/objects`
+- [x] `GET /stitches/metadata/:connectionId/objects/:objectName/fields`
+- [x] Calls `piece.describeObjects()` / `piece.describeFields()`
+- [x] Caches in `connector_object_profiles` + Redis `meta:{connectionId}:{objectName}` (5-min TTL)
 - Files: `apps/api/src/modules/stitches/metadata-discovery.service.ts`, `apps/api/src/modules/stitches/metadata.controller.ts`
 - Depends: T017, T018
 
@@ -200,19 +200,19 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T021 · api: Schedule endpoints on `StitchesController` (stub)
 
-- [ ] `PATCH /stitches/:id/schedule` — validate body, persist `syncIntervalMinutes` / `scheduleEnabled` to `integration_stitch` via `StitchesService`
-- [ ] `PATCH /admin/stitches/:id/schedule` — same, no interval restrictions
-- [ ] `POST /stitches/:id/schedule/trigger` — stub returns `202`; full enqueue wired in T029
-- [ ] `UpdateScheduleBody` with `@IsIn([30,60,120,240,360,720,1440])` validation
-- [ ] Leave `// TODO(T029): call SchedulerService.reschedule/disable/register` comments at the call sites — `SchedulerService` does not exist yet
+- [x] `PATCH /stitches/:id/schedule` — validate body, persist `syncIntervalMinutes` / `scheduleEnabled` to `integration_stitch` via `StitchesService`
+- [x] `PATCH /admin/stitches/:id/schedule` — same, no interval restrictions
+- [x] `POST /stitches/:id/schedule/trigger` — stub returns `202`; full enqueue wired in T029
+- [x] `UpdateScheduleBody` with `@IsIn([30,60,120,240,360,720,1440])` validation
+- [x] Leave `// TODO(T029): call SchedulerService.reschedule/disable/register` comments at the call sites — `SchedulerService` does not exist yet
 - Files: `apps/api/src/modules/stitches/stitches.controller.ts`, `apps/api/src/modules/stitches/update-schedule.validation.ts`
 - Depends: T020
 - Note: `SchedulerService` integration is completed in T029, which adds `SchedulerService` calls to these endpoints
 
 ### T022 · api: `FieldMappingsController`
 
-- [ ] `POST /stitches/:id/mappings`, `PATCH /stitches/:id/mappings`
-- [ ] Upserts `field_mapping` row on `(stitchId, sourceCanonical)`
+- [x] `POST /stitches/:id/mappings`, `PATCH /stitches/:id/mappings`
+- [x] Upserts `field_mapping` row on `(stitchId, sourceCanonical)`
 - Files: `apps/api/src/modules/stitches/field-mappings.controller.ts`
 - Depends: T020
 

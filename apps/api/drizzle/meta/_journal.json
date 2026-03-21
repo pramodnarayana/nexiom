@@ -78,6 +78,13 @@
       "when": 1773900000000,
       "tag": "0011_connection_env_type",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774000000000,
+      "tag": "0012_integration_stitch",
+      "breakpoints": true
     }
   ]
 }

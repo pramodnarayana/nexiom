@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  NotImplementedException,
 } from '@nestjs/common';
 import {
   AuthGuard,
@@ -21,6 +22,7 @@ import {
 } from '@nexiom/auth';
 import { StitchesService } from './stitches.service.js';
 import { CreateStitch, UpdateStitch } from './stitches.validation.js';
+import { UpdateScheduleBody } from './update-schedule.validation.js';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
 
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -76,5 +78,30 @@ export class StitchesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.stitchesService.remove(requireOrgId(auth), id);
+  }
+
+  @Patch(':id/schedule')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('stitches', 'manage')
+  updateSchedule(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateScheduleBody,
+  ) {
+    // TODO(T029): call SchedulerService.reschedule/disable
+    return this.stitchesService.updateSchedule(requireOrgId(auth), id, body);
+  }
+
+  @Post(':id/schedule/trigger')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequirePermission('stitches', 'manage')
+  triggerSchedule(
+    @AuthContext() _auth: RequestAuthContext,
+    @Param('id', ParseUUIDPipe) _id: string,
+  ) {
+    // T029: on-demand trigger requires SchedulerService — not yet implemented.
+    throw new NotImplementedException(
+      'On-demand sync trigger is not yet available.',
+    );
   }
 }

@@ -20,6 +20,7 @@ import { ConnectionsPage as MarketplacePage } from '../../modules/connections/pa
 import { ActiveConnectionsPage } from '../../modules/connections/pages/ActiveConnectionsPage';
 import { WorkspacesPage } from '../../modules/workspaces/pages/WorkspacesPage';
 import { WorkspaceDetailPage } from '../../modules/workspaces/pages/WorkspaceDetailPage';
+import { StitchesPage } from '../../modules/stitches/pages/StitchesPage';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -85,6 +86,7 @@ export function TenantRoutes() {
                             <Route path="active-connections" element={<ActiveConnectionsPage />} />
                             <Route path="workspaces" element={<WorkspacesPage />} />
                             <Route path="workspaces/:id" element={<WorkspaceDetailPage />} />
+                            <Route path="workspaces/:id/stitches" element={<StitchesPage />} />
                         </Route>
                     </Routes>
                 </Refine>

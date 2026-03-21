@@ -160,22 +160,53 @@ export class StitchesService {
       throw new BadRequestException('No updatable fields provided.');
     }
 
+    try {
+      const [updated] = await this.db
+        .update(integrationStitches)
+        .set({
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.status !== undefined && { status: body.status }),
+          ...(body.syncCondition !== undefined && {
+            syncCondition: body.syncCondition,
+          }),
+          ...(body.syncIntervalMinutes !== undefined && {
+            syncIntervalMinutes: body.syncIntervalMinutes,
+          }),
+          ...(body.scheduleEnabled !== undefined && {
+            scheduleEnabled: body.scheduleEnabled,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(integrationStitches.id, id),
+            eq(integrationStitches.orgId, orgId),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        throw new NotFoundException(`Stitch ${id} not found.`);
+      }
+      return updated;
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictException(
+          `A stitch named "${body.name}" already exists in this workspace.`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  async updateSchedule(
+    orgId: string,
+    id: string,
+    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
+  ) {
     const [updated] = await this.db
       .update(integrationStitches)
-      .set({
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.status !== undefined && { status: body.status }),
-        ...(body.syncCondition !== undefined && {
-          syncCondition: body.syncCondition,
-        }),
-        ...(body.syncIntervalMinutes !== undefined && {
-          syncIntervalMinutes: body.syncIntervalMinutes,
-        }),
-        ...(body.scheduleEnabled !== undefined && {
-          scheduleEnabled: body.scheduleEnabled,
-        }),
-        updatedAt: new Date(),
-      })
+      .set(this.buildScheduleSet(body))
       .where(
         and(
           eq(integrationStitches.id, id),
@@ -184,10 +215,48 @@ export class StitchesService {
       )
       .returning();
 
-    if (!updated) {
-      throw new NotFoundException(`Stitch ${id} not found.`);
-    }
+    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
     return updated;
+  }
+
+  async updateScheduleAdmin(
+    id: string,
+    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
+  ) {
+    // No org scoping — admin/support use only. Caller must be a SystemAdmin.
+    const [updated] = await this.db
+      .update(integrationStitches)
+      .set(this.buildScheduleSet(body))
+      .where(eq(integrationStitches.id, id))
+      .returning();
+
+    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+    return updated;
+  }
+
+  /**
+   * Builds the Drizzle `.set()` payload for schedule updates.
+   * Throws BadRequestException when neither field is provided.
+   */
+  private buildScheduleSet(body: {
+    syncIntervalMinutes?: number;
+    scheduleEnabled?: boolean;
+  }) {
+    if (
+      body.syncIntervalMinutes === undefined &&
+      body.scheduleEnabled === undefined
+    ) {
+      throw new BadRequestException('No schedule fields provided.');
+    }
+    return {
+      ...(body.syncIntervalMinutes !== undefined && {
+        syncIntervalMinutes: body.syncIntervalMinutes,
+      }),
+      ...(body.scheduleEnabled !== undefined && {
+        scheduleEnabled: body.scheduleEnabled,
+      }),
+      updatedAt: new Date(),
+    };
   }
 
   async remove(orgId: string, id: string) {
