@@ -6,7 +6,7 @@ import {
   ConflictException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, ne } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -114,10 +114,13 @@ export class StitchesService {
     }
   }
 
-  async list(orgId: string, workspaceId?: string) {
+  async list(orgId: string, workspaceId?: string, includeArchived = false) {
     const conditions = [eq(integrationStitches.orgId, orgId)];
     if (workspaceId) {
       conditions.push(eq(integrationStitches.workspaceId, workspaceId));
+    }
+    if (!includeArchived) {
+      conditions.push(ne(integrationStitches.status, 'ARCHIVED'));
     }
 
     return this.db.query.integrationStitches.findMany({

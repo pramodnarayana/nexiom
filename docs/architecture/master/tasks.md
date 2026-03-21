@@ -403,7 +403,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T041 · api: `MappingSuggestService` + endpoint
 
-- [ ] `POST /flows/:id/mappings/suggest`
+- [ ] `POST /stitches/:id/mappings/suggest`
 - [ ] Request: `{ sourceFields: string[], targetFields: string[] }`
 - [ ] Calls Claude with field lists + existing `field_mapping` rows as few-shot examples
 - [ ] Response: `{ suggestions: [{ sourceField, targetField, confidence }] }`
@@ -412,7 +412,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T042 · web: "Suggest Mappings" button on Mapping Canvas
 
-- [ ] Button calls `POST /flows/:id/mappings/suggest`
+- [ ] Button calls `POST /stitches/:id/mappings/suggest`
 - [ ] Renders suggestions as pending rows with confidence badge
 - [ ] User clicks checkmark to accept, X to reject each suggestion
 - Files: `apps/web/src/modules/stitches/MappingCanvas.tsx` (extend T023)

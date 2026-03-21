@@ -107,6 +107,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS "field_mapping_stitch_canonical_unique_idx"
 --> statement-breakpoint
 
 -- updated_at triggers --------------------------------------------------
+-- set_updated_at() is a shared utility trigger used across multiple migrations
+-- (e.g. 0008_workspaces.sql). CREATE OR REPLACE ensures idempotency — running
+-- this migration more than once or after another migration that defines the
+-- same function is safe.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN

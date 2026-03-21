@@ -40,8 +40,13 @@ export class StitchesController {
     @AuthContext() auth: RequestAuthContext,
     @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
     workspaceId?: string,
+    @Query('includeArchived') includeArchived?: string,
   ) {
-    return this.stitchesService.list(requireOrgId(auth), workspaceId);
+    return this.stitchesService.list(
+      requireOrgId(auth),
+      workspaceId,
+      includeArchived === 'true',
+    );
   }
 
   @Get(':id')
