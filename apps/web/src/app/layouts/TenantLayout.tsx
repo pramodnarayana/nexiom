@@ -54,13 +54,15 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
         });
     }, [isAuthenticated, isLoading]);
 
-    // Re-fetch when navigating away from the workspaces management page so newly
-    // created workspaces appear in the sidebar without a full page reload.
+    // Re-fetch when navigating within or away from the workspaces section so newly
+    // created/deleted workspaces appear in the sidebar without a full page reload.
     useEffect(() => {
         const prev = prevPathRef.current;
         prevPathRef.current = location.pathname;
         if (!isAuthenticated || isLoading) return;
-        if (prev.startsWith('/dashboard/workspaces') && !location.pathname.startsWith('/dashboard/workspaces')) {
+        const wasInWorkspaces = prev.startsWith('/dashboard/workspaces');
+        const navigated = prev !== location.pathname;
+        if (wasInWorkspaces && navigated) {
             listWorkspaces().then(setWorkspaces).catch(() => {
                 console.warn('[TenantLayout] Failed to refresh workspaces after navigation');
             });

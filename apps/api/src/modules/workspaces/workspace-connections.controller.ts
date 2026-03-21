@@ -25,6 +25,8 @@ import {
   type DrizzleDb,
   uiWorkspaceConnections,
   appConnections,
+  safeAppConnectionColumns,
+  AppConnectionStatus,
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
 import { requireOrgId } from './workspace.utils.js';
@@ -75,13 +77,22 @@ export class WorkspaceConnectionsController {
     // Verify workspace belongs to this org
     const workspace = await this.workspacesService.findOne(orgId, workspaceId);
 
-    // Verify connection belongs to this org
-    const connection = await this.db.query.appConnections.findFirst({
-      where: and(
-        eq(appConnections.id, connectionId),
-        eq(appConnections.tenantId, orgId),
-      ),
-    });
+    // Verify connection belongs to this org — use explicit select to avoid leaking
+    // the encrypted `value` blob.
+    const [connection] = await this.db
+      .select({
+        id: safeAppConnectionColumns.id,
+        envType: safeAppConnectionColumns.envType,
+      })
+      .from(appConnections)
+      .where(
+        and(
+          eq(appConnections.id, connectionId),
+          eq(appConnections.tenantId, orgId),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
+        ),
+      )
+      .limit(1);
     if (!connection) {
       throw new NotFoundException(`Connection ${connectionId} not found.`);
     }

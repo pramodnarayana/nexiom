@@ -68,6 +68,12 @@ export const uiWorkspaceConnections = pgTable('ui_workspace_connection', {
 // Relations
 // ---------------------------------------------------------------------------
 
+// Reverse relation from appConnections → uiWorkspaceConnections.
+// Defined here (not in tenant.ts) to avoid a circular import: tenant ← workspace.
+export const appConnectionRelations = relations(appConnections, ({ many }) => ({
+    workspaceConnections: many(uiWorkspaceConnections),
+}));
+
 export const uiWorkspaceRelations = relations(uiWorkspaces, ({ many }) => ({
     connections: many(uiWorkspaceConnections),
 }));

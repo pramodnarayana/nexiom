@@ -79,3 +79,25 @@ export const appConnections = pgTable('app_connection', {
     // Ensure displayNames are unique per provider per tenant, ignoring case
     uniqueIndex('tenant_app_display_name_lower_idx').on(table.tenantId, table.appName, sql`lower(${table.displayName})`),
 ]);
+
+/**
+ * Safe column projection for appConnections queries.
+ * The `value` column (encrypted credentials blob) is intentionally excluded —
+ * it must never leave the ConnectorsService that owns encryption/decryption.
+ * Use this with `.select(safeAppConnectionColumns).from(appConnections)` instead
+ * of `db.query.appConnections.findMany()` which returns all columns.
+ */
+export const safeAppConnectionColumns = {
+    id: appConnections.id,
+    tenantId: appConnections.tenantId,
+    appName: appConnections.appName,
+    externalId: appConnections.externalId,
+    displayName: appConnections.displayName,
+    authType: appConnections.authType,
+    envType: appConnections.envType,
+    status: appConnections.status,
+    expiresAt: appConnections.expiresAt,
+    metadata: appConnections.metadata,
+    createdAt: appConnections.createdAt,
+    updatedAt: appConnections.updatedAt,
+} as const;

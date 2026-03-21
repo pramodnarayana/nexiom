@@ -101,13 +101,9 @@ export function WorkspaceDetailPage() {
     setError(null);
     setDialogOpen(false);
 
+    // Use the guarded callbacks so stale in-flight responses cannot overwrite state.
     try {
-      const [assigned, available] = await Promise.all([
-        listWorkspaceConnections(id),
-        listAvailableConnections(id),
-      ]);
-      setAssignedConnections(assigned);
-      setAllConnections(available);
+      await Promise.all([fetchWorkspace(), fetchConnections()]);
     } catch {
       setError('Connection assigned, but failed to refresh the list. Try reloading.');
     } finally {
@@ -120,10 +116,10 @@ export function WorkspaceDetailPage() {
     setUnassigningId(connectionId);
     try {
       await unassignConnection(id, connectionId);
+      // Optimistic removal from the assigned list, then re-sync both lists via
+      // the guarded callbacks so stale responses cannot overwrite state.
       setAssignedConnections((prev) => prev.filter((c) => c.id !== connectionId));
-      // Refresh available list so the unassigned connection re-appears in the picker
-      const available = await listAvailableConnections(id);
-      setAllConnections(available);
+      await Promise.all([fetchWorkspace(), fetchConnections()]);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove connection.');
