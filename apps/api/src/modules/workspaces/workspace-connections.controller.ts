@@ -25,6 +25,8 @@ import {
   type DrizzleDb,
   uiWorkspaceConnections,
   appConnections,
+  safeAppConnectionColumns,
+  AppConnectionStatus,
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
 import { requireOrgId } from './workspace.utils.js';
@@ -49,6 +51,19 @@ export class WorkspaceConnectionsController {
     );
   }
 
+  /** Active connections for this org that match the workspace env_type and are not yet assigned. */
+  @Get('available')
+  @RequirePermission('workspaces', 'read')
+  listAvailable(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ) {
+    return this.workspacesService.listAvailableConnections(
+      requireOrgId(auth),
+      workspaceId,
+    );
+  }
+
   @Post(':connectionId')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('workspaces', 'manage')
@@ -60,17 +75,34 @@ export class WorkspaceConnectionsController {
     const orgId = requireOrgId(auth);
 
     // Verify workspace belongs to this org
-    await this.workspacesService.findOne(orgId, workspaceId);
+    const workspace = await this.workspacesService.findOne(orgId, workspaceId);
 
-    // Verify connection belongs to this org
-    const connection = await this.db.query.appConnections.findFirst({
-      where: and(
-        eq(appConnections.id, connectionId),
-        eq(appConnections.tenantId, orgId),
-      ),
-    });
+    // Verify connection belongs to this org — use explicit select to avoid leaking
+    // the encrypted `value` blob.
+    const [connection] = await this.db
+      .select({
+        id: safeAppConnectionColumns.id,
+        envType: safeAppConnectionColumns.envType,
+      })
+      .from(appConnections)
+      .where(
+        and(
+          eq(appConnections.id, connectionId),
+          eq(appConnections.tenantId, orgId),
+          eq(appConnections.status, AppConnectionStatus.ACTIVE),
+        ),
+      )
+      .limit(1);
     if (!connection) {
       throw new NotFoundException(`Connection ${connectionId} not found.`);
+    }
+
+    // Enforce env-type parity — sandbox connections may not be assigned to production
+    // workspaces and vice versa.
+    if (connection.envType !== workspace.envType) {
+      throw new ConflictException(
+        `Cannot assign a ${connection.envType} connection to a ${workspace.envType} workspace.`,
+      );
     }
 
     try {

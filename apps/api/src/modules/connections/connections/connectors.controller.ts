@@ -19,7 +19,6 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
-export const VALID_PROVIDER_NAME_REGEX = /^[A-Za-z0-9_-]+$/;
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import type { AnyProperty } from '@nexiom/connectors';
@@ -38,6 +37,22 @@ import type { ConnectionValueBlob } from '../connectors.service.js';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { CreateOAuthSession } from '../validation/create-oauth-session.js';
 import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
+import { VALID_PROVIDER_NAME_REGEX } from '../validation/constants.js';
+
+/**
+ * Maps a provider's vendorParams to Nexiom's envType discriminator.
+ *
+ * Convention: pieces that support sandbox use an `environment` prop with value `'test'`
+ * for sandbox and any other value (typically `'login'`) for production.
+ * Pieces without an `environment` prop (single-environment) default to PRODUCTION.
+ *
+ * When adding a new piece that uses a different field or value, extend this function.
+ */
+function deriveEnvType(
+  vendorParams: Record<string, string | number | boolean> | undefined,
+): 'PRODUCTION' | 'SANDBOX' {
+  return vendorParams?.environment === 'test' ? 'SANDBOX' : 'PRODUCTION';
+}
 
 function assertStaticDropdownValue(
   key: string,
@@ -311,6 +326,7 @@ export class ConnectorsController {
       displayName: string;
       authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
       status: string;
+      envType: 'PRODUCTION' | 'SANDBOX';
       metadata: unknown;
       expiresAt: Date | null;
       createdAt: Date;
@@ -329,6 +345,7 @@ export class ConnectorsController {
             displayName: appConnections.displayName,
             authType: appConnections.authType,
             status: appConnections.status,
+            envType: appConnections.envType,
             metadata: appConnections.metadata,
             expiresAt: appConnections.expiresAt,
             createdAt: appConnections.createdAt,
@@ -369,6 +386,7 @@ export class ConnectorsController {
         displayName: conn.displayName,
         authType: conn.authType,
         status: conn.status,
+        envType: conn.envType,
         metadata: conn.metadata,
         expiresAt: conn.expiresAt,
         createdAt: conn.createdAt,
@@ -864,6 +882,8 @@ export class ConnectorsController {
 
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
+    const resolvedEnvType = deriveEnvType(decodedState.vendorParams);
+
     await this.persistConnection(
       tenantId,
       body.providerName,
@@ -872,6 +892,7 @@ export class ConnectorsController {
       encryptedValue,
       expiresAt,
       body.connectionId,
+      resolvedEnvType,
     );
 
     // Mark as fully processed to prevent StrictMode duplicates from failing.
@@ -1001,6 +1022,7 @@ export class ConnectorsController {
     encryptedValue: string,
     expiresAt: Date,
     connectionId?: string,
+    envType?: 'PRODUCTION' | 'SANDBOX',
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
@@ -1013,6 +1035,7 @@ export class ConnectorsController {
         value: encryptedValue,
         expiresAt,
         metadata: {},
+        envType,
       });
     } catch (error) {
       if (

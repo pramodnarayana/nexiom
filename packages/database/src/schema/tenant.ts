@@ -2,6 +2,10 @@ import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgE
 import { sql } from 'drizzle-orm';
 import { organization } from './identity.js';
 
+// Shared environment discriminator — used by both app_connection and ui_workspace.
+// Defined here (tenant.ts) so workspace.ts can import it without a circular dep.
+export const envTypeEnum = pgEnum('env_type_enum', ['PRODUCTION', 'SANDBOX']);
+
 // Auth type enum — matches Activepieces' AppConnectionType pattern
 export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);
 
@@ -54,6 +58,10 @@ export const appConnections = pgTable('app_connection', {
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     status: connectionStatusEnum('status').default('ACTIVE').notNull(),
 
+    // Mirrors the workspace env_type — enforces that sandbox connections can only be
+    // assigned to sandbox workspaces and production connections to production workspaces.
+    envType: envTypeEnum('env_type').notNull().default('PRODUCTION'),
+
     // Plain-text metadata for display purposes only (e.g. connected account email, env label)
     metadata: jsonb('metadata').default({}),
 
@@ -71,3 +79,25 @@ export const appConnections = pgTable('app_connection', {
     // Ensure displayNames are unique per provider per tenant, ignoring case
     uniqueIndex('tenant_app_display_name_lower_idx').on(table.tenantId, table.appName, sql`lower(${table.displayName})`),
 ]);
+
+/**
+ * Safe column projection for appConnections queries.
+ * The `value` column (encrypted credentials blob) is intentionally excluded —
+ * it must never leave the ConnectorsService that owns encryption/decryption.
+ * Use this with `.select(safeAppConnectionColumns).from(appConnections)` instead
+ * of `db.query.appConnections.findMany()` which returns all columns.
+ */
+export const safeAppConnectionColumns = {
+    id: appConnections.id,
+    tenantId: appConnections.tenantId,
+    appName: appConnections.appName,
+    externalId: appConnections.externalId,
+    displayName: appConnections.displayName,
+    authType: appConnections.authType,
+    envType: appConnections.envType,
+    status: appConnections.status,
+    expiresAt: appConnections.expiresAt,
+    metadata: appConnections.metadata,
+    createdAt: appConnections.createdAt,
+    updatedAt: appConnections.updatedAt,
+} as const;

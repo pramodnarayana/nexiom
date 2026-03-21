@@ -5,7 +5,7 @@ export * from './schema/storage_registry.js';
 export * from './schema/connector_object_profiles.js';
 export * from './schema/pieces.js';
 export * from './schema/workspace.js';
-export * from './schema/routes.js';
+export * from './schema/stitches.js';
 export * from './schema/gem.js';
 export * from './schema/pipeline.js';
 export * from './utils/tenant-guard.js';

@@ -4,7 +4,8 @@ import {
     type ObjectSchema,
     IgtLogger,
 } from '@nexiom/connectors/intelligence';
-import { SalesforceAuthError, sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import { SalesforceAuthError, sfFetch } from '../sf-fetch.js';
+import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';
 
 const STORE_SCHEMA_KEY_PREFIX = 'igt_schema_';

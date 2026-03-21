@@ -7,6 +7,16 @@ import {
 import type { HttpResponse } from '@nexiom/connectors/framework';
 import { salesforceAuth } from '../auth.js';
 
+/** Salesforce REST API version — must match the version in openapi.json. */
+export const SF_API_VERSION = 'v59.0';
+
+/**
+ * Salesforce Bulk API 2.0 version.
+ * Kept separate from SF_API_VERSION because the Bulk API follows its own
+ * release cadence and is not always at parity with the REST API version.
+ */
+export const SF_BULK_API_VERSION = 'v58.0';
+
 export const salesforcesCommon = {
 	account: Property.Dropdown<string, true, typeof salesforceAuth>({
 		auth: salesforceAuth,
@@ -706,7 +716,7 @@ export async function querySalesforceApi<T>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/query`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/query`,
 		queryParams: {
 			q: query,
 		},
@@ -724,7 +734,7 @@ export async function createBulkJob<T = any>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v58.0/jobs/ingest/`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_BULK_API_VERSION}/jobs/ingest/`,
 		body: jobDetails,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
@@ -741,7 +751,7 @@ export async function uploadToBulkJob<T>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v58.0/jobs/ingest/${jobId}/batches`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_BULK_API_VERSION}/jobs/ingest/${jobId}/batches`,
 		headers: {
 			'Content-Type': 'text/csv',
 		},
@@ -761,7 +771,7 @@ export async function notifyBulkJobComplete<T>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v58.0/jobs/ingest/${jobId}`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_BULK_API_VERSION}/jobs/ingest/${jobId}`,
 		body: message,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
@@ -777,7 +787,7 @@ export async function getBulkJobInfo<T>(
 ): Promise<HttpResponse<T>> {
 	return await httpClient.sendRequest<T>({
 		method: method,
-		url: `${authentication.data['instance_url']}/services/data/v58.0/jobs/ingest/${jobId}`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_BULK_API_VERSION}/jobs/ingest/${jobId}`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],
@@ -790,7 +800,7 @@ async function getSalesforceObjects(
 ): Promise<HttpResponse<any>> {
 	return await httpClient.sendRequest<any>({
 		method: HttpMethod.GET,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/sobjects`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],
@@ -804,7 +814,7 @@ async function getSalesforceFields(
 ): Promise<HttpResponse<any>> {
 	return await httpClient.sendRequest<any>({
 		method: HttpMethod.GET,
-		url: `${authentication.data['instance_url']}/services/data/v56.0/sobjects/${object}/describe`,
+		url: `${authentication.data['instance_url']}/services/data/${SF_API_VERSION}/sobjects/${object}/describe`,
 		authentication: {
 			type: AuthenticationType.BEARER_TOKEN,
 			token: authentication['access_token'],

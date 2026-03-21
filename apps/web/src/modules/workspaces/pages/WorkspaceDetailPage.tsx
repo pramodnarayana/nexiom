@@ -12,16 +12,14 @@ import {
 import {
   getWorkspace,
   listWorkspaceConnections,
+  listAvailableConnections,
   assignConnection,
   unassignConnection,
   type WorkspaceResponse,
   type WorkspaceConnectionResponse,
+  type AvailableConnectionResponse,
 } from '../api/workspaces.api';
 import { EnvBadge } from '../components/EnvBadge';
-import {
-  listActiveConnections,
-  type ActiveConnectionResponse,
-} from '../../connections/api/connections.api';
 
 export function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,7 +27,7 @@ export function WorkspaceDetailPage() {
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [wsLoading, setWsLoading] = useState(true);
   const [assignedConnections, setAssignedConnections] = useState<WorkspaceConnectionResponse[]>([]);
-  const [allConnections, setAllConnections] = useState<ActiveConnectionResponse[]>([]);
+  const [allConnections, setAllConnections] = useState<AvailableConnectionResponse[]>([]);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -63,9 +61,10 @@ export function WorkspaceDetailPage() {
   }, [id]);
 
   const fetchConnections = useCallback(async () => {
+    if (!id) return;
     const seq = ++connSeqRef.current;
     try {
-      const connections = await listActiveConnections();
+      const connections = await listAvailableConnections(id);
       if (seq !== connSeqRef.current) return;
       setAllConnections(connections);
       setConnectionsError(null);
@@ -73,7 +72,7 @@ export function WorkspaceDetailPage() {
       if (seq !== connSeqRef.current) return;
       setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
     }
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     void fetchWorkspace();
@@ -84,11 +83,11 @@ export function WorkspaceDetailPage() {
     };
   }, [fetchWorkspace, fetchConnections]);
 
-  const assignedIds = new Set(assignedConnections.map((c) => c.id));
-  const unassignedConnections = allConnections.filter((c) => !assignedIds.has(c.id));
+  // allConnections is already filtered by the server: env-type matched + not yet assigned
+  const unassignedConnections = allConnections;
 
   const handleAssign = async (connectionId: string) => {
-    if (!id || assigning !== null) return;
+    if (!id || assigning !== null || unassigningId !== null) return;
     setAssigning(connectionId);
     try {
       await assignConnection(id, connectionId);
@@ -102,8 +101,9 @@ export function WorkspaceDetailPage() {
     setError(null);
     setDialogOpen(false);
 
+    // Use the guarded callbacks so stale in-flight responses cannot overwrite state.
     try {
-      setAssignedConnections(await listWorkspaceConnections(id));
+      await Promise.all([fetchWorkspace(), fetchConnections()]);
     } catch {
       setError('Connection assigned, but failed to refresh the list. Try reloading.');
     } finally {
@@ -112,11 +112,14 @@ export function WorkspaceDetailPage() {
   };
 
   const handleUnassign = async (connectionId: string) => {
-    if (!id) return;
+    if (!id || assigning !== null || unassigningId !== null) return;
     setUnassigningId(connectionId);
     try {
       await unassignConnection(id, connectionId);
+      // Optimistic removal from the assigned list, then re-sync both lists via
+      // the guarded callbacks so stale responses cannot overwrite state.
       setAssignedConnections((prev) => prev.filter((c) => c.id !== connectionId));
+      await Promise.all([fetchWorkspace(), fetchConnections()]);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to remove connection.');
@@ -149,10 +152,16 @@ export function WorkspaceDetailPage() {
       </div>
     );
   } else if (unassignedConnections.length === 0) {
+    const envLabel = workspace?.envType === 'SANDBOX' ? 'sandbox' : 'production';
     dialogContent = (
-      <p className="text-sm text-muted-foreground text-center py-4">
-        All connections are already assigned.
-      </p>
+      <div className="text-center py-4 space-y-1">
+        <p className="text-sm text-muted-foreground">
+          No {envLabel} connections available.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Create a {envLabel} connection in the Marketplace to assign it here.
+        </p>
+      </div>
     );
   } else {
     dialogContent = unassignedConnections.map((conn) => (

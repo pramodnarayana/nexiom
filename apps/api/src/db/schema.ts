@@ -54,3 +54,12 @@ export {
   uiWorkspaceConnections,
   envTypeEnum,
 } from '@nexiom/database';
+
+// Stitches — integration sync paths between source and destination connections
+export {
+  integrationStitches,
+  fieldMappings,
+  stitchStatusEnum,
+  integrationStitchesRelations,
+  fieldMappingsRelations,
+} from '@nexiom/database';

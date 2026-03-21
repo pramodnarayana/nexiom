@@ -465,7 +465,39 @@ describe('ConnectorsController', () => {
         value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
         metadata: {},
+        // No environment vendorParam in mock → deriveEnvType defaults to PRODUCTION
+        envType: 'PRODUCTION',
       });
+    });
+
+    it('should derive envType SANDBOX when vendorParams.environment is "test"', async () => {
+      // Provider must declare `environment` so validateVendorParams accepts it
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          props: {
+            realmId: { type: 'SHORT_TEXT', required: false },
+            environment: { type: 'SHORT_TEXT', required: false },
+          },
+        },
+      } as unknown as Piece);
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { environment: 'test', realmId: 'test-realm' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      await controller.exchangeCode(mockCtx, validBody);
+
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ envType: 'SANDBOX' }),
+      );
     });
 
     it('should preserve existing externalId during a reconnect flow (connectionId provided)', async () => {

@@ -9,6 +9,30 @@ import {
 } from "../constants.js";
 import { inArray } from "drizzle-orm";
 
+/**
+ * Non-system permissions granted to the member role (organizationId: null —
+ * applied in any org context). Exported so tests can derive fixtures from this
+ * canonical list rather than duplicating it as hard-coded literals.
+ */
+export const MEMBER_BASE_PERMS: PermissionType[] = [
+  "users:read",
+  "tenants:read",
+  "dashboard:read",
+  "workspaces:read",
+  "stitches:read",
+];
+
+/**
+ * System-scoped read-only permissions for the member role (organizationId set
+ * to systemTenantId). Only returned when the member is operating inside the
+ * system tenant — grants admin dashboard read access without write capabilities.
+ */
+export const MEMBER_SYSTEM_PERMS: PermissionType[] = [
+  "admin_dashboard:view",
+  "system_users:read",
+  "system_tenants:read",
+];
+
 export interface RbacConfig {
   ownerRoleId: string;
   adminRoleId: string;
@@ -120,20 +144,11 @@ export async function seedSystemRbac(
 
       // Member: curated safe subset
       // Non-system perms (organizationId: null) — apply in any org context.
-      const memberBasePerms: PermissionType[] = [
-        "users:read",
-        "tenants:read",
-        "dashboard:read",
-        "workspaces:read",
-      ];
+      const memberBasePerms = MEMBER_BASE_PERMS;
 
       // System-scoped read-only perms — only visible when member is in the system tenant.
       // Grants read-only access to the admin dashboard without any write/manage capabilities.
-      const memberSystemPerms: PermissionType[] = [
-        "admin_dashboard:view",
-        "system_users:read",
-        "system_tenants:read",
-      ];
+      const memberSystemPerms = MEMBER_SYSTEM_PERMS;
 
       // Validate configuration fail-fast
       const allMemberPerms = [...memberBasePerms, ...memberSystemPerms];

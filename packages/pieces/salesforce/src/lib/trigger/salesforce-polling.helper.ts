@@ -1,5 +1,6 @@
 import type { TriggerStore } from '@nexiom/connectors/framework';
-import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import { sfFetch } from '../sf-fetch.js';
+import { SF_API_VERSION } from '../common/index.js';
 
 const SF_OBJECT_NAME_RE = /^\w{1,80}$/;
 

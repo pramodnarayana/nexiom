@@ -3,7 +3,8 @@ import {
     type IBulkAdapter,
     IgtLogger
 } from '@nexiom/connectors/intelligence';
-import { sfFetch, SF_API_VERSION } from '../sf-fetch.js';
+import { sfFetch } from '../sf-fetch.js';
+import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';
 
 const log = new IgtLogger({ app: 'salesforce' });

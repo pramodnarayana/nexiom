@@ -1,12 +1,26 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import * as identitySchema from './schema/identity.js';
 import * as tenantSchema from './schema/tenant.js';
 import * as registrySchema from './schema/storage_registry.js';
 import * as profileSchema from './schema/connector_object_profiles.js';
 import * as piecesSchema from './schema/pieces.js';
 import * as workspaceSchema from './schema/workspace.js';
+import * as stitchesSchema from './schema/stitches.js';
+import * as gemSchema from './schema/gem.js';
+import * as pipelineSchema from './schema/pipeline.js';
 
-const schemaBundle = { ...tenantSchema, ...registrySchema, ...profileSchema, ...piecesSchema, ...workspaceSchema };
+const schemaBundle = {
+    ...identitySchema,
+    ...tenantSchema,
+    ...registrySchema,
+    ...profileSchema,
+    ...piecesSchema,
+    ...workspaceSchema,
+    ...stitchesSchema,
+    ...gemSchema,
+    ...pipelineSchema,
+};
 type DbSchema = typeof schemaBundle;
 
 let pool: Pool | undefined;

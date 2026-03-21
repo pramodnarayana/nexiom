@@ -14,7 +14,8 @@ import {
     DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/shared/components/ui/avatar";
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, Plus } from 'lucide-react';
+import { WorkspaceExplorer, type WorkspaceItem } from './WorkspaceExplorer';
 
 export interface NavGroup {
     title: string;
@@ -28,20 +29,26 @@ export interface NavGroup {
 
 interface SidebarProps {
     navGroups: NavGroup[];
+    /** Nav groups rendered after the workspace explorer (e.g. Settings). */
+    bottomNavGroups?: NavGroup[];
     user: { name?: string; email?: string; permissions?: string[]; organizationName?: string } | null;
     logout: () => void;
     navigate: NavigateFunction;
     title?: string;
     showOrgSwitcher?: boolean;
     headerContent?: React.ReactNode;
+    /** When provided, renders a collapsible workspace explorer in the nav. */
+    workspaces?: WorkspaceItem[];
 }
 
 export function Sidebar({
     navGroups,
+    bottomNavGroups,
     user,
     logout,
     navigate,
-    headerContent
+    headerContent,
+    workspaces,
 }: Readonly<SidebarProps>) {
     const location = useLocation();
     const isAdminView = location.pathname.startsWith(AppRoutes.ADMIN.ROOT);
@@ -59,6 +66,54 @@ export function Sidebar({
             <nav className="flex-1 px-4 space-y-6 overflow-y-auto custom-scrollbar">
                 {navGroups.map((group) => (
                     <div key={group.title || 'general'}>
+                        {group.title && (
+                            <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {group.title}
+                            </h3>
+                        )}
+                        <div className="space-y-1">
+                            {group.items.map((item) => {
+                                const isActive = item.exact
+                                    ? location.pathname === item.href
+                                    : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                                return (
+                                    <Link key={item.href} to={item.href}>
+                                        <Button
+                                            variant="ghost"
+                                            className={cn(
+                                                "w-full justify-start transition-all duration-200 font-medium",
+                                                isActive
+                                                    ? "bg-primary/10 text-primary border-l-4 border-primary rounded-l-none"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                            )}
+                                        >
+                                            <item.icon className={cn("mr-3 h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} />
+                                            {item.label}
+                                        </Button>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+
+                {/* Workspace explorer — sits below Active Connections, above bottom nav */}
+                {workspaces !== undefined && (
+                    <div>
+                        <div className="flex items-center justify-between mb-2 px-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Workspaces
+                            </h3>
+                            <Link to="/dashboard/workspaces" title="Manage workspaces">
+                                <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+                            </Link>
+                        </div>
+                        <WorkspaceExplorer workspaces={workspaces} />
+                    </div>
+                )}
+
+                {bottomNavGroups?.map((group) => (
+                    <div key={group.title || 'bottom'}>
                         {group.title && (
                             <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 {group.title}
