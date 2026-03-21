@@ -126,7 +126,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ## Phase 1 — Logical Workspaces
 
-### T013 · db: migration `0005_workspaces`
+### T013 · db: migrations `0008_workspaces` + `0009_workspace_name_unique_per_env`
 
 - [x] Run `pnpm --filter api db:generate` after `workspace.ts` schema is confirmed
 - [x] Review generated SQL, commit migration file
