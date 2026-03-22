@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, GitMerge, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -69,6 +69,8 @@ function CreateStitchDialog({ open, onClose, workspaceId, connections, onCreate 
   };
 
   const handleSubmit = async () => {
+    // T023: sourceObject / targetObject collection not yet implemented.
+    // This path is unreachable while the button is disabled, but kept for future use.
     if (!name.trim() || !srcId || !destId) {
       setError('All fields are required.');
       return;
@@ -163,8 +165,8 @@ function CreateStitchDialog({ open, onClose, workspaceId, connections, onCreate 
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+          {/* T023: field-mapping wizard not yet built — disable until sourceObject/targetObject can be collected */}
+          <Button onClick={() => void handleSubmit()} disabled title="Field mapping wizard coming soon (T023)">
             Create Stitch
           </Button>
         </DialogFooter>
@@ -186,23 +188,39 @@ export function StitchesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [archiving, setArchiving] = useState<string | null>(null);
 
+  // Incremented on every new load; stale responses check their captured token
+  // against the ref and discard state updates when superseded.
+  const loadIdRef = useRef(0);
+
   const load = useCallback(async () => {
     if (!workspaceId) return;
+    const myId = ++loadIdRef.current;
+    // Reset state synchronously so we never show stale data during loading.
     setLoading(true);
+    setWorkspace(null);
+    setConnections([]);
+    setStitches([]);
+    setError(null);
     try {
       const [ws, conns, stitchList] = await Promise.all([
         getWorkspace(workspaceId),
         listWorkspaceConnections(workspaceId),
         listStitches(workspaceId),
       ]);
+      if (myId !== loadIdRef.current) return; // superseded by a newer load
       setWorkspace(ws);
       setConnections(conns);
       setStitches(stitchList);
-      setError(null);
     } catch (e: unknown) {
+      if (myId !== loadIdRef.current) return; // superseded — discard
+      setWorkspace(null);
+      setConnections([]);
+      setStitches([]);
       setError(e instanceof Error ? e.message : 'Failed to load.');
     } finally {
-      setLoading(false);
+      if (myId === loadIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [workspaceId]);
 

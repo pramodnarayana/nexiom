@@ -26,7 +26,12 @@ function envDot(envType: EnvType) {
 
 export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProps>) {
     const location = useLocation();
-    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [expandedId, setExpandedId] = useState<string | null>(() =>
+        workspaces.find((ws) => {
+            const wsHref = `/dashboard/workspaces/${ws.id}`;
+            return location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
+        })?.id ?? null,
+    );
 
     if (workspaces.length === 0) {
         return (

@@ -38,7 +38,7 @@ export class MetadataController {
     );
   }
 
-  @Get(':connectionId/objects/:objectName')
+  @Get(':connectionId/objects/:objectName/fields')
   @RequirePermission('stitches', 'read')
   describeFields(
     @AuthContext() auth: RequestAuthContext,

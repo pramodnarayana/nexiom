@@ -93,7 +93,7 @@ export class StitchesController {
   }
 
   @Post(':id/schedule/trigger')
-  @HttpCode(HttpStatus.ACCEPTED)
+  @HttpCode(HttpStatus.NOT_IMPLEMENTED)
   @RequirePermission('stitches', 'manage')
   triggerSchedule(
     @AuthContext() _auth: RequestAuthContext,

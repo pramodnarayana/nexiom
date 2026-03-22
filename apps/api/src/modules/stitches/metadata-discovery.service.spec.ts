@@ -20,6 +20,7 @@ function buildMockDb() {
   // whereResult is both thenable (for direct `await db.select().from().where()`)
   // and has `.limit()` (for `await db.select().from().where().limit(1)`).
   // Both paths call selectRows so mockResolvedValueOnce chaining works for either.
+  // NOSONAR: S7739 — intentional thenable mock for dual-path Drizzle query testing.
   const whereResult = {
     limit: vi.fn().mockImplementation(() => selectRows()),
     then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
@@ -33,11 +34,16 @@ function buildMockDb() {
   const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insert = vi.fn().mockReturnValue({ values });
 
+  // delete mock: db.delete(table).where(...)
+  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  const deleteFn = vi.fn().mockReturnValue({ where: deleteWhere });
+
   return {
     selectRows,
     db: {
       select,
       insert,
+      delete: deleteFn,
     },
   };
 }
@@ -161,9 +167,17 @@ describe('MetadataDiscoveryService', () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
         .mockResolvedValueOnce([
-          // DB cache check
-          { objectName: 'Contact', updatedAt: freshUpdatedAt },
-          { objectName: 'Account', updatedAt: freshUpdatedAt },
+          // DB cache check — profile stores the StoredObjectDescriptor
+          {
+            objectName: 'Contact',
+            profile: { label: 'Contact', queryable: true },
+            updatedAt: freshUpdatedAt,
+          },
+          {
+            objectName: 'Account',
+            profile: { label: 'Account', queryable: true },
+            updatedAt: freshUpdatedAt,
+          },
         ]);
       redis.get.mockResolvedValueOnce(null);
 
@@ -200,7 +214,7 @@ describe('MetadataDiscoveryService', () => {
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue({});
 
-      const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ sobjects: MOCK_OBJECTS }),
       } as Response);
@@ -308,7 +322,7 @@ describe('MetadataDiscoveryService', () => {
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue({});
 
-      const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ fields: MOCK_FIELDS }),
       } as Response);
@@ -338,7 +352,7 @@ describe('MetadataDiscoveryService', () => {
       expect(names).toContain('DocNumber');
     });
 
-    it('returns common Id field for unknown quickbooks object', async () => {
+    it('throws NotFoundException for unknown quickbooks object', async () => {
       const qbConn = { ...MOCK_CONNECTION, appName: 'quickbooks' };
       mocks.selectRows
         .mockResolvedValueOnce([qbConn])
@@ -347,13 +361,21 @@ describe('MetadataDiscoveryService', () => {
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue({});
 
-      const result = await service.describeFields(
-        ORG_ID,
-        CONN_ID,
-        'UnknownObject',
-      );
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('Id');
+      await expect(
+        service.describeFields(ORG_ID, CONN_ID, 'UnknownObject'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('treats empty-array profile [] as a valid DB cache hit', async () => {
+      const freshUpdatedAt = new Date();
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION])
+        .mockResolvedValueOnce([{ profile: [], updatedAt: freshUpdatedAt }]);
+      redis.get.mockResolvedValueOnce(null);
+
+      const result = await service.describeFields(ORG_ID, CONN_ID, 'Contact');
+      expect(result).toEqual([]);
+      expect(redis.set).toHaveBeenCalledOnce();
     });
 
     it('throws NotFoundException when connection not found', async () => {

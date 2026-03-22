@@ -3,9 +3,10 @@ import {
   Inject,
   InternalServerErrorException,
   NotFoundException,
+  GatewayTimeoutException,
   Logger,
 } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, notInArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -26,10 +27,21 @@ const TTL_MS = TTL_SECONDS * 1_000;
 
 const MAX_OBJECTS = 500; // guard against excessively large payloads
 
+/**
+ * Shape stored in connectorObjectProfiles.profile when the row was populated
+ * by describeObjects (not by describeFields).  Field rows store FieldDescriptor[]
+ * (an array), so Array.isArray() distinguishes the two at read time.
+ */
+interface StoredObjectDescriptor {
+  label: string;
+  queryable: boolean;
+}
+
 @Injectable()
 export class MetadataDiscoveryService {
   private readonly logger = new Logger(MetadataDiscoveryService.name);
   private readonly prismSalesforceUrl: string;
+  private readonly prismFetchTimeoutMs: number;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
@@ -41,6 +53,10 @@ export class MetadataDiscoveryService {
     this.prismSalesforceUrl = this.configService.get(
       'PRISM_SALESFORCE_URL',
       'http://localhost:4010',
+    );
+    this.prismFetchTimeoutMs = this.configService.get<number>(
+      'PRISM_FETCH_TIMEOUT_MS',
+      10_000,
     );
   }
 
@@ -73,11 +89,23 @@ export class MetadataDiscoveryService {
           Date.now() - new Date(row.updatedAt).getTime() < TTL_MS,
       );
       if (allFresh) {
-        const objects: ObjectDescriptor[] = dbRows.map((row) => ({
-          name: row.objectName,
-          label: row.objectName,
-          queryable: true,
-        }));
+        // profile is StoredObjectDescriptor when set by describeObjects, or
+        // FieldDescriptor[] when set by describeFields.  We can always read
+        // label / queryable from the stored descriptor; fall back to objectName
+        // when the row was first populated by a field-only discovery.
+        const objects: ObjectDescriptor[] = dbRows.map((row) => {
+          const descriptor =
+            !Array.isArray(row.profile) &&
+            row.profile !== null &&
+            typeof row.profile === 'object'
+              ? (row.profile as StoredObjectDescriptor)
+              : null;
+          return {
+            name: row.objectName,
+            label: descriptor?.label ?? row.objectName,
+            queryable: descriptor?.queryable ?? true,
+          };
+        });
         await this.redis.set(
           redisKey,
           JSON.stringify(objects),
@@ -98,7 +126,10 @@ export class MetadataDiscoveryService {
 
     await this.redis.set(redisKey, JSON.stringify(objects), 'EX', TTL_SECONDS);
 
-    // Batch upsert all object names into the DB cache in a single statement.
+    // Batch upsert: store full ObjectDescriptor in profile so label/queryable
+    // survive a Redis eviction and are readable from the DB cache.
+    // On conflict only updatedAt is refreshed — existing field descriptor arrays
+    // written by describeFields are preserved in profile.
     if (objects.length > 0) {
       await this.db
         .insert(connectorObjectProfiles)
@@ -106,7 +137,10 @@ export class MetadataDiscoveryService {
           objects.map((obj) => ({
             connectionId,
             objectName: obj.name,
-            profile: {},
+            profile: {
+              label: obj.label,
+              queryable: obj.queryable,
+            } as unknown as Record<string, unknown>,
           })),
         )
         .onConflictDoUpdate({
@@ -116,6 +150,17 @@ export class MetadataDiscoveryService {
           ],
           set: { updatedAt: new Date() },
         });
+
+      // Remove objects that no longer exist upstream so stale rows don't linger.
+      const currentNames = objects.map((o) => o.name);
+      await this.db
+        .delete(connectorObjectProfiles)
+        .where(
+          and(
+            eq(connectorObjectProfiles.connectionId, connectionId),
+            notInArray(connectorObjectProfiles.objectName, currentNames),
+          ),
+        );
     }
 
     return objects.slice(0, effectiveLimit);
@@ -152,7 +197,9 @@ export class MetadataDiscoveryService {
       Date.now() - new Date(dbRow.updatedAt).getTime() < TTL_MS
     ) {
       const profile = dbRow.profile;
-      if (Array.isArray(profile) && profile.length > 0) {
+      // An empty array [] is a valid cache hit (connector returned no fields).
+      // Only skip if profile is not an array (it's a StoredObjectDescriptor).
+      if (Array.isArray(profile)) {
         await this.redis.set(
           redisKey,
           JSON.stringify(profile),
@@ -176,13 +223,20 @@ export class MetadataDiscoveryService {
 
     await this.db
       .insert(connectorObjectProfiles)
-      .values({ connectionId, objectName, profile: fields })
+      .values({
+        connectionId,
+        objectName,
+        profile: fields as unknown as Record<string, unknown>,
+      })
       .onConflictDoUpdate({
         target: [
           connectorObjectProfiles.connectionId,
           connectorObjectProfiles.objectName,
         ],
-        set: { profile: fields, updatedAt: new Date() },
+        set: {
+          profile: fields as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        },
       });
 
     return fields;
@@ -256,6 +310,34 @@ export class MetadataDiscoveryService {
     }
   }
 
+  /**
+   * Wraps a fetch call with an AbortController timeout.
+   * Throws GatewayTimeoutException (504) on abort; re-throws other errors.
+   */
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.prismFetchTimeoutMs,
+    );
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      return res;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new GatewayTimeoutException(
+          `Metadata request to ${url} timed out after ${this.prismFetchTimeoutMs}ms.`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async fetchObjects(
     appName: string,
     _connectionId: string,
@@ -267,14 +349,14 @@ export class MetadataDiscoveryService {
     }
 
     if (appName === 'salesforce') {
-      const res = await fetch(
+      const res = await this.fetchWithTimeout(
         `${this.prismSalesforceUrl}/services/data/v59.0/sobjects`,
         {
           headers:
             typeof credentials.accessToken === 'string' &&
             credentials.accessToken
               ? { Authorization: `Bearer ${credentials.accessToken}` }
-              : {},
+              : undefined,
         },
       );
       if (!res.ok) {
@@ -322,14 +404,14 @@ export class MetadataDiscoveryService {
     }
 
     if (appName === 'salesforce') {
-      const res = await fetch(
+      const res = await this.fetchWithTimeout(
         `${this.prismSalesforceUrl}/services/data/v59.0/sobjects/${encodeURIComponent(objectName)}/describe`,
         {
           headers:
             typeof credentials.accessToken === 'string' &&
             credentials.accessToken
               ? { Authorization: `Bearer ${credentials.accessToken}` }
-              : {},
+              : undefined,
         },
       );
       if (!res.ok) {
@@ -528,6 +610,12 @@ export class MetadataDiscoveryService {
       ],
     };
 
-    return fieldsByObject[objectName] ?? common;
+    const fields = fieldsByObject[objectName];
+    if (!fields) {
+      throw new NotFoundException(
+        `QuickBooks object "${objectName}" is not supported for field discovery.`,
+      );
+    }
+    return fields;
   }
 }

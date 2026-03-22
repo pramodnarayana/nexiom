@@ -313,15 +313,16 @@ describe('StitchesService', () => {
     expect(mocks.db.update).toHaveBeenCalled();
   });
 
-  it('updateSchedule — updates scheduleEnabled', async () => {
-    const updated = { ...STITCH, scheduleEnabled: true };
+  it('updateSchedule — updates scheduleEnabled from true to false', async () => {
+    const updated = { ...STITCH, scheduleEnabled: false };
     mocks.returningUpdate.mockResolvedValue([updated]);
 
     const result = await service.updateSchedule(ORG_ID, STITCH_ID, {
-      scheduleEnabled: true,
+      scheduleEnabled: false,
     });
 
-    expect(result.scheduleEnabled).toBe(true);
+    expect(result.scheduleEnabled).toBe(false);
+    expect(mocks.db.update).toHaveBeenCalled();
   });
 
   it('updateSchedule — throws BadRequestException when no fields provided', async () => {
