@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS "integration_stitch" (
   "workspace_id"           uuid NOT NULL,
   "src_connection_id"      uuid NOT NULL,
   "dest_connection_id"     uuid NOT NULL,
-  "source_object"          varchar(255) NOT NULL DEFAULT '',
-  "target_object"          varchar(255) NOT NULL DEFAULT '',
+  "source_object"          varchar(255) NOT NULL,
+  "target_object"          varchar(255) NOT NULL,
   "sync_condition"         jsonb NOT NULL DEFAULT '[]'::jsonb,
   "status"                 "stitch_status_enum" NOT NULL DEFAULT 'ACTIVE',
   "sync_interval_minutes"  integer NOT NULL DEFAULT 30,
@@ -140,13 +140,27 @@ DO $$ BEGIN
 END $$;
 --> statement-breakpoint
 
--- FK from field_mapping.stitch_id → integration_stitch.id (idempotent) -
+-- Purge orphaned field_mapping rows before enforcing the FK.
+-- Rows whose stitch_id has no matching integration_stitch are legacy
+-- route data that cannot be meaningfully remapped.  Deleting them here
+-- ensures the NOT VALID constraint below can be validated in a future
+-- migration without a full sequential scan failure.
+DELETE FROM "field_mapping"
+WHERE "stitch_id" IS NOT NULL
+  AND "stitch_id" NOT IN (SELECT "id" FROM "integration_stitch");
+--> statement-breakpoint
+
+-- FK from field_mapping.stitch_id → integration_stitch.id (idempotent).
+-- Added as NOT VALID so existing rows are not checked at migration time;
+-- run "ALTER TABLE field_mapping VALIDATE CONSTRAINT ..." in a follow-up
+-- migration once any remaining data quality is confirmed.
 DO $$ BEGIN
   ALTER TABLE "field_mapping"
     ADD CONSTRAINT "field_mapping_stitch_id_integration_stitch_id_fk"
     FOREIGN KEY ("stitch_id")
     REFERENCES "public"."integration_stitch"("id")
-    ON DELETE CASCADE;
+    ON DELETE CASCADE
+    NOT VALID;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint

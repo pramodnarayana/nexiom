@@ -109,13 +109,12 @@ describe('MetadataDiscoveryService', () => {
   let mockEncryption: { decrypt: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    vi.clearAllMocks();
+
     mocks = buildMockDb();
     redis = buildMockRedis();
     mockPieceRegistry = { getPiece: vi.fn() };
     mockEncryption = { decrypt: vi.fn() };
-
-    // Default: connection found, no DB cache rows
-    mocks.selectRows.mockResolvedValue([MOCK_CONNECTION]);
 
     const module = await Test.createTestingModule({
       providers: [
@@ -134,7 +133,6 @@ describe('MetadataDiscoveryService', () => {
     }).compile();
 
     service = module.get(MetadataDiscoveryService);
-    vi.clearAllMocks();
   });
 
   // ── describeObjects ─────────────────────────────────────────────────────────

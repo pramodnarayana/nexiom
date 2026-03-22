@@ -96,4 +96,17 @@ describe('FieldMappingsController', () => {
     );
     expect(result).toBe(MAPPING_ROW);
   });
+
+  it('upsert — accepts empty mappingRules and clears all mappings', async () => {
+    const emptyRulesRow = { ...MAPPING_ROW, mappingRules: [] };
+    mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
+    mocks.returning.mockResolvedValue([emptyRulesRow]);
+
+    const result = await controller.upsert(makeAuth(), STITCH_ID, {
+      sourceCanonical: MAPPING_BODY.sourceCanonical,
+      mappingRules: [],
+    } as any);
+    expect(result).toBe(emptyRulesRow);
+    expect(mocks.db.insert).toHaveBeenCalled();
+  });
 });
