@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import type { EnvType } from '@/modules/workspaces/api/workspaces.api';
 
 export interface WorkspaceItem {
@@ -26,7 +27,11 @@ function envDot(envType: EnvType) {
 
 export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProps>) {
     const location = useLocation();
-    const [expandedId, setExpandedId] = useState<string | null>(null);
+
+    // Tracks the last explicit chevron toggle.  null = no override yet.
+    // When set, this takes precedence over the route-derived expansion so
+    // the user's intent (collapse/expand) is respected even after navigation.
+    const [manualState, setManualState] = useState<{ id: string; collapsed: boolean } | null>(null);
 
     if (workspaces.length === 0) {
         return (
@@ -34,12 +39,32 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
         );
     }
 
+    // Discard manualState if the workspace it referenced has been deleted.
+    // Computed inline — no useEffect or setState required.
+    const isManualStateValid =
+        manualState !== null && workspaces.some((ws) => ws.id === manualState.id);
+    const effectiveManualState = isManualStateValid ? manualState : null;
+
+    // The workspace whose route currently matches the URL (if any).
+    // Computed inline on every render — no effect or sync needed.
+    const routeMatchedId = workspaces.find((ws) => {
+        const wsHref = `${AppRoutes.TENANT.WORKSPACES}/${ws.id}`;
+        return location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
+    })?.id ?? null;
+
     return (
         <div className="space-y-0.5">
             {workspaces.map((ws) => {
-                const isExpanded = expandedId === ws.id;
-                const wsHref = `/dashboard/workspaces/${ws.id}`;
-                const isActive = location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
+                const wsHref = `${AppRoutes.TENANT.WORKSPACES}/${ws.id}`;
+                const isActive = ws.id === routeMatchedId;
+
+                // Expansion priority (no useEffect required):
+                // 1. User explicitly toggled this workspace → honour that choice.
+                // 2. No manual override (or stale override) → auto-expand when route matches.
+                const isExpanded =
+                    effectiveManualState?.id === ws.id
+                        ? !effectiveManualState.collapsed
+                        : ws.id === routeMatchedId;
 
                 return (
                     <div key={ws.id}>
@@ -55,9 +80,10 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                             {/* Expand / collapse chevron */}
                             <button
                                 type="button"
-                                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                aria-label={isExpanded ? `Collapse ${ws.name}` : `Expand ${ws.name}`}
+                                aria-expanded={isExpanded}
                                 className="shrink-0 p-0.5 rounded hover:bg-muted"
-                                onClick={() => setExpandedId(isExpanded ? null : ws.id)}
+                                onClick={() => setManualState({ id: ws.id, collapsed: isExpanded })}
                             >
                                 <ChevronRight
                                     className={cn(
@@ -84,18 +110,41 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                             </Link>
                         </div>
 
-                        {/* Children — placeholder until sub-routes are wired (T020+) */}
                         {isExpanded && (
                             <div className="ml-6 mt-0.5 border-l border-border pl-3 space-y-0.5 pb-1">
-                                <span className="block text-xs text-muted-foreground/50 py-1 px-2 cursor-default select-none">
-                                    Stitches <span className="italic">(soon)</span>
-                                </span>
-                                <Link
-                                    to={wsHref}
-                                    className="block text-xs text-muted-foreground hover:text-foreground py-1 px-2 rounded hover:bg-muted/50"
-                                >
-                                    Connections
-                                </Link>
+                                {(() => {
+                                    const stitchesHref = `${wsHref}/stitches`;
+                                    const isStitchesActive = location.pathname === stitchesHref || location.pathname.startsWith(`${stitchesHref}/`);
+                                    const isConnectionsActive = !isStitchesActive && (location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`));
+                                    return (
+                                        <>
+                                            <Link
+                                                to={stitchesHref}
+                                                aria-current={isStitchesActive ? 'page' : undefined}
+                                                className={cn(
+                                                    'block text-xs py-1 px-2 rounded',
+                                                    isStitchesActive
+                                                        ? 'text-primary bg-primary/10 font-medium'
+                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                                )}
+                                            >
+                                                Stitches
+                                            </Link>
+                                            <Link
+                                                to={wsHref}
+                                                aria-current={isConnectionsActive ? 'page' : undefined}
+                                                className={cn(
+                                                    'block text-xs py-1 px-2 rounded',
+                                                    isConnectionsActive
+                                                        ? 'text-primary bg-primary/10 font-medium'
+                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                                )}
+                                            >
+                                                Connections
+                                            </Link>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>

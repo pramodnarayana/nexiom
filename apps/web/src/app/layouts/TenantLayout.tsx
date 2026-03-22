@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/shared/lib/auth/context';
 import { Sidebar } from '@/shared/components/layout/Sidebar';
 import { Navbar } from '@/shared/components/layout/Navbar';
-import { useLocation } from 'react-router-dom';
 import { useOrganization } from '@/modules/identity/hooks/useOrganization';
 import { listWorkspaces } from '@/modules/workspaces/api/workspaces.api';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import type { WorkspaceItem } from '@/shared/components/layout/WorkspaceExplorer';
 
 import { type AuthContextValue } from '@/shared/components/layout/types';
@@ -47,12 +47,16 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
         }
     }, [isAuthenticated, navigate, isLoading]);
 
+    const refreshWorkspaces = useCallback(() => {
+        listWorkspaces().then(setWorkspaces).catch(() => {
+            console.warn('[TenantLayout] Failed to refresh workspaces');
+        });
+    }, []);
+
     useEffect(() => {
         if (!isAuthenticated || isLoading) return;
-        listWorkspaces().then(setWorkspaces).catch(() => {
-            console.warn('[TenantLayout] Failed to load workspaces for sidebar');
-        });
-    }, [isAuthenticated, isLoading]);
+        refreshWorkspaces();
+    }, [isAuthenticated, isLoading, refreshWorkspaces]);
 
     // Re-fetch when navigating within or away from the workspaces section so newly
     // created/deleted workspaces appear in the sidebar without a full page reload.
@@ -60,14 +64,12 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
         const prev = prevPathRef.current;
         prevPathRef.current = location.pathname;
         if (!isAuthenticated || isLoading) return;
-        const wasInWorkspaces = prev.startsWith('/dashboard/workspaces');
+        const wasInWorkspaces = prev === AppRoutes.TENANT.WORKSPACES || prev.startsWith(AppRoutes.TENANT.WORKSPACES + '/');
         const navigated = prev !== location.pathname;
         if (wasInWorkspaces && navigated) {
-            listWorkspaces().then(setWorkspaces).catch(() => {
-                console.warn('[TenantLayout] Failed to refresh workspaces after navigation');
-            });
+            refreshWorkspaces();
         }
-    }, [location.pathname, isAuthenticated, isLoading]);
+    }, [location.pathname, isAuthenticated, isLoading, refreshWorkspaces]);
 
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen bg-background">Loading...</div>;
@@ -120,7 +122,7 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
 
                 {/* Page Content */}
                 <div className="p-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <Outlet />
+                    <Outlet context={{ refreshWorkspaces }} />
                 </div>
             </main>
         </div>

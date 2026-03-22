@@ -2,6 +2,23 @@ import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
 import { InternalServerErrorException } from '@nestjs/common';
+import type { FieldDescriptor as BaseFieldDescriptor } from '../intelligence/interfaces.js';
+
+/** A SaaS object available for metadata discovery. */
+export interface ObjectDescriptor {
+    name: string;
+    label: string;
+    queryable: boolean;
+}
+
+/**
+ * A single field within a SaaS object schema, as exposed by the Piece API.
+ * Extends the intelligence-layer BaseFieldDescriptor with `label` for UI display.
+ * `referenceTo` and all other base fields are inherited.
+ */
+export interface FieldDescriptor extends BaseFieldDescriptor {
+    label: string;
+}
 
 export interface Piece {
     name: string;
@@ -16,6 +33,10 @@ export interface Piece {
     triggers: Record<string, Trigger>;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
+    /** Returns available objects for this connection. Credentials are decrypted by the caller. */
+    describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
+    /** Returns the field schema for a specific object. */
+    describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
 }
 
 export enum PieceCategory {
@@ -45,6 +66,8 @@ export interface CreatePieceParams {
     description?: string;
     minimumSupportedRelease?: string;
     maximumSupportedRelease?: string;
+    describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
+    describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
 }
 
 /**
@@ -101,5 +124,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         triggers: triggersMap,
         minimumSupportedRelease: params.minimumSupportedRelease,
         maximumSupportedRelease: params.maximumSupportedRelease,
+        ...(params.describeObjects && { describeObjects: params.describeObjects }),
+        ...(params.describeFields && { describeFields: params.describeFields }),
     };
 }
