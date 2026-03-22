@@ -41,7 +41,7 @@ export interface CreateStitchPayload {
  * TODO(T023): Remove once the field-mapping wizard can supply sourceObject/targetObject.
  * Internal only — not part of the public API surface. Use CreateStitchPayload externally.
  */
-type DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
+type _DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
 
 export interface UpdateStitchPayload {
   name?: string;
@@ -65,12 +65,15 @@ export async function getStitch(id: string): Promise<StitchResponse> {
   return res.data;
 }
 
-// T023: accepts DraftStitchPayload (no sourceObject/targetObject) until the field-mapping wizard lands.
-// Switch callers to CreateStitchPayload and update this signature once T023 is implemented.
-export async function createStitch(payload: DraftStitchPayload): Promise<StitchResponse> {
+// T023: accepts _DraftStitchPayload (no sourceObject/targetObject) until the field-mapping wizard lands.
+// Switch to CreateStitchPayload and rename to createStitch once T023 is implemented.
+async function createStitchDraft(payload: _DraftStitchPayload): Promise<StitchResponse> {
   const res = await apiClient.post<StitchResponse>('/stitches', payload);
   return res.data;
 }
+
+// Suppress unused-variable warning until T023 callers land.
+void (createStitchDraft as unknown);
 
 export async function updateStitch(
   id: string,

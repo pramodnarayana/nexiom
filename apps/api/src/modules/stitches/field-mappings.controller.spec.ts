@@ -78,6 +78,14 @@ describe('FieldMappingsController', () => {
 
     expect(result).toBe(MAPPING_ROW);
 
+    // findFirst called with a tenant-scoped where clause
+    expect(mocks.findFirstStitch).toHaveBeenCalledOnce();
+    expect(mocks.findFirstStitch).toHaveBeenCalledWith(
+      expect.objectContaining<{ where: unknown }>({
+        where: expect.anything() as unknown,
+      }),
+    );
+
     // insert() called with the fieldMappings table
     expect(mocks.insert).toHaveBeenCalledOnce();
 
@@ -94,9 +102,13 @@ describe('FieldMappingsController', () => {
     const call = mocks.onConflictDoUpdate.mock.calls[0];
     expect(call).toBeDefined();
     const [conflictArg] = call as [
-      { target: unknown; set: { mappingRules: unknown; updatedAt: unknown } },
+      { target: unknown[]; set: { mappingRules: unknown; updatedAt: unknown } },
     ];
     expect(conflictArg.set.mappingRules).toEqual(MAPPING_BODY.mappingRules);
+
+    // target must be a two-column array (stitchId + sourceCanonical) — the upsert key set
+    expect(Array.isArray(conflictArg.target)).toBe(true);
+    expect(conflictArg.target).toHaveLength(2);
 
     // returning() called to get the persisted row
     expect(mocks.returning).toHaveBeenCalledOnce();

@@ -141,21 +141,23 @@ export function StitchesPage() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {/* Actions */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {stitches.length === 0
-            ? 'No stitches yet. Create one to start syncing data between connections.'
-            : `${stitches.length} ${stitches.length === 1 ? 'stitch' : 'stitches'}`}
-        </p>
-        {/* T023: field-mapping wizard not yet built — enabled when sourceObject/targetObject can be collected */}
-        <Button size="sm" disabled title="Field mapping wizard coming soon (T023)">
-          <Plus className="mr-2 h-3.5 w-3.5" />
-          New Stitch
-        </Button>
-      </div>
+      {!error && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {stitches.length === 0
+              ? 'No stitches yet. Create one to start syncing data between connections.'
+              : `${stitches.length} ${stitches.length === 1 ? 'stitch' : 'stitches'}`}
+          </p>
+          {/* T023: field-mapping wizard not yet built — enabled when sourceObject/targetObject can be collected */}
+          <Button size="sm" disabled title="Field mapping wizard coming soon (T023)">
+            <Plus className="mr-2 h-3.5 w-3.5" />
+            New Stitch
+          </Button>
+        </div>
+      )}
 
       {/* List */}
-      {stitches.length === 0 ? (
+      {!error && (stitches.length === 0 ? (
         <div className="border rounded-lg p-12 text-center text-muted-foreground text-sm space-y-2">
           <GitMerge className="h-8 w-8 mx-auto opacity-30" />
           <p>No stitches yet.</p>
@@ -185,7 +187,7 @@ export function StitchesPage() {
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground hover:text-destructive"
-                  disabled={archiving === stitch.id}
+                  disabled={archiving !== null}
                   onClick={() => void handleArchive(stitch.id)}
                   aria-label="Archive stitch"
                 >
@@ -197,7 +199,7 @@ export function StitchesPage() {
             </div>
           ))}
         </div>
-      )}
+      ))}
     </div>
   );
 }

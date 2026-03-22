@@ -80,7 +80,8 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                             {/* Expand / collapse chevron */}
                             <button
                                 type="button"
-                                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                aria-label={isExpanded ? `Collapse ${ws.name}` : `Expand ${ws.name}`}
+                                aria-expanded={isExpanded}
                                 className="shrink-0 p-0.5 rounded hover:bg-muted"
                                 onClick={() => setManualState({ id: ws.id, collapsed: isExpanded })}
                             >

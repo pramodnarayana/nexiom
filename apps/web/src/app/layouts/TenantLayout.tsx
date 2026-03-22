@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/shared/lib/auth/context';
 import { Sidebar } from '@/shared/components/layout/Sidebar';
 import { Navbar } from '@/shared/components/layout/Navbar';
-import { useLocation } from 'react-router-dom';
 import { useOrganization } from '@/modules/identity/hooks/useOrganization';
 import { listWorkspaces } from '@/modules/workspaces/api/workspaces.api';
 import { AppRoutes } from '@/shared/lib/auth/constants';
@@ -65,7 +64,7 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
         const prev = prevPathRef.current;
         prevPathRef.current = location.pathname;
         if (!isAuthenticated || isLoading) return;
-        const wasInWorkspaces = prev.startsWith(AppRoutes.TENANT.WORKSPACES);
+        const wasInWorkspaces = prev === AppRoutes.TENANT.WORKSPACES || prev.startsWith(AppRoutes.TENANT.WORKSPACES + '/');
         const navigated = prev !== location.pathname;
         if (wasInWorkspaces && navigated) {
             refreshWorkspaces();
