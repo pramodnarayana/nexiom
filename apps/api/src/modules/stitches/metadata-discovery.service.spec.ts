@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import {
+  GatewayTimeoutException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { EncryptionService } from '@nexiom/connectors';
@@ -38,12 +42,20 @@ function buildMockDb() {
   const deleteWhere = vi.fn().mockResolvedValue(undefined);
   const deleteFn = vi.fn().mockReturnValue({ where: deleteWhere });
 
+  // transaction mock: executes the callback immediately with the same db surface.
+  const transaction = vi
+    .fn()
+    .mockImplementation((cb: (tx: unknown) => Promise<unknown>) =>
+      cb({ select, insert, delete: deleteFn }),
+    );
+
   return {
     selectRows,
     db: {
       select,
       insert,
       delete: deleteFn,
+      transaction,
     },
   };
 }
@@ -202,6 +214,8 @@ describe('MetadataDiscoveryService', () => {
       expect(result).toEqual(MOCK_OBJECTS);
       expect(describeObjectsMock).toHaveBeenCalledWith({});
       expect(redis.set).toHaveBeenCalledOnce();
+      // Upsert + stale-delete must run atomically inside a transaction.
+      expect(mocks.db.transaction).toHaveBeenCalledOnce();
     });
 
     it('calls Prism for salesforce when piece has no describeObjects', async () => {
@@ -267,6 +281,48 @@ describe('MetadataDiscoveryService', () => {
       await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('throws InternalServerErrorException when Salesforce returns a non-ok status', async () => {
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({});
+
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+      } as Response);
+
+      await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+
+      fetchMock.mockRestore();
+    });
+
+    it('throws GatewayTimeoutException when Salesforce fetch times out', async () => {
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({});
+
+      const abortError = Object.assign(new Error('The operation was aborted'), {
+        name: 'AbortError',
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValueOnce(abortError);
+
+      await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
+        GatewayTimeoutException,
+      );
+
+      fetchMock.mockRestore();
     });
   });
 

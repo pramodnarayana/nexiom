@@ -9,6 +9,7 @@ const MappingRule = z.object({
 
 export const UpsertFieldMappingSchema = z.object({
   sourceCanonical: z.string().trim().min(1).max(100),
+  // An empty array is valid and signals "clear all mappings for this canonical".
   mappingRules: z.array(MappingRule).max(200),
 });
 

@@ -5,6 +5,7 @@ import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { FieldMappingsController } from './field-mappings.controller.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
+import { UpsertFieldMappingSchema } from './field-mappings.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
 const MAPPING_BODY = {
@@ -96,17 +97,80 @@ describe('FieldMappingsController', () => {
     );
     expect(result).toBe(MAPPING_ROW);
   });
+});
 
-  it('upsert — accepts empty mappingRules and clears all mappings', async () => {
-    const emptyRulesRow = { ...MAPPING_ROW, mappingRules: [] };
-    mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
-    mocks.returning.mockResolvedValue([emptyRulesRow]);
+// ── UpsertFieldMappingSchema unit tests ──────────────────────────────────────
+// Controller tests use `as any` to bypass NestJS pipes, so schema acceptance
+// must be validated directly against the Zod schema.
 
-    const result = await controller.upsert(makeAuth(), STITCH_ID, {
-      sourceCanonical: MAPPING_BODY.sourceCanonical,
-      mappingRules: [],
-    } as any);
-    expect(result).toBe(emptyRulesRow);
-    expect(mocks.db.insert).toHaveBeenCalled();
+describe('UpsertFieldMappingSchema', () => {
+  it('accepts a well-formed payload with mapping rules', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'TMS_INVOICE',
+        mappingRules: [{ src: '$.Amount', dest: '$.TotalAmt' }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts empty mappingRules [] — signals clear-all-mappings semantics', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'TMS_INVOICE',
+        mappingRules: [],
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts an optional transform on a mapping rule', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'TMS_INVOICE',
+        mappingRules: [
+          { src: '$.Amount', dest: '$.TotalAmt', transform: 'toNumber' },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a whitespace-only transform value', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'TMS_INVOICE',
+        mappingRules: [
+          { src: '$.Amount', dest: '$.TotalAmt', transform: '   ' },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an empty string transform value', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'TMS_INVOICE',
+        mappingRules: [{ src: '$.Amount', dest: '$.TotalAmt', transform: '' }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects sourceCanonical longer than 100 characters', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'x'.repeat(101),
+        mappingRules: [],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects more than 200 mapping rules', () => {
+    expect(() =>
+      UpsertFieldMappingSchema.parse({
+        sourceCanonical: 'X',
+        mappingRules: Array.from({ length: 201 }, (_, i) => ({
+          src: `$.f${i}`,
+          dest: `$.g${i}`,
+        })),
+      }),
+    ).toThrow();
   });
 });

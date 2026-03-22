@@ -26,12 +26,11 @@ function envDot(envType: EnvType) {
 
 export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProps>) {
     const location = useLocation();
-    const [expandedId, setExpandedId] = useState<string | null>(() =>
-        workspaces.find((ws) => {
-            const wsHref = `/dashboard/workspaces/${ws.id}`;
-            return location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
-        })?.id ?? null,
-    );
+
+    // Tracks the last explicit chevron toggle.  null = no override yet.
+    // When set, this takes precedence over the route-derived expansion so
+    // the user's intent (collapse/expand) is respected even after navigation.
+    const [manualState, setManualState] = useState<{ id: string; collapsed: boolean } | null>(null);
 
     if (workspaces.length === 0) {
         return (
@@ -39,12 +38,26 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
         );
     }
 
+    // The workspace whose route currently matches the URL (if any).
+    // Computed inline on every render — no effect or sync needed.
+    const routeMatchedId = workspaces.find((ws) => {
+        const wsHref = `/dashboard/workspaces/${ws.id}`;
+        return location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
+    })?.id ?? null;
+
     return (
         <div className="space-y-0.5">
             {workspaces.map((ws) => {
-                const isExpanded = expandedId === ws.id;
                 const wsHref = `/dashboard/workspaces/${ws.id}`;
-                const isActive = location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
+                const isActive = ws.id === routeMatchedId;
+
+                // Expansion priority (no useEffect required):
+                // 1. User explicitly toggled this workspace → honour that choice.
+                // 2. No manual override → auto-expand when the route matches.
+                const isExpanded =
+                    manualState?.id === ws.id
+                        ? !manualState.collapsed
+                        : ws.id === routeMatchedId;
 
                 return (
                     <div key={ws.id}>
@@ -62,7 +75,7 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                 type="button"
                                 aria-label={isExpanded ? 'Collapse' : 'Expand'}
                                 className="shrink-0 p-0.5 rounded hover:bg-muted"
-                                onClick={() => setExpandedId(isExpanded ? null : ws.id)}
+                                onClick={() => setManualState({ id: ws.id, collapsed: isExpanded })}
                             >
                                 <ChevronRight
                                     className={cn(

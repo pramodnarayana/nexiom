@@ -6,7 +6,7 @@ import {
   GatewayTimeoutException,
   Logger,
 } from '@nestjs/common';
-import { eq, and, notInArray } from 'drizzle-orm';
+import { eq, and, notInArray, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -128,39 +128,51 @@ export class MetadataDiscoveryService {
 
     // Batch upsert: store full ObjectDescriptor in profile so label/queryable
     // survive a Redis eviction and are readable from the DB cache.
-    // On conflict only updatedAt is refreshed — existing field descriptor arrays
-    // written by describeFields are preserved in profile.
+    // On conflict, overwrite profile with the fresh StoredObjectDescriptor so
+    // the DB-cache read path always has accurate label/queryable values, even
+    // when a prior describeFields call wrote a FieldDescriptor[] into the row.
+    // describeFields upsert will overwrite profile back to FieldDescriptor[]
+    // when it next runs, so there is no loss of field data.
     if (objects.length > 0) {
-      await this.db
-        .insert(connectorObjectProfiles)
-        .values(
-          objects.map((obj) => ({
-            connectionId,
-            objectName: obj.name,
-            profile: {
-              label: obj.label,
-              queryable: obj.queryable,
-            } as unknown as Record<string, unknown>,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: [
-            connectorObjectProfiles.connectionId,
-            connectorObjectProfiles.objectName,
-          ],
-          set: { updatedAt: new Date() },
-        });
-
-      // Remove objects that no longer exist upstream so stale rows don't linger.
       const currentNames = objects.map((o) => o.name);
-      await this.db
-        .delete(connectorObjectProfiles)
-        .where(
-          and(
-            eq(connectorObjectProfiles.connectionId, connectionId),
-            notInArray(connectorObjectProfiles.objectName, currentNames),
-          ),
-        );
+      // Upsert and stale-row cleanup run in a single transaction so concurrent
+      // describeObjects calls cannot observe a partially-updated object list.
+      await this.db.transaction(async (tx) => {
+        await tx
+          .insert(connectorObjectProfiles)
+          .values(
+            objects.map((obj) => ({
+              connectionId,
+              objectName: obj.name,
+              profile: {
+                label: obj.label,
+                queryable: obj.queryable,
+              } as unknown as Record<string, unknown>,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [
+              connectorObjectProfiles.connectionId,
+              connectorObjectProfiles.objectName,
+            ],
+            // Reference the incoming row via the EXCLUDED pseudo-table so each
+            // conflicting row gets its own fresh profile, not a shared literal.
+            set: {
+              profile: sql`excluded.profile`,
+              updatedAt: new Date(),
+            },
+          });
+
+        // Remove objects that no longer exist upstream so stale rows don't linger.
+        await tx
+          .delete(connectorObjectProfiles)
+          .where(
+            and(
+              eq(connectorObjectProfiles.connectionId, connectionId),
+              notInArray(connectorObjectProfiles.objectName, currentNames),
+            ),
+          );
+      });
     }
 
     return objects.slice(0, effectiveLimit);
@@ -297,7 +309,7 @@ export class MetadataDiscoveryService {
         refreshToken: blob.refreshToken,
         clientId: blob.clientId,
         ...blob.data,
-        ...(blob.vendorParams ?? {}),
+        ...blob.vendorParams,
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -432,6 +444,9 @@ export class MetadataDiscoveryService {
         filterable: f.filterable,
         sortable: f.sortable,
         nillable: f.nillable,
+        ...(Array.isArray(f.referenceTo) && f.referenceTo.length > 0
+          ? { referenceTo: f.referenceTo }
+          : {}),
       }));
     }
 

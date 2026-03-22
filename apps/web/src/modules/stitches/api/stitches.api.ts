@@ -30,6 +30,11 @@ export interface CreateStitchPayload {
   name: string;
   srcConnectionId: string;
   destConnectionId: string;
+  // T023: these are NOT NULL in the DB schema. Mark required and provide values
+  // once the field-mapping wizard collects them; sending without them will cause
+  // a server-side 400 because the API Zod schema defaults them to ''.
+  sourceObject?: string;
+  targetObject?: string;
 }
 
 export interface UpdateStitchPayload {
