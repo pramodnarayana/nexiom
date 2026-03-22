@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Plus, Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -21,7 +22,12 @@ import { EnvBadge } from '../components/EnvBadge';
 import { Link } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 
+interface TenantOutletContext {
+  refreshWorkspaces: () => void;
+}
+
 export function WorkspacesPage() {
+  const { refreshWorkspaces } = useOutletContext<TenantOutletContext>();
   const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +70,7 @@ export function WorkspacesPage() {
       setNewName('');
       setNewEnvType('PRODUCTION');
       void fetchWorkspaces();
+      refreshWorkspaces();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace.');
     } finally {
@@ -80,6 +87,7 @@ export function WorkspacesPage() {
       setWorkspaces((prev) => prev.filter((ws) => ws.id !== targetId));
       setDeleteTarget(null);
       void fetchWorkspaces();
+      refreshWorkspaces();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to delete workspace.');
     } finally {

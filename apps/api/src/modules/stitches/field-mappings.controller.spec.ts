@@ -108,6 +108,8 @@ describe('FieldMappingsController', () => {
     await expect(
       controller.upsert(makeAuth(), STITCH_ID, MAPPING_BODY as any),
     ).rejects.toThrow(NotFoundException);
+
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 
   // ── update (PATCH) ──────────────────────────────────────────────────────────
@@ -122,6 +124,16 @@ describe('FieldMappingsController', () => {
       MAPPING_BODY as any,
     );
     expect(result).toBe(MAPPING_ROW);
+
+    expect(mocks.findFirstStitch).toHaveBeenCalled();
+
+    expect(mocks.values).toHaveBeenCalledWith({
+      stitchId: STITCH_ID,
+      sourceCanonical: MAPPING_BODY.sourceCanonical,
+      mappingRules: MAPPING_BODY.mappingRules,
+    });
+
+    expect(mocks.returning).toHaveBeenCalled();
   });
 });
 

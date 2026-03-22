@@ -38,11 +38,10 @@ export interface CreateStitchPayload {
 }
 
 /**
- * Partial payload used before T023 (field-mapping wizard) is implemented.
- * sourceObject and targetObject are omitted here; the API Zod schema defaults
- * them to '' server-side.  Switch callers to CreateStitchPayload once T023 lands.
+ * TODO(T023): Remove once the field-mapping wizard can supply sourceObject/targetObject.
+ * Internal only — not part of the public API surface. Use CreateStitchPayload externally.
  */
-export type DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
+type DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
 
 export interface UpdateStitchPayload {
   name?: string;

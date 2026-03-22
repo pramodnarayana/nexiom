@@ -104,7 +104,7 @@ export function Sidebar({
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Workspaces
                             </h3>
-                            <Link to={AppRoutes.TENANT.WORKSPACES} title="Manage workspaces">
+                            <Link to={AppRoutes.TENANT.WORKSPACES} title="Manage workspaces" aria-label="Manage workspaces">
                                 <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
                             </Link>
                         </div>

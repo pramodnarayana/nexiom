@@ -54,6 +54,7 @@ export function StitchesPage() {
     setWorkspace(null);
     setStitches([]);
     setError(null);
+    setArchiving(null);
     try {
       const [ws, stitchList] = await Promise.all([
         getWorkspace(workspaceId),
