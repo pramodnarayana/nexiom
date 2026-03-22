@@ -19,6 +19,7 @@ import {
 } from '../api/workspaces.api';
 import { EnvBadge } from '../components/EnvBadge';
 import { Link } from 'react-router-dom';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 
 export function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
@@ -127,7 +128,7 @@ export function WorkspacesPage() {
               <div className="flex items-center gap-3">
                 <Building2 className="h-4 w-4 text-muted-foreground" />
                 <Link
-                  to={`/dashboard/workspaces/${ws.id}`}
+                  to={`${AppRoutes.TENANT.WORKSPACES}/${ws.id}`}
                   className="font-medium hover:underline"
                 >
                   {ws.name}

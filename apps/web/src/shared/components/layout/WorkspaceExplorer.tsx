@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Folder, FolderOpen } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import type { EnvType } from '@/modules/workspaces/api/workspaces.api';
 
 export interface WorkspaceItem {
@@ -38,25 +39,31 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
         );
     }
 
+    // Discard manualState if the workspace it referenced has been deleted.
+    // Computed inline — no useEffect or setState required.
+    const isManualStateValid =
+        manualState !== null && workspaces.some((ws) => ws.id === manualState.id);
+    const effectiveManualState = isManualStateValid ? manualState : null;
+
     // The workspace whose route currently matches the URL (if any).
     // Computed inline on every render — no effect or sync needed.
     const routeMatchedId = workspaces.find((ws) => {
-        const wsHref = `/dashboard/workspaces/${ws.id}`;
+        const wsHref = `${AppRoutes.TENANT.WORKSPACES}/${ws.id}`;
         return location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`);
     })?.id ?? null;
 
     return (
         <div className="space-y-0.5">
             {workspaces.map((ws) => {
-                const wsHref = `/dashboard/workspaces/${ws.id}`;
+                const wsHref = `${AppRoutes.TENANT.WORKSPACES}/${ws.id}`;
                 const isActive = ws.id === routeMatchedId;
 
                 // Expansion priority (no useEffect required):
                 // 1. User explicitly toggled this workspace → honour that choice.
-                // 2. No manual override → auto-expand when the route matches.
+                // 2. No manual override (or stale override) → auto-expand when route matches.
                 const isExpanded =
-                    manualState?.id === ws.id
-                        ? !manualState.collapsed
+                    effectiveManualState?.id === ws.id
+                        ? !effectiveManualState.collapsed
                         : ws.id === routeMatchedId;
 
                 return (

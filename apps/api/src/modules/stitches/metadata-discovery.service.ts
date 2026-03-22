@@ -133,11 +133,13 @@ export class MetadataDiscoveryService {
     // when a prior describeFields call wrote a FieldDescriptor[] into the row.
     // describeFields upsert will overwrite profile back to FieldDescriptor[]
     // when it next runs, so there is no loss of field data.
-    if (objects.length > 0) {
-      const currentNames = objects.map((o) => o.name);
-      // Upsert and stale-row cleanup run in a single transaction so concurrent
-      // describeObjects calls cannot observe a partially-updated object list.
-      await this.db.transaction(async (tx) => {
+    // Always run a transaction: upsert + targeted stale-delete when objects is
+    // non-empty; full delete for the connectionId when upstream returns nothing.
+    // This prevents orphaned rows from lingering when a connector reports zero objects.
+    await this.db.transaction(async (tx) => {
+      if (objects.length > 0) {
+        const currentNames = objects.map((o) => o.name);
+
         await tx
           .insert(connectorObjectProfiles)
           .values(
@@ -158,7 +160,7 @@ export class MetadataDiscoveryService {
             // Reference the incoming row via the EXCLUDED pseudo-table so each
             // conflicting row gets its own fresh profile, not a shared literal.
             set: {
-              profile: sql`excluded.profile`,
+              profile: sql`"excluded"."profile"`,
               updatedAt: new Date(),
             },
           });
@@ -172,8 +174,13 @@ export class MetadataDiscoveryService {
               notInArray(connectorObjectProfiles.objectName, currentNames),
             ),
           );
-      });
-    }
+      } else {
+        // Upstream returned an empty list — purge all cached rows for this connection.
+        await tx
+          .delete(connectorObjectProfiles)
+          .where(eq(connectorObjectProfiles.connectionId, connectionId));
+      }
+    });
 
     return objects.slice(0, effectiveLimit);
   }

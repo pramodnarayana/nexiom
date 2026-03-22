@@ -218,6 +218,66 @@ describe('MetadataDiscoveryService', () => {
       expect(mocks.db.transaction).toHaveBeenCalledOnce();
     });
 
+    it('decrypts credentials and passes them to piece.describeObjects', async () => {
+      const encryptedValue = 'encrypted-blob-xyz';
+      const decryptedCredentials = {
+        accessToken: 'sf-access-token',
+        refreshToken: null,
+        clientId: null,
+        data: { instanceUrl: 'https://sf.example.com' },
+      };
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
+        .mockResolvedValueOnce([]) // empty DB cache
+        .mockResolvedValueOnce([{ value: encryptedValue }]); // resolveCredentials
+      redis.get.mockResolvedValueOnce(null);
+      mockEncryption.decrypt.mockResolvedValue(
+        JSON.stringify(decryptedCredentials),
+      );
+      const describeObjectsMock = vi.fn().mockResolvedValue(MOCK_OBJECTS);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeObjects: describeObjectsMock,
+      });
+
+      await service.describeObjects(ORG_ID, CONN_ID);
+
+      // Decryption must be called with the raw encrypted string from the DB.
+      expect(mockEncryption.decrypt).toHaveBeenCalledWith(encryptedValue);
+
+      // piece.describeObjects must receive the flattened credential map —
+      // nested data fields (e.g. instanceUrl) are spread to the top level,
+      // and all top-level credential fields (including null ones) are present.
+      expect(describeObjectsMock).toHaveBeenCalledWith({
+        accessToken: 'sf-access-token',
+        refreshToken: null,
+        clientId: null,
+        instanceUrl: 'https://sf.example.com',
+      });
+    });
+
+    it('purges all cached rows (not notInArray) when piece returns empty object list', async () => {
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
+        .mockResolvedValueOnce([]) // empty DB cache
+        .mockResolvedValueOnce([NULL_CREDS_ROW]); // resolveCredentials
+      redis.get.mockResolvedValueOnce(null);
+      // Piece returns an empty array — upstream has no objects.
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeObjects: vi.fn().mockResolvedValue([]),
+      });
+
+      const result = await service.describeObjects(ORG_ID, CONN_ID);
+      expect(result).toEqual([]);
+
+      // Transaction must still run — the delete-all path needs atomicity too.
+      expect(mocks.db.transaction).toHaveBeenCalledOnce();
+
+      // The delete must use a simple eq() on connectionId, not notInArray,
+      // because there are no current names to exclude.
+      const { delete: deleteFn } = mocks.db;
+      expect(deleteFn).toHaveBeenCalledOnce();
+    });
+
     it('calls Prism for salesforce when piece has no describeObjects', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])

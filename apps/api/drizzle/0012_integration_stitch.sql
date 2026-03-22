@@ -140,14 +140,37 @@ DO $$ BEGIN
 END $$;
 --> statement-breakpoint
 
--- Purge orphaned field_mapping rows before enforcing the FK.
--- Rows whose stitch_id has no matching integration_stitch are legacy
--- route data that cannot be meaningfully remapped.  Deleting them here
--- ensures the NOT VALID constraint below can be validated in a future
--- migration without a full sequential scan failure.
-DELETE FROM "field_mapping"
-WHERE "stitch_id" IS NOT NULL
-  AND "stitch_id" NOT IN (SELECT "id" FROM "integration_stitch");
+-- Archive orphaned field_mapping rows before purging them (atomic block).
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Rollout note
+-- ────────────
+-- Rows whose stitch_id references a route_id (pre-Stitches feature) have no
+-- matching integration_stitch record and cannot be meaningfully migrated.
+-- They are preserved in field_mapping_legacy_backup for 90 days before the
+-- table should be dropped.  To restore any row:
+--   INSERT INTO "field_mapping" SELECT * FROM "field_mapping_legacy_backup"
+--   WHERE "stitch_id" = '<uuid-to-restore>';
+--
+-- Atomicity: backup creation and DELETE are in a single DO block so a
+-- partial failure cannot leave the backup table without the DELETE running
+-- or vice-versa.  DROP TABLE IF EXISTS … CREATE TABLE … AS SELECT is used
+-- instead of CREATE TABLE IF NOT EXISTS so that re-running this migration
+-- (e.g. after a rollback) always produces a fresh, accurate backup.
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$ BEGIN
+  DROP TABLE IF EXISTS "field_mapping_legacy_backup";
+
+  CREATE TABLE "field_mapping_legacy_backup" AS
+    SELECT * FROM "field_mapping"
+    WHERE "stitch_id" IS NOT NULL
+      AND "stitch_id" NOT IN (SELECT "id" FROM "integration_stitch");
+
+  CREATE INDEX ON "field_mapping_legacy_backup" ("stitch_id");
+
+  DELETE FROM "field_mapping"
+  WHERE "stitch_id" IS NOT NULL
+    AND "stitch_id" NOT IN (SELECT "id" FROM "integration_stitch");
+END $$;
 --> statement-breakpoint
 
 -- FK from field_mapping.stitch_id → integration_stitch.id (idempotent).

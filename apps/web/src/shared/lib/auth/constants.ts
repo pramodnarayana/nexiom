@@ -46,6 +46,7 @@ export const AppRoutes = {
     },
     TENANT: {
         ROOT: '/dashboard',
+        WORKSPACES: '/dashboard/workspaces',
         PROFILE: '/settings/profile',
     },
     AUTH: {

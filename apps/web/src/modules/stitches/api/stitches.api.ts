@@ -25,17 +25,24 @@ export interface StitchResponse {
   updatedAt: string;
 }
 
+/** Full payload once the T023 field-mapping wizard can supply all required fields. */
 export interface CreateStitchPayload {
   workspaceId: string;
   name: string;
   srcConnectionId: string;
   destConnectionId: string;
-  // T023: these are NOT NULL in the DB schema. Mark required and provide values
-  // once the field-mapping wizard collects them; sending without them will cause
-  // a server-side 400 because the API Zod schema defaults them to ''.
-  sourceObject?: string;
-  targetObject?: string;
+  /** Vendor object name on the source connection (e.g. "Contact"). NOT NULL in DB. */
+  sourceObject: string;
+  /** Vendor object name on the destination connection (e.g. "Customer"). NOT NULL in DB. */
+  targetObject: string;
 }
+
+/**
+ * Partial payload used before T023 (field-mapping wizard) is implemented.
+ * sourceObject and targetObject are omitted here; the API Zod schema defaults
+ * them to '' server-side.  Switch callers to CreateStitchPayload once T023 lands.
+ */
+export type DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
 
 export interface UpdateStitchPayload {
   name?: string;
@@ -59,7 +66,9 @@ export async function getStitch(id: string): Promise<StitchResponse> {
   return res.data;
 }
 
-export async function createStitch(payload: CreateStitchPayload): Promise<StitchResponse> {
+// T023: accepts DraftStitchPayload (no sourceObject/targetObject) until the field-mapping wizard lands.
+// Switch callers to CreateStitchPayload and update this signature once T023 is implemented.
+export async function createStitch(payload: DraftStitchPayload): Promise<StitchResponse> {
   const res = await apiClient.post<StitchResponse>('/stitches', payload);
   return res.data;
 }

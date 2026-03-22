@@ -22,6 +22,9 @@ function buildMockDb() {
 
   return {
     findFirstStitch,
+    insert,
+    values,
+    onConflictDoUpdate,
     returning,
     db: {
       query: {
@@ -63,7 +66,7 @@ describe('FieldMappingsController', () => {
 
   // ── upsert (POST) ───────────────────────────────────────────────────────────
 
-  it('upsert — inserts and returns the mapping', async () => {
+  it('upsert — executes full upsert chain and returns the mapping row', async () => {
     mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
     mocks.returning.mockResolvedValue([MAPPING_ROW]);
 
@@ -72,8 +75,31 @@ describe('FieldMappingsController', () => {
       STITCH_ID,
       MAPPING_BODY as any,
     );
+
     expect(result).toBe(MAPPING_ROW);
-    expect(mocks.db.insert).toHaveBeenCalled();
+
+    // insert() called with the fieldMappings table
+    expect(mocks.insert).toHaveBeenCalledOnce();
+
+    // values() called with the correct payload
+    expect(mocks.values).toHaveBeenCalledOnce();
+    expect(mocks.values).toHaveBeenCalledWith({
+      stitchId: STITCH_ID,
+      sourceCanonical: MAPPING_BODY.sourceCanonical,
+      mappingRules: MAPPING_BODY.mappingRules,
+    });
+
+    // onConflictDoUpdate() called — upsert path, not plain insert
+    expect(mocks.onConflictDoUpdate).toHaveBeenCalledOnce();
+    const call = mocks.onConflictDoUpdate.mock.calls[0];
+    expect(call).toBeDefined();
+    const [conflictArg] = call as [
+      { target: unknown; set: { mappingRules: unknown; updatedAt: unknown } },
+    ];
+    expect(conflictArg.set.mappingRules).toEqual(MAPPING_BODY.mappingRules);
+
+    // returning() called to get the persisted row
+    expect(mocks.returning).toHaveBeenCalledOnce();
   });
 
   it('upsert — throws NotFoundException when stitch not in org', async () => {

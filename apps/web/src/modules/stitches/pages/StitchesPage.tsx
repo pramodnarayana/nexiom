@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import { ArrowLeft, GitMerge, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -79,14 +80,21 @@ export function StitchesPage() {
 
   const handleArchive = async (stitchId: string) => {
     if (archiving) return;
+    // Capture the load token so a workspace navigation that fires a new load
+    // while the archive request is in-flight doesn't mutate the next page's state.
+    const token = loadIdRef.current;
     setArchiving(stitchId);
     try {
       await archiveStitch(stitchId);
+      if (token !== loadIdRef.current) return;
       setStitches((prev) => prev.filter((s) => s.id !== stitchId));
     } catch (e: unknown) {
+      if (token !== loadIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to archive stitch.');
     } finally {
-      setArchiving(null);
+      if (token === loadIdRef.current) {
+        setArchiving(null);
+      }
     }
   };
 
@@ -112,7 +120,7 @@ export function StitchesPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
-          to={`/dashboard/workspaces/${workspaceId ?? ''}`}
+          to={`${AppRoutes.TENANT.WORKSPACES}/${workspaceId ?? ''}`}
           aria-label="Back to workspace"
           className="text-muted-foreground hover:text-foreground"
         >

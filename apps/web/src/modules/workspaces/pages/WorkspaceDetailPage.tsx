@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import { ArrowLeft, Building2, Loader2, Plus, Unlink } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -191,7 +192,7 @@ export function WorkspaceDetailPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link to="/dashboard/workspaces" aria-label="Back to workspaces" className="text-muted-foreground hover:text-foreground">
+        <Link to={AppRoutes.TENANT.WORKSPACES} aria-label="Back to workspaces" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <Building2 className="h-5 w-5 text-muted-foreground" />

@@ -6,6 +6,7 @@ import { Navbar } from '@/shared/components/layout/Navbar';
 import { useLocation } from 'react-router-dom';
 import { useOrganization } from '@/modules/identity/hooks/useOrganization';
 import { listWorkspaces } from '@/modules/workspaces/api/workspaces.api';
+import { AppRoutes } from '@/shared/lib/auth/constants';
 import type { WorkspaceItem } from '@/shared/components/layout/WorkspaceExplorer';
 
 import { type AuthContextValue } from '@/shared/components/layout/types';
@@ -60,7 +61,7 @@ export function TenantLayout({ title, navGroups, bottomNavGroups }: Readonly<Das
         const prev = prevPathRef.current;
         prevPathRef.current = location.pathname;
         if (!isAuthenticated || isLoading) return;
-        const wasInWorkspaces = prev.startsWith('/dashboard/workspaces');
+        const wasInWorkspaces = prev.startsWith(AppRoutes.TENANT.WORKSPACES);
         const navigated = prev !== location.pathname;
         if (wasInWorkspaces && navigated) {
             listWorkspaces().then(setWorkspaces).catch(() => {
