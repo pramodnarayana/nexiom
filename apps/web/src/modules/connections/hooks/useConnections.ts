@@ -106,7 +106,7 @@ export function useConnections() {
         pendingCredentials.current = null;
     }, []);
 
-    const { openPopup } = useOAuthPopup({
+    const { openPopup, closePopup } = useOAuthPopup({
         onSuccess: handleSuccess,
         onError: handleError,
         onClose: handleClose,
@@ -146,13 +146,14 @@ export function useConnections() {
                 // Re-call openPopup with the actual URL to redirect the already-opened window
                 openPopup(popupUrl);
             } catch (err: unknown) {
+                closePopup();
                 const msg = err instanceof Error ? err.message : 'Failed to establish secure OAuth pre-flight session';
                 toast({ title: 'Connection Error', description: msg, variant: 'destructive' });
                 pendingCredentials.current = null;
                 throw err;
             }
         },
-        [openPopup, toast],
+        [openPopup, closePopup, toast],
     );
 
     return { connections, loading, refresh, connect };

@@ -4,6 +4,7 @@ import { CacheModule } from '@nexiom/cache';
 import { EncryptionService, AesEncryptionService } from '@nexiom/connectors';
 import { DbModule } from '../../db/db.module.js';
 import { PiecesModule } from '../pieces/pieces.module.js';
+import { ConnectionsModule } from '../connections/connections.module.js';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesAdminController } from './stitches-admin.controller.js';
 import { MetadataController } from './metadata.controller.js';
@@ -12,7 +13,7 @@ import { StitchesService } from './stitches.service.js';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 
 @Module({
-  imports: [DbModule, AuthModule, CacheModule, PiecesModule],
+  imports: [DbModule, AuthModule, CacheModule, PiecesModule, ConnectionsModule],
   controllers: [
     StitchesController,
     StitchesAdminController,

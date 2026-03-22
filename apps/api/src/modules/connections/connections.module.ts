@@ -52,5 +52,6 @@ import { type DrizzleDb } from '@nexiom/database';
     { provide: EncryptionService, useClass: AesEncryptionService },
     { provide: OAuthRefreshClient, useClass: DefaultOAuthRefreshClient },
   ],
+  exports: [TokenManagerService],
 })
 export class ConnectionsModule {}

@@ -14,7 +14,7 @@ import {
   resolveOAuth2Url,
   PropertyType,
 } from '@nexiom/connectors';
-import type { OAuth2Auth } from '@nexiom/connectors';
+import type { OAuth2Auth, OAuthCredentialBlob } from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,
@@ -43,25 +43,11 @@ function isPgError(err: unknown): err is PgError {
   );
 }
 
-/** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
-export interface ConnectionValueBlob {
-  clientId: string;
-  clientSecret: string;
-  accessToken: string;
-  refreshToken?: string;
-  /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
-  data: Record<string, unknown>;
-  /**
-   * Vendor-specific auth parameters collected during the OAuth flow
-   * (e.g. environment selection). Stored here so the reconnect form
-   * can restore them without database round-trips.
-   */
-  vendorParams?: Record<string, string>;
-  /**
-   * Top-level legacy environment parameter (now merged into vendorParams).
-   */
-  environment?: string | number | boolean;
-}
+/**
+ * Encrypted value blob stored in app_connection.value.
+ * Aliased from the connectors package so all callers share a single source of truth.
+ */
+export type ConnectionValueBlob = OAuthCredentialBlob;
 
 export interface StoreOAuthConnectionOptions {
   id?: string;

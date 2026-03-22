@@ -1,14 +1,99 @@
 import {
     createPiece,
     createCustomApiCallAction,
-    PieceCategory
+    PieceCategory,
+    type ObjectDescriptor,
+    type FieldDescriptor,
 } from '@nexiom/connectors/framework';
 
 
 import { salesforceUniversalTrigger } from './lib/trigger/universal-trigger.js';
 import { salesforceAuth } from './lib/auth.js';
 
+const SF_API_VERSION = 'v59.0';
 
+function getInstanceUrl(credentials: Record<string, unknown>): string {
+    const url = credentials['instance_url'];
+    if (typeof url !== 'string' || !url) {
+        throw new Error('Salesforce credentials missing instance_url');
+    }
+    return url.replace(/\/$/, '');
+}
+
+function getAccessToken(credentials: Record<string, unknown>): string {
+    const token = credentials['accessToken'];
+    if (typeof token !== 'string' || !token) {
+        throw new Error('Salesforce credentials missing accessToken');
+    }
+    return token;
+}
+
+async function sfFetch<T>(url: string, accessToken: string): Promise<T> {
+    const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`Salesforce API error ${res.status}: ${body}`);
+    }
+    return res.json() as Promise<T>;
+}
+
+async function describeObjects(
+    credentials: Record<string, unknown>,
+): Promise<ObjectDescriptor[]> {
+    const instanceUrl = getInstanceUrl(credentials);
+    const accessToken = getAccessToken(credentials);
+    const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects`;
+
+    interface SfSobjectsResponse {
+        sobjects: Array<{ name: string; label: string; queryable: boolean }>;
+    }
+    const data = await sfFetch<SfSobjectsResponse>(url, accessToken);
+
+    const filtered = data.sobjects.filter((o) => o.queryable || o.name.endsWith('__c'));
+
+    // Custom objects first (sorted by label), then standard objects (sorted by label).
+    // This ensures __c objects are never cut off by the MAX_OBJECTS cap in the service layer.
+    filtered.sort((a, b) => {
+        const aCustom = a.name.endsWith('__c');
+        const bCustom = b.name.endsWith('__c');
+        if (aCustom !== bCustom) return aCustom ? -1 : 1;
+        return a.label.localeCompare(b.label);
+    });
+
+    return filtered.map((o) => ({ name: o.name, label: o.label, queryable: o.queryable }));
+}
+
+async function describeFields(
+    credentials: Record<string, unknown>,
+    objectName: string,
+): Promise<FieldDescriptor[]> {
+    const instanceUrl = getInstanceUrl(credentials);
+    const accessToken = getAccessToken(credentials);
+    const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects/${encodeURIComponent(objectName)}/describe`;
+
+    interface SfField {
+        name: string;
+        label: string;
+        type: string;
+        filterable: boolean;
+        sortable: boolean;
+        nillable: boolean;
+        referenceTo?: string[];
+    }
+    interface SfDescribeResponse { fields: SfField[] }
+    const data = await sfFetch<SfDescribeResponse>(url, accessToken);
+    return data.fields.map((f) => ({
+        name: f.name,
+        label: f.label,
+        type: f.type,
+        filterable: f.filterable,
+        sortable: f.sortable,
+        nillable: f.nillable,
+        ...(f.referenceTo?.length ? { referenceTo: f.referenceTo } : {}),
+    }));
+}
 
 const customApiAction = createCustomApiCallAction({
     baseUrl: (auth) => (auth).data['instance_url'],
@@ -42,5 +127,7 @@ export const salesforce = createPiece({
     triggers: [
         salesforceUniversalTrigger
     ],
+    describeObjects,
+    describeFields,
 });
 export { salesforceAuth } from './lib/auth.js';

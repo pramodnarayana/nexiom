@@ -43,6 +43,7 @@ export const AppRoutes = {
         DASHBOARD: '/admin/dashboard',
         USERS: '/admin/users',
         TENANTS: '/admin/tenants',
+        STITCHES: '/admin/stitches',
     },
     TENANT: {
         ROOT: '/dashboard',

@@ -259,6 +259,50 @@ export class StitchesService {
     };
   }
 
+  async listAdmin() {
+    // Explicit column allowlist guards against future sensitive columns being
+    // inadvertently returned by a wildcard select after schema additions.
+    return this.db.query.integrationStitches.findMany({
+      columns: {
+        id: true,
+        orgId: true,
+        workspaceId: true,
+        name: true,
+        srcConnectionId: true,
+        destConnectionId: true,
+        sourceObject: true,
+        targetObject: true,
+        syncCondition: true,
+        status: true,
+        syncIntervalMinutes: true,
+        scheduleEnabled: true,
+        lastScheduledAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [
+        asc(integrationStitches.orgId),
+        asc(integrationStitches.createdAt),
+      ],
+    });
+  }
+
+  async bulkUpdateScheduleByOrg(
+    orgId: string,
+    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
+  ) {
+    return this.db
+      .update(integrationStitches)
+      .set(this.buildScheduleSet(body))
+      .where(
+        and(
+          eq(integrationStitches.orgId, orgId),
+          ne(integrationStitches.status, 'ARCHIVED'),
+        ),
+      )
+      .returning();
+  }
+
   async remove(orgId: string, id: string) {
     const [archived] = await this.db
       .update(integrationStitches)

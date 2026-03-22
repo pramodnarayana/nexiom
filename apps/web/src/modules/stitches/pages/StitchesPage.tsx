@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { ArrowLeft, GitMerge, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/shared/components/ui/dialog';
 import { getWorkspace } from '@/modules/workspaces/api/workspaces.api';
 import type { WorkspaceResponse } from '@/modules/workspaces/api/workspaces.api';
 import {
@@ -35,12 +43,14 @@ function nextSyncLabel(stitch: StitchResponse): string {
 
 export function StitchesPage() {
   const { id: workspaceId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [stitches, setStitches] = useState<StitchResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<StitchResponse | null>(null);
 
   // Incremented on every new load; stale responses check their captured token
   // against the ref and discard state updates when superseded.
@@ -78,6 +88,13 @@ export function StitchesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleArchiveConfirm = async () => {
+    if (!archiveTarget) return;
+    const stitchId = archiveTarget.id;
+    setArchiveTarget(null);
+    await handleArchive(stitchId);
+  };
 
   const handleArchive = async (stitchId: string) => {
     if (archiving) return;
@@ -148,8 +165,10 @@ export function StitchesPage() {
               ? 'No stitches yet. Create one to start syncing data between connections.'
               : `${stitches.length} ${stitches.length === 1 ? 'stitch' : 'stitches'}`}
           </p>
-          {/* T023: field-mapping wizard not yet built — enabled when sourceObject/targetObject can be collected */}
-          <Button size="sm" disabled title="Field mapping wizard coming soon (T023)">
+          <Button
+            size="sm"
+            onClick={() => { navigate(`${AppRoutes.TENANT.WORKSPACES}/${workspaceId ?? ''}/stitches/new`); }}
+          >
             <Plus className="mr-2 h-3.5 w-3.5" />
             New Stitch
           </Button>
@@ -161,8 +180,11 @@ export function StitchesPage() {
         <div className="border rounded-lg p-12 text-center text-muted-foreground text-sm space-y-2">
           <GitMerge className="h-8 w-8 mx-auto opacity-30" />
           <p>No stitches yet.</p>
-          {/* T023: enabled when field-mapping wizard is implemented */}
-          <Button size="sm" variant="outline" disabled title="Field mapping wizard coming soon (T023)">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { navigate(`${AppRoutes.TENANT.WORKSPACES}/${workspaceId ?? ''}/stitches/new`); }}
+          >
             <Plus className="mr-1 h-3.5 w-3.5" />
             New Stitch
           </Button>
@@ -188,7 +210,7 @@ export function StitchesPage() {
                   size="sm"
                   className="text-muted-foreground hover:text-destructive"
                   disabled={archiving !== null}
-                  onClick={() => void handleArchive(stitch.id)}
+                  onClick={() => { setArchiveTarget(stitch); }}
                   aria-label="Archive stitch"
                 >
                   {archiving === stitch.id
@@ -200,6 +222,32 @@ export function StitchesPage() {
           ))}
         </div>
       ))}
+
+      {/* Archive confirmation */}
+      <Dialog open={!!archiveTarget} onOpenChange={(open) => { if (!open) setArchiveTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive stitch?</DialogTitle>
+            <DialogDescription>
+              <strong>{archiveTarget?.name}</strong> will be archived and stop syncing. You can
+              create a new stitch with the same connections if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setArchiveTarget(null); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={archiving !== null}
+              onClick={() => { void handleArchiveConfirm(); }}
+            >
+              {archiving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -19,7 +19,7 @@
 
 ## Code Quality Notes
 
-- Debug `console.log` statements have appeared in production code in adapters -- flag these
+- Debug `console.log`/`console.debug` statements have appeared in production code in adapters AND pieces (salesforce/src/index.ts) -- flag these
 - `as any` casts used frequently to work around Drizzle's deep relation type inference
 - `DrizzleUserAdapter.findById` delegates to `AuthProvider.findById` for permission resolution
 - `findById` in BetterAuthAdapter does NOT eager-load members, causing lazy-fetch fallback every time
@@ -38,3 +38,7 @@
 - appConnections has envType column (PRODUCTION|SANDBOX default PRODUCTION)
 - uiWorkspaces + uiWorkspaceConnections bridge table in workspace.ts
 - storeOAuthConnection UPDATE path does not write envType (bug found 2026-03-21)
+- TokenManagerService.onModuleDestroy calls redis.quit() on a shared singleton -- potential issue
+- MappingCanvas calls onChange (parent setState) inside setCanvas updater -- React anti-pattern (side effects in updater)
+- Frontend FieldDescriptor type (metadata.api.ts) diverges from backend Salesforce piece fields
+- Stitches metadata uses Redis + DB two-tier cache with 5min TTL; forceRefresh busts both

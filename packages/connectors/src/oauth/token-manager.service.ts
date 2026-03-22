@@ -1,10 +1,26 @@
-import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { appConnections, DATABASE_CONNECTION } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
 
 import { EncryptionService } from '../crypto/encryption.interface.js';
+
+/**
+ * Shape of the decrypted credential blob stored in app_connection.value.
+ * Returned by getValidCredentials() so callers have a typed, narrow interface
+ * without resorting to double casts or knowledge of the encryption layer.
+ */
+export interface OAuthCredentialBlob {
+    clientId: string;
+    clientSecret: string;
+    accessToken: string;
+    refreshToken?: string;
+    /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
+    data: Record<string, unknown>;
+    vendorParams?: Record<string, string>;
+    environment?: string | number | boolean;
+}
 
 export class OAuthRefreshError extends Error {
     constructor(message: string, public status?: number) {
@@ -31,7 +47,7 @@ function parseExpiresAt(value: unknown): Date | null {
 }
 
 @Injectable()
-export class TokenManagerService implements OnModuleDestroy {
+export class TokenManagerService {
     private readonly logger = new Logger(TokenManagerService.name);
 
     constructor(
@@ -41,15 +57,11 @@ export class TokenManagerService implements OnModuleDestroy {
         private readonly oauthClient: OAuthRefreshClient,
     ) { }
 
-    async onModuleDestroy() {
-        await this.redis.quit();
-    }
-
     /**
      * Primary Entrypoint for fetching tokens.
      * Guarantees returning a VALID, unexpired token payload.
      */
-    async getValidCredentials(connectionId: string): Promise<Record<string, unknown>> {
+    async getValidCredentials(connectionId: string): Promise<OAuthCredentialBlob> {
         const connection = await this.db.query.appConnections.findFirst({
             where: eq(appConnections.id, connectionId)
         });
@@ -70,10 +82,10 @@ export class TokenManagerService implements OnModuleDestroy {
         }
 
         // 2. Return decrypted credentials
-        return JSON.parse(await this.crypto.decrypt(connection.value)) as Record<string, unknown>;
+        return JSON.parse(await this.crypto.decrypt(connection.value)) as OAuthCredentialBlob;
     }
 
-    private async refreshWithLock(connection: Record<string, any>): Promise<Record<string, unknown>> {
+    private async refreshWithLock(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
         const lockKey = `lock:refresh:${connection.id as string}`;
         const lockValue = Math.random().toString(36).substring(2);
 
@@ -83,8 +95,12 @@ export class TokenManagerService implements OnModuleDestroy {
         if (!lockAcquired) {
             this.logger.debug(`Connection ${connection.id as string} is currently refreshing. Waiting...`);
             const result = await this.waitForRefreshOrAcquireLock(connection, lockKey, lockValue);
+            // IMPORTANT: this early return must stay outside the try/finally below.
+            // When credentials are resolved by another worker we hold no lock,
+            // so releaseLock must NOT be called.
             if (result.credentials) return result.credentials;
             connection = result.connection;
+            // Lock was acquired inside waitForRefreshOrAcquireLock — fall through to try/finally.
         }
 
         try {
@@ -105,7 +121,7 @@ export class TokenManagerService implements OnModuleDestroy {
         connection: Record<string, any>,
         lockKey: string,
         lockValue: string,
-    ): Promise<{ credentials?: Record<string, unknown>; connection: Record<string, any> }> {
+    ): Promise<{ credentials?: OAuthCredentialBlob; connection: Record<string, any> }> {
         const MAX_RETRIES = 3;
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -122,7 +138,7 @@ export class TokenManagerService implements OnModuleDestroy {
                 // Token was refreshed by another worker
                 const credentials = JSON.parse(
                     await this.crypto.decrypt(freshConnection!.value)
-                ) as Record<string, unknown>;
+                ) as OAuthCredentialBlob;
                 return { credentials, connection };
             }
 
@@ -145,7 +161,7 @@ export class TokenManagerService implements OnModuleDestroy {
     }
 
     /** Decrypts, refreshes via the vendor API, encrypts, and persists the new token. */
-    private async performTokenRefresh(connection: Record<string, any>): Promise<Record<string, unknown>> {
+    private async performTokenRefresh(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
         this.logger.log(`Acquired lock. Refreshing OAuth token for ${connection.appName as string}`);
 
         // 1. Decrypt old payload to get refresh_token
@@ -169,16 +185,16 @@ export class TokenManagerService implements OnModuleDestroy {
         const newTokens = await this.oauthClient.refresh(
             connection.tenantId,
             connection.appName as string,
-            connection.externalId as string,
+            connection.externalId,
             oldPayload.refreshToken as string,
         );
 
         // 3. Explicitly map known snake_case fields to camelCase and merge unknowns.
         //    This keeps the persisted payload normalized while preserving custom vendor fields.
-        const updatedPayload: Record<string, unknown> = {
-            ...oldPayload,
-            accessToken: newTokens.access_token ?? oldPayload.accessToken,
-            refreshToken: newTokens.refresh_token || oldPayload.refreshToken,
+        const updatedPayload: OAuthCredentialBlob = {
+            ...(oldPayload as unknown as OAuthCredentialBlob),
+            accessToken: (newTokens.access_token ?? oldPayload.accessToken) as string,
+            refreshToken: (newTokens.refresh_token || oldPayload.refreshToken) as string | undefined,
             ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
             ...('id_token' in newTokens && { idToken: newTokens.id_token }),
             ...('token_type' in newTokens && { tokenType: newTokens.token_type }),

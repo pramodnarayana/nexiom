@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { AppRoutes } from '@/shared/lib/auth/constants';
+import { AdminStitchesPage } from '../../modules/admin/AdminStitchesPage';
 
 import { dataProvider } from "../providers/data-provider";
 import { authProvider } from "../providers/auth-provider";
@@ -68,6 +69,7 @@ export function AdminRoutes() {
                             <Route path="tenants" element={<TenantListPage />} />
                             <Route path="tenants/:id" element={<TenantEdit />} />
                             <Route path="settings" element={<div>Settings Placeholder</div>} />
+                            <Route path="stitches" element={<AdminStitchesPage />} />
                         </Route>
                     </Routes>
                 </Refine>
