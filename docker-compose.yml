@@ -150,10 +150,9 @@ services:
     environment:
       <<: *common-env
       # Overrides for Docker Networking
+      # Windmill — docker networking overrides (secrets loaded from apps/api/.env via env_file)
       WINDMILL_BASE_URL: http://windmill_server:8000
       WINDMILL_WORKSPACE: nexiom
-      WINDMILL_TOKEN: ${WINDMILL_TOKEN}
-      WINDMILL_INTERNAL_SECRET: ${WINDMILL_INTERNAL_SECRET}
       WINDMILL_ENABLED: "true"
       SMTP_HOST: mailpit
       SMTP_PORT: 1025

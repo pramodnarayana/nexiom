@@ -581,15 +581,27 @@ Windmill runs as two Docker services (server + worker) sharing the existing Post
 
 x-windmill-env: &windmill-env
   DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/windmill
-  BASE_URL: http://localhost:8000
+  BASE_URL: ${WINDMILL_BASE_URL:-http://localhost:8000}
 
 services:
+  # ----- Windmill DB Init (ephemeral, runs once) -----
+  # Creates the 'windmill' database and runs Windmill's schema migrations.
+  windmill_init:
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
+    pull_policy: always
+    command: ["windmill", "init"]
+    environment:
+      <<: *windmill-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
   # ----- Windmill Server (stateless API + UI) -----
   windmill_server:
-    image: ghcr.io/windmill-labs/windmill:main
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
     pull_policy: always
-    deploy:
-      replicas: 1
     restart: unless-stopped
     environment:
       <<: *windmill-env
@@ -605,40 +617,27 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 120s
     networks:
       - nexiom-network
 
   # ----- Windmill Worker (executes stitch-runner scripts) -----
   windmill_worker:
-    image: ghcr.io/windmill-labs/windmill:main
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
     pull_policy: always
+    restart: unless-stopped
+    # privileged required for ENABLE_UNSHARE_PID
+    privileged: true
     deploy:
       replicas: 2
-    restart: unless-stopped
     environment:
       <<: *windmill-env
       MODE: worker
       WORKER_GROUP: default
-      # PID namespace isolation — prevents worker jobs from reading parent process memory
       ENABLE_UNSHARE_PID: "true"
-    privileged: true   # required for ENABLE_UNSHARE_PID
     depends_on:
       windmill_server:
-        condition: service_healthy
-    networks:
-      - nexiom-network
-
-  # ----- Windmill DB Init (ephemeral, runs once) -----
-  # Creates the 'windmill' database and runs Windmill's schema migrations.
-  windmill_init:
-    image: ghcr.io/windmill-labs/windmill:main
-    command: ["windmill", "init"]
-    environment:
-      <<: *windmill-env
-    depends_on:
-      postgres:
         condition: service_healthy
     networks:
       - nexiom-network

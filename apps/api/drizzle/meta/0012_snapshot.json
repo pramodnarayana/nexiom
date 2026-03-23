@@ -2038,6 +2038,25 @@
     }
   },
   "enums": {
+    "public.auth_type_enum": {
+      "name": "auth_type_enum",
+      "schema": "public",
+      "values": [
+        "OAUTH2",
+        "API_KEY",
+        "BASIC"
+      ]
+    },
+    "public.connection_status_enum": {
+      "name": "connection_status_enum",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "INACTIVE",
+        "REVOKED",
+        "EXPIRED"
+      ]
+    },
     "public.env_type_enum": {
       "name": "env_type_enum",
       "schema": "public",
