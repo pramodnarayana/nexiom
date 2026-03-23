@@ -77,6 +77,7 @@ export async function createOAuthSession(payload: {
     vendorParams?: VendorParams;
 }): Promise<{ sessionId: string }> {
     const res = await apiClient.post<{ sessionId: string }>(`/connectors/${payload.providerName}/session`, {
+        providerName: payload.providerName,
         clientId: payload.clientId,
         vendorParams: payload.vendorParams,
     });

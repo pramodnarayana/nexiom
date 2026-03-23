@@ -20,6 +20,24 @@ function buildMockDb() {
   const returningInsert = vi.fn();
   const returningUpdate = vi.fn();
 
+  // Shared insert chain used both directly on db and inside transaction callbacks.
+  const insertChain = {
+    values: vi.fn().mockReturnValue({ returning: returningInsert }),
+  };
+  const insertFn = vi.fn().mockReturnValue(insertChain);
+
+  // tx object passed to db.transaction() callbacks — shares the same mocks so
+  // tests can assert on returningInsert / returningUpdate regardless of whether
+  // the code runs inside or outside a transaction.
+  const tx = {
+    insert: insertFn,
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning: returningUpdate }),
+      }),
+    }),
+  };
+
   return {
     findFirstWorkspaces,
     findFirstConnections,
@@ -36,14 +54,17 @@ function buildMockDb() {
           findMany: findManyStitches,
         },
       },
-      insert: vi.fn().mockReturnValue({
-        values: vi.fn().mockReturnValue({ returning: returningInsert }),
-      }),
+      insert: insertFn,
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({ returning: returningUpdate }),
         }),
       }),
+      // Executes the callback synchronously with the shared tx mock, forwarding
+      // its return value so callers receive the same result as a real transaction.
+      transaction: vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx)),
     },
   };
 }
@@ -171,13 +192,30 @@ describe('StitchesService', () => {
     );
   });
 
-  it('throws ConflictException when DB raises a unique-violation (23505)', async () => {
+  it('throws ConflictException on duplicate stitch name (stitch_name_workspace_unique_idx)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     mocks.findFirstConnections
       .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
       .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
+      constraint: 'stitch_name_workspace_unique_idx',
+    });
+    mocks.returningInsert.mockRejectedValue(pgUniqueError);
+
+    await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('throws ConflictException on duplicate field mapping (field_mapping_stitch_canonical_unique_idx)', async () => {
+    mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
+    mocks.findFirstConnections
+      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
+      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+    const pgUniqueError = Object.assign(new Error('unique violation'), {
+      code: '23505',
+      constraint: 'field_mapping_stitch_canonical_unique_idx',
     });
     mocks.returningInsert.mockRejectedValue(pgUniqueError);
 

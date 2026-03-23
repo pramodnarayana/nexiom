@@ -99,6 +99,14 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         };
     }, [stopPoll]);
 
+    const closePopup = useCallback(() => {
+        stopPoll();
+        if (popupRef.current && !popupRef.current.closed) {
+            popupRef.current.close();
+        }
+        popupRef.current = null;
+    }, [stopPoll]);
+
     const openPopup = useCallback((connectUrl: string) => {
         // Cancel any in-flight poll to prepare for fresh state
         stopPoll();
@@ -138,5 +146,5 @@ export function useOAuthPopup({ onSuccess, onError, onClose }: OAuthPopupOptions
         startCloseWatcher();
     }, [stopPoll, startCloseWatcher]);
 
-    return { openPopup };
+    return { openPopup, closePopup };
 }

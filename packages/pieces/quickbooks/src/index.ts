@@ -1,12 +1,235 @@
 import {
   createPiece,
   createCustomApiCallAction,
-  PieceCategory
+  PieceCategory,
+  type ObjectDescriptor,
+  type FieldDescriptor,
 } from '@nexiom/connectors/framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';
 import type { QuickBooksAuth } from './triggers/quickbooks-polling.helper.js';
+
+// ── QuickBooks metadata (no describe API — schemas are stable and well-documented) ─────
+
+// Core transactional and list entities supported by the QuickBooks Online v3 API.
+const QB_OBJECTS: ObjectDescriptor[] = [
+  { name: 'Customer', label: 'Customer', queryable: true },
+  { name: 'Vendor', label: 'Vendor', queryable: true },
+  { name: 'Employee', label: 'Employee', queryable: true },
+  { name: 'Item', label: 'Item (Product/Service)', queryable: true },
+  { name: 'Invoice', label: 'Invoice', queryable: true },
+  { name: 'Bill', label: 'Bill', queryable: true },
+  { name: 'Payment', label: 'Payment', queryable: true },
+  { name: 'BillPayment', label: 'Bill Payment', queryable: true },
+  { name: 'Estimate', label: 'Estimate', queryable: true },
+  { name: 'CreditMemo', label: 'Credit Memo', queryable: true },
+  { name: 'SalesReceipt', label: 'Sales Receipt', queryable: true },
+  { name: 'PurchaseOrder', label: 'Purchase Order', queryable: true },
+  { name: 'Purchase', label: 'Purchase (Expense)', queryable: true },
+  { name: 'JournalEntry', label: 'Journal Entry', queryable: true },
+  { name: 'Account', label: 'Account (Chart of Accounts)', queryable: true },
+  { name: 'TaxCode', label: 'Tax Code', queryable: true },
+  { name: 'Term', label: 'Payment Term', queryable: true },
+];
+
+// Field schemas keyed by entity name.
+const QB_FIELDS: Record<string, FieldDescriptor[]> = {
+  Customer: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DisplayName', label: 'Display Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'GivenName', label: 'First Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'FamilyName', label: 'Last Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'CompanyName', label: 'Company Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'PrimaryEmailAddr', label: 'Email', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'PrimaryPhone', label: 'Phone', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'Balance', label: 'Balance', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Vendor: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DisplayName', label: 'Display Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'GivenName', label: 'First Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'FamilyName', label: 'Last Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'CompanyName', label: 'Company Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'PrimaryEmailAddr', label: 'Email', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'Balance', label: 'Balance', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Employee: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DisplayName', label: 'Display Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'GivenName', label: 'First Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'FamilyName', label: 'Last Name', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'PrimaryEmailAddr', label: 'Email', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Item: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Name', label: 'Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Description', label: 'Description', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'Type', label: 'Type', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'UnitPrice', label: 'Unit Price', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'PurchaseCost', label: 'Purchase Cost', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Invoice: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Invoice Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'DueDate', label: 'Due Date', type: 'date', filterable: true, sortable: true, nillable: true },
+    { name: 'CustomerRef.value', label: 'Customer ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Customer'] },
+    { name: 'CustomerRef.name', label: 'Customer Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'Balance', label: 'Balance Due', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'EmailStatus', label: 'Email Status', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Bill: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Reference Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'DueDate', label: 'Due Date', type: 'date', filterable: true, sortable: true, nillable: true },
+    { name: 'VendorRef.value', label: 'Vendor ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Vendor'] },
+    { name: 'VendorRef.name', label: 'Vendor Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'Balance', label: 'Balance', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Payment: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'TxnDate', label: 'Payment Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'CustomerRef.value', label: 'Customer ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Customer'] },
+    { name: 'CustomerRef.name', label: 'Customer Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'UnappliedAmt', label: 'Unapplied Amount', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  BillPayment: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'TxnDate', label: 'Payment Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'VendorRef.value', label: 'Vendor ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Vendor'] },
+    { name: 'VendorRef.name', label: 'Vendor Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Estimate: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Estimate Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'ExpirationDate', label: 'Expiration Date', type: 'date', filterable: true, sortable: true, nillable: true },
+    { name: 'CustomerRef.value', label: 'Customer ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Customer'] },
+    { name: 'CustomerRef.name', label: 'Customer Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'TxnStatus', label: 'Status', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  CreditMemo: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Credit Memo Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'CustomerRef.value', label: 'Customer ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Customer'] },
+    { name: 'CustomerRef.name', label: 'Customer Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'RemainingCredit', label: 'Remaining Credit', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  SalesReceipt: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Receipt Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'CustomerRef.value', label: 'Customer ID', type: 'reference', filterable: true, sortable: true, nillable: true, referenceTo: ['Customer'] },
+    { name: 'CustomerRef.name', label: 'Customer Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  PurchaseOrder: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'PO Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'VendorRef.value', label: 'Vendor ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Vendor'] },
+    { name: 'VendorRef.name', label: 'Vendor Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'POStatus', label: 'Status', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Purchase: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'PaymentType', label: 'Payment Type', type: 'string', filterable: true, sortable: false, nillable: false },
+    { name: 'AccountRef.value', label: 'Account ID', type: 'reference', filterable: true, sortable: true, nillable: false, referenceTo: ['Account'] },
+    { name: 'AccountRef.name', label: 'Account Name', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  JournalEntry: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'DocNumber', label: 'Reference Number', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'TxnDate', label: 'Transaction Date', type: 'date', filterable: true, sortable: true, nillable: false },
+    { name: 'Adjustment', label: 'Is Adjustment', type: 'boolean', filterable: true, sortable: false, nillable: true },
+    { name: 'TotalAmt', label: 'Total Amount', type: 'currency', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  Account: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Name', label: 'Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'AccountType', label: 'Account Type', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'AccountSubType', label: 'Account Sub-Type', type: 'string', filterable: true, sortable: true, nillable: true },
+    { name: 'Classification', label: 'Classification', type: 'string', filterable: true, sortable: false, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'CurrentBalance', label: 'Current Balance', type: 'currency', filterable: true, sortable: true, nillable: true },
+    { name: 'MetaData.CreateTime', label: 'Created At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+    { name: 'MetaData.LastUpdatedTime', label: 'Updated At', type: 'datetime', filterable: true, sortable: true, nillable: false },
+  ],
+  TaxCode: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Name', label: 'Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Description', label: 'Description', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'Taxable', label: 'Taxable', type: 'boolean', filterable: true, sortable: false, nillable: false },
+  ],
+  Term: [
+    { name: 'Id', label: 'ID', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Name', label: 'Name', type: 'string', filterable: true, sortable: true, nillable: false },
+    { name: 'Active', label: 'Active', type: 'boolean', filterable: true, sortable: false, nillable: false },
+    { name: 'DueDays', label: 'Due Days', type: 'integer', filterable: true, sortable: true, nillable: true },
+    { name: 'DiscountDays', label: 'Discount Days', type: 'integer', filterable: true, sortable: true, nillable: true },
+    { name: 'DiscountPercent', label: 'Discount Percent', type: 'decimal', filterable: true, sortable: true, nillable: true },
+  ],
+};
+
+function describeObjects(_credentials: Record<string, unknown>): Promise<ObjectDescriptor[]> {
+  return Promise.resolve(QB_OBJECTS);
+}
+
+function describeFields(
+  _credentials: Record<string, unknown>,
+  objectName: string,
+): Promise<FieldDescriptor[]> {
+  const fields = QB_FIELDS[objectName];
+  if (!fields) {
+    return Promise.resolve([]);
+  }
+  return Promise.resolve(fields);
+}
 
 const customApiAction = createCustomApiCallAction({
   auth: quickbooksAuth,
@@ -43,4 +266,6 @@ export const quickbooks = createPiece({
   triggers: [
     quickbooksUniversalTrigger
   ],
+  describeObjects,
+  describeFields,
 });

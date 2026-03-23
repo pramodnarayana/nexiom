@@ -30,6 +30,7 @@ import {
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
 import { requireOrgId } from './workspace.utils.js';
+import { isUniqueViolation } from '../../shared/db.utils.js';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('workspaces/:workspaceId/connections')
@@ -112,13 +113,7 @@ export class WorkspaceConnectionsController {
         .returning();
       return assignment;
     } catch (err: unknown) {
-      // PG unique-violation → already assigned
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        (err as { code: string }).code === '23505'
-      ) {
+      if (isUniqueViolation(err)) {
         throw new ConflictException(
           'Connection is already assigned to this workspace.',
         );

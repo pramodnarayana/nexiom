@@ -1,6 +1,7 @@
 import {
   Injectable,
   Inject,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -11,25 +12,21 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   integrationStitches,
+  fieldMappings,
   uiWorkspaces,
   appConnections,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
-
-/** Postgres unique-constraint violation error code. */
-const PG_UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === PG_UNIQUE_VIOLATION
-  );
-}
+import {
+  extractPgError,
+  isUniqueViolation,
+  PG_UNIQUE_VIOLATION,
+} from '../../shared/db.utils.js';
 
 @Injectable()
 export class StitchesService {
+  private readonly logger = new Logger(StitchesService.name);
+
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
 
   async create(orgId: string, body: CreateStitch) {
@@ -77,38 +74,67 @@ export class StitchesService {
     }
 
     try {
-      const [stitch] = await this.db
-        .insert(integrationStitches)
-        .values({
-          name: body.name,
-          orgId,
-          workspaceId: body.workspaceId,
-          srcConnectionId: body.srcConnectionId,
-          destConnectionId: body.destConnectionId,
-          sourceObject: body.sourceObject,
-          targetObject: body.targetObject,
-          ...(body.syncCondition !== undefined && {
-            syncCondition: body.syncCondition,
-          }),
-          ...(body.status !== undefined && { status: body.status }),
-          ...(body.syncIntervalMinutes !== undefined && {
-            syncIntervalMinutes: body.syncIntervalMinutes,
-          }),
-          ...(body.scheduleEnabled !== undefined && {
-            scheduleEnabled: body.scheduleEnabled,
-          }),
-        })
-        .returning();
+      return await this.db.transaction(async (tx) => {
+        const [stitch] = await tx
+          .insert(integrationStitches)
+          .values({
+            name: body.name,
+            orgId,
+            workspaceId: body.workspaceId,
+            srcConnectionId: body.srcConnectionId,
+            destConnectionId: body.destConnectionId,
+            sourceObject: body.sourceObject,
+            targetObject: body.targetObject,
+            ...(body.syncCondition !== undefined && {
+              syncCondition: body.syncCondition,
+            }),
+            ...(body.status !== undefined && { status: body.status }),
+            ...(body.syncIntervalMinutes !== undefined && {
+              syncIntervalMinutes: body.syncIntervalMinutes,
+            }),
+            ...(body.scheduleEnabled !== undefined && {
+              scheduleEnabled: body.scheduleEnabled,
+            }),
+          })
+          .returning();
 
-      if (!stitch) {
-        throw new InternalServerErrorException('Insert did not return a row.');
-      }
-      return stitch;
+        if (!stitch) {
+          throw new InternalServerErrorException(
+            'Insert did not return a row.',
+          );
+        }
+
+        // Atomically persist any initial field mappings supplied by the wizard.
+        // Doing this in the same transaction guarantees no orphaned stitch rows
+        // when the mapping insert would otherwise fail after a successful stitch insert.
+        if (body.fieldMappings && body.fieldMappings.length > 0) {
+          await tx.insert(fieldMappings).values(
+            body.fieldMappings.map((fm) => ({
+              stitchId: stitch.id,
+              sourceCanonical: fm.sourceCanonical,
+              mappingRules: fm.mappingRules,
+            })),
+          );
+        }
+
+        return stitch;
+      });
     } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException(
-          `A stitch named "${body.name}" already exists in this workspace.`,
-        );
+      const pgErr = extractPgError(err);
+      if (pgErr?.code === PG_UNIQUE_VIOLATION) {
+        // Distinguish which unique index fired so the message is accurate.
+        // Both inserts (integrationStitches and fieldMappings) run inside the
+        // same transaction, so the outer catch must route by constraint name.
+        if (pgErr.constraint === 'stitch_name_workspace_unique_idx') {
+          throw new ConflictException(
+            `A stitch named "${body.name}" already exists in this workspace.`,
+          );
+        }
+        if (pgErr.constraint === 'field_mapping_stitch_canonical_unique_idx') {
+          throw new ConflictException(
+            'A field mapping for this source object already exists on this stitch.',
+          );
+        }
       }
       throw err;
     }
@@ -257,6 +283,58 @@ export class StitchesService {
       }),
       updatedAt: new Date(),
     };
+  }
+
+  async listAdmin() {
+    // Explicit column allowlist guards against future sensitive columns being
+    // inadvertently returned by a wildcard select after schema additions.
+    return this.db.query.integrationStitches.findMany({
+      columns: {
+        id: true,
+        orgId: true,
+        workspaceId: true,
+        name: true,
+        srcConnectionId: true,
+        destConnectionId: true,
+        sourceObject: true,
+        targetObject: true,
+        syncCondition: true,
+        status: true,
+        syncIntervalMinutes: true,
+        scheduleEnabled: true,
+        lastScheduledAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [
+        asc(integrationStitches.orgId),
+        asc(integrationStitches.createdAt),
+      ],
+    });
+  }
+
+  async bulkUpdateScheduleByOrg(
+    orgId: string,
+    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
+  ) {
+    const updated = await this.db
+      .update(integrationStitches)
+      .set(this.buildScheduleSet(body))
+      .where(
+        and(
+          eq(integrationStitches.orgId, orgId),
+          ne(integrationStitches.status, 'ARCHIVED'),
+        ),
+      )
+      .returning();
+
+    const count = updated.length;
+    if (count === 0) {
+      this.logger.warn(
+        `bulkUpdateScheduleByOrg: no non-archived stitches found for org ${orgId}`,
+      );
+    }
+    return { updated, count };
   }
 
   async remove(orgId: string, id: string) {

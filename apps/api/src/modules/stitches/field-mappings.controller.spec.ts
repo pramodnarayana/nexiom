@@ -5,10 +5,13 @@ import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { FieldMappingsController } from './field-mappings.controller.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
-import { UpsertFieldMappingSchema } from './field-mappings.validation.js';
+import {
+  UpsertFieldMappingSchema,
+  UpsertFieldMappingBody,
+} from './field-mappings.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
-const MAPPING_BODY = {
+const MAPPING_BODY: UpsertFieldMappingBody = {
   sourceCanonical: 'TMS_INVOICE',
   mappingRules: [{ src: '$.rtms__Total_Amount__c', dest: '$.TotalAmt' }],
 };
@@ -70,11 +73,7 @@ describe('FieldMappingsController', () => {
     mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
     mocks.returning.mockResolvedValue([MAPPING_ROW]);
 
-    const result = await controller.upsert(
-      makeAuth(),
-      STITCH_ID,
-      MAPPING_BODY as any,
-    );
+    const result = await controller.upsert(makeAuth(), STITCH_ID, MAPPING_BODY);
 
     expect(result).toBe(MAPPING_ROW);
 
@@ -118,7 +117,7 @@ describe('FieldMappingsController', () => {
     mocks.findFirstStitch.mockResolvedValue(null);
 
     await expect(
-      controller.upsert(makeAuth(), STITCH_ID, MAPPING_BODY as any),
+      controller.upsert(makeAuth(), STITCH_ID, MAPPING_BODY),
     ).rejects.toThrow(NotFoundException);
 
     expect(mocks.insert).not.toHaveBeenCalled();
@@ -130,11 +129,7 @@ describe('FieldMappingsController', () => {
     mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
     mocks.returning.mockResolvedValue([MAPPING_ROW]);
 
-    const result = await controller.update(
-      makeAuth(),
-      STITCH_ID,
-      MAPPING_BODY as any,
-    );
+    const result = await controller.update(makeAuth(), STITCH_ID, MAPPING_BODY);
     expect(result).toBe(MAPPING_ROW);
 
     expect(mocks.findFirstStitch).toHaveBeenCalled();

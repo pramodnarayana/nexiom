@@ -5,6 +5,7 @@ import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
+import { UpdateScheduleBody } from './update-schedule.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
 
@@ -40,7 +41,7 @@ describe('StitchesController — schedule endpoints', () => {
 
     const result = await controller.updateSchedule(makeAuth(), STITCH_ID, {
       syncIntervalMinutes: 60,
-    } as any);
+    } satisfies UpdateScheduleBody);
 
     expect(result).toBe(updated);
     expect(mockService.updateSchedule).toHaveBeenCalledWith(ORG_ID, STITCH_ID, {

@@ -34,13 +34,39 @@ describe('MetadataController', () => {
     const objects = [{ name: 'Contact', label: 'Contact', queryable: true }];
     mockService.describeObjects.mockResolvedValue(objects);
 
-    const result = await controller.describeObjects(makeAuth(), CONN_ID, 500);
+    const result = await controller.describeObjects(
+      makeAuth(),
+      CONN_ID,
+      500,
+      false,
+    );
 
     expect(result).toBe(objects);
     expect(mockService.describeObjects).toHaveBeenCalledWith(
       ORG_ID,
       CONN_ID,
       500,
+      false,
+    );
+  });
+
+  it('describeObjects — forwards refresh=true to service for cache-busting', async () => {
+    const objects = [{ name: 'Account', label: 'Account', queryable: true }];
+    mockService.describeObjects.mockResolvedValue(objects);
+
+    const result = await controller.describeObjects(
+      makeAuth(),
+      CONN_ID,
+      500,
+      true,
+    );
+
+    expect(result).toBe(objects);
+    expect(mockService.describeObjects).toHaveBeenCalledWith(
+      ORG_ID,
+      CONN_ID,
+      500,
+      true,
     );
   });
 

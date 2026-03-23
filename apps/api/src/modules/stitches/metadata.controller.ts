@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
   DefaultValuePipe,
+  ParseBoolPipe,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
@@ -30,11 +31,14 @@ export class MetadataController {
     @AuthContext() auth: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Query('limit', new DefaultValuePipe(500), ParseIntPipe) limit: number,
+    @Query('refresh', new DefaultValuePipe(false), ParseBoolPipe)
+    refresh: boolean,
   ) {
     return this.metadataDiscovery.describeObjects(
       requireOrgId(auth),
       connectionId,
       limit,
+      refresh,
     );
   }
 

@@ -3,9 +3,10 @@ import {
   Inject,
   InternalServerErrorException,
   NotFoundException,
-  GatewayTimeoutException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { eq, and, notInArray, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
@@ -15,124 +16,156 @@ import {
   appConnections,
 } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
-import { ConfigService } from '@nestjs/config';
-import { EncryptionService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/connectors';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
-import type { ObjectDescriptor, FieldDescriptor } from '@nexiom/connectors';
-import type { ConnectionValueBlob } from '../connections/connectors.service.js';
+import type {
+  ObjectDescriptor,
+  FieldDescriptor,
+  OAuthCredentialBlob,
+} from '@nexiom/connectors';
 
 // Single source of truth for metadata cache TTL.
 const TTL_SECONDS = 5 * 60; // 5 minutes
 const TTL_MS = TTL_SECONDS * 1_000;
 
-const MAX_OBJECTS = 500; // guard against excessively large payloads
+/** Default cap when METADATA_MAX_OBJECTS is not set. */
+const DEFAULT_MAX_OBJECTS = 2000;
 
 /**
- * Shape stored in connectorObjectProfiles.profile when the row was populated
- * by describeObjects (not by describeFields).  Field rows store FieldDescriptor[]
- * (an array), so Array.isArray() distinguishes the two at read time.
+ * Combined shape stored in connectorObjectProfiles.profile.
+ * Both describeObjects and describeFields write into this envelope using a
+ * jsonb-merge (COALESCE || EXCLUDED) so each writer preserves the keys it
+ * does not own:
+ *  - describeObjects writes descriptor + position; preserves fields.
+ *  - describeFields writes fields; preserves descriptor + position.
+ * Reading code should always branch on the presence of individual keys rather
+ * than assuming the whole shape was written by one caller.
  */
-interface StoredObjectDescriptor {
-  label: string;
-  queryable: boolean;
+interface CombinedProfile {
+  /** Object-level metadata written by describeObjects. */
+  descriptor?: { label: string; queryable: boolean };
+  /** Field list written by describeFields. undefined = not yet fetched; [] = fetched, no fields. */
+  fields?: FieldDescriptor[];
+  /** Stable sort position from the live describeObjects response; used to restore ordering after a Redis eviction. */
+  position?: number;
 }
 
 @Injectable()
-export class MetadataDiscoveryService {
+export class MetadataDiscoveryService implements OnModuleInit {
   private readonly logger = new Logger(MetadataDiscoveryService.name);
-  private readonly prismSalesforceUrl: string;
-  private readonly prismFetchTimeoutMs: number;
+  private readonly maxObjects: number;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
-    private readonly configService: ConfigService,
     private readonly pieceRegistry: PieceRegistryService,
-    private readonly encryption: EncryptionService,
+    private readonly tokenManager: TokenManagerService,
+    private readonly config: ConfigService,
   ) {
-    this.prismSalesforceUrl = this.configService.get(
-      'PRISM_SALESFORCE_URL',
-      'http://localhost:4010',
-    );
-    this.prismFetchTimeoutMs = this.configService.get<number>(
-      'PRISM_FETCH_TIMEOUT_MS',
-      10_000,
+    const raw = this.config.get<string>('METADATA_MAX_OBJECTS');
+    const parsed = raw !== undefined ? parseInt(raw, 10) : NaN;
+    this.maxObjects =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_OBJECTS;
+  }
+
+  onModuleInit() {
+    this.logger.log(
+      `MetadataDiscoveryService initialised — MAX_OBJECTS=${this.maxObjects}`,
     );
   }
 
   async describeObjects(
     orgId: string,
     connectionId: string,
-    limit = MAX_OBJECTS,
+    limit = this.maxObjects,
+    forceRefresh = false,
   ): Promise<ObjectDescriptor[]> {
-    const effectiveLimit = Math.max(1, Math.min(limit, MAX_OBJECTS));
+    const effectiveLimit = Math.max(1, Math.min(limit, this.maxObjects));
     const connection = await this.resolveConnection(orgId, connectionId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:objects:${connectionId}`;
-    const cached = await this.redis.get(redisKey);
-    if (cached) {
-      const all = JSON.parse(cached) as ObjectDescriptor[];
-      return all.slice(0, effectiveLimit);
+
+    if (forceRefresh) {
+      // Bust both caches so this request and all subsequent ones get fresh data.
+      await this.redis.del(redisKey);
+    } else {
+      const cached = await this.redis.get(redisKey);
+      if (cached) {
+        const all = JSON.parse(cached) as ObjectDescriptor[];
+        return all.slice(0, effectiveLimit);
+      }
     }
 
-    // ── 2. DB cache ──────────────────────────────────────────────────────────
-    const dbRows = await this.db
-      .select()
-      .from(connectorObjectProfiles)
-      .where(eq(connectorObjectProfiles.connectionId, connectionId));
+    // ── 2. DB cache (skipped on forceRefresh) ────────────────────────────────
+    if (!forceRefresh) {
+      const dbRows = await this.db
+        .select()
+        .from(connectorObjectProfiles)
+        .where(eq(connectorObjectProfiles.connectionId, connectionId));
 
-    if (dbRows.length > 0) {
-      const allFresh = dbRows.every(
-        (row) =>
-          row.updatedAt &&
-          Date.now() - new Date(row.updatedAt).getTime() < TTL_MS,
-      );
-      if (allFresh) {
-        // profile is StoredObjectDescriptor when set by describeObjects, or
-        // FieldDescriptor[] when set by describeFields.  We can always read
-        // label / queryable from the stored descriptor; fall back to objectName
-        // when the row was first populated by a field-only discovery.
-        const objects: ObjectDescriptor[] = dbRows.map((row) => {
-          const descriptor =
-            !Array.isArray(row.profile) &&
-            row.profile !== null &&
-            typeof row.profile === 'object'
-              ? (row.profile as StoredObjectDescriptor)
-              : null;
-          return {
-            name: row.objectName,
-            label: descriptor?.label ?? row.objectName,
-            queryable: descriptor?.queryable ?? true,
-          };
-        });
-        await this.redis.set(
-          redisKey,
-          JSON.stringify(objects),
-          'EX',
-          TTL_SECONDS,
+      if (dbRows.length > 0) {
+        const allFresh = dbRows.every(
+          (row) =>
+            row.updatedAt &&
+            Date.now() - new Date(row.updatedAt).getTime() < TTL_MS,
         );
-        return objects.slice(0, effectiveLimit);
+        if (allFresh) {
+          // Sort by stored position so ordering matches the original live-fetch
+          // response even after a Redis eviction.  Rows without a position (e.g.
+          // written by an older schema or solely by describeFields) sort last.
+          dbRows.sort((a, b) => {
+            const posA =
+              (a.profile as CombinedProfile | null)?.position ?? Infinity;
+            const posB =
+              (b.profile as CombinedProfile | null)?.position ?? Infinity;
+            return posA - posB;
+          });
+
+          const objects: ObjectDescriptor[] = dbRows.map((row) => {
+            const descriptor =
+              (row.profile as CombinedProfile | null)?.descriptor ?? null;
+            return {
+              name: row.objectName,
+              // Fall back to objectName only when no descriptor exists (row was
+              // written solely by describeFields before describeObjects ran).
+              label: descriptor?.label ?? row.objectName,
+              // Preserve queryable=false explicitly — nullish coalescing only
+              // defaults to true when descriptor is absent, not when it is false.
+              queryable: descriptor?.queryable ?? true,
+            };
+          });
+          await this.redis.set(
+            redisKey,
+            JSON.stringify(objects),
+            'EX',
+            TTL_SECONDS,
+          );
+          return objects.slice(0, effectiveLimit);
+        }
       }
     }
 
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
-    const credentials = await this.resolveCredentials(orgId, connectionId);
-    const objects = await this.fetchObjects(
-      connection.appName,
-      connectionId,
-      credentials,
-    );
+    const credentials = await this.resolveCredentials(connectionId);
+    const objects = await this.fetchObjects(connection.appName, credentials);
+
+    // Emit a warning when the discovered count approaches the configured cap
+    // (> 75%) so operators can raise METADATA_MAX_OBJECTS before objects are silently truncated.
+    if (objects.length > this.maxObjects * 0.75) {
+      this.logger.warn(
+        `describeObjects: connector "${connection.appName}" returned ${objects.length} objects — ` +
+          `exceeds 75% of MAX_OBJECTS limit (${this.maxObjects}). ` +
+          `Raise METADATA_MAX_OBJECTS env var if truncation is undesirable.`,
+      );
+    }
 
     await this.redis.set(redisKey, JSON.stringify(objects), 'EX', TTL_SECONDS);
 
-    // Batch upsert: store full ObjectDescriptor in profile so label/queryable
-    // survive a Redis eviction and are readable from the DB cache.
-    // On conflict, overwrite profile with the fresh StoredObjectDescriptor so
-    // the DB-cache read path always has accurate label/queryable values, even
-    // when a prior describeFields call wrote a FieldDescriptor[] into the row.
-    // describeFields upsert will overwrite profile back to FieldDescriptor[]
-    // when it next runs, so there is no loss of field data.
+    // Batch upsert: write descriptor + position into the combined profile envelope.
+    // Uses a jsonb merge (COALESCE || EXCLUDED) so any fields written by a prior
+    // describeFields call are preserved — descriptor and fields never overwrite
+    // each other, they coexist under the same row.
     // Always run a transaction: upsert + targeted stale-delete when objects is
     // non-empty; full delete for the connectionId when upstream returns nothing.
     // This prevents orphaned rows from lingering when a connector reports zero objects.
@@ -143,12 +176,12 @@ export class MetadataDiscoveryService {
         await tx
           .insert(connectorObjectProfiles)
           .values(
-            objects.map((obj) => ({
+            objects.map((obj, idx) => ({
               connectionId,
               objectName: obj.name,
               profile: {
-                label: obj.label,
-                queryable: obj.queryable,
+                descriptor: { label: obj.label, queryable: obj.queryable },
+                position: idx,
               } as unknown as Record<string, unknown>,
             })),
           )
@@ -157,10 +190,12 @@ export class MetadataDiscoveryService {
               connectorObjectProfiles.connectionId,
               connectorObjectProfiles.objectName,
             ],
-            // Reference the incoming row via the EXCLUDED pseudo-table so each
-            // conflicting row gets its own fresh profile, not a shared literal.
+            // Merge existing profile (may contain fields from describeFields) with
+            // the incoming descriptor+position via jsonb concatenation.  Right-side
+            // keys (EXCLUDED) take precedence, so descriptor and position are always
+            // refreshed while an existing fields key is preserved.
             set: {
-              profile: sql`"excluded"."profile"`,
+              profile: sql`COALESCE(${connectorObjectProfiles.profile}, '{}'::jsonb) || "excluded"."profile"`,
               updatedAt: new Date(),
             },
           });
@@ -215,37 +250,39 @@ export class MetadataDiscoveryService {
       dbRow?.updatedAt &&
       Date.now() - new Date(dbRow.updatedAt).getTime() < TTL_MS
     ) {
-      const profile = dbRow.profile;
-      // An empty array [] is a valid cache hit (connector returned no fields).
-      // Only skip if profile is not an array (it's a StoredObjectDescriptor).
-      if (Array.isArray(profile)) {
+      const profile = dbRow.profile as CombinedProfile | null;
+      // fields === undefined means describeFields has never run for this object;
+      // fields === [] is a valid cache hit (connector returned no fields).
+      if (profile?.fields !== undefined) {
         await this.redis.set(
           redisKey,
-          JSON.stringify(profile),
+          JSON.stringify(profile.fields),
           'EX',
           TTL_SECONDS,
         );
-        return profile as FieldDescriptor[];
+        return profile.fields;
       }
     }
 
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
-    const credentials = await this.resolveCredentials(orgId, connectionId);
+    const credentials = await this.resolveCredentials(connectionId);
     const fields = await this.fetchFields(
       connection.appName,
-      connectionId,
       objectName,
       credentials,
     );
 
     await this.redis.set(redisKey, JSON.stringify(fields), 'EX', TTL_SECONDS);
 
+    // Write fields into the combined profile envelope, merging with any existing
+    // descriptor + position written by describeObjects.  Right-side keys (EXCLUDED)
+    // take precedence so fields is always refreshed; descriptor and position survive.
     await this.db
       .insert(connectorObjectProfiles)
       .values({
         connectionId,
         objectName,
-        profile: fields as unknown as Record<string, unknown>,
+        profile: { fields } as unknown as Record<string, unknown>,
       })
       .onConflictDoUpdate({
         target: [
@@ -253,7 +290,7 @@ export class MetadataDiscoveryService {
           connectorObjectProfiles.objectName,
         ],
         set: {
-          profile: fields as unknown as Record<string, unknown>,
+          profile: sql`COALESCE(${connectorObjectProfiles.profile}, '{}'::jsonb) || "excluded"."profile"`,
           updatedAt: new Date(),
         },
       });
@@ -285,135 +322,62 @@ export class MetadataDiscoveryService {
   }
 
   /**
-   * Fetches the encrypted `value` column, decrypts it, and returns the parsed
-   * credential blob.  The `value` column is intentionally excluded from
-   * `safeAppConnectionColumns`; this is one of the two permitted call sites
-   * (the other is ConnectorsController for credential display).
+   * Returns a flat credentials map for the given connection, with a valid
+   * (non-expired) access token.  Token refresh, distributed locking, and
+   * REVOKED-status marking are all handled by TokenManagerService so this
+   * service does not duplicate that logic.
    */
   private async resolveCredentials(
-    orgId: string,
     connectionId: string,
   ): Promise<Record<string, unknown>> {
-    const [row] = await this.db
-      .select({ value: appConnections.value })
-      .from(appConnections)
-      .where(
-        and(
-          eq(appConnections.id, connectionId),
-          eq(appConnections.tenantId, orgId),
-        ),
-      )
-      .limit(1);
-
-    if (!row?.value) return {};
-
     try {
-      const decrypted = await this.encryption.decrypt(row.value);
-      const blob = JSON.parse(decrypted) as ConnectionValueBlob;
-      // Expose the fields pieces typically need for API calls.
+      // TokenManagerService.getValidCredentials checks expiresAt with a 5-minute
+      // buffer, acquires a Redis lock, calls the vendor token endpoint if needed,
+      // and persists the refreshed token — all in one call.
+      const blob: OAuthCredentialBlob =
+        await this.tokenManager.getValidCredentials(connectionId);
+
+      // Layer order (last write wins):
+      //   1. All top-level blob scalars (clientId, clientSecret, environment, …)
+      //   2. Vendor extras in blob.data (instance_url, realmId, …)
+      //   3. vendorParams template values (environment override, subdomain, …)
+      //   4. Canonical token fields — always authoritative, never overridable.
       return {
+        ...blob,
+        ...blob.data,
+        ...blob.vendorParams,
         accessToken: blob.accessToken,
         refreshToken: blob.refreshToken,
         clientId: blob.clientId,
-        ...blob.data,
-        ...blob.vendorParams,
+        clientSecret: blob.clientSecret,
       };
     } catch (e) {
+      if (e instanceof InternalServerErrorException) throw e;
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.error(
-        `Failed to decrypt credentials for connection ${connectionId}: ${msg}`,
+        `Failed to resolve credentials for connection ${connectionId}: ${msg}`,
       );
       throw new InternalServerErrorException(
-        'Failed to decrypt connection credentials.',
+        'Failed to retrieve connection credentials.',
       );
-    }
-  }
-
-  /**
-   * Wraps a fetch call with an AbortController timeout.
-   * Throws GatewayTimeoutException (504) on abort; re-throws other errors.
-   */
-  private async fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      this.prismFetchTimeoutMs,
-    );
-    try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
-      return res;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new GatewayTimeoutException(
-          `Metadata request to ${url} timed out after ${this.prismFetchTimeoutMs}ms.`,
-        );
-      }
-      throw err;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
   private async fetchObjects(
     appName: string,
-    _connectionId: string,
     credentials: Record<string, unknown>,
   ): Promise<ObjectDescriptor[]> {
     const piece = this.pieceRegistry.getPiece(appName);
     if (piece?.describeObjects) {
       return piece.describeObjects(credentials);
     }
-
-    if (appName === 'salesforce') {
-      const res = await this.fetchWithTimeout(
-        `${this.prismSalesforceUrl}/services/data/v59.0/sobjects`,
-        {
-          headers:
-            typeof credentials.accessToken === 'string' &&
-            credentials.accessToken
-              ? { Authorization: `Bearer ${credentials.accessToken}` }
-              : undefined,
-        },
-      );
-      if (!res.ok) {
-        throw new InternalServerErrorException(
-          `Salesforce sobjects request failed with status ${res.status}.`,
-        );
-      }
-      const data = (await res.json()) as { sobjects?: ObjectDescriptor[] };
-      if (!Array.isArray(data.sobjects)) {
-        throw new InternalServerErrorException(
-          'Unexpected response from Salesforce sobjects endpoint.',
-        );
-      }
-      return data.sobjects.map((s) => ({
-        name: s.name,
-        label: s.label,
-        queryable: s.queryable,
-      }));
-    }
-
-    if (appName === 'quickbooks') {
-      return [
-        { name: 'Customer', label: 'Customer', queryable: true },
-        { name: 'Invoice', label: 'Invoice', queryable: true },
-        { name: 'Item', label: 'Item', queryable: true },
-        { name: 'Payment', label: 'Payment', queryable: true },
-        { name: 'Vendor', label: 'Vendor', queryable: true },
-      ];
-    }
-
     throw new NotFoundException(
-      'Metadata discovery not supported for this connector.',
+      `Connector "${appName}" does not support metadata discovery. Register a Piece with describeObjects.`,
     );
   }
 
   private async fetchFields(
     appName: string,
-    _connectionId: string,
     objectName: string,
     credentials: Record<string, unknown>,
   ): Promise<FieldDescriptor[]> {
@@ -421,223 +385,8 @@ export class MetadataDiscoveryService {
     if (piece?.describeFields) {
       return piece.describeFields(credentials, objectName);
     }
-
-    if (appName === 'salesforce') {
-      const res = await this.fetchWithTimeout(
-        `${this.prismSalesforceUrl}/services/data/v59.0/sobjects/${encodeURIComponent(objectName)}/describe`,
-        {
-          headers:
-            typeof credentials.accessToken === 'string' &&
-            credentials.accessToken
-              ? { Authorization: `Bearer ${credentials.accessToken}` }
-              : undefined,
-        },
-      );
-      if (!res.ok) {
-        throw new InternalServerErrorException(
-          `Salesforce describe request failed with status ${res.status}.`,
-        );
-      }
-      const data = (await res.json()) as { fields?: FieldDescriptor[] };
-      if (!Array.isArray(data.fields)) {
-        throw new InternalServerErrorException(
-          'Unexpected response from Salesforce describe endpoint.',
-        );
-      }
-      return data.fields.map((f) => ({
-        name: f.name,
-        label: f.label,
-        type: f.type,
-        filterable: f.filterable,
-        sortable: f.sortable,
-        nillable: f.nillable,
-        ...(Array.isArray(f.referenceTo) && f.referenceTo.length > 0
-          ? { referenceTo: f.referenceTo }
-          : {}),
-      }));
-    }
-
-    if (appName === 'quickbooks') {
-      return this.getQuickBooksStubFields(objectName);
-    }
-
     throw new NotFoundException(
-      'Metadata discovery not supported for this connector.',
+      `Connector "${appName}" does not support metadata discovery. Register a Piece with describeFields.`,
     );
-  }
-
-  private getQuickBooksStubFields(objectName: string): FieldDescriptor[] {
-    const common: FieldDescriptor[] = [
-      {
-        name: 'Id',
-        label: 'ID',
-        type: 'string',
-        filterable: true,
-        sortable: true,
-        nillable: false,
-      },
-    ];
-
-    const fieldsByObject: Record<string, FieldDescriptor[]> = {
-      Customer: [
-        ...common,
-        {
-          name: 'DisplayName',
-          label: 'Display Name',
-          type: 'string',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-        {
-          name: 'PrimaryEmailAddr',
-          label: 'Email',
-          type: 'string',
-          filterable: true,
-          sortable: false,
-          nillable: true,
-        },
-        {
-          name: 'PrimaryPhone',
-          label: 'Phone',
-          type: 'string',
-          filterable: false,
-          sortable: false,
-          nillable: true,
-        },
-        {
-          name: 'Balance',
-          label: 'Balance',
-          type: 'decimal',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-      ],
-      Invoice: [
-        ...common,
-        {
-          name: 'DocNumber',
-          label: 'Document Number',
-          type: 'string',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-        {
-          name: 'TxnDate',
-          label: 'Transaction Date',
-          type: 'date',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-        {
-          name: 'TotalAmt',
-          label: 'Total Amount',
-          type: 'decimal',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-        {
-          name: 'CustomerRef',
-          label: 'Customer Reference',
-          type: 'reference',
-          filterable: true,
-          sortable: false,
-          nillable: false,
-        },
-      ],
-      Item: [
-        ...common,
-        {
-          name: 'Name',
-          label: 'Name',
-          type: 'string',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-        {
-          name: 'Type',
-          label: 'Type',
-          type: 'string',
-          filterable: true,
-          sortable: false,
-          nillable: false,
-        },
-        {
-          name: 'UnitPrice',
-          label: 'Unit Price',
-          type: 'decimal',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-      ],
-      Payment: [
-        ...common,
-        {
-          name: 'TotalAmt',
-          label: 'Total Amount',
-          type: 'decimal',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-        {
-          name: 'TxnDate',
-          label: 'Transaction Date',
-          type: 'date',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-        {
-          name: 'CustomerRef',
-          label: 'Customer Reference',
-          type: 'reference',
-          filterable: true,
-          sortable: false,
-          nillable: false,
-        },
-      ],
-      Vendor: [
-        ...common,
-        {
-          name: 'DisplayName',
-          label: 'Display Name',
-          type: 'string',
-          filterable: true,
-          sortable: true,
-          nillable: false,
-        },
-        {
-          name: 'PrimaryEmailAddr',
-          label: 'Email',
-          type: 'string',
-          filterable: true,
-          sortable: false,
-          nillable: true,
-        },
-        {
-          name: 'Balance',
-          label: 'Balance',
-          type: 'decimal',
-          filterable: true,
-          sortable: true,
-          nillable: true,
-        },
-      ],
-    };
-
-    const fields = fieldsByObject[objectName];
-    if (!fields) {
-      throw new NotFoundException(
-        `QuickBooks object "${objectName}" is not supported for field discovery.`,
-      );
-    }
-    return fields;
   }
 }

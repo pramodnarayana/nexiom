@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Patch,
   Param,
   Body,
@@ -17,6 +18,22 @@ import { AdminUpdateScheduleBody } from './update-schedule.validation.js';
 @Controller('admin/stitches')
 export class StitchesAdminController {
   constructor(private readonly stitchesService: StitchesService) {}
+
+  @Get()
+  listAll() {
+    return this.stitchesService.listAdmin();
+  }
+
+  // NOTE: this route must be declared before :id/schedule so NestJS does not
+  // treat the literal "org" segment as a UUID param.
+  @Patch('org/:orgId/schedule')
+  @HttpCode(HttpStatus.OK)
+  bulkUpdateOrgSchedule(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Body() body: AdminUpdateScheduleBody,
+  ) {
+    return this.stitchesService.bulkUpdateScheduleByOrg(orgId, body);
+  }
 
   @Patch(':id/schedule')
   @HttpCode(HttpStatus.OK)

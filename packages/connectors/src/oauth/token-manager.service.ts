@@ -1,10 +1,32 @@
-import { Injectable, Logger, Inject, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { appConnections, DATABASE_CONNECTION } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
 
 import { EncryptionService } from '../crypto/encryption.interface.js';
+
+/**
+ * Shape of the decrypted credential blob stored in app_connection.value.
+ * Returned by getValidCredentials() so callers have a typed, narrow interface
+ * without resorting to double casts or knowledge of the encryption layer.
+ */
+export interface OAuthCredentialBlob {
+    clientId: string;
+    clientSecret: string;
+    accessToken: string;
+    refreshToken?: string;
+    /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
+    data: Record<string, unknown>;
+    vendorParams?: Record<string, string>;
+    environment?: string | number | boolean;
+    /** Standard OAuth2 token lifetime in seconds, carried forward on refresh. */
+    expiresIn?: number;
+    /** OpenID Connect id_token, present when the vendor returns one. */
+    idToken?: string;
+    /** OAuth2 token_type (e.g. "Bearer"), carried forward on refresh. */
+    tokenType?: string;
+}
 
 export class OAuthRefreshError extends Error {
     constructor(message: string, public status?: number) {
@@ -20,6 +42,24 @@ export class AppCredentialError extends Error {
     }
 }
 
+/**
+ * Runtime type guard for OAuthCredentialBlob.
+ * Validates the minimum required fields so callers can detect malformed
+ * encrypted payloads before attempting a token refresh merge, rather than
+ * silently carrying forward stale or undefined credential fields via an
+ * unsafe double-cast.
+ */
+export function isOAuthCredentialBlob(value: unknown): value is OAuthCredentialBlob {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    return (
+        typeof v['clientId'] === 'string' &&
+        typeof v['clientSecret'] === 'string' &&
+        typeof v['accessToken'] === 'string' &&
+        typeof v['data'] === 'object' && v['data'] !== null
+    );
+}
+
 export abstract class OAuthRefreshClient {
     abstract refresh(tenantId: string, appName: string, externalId: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
@@ -31,7 +71,7 @@ function parseExpiresAt(value: unknown): Date | null {
 }
 
 @Injectable()
-export class TokenManagerService implements OnModuleDestroy {
+export class TokenManagerService {
     private readonly logger = new Logger(TokenManagerService.name);
 
     constructor(
@@ -41,15 +81,11 @@ export class TokenManagerService implements OnModuleDestroy {
         private readonly oauthClient: OAuthRefreshClient,
     ) { }
 
-    async onModuleDestroy() {
-        await this.redis.quit();
-    }
-
     /**
      * Primary Entrypoint for fetching tokens.
      * Guarantees returning a VALID, unexpired token payload.
      */
-    async getValidCredentials(connectionId: string): Promise<Record<string, unknown>> {
+    async getValidCredentials(connectionId: string): Promise<OAuthCredentialBlob> {
         const connection = await this.db.query.appConnections.findFirst({
             where: eq(appConnections.id, connectionId)
         });
@@ -69,11 +105,11 @@ export class TokenManagerService implements OnModuleDestroy {
             return await this.refreshWithLock(connection);
         }
 
-        // 2. Return decrypted credentials
-        return JSON.parse(await this.crypto.decrypt(connection.value)) as Record<string, unknown>;
+        // 2. Return decrypted credentials (validates shape before returning).
+        return await this.decryptAndValidate(connection);
     }
 
-    private async refreshWithLock(connection: Record<string, any>): Promise<Record<string, unknown>> {
+    private async refreshWithLock(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
         const lockKey = `lock:refresh:${connection.id as string}`;
         const lockValue = Math.random().toString(36).substring(2);
 
@@ -83,8 +119,12 @@ export class TokenManagerService implements OnModuleDestroy {
         if (!lockAcquired) {
             this.logger.debug(`Connection ${connection.id as string} is currently refreshing. Waiting...`);
             const result = await this.waitForRefreshOrAcquireLock(connection, lockKey, lockValue);
+            // IMPORTANT: this early return must stay outside the try/finally below.
+            // When credentials are resolved by another worker we hold no lock,
+            // so releaseLock must NOT be called.
             if (result.credentials) return result.credentials;
             connection = result.connection;
+            // Lock was acquired inside waitForRefreshOrAcquireLock — fall through to try/finally.
         }
 
         try {
@@ -105,7 +145,7 @@ export class TokenManagerService implements OnModuleDestroy {
         connection: Record<string, any>,
         lockKey: string,
         lockValue: string,
-    ): Promise<{ credentials?: Record<string, unknown>; connection: Record<string, any> }> {
+    ): Promise<{ credentials?: OAuthCredentialBlob; connection: Record<string, any> }> {
         const MAX_RETRIES = 3;
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -119,10 +159,9 @@ export class TokenManagerService implements OnModuleDestroy {
 
             if (parsedExpiry &&
                 new Date(parsedExpiry.getTime() - 5 * 60000) > new Date()) {
-                // Token was refreshed by another worker
-                const credentials = JSON.parse(
-                    await this.crypto.decrypt(freshConnection!.value)
-                ) as Record<string, unknown>;
+                // Token was refreshed by another worker — decrypt and validate
+                // shape via the shared helper so malformed stored data fails fast.
+                const credentials = await this.decryptAndValidate(freshConnection!);
                 return { credentials, connection };
             }
 
@@ -145,15 +184,19 @@ export class TokenManagerService implements OnModuleDestroy {
     }
 
     /** Decrypts, refreshes via the vendor API, encrypts, and persists the new token. */
-    private async performTokenRefresh(connection: Record<string, any>): Promise<Record<string, unknown>> {
+    private async performTokenRefresh(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
         this.logger.log(`Acquired lock. Refreshing OAuth token for ${connection.appName as string}`);
 
-        // 1. Decrypt old payload to get refresh_token
-        const oldPayload = JSON.parse(
-            await this.crypto.decrypt(connection.value)
-        ) as Record<string, unknown>;
+        // 1. Decrypt and validate the stored credential shape.
+        //    decryptAndValidate throws AppCredentialError when the payload is
+        //    malformed (e.g., key rotation, older schema) so we never spread
+        //    undefined fields into the refreshed blob.
+        const oldPayload = await this.decryptAndValidate(connection);
 
-        if (!oldPayload.refreshToken) {
+        // 2. refreshToken must be a non-empty, non-whitespace string.
+        //    An absent or blank value means the connection was never issued a
+        //    refresh token (e.g., client-credentials grant) or has been revoked.
+        if (typeof oldPayload.refreshToken !== 'string' || !oldPayload.refreshToken.trim()) {
             throw new Error('No refresh token available');
         }
 
@@ -165,38 +208,63 @@ export class TokenManagerService implements OnModuleDestroy {
             throw new TypeError('Invalid connection: externalId is missing, empty or not a string');
         }
 
-        // 2. Perform HTTP call to Vendor API
+        // 3. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
             connection.tenantId,
             connection.appName as string,
-            connection.externalId as string,
-            oldPayload.refreshToken as string,
+            connection.externalId,
+            oldPayload.refreshToken,
         );
 
-        // 3. Explicitly map known snake_case fields to camelCase and merge unknowns.
-        //    This keeps the persisted payload normalized while preserving custom vendor fields.
-        const updatedPayload: Record<string, unknown> = {
+        // 4. Require a fresh access token — never persist a stale one.
+        //    A missing access_token means the vendor refresh response was malformed
+        //    or the grant was revoked; writing oldPayload.accessToken back would
+        //    produce a DB row with a refreshed expiresAt but a stale token, causing
+        //    silent auth failures until the connection is fully re-authorized.
+        if (typeof newTokens.access_token !== 'string' || !newTokens.access_token) {
+            throw new OAuthRefreshError(
+                'Token refresh response did not include an access_token. Re-authorization required.',
+            );
+        }
+
+        // oldPayload is already narrowed to OAuthCredentialBlob by decryptAndValidate.
+        const updatedPayload: OAuthCredentialBlob = {
             ...oldPayload,
-            accessToken: newTokens.access_token ?? oldPayload.accessToken,
-            refreshToken: newTokens.refresh_token || oldPayload.refreshToken,
+            accessToken: newTokens.access_token,
+            refreshToken: typeof newTokens.refresh_token === 'string' ? newTokens.refresh_token : oldPayload.refreshToken,
             ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
-            ...('id_token' in newTokens && { idToken: newTokens.id_token }),
-            ...('token_type' in newTokens && { tokenType: newTokens.token_type }),
+            ...(typeof newTokens.id_token === 'string' && { idToken: newTokens.id_token }),
+            ...(typeof newTokens.token_type === 'string' && { tokenType: newTokens.token_type }),
         };
 
-        // 4. Encrypt & Calculate Expiry
+        // 6. Encrypt & Calculate Expiry
         const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));
         const expiresInMs = typeof newTokens.expires_in === 'number'
             ? newTokens.expires_in * 1000
             : 3600 * 1000; // default 1-hour fallback
         const expiresAt = new Date(Date.now() + expiresInMs);
 
-        // 5. Save to DB
+        // 7. Save to DB
         await this.db.update(appConnections)
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(appConnections.id, connection.id));
 
         return updatedPayload;
+    }
+
+    /**
+     * Decrypts the stored credential value and validates it matches OAuthCredentialBlob.
+     * Throws AppCredentialError when the shape is wrong (e.g. key rotation, old schema)
+     * so callers never have to repeat the decrypt + cast + validate triple inline.
+     */
+    private async decryptAndValidate(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
+        const parsed: unknown = JSON.parse(await this.crypto.decrypt(connection.value));
+        if (!isOAuthCredentialBlob(parsed)) {
+            throw new AppCredentialError(
+                'Stored credentials are malformed and do not match OAuthCredentialBlob. Re-authorization required.',
+            );
+        }
+        return parsed;
     }
 
     /** Marks the connection as REVOKED if the vendor rejected the refresh (400/401). */

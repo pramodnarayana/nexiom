@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  GatewayTimeoutException,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { EncryptionService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/connectors';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
@@ -42,11 +41,16 @@ function buildMockDb() {
   const deleteWhere = vi.fn().mockResolvedValue(undefined);
   const deleteFn = vi.fn().mockReturnValue({ where: deleteWhere });
 
+  // update mock: db.update(table).set(...).where(...)
+  const updateWhere = vi.fn().mockResolvedValue(undefined);
+  const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+  const updateFn = vi.fn().mockReturnValue({ set: updateSet });
+
   // transaction mock: executes the callback immediately with the same db surface.
   const transaction = vi
     .fn()
     .mockImplementation((cb: (tx: unknown) => Promise<unknown>) =>
-      cb({ select, insert, delete: deleteFn }),
+      cb({ select, insert, delete: deleteFn, update: updateFn }),
     );
 
   return {
@@ -55,6 +59,7 @@ function buildMockDb() {
       select,
       insert,
       delete: deleteFn,
+      update: updateFn,
       transaction,
     },
   };
@@ -66,6 +71,7 @@ function buildMockRedis() {
   return {
     get: vi.fn<() => Promise<string | null>>().mockResolvedValue(null),
     set: vi.fn<() => Promise<string>>().mockResolvedValue('OK'),
+    del: vi.fn<() => Promise<number>>().mockResolvedValue(1),
   };
 }
 
@@ -86,8 +92,15 @@ const MOCK_CONNECTION = {
   updatedAt: new Date(),
 };
 
-// Row returned by resolveCredentials (value column present but null → returns {})
-const NULL_CREDS_ROW = { value: null };
+/** Default credential blob returned by the TokenManagerService mock. */
+const DEFAULT_CREDS_BLOB = {
+  accessToken: 'sf-access-token',
+  refreshToken: undefined,
+  clientId: 'client-id',
+  clientSecret: 'client-secret',
+  data: {} as Record<string, unknown>,
+  vendorParams: {} as Record<string, string>,
+};
 
 const MOCK_OBJECTS = [
   { name: 'Contact', label: 'Contact', queryable: true },
@@ -118,7 +131,7 @@ describe('MetadataDiscoveryService', () => {
   let mocks: ReturnType<typeof buildMockDb>;
   let redis: ReturnType<typeof buildMockRedis>;
   let mockPieceRegistry: { getPiece: ReturnType<typeof vi.fn> };
-  let mockEncryption: { decrypt: ReturnType<typeof vi.fn> };
+  let mockTokenManager: { getValidCredentials: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -126,7 +139,9 @@ describe('MetadataDiscoveryService', () => {
     mocks = buildMockDb();
     redis = buildMockRedis();
     mockPieceRegistry = { getPiece: vi.fn() };
-    mockEncryption = { decrypt: vi.fn() };
+    mockTokenManager = {
+      getValidCredentials: vi.fn().mockResolvedValue(DEFAULT_CREDS_BLOB),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -134,12 +149,10 @@ describe('MetadataDiscoveryService', () => {
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
         { provide: REDIS_CLIENT, useValue: redis },
         { provide: PieceRegistryService, useValue: mockPieceRegistry },
-        { provide: EncryptionService, useValue: mockEncryption },
+        { provide: TokenManagerService, useValue: mockTokenManager },
         {
           provide: ConfigService,
-          useValue: {
-            get: vi.fn((_key: string, defaultVal: string) => defaultVal),
-          },
+          useValue: { get: vi.fn().mockReturnValue(undefined) },
         },
       ],
     }).compile();
@@ -177,15 +190,21 @@ describe('MetadataDiscoveryService', () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
         .mockResolvedValueOnce([
-          // DB cache check — profile stores the StoredObjectDescriptor
+          // DB cache — profile uses the combined CombinedProfile envelope
           {
             objectName: 'Contact',
-            profile: { label: 'Contact', queryable: true },
+            profile: {
+              descriptor: { label: 'Contact', queryable: true },
+              position: 0,
+            },
             updatedAt: freshUpdatedAt,
           },
           {
             objectName: 'Account',
-            profile: { label: 'Account', queryable: true },
+            profile: {
+              descriptor: { label: 'Account', queryable: true },
+              position: 1,
+            },
             updatedAt: freshUpdatedAt,
           },
         ]);
@@ -199,11 +218,10 @@ describe('MetadataDiscoveryService', () => {
       expect(redis.set).toHaveBeenCalledOnce();
     });
 
-    it('calls piece.describeObjects with decrypted credentials when piece implements it', async () => {
+    it('calls piece.describeObjects with credentials from TokenManagerService', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
-        .mockResolvedValueOnce([]) // empty DB cache
-        .mockResolvedValueOnce([NULL_CREDS_ROW]); // resolveCredentials
+        .mockResolvedValueOnce([]); // empty DB cache
       redis.get.mockResolvedValueOnce(null);
       const describeObjectsMock = vi.fn().mockResolvedValue(MOCK_OBJECTS);
       mockPieceRegistry.getPiece.mockReturnValue({
@@ -212,28 +230,31 @@ describe('MetadataDiscoveryService', () => {
 
       const result = await service.describeObjects(ORG_ID, CONN_ID);
       expect(result).toEqual(MOCK_OBJECTS);
-      expect(describeObjectsMock).toHaveBeenCalledWith({});
+      expect(mockTokenManager.getValidCredentials).toHaveBeenCalledWith(
+        CONN_ID,
+      );
       expect(redis.set).toHaveBeenCalledOnce();
       // Upsert + stale-delete must run atomically inside a transaction.
       expect(mocks.db.transaction).toHaveBeenCalledOnce();
     });
 
-    it('decrypts credentials and passes them to piece.describeObjects', async () => {
-      const encryptedValue = 'encrypted-blob-xyz';
-      const decryptedCredentials = {
+    it('spreads vendor data fields into credentials passed to piece.describeObjects', async () => {
+      const credsBlob = {
         accessToken: 'sf-access-token',
-        refreshToken: null,
-        clientId: null,
-        data: { instanceUrl: 'https://sf.example.com' },
+        refreshToken: undefined,
+        clientId: 'cid',
+        clientSecret: 'cs',
+        data: { instance_url: 'https://sf.example.com' } as Record<
+          string,
+          unknown
+        >,
+        vendorParams: {} as Record<string, string>,
       };
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
-        .mockResolvedValueOnce([]) // empty DB cache
-        .mockResolvedValueOnce([{ value: encryptedValue }]); // resolveCredentials
+        .mockResolvedValueOnce([]); // empty DB cache
       redis.get.mockResolvedValueOnce(null);
-      mockEncryption.decrypt.mockResolvedValue(
-        JSON.stringify(decryptedCredentials),
-      );
+      mockTokenManager.getValidCredentials.mockResolvedValueOnce(credsBlob);
       const describeObjectsMock = vi.fn().mockResolvedValue(MOCK_OBJECTS);
       mockPieceRegistry.getPiece.mockReturnValue({
         describeObjects: describeObjectsMock,
@@ -241,25 +262,29 @@ describe('MetadataDiscoveryService', () => {
 
       await service.describeObjects(ORG_ID, CONN_ID);
 
-      // Decryption must be called with the raw encrypted string from the DB.
-      expect(mockEncryption.decrypt).toHaveBeenCalledWith(encryptedValue);
-
-      // piece.describeObjects must receive the flattened credential map —
-      // nested data fields (e.g. instanceUrl) are spread to the top level,
-      // and all top-level credential fields (including null ones) are present.
+      // piece.describeObjects must receive the flattened credential map.
+      // Layer order: blob top-level scalars → blob.data → blob.vendorParams →
+      // canonical token fields (always win). All top-level blob properties
+      // (including clientSecret, environment, data, vendorParams objects) are
+      // included so pieces can access any field they need.
       expect(describeObjectsMock).toHaveBeenCalledWith({
+        // from blob top-level
+        clientId: 'cid',
+        clientSecret: 'cs',
+        refreshToken: undefined,
+        data: { instance_url: 'https://sf.example.com' },
+        vendorParams: {},
+        // from blob.data (flattened)
+        instance_url: 'https://sf.example.com',
+        // canonical token fields — always authoritative
         accessToken: 'sf-access-token',
-        refreshToken: null,
-        clientId: null,
-        instanceUrl: 'https://sf.example.com',
       });
     });
 
     it('purges all cached rows (not notInArray) when piece returns empty object list', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
-        .mockResolvedValueOnce([]) // empty DB cache
-        .mockResolvedValueOnce([NULL_CREDS_ROW]); // resolveCredentials
+        .mockResolvedValueOnce([]); // empty DB cache
       redis.get.mockResolvedValueOnce(null);
       // Piece returns an empty array — upstream has no objects.
       mockPieceRegistry.getPiece.mockReturnValue({
@@ -278,54 +303,41 @@ describe('MetadataDiscoveryService', () => {
       expect(deleteFn).toHaveBeenCalledOnce();
     });
 
-    it('calls Prism for salesforce when piece has no describeObjects', async () => {
+    it('busts Redis cache and skips DB cache when forceRefresh=true', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]); // resolveConnection
+      redis.get.mockResolvedValueOnce(JSON.stringify(MOCK_OBJECTS)); // would be a cache hit
+      const describeObjectsMock = vi.fn().mockResolvedValue(MOCK_OBJECTS);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeObjects: describeObjectsMock,
+      });
+
+      await service.describeObjects(ORG_ID, CONN_ID, 500, true);
+
+      // Must delete the Redis key, not read from it.
+      expect(redis.del).toHaveBeenCalledWith(`meta:objects:${CONN_ID}`);
+      expect(redis.get).not.toHaveBeenCalled();
+      // Must hit the live piece, not return the cached value.
+      expect(describeObjectsMock).toHaveBeenCalledOnce();
+    });
+
+    it('throws NotFoundException when piece has no describeObjects', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+        .mockResolvedValueOnce([]);
       redis.get.mockResolvedValueOnce(null);
+      // Piece registered but does not implement describeObjects
       mockPieceRegistry.getPiece.mockReturnValue({});
 
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sobjects: MOCK_OBJECTS }),
-      } as Response);
-
-      const result = await service.describeObjects(ORG_ID, CONN_ID);
-      expect(result).toEqual(MOCK_OBJECTS);
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/services/data/v59.0/sobjects'),
-        expect.any(Object),
+      await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
+        NotFoundException,
       );
-
-      fetchMock.mockRestore();
     });
 
-    it('returns hardcoded stub for quickbooks', async () => {
-      const qbConn = { ...MOCK_CONNECTION, appName: 'quickbooks' };
-      mocks.selectRows
-        .mockResolvedValueOnce([qbConn])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
-
-      const result = await service.describeObjects(ORG_ID, CONN_ID);
-      expect(result.map((o) => o.name)).toEqual([
-        'Customer',
-        'Invoice',
-        'Item',
-        'Payment',
-        'Vendor',
-      ]);
-    });
-
-    it('throws NotFoundException for unsupported connector', async () => {
+    it('throws NotFoundException when no piece is registered for the connector', async () => {
       const unknownConn = { ...MOCK_CONNECTION, appName: 'unknown-app' };
       mocks.selectRows
         .mockResolvedValueOnce([unknownConn])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+        .mockResolvedValueOnce([]);
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue(undefined);
 
@@ -341,48 +353,6 @@ describe('MetadataDiscoveryService', () => {
       await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
         NotFoundException,
       );
-    });
-
-    it('throws InternalServerErrorException when Salesforce returns a non-ok status', async () => {
-      mocks.selectRows
-        .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
-
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-      } as Response);
-
-      await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
-        InternalServerErrorException,
-      );
-
-      fetchMock.mockRestore();
-    });
-
-    it('throws GatewayTimeoutException when Salesforce fetch times out', async () => {
-      mocks.selectRows
-        .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
-
-      const abortError = Object.assign(new Error('The operation was aborted'), {
-        name: 'AbortError',
-      });
-      const fetchMock = vi
-        .spyOn(globalThis, 'fetch')
-        .mockRejectedValueOnce(abortError);
-
-      await expect(service.describeObjects(ORG_ID, CONN_ID)).rejects.toThrow(
-        GatewayTimeoutException,
-      );
-
-      fetchMock.mockRestore();
     });
   });
 
@@ -403,7 +373,7 @@ describe('MetadataDiscoveryService', () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
         .mockResolvedValueOnce([
-          { profile: MOCK_FIELDS, updatedAt: freshUpdatedAt },
+          { profile: { fields: MOCK_FIELDS }, updatedAt: freshUpdatedAt },
         ]);
       redis.get.mockResolvedValueOnce(null);
 
@@ -412,11 +382,10 @@ describe('MetadataDiscoveryService', () => {
       expect(redis.set).toHaveBeenCalledOnce();
     });
 
-    it('calls piece.describeFields with decrypted credentials when piece implements it', async () => {
+    it('calls piece.describeFields with credentials from TokenManagerService', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+        .mockResolvedValueOnce([]);
       redis.get.mockResolvedValueOnce(null);
       const describeFieldsMock = vi.fn().mockResolvedValue(MOCK_FIELDS);
       mockPieceRegistry.getPiece.mockReturnValue({
@@ -425,58 +394,39 @@ describe('MetadataDiscoveryService', () => {
 
       const result = await service.describeFields(ORG_ID, CONN_ID, 'Contact');
       expect(result).toEqual(MOCK_FIELDS);
-      expect(describeFieldsMock).toHaveBeenCalledWith({}, 'Contact');
+      expect(mockTokenManager.getValidCredentials).toHaveBeenCalledWith(
+        CONN_ID,
+      );
+      expect(describeFieldsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accessToken: DEFAULT_CREDS_BLOB.accessToken,
+        }),
+        'Contact',
+      );
     });
 
-    it('calls Prism for salesforce when piece has no describeFields', async () => {
+    it('throws NotFoundException when piece has no describeFields', async () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
-
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ fields: MOCK_FIELDS }),
-      } as Response);
-
-      const result = await service.describeFields(ORG_ID, CONN_ID, 'Contact');
-      expect(result).toEqual(MOCK_FIELDS);
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/sobjects/Contact/describe'),
-        expect.any(Object),
-      );
-
-      fetchMock.mockRestore();
-    });
-
-    it('returns quickbooks Invoice stub fields', async () => {
-      const qbConn = { ...MOCK_CONNECTION, appName: 'quickbooks' };
-      mocks.selectRows
-        .mockResolvedValueOnce([qbConn])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
-      redis.get.mockResolvedValueOnce(null);
-      mockPieceRegistry.getPiece.mockReturnValue({});
-
-      const result = await service.describeFields(ORG_ID, CONN_ID, 'Invoice');
-      const names = result.map((f) => f.name);
-      expect(names).toContain('TotalAmt');
-      expect(names).toContain('DocNumber');
-    });
-
-    it('throws NotFoundException for unknown quickbooks object', async () => {
-      const qbConn = { ...MOCK_CONNECTION, appName: 'quickbooks' };
-      mocks.selectRows
-        .mockResolvedValueOnce([qbConn])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([NULL_CREDS_ROW]);
+        .mockResolvedValueOnce([]);
       redis.get.mockResolvedValueOnce(null);
       mockPieceRegistry.getPiece.mockReturnValue({});
 
       await expect(
-        service.describeFields(ORG_ID, CONN_ID, 'UnknownObject'),
+        service.describeFields(ORG_ID, CONN_ID, 'Contact'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when no piece is registered for the connector', async () => {
+      const unknownConn = { ...MOCK_CONNECTION, appName: 'unknown-app' };
+      mocks.selectRows
+        .mockResolvedValueOnce([unknownConn])
+        .mockResolvedValueOnce([]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
+
+      await expect(
+        service.describeFields(ORG_ID, CONN_ID, 'Contact'),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -484,7 +434,9 @@ describe('MetadataDiscoveryService', () => {
       const freshUpdatedAt = new Date();
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([{ profile: [], updatedAt: freshUpdatedAt }]);
+        .mockResolvedValueOnce([
+          { profile: { fields: [] }, updatedAt: freshUpdatedAt },
+        ]);
       redis.get.mockResolvedValueOnce(null);
 
       const result = await service.describeFields(ORG_ID, CONN_ID, 'Contact');
@@ -499,6 +451,23 @@ describe('MetadataDiscoveryService', () => {
       await expect(
         service.describeFields(ORG_ID, CONN_ID, 'Contact'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws InternalServerErrorException when TokenManagerService fails', async () => {
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION])
+        .mockResolvedValueOnce([]);
+      redis.get.mockResolvedValueOnce(null);
+      mockTokenManager.getValidCredentials.mockRejectedValueOnce(
+        new Error('token refresh failed'),
+      );
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeFields: vi.fn(),
+      });
+
+      await expect(
+        service.describeFields(ORG_ID, CONN_ID, 'Contact'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 });

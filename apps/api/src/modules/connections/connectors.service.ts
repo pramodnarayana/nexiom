@@ -14,7 +14,7 @@ import {
   resolveOAuth2Url,
   PropertyType,
 } from '@nexiom/connectors';
-import type { OAuth2Auth } from '@nexiom/connectors';
+import type { OAuth2Auth, OAuthCredentialBlob } from '@nexiom/connectors';
 import {
   appConnections,
   AppConnectionStatus,
@@ -28,40 +28,13 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
+import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
-interface PgError {
-  code: string;
-  constraint?: string;
-}
-
-function isPgError(err: unknown): err is PgError {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    typeof (err as Record<string, unknown>).code === 'string'
-  );
-}
-
-/** Encrypted value blob stored in app_connection.value — mirrors Activepieces BaseOAuth2ConnectionValue */
-export interface ConnectionValueBlob {
-  clientId: string;
-  clientSecret: string;
-  accessToken: string;
-  refreshToken?: string;
-  /** Vendor-specific extras: instance_url, realmId, id_token, etc. */
-  data: Record<string, unknown>;
-  /**
-   * Vendor-specific auth parameters collected during the OAuth flow
-   * (e.g. environment selection). Stored here so the reconnect form
-   * can restore them without database round-trips.
-   */
-  vendorParams?: Record<string, string>;
-  /**
-   * Top-level legacy environment parameter (now merged into vendorParams).
-   */
-  environment?: string | number | boolean;
-}
+/**
+ * Encrypted value blob stored in app_connection.value.
+ * Aliased from the connectors package so all callers share a single source of truth.
+ */
+export type ConnectionValueBlob = OAuthCredentialBlob;
 
 export interface StoreOAuthConnectionOptions {
   id?: string;
@@ -376,20 +349,11 @@ export class ConnectorsService {
               )
               .returning({ id: appConnections.id });
           } catch (err: unknown) {
-            if (isPgError(err) && err.code === '23505') {
-              if (err.constraint === 'tenant_app_display_name_lower_idx') {
-                throw new HttpException(
-                  `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-                  409,
-                );
-              }
-              if (err.constraint === 'tenant_external_id_unique_idx') {
-                throw new HttpException(
-                  `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-                  409,
-                );
-              }
-            }
+            this.throwOnDuplicateConnection(
+              extractPgError(err),
+              displayName,
+              externalId,
+            );
             throw err;
           }
 
@@ -423,20 +387,11 @@ export class ConnectorsService {
             })
             .returning({ id: appConnections.id });
         } catch (err: unknown) {
-          if (isPgError(err) && err.code === '23505') {
-            if (err.constraint === 'tenant_app_display_name_lower_idx') {
-              throw new HttpException(
-                `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-                409,
-              );
-            }
-            if (err.constraint === 'tenant_external_id_unique_idx') {
-              throw new HttpException(
-                `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-                409,
-              );
-            }
-          }
+          this.throwOnDuplicateConnection(
+            extractPgError(err),
+            displayName,
+            externalId,
+          );
           throw err;
         }
 
@@ -537,6 +492,32 @@ export class ConnectorsService {
       );
       throw new InternalServerErrorException(
         'Failed to save connection to database',
+      );
+    }
+  }
+
+  /**
+   * Throws a 409 HttpException when the pg error represents a unique-constraint
+   * violation on a known connection-uniqueness index. Returns without throwing
+   * when the code is not '23505' or the constraint is unrecognized (re-throw
+   * is left to the caller).
+   */
+  private throwOnDuplicateConnection(
+    pgErr: { code: string; constraint?: string } | null,
+    displayName: string,
+    externalId: string,
+  ): void {
+    if (pgErr?.code !== PG_UNIQUE_VIOLATION) return;
+    if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+      throw new HttpException(
+        `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+        409,
+      );
+    }
+    if (pgErr.constraint === 'tenant_external_id_unique_idx') {
+      throw new HttpException(
+        `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+        409,
       );
     }
   }

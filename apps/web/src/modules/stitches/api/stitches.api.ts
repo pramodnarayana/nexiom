@@ -25,7 +25,6 @@ export interface StitchResponse {
   updatedAt: string;
 }
 
-/** Full payload once the T023 field-mapping wizard can supply all required fields. */
 export interface CreateStitchPayload {
   workspaceId: string;
   name: string;
@@ -35,13 +34,24 @@ export interface CreateStitchPayload {
   sourceObject: string;
   /** Vendor object name on the destination connection (e.g. "Customer"). NOT NULL in DB. */
   targetObject: string;
+  /** Optional filter conditions applied at sync time. Values are always sent as strings; the backend coerces to the appropriate type. */
+  syncCondition?: Array<{
+    field: string;
+    op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
+    value: string;
+    logic?: 'AND' | 'OR';
+  }>;
+  /**
+   * Field mappings created atomically with the stitch in a single DB transaction.
+   * Prevents orphaned stitch rows when the mapping save would otherwise fail
+   * after the stitch has already been inserted.
+   */
+  fieldMappings?: Array<{
+    sourceCanonical: string;
+    mappingRules: Array<{ src: string; dest: string; transform?: string }>;
+  }>;
 }
 
-/**
- * TODO(T023): Remove once the field-mapping wizard can supply sourceObject/targetObject.
- * Internal only — not part of the public API surface. Use CreateStitchPayload externally.
- */
-type _DraftStitchPayload = Omit<CreateStitchPayload, 'sourceObject' | 'targetObject'>;
 
 export interface UpdateStitchPayload {
   name?: string;
@@ -65,15 +75,10 @@ export async function getStitch(id: string): Promise<StitchResponse> {
   return res.data;
 }
 
-// T023: accepts _DraftStitchPayload (no sourceObject/targetObject) until the field-mapping wizard lands.
-// Switch to CreateStitchPayload and rename to createStitch once T023 is implemented.
-async function createStitchDraft(payload: _DraftStitchPayload): Promise<StitchResponse> {
+export async function createStitch(payload: CreateStitchPayload): Promise<StitchResponse> {
   const res = await apiClient.post<StitchResponse>('/stitches', payload);
   return res.data;
 }
-
-// Suppress unused-variable warning until T023 callers land.
-void (createStitchDraft as unknown);
 
 export async function updateStitch(
   id: string,
