@@ -153,10 +153,9 @@ export class TokenManagerService {
 
             if (parsedExpiry &&
                 new Date(parsedExpiry.getTime() - 5 * 60000) > new Date()) {
-                // Token was refreshed by another worker
-                const credentials = JSON.parse(
-                    await this.crypto.decrypt(freshConnection!.value)
-                ) as OAuthCredentialBlob;
+                // Token was refreshed by another worker — decrypt and validate
+                // shape via the shared helper so malformed stored data fails fast.
+                const credentials = await this.decryptAndValidate(freshConnection!);
                 return { credentials, connection };
             }
 
