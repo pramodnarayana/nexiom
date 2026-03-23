@@ -190,15 +190,21 @@ describe('MetadataDiscoveryService', () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION]) // resolveConnection
         .mockResolvedValueOnce([
-          // DB cache check — profile stores the StoredObjectDescriptor
+          // DB cache — profile uses the combined CombinedProfile envelope
           {
             objectName: 'Contact',
-            profile: { label: 'Contact', queryable: true },
+            profile: {
+              descriptor: { label: 'Contact', queryable: true },
+              position: 0,
+            },
             updatedAt: freshUpdatedAt,
           },
           {
             objectName: 'Account',
-            profile: { label: 'Account', queryable: true },
+            profile: {
+              descriptor: { label: 'Account', queryable: true },
+              position: 1,
+            },
             updatedAt: freshUpdatedAt,
           },
         ]);
@@ -367,7 +373,7 @@ describe('MetadataDiscoveryService', () => {
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
         .mockResolvedValueOnce([
-          { profile: MOCK_FIELDS, updatedAt: freshUpdatedAt },
+          { profile: { fields: MOCK_FIELDS }, updatedAt: freshUpdatedAt },
         ]);
       redis.get.mockResolvedValueOnce(null);
 
@@ -428,7 +434,9 @@ describe('MetadataDiscoveryService', () => {
       const freshUpdatedAt = new Date();
       mocks.selectRows
         .mockResolvedValueOnce([MOCK_CONNECTION])
-        .mockResolvedValueOnce([{ profile: [], updatedAt: freshUpdatedAt }]);
+        .mockResolvedValueOnce([
+          { profile: { fields: [] }, updatedAt: freshUpdatedAt },
+        ]);
       redis.get.mockResolvedValueOnce(null);
 
       const result = await service.describeFields(ORG_ID, CONN_ID, 'Contact');

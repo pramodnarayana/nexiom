@@ -50,7 +50,9 @@ export function Combobox({
     )
   }, [options, query])
 
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? value
+  const selectedOption = options.find((o) => o.value === value) ?? null
+  const selectedLabel = selectedOption?.label ?? value
+  const isSelected = selectedOption !== null
 
   function handleOpenChange(next: boolean) {
     setOpen(next)
@@ -71,6 +73,8 @@ export function Combobox({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    // IME composition events (e.g. CJK input methods) should not trigger navigation.
+    if (e.nativeEvent.isComposing) return
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault()
@@ -88,9 +92,6 @@ export function Combobox({
         }
         break
       case "Escape":
-        setOpen(false)
-        break
-      case "Tab":
         setOpen(false)
         break
     }
@@ -120,11 +121,11 @@ export function Combobox({
             "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background",
             "focus:outline-none focus:ring-1 focus:ring-ring",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            !value && "text-muted-foreground",
+            !isSelected && "text-muted-foreground",
             className,
           )}
         >
-          <span className="truncate">{value ? selectedLabel : placeholder}</span>
+          <span className="truncate">{isSelected ? selectedLabel : placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </button>
       </PopoverPrimitive.Trigger>
@@ -135,6 +136,9 @@ export function Combobox({
           sideOffset={4}
           // Match the trigger width exactly
           className="z-50 w-[--radix-popover-trigger-width] rounded-md border bg-popover text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
+          // Prevent focus returning to the trigger on close — the keyboard user
+          // dismissed the popover intentionally and focus should stay where it is.
+          onCloseAutoFocus={(e) => { e.preventDefault() }}
         >
           {/* ── Search bar ─────────────────────────────────────────────── */}
           <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
@@ -155,6 +159,13 @@ export function Combobox({
           </div>
 
           {/* ── Options list ───────────────────────────────────────────── */}
+          {/* Empty-state is rendered outside the listbox so assistive technology
+              does not encounter a non-option child inside role="listbox". */}
+          {filtered.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {emptyMessage}
+            </p>
+          )}
           {/*
             WAI-ARIA 1.2 combobox pattern: role="listbox" is correct here.
             A native <select> cannot host the search <Input> above, so the
@@ -170,43 +181,37 @@ export function Combobox({
             aria-label="Options"
             className="max-h-60 overflow-y-auto p-1"
           >
-            {filtered.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                {emptyMessage}
-              </p>
-            ) : (
-              filtered.map((option, index) => (
-                <div // NOSONAR: S6819 — WAI-ARIA 1.2 combobox requires role="option"; tabIndex and onKeyDown satisfy focusability/keyboard requirements
-                  key={option.value}
-                  id={`${listId}-opt-${index}`}
-                  role="option"
-                  // tabIndex={-1} makes each option programmatically focusable
-                  // (required for role="option" per ARIA spec).
-                  tabIndex={-1}
-                  aria-selected={option.value === value}
-                  data-active={index === activeIndex ? "true" : undefined}
-                  onMouseEnter={() => { setActiveIndex(index) }}
-                  onClick={() => { handleSelect(option.value) }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleSelect(option.value)
-                    }
-                  }}
-                  className={cn(
-                    "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    "data-[active]:bg-accent data-[active]:text-accent-foreground",
-                    option.value === value && "font-medium",
-                  )}
-                >
-                  <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
-                    {option.value === value && <Check className="h-4 w-4" />}
-                  </span>
-                  {option.label}
-                </div>
-              ))
-            )}
+            {filtered.map((option, index) => (
+              <div // NOSONAR: S6819 — WAI-ARIA 1.2 combobox requires role="option"; tabIndex and onKeyDown satisfy focusability/keyboard requirements
+                key={option.value}
+                id={`${listId}-opt-${index}`}
+                role="option"
+                // tabIndex={-1} makes each option programmatically focusable
+                // (required for role="option" per ARIA spec).
+                tabIndex={-1}
+                aria-selected={option.value === value}
+                data-active={index === activeIndex ? "true" : undefined}
+                onMouseEnter={() => { setActiveIndex(index) }}
+                onClick={() => { handleSelect(option.value) }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleSelect(option.value)
+                  }
+                }}
+                className={cn(
+                  "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "data-[active]:bg-accent data-[active]:text-accent-foreground",
+                  option.value === value && "font-medium",
+                )}
+              >
+                <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+                  {option.value === value && <Check className="h-4 w-4" />}
+                </span>
+                {option.label}
+              </div>
+            ))}
           </div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>

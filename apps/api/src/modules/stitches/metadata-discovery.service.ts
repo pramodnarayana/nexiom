@@ -32,13 +32,22 @@ const TTL_MS = TTL_SECONDS * 1_000;
 const DEFAULT_MAX_OBJECTS = 2000;
 
 /**
- * Shape stored in connectorObjectProfiles.profile when the row was populated
- * by describeObjects (not by describeFields).  Field rows store FieldDescriptor[]
- * (an array), so Array.isArray() distinguishes the two at read time.
+ * Combined shape stored in connectorObjectProfiles.profile.
+ * Both describeObjects and describeFields write into this envelope using a
+ * jsonb-merge (COALESCE || EXCLUDED) so each writer preserves the keys it
+ * does not own:
+ *  - describeObjects writes descriptor + position; preserves fields.
+ *  - describeFields writes fields; preserves descriptor + position.
+ * Reading code should always branch on the presence of individual keys rather
+ * than assuming the whole shape was written by one caller.
  */
-interface StoredObjectDescriptor {
-  label: string;
-  queryable: boolean;
+interface CombinedProfile {
+  /** Object-level metadata written by describeObjects. */
+  descriptor?: { label: string; queryable: boolean };
+  /** Field list written by describeFields. undefined = not yet fetched; [] = fetched, no fields. */
+  fields?: FieldDescriptor[];
+  /** Stable sort position from the live describeObjects response; used to restore ordering after a Redis eviction. */
+  position?: number;
 }
 
 @Injectable()
@@ -102,20 +111,27 @@ export class MetadataDiscoveryService implements OnModuleInit {
             Date.now() - new Date(row.updatedAt).getTime() < TTL_MS,
         );
         if (allFresh) {
-          // profile is StoredObjectDescriptor when set by describeObjects, or
-          // FieldDescriptor[] when set by describeFields.  We can always read
-          // label / queryable from the stored descriptor; fall back to objectName
-          // when the row was first populated by a field-only discovery.
+          // Sort by stored position so ordering matches the original live-fetch
+          // response even after a Redis eviction.  Rows without a position (e.g.
+          // written by an older schema or solely by describeFields) sort last.
+          dbRows.sort((a, b) => {
+            const posA =
+              (a.profile as CombinedProfile | null)?.position ?? Infinity;
+            const posB =
+              (b.profile as CombinedProfile | null)?.position ?? Infinity;
+            return posA - posB;
+          });
+
           const objects: ObjectDescriptor[] = dbRows.map((row) => {
             const descriptor =
-              !Array.isArray(row.profile) &&
-              row.profile !== null &&
-              typeof row.profile === 'object'
-                ? (row.profile as StoredObjectDescriptor)
-                : null;
+              (row.profile as CombinedProfile | null)?.descriptor ?? null;
             return {
               name: row.objectName,
+              // Fall back to objectName only when no descriptor exists (row was
+              // written solely by describeFields before describeObjects ran).
               label: descriptor?.label ?? row.objectName,
+              // Preserve queryable=false explicitly — nullish coalescing only
+              // defaults to true when descriptor is absent, not when it is false.
               queryable: descriptor?.queryable ?? true,
             };
           });
@@ -146,13 +162,10 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
     await this.redis.set(redisKey, JSON.stringify(objects), 'EX', TTL_SECONDS);
 
-    // Batch upsert: store full ObjectDescriptor in profile so label/queryable
-    // survive a Redis eviction and are readable from the DB cache.
-    // On conflict, overwrite profile with the fresh StoredObjectDescriptor so
-    // the DB-cache read path always has accurate label/queryable values, even
-    // when a prior describeFields call wrote a FieldDescriptor[] into the row.
-    // describeFields upsert will overwrite profile back to FieldDescriptor[]
-    // when it next runs, so there is no loss of field data.
+    // Batch upsert: write descriptor + position into the combined profile envelope.
+    // Uses a jsonb merge (COALESCE || EXCLUDED) so any fields written by a prior
+    // describeFields call are preserved — descriptor and fields never overwrite
+    // each other, they coexist under the same row.
     // Always run a transaction: upsert + targeted stale-delete when objects is
     // non-empty; full delete for the connectionId when upstream returns nothing.
     // This prevents orphaned rows from lingering when a connector reports zero objects.
@@ -163,12 +176,12 @@ export class MetadataDiscoveryService implements OnModuleInit {
         await tx
           .insert(connectorObjectProfiles)
           .values(
-            objects.map((obj) => ({
+            objects.map((obj, idx) => ({
               connectionId,
               objectName: obj.name,
               profile: {
-                label: obj.label,
-                queryable: obj.queryable,
+                descriptor: { label: obj.label, queryable: obj.queryable },
+                position: idx,
               } as unknown as Record<string, unknown>,
             })),
           )
@@ -177,10 +190,12 @@ export class MetadataDiscoveryService implements OnModuleInit {
               connectorObjectProfiles.connectionId,
               connectorObjectProfiles.objectName,
             ],
-            // Reference the incoming row via the EXCLUDED pseudo-table so each
-            // conflicting row gets its own fresh profile, not a shared literal.
+            // Merge existing profile (may contain fields from describeFields) with
+            // the incoming descriptor+position via jsonb concatenation.  Right-side
+            // keys (EXCLUDED) take precedence, so descriptor and position are always
+            // refreshed while an existing fields key is preserved.
             set: {
-              profile: sql`"excluded"."profile"`,
+              profile: sql`COALESCE(${connectorObjectProfiles.profile}, '{}'::jsonb) || "excluded"."profile"`,
               updatedAt: new Date(),
             },
           });
@@ -235,17 +250,17 @@ export class MetadataDiscoveryService implements OnModuleInit {
       dbRow?.updatedAt &&
       Date.now() - new Date(dbRow.updatedAt).getTime() < TTL_MS
     ) {
-      const profile = dbRow.profile;
-      // An empty array [] is a valid cache hit (connector returned no fields).
-      // Only skip if profile is not an array (it's a StoredObjectDescriptor).
-      if (Array.isArray(profile)) {
+      const profile = dbRow.profile as CombinedProfile | null;
+      // fields === undefined means describeFields has never run for this object;
+      // fields === [] is a valid cache hit (connector returned no fields).
+      if (profile?.fields !== undefined) {
         await this.redis.set(
           redisKey,
-          JSON.stringify(profile),
+          JSON.stringify(profile.fields),
           'EX',
           TTL_SECONDS,
         );
-        return profile as FieldDescriptor[];
+        return profile.fields;
       }
     }
 
@@ -259,12 +274,15 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
     await this.redis.set(redisKey, JSON.stringify(fields), 'EX', TTL_SECONDS);
 
+    // Write fields into the combined profile envelope, merging with any existing
+    // descriptor + position written by describeObjects.  Right-side keys (EXCLUDED)
+    // take precedence so fields is always refreshed; descriptor and position survive.
     await this.db
       .insert(connectorObjectProfiles)
       .values({
         connectionId,
         objectName,
-        profile: fields as unknown as Record<string, unknown>,
+        profile: { fields } as unknown as Record<string, unknown>,
       })
       .onConflictDoUpdate({
         target: [
@@ -272,7 +290,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
           connectorObjectProfiles.objectName,
         ],
         set: {
-          profile: fields as unknown as Record<string, unknown>,
+          profile: sql`COALESCE(${connectorObjectProfiles.profile}, '{}'::jsonb) || "excluded"."profile"`,
           updatedAt: new Date(),
         },
       });

@@ -99,8 +99,8 @@ export class TokenManagerService {
             return await this.refreshWithLock(connection);
         }
 
-        // 2. Return decrypted credentials
-        return JSON.parse(await this.crypto.decrypt(connection.value)) as OAuthCredentialBlob;
+        // 2. Return decrypted credentials (validates shape before returning).
+        return await this.decryptAndValidate(connection);
     }
 
     private async refreshWithLock(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
@@ -182,12 +182,16 @@ export class TokenManagerService {
     private async performTokenRefresh(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
         this.logger.log(`Acquired lock. Refreshing OAuth token for ${connection.appName as string}`);
 
-        // 1. Decrypt old payload to get refresh_token
-        const oldPayload = JSON.parse(
-            await this.crypto.decrypt(connection.value)
-        ) as Record<string, unknown>;
+        // 1. Decrypt and validate the stored credential shape.
+        //    decryptAndValidate throws AppCredentialError when the payload is
+        //    malformed (e.g., key rotation, older schema) so we never spread
+        //    undefined fields into the refreshed blob.
+        const oldPayload = await this.decryptAndValidate(connection);
 
-        if (!oldPayload.refreshToken) {
+        // 2. refreshToken must be a non-empty, non-whitespace string.
+        //    An absent or blank value means the connection was never issued a
+        //    refresh token (e.g., client-credentials grant) or has been revoked.
+        if (typeof oldPayload.refreshToken !== 'string' || !oldPayload.refreshToken.trim()) {
             throw new Error('No refresh token available');
         }
 
@@ -199,23 +203,13 @@ export class TokenManagerService {
             throw new TypeError('Invalid connection: externalId is missing, empty or not a string');
         }
 
-        // 2. Perform HTTP call to Vendor API
+        // 3. Perform HTTP call to Vendor API
         const newTokens = await this.oauthClient.refresh(
             connection.tenantId,
             connection.appName as string,
             connection.externalId,
-            oldPayload.refreshToken as string,
+            oldPayload.refreshToken,
         );
-
-        // 3. Validate stored credential shape before merging.
-        //    If the decrypted payload does not match OAuthCredentialBlob (e.g., the
-        //    encryption key rotated or the row was written by an older schema), throw
-        //    rather than silently spreading undefined fields into the refreshed blob.
-        if (!isOAuthCredentialBlob(oldPayload)) {
-            throw new AppCredentialError(
-                'Stored credentials are malformed and do not match OAuthCredentialBlob. Re-authorization required.',
-            );
-        }
 
         // 4. Require a fresh access token — never persist a stale one.
         //    A missing access_token means the vendor refresh response was malformed
@@ -228,7 +222,7 @@ export class TokenManagerService {
             );
         }
 
-        // oldPayload is narrowed to OAuthCredentialBlob by the guard above — no cast needed.
+        // oldPayload is already narrowed to OAuthCredentialBlob by decryptAndValidate.
         const updatedPayload: OAuthCredentialBlob = {
             ...oldPayload,
             accessToken: newTokens.access_token,
@@ -238,19 +232,34 @@ export class TokenManagerService {
             ...('token_type' in newTokens && { tokenType: newTokens.token_type }),
         };
 
-        // 5. Encrypt & Calculate Expiry
+        // 6. Encrypt & Calculate Expiry
         const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));
         const expiresInMs = typeof newTokens.expires_in === 'number'
             ? newTokens.expires_in * 1000
             : 3600 * 1000; // default 1-hour fallback
         const expiresAt = new Date(Date.now() + expiresInMs);
 
-        // 6. Save to DB
+        // 7. Save to DB
         await this.db.update(appConnections)
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(appConnections.id, connection.id));
 
         return updatedPayload;
+    }
+
+    /**
+     * Decrypts the stored credential value and validates it matches OAuthCredentialBlob.
+     * Throws AppCredentialError when the shape is wrong (e.g. key rotation, old schema)
+     * so callers never have to repeat the decrypt + cast + validate triple inline.
+     */
+    private async decryptAndValidate(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
+        const parsed: unknown = JSON.parse(await this.crypto.decrypt(connection.value));
+        if (!isOAuthCredentialBlob(parsed)) {
+            throw new AppCredentialError(
+                'Stored credentials are malformed and do not match OAuthCredentialBlob. Re-authorization required.',
+            );
+        }
+        return parsed;
     }
 
     /** Marks the connection as REVOKED if the vendor rejected the refresh (400/401). */

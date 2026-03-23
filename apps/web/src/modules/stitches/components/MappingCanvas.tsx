@@ -52,6 +52,12 @@ export interface MappingCanvasProps {
   sourceObject: string;
   destConnectionId: string;
   targetObject: string;
+  /**
+   * Called whenever the user edits mapping rows or sync conditions.
+   * Should be stable (memoized with useCallback in the parent) to avoid
+   * unnecessary work; the component internally stabilises the reference via a
+   * ref so stale-closure bugs are avoided even if the identity changes.
+   */
   onChange: (rules: MappingRule[], conditions: SyncConditionRule[]) => void;
 }
 
@@ -139,9 +145,16 @@ export function MappingCanvas({
     return () => { cancelled = true; };
   }, [srcConnectionId, sourceObject, destConnectionId, targetObject]);
 
+  // Stabilise onChange so the canvas-sync effect below does not re-run every
+  // time the parent re-creates its callback.  The ref is always kept current so
+  // calling onChangeRef.current(...) never produces a stale-closure bug.
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
   // Sync parent whenever canvas changes.
   // Skips the initial mount to avoid calling onChange (→ setWizard in parent)
   // during the first render, which triggers React's "update while rendering" warning.
+  // onChange is intentionally omitted from deps — stabilised via onChangeRef above.
   const hasMountedRef = useRef(false);
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -154,8 +167,8 @@ export function MappingCanvas({
     const conds: SyncConditionRule[] = canvas.conditionRows
       .filter((c) => c.field && c.value)
       .map(({ field, op, value, logic }) => ({ field, op, value, logic }));
-    onChange(rules, conds);
-  }, [canvas, onChange]);
+    onChangeRef.current(rules, conds);
+  }, [canvas]);  
 
   // ── Mapping row handlers ─────────────────────────────────────────────────
 

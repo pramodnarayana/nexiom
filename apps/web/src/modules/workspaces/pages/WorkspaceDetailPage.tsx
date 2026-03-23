@@ -79,10 +79,7 @@ export function WorkspaceDetailPage() {
     void fetchWorkspace();
     void fetchConnections();
     return () => {
-      // useRef objects are stable — incrementing .current in cleanup is safe.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       fetchSeqRef.current++;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       connSeqRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);
