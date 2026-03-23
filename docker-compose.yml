@@ -223,7 +223,7 @@ services:
   # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
   # memory. Requires `privileged: true` on the worker container.
   windmill_init:
-    image: ghcr.io/windmill-labs/windmill:main
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
     pull_policy: always
     command: ["windmill", "init"]
     environment:
@@ -235,7 +235,7 @@ services:
       - nexiom-network
 
   windmill_server:
-    image: ghcr.io/windmill-labs/windmill:main
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -252,17 +252,19 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 120s
     networks:
       - nexiom-network
 
   windmill_worker:
-    image: ghcr.io/windmill-labs/windmill:main
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
     pull_policy: always
     restart: unless-stopped
     # privileged required for ENABLE_UNSHARE_PID
     privileged: true
+    deploy:
+      replicas: 2
     environment:
       <<: *windmill-env
       MODE: worker

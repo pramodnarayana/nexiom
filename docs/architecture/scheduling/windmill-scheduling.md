@@ -104,7 +104,7 @@ export async function main(stitchId: string): Promise<object> {
   }
 
   // Return value is stored in Windmill's job result history (JSON)
-  return response.json();
+  return await response.json();
 }
 ```
 

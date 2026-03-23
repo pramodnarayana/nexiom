@@ -1109,12 +1109,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "ds_project_code": {
-          "name": "ds_project_code",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        }
       },
       "indexes": {
         "organization_slug_unique_idx": {
@@ -1132,22 +1126,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "organization_ds_project_code_unique_idx": {
-          "name": "organization_ds_project_code_unique_idx",
-          "columns": [
-            {
-              "expression": "ds_project_code",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"ds_project_code\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1158,10 +1136,6 @@
         "organization_id_not_sentinel": {
           "name": "organization_id_not_sentinel",
           "value": "\"organization\".\"id\" <> '__NULL__'"
-        },
-        "ds_project_code_safe_integer": {
-          "name": "ds_project_code_safe_integer",
-          "value": "\"organization\".\"ds_project_code\" IS NULL OR (\"organization\".\"ds_project_code\" >= -9007199254740991 AND \"organization\".\"ds_project_code\" <= 9007199254740991)"
         }
       },
       "isRLSEnabled": false
