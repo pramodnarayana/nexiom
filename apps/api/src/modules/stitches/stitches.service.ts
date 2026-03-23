@@ -11,22 +11,12 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   integrationStitches,
+  fieldMappings,
   uiWorkspaces,
   appConnections,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
-
-/** Postgres unique-constraint violation error code. */
-const PG_UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === PG_UNIQUE_VIOLATION
-  );
-}
+import { isUniqueViolation } from '../../shared/db.utils.js';
 
 @Injectable()
 export class StitchesService {
@@ -77,33 +67,51 @@ export class StitchesService {
     }
 
     try {
-      const [stitch] = await this.db
-        .insert(integrationStitches)
-        .values({
-          name: body.name,
-          orgId,
-          workspaceId: body.workspaceId,
-          srcConnectionId: body.srcConnectionId,
-          destConnectionId: body.destConnectionId,
-          sourceObject: body.sourceObject,
-          targetObject: body.targetObject,
-          ...(body.syncCondition !== undefined && {
-            syncCondition: body.syncCondition,
-          }),
-          ...(body.status !== undefined && { status: body.status }),
-          ...(body.syncIntervalMinutes !== undefined && {
-            syncIntervalMinutes: body.syncIntervalMinutes,
-          }),
-          ...(body.scheduleEnabled !== undefined && {
-            scheduleEnabled: body.scheduleEnabled,
-          }),
-        })
-        .returning();
+      return await this.db.transaction(async (tx) => {
+        const [stitch] = await tx
+          .insert(integrationStitches)
+          .values({
+            name: body.name,
+            orgId,
+            workspaceId: body.workspaceId,
+            srcConnectionId: body.srcConnectionId,
+            destConnectionId: body.destConnectionId,
+            sourceObject: body.sourceObject,
+            targetObject: body.targetObject,
+            ...(body.syncCondition !== undefined && {
+              syncCondition: body.syncCondition,
+            }),
+            ...(body.status !== undefined && { status: body.status }),
+            ...(body.syncIntervalMinutes !== undefined && {
+              syncIntervalMinutes: body.syncIntervalMinutes,
+            }),
+            ...(body.scheduleEnabled !== undefined && {
+              scheduleEnabled: body.scheduleEnabled,
+            }),
+          })
+          .returning();
 
-      if (!stitch) {
-        throw new InternalServerErrorException('Insert did not return a row.');
-      }
-      return stitch;
+        if (!stitch) {
+          throw new InternalServerErrorException(
+            'Insert did not return a row.',
+          );
+        }
+
+        // Atomically persist any initial field mappings supplied by the wizard.
+        // Doing this in the same transaction guarantees no orphaned stitch rows
+        // when the mapping insert would otherwise fail after a successful stitch insert.
+        if (body.fieldMappings && body.fieldMappings.length > 0) {
+          await tx.insert(fieldMappings).values(
+            body.fieldMappings.map((fm) => ({
+              stitchId: stitch.id,
+              sourceCanonical: fm.sourceCanonical,
+              mappingRules: fm.mappingRules,
+            })),
+          );
+        }
+
+        return stitch;
+      });
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new ConflictException(

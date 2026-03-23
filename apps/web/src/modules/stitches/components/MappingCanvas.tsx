@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -121,8 +121,14 @@ export function MappingCanvas({
   }, [srcConnectionId, sourceObject, destConnectionId, targetObject]);
 
   // Sync parent whenever canvas changes.
-  // Kept in a useEffect so state updaters stay pure (no side-effects inside setCanvas).
+  // Skips the initial mount to avoid calling onChange (→ setWizard in parent)
+  // during the first render, which triggers React's "update while rendering" warning.
+  const isInitialRender = useRef(false);
   useEffect(() => {
+    if (!isInitialRender.current) {
+      isInitialRender.current = true;
+      return;
+    }
     const rules: MappingRule[] = canvas.mappingRows
       .filter((r) => r.src && r.dest)
       .map(({ src, dest }) => ({ src, dest }));

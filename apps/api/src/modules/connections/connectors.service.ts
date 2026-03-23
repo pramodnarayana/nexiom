@@ -28,20 +28,7 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
-
-interface PgError {
-  code: string;
-  constraint?: string;
-}
-
-function isPgError(err: unknown): err is PgError {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    typeof (err as Record<string, unknown>).code === 'string'
-  );
-}
+import { extractPgError } from '../../shared/db.utils.js';
 
 /**
  * Encrypted value blob stored in app_connection.value.
@@ -362,14 +349,15 @@ export class ConnectorsService {
               )
               .returning({ id: appConnections.id });
           } catch (err: unknown) {
-            if (isPgError(err) && err.code === '23505') {
-              if (err.constraint === 'tenant_app_display_name_lower_idx') {
+            const pgErr = extractPgError(err);
+            if (pgErr?.code === '23505') {
+              if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
                 throw new HttpException(
                   `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
                   409,
                 );
               }
-              if (err.constraint === 'tenant_external_id_unique_idx') {
+              if (pgErr.constraint === 'tenant_external_id_unique_idx') {
                 throw new HttpException(
                   `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
                   409,
@@ -409,14 +397,15 @@ export class ConnectorsService {
             })
             .returning({ id: appConnections.id });
         } catch (err: unknown) {
-          if (isPgError(err) && err.code === '23505') {
-            if (err.constraint === 'tenant_app_display_name_lower_idx') {
+          const pgErr = extractPgError(err);
+          if (pgErr?.code === '23505') {
+            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
               throw new HttpException(
                 `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
                 409,
               );
             }
-            if (err.constraint === 'tenant_external_id_unique_idx') {
+            if (pgErr.constraint === 'tenant_external_id_unique_idx') {
               throw new HttpException(
                 `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
                 409,

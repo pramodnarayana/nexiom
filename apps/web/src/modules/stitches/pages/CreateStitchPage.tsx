@@ -16,7 +16,7 @@ import { AppRoutes } from '@/shared/lib/auth/constants';
 import { listWorkspaceConnections, type WorkspaceConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
 import { createStitch } from '../api/stitches.api';
 import { listObjects, type ObjectDescriptor } from '../api/metadata.api';
-import { upsertFieldMapping, type MappingRule } from '../api/field-mappings.api';
+import type { MappingRule } from '../api/field-mappings.api';
 import { MappingCanvas, type SyncConditionRule } from '../components/MappingCanvas';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ export function CreateStitchPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const stitch = await createStitch({
+      await createStitch({
         workspaceId,
         name: wizard.name.trim(),
         srcConnectionId: wizard.srcConnectionId,
@@ -299,13 +299,12 @@ export function CreateStitchPage() {
         sourceObject: wizard.sourceObject,
         targetObject: wizard.targetObject,
         ...(wizard.syncConditions.length > 0 && { syncCondition: wizard.syncConditions }),
+        // Mappings are sent in the same request so the backend can persist them
+        // atomically in a single transaction — no orphaned stitch on mapping failure.
+        ...(wizard.mappingRules.length > 0 && {
+          fieldMappings: [{ sourceCanonical: wizard.sourceObject, mappingRules: wizard.mappingRules }],
+        }),
       });
-      if (wizard.mappingRules.length > 0) {
-        await upsertFieldMapping(stitch.id, {
-          sourceCanonical: wizard.sourceObject,
-          mappingRules: wizard.mappingRules,
-        });
-      }
       navigate(stitchesHref);
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : 'Failed to create stitch.');

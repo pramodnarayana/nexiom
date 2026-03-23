@@ -19,18 +19,7 @@ import type {
   CreateWorkspace,
   UpdateWorkspace,
 } from './workspaces.validation.js';
-
-/** Postgres unique-constraint violation error code. */
-const PG_UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === PG_UNIQUE_VIOLATION
-  );
-}
+import { isUniqueViolation } from '../../shared/db.utils.js';
 
 @Injectable()
 export class WorkspacesService {

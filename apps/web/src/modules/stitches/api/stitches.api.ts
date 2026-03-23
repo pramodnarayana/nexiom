@@ -25,7 +25,6 @@ export interface StitchResponse {
   updatedAt: string;
 }
 
-/** Full payload once the T023 field-mapping wizard can supply all required fields. */
 export interface CreateStitchPayload {
   workspaceId: string;
   name: string;
@@ -41,6 +40,15 @@ export interface CreateStitchPayload {
     op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
     value: string;
     logic?: 'AND' | 'OR';
+  }>;
+  /**
+   * Field mappings created atomically with the stitch in a single DB transaction.
+   * Prevents orphaned stitch rows when the mapping save would otherwise fail
+   * after the stitch has already been inserted.
+   */
+  fieldMappings?: Array<{
+    sourceCanonical: string;
+    mappingRules: Array<{ src: string; dest: string; transform?: string }>;
   }>;
 }
 
