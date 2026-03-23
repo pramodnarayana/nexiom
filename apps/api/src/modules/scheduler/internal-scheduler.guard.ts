@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import type { Request } from 'express';
 
 /**
@@ -36,15 +36,13 @@ export class InternalSchedulerGuard implements CanActivate {
     const token = authHeader.slice(7);
     const expected = this.config.getOrThrow<string>('WINDMILL_INTERNAL_SECRET');
 
-    // Constant-time comparison prevents timing-based secret extraction.
-    // Buffers must be the same byte length for timingSafeEqual — pad/truncate to match.
-    const tokenBuf = Buffer.from(token);
-    const expectedBuf = Buffer.from(expected);
+    // Hash both values to a fixed-length digest before comparing.
+    // This prevents leaking the secret length via the early-exit length check
+    // that a direct Buffer comparison would require.
+    const tokenDigest = createHash('sha256').update(token).digest();
+    const expectedDigest = createHash('sha256').update(expected).digest();
 
-    if (
-      tokenBuf.length !== expectedBuf.length ||
-      !timingSafeEqual(tokenBuf, expectedBuf)
-    ) {
+    if (!timingSafeEqual(tokenDigest, expectedDigest)) {
       throw new UnauthorizedException('Invalid internal scheduler secret');
     }
 

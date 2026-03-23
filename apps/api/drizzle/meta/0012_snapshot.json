@@ -1108,7 +1108,7 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
+        }
       },
       "indexes": {
         "organization_slug_unique_idx": {

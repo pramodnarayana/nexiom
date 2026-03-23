@@ -687,13 +687,13 @@ api:
 
 The `organization.ds_project_code` column was designed to persist DolphinScheduler's numeric project codes. With Windmill, schedule paths are derived from `stitchId` (`f/stitches/{stitchId}`) and require no per-org state.
 
-**Migration steps:**
+**Status: complete.** All removals landed in this branch before `0013_sync_cursors.sql` was generated:
 
-1. Drop the `ds_project_code` column from `organization` in `packages/database/src/schema/identity.ts`.
-2. Remove the `ds_project_code_safe_integer` CHECK constraint and `organization_ds_project_code_unique_idx` index.
-3. Generate migration: `pnpm --filter api db:generate`.
-4. Update `mkOrg()` fixture in `drizzle-tenant.adapter.spec.ts` (remove `dsProjectCode` field).
-5. Remove any `dsProjectCode` references in `DrizzleTenantAdapter` and identity interfaces.
+- `packages/database/src/schema/identity.ts` — `dsProjectCode` column, `ds_project_code_safe_integer` CHECK constraint, and `organization_ds_project_code_unique_idx` index removed.
+- `packages/identity/src/adapters/drizzle-tenant.adapter.spec.ts` — `dsProjectCode: null` removed from `mkOrg()` fixture.
+- `apps/api/drizzle/meta/0012_snapshot.json` — `ds_project_code` column, `organization_ds_project_code_unique_idx` index, and `ds_project_code_safe_integer` check constraint entries removed so the snapshot is consistent with the schema.
+- No `dsProjectCode` references remain in `DrizzleTenantAdapter` or identity interfaces.
+- `0013_sync_cursors.sql` covers only the new `sync_cursors` table — no `ds_project_code` DDL is needed there.
 
 ---
 
