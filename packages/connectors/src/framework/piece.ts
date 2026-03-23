@@ -11,6 +11,87 @@ export interface ObjectDescriptor {
     queryable: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Polling framework types
+// Used by piece.poll() and the SchedulerWorker (packages/engine).
+// Defined here (packages/connectors) so that pieces can implement poll()
+// without taking a dependency on packages/engine.
+// ---------------------------------------------------------------------------
+
+/**
+ * Discriminator for how the replication key should be compared and formatted.
+ * - `timestamp`: ISO-8601 string; `calculateWindow` applies the safety buffer.
+ * - `numeric`:   Integer or float; compared as numbers, not strings.
+ * - `opaque`:    Vendor-specific cursor (e.g. Salesforce queryLocator); passed through as-is.
+ */
+export type ReplicationKeyType = 'timestamp' | 'numeric' | 'opaque';
+
+/**
+ * The inclusive time/value window for a single poll run.
+ * Both bounds are ISO-8601 strings for timestamp keys;
+ * stringified numbers for numeric keys; raw tokens for opaque keys.
+ */
+export interface PollWindow {
+    /** Buffered start value (cursor minus safety buffer for timestamps). */
+    lowerBound: string;
+    /** Upper bound — the exact moment the poll started; becomes next lowerBound. */
+    upperBound: string;
+    /** How the replication key should be interpreted. */
+    replicationKeyType: ReplicationKeyType;
+}
+
+/** A single record returned by piece.poll(). */
+export interface PollRecord {
+    /** Raw record payload from the source SaaS API. */
+    data: Record<string, unknown>;
+    /** The field name used as the replication key for this stream. */
+    replicationKey: string;
+    /** The replication key value for this specific record. */
+    replicationKeyValue: string | number;
+}
+
+/** One page of poll results for a named stream. */
+export interface PollPage {
+    streamName: string;
+    records: PollRecord[];
+    /** Opaque cursor for the next page; undefined = last page. */
+    nextPageCursor?: string;
+}
+
+/**
+ * Singer-style catalog entry for a single stream.
+ * Returned by piece.describeStreams() so the SchedulerWorker can determine
+ * replication strategy and key type before any state document exists.
+ * Mirrors Singer catalog metadata fields:
+ *   valid-replication-keys, replication-method, key-properties
+ *
+ * Discriminated union: INCREMENTAL requires replicationKey + replicationKeyType
+ * at compile time so the SchedulerWorker never reaches calculateWindow with a
+ * missing key. FULL_TABLE and LOG_BASED forbid these fields to prevent misuse.
+ *
+ * keyProperties must be non-empty — an empty array would give L2 no conflict
+ * target for UPSERT deduplication.
+ */
+export type StreamDescriptor =
+    | {
+          streamName: string;
+          replicationMethod: 'INCREMENTAL';
+          /** The field name used as the bookmark. Must match PollRecord.replicationKey. */
+          replicationKey: string;
+          /** How the replication key value is compared and windowed. */
+          replicationKeyType: ReplicationKeyType;
+          /** Non-empty list of primary key fields for L2 UPSERT deduplication. */
+          keyProperties: [string, ...string[]];
+      }
+    | {
+          streamName: string;
+          replicationMethod: 'FULL_TABLE' | 'LOG_BASED';
+          replicationKey?: never;
+          replicationKeyType?: never;
+          /** Non-empty list of primary key fields for L2 UPSERT deduplication. */
+          keyProperties: [string, ...string[]];
+      };
+
 /**
  * A single field within a SaaS object schema, as exposed by the Piece API.
  * Extends the intelligence-layer BaseFieldDescriptor with `label` for UI display.
@@ -37,6 +118,28 @@ export interface Piece {
     describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
     /** Returns the field schema for a specific object. */
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
+    /**
+     * Returns the Singer-style catalog for all streams this piece supports.
+     * Called by SchedulerWorker before the first poll run to determine replication
+     * strategy and key type without relying on existing state.
+     */
+    describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
+    /**
+     * Fetches one page of records from the source SaaS API within the given window.
+     * The SchedulerWorker calls this once per page, advancing nextPageCursor until undefined.
+     * Credentials are decrypted by the caller (TokenManagerService).
+     *
+     * `window.upperBound` is a **snapshot timestamp** fixed at the start of the run —
+     * it does not advance between page calls. Implementations must use it as a stable
+     * upper filter (e.g. `WHERE updated_at <= :upperBound`) on every page to ensure
+     * records created during a long paginated run are not partially captured.
+     * The SchedulerWorker commits `upperBound` as the next bookmark after a successful run.
+     *
+     * Implementors must guard against undefined `poll`: the SchedulerWorker validates
+     * `typeof piece.poll === 'function'` at stitch creation time and rejects schedule
+     * activation for pieces that do not implement polling.
+     */
+    poll?(credentials: Record<string, unknown>, window: PollWindow, nextPageCursor?: string): Promise<PollPage>;
 }
 
 export enum PieceCategory {
@@ -68,6 +171,10 @@ export interface CreatePieceParams {
     maximumSupportedRelease?: string;
     describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
+    /** @see Piece.describeStreams */
+    describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
+    /** @see Piece.poll */
+    poll?(credentials: Record<string, unknown>, window: PollWindow, nextPageCursor?: string): Promise<PollPage>;
 }
 
 /**
@@ -126,5 +233,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         maximumSupportedRelease: params.maximumSupportedRelease,
         ...(params.describeObjects && { describeObjects: params.describeObjects }),
         ...(params.describeFields && { describeFields: params.describeFields }),
+        ...(params.describeStreams && { describeStreams: params.describeStreams }),
+        ...(params.poll && { poll: params.poll }),
     };
 }

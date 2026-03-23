@@ -63,3 +63,6 @@ export {
   integrationStitchesRelations,
   fieldMappingsRelations,
 } from '@nexiom/database';
+
+// Scheduler — Singer-style polling cursors (control-plane, public schema)
+export { syncCursors } from '@nexiom/database';

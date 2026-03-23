@@ -60,6 +60,7 @@ describe("DrizzleTenantAdapter", () => {
     deletedAt: null,
     metadata: null,
     isSystem: false,
+    dsProjectCode: null,
     ...overrides,
   });
 
