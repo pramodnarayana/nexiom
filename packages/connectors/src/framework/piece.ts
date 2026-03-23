@@ -27,18 +27,41 @@ export interface ObjectDescriptor {
 export type ReplicationKeyType = 'timestamp' | 'numeric' | 'opaque';
 
 /**
- * The inclusive time/value window for a single poll run.
- * Both bounds are ISO-8601 strings for timestamp keys;
- * stringified numbers for numeric keys; raw tokens for opaque keys.
+ * The polling window passed to piece.poll() on each page call.
+ *
+ * Discriminated union keyed by `replicationKeyType` so connectors receive
+ * only the bounds that are meaningful for their key type:
+ *
+ * - `timestamp` — ISO-8601 lower and upper bounds. `upperBound` is a snapshot
+ *   fixed at run start; use it as `WHERE updated_at <= :upperBound` on every
+ *   page. The SchedulerWorker commits `upperBound` as the next bookmark.
+ * - `numeric`   — `lowerBound` only (stringified integer). There is no "now"
+ *   upper bound for sequence IDs; connectors fetch forward from `lowerBound`.
+ * - `opaque`    — `lowerBound` only (raw vendor cursor token, empty string on
+ *   first run). Vendor controls semantics; no bound arithmetic is applied.
  */
-export interface PollWindow {
-    /** Buffered start value (cursor minus safety buffer for timestamps). */
-    lowerBound: string;
-    /** Upper bound — the exact moment the poll started; becomes next lowerBound. */
-    upperBound: string;
-    /** How the replication key should be interpreted. */
-    replicationKeyType: ReplicationKeyType;
-}
+export type PollWindow =
+    | {
+          replicationKeyType: 'timestamp';
+          /** Buffered start — prior bookmark minus safety buffer (ISO-8601). */
+          lowerBound: string;
+          /**
+           * Snapshot upper bound — fixed at the moment the run started (ISO-8601).
+           * Use as a stable upper filter on every page to prevent partially
+           * capturing records written during a long paginated run.
+           */
+          upperBound: string;
+      }
+    | {
+          replicationKeyType: 'numeric';
+          /** Last checkpointed sequence/integer value (stringified). `'0'` on first run. */
+          lowerBound: string;
+      }
+    | {
+          replicationKeyType: 'opaque';
+          /** Raw vendor cursor token from the last checkpoint. `''` on first run. */
+          lowerBound: string;
+      };
 
 /** A single record returned by piece.poll(). */
 export interface PollRecord {
@@ -51,8 +74,8 @@ export interface PollRecord {
      *
      * Coercion contract: implementers may return either `string` or `number`.
      * Internally the system treats these as follows:
-     * - `PollWindow.lowerBound` / `upperBound` are always `string` — numeric
-     *   values are stringified before being stored or compared.
+     * - `PollWindow.lowerBound` is always `string`; `upperBound` only exists on
+     *   the `timestamp` variant — numeric values are stringified before use.
      * - `CursorManagerService.trackHighWaterMark` calls `Number(value)` for
      *   `numeric` keys and `String(value)` for `timestamp` / `opaque` keys.
      * - The persisted `StreamBookmark.replication_key_value` is `string | number`
@@ -68,8 +91,16 @@ export interface PollRecord {
 export interface PollPage {
     streamName: string;
     records: PollRecord[];
-    /** Opaque cursor for the next page; undefined = last page. */
-    nextPageCursor?: string;
+    /**
+     * Connector-specific pagination state to resume at the next page.
+     * `undefined` means this is the last page.
+     *
+     * The SchedulerWorker persists this into `bookmark.offset` in `sync_cursors`
+     * after each page (intermediate checkpoint), enabling crash-resume at page N
+     * rather than re-fetching from the high-water mark.
+     * Shape is connector-defined (e.g. `{ cursor: "abc123" }`, `{ page: 4 }`).
+     */
+    nextPageCursor?: Record<string, unknown>;
 }
 
 /**
@@ -139,21 +170,33 @@ export interface Piece {
      */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /**
-     * Fetches one page of records from the source SaaS API within the given window.
-     * The SchedulerWorker calls this once per page, advancing nextPageCursor until undefined.
+     * Fetches one page of records from the source SaaS API for the named stream.
+     * The SchedulerWorker calls this once per page, passing the previous page's
+     * `nextPageCursor` until `PollPage.nextPageCursor` is `undefined` (last page).
      * Credentials are decrypted by the caller (TokenManagerService).
      *
-     * `window.upperBound` is a **snapshot timestamp** fixed at the start of the run —
-     * it does not advance between page calls. Implementations must use it as a stable
-     * upper filter (e.g. `WHERE updated_at <= :upperBound`) on every page to ensure
-     * records created during a long paginated run are not partially captured.
-     * The SchedulerWorker commits `upperBound` as the next bookmark after a successful run.
+     * `streamName` identifies which object/stream to query (e.g. `'Account'`).
+     * It matches `StreamDescriptor.streamName` and the `stream_name` key in `sync_cursors`.
      *
-     * Implementors must guard against undefined `poll`: the SchedulerWorker validates
-     * `typeof piece.poll === 'function'` at stitch creation time and rejects schedule
-     * activation for pieces that do not implement polling.
+     * `window` is typed as a discriminated union — use `window.replicationKeyType`
+     * to determine which bounds are available:
+     *   - `'timestamp'`: both `lowerBound` and `upperBound` are ISO-8601 strings.
+     *   - `'numeric'`:   only `lowerBound` (stringified integer); no `upperBound`.
+     *   - `'opaque'`:    only `lowerBound` (raw vendor token); no `upperBound`.
+     *
+     * `nextPageCursor` is the connector-specific pagination state returned by the
+     * previous `PollPage`. Shape is connector-defined and round-trips through
+     * `bookmark.offset` in `sync_cursors` for crash-safe page resumption.
+     *
+     * The SchedulerWorker validates `typeof piece.poll === 'function'` at stitch
+     * creation time and rejects schedule activation for non-polling pieces.
      */
-    poll?(credentials: Record<string, unknown>, window: PollWindow, nextPageCursor?: string): Promise<PollPage>;
+    poll?(
+        credentials: Record<string, unknown>,
+        streamName: string,
+        window: PollWindow,
+        nextPageCursor?: Record<string, unknown>,
+    ): Promise<PollPage>;
 }
 
 export enum PieceCategory {
@@ -188,7 +231,12 @@ export interface CreatePieceParams {
     /** @see Piece.describeStreams */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /** @see Piece.poll */
-    poll?(credentials: Record<string, unknown>, window: PollWindow, nextPageCursor?: string): Promise<PollPage>;
+    poll?(
+        credentials: Record<string, unknown>,
+        streamName: string,
+        window: PollWindow,
+        nextPageCursor?: Record<string, unknown>,
+    ): Promise<PollPage>;
 }
 
 /**

@@ -117,7 +117,7 @@ NestJS  SchedulerWorker
     ├─ 5. CursorManagerService.calculateWindow(bookmark, catalog)
     │       →  { lowerBound, upperBound, replicationKeyType }
     │
-    ├─ 6. For each page from piece.poll(credentials, window, nextPageCursor):
+    ├─ 6. For each page from piece.poll(credentials, streamName, window, nextPageCursor):
     │       ├─ CursorManagerService.trackHighWaterMark(records, currentMax, replicationKeyType)
     │       ├─ INSERT batch  →  inbound_gateway  (see §12 for pipeline context)
     │       ├─ Enqueue batch  →  Inbound_Queue  (SQS / BullMQ)
@@ -169,11 +169,13 @@ Lives in the **shared control-plane schema**. The SchedulerWorker reads and writ
 | `id` | `UUID` | Primary key |
 | `stitch_id` | `UUID` | FK → `integration_stitch.id` ON DELETE CASCADE |
 | `stream_name` | `VARCHAR(200)` | Object/stream name (e.g. `Account`, `rtms__Load__c`) |
-| `state_document` | `JSONB` | Singer-style bookmark payload (see §5). Default: `{"bookmarks":{},"versions":{},"currently_syncing":null}` |
+| `state_document` | `JSONB` | Singer-style state for **this row's stream only** (see §5). Default: `{"bookmarks":{},"versions":{},"currently_syncing":null}` |
 | `created_at` | `TIMESTAMPTZ` | Row creation timestamp — when the stream was first synced |
 | `updated_at` | `TIMESTAMPTZ` | Last successful checkpoint timestamp |
 
 **Unique index:** `(stitch_id, stream_name)` — one row per stream **per stitch**. Stitches that share the same source connection + stream name each have their own independent cursor row so advancing one never affects the other.
+
+**Single-stream invariant:** Each row's `state_document.bookmarks` and `state_document.versions` will always contain exactly one key — the `stream_name` of that row. The `Record<string, ...>` type is used for Singer tooling compatibility, not to allow multi-stream documents per row. The SchedulerWorker reads and writes only the entry matching this row's `stream_name`.
 
 > **Why `stitch_id` not `connection_id`:** Using `connection_id` as the key would cause two stitches sharing the same Salesforce connection and polling the same `Account` stream to collide on a single cursor row. Stitch A advancing its high-water mark would silently suppress records for Stitch B on its next run.
 
@@ -183,6 +185,8 @@ Lives in the **shared control-plane schema**. The SchedulerWorker reads and writ
 
 ## 5. Singer-Style State Payload (JSONB)
 
+Each `sync_cursors` row is scoped to a single `(stitch_id, stream_name)` pair. The `state_document` for the row tracking `stitch-abc / rtms__Load__c` looks like:
+
 ```json
 {
   "bookmarks": {
@@ -191,21 +195,16 @@ Lives in the **shared control-plane schema**. The SchedulerWorker reads and writ
       "replication_key_value": "2026-03-22T09:45:00.000Z",
       "replication_key_type": "timestamp",
       "offset": {}
-    },
-    "Account": {
-      "replication_key": "LastModifiedDate",
-      "replication_key_value": "2026-03-21T18:30:00.000Z",
-      "replication_key_type": "timestamp",
-      "offset": {}
     }
   },
   "versions": {
-    "rtms__Load__c": 1,
-    "Account": 1
+    "rtms__Load__c": 1
   },
   "currently_syncing": null
 }
 ```
+
+`bookmarks` and `versions` always contain exactly one key matching the row's `stream_name`. The SchedulerWorker reads and writes only that key; it never writes a multi-stream document into a single row.
 
 **Field semantics (aligned with singer-python `state.py` conventions):**
 
@@ -233,11 +232,12 @@ export type ReplicationKeyType = 'timestamp' | 'numeric' | 'opaque';
 // keyProperties typed as [string, ...string[]] (non-empty) so L2 always has
 // a conflict target for UPSERT deduplication.
 
-export interface PollWindow {
-  lowerBound: string;
-  upperBound: string;
-  replicationKeyType: ReplicationKeyType;
-}
+// Discriminated union — each variant exposes only the bounds that make sense
+// for its key type. Numeric/opaque streams must not receive an ISO upperBound.
+export type PollWindow =
+  | { replicationKeyType: 'timestamp'; lowerBound: string; upperBound: string }
+  | { replicationKeyType: 'numeric';   lowerBound: string }
+  | { replicationKeyType: 'opaque';    lowerBound: string };
 
 export interface PollRecord {
   data: Record<string, unknown>;
@@ -248,8 +248,19 @@ export interface PollRecord {
 export interface PollPage {
   streamName: string;
   records: PollRecord[];
-  nextPageCursor?: string;
+  // Connector-specific pagination state; persisted to bookmark.offset for crash resumption.
+  nextPageCursor?: Record<string, unknown>;
 }
+
+// poll() signature — streamName explicitly identifies which stream to fetch.
+// nextPageCursor round-trips through bookmark.offset in sync_cursors.
+//
+// poll(
+//   credentials: Record<string, unknown>,
+//   streamName: string,
+//   window: PollWindow,
+//   nextPageCursor?: Record<string, unknown>,
+// ): Promise<PollPage>
 ```
 
 ```typescript
@@ -379,28 +390,35 @@ export class CursorManagerService {
       bookmark?.replication_key_type ?? catalog.replicationKeyType;
 
     if (!bookmark) {
-      const lowerBound = replicationKeyType === 'numeric' ? '0' : '1970-01-01T00:00:00.000Z';
-      return { lowerBound, upperBound, replicationKeyType };
+      // First run — no prior checkpoint. Return a full-refresh window.
+      // numeric: '0' (lowest sequence); opaque: '' (empty token signals first run to connector).
+      if (replicationKeyType === 'numeric') {
+        return { replicationKeyType, lowerBound: '0' };
+      }
+      if (replicationKeyType === 'opaque') {
+        return { replicationKeyType, lowerBound: '' };
+      }
+      // timestamp — epoch lower bound, snapshot upper bound
+      return { replicationKeyType, lowerBound: '1970-01-01T00:00:00.000Z', upperBound };
     }
 
-    let lowerBound: string;
     if (replicationKeyType === 'timestamp') {
       const parsed = dayjs(bookmark.replication_key_value as string);
-      if (!parsed.isValid()) {
-        this.logger.warn(
-          `Invalid timestamp cursor "${bookmark.replication_key_value}" for key "${bookmark.replication_key}". ` +
-          `Falling back to epoch for full refresh.`,
-        );
-        lowerBound = '1970-01-01T00:00:00.000Z';
-      } else {
-        lowerBound = parsed.subtract(this.safetyBufferMinutes, 'minute').toISOString();
-      }
-    } else {
-      // numeric or opaque — use raw value, no date arithmetic
-      lowerBound = String(bookmark.replication_key_value);
+      const lowerBound = parsed.isValid()
+        ? parsed.subtract(this.safetyBufferMinutes, 'minute').toISOString()
+        : (() => {
+            this.logger.warn(
+              `Invalid timestamp cursor "${bookmark.replication_key_value}" for key "${bookmark.replication_key}". ` +
+              `Falling back to epoch for full refresh.`,
+            );
+            return '1970-01-01T00:00:00.000Z';
+          })();
+      return { replicationKeyType, lowerBound, upperBound };
     }
 
-    return { lowerBound, upperBound, replicationKeyType };
+    // numeric or opaque — use raw value, no date arithmetic, no upperBound
+    const lowerBound = String(bookmark.replication_key_value);
+    return { replicationKeyType, lowerBound };
   }
 
   /**
@@ -593,7 +611,7 @@ ds-alert:
 [L0]  SchedulerWorker  (NestJS)
         ├─ stitchId → srcConnectionId + sourceObject  (DB lookup)
         ├─ CursorManagerService.calculateWindow()
-        ├─ piece.poll(credentials, window)  →  PollPage[]
+        ├─ piece.poll(credentials, streamName, window)  →  PollPage[]
         ├─ CursorManagerService.trackHighWaterMark()
         └─ checkpoint  →  public.sync_cursors  (keyed by stitch_id + stream_name)
                                           │
