@@ -283,7 +283,7 @@ export function CreateStitchPage() {
     loadDestObjects(id);
   }
 
-  const step1Valid = wizard.srcConnectionId && wizard.sourceObject && wizard.name.trim();
+  const step1Valid = wizard.srcConnectionId && wizard.sourceObject && wizard.name.trim().length > 0;
   const step2Valid = wizard.destConnectionId && wizard.targetObject;
 
   async function handleCreate() {

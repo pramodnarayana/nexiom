@@ -78,9 +78,13 @@ export function WorkspaceDetailPage() {
   useEffect(() => {
     void fetchWorkspace();
     void fetchConnections();
+    // Capture ref objects (not values) so the cleanup mutates the same ref
+    // regardless of when it runs — satisfies react-hooks/exhaustive-deps.
+    const fetchRef = fetchSeqRef;
+    const connRef = connSeqRef;
     return () => {
-      fetchSeqRef.current++;
-      connSeqRef.current++;
+      fetchRef.current++;
+      connRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);
 

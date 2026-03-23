@@ -251,14 +251,22 @@ describe('MetadataDiscoveryService', () => {
 
       await service.describeObjects(ORG_ID, CONN_ID);
 
-      // piece.describeObjects must receive the flattened credential map —
-      // nested data fields (e.g. instance_url) are spread to the top level,
-      // and explicit token fields always win over data/vendorParams keys.
+      // piece.describeObjects must receive the flattened credential map.
+      // Layer order: blob top-level scalars → blob.data → blob.vendorParams →
+      // canonical token fields (always win). All top-level blob properties
+      // (including clientSecret, environment, data, vendorParams objects) are
+      // included so pieces can access any field they need.
       expect(describeObjectsMock).toHaveBeenCalledWith({
-        instance_url: 'https://sf.example.com',
-        accessToken: 'sf-access-token',
-        refreshToken: undefined,
+        // from blob top-level
         clientId: 'cid',
+        clientSecret: 'cs',
+        refreshToken: undefined,
+        data: { instance_url: 'https://sf.example.com' },
+        vendorParams: {},
+        // from blob.data (flattened)
+        instance_url: 'https://sf.example.com',
+        // canonical token fields — always authoritative
+        accessToken: 'sf-access-token',
       });
     });
 

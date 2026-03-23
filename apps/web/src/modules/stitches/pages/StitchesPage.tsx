@@ -89,6 +89,12 @@ export function StitchesPage() {
     void load();
   }, [load]);
 
+  // Clear modal targets when the workspace changes so a stale confirmation
+  // dialog from workspace A cannot act on a stitch that belongs to workspace B.
+  useEffect(() => {
+    setArchiveTarget(null);
+  }, [workspaceId]);
+
   const handleArchiveConfirm = async () => {
     if (!archiveTarget) return;
     const stitchId = archiveTarget.id;

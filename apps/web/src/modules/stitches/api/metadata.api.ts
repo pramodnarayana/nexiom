@@ -6,12 +6,20 @@ export interface ObjectDescriptor {
   queryable: boolean;
 }
 
+/**
+ * Mirrors the FieldDescriptor returned by piece.describeFields and the
+ * /stitches/metadata/:connectionId/objects/:objectName/fields endpoint.
+ * Matches packages/connectors/src/framework/piece.ts FieldDescriptor exactly.
+ */
 export interface FieldDescriptor {
   name: string;
   label: string;
   type: string;
-  updateable?: boolean;
-  createable?: boolean;
+  filterable: boolean;
+  sortable: boolean;
+  nillable: boolean;
+  /** Present only when type === 'reference'. */
+  referenceTo?: string[];
 }
 
 export async function listObjects(

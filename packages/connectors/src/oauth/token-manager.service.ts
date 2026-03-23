@@ -189,11 +189,20 @@ export class TokenManagerService {
             oldPayload.refreshToken as string,
         );
 
-        // 3. Explicitly map known snake_case fields to camelCase and merge unknowns.
-        //    This keeps the persisted payload normalized while preserving custom vendor fields.
+        // 3. Require a fresh access token — never persist a stale one.
+        //    A missing access_token means the vendor refresh response was malformed
+        //    or the grant was revoked; writing oldPayload.accessToken back would
+        //    produce a DB row with a refreshed expiresAt but a stale token, causing
+        //    silent auth failures until the connection is fully re-authorized.
+        if (typeof newTokens.access_token !== 'string' || !newTokens.access_token) {
+            throw new OAuthRefreshError(
+                'Token refresh response did not include an access_token. Re-authorization required.',
+            );
+        }
+
         const updatedPayload: OAuthCredentialBlob = {
             ...(oldPayload as unknown as OAuthCredentialBlob),
-            accessToken: (newTokens.access_token ?? oldPayload.accessToken) as string,
+            accessToken: newTokens.access_token,
             refreshToken: (newTokens.refresh_token || oldPayload.refreshToken) as string | undefined,
             ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
             ...('id_token' in newTokens && { idToken: newTokens.id_token }),

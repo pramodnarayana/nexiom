@@ -293,13 +293,19 @@ export class MetadataDiscoveryService {
       const blob: OAuthCredentialBlob =
         await this.tokenManager.getValidCredentials(connectionId);
 
-      // Spread vendor extras first so the canonical token fields always win.
+      // Layer order (last write wins):
+      //   1. All top-level blob scalars (clientId, clientSecret, environment, …)
+      //   2. Vendor extras in blob.data (instance_url, realmId, …)
+      //   3. vendorParams template values (environment override, subdomain, …)
+      //   4. Canonical token fields — always authoritative, never overridable.
       return {
+        ...blob,
         ...blob.data,
         ...blob.vendorParams,
         accessToken: blob.accessToken,
         refreshToken: blob.refreshToken,
         clientId: blob.clientId,
+        clientSecret: blob.clientSecret,
       };
     } catch (e) {
       if (e instanceof InternalServerErrorException) throw e;

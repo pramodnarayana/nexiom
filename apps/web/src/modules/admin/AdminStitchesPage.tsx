@@ -22,6 +22,7 @@ import {
   adminListStitches,
   adminUpdateSchedule,
   adminBulkUpdateOrgSchedule,
+  type BulkUpdateOrgScheduleResponse,
 } from '@/modules/stitches/api/admin-stitches.api';
 import type { StitchResponse } from '@/modules/stitches/api/stitches.api';
 
@@ -65,8 +66,11 @@ export function AdminStitchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /** Sentinel value meaning "no org filter applied" — avoids empty-string SelectItem. */
+  const ALL_ORGS = '__ALL__';
+
   // Client-side filters
-  const [orgFilter, setOrgFilter] = useState<string>('');
+  const [orgFilter, setOrgFilter] = useState<string>(ALL_ORGS);
   const [search, setSearch] = useState('');
 
   // Per-row edit state keyed by stitch id
@@ -110,7 +114,7 @@ export function AdminStitchesPage() {
 
   const filtered = useMemo(() => {
     return stitches.filter((s) => {
-      if (orgFilter && s.orgId !== orgFilter) return false;
+      if (orgFilter !== ALL_ORGS && s.orgId !== orgFilter) return false;
       if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -123,6 +127,10 @@ export function AdminStitchesPage() {
   async function handleRowSave(id: string) {
     const edit = rowEdits[id];
     if (!edit) return;
+    if (!/^[1-9]\d*$/.test(edit.interval)) {
+      patchRowEdit(id, { error: 'Enter a positive integer.' });
+      return;
+    }
     const interval = Number.parseInt(edit.interval, 10);
     if (!Number.isInteger(interval) || interval <= 0) {
       patchRowEdit(id, { error: 'Enter a positive integer.' });
@@ -143,6 +151,10 @@ export function AdminStitchesPage() {
 
   function handleBulkApplyClick() {
     if (!bulkOrgId || !bulkInterval) return;
+    if (!/^[1-9]\d*$/.test(bulkInterval)) {
+      setBulkError('Enter a positive integer.');
+      return;
+    }
     const interval = Number.parseInt(bulkInterval, 10);
     if (!Number.isInteger(interval) || interval <= 0) {
       setBulkError('Enter a positive integer.');
@@ -154,21 +166,22 @@ export function AdminStitchesPage() {
 
   async function handleBulkSave() {
     if (!bulkOrgId || !bulkInterval) return;
+    if (!/^[1-9]\d*$/.test(bulkInterval)) return;
     const interval = Number.parseInt(bulkInterval, 10);
     setBulkConfirmOpen(false);
     setBulkSaving(true);
     setBulkError(null);
     setBulkSaved(false);
     try {
-      const updated = await adminBulkUpdateOrgSchedule(bulkOrgId, { syncIntervalMinutes: interval });
+      const { updated } = await adminBulkUpdateOrgSchedule(bulkOrgId, { syncIntervalMinutes: interval });
       setStitches((prev) => {
-        const updatedMap = new Map(updated.map((u) => [u.id, u]));
+        const updatedMap = new Map(updated.map((u: BulkUpdateOrgScheduleResponse['updated'][number]) => [u.id, u]));
         return prev.map((s) => updatedMap.get(s.id) ?? s);
       });
       // Sync row edits for affected stitches
       setRowEdits((prev) => {
         const next = { ...prev };
-        updated.forEach((u) => {
+        updated.forEach((u: BulkUpdateOrgScheduleResponse['updated'][number]) => {
           if (next[u.id]) {
             next[u.id] = { ...next[u.id], interval: String(u.syncIntervalMinutes), saved: false };
           }
@@ -209,6 +222,7 @@ export function AdminStitchesPage() {
             className="w-28 h-8 text-sm"
             type="number"
             min={1}
+            step={1}
             placeholder="Interval (min)"
             value={bulkInterval}
             onChange={(e) => { setBulkInterval(e.target.value); setBulkSaved(false); }}
@@ -233,7 +247,7 @@ export function AdminStitchesPage() {
             <SelectValue placeholder="All orgs" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All orgs</SelectItem>
+            <SelectItem value={ALL_ORGS}>All orgs</SelectItem>
             {orgIds.map((id) => (
               <SelectItem key={id} value={id}>{id}</SelectItem>
             ))}
@@ -305,6 +319,7 @@ export function AdminStitchesPage() {
                             className="h-7 w-20 text-sm"
                             type="number"
                             min={1}
+                            step={1}
                             value={edit.interval}
                             aria-label={`Sync interval for ${stitch.name}`}
                             onChange={(e) => {
@@ -348,7 +363,7 @@ export function AdminStitchesPage() {
           <DialogHeader>
             <DialogTitle>Apply bulk schedule override?</DialogTitle>
             <DialogDescription>
-              All active stitches for org <strong>{bulkOrgId ? shortId(bulkOrgId) : ''}…</strong> will
+              All non-archived stitches for org <strong>{bulkOrgId ? shortId(bulkOrgId) : ''}…</strong> will
               be updated to a sync interval of <strong>{bulkInterval} min</strong>. This cannot be
               undone without applying another override.
             </DialogDescription>

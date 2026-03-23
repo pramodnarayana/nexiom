@@ -349,21 +349,11 @@ export class ConnectorsService {
               )
               .returning({ id: appConnections.id });
           } catch (err: unknown) {
-            const pgErr = extractPgError(err);
-            if (pgErr?.code === '23505') {
-              if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
-                throw new HttpException(
-                  `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-                  409,
-                );
-              }
-              if (pgErr.constraint === 'tenant_external_id_unique_idx') {
-                throw new HttpException(
-                  `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-                  409,
-                );
-              }
-            }
+            this.throwOnDuplicateConnection(
+              extractPgError(err),
+              displayName,
+              externalId,
+            );
             throw err;
           }
 
@@ -397,21 +387,11 @@ export class ConnectorsService {
             })
             .returning({ id: appConnections.id });
         } catch (err: unknown) {
-          const pgErr = extractPgError(err);
-          if (pgErr?.code === '23505') {
-            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
-              throw new HttpException(
-                `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
-                409,
-              );
-            }
-            if (pgErr.constraint === 'tenant_external_id_unique_idx') {
-              throw new HttpException(
-                `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
-                409,
-              );
-            }
-          }
+          this.throwOnDuplicateConnection(
+            extractPgError(err),
+            displayName,
+            externalId,
+          );
           throw err;
         }
 
@@ -512,6 +492,32 @@ export class ConnectorsService {
       );
       throw new InternalServerErrorException(
         'Failed to save connection to database',
+      );
+    }
+  }
+
+  /**
+   * Throws a 409 HttpException when the pg error represents a unique-constraint
+   * violation on a known connection-uniqueness index. Returns without throwing
+   * when the code is not '23505' or the constraint is unrecognized (re-throw
+   * is left to the caller).
+   */
+  private throwOnDuplicateConnection(
+    pgErr: { code: string; constraint?: string } | null,
+    displayName: string,
+    externalId: string,
+  ): void {
+    if (pgErr?.code !== '23505') return;
+    if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+      throw new HttpException(
+        `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
+        409,
+      );
+    }
+    if (pgErr.constraint === 'tenant_external_id_unique_idx') {
+      throw new HttpException(
+        `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
+        409,
       );
     }
   }

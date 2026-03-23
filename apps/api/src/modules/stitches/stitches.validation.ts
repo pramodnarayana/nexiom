@@ -35,7 +35,8 @@ const FieldMappingRule = z.object({
 
 const InitialFieldMapping = z.object({
   sourceCanonical: z.string().trim().min(1).max(100),
-  mappingRules: z.array(FieldMappingRule).max(200),
+  // min(1): an empty rules array is a no-op that wastes a DB row.
+  mappingRules: z.array(FieldMappingRule).min(1).max(200),
 });
 
 export const CreateStitchSchema = z.object({

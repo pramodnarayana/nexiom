@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -71,6 +71,44 @@ function newConditionRow(): ConditionRow {
   return { _id: crypto.randomUUID(), field: '', op: 'eq', value: '', logic: 'AND' };
 }
 
+// ── State ─────────────────────────────────────────────────────────────────────
+
+interface FieldsState {
+  src: FieldDescriptor[];
+  dest: FieldDescriptor[];
+  loading: boolean;
+  error: string | null;
+}
+
+interface ComponentState {
+  fields: FieldsState;
+  canvas: CanvasState;
+}
+
+type ComponentAction =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; src: FieldDescriptor[]; dest: FieldDescriptor[] }
+  | { type: 'FETCH_ERROR'; error: string }
+  | { type: 'CANVAS'; update: (prev: CanvasState) => CanvasState };
+
+const INITIAL_STATE: ComponentState = {
+  fields: { src: [], dest: [], loading: true, error: null },
+  canvas: { mappingRows: [newMappingRow()], conditionRows: [] },
+};
+
+function reducer(state: ComponentState, action: ComponentAction): ComponentState {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { fields: { src: [], dest: [], loading: true, error: null }, canvas: { mappingRows: [newMappingRow()], conditionRows: [] } };
+    case 'FETCH_SUCCESS':
+      return { ...state, fields: { src: action.src, dest: action.dest, loading: false, error: null } };
+    case 'FETCH_ERROR':
+      return { ...state, fields: { src: [], dest: [], loading: false, error: action.error } };
+    case 'CANVAS':
+      return { ...state, canvas: action.update(state.canvas) };
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MappingCanvas({
@@ -80,41 +118,22 @@ export function MappingCanvas({
   targetObject,
   onChange,
 }: Readonly<MappingCanvasProps>) {
-  interface FieldsState {
-    src: FieldDescriptor[];
-    dest: FieldDescriptor[];
-    loading: boolean;
-    error: string | null;
-  }
-  const [fields, setFields] = useState<FieldsState>({
-    src: [],
-    dest: [],
-    loading: true,
-    error: null,
-  });
-
-  const [canvas, setCanvas] = useState<CanvasState>({
-    mappingRows: [newMappingRow()],
-    conditionRows: [],
-  });
+  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const { fields, canvas } = state;
 
   useEffect(() => {
+    dispatch({ type: 'FETCH_START' });
     let cancelled = false;
     Promise.all([
       listFields(srcConnectionId, sourceObject),
       listFields(destConnectionId, targetObject),
     ])
       .then(([src, dest]) => {
-        if (!cancelled) setFields({ src, dest, loading: false, error: null });
+        if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', src, dest });
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setFields({
-            src: [],
-            dest: [],
-            loading: false,
-            error: e instanceof Error ? e.message : 'Failed to load fields.',
-          });
+          dispatch({ type: 'FETCH_ERROR', error: e instanceof Error ? e.message : 'Failed to load fields.' });
         }
       });
     return () => { cancelled = true; };
@@ -141,41 +160,41 @@ export function MappingCanvas({
   // ── Mapping row handlers ─────────────────────────────────────────────────
 
   function updateMappingRow(id: string, patch: Partial<Pick<MappingRow, 'src' | 'dest'>>) {
-    setCanvas((prev) => ({
+    dispatch({ type: 'CANVAS', update: (prev) => ({
       ...prev,
       mappingRows: prev.mappingRows.map((r) => (r._id === id ? { ...r, ...patch } : r)),
-    }));
+    }) });
   }
 
   function addMappingRow() {
-    setCanvas((prev) => ({ ...prev, mappingRows: [...prev.mappingRows, newMappingRow()] }));
+    dispatch({ type: 'CANVAS', update: (prev) => ({ ...prev, mappingRows: [...prev.mappingRows, newMappingRow()] }) });
   }
 
   function removeMappingRow(id: string) {
-    setCanvas((prev) => {
+    dispatch({ type: 'CANVAS', update: (prev) => {
       const next = prev.mappingRows.filter((r) => r._id !== id);
       return { ...prev, mappingRows: next.length > 0 ? next : [newMappingRow()] };
-    });
+    } });
   }
 
   // ── Condition row handlers ───────────────────────────────────────────────
 
   function updateConditionRow(id: string, patch: Partial<Omit<ConditionRow, '_id'>>) {
-    setCanvas((prev) => ({
+    dispatch({ type: 'CANVAS', update: (prev) => ({
       ...prev,
       conditionRows: prev.conditionRows.map((r) => (r._id === id ? { ...r, ...patch } : r)),
-    }));
+    }) });
   }
 
   function addConditionRow() {
-    setCanvas((prev) => ({ ...prev, conditionRows: [...prev.conditionRows, newConditionRow()] }));
+    dispatch({ type: 'CANVAS', update: (prev) => ({ ...prev, conditionRows: [...prev.conditionRows, newConditionRow()] }) });
   }
 
   function removeConditionRow(id: string) {
-    setCanvas((prev) => ({
+    dispatch({ type: 'CANVAS', update: (prev) => ({
       ...prev,
       conditionRows: prev.conditionRows.filter((r) => r._id !== id),
-    }));
+    }) });
   }
 
   const srcFieldOptions = useMemo(

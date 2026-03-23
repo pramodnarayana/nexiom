@@ -4,6 +4,7 @@ import { AuthGuard } from '@nexiom/auth';
 import { StitchesAdminController } from './stitches-admin.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { SystemAdminGuard } from '../identity/auth/system-admin.guard.js';
+import { AdminUpdateScheduleBody } from './update-schedule.validation.js';
 
 const STITCH_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -49,7 +50,7 @@ describe('StitchesAdminController', () => {
 
     const result = await controller.bulkUpdateOrgSchedule(ORG_ID, {
       syncIntervalMinutes: 30,
-    } as any);
+    } satisfies AdminUpdateScheduleBody);
 
     expect(result).toBe(updated);
     expect(mockService.bulkUpdateScheduleByOrg).toHaveBeenCalledWith(ORG_ID, {
@@ -67,7 +68,7 @@ describe('StitchesAdminController', () => {
 
     const result = await controller.updateSchedule(STITCH_ID, {
       syncIntervalMinutes: 15,
-    } as any);
+    } satisfies AdminUpdateScheduleBody);
 
     expect(result).toBe(updated);
     expect(mockService.updateScheduleAdmin).toHaveBeenCalledWith(STITCH_ID, {

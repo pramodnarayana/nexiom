@@ -29,9 +29,18 @@ function getAccessToken(credentials: Record<string, unknown>): string {
 }
 
 async function sfFetch<T>(url: string, accessToken: string): Promise<T> {
-    const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
-    });
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+            signal: AbortSignal.timeout(10_000),
+        });
+    } catch (err: unknown) {
+        if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+            throw new Error(`Salesforce API request timed out after 10s: ${url}`);
+        }
+        throw err;
+    }
     if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`Salesforce API error ${res.status}: ${body}`);
