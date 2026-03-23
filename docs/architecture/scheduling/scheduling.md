@@ -562,13 +562,46 @@ DolphinScheduler 3.x runs as four Docker services sharing a PostgreSQL backing s
 
 ```yaml
 # docker-compose additions (excerpt)
+# Healthchecks on postgres and zookeeper are defined on those services so that
+# ds-master waits for actual readiness, not just container start.
+
+postgres:
+  # ... existing postgres service definition ...
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+
+zookeeper:
+  # ... existing zookeeper service definition ...
+  healthcheck:
+    # ZooKeeper 3.x responds to the four-letter "ruok" command on its client port (2181)
+    test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep -q imok"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 15s
+
 ds-master:
   image: apache/dolphinscheduler-master:3.2.2
   environment:
     - DATABASE_HOST=postgres
     - DATABASE_NAME=dolphinscheduler
     - REGISTRY_TYPE=zookeeper
-  depends_on: [postgres, zookeeper]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    zookeeper:
+      condition: service_healthy
+  healthcheck:
+    # DS master exposes an actuator endpoint on port 5679
+    test: ["CMD-SHELL", "curl -f http://localhost:5679/actuator/health || exit 1"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
 
 ds-worker:
   image: apache/dolphinscheduler-worker:3.2.2
@@ -576,7 +609,11 @@ ds-worker:
     - DATABASE_HOST=postgres
     - DATABASE_NAME=dolphinscheduler
     - WORKER_GROUPS=default,production,sandbox
-  depends_on: [ds-master]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    ds-master:
+      condition: service_healthy
 
 ds-api:
   image: apache/dolphinscheduler-api:3.2.2
@@ -584,11 +621,23 @@ ds-api:
   environment:
     - DATABASE_HOST=postgres
     - DATABASE_NAME=dolphinscheduler
-  depends_on: [ds-master]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    ds-master:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "curl -f http://localhost:12345/dolphinscheduler/actuator/health || exit 1"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
 
 ds-alert:
   image: apache/dolphinscheduler-alert-server:3.2.2
-  depends_on: [ds-master]
+  depends_on:
+    ds-master:
+      condition: service_healthy
 ```
 
 **Environment variables:**
