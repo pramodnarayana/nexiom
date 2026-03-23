@@ -4,7 +4,9 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { eq, and, notInArray, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
@@ -26,7 +28,8 @@ import type {
 const TTL_SECONDS = 5 * 60; // 5 minutes
 const TTL_MS = TTL_SECONDS * 1_000;
 
-const MAX_OBJECTS = 2000; // guard against excessively large payloads
+/** Default cap when METADATA_MAX_OBJECTS is not set. */
+const DEFAULT_MAX_OBJECTS = 2000;
 
 /**
  * Shape stored in connectorObjectProfiles.profile when the row was populated
@@ -39,23 +42,36 @@ interface StoredObjectDescriptor {
 }
 
 @Injectable()
-export class MetadataDiscoveryService {
+export class MetadataDiscoveryService implements OnModuleInit {
   private readonly logger = new Logger(MetadataDiscoveryService.name);
+  private readonly maxObjects: number;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly tokenManager: TokenManagerService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const raw = this.config.get<string>('METADATA_MAX_OBJECTS');
+    const parsed = raw !== undefined ? parseInt(raw, 10) : NaN;
+    this.maxObjects =
+      Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_OBJECTS;
+  }
+
+  onModuleInit() {
+    this.logger.log(
+      `MetadataDiscoveryService initialised — MAX_OBJECTS=${this.maxObjects}`,
+    );
+  }
 
   async describeObjects(
     orgId: string,
     connectionId: string,
-    limit = MAX_OBJECTS,
+    limit = this.maxObjects,
     forceRefresh = false,
   ): Promise<ObjectDescriptor[]> {
-    const effectiveLimit = Math.max(1, Math.min(limit, MAX_OBJECTS));
+    const effectiveLimit = Math.max(1, Math.min(limit, this.maxObjects));
     const connection = await this.resolveConnection(orgId, connectionId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
@@ -117,6 +133,16 @@ export class MetadataDiscoveryService {
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
     const credentials = await this.resolveCredentials(connectionId);
     const objects = await this.fetchObjects(connection.appName, credentials);
+
+    // Emit a warning when the discovered count approaches the configured cap
+    // (> 75%) so operators can raise METADATA_MAX_OBJECTS before objects are silently truncated.
+    if (objects.length > this.maxObjects * 0.75) {
+      this.logger.warn(
+        `describeObjects: connector "${connection.appName}" returned ${objects.length} objects — ` +
+          `exceeds 75% of MAX_OBJECTS limit (${this.maxObjects}). ` +
+          `Raise METADATA_MAX_OBJECTS env var if truncation is undesirable.`,
+      );
+    }
 
     await this.redis.set(redisKey, JSON.stringify(objects), 'EX', TTL_SECONDS);
 

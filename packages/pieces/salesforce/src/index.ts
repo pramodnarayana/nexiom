@@ -60,6 +60,11 @@ async function describeObjects(
     }
     const data = await sfFetch<SfSobjectsResponse>(url, accessToken);
 
+    // Non-queryable custom objects (name.endsWith('__c')) are intentionally included
+    // even when queryable === false, to allow field-mapping discovery against custom
+    // objects that Salesforce marks non-queryable (e.g., junction/relationship objects).
+    // Standard non-queryable objects are excluded because they are typically internal
+    // and have no meaningful mapping use case.
     const filtered = data.sobjects.filter((o) => o.queryable || o.name.endsWith('__c'));
 
     // Custom objects first (sorted by label), then standard objects (sorted by label).
@@ -71,6 +76,9 @@ async function describeObjects(
         return a.label.localeCompare(b.label);
     });
 
+    // queryable is preserved in the returned shape so downstream code (e.g., the
+    // metadata-discovery service and the mapping canvas) can check the flag and
+    // surface a warning or disable query-dependent features for non-queryable objects.
     return filtered.map((o) => ({ name: o.name, label: o.label, queryable: o.queryable }));
 }
 

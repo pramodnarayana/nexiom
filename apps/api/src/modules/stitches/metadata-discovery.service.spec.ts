@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { TokenManagerService } from '@nexiom/connectors';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
@@ -49,7 +50,7 @@ function buildMockDb() {
   const transaction = vi
     .fn()
     .mockImplementation((cb: (tx: unknown) => Promise<unknown>) =>
-      cb({ select, insert, delete: deleteFn }),
+      cb({ select, insert, delete: deleteFn, update: updateFn }),
     );
 
   return {
@@ -149,6 +150,10 @@ describe('MetadataDiscoveryService', () => {
         { provide: REDIS_CLIENT, useValue: redis },
         { provide: PieceRegistryService, useValue: mockPieceRegistry },
         { provide: TokenManagerService, useValue: mockTokenManager },
+        {
+          provide: ConfigService,
+          useValue: { get: vi.fn().mockReturnValue(undefined) },
+        },
       ],
     }).compile();
 

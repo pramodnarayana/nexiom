@@ -142,10 +142,10 @@ export function MappingCanvas({
   // Sync parent whenever canvas changes.
   // Skips the initial mount to avoid calling onChange (→ setWizard in parent)
   // during the first render, which triggers React's "update while rendering" warning.
-  const isInitialRender = useRef(false);
+  const hasMountedRef = useRef(false);
   useEffect(() => {
-    if (!isInitialRender.current) {
-      isInitialRender.current = true;
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
       return;
     }
     const rules: MappingRule[] = canvas.mappingRows

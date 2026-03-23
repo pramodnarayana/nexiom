@@ -78,6 +78,7 @@ export function Combobox({
         break
       case "ArrowUp":
         e.preventDefault()
+        if (filtered.length === 0) break
         setActiveIndex((i) => Math.max(i - 1, 0))
         break
       case "Enter":
@@ -102,10 +103,10 @@ export function Combobox({
     items[activeIndex]?.scrollIntoView({ block: "nearest" })
   }, [activeIndex])
 
-  // Reset active index whenever the filtered list changes
+  // Reset active index whenever the query or filtered option set changes
   React.useEffect(() => {
     setActiveIndex(-1)
-  }, [query])
+  }, [query, filtered])
 
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={handleOpenChange}>
@@ -143,7 +144,7 @@ export function Combobox({
               role="combobox"
               aria-expanded={open}
               aria-controls={listId}
-              aria-activedescendant={activeIndex >= 0 ? `${listId}-opt-${activeIndex}` : undefined}
+              aria-activedescendant={activeIndex >= 0 && filtered[activeIndex] ? `${listId}-opt-${activeIndex}` : undefined}
               aria-autocomplete="list"
               value={query}
               onChange={(e) => { setQuery(e.target.value) }}
@@ -154,7 +155,15 @@ export function Combobox({
           </div>
 
           {/* ── Options list ───────────────────────────────────────────── */}
-          <div
+          {/*
+            WAI-ARIA 1.2 combobox pattern: role="listbox" is correct here.
+            A native <select> cannot host the search <Input> above, so the
+            ARIA listbox/option roles are the specified accessible equivalent.
+            Keyboard navigation is handled by the search input via
+            aria-activedescendant; options also carry tabIndex={-1} and their
+            own onKeyDown so they are directly activatable if focused.
+          */}
+          <div // NOSONAR: S6819 — WAI-ARIA 1.2 combobox requires role="listbox"; native <select> cannot embed a search input
             ref={listRef}
             id={listId}
             role="listbox"
@@ -167,14 +176,23 @@ export function Combobox({
               </p>
             ) : (
               filtered.map((option, index) => (
-                <div
+                <div // NOSONAR: S6819 — WAI-ARIA 1.2 combobox requires role="option"; tabIndex and onKeyDown satisfy focusability/keyboard requirements
                   key={option.value}
                   id={`${listId}-opt-${index}`}
                   role="option"
+                  // tabIndex={-1} makes each option programmatically focusable
+                  // (required for role="option" per ARIA spec).
+                  tabIndex={-1}
                   aria-selected={option.value === value}
                   data-active={index === activeIndex ? "true" : undefined}
                   onMouseEnter={() => { setActiveIndex(index) }}
                   onClick={() => { handleSelect(option.value) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleSelect(option.value)
+                    }
+                  }}
                   className={cn(
                     "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none",
                     "hover:bg-accent hover:text-accent-foreground",

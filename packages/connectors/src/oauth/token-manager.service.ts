@@ -36,6 +36,24 @@ export class AppCredentialError extends Error {
     }
 }
 
+/**
+ * Runtime type guard for OAuthCredentialBlob.
+ * Validates the minimum required fields so callers can detect malformed
+ * encrypted payloads before attempting a token refresh merge, rather than
+ * silently carrying forward stale or undefined credential fields via an
+ * unsafe double-cast.
+ */
+export function isOAuthCredentialBlob(value: unknown): value is OAuthCredentialBlob {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    return (
+        typeof v['clientId'] === 'string' &&
+        typeof v['clientSecret'] === 'string' &&
+        typeof v['accessToken'] === 'string' &&
+        typeof v['data'] === 'object' && v['data'] !== null
+    );
+}
+
 export abstract class OAuthRefreshClient {
     abstract refresh(tenantId: string, appName: string, externalId: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
@@ -189,7 +207,17 @@ export class TokenManagerService {
             oldPayload.refreshToken as string,
         );
 
-        // 3. Require a fresh access token — never persist a stale one.
+        // 3. Validate stored credential shape before merging.
+        //    If the decrypted payload does not match OAuthCredentialBlob (e.g., the
+        //    encryption key rotated or the row was written by an older schema), throw
+        //    rather than silently spreading undefined fields into the refreshed blob.
+        if (!isOAuthCredentialBlob(oldPayload)) {
+            throw new AppCredentialError(
+                'Stored credentials are malformed and do not match OAuthCredentialBlob. Re-authorization required.',
+            );
+        }
+
+        // 4. Require a fresh access token — never persist a stale one.
         //    A missing access_token means the vendor refresh response was malformed
         //    or the grant was revoked; writing oldPayload.accessToken back would
         //    produce a DB row with a refreshed expiresAt but a stale token, causing
@@ -200,8 +228,9 @@ export class TokenManagerService {
             );
         }
 
+        // oldPayload is narrowed to OAuthCredentialBlob by the guard above — no cast needed.
         const updatedPayload: OAuthCredentialBlob = {
-            ...(oldPayload as unknown as OAuthCredentialBlob),
+            ...oldPayload,
             accessToken: newTokens.access_token,
             refreshToken: (newTokens.refresh_token || oldPayload.refreshToken) as string | undefined,
             ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
@@ -209,14 +238,14 @@ export class TokenManagerService {
             ...('token_type' in newTokens && { tokenType: newTokens.token_type }),
         };
 
-        // 4. Encrypt & Calculate Expiry
+        // 5. Encrypt & Calculate Expiry
         const encryptedPayload = await this.crypto.encrypt(JSON.stringify(updatedPayload));
         const expiresInMs = typeof newTokens.expires_in === 'number'
             ? newTokens.expires_in * 1000
             : 3600 * 1000; // default 1-hour fallback
         const expiresAt = new Date(Date.now() + expiresInMs);
 
-        // 5. Save to DB
+        // 6. Save to DB
         await this.db.update(appConnections)
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(appConnections.id, connection.id));

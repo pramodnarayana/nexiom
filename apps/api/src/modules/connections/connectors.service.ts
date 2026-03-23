@@ -28,7 +28,7 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import * as crypto from 'node:crypto';
-import { extractPgError } from '../../shared/db.utils.js';
+import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
 /**
  * Encrypted value blob stored in app_connection.value.
@@ -507,7 +507,7 @@ export class ConnectorsService {
     displayName: string,
     externalId: string,
   ): void {
-    if (pgErr?.code !== '23505') return;
+    if (pgErr?.code !== PG_UNIQUE_VIOLATION) return;
     if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
       throw new HttpException(
         `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,

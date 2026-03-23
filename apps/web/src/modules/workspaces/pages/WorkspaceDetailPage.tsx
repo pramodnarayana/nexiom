@@ -78,13 +78,12 @@ export function WorkspaceDetailPage() {
   useEffect(() => {
     void fetchWorkspace();
     void fetchConnections();
-    // Capture ref objects (not values) so the cleanup mutates the same ref
-    // regardless of when it runs — satisfies react-hooks/exhaustive-deps.
-    const fetchRef = fetchSeqRef;
-    const connRef = connSeqRef;
     return () => {
-      fetchRef.current++;
-      connRef.current++;
+      // useRef objects are stable — incrementing .current in cleanup is safe.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      fetchSeqRef.current++;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      connSeqRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);
 
