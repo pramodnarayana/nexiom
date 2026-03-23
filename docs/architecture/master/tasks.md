@@ -268,33 +268,52 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] Add to `Piece` interface
 - [ ] `normalize(objectType, raw)` → `{ canonicalType, data }`
 - [ ] `executeAction(objectType, payload, credentials)` → `VendorResponse`
-- [ ] `poll(credentials, cursor)` → `{ records, nextCursor }`
+- [ ] `poll(credentials, window: PollWindow)` → `PollPage` — each record must carry `replicationKey` + `replicationKeyValue` so `CursorManagerService` can advance the High-Water Mark without knowing the connector schema; `PollPage.nextPageCursor` drives pagination
 - [ ] Salesforce + QuickBooks: stub implementations
 - [ ] Canonical model interfaces in `packages/connectors/framework/canonical/`
+- [ ] `PollRecord`, `PollPage`, `PollWindow` interfaces exported from `packages/engine/` (see T046)
 - Files: `packages/connectors/framework/src/piece.interface.ts`, `packages/connectors/framework/canonical/**`
-- Depends: T018
+- Depends: T018, T046
 
-### T029 · api: `SchedulerModule` + `SchedulerService`
+### T029 · api: `SchedulerModule` + `SchedulerService` (DolphinScheduler-backed)
 
-- [ ] BullMQ `scheduler-queue` backed by Redis
-- [ ] `register(stitchId, intervalMinutes)` — `queue.upsertJobScheduler(`schedule:${stitchId}`, { every: ms }, { name: 'poll-stitch', data: { stitchId } })`
-- [ ] `reschedule(stitchId, newInterval)` — `queue.upsertJobScheduler(...)` atomically updates interval (no remove-then-add race)
-- [ ] `disable(stitchId)` — `queue.removeJobScheduler(`schedule:${stitchId}`)`
-- [ ] `onModuleInit()` — bootstraps all `ACTIVE` + `schedule_enabled=true` stitches via `upsertJobScheduler` (idempotent on restart)
-- [ ] Wire into `StitchesController` schedule endpoints (T021 stubs): replace TODO comments with `SchedulerService.reschedule()`/`disable()`/`register()` calls
+> Spec: `docs/architecture/scheduling/scheduling.md` §3
+
+- [ ] `SchedulerService` wraps `DolphinSchedulerClient` (T050) to manage stitch lifecycle in DS
+- [ ] `registerStitch(stitch)` — creates DS project (idempotent per org) → creates process definition with HTTP task (`POST /internal/scheduler/execute-stitch`) → creates cron schedule → online
+- [ ] `rescheduleStitch(stitchId, orgId, newInterval)` — updates DS cron schedule → re-online
+- [ ] `disableStitch(stitchId, orgId)` — offlines the DS schedule
+- [ ] `triggerOnce(stitchId, orgId)` — fires a one-shot DS process instance (manual trigger)
+- [ ] `deregisterStitch(stitchId, orgId)` — offlines + deletes DS process definition (called on stitch delete)
+- [ ] `onModuleInit()` — reconciles all `ACTIVE` + `schedule_enabled=true` stitches against DS on restart: registers missing, offlines deleted (idempotent)
+- [ ] Wire into `StitchesController` + `StitchesAdminController` (T021 stubs): replace `// TODO(T029)` comments with `SchedulerService` calls
 - Files: `apps/api/src/modules/scheduler/scheduler.module.ts`, `apps/api/src/modules/scheduler/scheduler.service.ts`
-- Depends: T003, T020, T021
+- Depends: T020, T021, T049, T050
 
-### T030 · api: `SchedulerWorker` — poll execution
+### T030 · api: `SchedulerWorker` — DolphinScheduler HTTP callback handler
 
-- [ ] Consumes `poll-stitch` jobs from `scheduler-queue`
-- [ ] Guards: check `schedule_enabled` + `status=ACTIVE` before proceeding
-- [ ] Reads `sync_cursor` for high-water mark (table created by T026 `REPLICA_ACTIVE` plan)
-- [ ] Calls `piece.poll(credentials, cursor)` → fan out each record into `inbound_gateway` + `Inbound_Queue`
-- [ ] Advances `sync_cursor` only after DB commit
-- [ ] Updates `integration_stitch.last_scheduled_at`
-- Files: `apps/api/src/modules/scheduler/scheduler.worker.ts`
-- Depends: T026, T028, T029
+> Spec: `docs/architecture/scheduling/scheduling.md` §2C, §Poll Run Sequence
+
+- [ ] `POST /internal/scheduler/execute-stitch` — receives `{ stitchId }` from DolphinScheduler HTTP task; returns `ExecuteStitchResult`; non-2xx triggers DS retry DAG
+- [ ] Guard: verify `scheduleEnabled=true` + `status=ACTIVE`; return `{ status: 'SKIPPED' }` with `200` otherwise (DS does not retry SKIPPED)
+- [ ] Validate `Authorization: Bearer <DS_INTERNAL_SECRET>` header — return `401` if invalid
+- [ ] Lookup `stitchId → { srcConnectionId, sourceObject }` from `integration_stitch` — return `404` if deleted
+- [ ] Acquire Redis lock `lock:poll:{stitchId}:{streamName}` (TTL = stitch interval) — return `{ status: 'SKIPPED' }` with `200` if unavailable (concurrent DS run)
+- [ ] Call `piece.describeStreams(credentials)` → `StreamDescriptor` for the source object
+- [ ] Read `SyncStateDocument` from `public.sync_cursors` for `(stitchId, streamName)`; detect crash-resume via `currently_syncing` field
+- [ ] `CursorManagerService.calculateWindow(bookmark, catalog)` → `PollWindow`
+- [ ] Paginate `piece.poll(credentials, window, nextPageCursor)`: for each `PollPage`:
+  - `CursorManagerService.trackHighWaterMark(records, currentMax, replicationKeyType)` — held in memory
+  - `INSERT` batch → `inbound_gateway`; enqueue → `Inbound_Queue`
+  - Every `CURSOR_CHECKPOINT_INTERVAL` pages: intermediate checkpoint → `sync_cursors` (saves both high-water mark and `nextPageCursor` as `bookmark.offset`)
+- [ ] Final checkpoint → `sync_cursors` (clears `bookmark.offset` + `currently_syncing`)
+- [ ] Stale cursor detection: if `updated_at` age > `2 × syncIntervalMinutes` emit `cursor_stale` Prometheus counter
+- [ ] Update `integration_stitch.last_scheduled_at`
+- [ ] Release Redis lock
+- [ ] Return `ExecuteStitchResult` — DolphinScheduler records this in its run history
+- [ ] Unit tests: happy path, SKIPPED guard, lock-contention skip, intermediate checkpoint, crash recovery
+- Files: `apps/api/src/modules/scheduler/scheduler.worker.ts`, `apps/api/src/modules/scheduler/scheduler.worker.spec.ts`
+- Depends: T026, T028, T029, T046, T047
 
 ### T031 · api: `ReplicaService` — L2 worker
 
@@ -354,6 +373,70 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] Unit tests
 - Files: `apps/api/src/modules/pipeline/delivery.service.ts` (extend T034)
 - Depends: T034
+
+---
+
+## Phase 3.5 — Stateful Sync (DolphinScheduler + Cursor Manager)
+
+> Spec: `docs/architecture/scheduling/scheduling.md`
+
+### T049 · docker-compose: Add DolphinScheduler services
+
+- [ ] Add `dolphinscheduler` database to existing postgres service (`POSTGRES_MULTIPLE_DATABASES=nexiom_master,dolphinscheduler`)
+- [ ] Add `zookeeper:3.8` service (DS registry backend; port 2181)
+- [ ] Add `ds-master` service (`apache/dolphinscheduler-master:3.2.2`) — depends on postgres + zookeeper
+- [ ] Add `ds-worker` service (`apache/dolphinscheduler-worker:3.2.2`) — worker groups: `default`, `production`, `sandbox`; depends on ds-master
+- [ ] Add `ds-api` service (`apache/dolphinscheduler-api:3.2.2`) — port 12345; depends on ds-master
+- [ ] Add `ds-alert` service (`apache/dolphinscheduler-alert-server:3.2.2`) — depends on ds-master
+- [ ] Add env vars to `apps/api` `.env.example`: `DS_API_URL`, `DS_API_TOKEN`, `DS_NESTJS_API_URL`, `DS_INTERNAL_SECRET`, `DS_DEFAULT_PROJECT_CODE`
+- [ ] Healthcheck on `ds-api` port 12345 before dependent services start
+- Files: `docker-compose.yml`, `apps/api/.env.example`
+- Depends: T001
+
+### T050 · api: `DolphinSchedulerClient` — DS REST API adapter
+
+> Spec: `docs/architecture/scheduling/scheduling.md` §8
+
+- [ ] Abstract class `DolphinSchedulerClient` with methods: `registerStitch`, `updateSchedule`, `enableSchedule`, `disableSchedule`, `triggerOnce`, `deregisterStitch`
+- [ ] `HttpDolphinSchedulerClient` — concrete implementation using `@nestjs/axios`; reads `DS_API_URL` + `DS_API_TOKEN` from `ConfigService`
+- [ ] `StubDolphinSchedulerClient` — no-op implementation for unit tests; injectable as a provider override
+- [ ] `intervalToCron(minutes: SyncIntervalMinutes): string` — pure function mapping all 7 `SYNC_INTERVAL_OPTIONS` to Quartz cron expressions (see spec §2B)
+- [ ] `dsProjectCode(orgId: string): number` — deterministic project code mapping (orgId hash or DS project lookup + cache)
+- [ ] Handles DS token expiry: re-authenticates automatically on 401
+- [ ] Unit tests: `intervalToCron` covers all 7 intervals; `HttpDolphinSchedulerClient` mocks axios; `dsProjectCode` idempotency
+- Files: `apps/api/src/modules/scheduler/dolphin-scheduler.client.ts`, `apps/api/src/modules/scheduler/dolphin-scheduler.client.spec.ts`
+- Depends: T049
+
+### T046 · db: migration `0013_sync_cursors` — control-plane Singer-style cursor table
+
+- [ ] New public-schema table `sync_cursors`: `id UUID`, `stitch_id UUID` (FK → `integration_stitch.id` ON DELETE CASCADE), `stream_name VARCHAR(200)`, `state_document JSONB` (default `{"bookmarks":{},"versions":{},"currently_syncing":null}`), `updated_at TIMESTAMPTZ`
+- [ ] Unique index on `(stitch_id, stream_name)` — keyed per stitch, not per connection, so two stitches sharing the same source connection + stream maintain independent cursors
+- [ ] **Distinct from** `ws_{id}.sync_cursor` (per-workspace L2 replication state from T026) — this table lives in the public control-plane schema and is written by the SchedulerWorker, not the ReplicaService
+- [ ] Run `pnpm --filter api db:generate` and review generated SQL
+- Files: `apps/api/drizzle/0013_sync_cursors.sql`, `apps/api/drizzle/meta/_journal.json`, `packages/database/src/schema/stitches.ts`
+- Depends: T001
+
+### T047 · package: `packages/engine/` — `CursorManagerService`
+
+- [ ] `cursor-manager.types.ts` — `StreamBookmark` (with `replication_key_type`, `offset`), `SyncStateDocument` (with `versions`, `currently_syncing`), `ExecuteStitchPayload`, `ExecuteStitchResult`, `StreamResult` interfaces; re-exports `ReplicationKeyType`, `StreamDescriptor` from `@nexiom/connectors/framework`
+- [ ] `cursor-manager.service.ts` — `CursorManagerService` with three phases:
+  - `calculateWindow(bookmark: StreamBookmark | undefined, catalog: StreamDescriptor): PollWindow` — type-aware (timestamp/numeric/opaque); applies safety buffer for timestamps; `'0'` lower bound for numeric on first run; epoch for timestamp on first run
+  - `trackHighWaterMark(records: PollRecord[], currentMax: string, replicationKeyType: ReplicationKeyType): string` — numeric comparison for `numeric` keys; lexicographic for `timestamp`; last-write-wins for `opaque`
+  - Checkpoint is the caller's responsibility (write `state_document` to `public.sync_cursors` after successful batch commit)
+- [ ] `onModuleInit()` logs configured safety buffer value
+- [ ] `CURSOR_CHECKPOINT_INTERVAL` env var (default 10) — exported constant consumed by `SchedulerWorker`
+- [ ] Unit tests: full-refresh (no bookmark), incremental with safety buffer, high-water mark across multiple pages, configurable buffer via `ConfigService`
+- Files: `packages/engine/src/state/cursor-manager.types.ts`, `packages/engine/src/state/cursor-manager.service.ts`, `packages/engine/src/state/cursor-manager.spec.ts`, `packages/engine/src/index.ts`, `packages/engine/package.json`
+- Depends: T046
+
+### T048 · api: `CursorResetEndpoint` — admin full-refresh trigger
+
+- [ ] `DELETE /admin/stitches/:id/cursor/:streamName` — deletes the `sync_cursors` row for `(stitchId, streamName)`; returns `204`; triggers full refresh on next DS run
+- [ ] Superadmin guard only; logs the reset with operator identity for audit
+- [ ] `GET /admin/stitches/:id/cursors` — lists all `sync_cursors` rows for the stitch with `updated_at` age and stale flag (`age > 2 × syncIntervalMinutes`)
+- [ ] Unit tests for both endpoints
+- Files: `apps/api/src/modules/scheduler/cursor-reset.controller.ts`, `apps/api/src/modules/scheduler/cursor-reset.controller.spec.ts`
+- Depends: T046, T029
 
 ---
 
@@ -459,8 +542,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 1 — Workspaces | T013–T016 | Multi-workspace CRUD + UI |
 | 2 — Stitches & Mapping Canvas | T017–T025 | Stitch + field mapping + schedule config |
 | 3 — Pipeline | T026–T035 | Full L1→L6 data flow + scheduler execution |
+| 3.5 — Stateful Sync | T046–T050 + T029 + T030 | DolphinScheduler orchestration + Singer-style cursor engine |
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |
 
-**Total: 45 tasks**
+**Total: 50 tasks**
