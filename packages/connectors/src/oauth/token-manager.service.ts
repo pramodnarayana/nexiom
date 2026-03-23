@@ -20,6 +20,12 @@ export interface OAuthCredentialBlob {
     data: Record<string, unknown>;
     vendorParams?: Record<string, string>;
     environment?: string | number | boolean;
+    /** Standard OAuth2 token lifetime in seconds, carried forward on refresh. */
+    expiresIn?: number;
+    /** OpenID Connect id_token, present when the vendor returns one. */
+    idToken?: string;
+    /** OAuth2 token_type (e.g. "Bearer"), carried forward on refresh. */
+    tokenType?: string;
 }
 
 export class OAuthRefreshError extends Error {
@@ -225,10 +231,10 @@ export class TokenManagerService {
         const updatedPayload: OAuthCredentialBlob = {
             ...oldPayload,
             accessToken: newTokens.access_token,
-            refreshToken: (newTokens.refresh_token || oldPayload.refreshToken) as string | undefined,
+            refreshToken: typeof newTokens.refresh_token === 'string' ? newTokens.refresh_token : oldPayload.refreshToken,
             ...(typeof newTokens.expires_in === 'number' && { expiresIn: newTokens.expires_in }),
-            ...('id_token' in newTokens && { idToken: newTokens.id_token }),
-            ...('token_type' in newTokens && { tokenType: newTokens.token_type }),
+            ...(typeof newTokens.id_token === 'string' && { idToken: newTokens.id_token }),
+            ...(typeof newTokens.token_type === 'string' && { tokenType: newTokens.token_type }),
         };
 
         // 6. Encrypt & Calculate Expiry
