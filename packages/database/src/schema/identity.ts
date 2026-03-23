@@ -267,12 +267,16 @@ export const organization = pgTable(
     check("organization_id_not_sentinel", sql`${table.id} <> '__NULL__'`),
     check(
       "ds_project_code_safe_integer",
-      sql`${table.dsProjectCode} IS NULL OR ${table.dsProjectCode} <= 9007199254740991`,
+      sql`${table.dsProjectCode} IS NULL OR (${table.dsProjectCode} >= -9007199254740991 AND ${table.dsProjectCode} <= 9007199254740991)`,
     ),
     // Partial unique index: enforce slug uniqueness only for non-deleted orgs
     uniqueIndex("organization_slug_unique_idx")
       .on(table.slug)
       .where(sql`"deletedAt" IS NULL`),
+    // Partial unique index: one DS project per org; NULLs (orgs with no DS project yet) are excluded
+    uniqueIndex("organization_ds_project_code_unique_idx")
+      .on(table.dsProjectCode)
+      .where(sql`"ds_project_code" IS NOT NULL`),
   ],
 );
 

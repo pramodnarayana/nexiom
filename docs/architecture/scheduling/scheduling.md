@@ -169,7 +169,8 @@ Lives in the **shared control-plane schema**. The SchedulerWorker reads and writ
 | `id` | `UUID` | Primary key |
 | `stitch_id` | `UUID` | FK → `integration_stitch.id` ON DELETE CASCADE |
 | `stream_name` | `VARCHAR(200)` | Object/stream name (e.g. `Account`, `rtms__Load__c`) |
-| `state_document` | `JSONB` | Singer-style bookmark payload (see §5). Default: `{"bookmarks":{}}` |
+| `state_document` | `JSONB` | Singer-style bookmark payload (see §5). Default: `{"bookmarks":{},"versions":{},"currently_syncing":null}` |
+| `created_at` | `TIMESTAMPTZ` | Row creation timestamp — when the stream was first synced |
 | `updated_at` | `TIMESTAMPTZ` | Last successful checkpoint timestamp |
 
 **Unique index:** `(stitch_id, stream_name)` — one row per stream **per stitch**. Stitches that share the same source connection + stream name each have their own independent cursor row so advancing one never affects the other.
@@ -355,10 +356,27 @@ export class CursorManagerService {
     bookmark: StreamBookmark | undefined,
     catalog: StreamDescriptor,
   ): PollWindow {
+    // Precondition: calculateWindow is only meaningful for INCREMENTAL streams.
+    // FULL_TABLE streams have no cursor — the SchedulerWorker must not call
+    // calculateWindow for them. LOG_BASED streams manage their own offsets.
+    // catalog.replicationKeyType is typed as `never` for non-INCREMENTAL variants
+    // of the StreamDescriptor discriminated union, so it will be undefined at
+    // runtime if the wrong stream type is passed here.
+    if (catalog.replicationMethod !== 'INCREMENTAL') {
+      throw new Error(
+        `calculateWindow called for non-INCREMENTAL stream "${catalog.streamName}" ` +
+        `(replicationMethod=${catalog.replicationMethod}). ` +
+        `Only INCREMENTAL streams use cursor windows.`,
+      );
+    }
+
     const upperBound = dayjs().toISOString();
-    // Prefer the persisted type; fall back to catalog declaration.
+    // Prefer the persisted type (from prior checkpoint); fall back to the catalog
+    // declaration. Both are guaranteed present for INCREMENTAL streams: the
+    // bookmark carries the type it was written with, and the catalog requires it
+    // via the discriminated union.
     const replicationKeyType: ReplicationKeyType =
-      bookmark?.replication_key_type ?? catalog.replicationKeyType ?? 'timestamp';
+      bookmark?.replication_key_type ?? catalog.replicationKeyType;
 
     if (!bookmark) {
       const lowerBound = replicationKeyType === 'numeric' ? '0' : '1970-01-01T00:00:00.000Z';

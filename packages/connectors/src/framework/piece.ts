@@ -46,7 +46,21 @@ export interface PollRecord {
     data: Record<string, unknown>;
     /** The field name used as the replication key for this stream. */
     replicationKey: string;
-    /** The replication key value for this specific record. */
+    /**
+     * The replication key value for this specific record.
+     *
+     * Coercion contract: implementers may return either `string` or `number`.
+     * Internally the system treats these as follows:
+     * - `PollWindow.lowerBound` / `upperBound` are always `string` — numeric
+     *   values are stringified before being stored or compared.
+     * - `CursorManagerService.trackHighWaterMark` calls `Number(value)` for
+     *   `numeric` keys and `String(value)` for `timestamp` / `opaque` keys.
+     * - The persisted `StreamBookmark.replication_key_value` is `string | number`
+     *   and is stored as-is in JSONB; comparisons always use the type-aware path.
+     *
+     * Returning a `number` is safe for sequence IDs; returning a `string` is
+     * required for ISO-8601 timestamps and opaque cursors.
+     */
     replicationKeyValue: string | number;
 }
 
