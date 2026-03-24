@@ -45,7 +45,6 @@ export default defineConfig({
                 'src/db/db-cli.ts',
                 'src/db/schema.ts',
                 'src/db/db.provider.ts',
-                'src/modules/scheduler/outbox-worker.service.ts',
                 'test/**',
                 '**/*.spec.ts',
                 '**/*.e2e-spec.ts',

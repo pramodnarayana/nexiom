@@ -12,5 +12,6 @@ CREATE TABLE IF NOT EXISTS "scheduler_outbox" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "scheduler_outbox" ADD CONSTRAINT "scheduler_outbox_stitch_fk" FOREIGN KEY ("stitch_id") REFERENCES "public"."integration_stitch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "scheduler_outbox_poll_idx" ON "scheduler_outbox" USING btree ("status","next_retry_at");--> statement-breakpoint
 CREATE INDEX "scheduler_outbox_stitch_idx" ON "scheduler_outbox" USING btree ("stitch_id");

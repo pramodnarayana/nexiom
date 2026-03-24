@@ -163,8 +163,7 @@ describe('SchedulerService', () => {
           expectedCron,
           true,
         );
-        vi.clearAllMocks();
-        windmill.updateSchedule = vi.fn().mockResolvedValue(true);
+        windmill.updateSchedule.mockClear();
       }
     });
   });

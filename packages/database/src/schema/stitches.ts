@@ -225,7 +225,18 @@ export const schedulerOutboxStatusEnum = pgEnum('scheduler_outbox_status_enum', 
  */
 export const schedulerOutbox = pgTable('scheduler_outbox', {
   id: uuid('id').defaultRandom().primaryKey(),
-  /** The stitch whose Windmill schedule should be synced. */
+  /**
+   * The stitch whose Windmill schedule should be synced.
+   * No inline .references() — FK is declared as an explicit named foreignKey()
+   * in the table constraints below (scheduler_outbox_stitch_fk) to keep the
+   * constraint name stable across schema regenerations.
+   *
+   * ON DELETE CASCADE: hard-deletes of a stitch (rare; normal removal is a
+   * soft-archive to status='ARCHIVED') auto-clean orphaned outbox rows.
+   * The remove() method always soft-archives, so this only fires if a stitch
+   * row is forcibly deleted directly in the DB or via a cascade from a
+   * workspace/connection delete.
+   */
   stitchId: uuid('stitch_id').notNull(),
   /** What the scheduler should do for this stitch. */
   action: schedulerOutboxActionEnum('action').notNull(),
@@ -246,6 +257,11 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
   processedAt: timestamp('processed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  foreignKey({
+    columns: [table.stitchId],
+    foreignColumns: [integrationStitches.id],
+    name: 'scheduler_outbox_stitch_fk',
+  }).onDelete('cascade'),
   // Primary poll query: WHERE status = 'pending' AND next_retry_at <= NOW()
   index('scheduler_outbox_poll_idx').on(table.status, table.nextRetryAt),
   index('scheduler_outbox_stitch_idx').on(table.stitchId),

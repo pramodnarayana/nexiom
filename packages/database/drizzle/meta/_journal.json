@@ -17,9 +17,16 @@
       "breakpoints": true
     },
     {
+      "idx": 2,
+      "version": "7",
+      "when": 1772700000000,
+      "tag": "0002_consolidate_tenant_id_to_organization",
+      "breakpoints": true
+    },
+    {
       "idx": 3,
       "version": "7",
-      "when": 1742813200000,
+      "when": 1772800000000,
       "tag": "0003_scheduler_outbox",
       "breakpoints": true
     }

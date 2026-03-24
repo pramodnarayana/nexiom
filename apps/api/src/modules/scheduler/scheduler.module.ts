@@ -26,7 +26,6 @@ import { OutboxWorkerService } from './outbox-worker.service.js';
       },
     },
     { provide: SyncRunner, useClass: StubSyncRunner },
-    StubSyncRunner,
     SchedulerService,
     InternalSchedulerGuard,
     OutboxWorkerService,
