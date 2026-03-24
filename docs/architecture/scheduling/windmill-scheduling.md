@@ -213,9 +213,9 @@ Every stitch create/update/delete operation is mirrored to Windmill via the `Win
 | `PATCH /stitches/:id/schedule` (`scheduleEnabled=true`) | `POST /api/w/nexiom/schedules/setenabled/f/stitches/{stitchId}` → `{ enabled: true }` |
 | `POST /stitches/:id/schedule/trigger` | `POST /api/w/nexiom/jobs/run/p/f/stitch-runner/main` → `{ args: { stitchId } }` |
 | `DELETE /stitches/:id` | `DELETE /api/w/nexiom/schedules/delete/f/stitches/{stitchId}` |
-| `DELETE /organization/:id` | Delete all schedules for `orgId` (WindmillClient queries `listSchedules()` filtered by `orgId` prefix) |
+| `DELETE /organization/:id` | Delete all schedules for the org: NestJS queries `integration_stitch` for all `stitchId`s belonging to the org, then calls `WindmillClient.deleteSchedule(stitchId)` for each — which targets `f/stitches/{stitchId}` directly. No orgId-based prefix filtering is used because schedule paths encode only `stitchId`. |
 
-**No `ds_project_code` analogue is needed.** Schedule paths are derived deterministically from `stitchId`. The `organization.ds_project_code` column added during the DS design phase should be removed in the next migration.
+**No `ds_project_code` analogue is needed.** Schedule paths (`f/stitches/{stitchId}`) are derived deterministically from `stitchId` alone. The `organization.ds_project_code` column has already been removed — see §12.
 
 ---
 
@@ -734,9 +734,9 @@ The `organization.ds_project_code` column was designed to persist DolphinSchedul
 
 | Old Task | Updated Description |
 | --- | --- |
-| T049 | Docker-compose: add `windmill_server`, `windmill_worker`, `windmill_init` services; add `scripts/create-windmill-db.sh`; add Windmill env vars to `.env.example` |
+| T049 | ✅ Docker-compose: `windmill_server`, `windmill_worker`, `windmill_init` services added; `scripts/create-windmill-db.sh` created; Windmill env vars added to `apps/api/.env` |
+| T046 | ✅ `0013_sync_cursors.sql` migration created; `ds_project_code` dropped from schema and snapshot (complete — see §12) |
 | T050 | `WindmillClient` HTTP adapter + `StubWindmillClient` + `intervalToCron` utility |
-| T029 | `SchedulerModule` + `SchedulerService` backed by `WindmillClient` |
-| T046 | DB migration `0013_sync_cursors`: generate SQL; also drop `ds_project_code` from organization in same migration |
+| T029 | `SchedulerModule` + `SchedulerService` backed by `WindmillClient`; wire `InternalSchedulerGuard` to `execute-stitch` controller |
 | T047 | `packages/engine/` — `CursorManagerService` (unchanged from original design) |
 | T048 | Admin cursor reset endpoints (unchanged) |
