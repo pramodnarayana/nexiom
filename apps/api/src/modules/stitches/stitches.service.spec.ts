@@ -334,6 +334,7 @@ describe('StitchesService', () => {
     expect(mocks.db.transaction).toHaveBeenCalled();
     // The outbox insert runs inside the transaction via the shared insertFn.
     // Retrieve the values() mock from the insert call chain and assert payload.
+    expect(mocks.db.insert).toHaveBeenCalled();
     const insertCallChain = mocks.db.insert.mock.results[0]?.value as {
       values: ReturnType<typeof vi.fn>;
     };
