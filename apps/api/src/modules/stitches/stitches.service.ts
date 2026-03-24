@@ -22,12 +22,16 @@ import {
   isUniqueViolation,
   PG_UNIQUE_VIOLATION,
 } from '../../shared/db.utils.js';
+import { SchedulerService } from '../scheduler/scheduler.service.js';
 
 @Injectable()
 export class StitchesService {
   private readonly logger = new Logger(StitchesService.name);
 
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    private readonly scheduler: SchedulerService,
+  ) {}
 
   async create(orgId: string, body: CreateStitch) {
     // Verify workspace belongs to org
@@ -73,9 +77,10 @@ export class StitchesService {
       );
     }
 
+    let stitch: typeof integrationStitches.$inferSelect;
     try {
-      return await this.db.transaction(async (tx) => {
-        const [stitch] = await tx
+      stitch = await this.db.transaction(async (tx) => {
+        const [row] = await tx
           .insert(integrationStitches)
           .values({
             name: body.name,
@@ -98,7 +103,7 @@ export class StitchesService {
           })
           .returning();
 
-        if (!stitch) {
+        if (!row) {
           throw new InternalServerErrorException(
             'Insert did not return a row.',
           );
@@ -110,14 +115,14 @@ export class StitchesService {
         if (body.fieldMappings && body.fieldMappings.length > 0) {
           await tx.insert(fieldMappings).values(
             body.fieldMappings.map((fm) => ({
-              stitchId: stitch.id,
+              stitchId: row.id,
               sourceCanonical: fm.sourceCanonical,
               mappingRules: fm.mappingRules,
             })),
           );
         }
 
-        return stitch;
+        return row;
       });
     } catch (err) {
       const pgErr = extractPgError(err);
@@ -138,6 +143,16 @@ export class StitchesService {
       }
       throw err;
     }
+
+    // Transaction has committed — safe to notify Windmill now.
+    // Fire-and-forget: schedule sync must not block or fail the create response.
+    this.scheduler.onStitchCreated(stitch).catch((err: unknown) => {
+      this.logger.error(
+        `Failed to create Windmill schedule for stitch ${stitch.id}: ${String(err)}`,
+      );
+    });
+
+    return stitch;
   }
 
   async list(orgId: string, workspaceId?: string, includeArchived = false) {
@@ -214,6 +229,18 @@ export class StitchesService {
       if (!updated) {
         throw new NotFoundException(`Stitch ${id} not found.`);
       }
+
+      const scheduleFieldsChanged =
+        body.syncIntervalMinutes !== undefined ||
+        body.scheduleEnabled !== undefined;
+      if (scheduleFieldsChanged) {
+        this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
+          this.logger.error(
+            `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
+          );
+        });
+      }
+
       return updated;
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -242,6 +269,13 @@ export class StitchesService {
       .returning();
 
     if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+
+    this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
+      this.logger.error(
+        `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
+      );
+    });
+
     return updated;
   }
 
@@ -257,6 +291,13 @@ export class StitchesService {
       .returning();
 
     if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+
+    this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
+      this.logger.error(
+        `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
+      );
+    });
+
     return updated;
   }
 
@@ -334,6 +375,19 @@ export class StitchesService {
         `bulkUpdateScheduleByOrg: no non-archived stitches found for org ${orgId}`,
       );
     }
+
+    // Sync all updated schedules in parallel; individual failures are logged but do not abort.
+    const scheduleResults = await Promise.allSettled(
+      updated.map((stitch) => this.scheduler.onStitchUpdated(stitch)),
+    );
+    scheduleResults.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `Failed to sync Windmill schedule for stitch ${updated[i].id}: ${String(result.reason)}`,
+        );
+      }
+    });
+
     return { updated, count };
   }
 
@@ -352,5 +406,11 @@ export class StitchesService {
     if (!archived) {
       throw new NotFoundException(`Stitch ${id} not found.`);
     }
+
+    this.scheduler.onStitchDeleted(id).catch((err: unknown) => {
+      this.logger.error(
+        `Failed to delete Windmill schedule for stitch ${id}: ${String(err)}`,
+      );
+    });
   }
 }

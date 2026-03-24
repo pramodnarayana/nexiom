@@ -21,7 +21,16 @@ import type { Request } from 'express';
  */
 @Injectable()
 export class InternalSchedulerGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  /** Pre-computed SHA-256 digest of the expected secret. Computed once at construction. */
+  private readonly expectedDigest: Buffer;
+
+  constructor(config: ConfigService) {
+    // Read and hash the secret once at startup. This avoids a ConfigService
+    // call in the hot path and ensures a missing config key fails fast at boot,
+    // not at request time (which would throw a non-UnauthorizedException error).
+    const secret = config.getOrThrow<string>('WINDMILL_INTERNAL_SECRET');
+    this.expectedDigest = createHash('sha256').update(secret).digest();
+  }
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
@@ -34,15 +43,13 @@ export class InternalSchedulerGuard implements CanActivate {
     }
 
     const token = authHeader.slice(7);
-    const expected = this.config.getOrThrow<string>('WINDMILL_INTERNAL_SECRET');
 
     // Hash both values to a fixed-length digest before comparing.
     // This prevents leaking the secret length via the early-exit length check
     // that a direct Buffer comparison would require.
     const tokenDigest = createHash('sha256').update(token).digest();
-    const expectedDigest = createHash('sha256').update(expected).digest();
 
-    if (!timingSafeEqual(tokenDigest, expectedDigest)) {
+    if (!timingSafeEqual(tokenDigest, this.expectedDigest)) {
       throw new UnauthorizedException('Invalid internal scheduler secret');
     }
 

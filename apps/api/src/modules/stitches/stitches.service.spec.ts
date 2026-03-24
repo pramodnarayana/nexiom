@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { StitchesService } from './stitches.service.js';
+import { SchedulerService } from '../scheduler/scheduler.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { Test } from '@nestjs/testing';
 
@@ -109,10 +110,17 @@ describe('StitchesService', () => {
   beforeEach(async () => {
     mocks = buildMockDb();
 
+    const mockScheduler: Partial<SchedulerService> = {
+      onStitchCreated: vi.fn().mockResolvedValue(undefined),
+      onStitchUpdated: vi.fn().mockResolvedValue(undefined),
+      onStitchDeleted: vi.fn().mockResolvedValue(undefined),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         StitchesService,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
+        { provide: SchedulerService, useValue: mockScheduler },
       ],
     }).compile();
 
