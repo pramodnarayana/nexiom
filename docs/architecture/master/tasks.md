@@ -423,7 +423,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
   - Checkpoint is the caller's responsibility
 - [x] `onModuleInit()` logs safety buffer and checkpoint interval
 - [x] `DEFAULT_CURSOR_CHECKPOINT_INTERVAL = 10` exported constant; configurable via `CURSOR_CHECKPOINT_INTERVAL` env var
-- [x] Unit tests: 24 tests covering all key types, first-run, incremental, safety buffer, multi-page accumulation, configurable buffer
+- [x] Unit tests: 28 tests covering all key types, first-run, incremental, safety buffer, multi-page accumulation, configurable buffer
 - Files: `packages/engine/src/state/cursor-manager.types.ts`, `packages/engine/src/state/cursor-manager.service.ts`, `packages/engine/src/state/cursor-manager.service.spec.ts`, `packages/engine/src/index.ts`, `packages/engine/package.json`
 - Depends: T046
 
@@ -540,7 +540,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 1 — Workspaces | T013–T016 | Multi-workspace CRUD + UI |
 | 2 — Stitches & Mapping Canvas | T017–T025 | Stitch + field mapping + schedule config |
 | 3 — Pipeline | T026–T035 | Full L1→L6 data flow + scheduler execution |
-| 3.5 — Stateful Sync | T046–T050 + T029 + T030 | DolphinScheduler orchestration + Singer-style cursor engine |
+| 3.5 — Stateful Sync | T046–T050 + T029 + T030 | Windmill orchestration + Singer-style cursor engine |
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |

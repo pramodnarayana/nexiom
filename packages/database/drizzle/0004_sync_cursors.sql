@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS "sync_cursors" (
 --> statement-breakpoint
 ALTER TABLE "sync_cursors" ADD CONSTRAINT "sync_cursors_stitch_fk" FOREIGN KEY ("stitch_id") REFERENCES "public"."integration_stitch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "sync_cursors_stitch_stream_unique_idx" ON "sync_cursors" USING btree ("stitch_id","stream_name");--> statement-breakpoint
+CREATE INDEX "sync_cursors_stitch_idx" ON "sync_cursors" USING btree ("stitch_id");--> statement-breakpoint
 -- Trigger: keep updated_at current on every row update regardless of ORM layer.
 -- Drizzle's $onUpdate() only fires via the ORM; raw SQL writes (e.g. SchedulerWorker
 -- UPSERT) would leave updated_at stale without this trigger.
-CREATE OR REPLACE FUNCTION set_updated_at()
+-- Function is scoped to this table to avoid conflicts with other migrations.
+CREATE OR REPLACE FUNCTION sync_cursors_set_updated_at_fn()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   NEW.updated_at = now();
@@ -22,4 +24,4 @@ $$;
 --> statement-breakpoint
 CREATE TRIGGER sync_cursors_set_updated_at
 BEFORE UPDATE ON "sync_cursors"
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+FOR EACH ROW EXECUTE FUNCTION sync_cursors_set_updated_at_fn();
