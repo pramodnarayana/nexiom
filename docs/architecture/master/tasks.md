@@ -271,7 +271,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [ ] `poll(credentials, window: PollWindow)` → `PollPage` — each record must carry `replicationKey` + `replicationKeyValue` so `CursorManagerService` can advance the High-Water Mark without knowing the connector schema; `PollPage.nextPageCursor` drives pagination
 - [ ] Salesforce + QuickBooks: stub implementations
 - [ ] Canonical model interfaces in `packages/connectors/framework/canonical/`
-- [ ] `PollRecord`, `PollPage`, `PollWindow` interfaces defined in `packages/connectors/framework/` and re-exported from `packages/engine/` (see T046)
+- [ ] `PollRecord`, `PollPage`, `PollWindow` interfaces defined in `packages/connectors/framework/` and re-exported from `packages/engine/` (see T047)
 - Files: `packages/connectors/framework/src/piece.interface.ts`, `packages/connectors/framework/canonical/**`
 - Depends: T018, T046
 
@@ -287,10 +287,10 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `triggerOnce(stitchId)` — fires a one-shot Windmill job; returns job ID
 - [x] `deleteOrgSchedules(stitchIds[])` — bulk delete with `allSettled` (failures logged, not thrown)
 - [x] `onModuleInit()` — calls `ensureStitchScript()` on boot; crash is logged but does not prevent startup
-- [x] `executeStitch(stitchId)` — delegates to `SyncRunner.run()` (stub until T047)
+- [x] `executeStitch(stitchId)` — delegates to `SyncRunner.run()`; real implementation in T030
 - [x] Stitch mutations wired via transactional outbox (`scheduler_outbox` table + `OutboxWorkerService`) — no direct `SchedulerService` calls from `StitchesService`
 - [x] `OutboxWorkerService` — `@Cron(EVERY_10_SECONDS)`, `FOR UPDATE SKIP LOCKED` claim, exponential backoff, `failed` status after 5 attempts
-- [x] Abstract `SyncRunner` + `StubSyncRunner` placeholder (real impl pending T047)
+- [x] Abstract `SyncRunner` + `StubSyncRunner` placeholder (real implementation in T030)
 - Files: `apps/api/src/modules/scheduler/scheduler.module.ts`, `apps/api/src/modules/scheduler/scheduler.service.ts`, `apps/api/src/modules/scheduler/outbox-worker.service.ts`, `apps/api/src/modules/scheduler/sync-runner.ts`, `apps/api/src/modules/scheduler/stub-sync-runner.ts`
 - Depends: T020, T021, T050
 
@@ -374,7 +374,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ---
 
-## Phase 3.5 — Stateful Sync (DolphinScheduler + Cursor Manager)
+## Phase 3.5 — Stateful Sync (Windmill Integration + Cursor Manager)
 
 > Spec: `docs/architecture/scheduling/scheduling.md`
 
