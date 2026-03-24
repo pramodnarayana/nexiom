@@ -234,7 +234,7 @@ Lives in the **shared control-plane schema**. The SchedulerWorker reads and writ
 
 **Unique index:** `(stitch_id, stream_name)` — one row per stream **per stitch**. Stitches that share the same source connection + stream name each have their own independent cursor row so advancing one never affects the other.
 
-**Single-stream invariant:** Each row's `state_document.bookmarks` and `state_document.versions` will always contain exactly one key — the `stream_name` of that row. The `Record<string, ...>` type is used for Singer tooling compatibility, not to allow multi-stream documents per row.
+**Single-stream invariant:** Once a checkpoint has been recorded, each row's `state_document.bookmarks` and `state_document.versions` will contain exactly one key — the `stream_name` of that row. Newly created rows start with the default `{"bookmarks":{},"versions":{},"currently_syncing":null}` and are populated on the first successful poll run. The `Record<string, ...>` type is used for Singer tooling compatibility, not to allow multi-stream documents per row; the SchedulerWorker reads and writes only the entry matching this row's `stream_name`.
 
 > **Why `stitch_id` not `connection_id`:** Using `connection_id` as the key would cause two stitches sharing the same Salesforce connection and polling the same `Account` stream to collide on a single cursor row. Stitch A advancing its high-water mark would silently suppress records for Stitch B on its next run.
 
@@ -319,7 +319,8 @@ export interface PollPage {
 ```
 
 ```typescript
-// packages/engine/src/state/cursor-manager.types.ts
+// Planned location (T047): packages/engine/src/state/cursor-manager.types.ts
+// This file does not exist yet — it will be created as part of T047 (CursorManagerService package).
 
 import type { ReplicationKeyType, StreamDescriptor } from '@nexiom/connectors/framework';
 
