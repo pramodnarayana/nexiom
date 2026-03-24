@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { SchedulerService } from './scheduler.service.js';
 import { WindmillClient } from './windmill.client.js';
+import { SyncRunner } from './sync-runner.js';
 
 const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const STITCH_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -39,10 +40,17 @@ describe('SchedulerService', () => {
       setScheduleEnabled: vi.fn().mockResolvedValue(undefined),
     };
 
+    const mockSyncRunner = {
+      run: vi
+        .fn()
+        .mockResolvedValue({ stitchId: STITCH_ID, status: 'started' }),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         SchedulerService,
         { provide: WindmillClient, useValue: windmill },
+        { provide: SyncRunner, useValue: mockSyncRunner },
       ],
     }).compile();
 
@@ -211,9 +219,9 @@ describe('SchedulerService', () => {
   // ── executeStitch ───────────────────────────────────────────────────────
 
   describe('executeStitch', () => {
-    it('returns accepted status with the stitch ID', async () => {
+    it('delegates to SyncRunner and returns the result', async () => {
       const result = await service.executeStitch(STITCH_ID);
-      expect(result).toEqual({ stitchId: STITCH_ID, status: 'accepted' });
+      expect(result).toEqual({ stitchId: STITCH_ID, status: 'started' });
     });
   });
 });

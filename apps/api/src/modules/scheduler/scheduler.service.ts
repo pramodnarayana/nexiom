@@ -6,6 +6,7 @@ import type {
 } from '@nexiom/database';
 import { WindmillClient } from './windmill.client.js';
 import { intervalToCron } from './interval-to-cron.js';
+import { SyncRunner } from './sync-runner.js';
 
 type Stitch = typeof integrationStitches.$inferSelect;
 
@@ -18,7 +19,10 @@ function isSyncIntervalMinutes(value: unknown): value is SyncIntervalMinutes {
 export class SchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerService.name);
 
-  constructor(private readonly windmill: WindmillClient) {}
+  constructor(
+    private readonly windmill: WindmillClient,
+    private readonly syncRunner: SyncRunner,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     try {
@@ -111,15 +115,21 @@ export class SchedulerService implements OnModuleInit {
   /**
    * Entry point called by the internal scheduler controller when Windmill
    * invokes /internal/scheduler/execute-stitch.
-   *
-   * TODO(T047): Delegate to CursorManagerService / sync engine once available.
    */
-  executeStitch(
+  async executeStitch(
     stitchId: string,
   ): Promise<{ stitchId: string; status: string }> {
     this.logger.log(`Executing stitch ${stitchId}`);
-    // Placeholder — T047 will replace this with the full sync pipeline.
-    return Promise.resolve({ stitchId, status: 'accepted' });
+    try {
+      const result = await this.syncRunner.run(stitchId);
+      this.logger.log(
+        `Stitch ${stitchId} execution completed: status=${result.status}`,
+      );
+      return result;
+    } catch (err) {
+      this.logger.error(`Stitch ${stitchId} execution failed: ${String(err)}`);
+      throw err;
+    }
   }
 
   // ---------------------------------------------------------------------------

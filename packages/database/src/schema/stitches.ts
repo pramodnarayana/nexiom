@@ -4,6 +4,7 @@ import {
     uuid,
     varchar,
     text,
+    smallint,
     integer,
     boolean,
     jsonb,
@@ -191,6 +192,63 @@ export const syncCursors = pgTable('sync_cursors', {
     }).onDelete('cascade'),
     uniqueIndex('sync_cursors_stitch_stream_unique_idx').on(table.stitchId, table.streamName),
     index('sync_cursors_stitch_idx').on(table.stitchId),
+]);
+
+// ---------------------------------------------------------------------------
+// Scheduler Outbox — durable transactional outbox for Windmill schedule sync
+// ---------------------------------------------------------------------------
+
+export const schedulerOutboxActionEnum = pgEnum('scheduler_outbox_action_enum', [
+  'created',
+  'updated',
+  'deleted',
+]);
+
+export const schedulerOutboxStatusEnum = pgEnum('scheduler_outbox_status_enum', [
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+]);
+
+/**
+ * SCHEDULER OUTBOX
+ *
+ * Transactional outbox for Windmill schedule synchronisation.
+ * Written inside the same DB transaction as the stitch mutation that triggers
+ * it, guaranteeing at-least-once delivery to Windmill even if the process
+ * crashes immediately after the DB write.
+ *
+ * OutboxWorkerService polls this table every 10 s using SELECT … FOR UPDATE
+ * SKIP LOCKED so multiple API pods do not double-process the same record.
+ * Failures are retried with exponential back-off up to MAX_OUTBOX_ATTEMPTS.
+ */
+export const schedulerOutbox = pgTable('scheduler_outbox', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  /** The stitch whose Windmill schedule should be synced. */
+  stitchId: uuid('stitch_id').notNull(),
+  /** What the scheduler should do for this stitch. */
+  action: schedulerOutboxActionEnum('action').notNull(),
+  /** Lifecycle state managed by OutboxWorkerService. */
+  status: schedulerOutboxStatusEnum('status').notNull().default('pending'),
+  /** How many delivery attempts have been made (incremented before each try). */
+  attempts: smallint('attempts').notNull().default(0),
+  /**
+   * Earliest timestamp at which this record may be picked up.
+   * Set to NOW() on insert; updated to NOW() + back-off after each failure.
+   */
+  nextRetryAt: timestamp('next_retry_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+  /** Last error message recorded on failure. */
+  lastError: text('last_error'),
+  /** Timestamp of final processing (succeeded or permanently failed). */
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  // Primary poll query: WHERE status = 'pending' AND next_retry_at <= NOW()
+  index('scheduler_outbox_poll_idx').on(table.status, table.nextRetryAt),
+  index('scheduler_outbox_stitch_idx').on(table.stitchId),
 ]);
 
 // ---------------------------------------------------------------------------

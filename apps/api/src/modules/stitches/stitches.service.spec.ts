@@ -6,7 +6,6 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { StitchesService } from './stitches.service.js';
-import { SchedulerService } from '../scheduler/scheduler.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { Test } from '@nestjs/testing';
 
@@ -22,8 +21,13 @@ function buildMockDb() {
   const returningUpdate = vi.fn();
 
   // Shared insert chain used both directly on db and inside transaction callbacks.
+  const outboxInsertResult = Promise.resolve([]);
   const insertChain = {
-    values: vi.fn().mockReturnValue({ returning: returningInsert }),
+    values: vi
+      .fn()
+      .mockReturnValue(
+        Object.assign(outboxInsertResult, { returning: returningInsert }),
+      ),
   };
   const insertFn = vi.fn().mockReturnValue(insertChain);
 
@@ -110,17 +114,10 @@ describe('StitchesService', () => {
   beforeEach(async () => {
     mocks = buildMockDb();
 
-    const mockScheduler: Partial<SchedulerService> = {
-      onStitchCreated: vi.fn().mockResolvedValue(undefined),
-      onStitchUpdated: vi.fn().mockResolvedValue(undefined),
-      onStitchDeleted: vi.fn().mockResolvedValue(undefined),
-    };
-
     const module = await Test.createTestingModule({
       providers: [
         StitchesService,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
-        { provide: SchedulerService, useValue: mockScheduler },
       ],
     }).compile();
 
@@ -334,7 +331,7 @@ describe('StitchesService', () => {
     mocks.returningUpdate.mockResolvedValue([archived]);
 
     await expect(service.remove(ORG_ID, STITCH_ID)).resolves.toBeUndefined();
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 
   it('throws NotFoundException when archiving non-existent stitch', async () => {
@@ -356,7 +353,7 @@ describe('StitchesService', () => {
     });
 
     expect(result).toEqual(updated);
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 
   it('updateSchedule — updates scheduleEnabled from true to false', async () => {
@@ -368,7 +365,7 @@ describe('StitchesService', () => {
     });
 
     expect(result.scheduleEnabled).toBe(false);
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 
   it('updateSchedule — throws BadRequestException when no fields provided', async () => {

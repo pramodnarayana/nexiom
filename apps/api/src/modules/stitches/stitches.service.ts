@@ -15,6 +15,7 @@ import {
   fieldMappings,
   uiWorkspaces,
   appConnections,
+  schedulerOutbox,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 import {
@@ -22,16 +23,12 @@ import {
   isUniqueViolation,
   PG_UNIQUE_VIOLATION,
 } from '../../shared/db.utils.js';
-import { SchedulerService } from '../scheduler/scheduler.service.js';
 
 @Injectable()
 export class StitchesService {
   private readonly logger = new Logger(StitchesService.name);
 
-  constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    private readonly scheduler: SchedulerService,
-  ) {}
+  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
 
   async create(orgId: string, body: CreateStitch) {
     // Verify workspace belongs to org
@@ -122,6 +119,10 @@ export class StitchesService {
           );
         }
 
+        await tx
+          .insert(schedulerOutbox)
+          .values({ stitchId: row.id, action: 'created' });
+
         return row;
       });
     } catch (err) {
@@ -143,14 +144,6 @@ export class StitchesService {
       }
       throw err;
     }
-
-    // Transaction has committed — safe to notify Windmill now.
-    // Fire-and-forget: schedule sync must not block or fail the create response.
-    this.scheduler.onStitchCreated(stitch).catch((err: unknown) => {
-      this.logger.error(
-        `Failed to create Windmill schedule for stitch ${stitch.id}: ${String(err)}`,
-      );
-    });
 
     return stitch;
   }
@@ -201,45 +194,48 @@ export class StitchesService {
       throw new BadRequestException('No updatable fields provided.');
     }
 
+    const scheduleFieldsChanged =
+      body.syncIntervalMinutes !== undefined ||
+      body.scheduleEnabled !== undefined;
+
     try {
-      const [updated] = await this.db
-        .update(integrationStitches)
-        .set({
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.status !== undefined && { status: body.status }),
-          ...(body.syncCondition !== undefined && {
-            syncCondition: body.syncCondition,
-          }),
-          ...(body.syncIntervalMinutes !== undefined && {
-            syncIntervalMinutes: body.syncIntervalMinutes,
-          }),
-          ...(body.scheduleEnabled !== undefined && {
-            scheduleEnabled: body.scheduleEnabled,
-          }),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(integrationStitches.id, id),
-            eq(integrationStitches.orgId, orgId),
-          ),
-        )
-        .returning();
+      const updated = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(integrationStitches)
+          .set({
+            ...(body.name !== undefined && { name: body.name }),
+            ...(body.status !== undefined && { status: body.status }),
+            ...(body.syncCondition !== undefined && {
+              syncCondition: body.syncCondition,
+            }),
+            ...(body.syncIntervalMinutes !== undefined && {
+              syncIntervalMinutes: body.syncIntervalMinutes,
+            }),
+            ...(body.scheduleEnabled !== undefined && {
+              scheduleEnabled: body.scheduleEnabled,
+            }),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(integrationStitches.id, id),
+              eq(integrationStitches.orgId, orgId),
+            ),
+          )
+          .returning();
 
-      if (!updated) {
-        throw new NotFoundException(`Stitch ${id} not found.`);
-      }
+        if (!row) {
+          throw new NotFoundException(`Stitch ${id} not found.`);
+        }
 
-      const scheduleFieldsChanged =
-        body.syncIntervalMinutes !== undefined ||
-        body.scheduleEnabled !== undefined;
-      if (scheduleFieldsChanged) {
-        this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
-          this.logger.error(
-            `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
-          );
-        });
-      }
+        if (scheduleFieldsChanged) {
+          await tx
+            .insert(schedulerOutbox)
+            .values({ stitchId: row.id, action: 'updated' });
+        }
+
+        return row;
+      });
 
       return updated;
     } catch (err) {
@@ -257,23 +253,25 @@ export class StitchesService {
     id: string,
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
-    const [updated] = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(
-        and(
-          eq(integrationStitches.id, id),
-          eq(integrationStitches.orgId, orgId),
-        ),
-      )
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(
+          and(
+            eq(integrationStitches.id, id),
+            eq(integrationStitches.orgId, orgId),
+          ),
+        )
+        .returning();
 
-    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
 
-    this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
-      this.logger.error(
-        `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
-      );
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: row.id, action: 'updated' });
+
+      return row;
     });
 
     return updated;
@@ -284,18 +282,20 @@ export class StitchesService {
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
     // No org scoping — admin/support use only. Caller must be a SystemAdmin.
-    const [updated] = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(eq(integrationStitches.id, id))
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(eq(integrationStitches.id, id))
+        .returning();
 
-    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
 
-    this.scheduler.onStitchUpdated(updated).catch((err: unknown) => {
-      this.logger.error(
-        `Failed to sync Windmill schedule for stitch ${updated.id}: ${String(err)}`,
-      );
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: row.id, action: 'updated' });
+
+      return row;
     });
 
     return updated;
@@ -358,59 +358,58 @@ export class StitchesService {
     orgId: string,
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
-    const updated = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(
-        and(
-          eq(integrationStitches.orgId, orgId),
-          ne(integrationStitches.status, 'ARCHIVED'),
-        ),
-      )
-      .returning();
+    const { updated, count } = await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(
+          and(
+            eq(integrationStitches.orgId, orgId),
+            ne(integrationStitches.status, 'ARCHIVED'),
+          ),
+        )
+        .returning();
 
-    const count = updated.length;
+      if (rows.length > 0) {
+        await tx
+          .insert(schedulerOutbox)
+          .values(
+            rows.map((r) => ({ stitchId: r.id, action: 'updated' as const })),
+          );
+      }
+
+      return { updated: rows, count: rows.length };
+    });
+
     if (count === 0) {
       this.logger.warn(
         `bulkUpdateScheduleByOrg: no non-archived stitches found for org ${orgId}`,
       );
     }
 
-    // Sync all updated schedules in parallel; individual failures are logged but do not abort.
-    const scheduleResults = await Promise.allSettled(
-      updated.map((stitch) => this.scheduler.onStitchUpdated(stitch)),
-    );
-    scheduleResults.forEach((result, i) => {
-      if (result.status === 'rejected') {
-        this.logger.error(
-          `Failed to sync Windmill schedule for stitch ${updated[i].id}: ${String(result.reason)}`,
-        );
-      }
-    });
-
     return { updated, count };
   }
 
   async remove(orgId: string, id: string) {
-    const [archived] = await this.db
-      .update(integrationStitches)
-      .set({ status: 'ARCHIVED', updatedAt: new Date() })
-      .where(
-        and(
-          eq(integrationStitches.id, id),
-          eq(integrationStitches.orgId, orgId),
-        ),
-      )
-      .returning();
+    await this.db.transaction(async (tx) => {
+      const [archived] = await tx
+        .update(integrationStitches)
+        .set({ status: 'ARCHIVED', updatedAt: new Date() })
+        .where(
+          and(
+            eq(integrationStitches.id, id),
+            eq(integrationStitches.orgId, orgId),
+          ),
+        )
+        .returning();
 
-    if (!archived) {
-      throw new NotFoundException(`Stitch ${id} not found.`);
-    }
+      if (!archived) {
+        throw new NotFoundException(`Stitch ${id} not found.`);
+      }
 
-    this.scheduler.onStitchDeleted(id).catch((err: unknown) => {
-      this.logger.error(
-        `Failed to delete Windmill schedule for stitch ${id}: ${String(err)}`,
-      );
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: id, action: 'deleted' });
     });
   }
 }

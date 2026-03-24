@@ -70,32 +70,20 @@ describe('HttpWindmillClient', () => {
   // ── ensureStitchScript ──────────────────────────────────────────────────
 
   describe('ensureStitchScript', () => {
-    it('skips script creation when it already exists', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, '{}'));
-
-      await client.ensureStitchScript();
-
-      // Only one call (the scriptExists GET), no POST to create
+    it('deploys the script when Windmill responds 200', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      await expect(client.ensureStitchScript()).resolves.toBeUndefined();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(getCallInit(fetchSpy, 0).method).toBe('GET');
+      expect(getCallInit(fetchSpy, 0).method).toBe('POST');
     });
 
-    it('creates the script when it does not exist', async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(404, 'not found')) // scriptExists
-        .mockResolvedValueOnce(mockResponse(200, '')); // create
-
-      await client.ensureStitchScript();
-
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(getCallInit(fetchSpy, 1).method).toBe('POST');
+    it('treats 409 Conflict as success (idempotent — script already exists)', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(409, 'conflict'));
+      await expect(client.ensureStitchScript()).resolves.toBeUndefined();
     });
 
-    it('throws when the create call fails', async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(404)) // scriptExists
-        .mockResolvedValueOnce(mockResponse(500, 'server error')); // create fails
-
+    it('throws for non-409 errors', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
       await expect(client.ensureStitchScript()).rejects.toThrow('500');
     });
   });
@@ -194,6 +182,11 @@ describe('HttpWindmillClient', () => {
     it('returns false when Windmill returns 404', async () => {
       fetchSpy.mockResolvedValue(mockResponse(404, ''));
       expect(await client.scheduleExists(STITCH_ID)).toBe(false);
+    });
+
+    it('throws for non-404 errors (e.g. 500)', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
+      await expect(client.scheduleExists(STITCH_ID)).rejects.toThrow('500');
     });
   });
 

@@ -66,3 +66,10 @@ export {
 
 // Scheduler — Singer-style polling cursors (control-plane, public schema)
 export { syncCursors } from '@nexiom/database';
+
+// Scheduler outbox — durable transactional outbox for Windmill schedule sync
+export {
+  schedulerOutbox,
+  schedulerOutboxActionEnum,
+  schedulerOutboxStatusEnum,
+} from '@nexiom/database';

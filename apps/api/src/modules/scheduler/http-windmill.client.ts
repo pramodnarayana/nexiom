@@ -17,7 +17,7 @@ export async function main(stitchId: string): Promise<object> {
   const apiUrl = await wmill.getVariable("f/config/NEXIOM_API_URL");
   const secret = await wmill.getVariable("f/config/WINDMILL_INTERNAL_SECRET");
 
-  const response = await fetch(\`\${apiUrl}/internal/scheduler/execute-stitch\`, {
+  const response = await fetch(\`\${apiUrl}/api/internal/scheduler/execute-stitch\`, {
     method: "POST",
     headers: {
       "Authorization": \`Bearer \${secret}\`,
@@ -50,16 +50,7 @@ export class HttpWindmillClient extends WindmillClient {
   }
 
   async ensureStitchScript(): Promise<void> {
-    const exists = await this.scriptExists(STITCH_RUNNER_PATH);
-    if (exists) {
-      this.logger.debug(
-        `Stitch-runner script already exists at ${STITCH_RUNNER_PATH}`,
-      );
-      return;
-    }
-
-    this.logger.debug(`Creating stitch-runner script at ${STITCH_RUNNER_PATH}`);
-    await this.requestVoid('POST', `/scripts/create`, {
+    const res = await this.rawRequest('POST', `/scripts/create`, {
       path: STITCH_RUNNER_PATH,
       summary: 'Stitch Runner',
       description:
@@ -78,6 +69,25 @@ export class HttpWindmillClient extends WindmillClient {
         required: ['stitchId'],
       },
     });
+
+    if (res.ok) {
+      await res.body?.cancel();
+      this.logger.debug(
+        `Deployed stitch-runner script at ${STITCH_RUNNER_PATH}`,
+      );
+      return;
+    }
+    if (res.status === 409) {
+      await res.body?.cancel();
+      this.logger.debug(
+        `Stitch-runner script already exists at ${STITCH_RUNNER_PATH} (409)`,
+      );
+      return;
+    }
+    const body = await res.text();
+    throw new Error(
+      `Windmill API POST /scripts/create failed [${res.status}]: ${body}`,
+    );
   }
 
   async createSchedule(
@@ -141,8 +151,7 @@ export class HttpWindmillClient extends WindmillClient {
   async scheduleExists(stitchId: string): Promise<boolean> {
     const path = schedulePathFor(stitchId);
     const res = await this.rawRequest('GET', `/schedules/get/${path}`);
-    await res.body?.cancel();
-    return res.ok;
+    return this.existsOrThrow(res);
   }
 
   async deleteSchedule(stitchId: string): Promise<void> {
@@ -179,10 +188,19 @@ export class HttpWindmillClient extends WindmillClient {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private async scriptExists(scriptPath: string): Promise<boolean> {
-    const res = await this.rawRequest('GET', `/scripts/get/p/${scriptPath}`);
-    await res.body?.cancel();
-    return res.ok;
+  private async existsOrThrow(res: Response): Promise<boolean> {
+    if (res.ok) {
+      await res.body?.cancel();
+      return true;
+    }
+    if (res.status === 404) {
+      await res.body?.cancel();
+      return false;
+    }
+    const body = await res.text();
+    throw new Error(
+      `Windmill API returned unexpected status [${res.status}]: ${body}`,
+    );
   }
 
   private url(path: string): string {
