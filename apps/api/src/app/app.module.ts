@@ -24,6 +24,7 @@ import { CacheModule } from '@nexiom/cache';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
 import { WorkspacesModule } from '../modules/workspaces/workspaces.module.js';
 import { StitchesModule } from '../modules/stitches/stitches.module.js';
+import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { StitchesModule } from '../modules/stitches/stitches.module.js';
     DbManagerModule,
     WorkspacesModule,
     StitchesModule,
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

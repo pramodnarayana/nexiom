@@ -21,8 +21,13 @@ function buildMockDb() {
   const returningUpdate = vi.fn();
 
   // Shared insert chain used both directly on db and inside transaction callbacks.
+  const outboxInsertResult = Promise.resolve([]);
   const insertChain = {
-    values: vi.fn().mockReturnValue({ returning: returningInsert }),
+    values: vi
+      .fn()
+      .mockReturnValue(
+        Object.assign(outboxInsertResult, { returning: returningInsert }),
+      ),
   };
   const insertFn = vi.fn().mockReturnValue(insertChain);
 
@@ -321,12 +326,21 @@ describe('StitchesService', () => {
 
   // ── remove (archive) ───────────────────────────────────────────────────
 
-  it('archives a stitch', async () => {
+  it('archives a stitch and queues a deleted outbox record', async () => {
     const archived = { ...STITCH, status: 'ARCHIVED' as const };
     mocks.returningUpdate.mockResolvedValue([archived]);
 
     await expect(service.remove(ORG_ID, STITCH_ID)).resolves.toBeUndefined();
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
+    // The outbox insert runs inside the transaction via the shared insertFn.
+    // Retrieve the values() mock from the insert call chain and assert payload.
+    expect(mocks.db.insert).toHaveBeenCalled();
+    const insertCallChain = mocks.db.insert.mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    expect(insertCallChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({ stitchId: STITCH_ID, action: 'deleted' }),
+    );
   });
 
   it('throws NotFoundException when archiving non-existent stitch', async () => {
@@ -348,7 +362,7 @@ describe('StitchesService', () => {
     });
 
     expect(result).toEqual(updated);
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 
   it('updateSchedule — updates scheduleEnabled from true to false', async () => {
@@ -360,7 +374,7 @@ describe('StitchesService', () => {
     });
 
     expect(result.scheduleEnabled).toBe(false);
-    expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 
   it('updateSchedule — throws BadRequestException when no fields provided', async () => {

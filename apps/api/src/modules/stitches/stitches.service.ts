@@ -15,6 +15,7 @@ import {
   fieldMappings,
   uiWorkspaces,
   appConnections,
+  schedulerOutbox,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 import {
@@ -73,9 +74,10 @@ export class StitchesService {
       );
     }
 
+    let stitch: typeof integrationStitches.$inferSelect;
     try {
-      return await this.db.transaction(async (tx) => {
-        const [stitch] = await tx
+      stitch = await this.db.transaction(async (tx) => {
+        const [row] = await tx
           .insert(integrationStitches)
           .values({
             name: body.name,
@@ -98,7 +100,7 @@ export class StitchesService {
           })
           .returning();
 
-        if (!stitch) {
+        if (!row) {
           throw new InternalServerErrorException(
             'Insert did not return a row.',
           );
@@ -110,14 +112,18 @@ export class StitchesService {
         if (body.fieldMappings && body.fieldMappings.length > 0) {
           await tx.insert(fieldMappings).values(
             body.fieldMappings.map((fm) => ({
-              stitchId: stitch.id,
+              stitchId: row.id,
               sourceCanonical: fm.sourceCanonical,
               mappingRules: fm.mappingRules,
             })),
           );
         }
 
-        return stitch;
+        await tx
+          .insert(schedulerOutbox)
+          .values({ stitchId: row.id, action: 'created' });
+
+        return row;
       });
     } catch (err) {
       const pgErr = extractPgError(err);
@@ -138,6 +144,8 @@ export class StitchesService {
       }
       throw err;
     }
+
+    return stitch;
   }
 
   async list(orgId: string, workspaceId?: string, includeArchived = false) {
@@ -186,34 +194,49 @@ export class StitchesService {
       throw new BadRequestException('No updatable fields provided.');
     }
 
-    try {
-      const [updated] = await this.db
-        .update(integrationStitches)
-        .set({
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.status !== undefined && { status: body.status }),
-          ...(body.syncCondition !== undefined && {
-            syncCondition: body.syncCondition,
-          }),
-          ...(body.syncIntervalMinutes !== undefined && {
-            syncIntervalMinutes: body.syncIntervalMinutes,
-          }),
-          ...(body.scheduleEnabled !== undefined && {
-            scheduleEnabled: body.scheduleEnabled,
-          }),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(integrationStitches.id, id),
-            eq(integrationStitches.orgId, orgId),
-          ),
-        )
-        .returning();
+    const scheduleFieldsChanged =
+      body.syncIntervalMinutes !== undefined ||
+      body.scheduleEnabled !== undefined;
 
-      if (!updated) {
-        throw new NotFoundException(`Stitch ${id} not found.`);
-      }
+    try {
+      const updated = await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(integrationStitches)
+          .set({
+            ...(body.name !== undefined && { name: body.name }),
+            ...(body.status !== undefined && { status: body.status }),
+            ...(body.syncCondition !== undefined && {
+              syncCondition: body.syncCondition,
+            }),
+            ...(body.syncIntervalMinutes !== undefined && {
+              syncIntervalMinutes: body.syncIntervalMinutes,
+            }),
+            ...(body.scheduleEnabled !== undefined && {
+              scheduleEnabled: body.scheduleEnabled,
+            }),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(integrationStitches.id, id),
+              eq(integrationStitches.orgId, orgId),
+            ),
+          )
+          .returning();
+
+        if (!row) {
+          throw new NotFoundException(`Stitch ${id} not found.`);
+        }
+
+        if (scheduleFieldsChanged) {
+          await tx
+            .insert(schedulerOutbox)
+            .values({ stitchId: row.id, action: 'updated' });
+        }
+
+        return row;
+      });
+
       return updated;
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -230,18 +253,27 @@ export class StitchesService {
     id: string,
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
-    const [updated] = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(
-        and(
-          eq(integrationStitches.id, id),
-          eq(integrationStitches.orgId, orgId),
-        ),
-      )
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(
+          and(
+            eq(integrationStitches.id, id),
+            eq(integrationStitches.orgId, orgId),
+          ),
+        )
+        .returning();
 
-    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
+
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: row.id, action: 'updated' });
+
+      return row;
+    });
+
     return updated;
   }
 
@@ -250,13 +282,22 @@ export class StitchesService {
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
     // No org scoping — admin/support use only. Caller must be a SystemAdmin.
-    const [updated] = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(eq(integrationStitches.id, id))
-      .returning();
+    const updated = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(eq(integrationStitches.id, id))
+        .returning();
 
-    if (!updated) throw new NotFoundException(`Stitch ${id} not found.`);
+      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
+
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: row.id, action: 'updated' });
+
+      return row;
+    });
+
     return updated;
   }
 
@@ -317,40 +358,58 @@ export class StitchesService {
     orgId: string,
     body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
   ) {
-    const updated = await this.db
-      .update(integrationStitches)
-      .set(this.buildScheduleSet(body))
-      .where(
-        and(
-          eq(integrationStitches.orgId, orgId),
-          ne(integrationStitches.status, 'ARCHIVED'),
-        ),
-      )
-      .returning();
+    const { updated, count } = await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .update(integrationStitches)
+        .set(this.buildScheduleSet(body))
+        .where(
+          and(
+            eq(integrationStitches.orgId, orgId),
+            ne(integrationStitches.status, 'ARCHIVED'),
+          ),
+        )
+        .returning();
 
-    const count = updated.length;
+      if (rows.length > 0) {
+        await tx
+          .insert(schedulerOutbox)
+          .values(
+            rows.map((r) => ({ stitchId: r.id, action: 'updated' as const })),
+          );
+      }
+
+      return { updated: rows, count: rows.length };
+    });
+
     if (count === 0) {
       this.logger.warn(
         `bulkUpdateScheduleByOrg: no non-archived stitches found for org ${orgId}`,
       );
     }
+
     return { updated, count };
   }
 
   async remove(orgId: string, id: string) {
-    const [archived] = await this.db
-      .update(integrationStitches)
-      .set({ status: 'ARCHIVED', updatedAt: new Date() })
-      .where(
-        and(
-          eq(integrationStitches.id, id),
-          eq(integrationStitches.orgId, orgId),
-        ),
-      )
-      .returning();
+    await this.db.transaction(async (tx) => {
+      const [archived] = await tx
+        .update(integrationStitches)
+        .set({ status: 'ARCHIVED', updatedAt: new Date() })
+        .where(
+          and(
+            eq(integrationStitches.id, id),
+            eq(integrationStitches.orgId, orgId),
+          ),
+        )
+        .returning();
 
-    if (!archived) {
-      throw new NotFoundException(`Stitch ${id} not found.`);
-    }
+      if (!archived) {
+        throw new NotFoundException(`Stitch ${id} not found.`);
+      }
+
+      await tx
+        .insert(schedulerOutbox)
+        .values({ stitchId: id, action: 'deleted' });
+    });
   }
 }
