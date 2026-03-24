@@ -1,0 +1,13 @@
+#!/bin/bash
+# Creates the windmill database inside the existing postgres instance.
+# Runs once on first container start via /docker-entrypoint-initdb.d/.
+# Idempotent: the SELECT ... WHERE NOT EXISTS pattern skips creation if the DB
+# already exists, so re-running postgres with existing data is safe.
+set -e
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    SELECT 'CREATE DATABASE windmill'
+    WHERE NOT EXISTS (
+        SELECT FROM pg_database WHERE datname = 'windmill'
+    )\gexec
+EOSQL

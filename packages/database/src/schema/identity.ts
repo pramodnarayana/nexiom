@@ -3,7 +3,6 @@ import {
   text,
   timestamp,
   boolean,
-  bigint,
   pgEnum,
   unique,
   index,
@@ -255,28 +254,13 @@ export const organization = pgTable(
     status: organizationStatusEnum("status").default("active").notNull(),
     isSystem: boolean("isSystem").default(false).notNull(),
     deletedAt: timestamp("deletedAt", { withTimezone: true }),
-    // DolphinScheduler project code assigned when the org's first stitch is registered.
-    // NULL until the SchedulerService creates the DS project for this org.
-    // DS assigns numeric codes internally; this persists the mapping so SchedulerService
-    // can resolve orgId → dsProjectCode without calling the DS API on every request.
-    // mode:"number" is safe for DS codes in practice, but the CHECK constraint below
-    // ensures we fail loudly rather than silently truncate if DS ever exceeds JS MAX_SAFE_INTEGER.
-    dsProjectCode: bigint("ds_project_code", { mode: "number" }),
   },
   (table) => [
     check("organization_id_not_sentinel", sql`${table.id} <> '__NULL__'`),
-    check(
-      "ds_project_code_safe_integer",
-      sql`${table.dsProjectCode} IS NULL OR (${table.dsProjectCode} >= -9007199254740991 AND ${table.dsProjectCode} <= 9007199254740991)`,
-    ),
     // Partial unique index: enforce slug uniqueness only for non-deleted orgs
     uniqueIndex("organization_slug_unique_idx")
       .on(table.slug)
       .where(sql`"deletedAt" IS NULL`),
-    // Partial unique index: one DS project per org; NULLs (orgs with no DS project yet) are excluded
-    uniqueIndex("organization_ds_project_code_unique_idx")
-      .on(table.dsProjectCode)
-      .where(sql`"ds_project_code" IS NOT NULL`),
   ],
 );
 

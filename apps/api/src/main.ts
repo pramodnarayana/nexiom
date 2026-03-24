@@ -4,7 +4,24 @@ import { NestFactory } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app/app.module.js';
 
+function validateEnv(): void {
+  if (process.env.WINDMILL_ENABLED === 'true') {
+    const missing = (
+      ['WINDMILL_TOKEN', 'WINDMILL_INTERNAL_SECRET'] as const
+    ).filter((k) => !process.env[k]);
+    if (missing.length > 0) {
+      Logger.error(
+        `WINDMILL_ENABLED=true but the following required variables are not set: ${missing.join(', ')}. ` +
+          `Set WINDMILL_ENABLED=false to use StubWindmillClient for local development.`,
+        'Bootstrap',
+      );
+      process.exit(1);
+    }
+  }
+}
+
 async function bootstrap() {
+  validateEnv();
   const app = await NestFactory.create(AppModule);
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);

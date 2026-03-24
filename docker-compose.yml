@@ -7,6 +7,10 @@ x-db-vars: &db-vars
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
   POSTGRES_DB: ${POSTGRES_DB:-nexiom_local}
 
+x-windmill-env: &windmill-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/windmill
+  BASE_URL: ${WINDMILL_BASE_URL:-http://localhost:8000}
+
 x-common-env: &common-env
   DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-nexiom_local}
   DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/${POSTGRES_DB:-nexiom_local}
@@ -23,6 +27,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/create-windmill-db.sh:/docker-entrypoint-initdb.d/create-windmill-db.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-nexiom_local}"]
       interval: 5s
@@ -145,6 +150,10 @@ services:
     environment:
       <<: *common-env
       # Overrides for Docker Networking
+      # Windmill — docker networking overrides (secrets loaded from apps/api/.env via env_file)
+      WINDMILL_BASE_URL: http://windmill_server:8000
+      WINDMILL_WORKSPACE: nexiom
+      WINDMILL_ENABLED: "true"
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_SECURE: "false"
@@ -163,6 +172,8 @@ services:
       migrator:
         condition: service_completed_successfully
       localstack:
+        condition: service_healthy
+      windmill_server:
         condition: service_healthy
     networks:
       - nexiom-network
@@ -201,6 +212,65 @@ services:
       - "4983:4983"
     depends_on:
       postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
+  # --- Windmill (Scheduler) ---
+  # windmill_init creates the schema on the 'windmill' database (one-shot, service_completed_successfully).
+  # windmill_server is the stateless API + UI; windmill_worker executes stitch-runner scripts.
+  # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
+  # memory. Requires `privileged: true` on the worker container.
+  windmill_init:
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
+    pull_policy: always
+    command: ["windmill", "init"]
+    environment:
+      <<: *windmill-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
+  windmill_server:
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      <<: *windmill-env
+      MODE: server
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      windmill_init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    networks:
+      - nexiom-network
+
+  windmill_worker:
+    image: ghcr.io/windmill-labs/windmill:v1.662.0
+    pull_policy: always
+    restart: unless-stopped
+    # privileged required for ENABLE_UNSHARE_PID
+    privileged: true
+    deploy:
+      replicas: 2
+    environment:
+      <<: *windmill-env
+      MODE: worker
+      WORKER_GROUP: default
+      ENABLE_UNSHARE_PID: "true"
+    depends_on:
+      windmill_server:
         condition: service_healthy
     networks:
       - nexiom-network
