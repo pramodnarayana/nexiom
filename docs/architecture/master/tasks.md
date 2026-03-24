@@ -302,7 +302,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `POST /internal/scheduler/execute-stitch` — receives `{ stitchId }` from Windmill; returns `ExecuteStitchResult`
 - [x] `InternalSchedulerGuard` — validates `Authorization: Bearer <WINDMILL_INTERNAL_SECRET>` using timing-safe compare; returns `401` on mismatch
 - [x] `executeStitch` body validated via Zod (`ExecuteStitchBody` with UUID check)
-- [x] Delegates to `SyncRunner.run(stitchId)` (stub returning `{ status: 'started' }` until T047)
+- [x] Delegates to `SyncRunner.run(stitchId)` (stub returning `{ status: 'started' }` until poll run sequence below is implemented)
 - [ ] Acquire Redis lock `lock:poll:{stitchId}:{streamName}` (TTL = stitch interval) — return `{ status: 'SKIPPED' }` with `200` if unavailable
 - [ ] Call `piece.describeStreams(credentials)` → `StreamDescriptor` for the source object
 - [ ] Read `SyncStateDocument` from `public.sync_cursors`; detect crash-resume via `currently_syncing`
@@ -382,10 +382,10 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 > Note: DolphinScheduler replaced by **Windmill**. T049 now tracks Windmill docker-compose setup.
 
-- [ ] Add `windmill-db` postgres service (or reuse existing postgres with a `windmill` database)
-- [ ] Add `windmill-server` service (`ghcr.io/windmill-labs/windmill:main`) — port 8000; depends on postgres
-- [ ] Add `windmill-worker` service (`ghcr.io/windmill-labs/windmill-worker:main`) — depends on windmill-server
-- [ ] Add env vars to `apps/api/.env`: `WINDMILL_BASE_URL`, `WINDMILL_WORKSPACE`, `WINDMILL_TOKEN`, `WINDMILL_INTERNAL_SECRET`, `WINDMILL_ENABLED`
+- [x] Add `windmill-db` postgres service (reuses existing postgres with a `windmill` database via `scripts/create-windmill-db.sh`)
+- [x] Add `windmill-server` service (`ghcr.io/windmill-labs/windmill:v1.662.0`) — port 8000; depends on `windmill_init`
+- [x] Add `windmill-worker` service (`ghcr.io/windmill-labs/windmill-worker`) — depends on windmill-server
+- [x] Add env vars to `apps/api/.env`: `WINDMILL_BASE_URL`, `WINDMILL_WORKSPACE`, `WINDMILL_TOKEN`, `WINDMILL_INTERNAL_SECRET`, `WINDMILL_ENABLED`
 - [ ] Create Windmill workspace + bootstrap `f/config/NEXIOM_API_URL` and `f/config/WINDMILL_INTERNAL_SECRET` variables
 - Files: `docker-compose.yml`, `apps/api/.env`
 - Depends: T001
