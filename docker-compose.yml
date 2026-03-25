@@ -277,8 +277,7 @@ services:
 
   # --- Observability: Vector log-shipping sidecar ---
   # Reads JSON from the `api` container's stdout and ships to OpenObserve.
-  # Set OPENOBSERVE_URL / OPENOBSERVE_TOKEN in apps/api/.env to enable.
-  # Leave OPENOBSERVE_URL blank to run Vector without shipping (useful for local dev).
+  # OPENOBSERVE_URL and OPENOBSERVE_TOKEN are required in production.
   vector:
     image: timberio/vector:0.43.0-alpine
     restart: unless-stopped
@@ -286,10 +285,10 @@ services:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:?OPENOBSERVE_URL must be set}
       OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-nexiom}
       OPENOBSERVE_STREAM: ${OPENOBSERVE_STREAM:-api-logs}
-      OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:-}
+      OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:?OPENOBSERVE_TOKEN must be set}
     depends_on:
       - api
     networks:

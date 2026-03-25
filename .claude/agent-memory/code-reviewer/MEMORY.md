@@ -59,7 +59,7 @@
 - Tenant schema isolation: `SET LOCAL search_path` with assertValidSchemaName defense-in-depth
 - ShutdownService: custom SIGTERM/SIGINT handler with 30s hard deadline, replaces NestJS enableShutdownHooks
 - Database: singleton Pool via getDb(), closeDb() called from DatabaseModule.onModuleDestroy
-- CORS: origin allowlist from ALLOWED_ORIGINS env var -- has a bypass for no-Origin requests in prod (flagged 2026-03-25)
+- CORS: origin allowlist from ALLOWED_ORIGINS env var -- intentionally permits requests with no Origin for non-browser clients (webhooks protected by WebhookSignatureGuard) (updated 2026-03-25)
 - Vector config: docker_logs source -> remap parse_json -> http sink to OpenObserve (env vars required, no defaults)
 
 ## Schema Notes

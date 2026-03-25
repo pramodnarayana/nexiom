@@ -2,8 +2,7 @@
 #
 # Reads structured JSON from the `api` container's stdout via the Docker
 # logs source and ships to OpenObserve's HTTP bulk-ingest endpoint.
-# When OPENOBSERVE_URL is unset the http sink is effectively disabled
-# (Vector will log a warning but won't crash).
+# OPENOBSERVE_URL and OPENOBSERVE_TOKEN must be set for the pipeline to start.
 #
 # Run as part of docker-compose (see docker-compose.yml `vector` service).
 
@@ -30,7 +29,7 @@ data_dir = "/var/lib/vector"
 [sinks.openobserve]
   type              = "http"
   inputs            = ["parse_json"]
-  uri               = "${OPENOBSERVE_URL}/api/${OPENOBSERVE_ORG}/${OPENOBSERVE_STREAM}/_json"
+  uri               = "${OPENOBSERVE_URL:?OPENOBSERVE_URL must be set}/api/${OPENOBSERVE_ORG}/${OPENOBSERVE_STREAM}/_json"
   method            = "post"
   encoding.codec    = "json"
   batch.max_bytes   = 1_048_576   # 1 MiB

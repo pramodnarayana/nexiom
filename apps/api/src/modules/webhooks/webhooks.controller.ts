@@ -88,11 +88,11 @@ export class WebhooksController {
     const schemaName =
       await this.storageResolver.resolveSchemaName(connectionId);
     const { inboundGateway } = buildTenantSchema(schemaName);
-    const traceId = randomUUID();
+    const inboundGatewayId = randomUUID();
     const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
     // Bind L1-specific fields so every log call in this method carries them.
-    this.logger.assign({ layer: 'L1', traceId, extReqId });
+    this.logger.assign({ layer: 'L1', inboundGatewayId, extReqId });
 
     // Strip sensitive / irrelevant headers before persisting. Only the keys
     // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
@@ -110,10 +110,10 @@ export class WebhooksController {
         // break the safety invariant.
         assertValidSchemaName(schemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw(`"${schemaName}"`)}`,
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
         await tx.insert(inboundGateway).values({
-          traceId,
+          traceId: inboundGatewayId,
           connectionId,
           payload: body as Record<string, unknown>,
           headers: filteredHeaders,
@@ -137,7 +137,8 @@ export class WebhooksController {
         {
           event: 'l1.error',
           durationMs: Date.now() - start,
-          err: err instanceof Error ? err.message : String(err),
+          err,
+          errMessage: err instanceof Error ? err.message : String(err),
         },
         'L1 ingest failed',
       );

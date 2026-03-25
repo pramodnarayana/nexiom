@@ -11,7 +11,7 @@ const DRAIN_TIMEOUT_MS = 25_000;
  *
  * Registers OS signal handlers that call app.close(), which triggers
  * OnModuleDestroy hooks on all providers (including QueueService.stopConsuming()).
- * A hard 30-second deadline force-exits the process if drain stalls.
+ * A hard 25-second deadline force-exits the process if drain stalls.
  *
  * Call enableShutdownHooks(app) immediately after app.listen() in main.ts.
  */

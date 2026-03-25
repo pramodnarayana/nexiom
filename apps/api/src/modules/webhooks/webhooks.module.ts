@@ -5,13 +5,14 @@ import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 import { DbModule } from '../../db/db.module.js';
 import { StorageResolverModule } from '../storage-resolver/storage-resolver.module.js';
 import { PiecesModule } from '../pieces/pieces.module.js';
+import { ObservabilityModule } from '../observability/observability.module.js';
 
 // NOTE: TenantRateLimitGuard injects REDIS_CLIENT, which is provided by
 // CacheModule. CacheModule must be registered as a global module in AppModule
 // for this injection to resolve. If CacheModule is ever made non-global,
 // add `CacheModule` to the imports array here.
 @Module({
-  imports: [DbModule, StorageResolverModule, PiecesModule],
+  imports: [DbModule, StorageResolverModule, PiecesModule, ObservabilityModule],
   controllers: [WebhooksController],
   providers: [WebhookSignatureGuard, TenantRateLimitGuard],
 })
