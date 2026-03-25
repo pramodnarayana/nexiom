@@ -44,6 +44,7 @@
     "@nexiom/cache": "workspace:*",
     "@nexiom/connectors": "workspace:*",
     "@nexiom/database": "workspace:*",
+    "@nexiom/engine": "workspace:*",
     "@nexiom/dbmanager": "workspace:*",
     "@nexiom/identity": "workspace:*",
     "@nexiom/piece-quickbooks": "workspace:*",

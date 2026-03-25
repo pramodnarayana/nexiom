@@ -32,6 +32,16 @@
 - Mocks use `vi.fn()` and `vi.mock()`
 - Test DB mock is `mkDb()` factory returning chainable query mock
 
+## Scheduler / Sync Pipeline
+
+- Abstract `SyncRunner` base class with DI swapping (`{ provide: SyncRunner, useClass: PollSyncRunner }`)
+- `PollSyncRunner` implements Singer-style poll with Redis NX locks, crash-resume via `currently_syncing` + `bookmark.offset`
+- State persisted in `public.sync_cursors` (stitchId + streamName composite key, JSONB stateDocument)
+- `CursorManagerService` in `packages/engine` -- stateless, computes windows + tracks HWM
+- Lock key: `lock:poll:${stitchId}:${streamName}`, TTL = syncIntervalMinutes (potential issue: long syncs exceed TTL)
+- `OAuthCredentialBlob` double-cast to `Record<string, unknown>` is a recurring pattern in piece calls
+- Test mock pattern: `makeDb()` with sequential callCount dispatching -- fragile, order-dependent
+
 ## Schema Notes
 
 - envTypeEnum defined in tenant.ts, re-exported from workspace.ts
