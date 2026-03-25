@@ -444,9 +444,11 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 ### Enterprise-grade quality pass (all scheduler module files)
 
 - [x] **C1** `outbox-worker.service.ts`: `MAX_OUTBOX_ATTEMPTS` changed from 5 → 6 (1 initial + 5 retries) to match documented back-off schedule "2s, 4s, 8s, 16s, 32s"; tests updated for new boundary (attempts=6 permanently fails, attempts=5 retries with 32s delay)
-- [x] **C3** `http-windmill.client.ts`: 409 on `ensureStitchScript` now logs WARN with explanation; removes silent swallow; dead `requestJson` method removed (W7)
-- [x] **W1** `scheduler.module.ts`: `SyncRunner` binding converted from `useClass` to conditional `useFactory`; returns `StubSyncRunner` when `WINDMILL_ENABLED=false` to avoid heavyweight dependency instantiation on dev startup
-- [x] **W2** `scheduler.controller.ts`: `executeStitch` wrapped in try/catch; raw service errors (DB strings, tokens) never reach Windmill worker HTTP response
+- [x] **C2** `outbox-worker.service.ts`: `sanitizeError()` helper — logs emit truncated (≤200 char) URL-credential-stripped error message; full raw text persisted only to DB `last_error` column for human/alerting review
+- [x] **C3** `http-windmill.client.ts`: 409 on `ensureStitchScript` now reads bounded body snippet (≤1 KB) and includes it in WARN log for diagnostics; dead `requestJson` method removed (W7)
+- [x] **W1** `scheduler.module.ts`: `SyncRunner` factory changed to `inject: [ConfigService, ModuleRef]`; heavy deps (DB, Redis, TokenManager, PieceRegistry, CursorManager) resolved lazily via `moduleRef.get(..., { strict: false })` only when `WINDMILL_ENABLED=true` — prevents startup failures when those providers are absent
+- [x] **W2** `scheduler.controller.ts`: catch block changed from `instanceof InternalServerErrorException` to `instanceof HttpException` so `NotFoundException`, `BadRequestException`, etc. propagate as the correct 4xx status instead of being wrapped as 500; test added for `NotFoundException` propagation
+- [x] **W3** `poll-sync-runner.ts`: `loadStitch()` throws `NotFoundException`, `loadConnection()` throws `NotFoundException`, `resolvePiece()` throws `BadRequestException` — these now propagate through `SchedulerController` as the correct HTTP status codes; spec updated to assert exception types
 - [x] **W4** `poll-sync-runner.ts`: `credentials as unknown as Record<string,unknown>` double-cast centralised into `toCredentialsRecord()` helper
 - [x] **W5** `lock-keys.ts`: `pollLockKey()` extracted to shared module; `PollSyncRunner` and `CursorResetController` both import from it
 - [x] **W6** `http-windmill.client.ts`: `Content-Type: application/json` only set when request has a body (GET requests omit it)

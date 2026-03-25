@@ -1,4 +1,10 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -331,7 +337,7 @@ export class PollSyncRunner extends SyncRunner {
       .from(integrationStitches)
       .where(eq(integrationStitches.id, stitchId))
       .limit(1);
-    if (!stitch) throw new Error(`Stitch not found: ${stitchId}`);
+    if (!stitch) throw new NotFoundException(`Stitch not found: ${stitchId}`);
     return stitch;
   }
 
@@ -344,7 +350,8 @@ export class PollSyncRunner extends SyncRunner {
       .from(appConnections)
       .where(eq(appConnections.id, connectionId))
       .limit(1);
-    if (!conn) throw new Error(`Connection not found: ${connectionId}`);
+    if (!conn)
+      throw new NotFoundException(`Connection not found: ${connectionId}`);
     return conn;
   }
 
@@ -402,10 +409,10 @@ export class PollSyncRunner extends SyncRunner {
   private resolvePiece(appName: string): Piece {
     const piece = this.pieceRegistry.getPiece(appName);
     if (!piece) {
-      throw new Error(`Piece not registered: "${appName}"`);
+      throw new BadRequestException(`Piece not registered: "${appName}"`);
     }
     if (typeof piece.poll !== 'function') {
-      throw new Error(
+      throw new BadRequestException(
         `Piece "${appName}" does not support polling (no poll() method)`,
       );
     }

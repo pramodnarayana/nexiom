@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  HttpException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
@@ -39,7 +40,10 @@ export class SchedulerController {
       }
       return result;
     } catch (err) {
-      if (err instanceof InternalServerErrorException) throw err;
+      // Re-throw NestJS HTTP exceptions (NotFoundException, BadRequestException,
+      // etc.) unchanged so domain errors surface as the correct 4xx status.
+      // Only wrap truly unexpected errors as 500 to avoid leaking internals.
+      if (err instanceof HttpException) throw err;
       throw new InternalServerErrorException('Stitch execution failed');
     }
   }

@@ -34,7 +34,8 @@ function createMockRedis() {
   return {
     // SET NX: returns 'OK' (lock acquired) or null (already held)
     set: vi.fn().mockResolvedValue('OK'),
-    del: vi.fn().mockResolvedValue(1),
+    // Lua compare-and-delete used to release the lock
+    eval: vi.fn().mockResolvedValue(1),
   };
 }
 
@@ -69,7 +70,7 @@ describe('CursorResetController', () => {
 
   // ── DELETE ──────────────────────────────────────────────────────────────
 
-  it('DELETE acquires lock, deletes cursor, releases lock', async () => {
+  it('DELETE acquires lock with a UUID token, deletes cursor, releases lock via compare-and-delete', async () => {
     mockRedis.set.mockResolvedValue('OK');
     mockDb.delete.mockReturnValue(mockDb);
     mockDb.where.mockResolvedValue(undefined);
@@ -81,23 +82,48 @@ describe('CursorResetController', () => {
     );
 
     expect(result).toBeUndefined();
-    // Lock acquired then released
-    expect(mockRedis.set).toHaveBeenCalledOnce();
-    expect(mockRedis.del).toHaveBeenCalledOnce();
+
+    // SET NX called with a UUID token (not a static string)
+    const setArgs = mockRedis.set.mock.calls[0] as [
+      string,
+      string,
+      string,
+      number,
+      string,
+    ];
+    expect(setArgs[0]).toBe(`lock:poll:${STITCH_ID}:${STREAM_NAME}`);
+    expect(setArgs[1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(setArgs[2]).toBe('PX');
+    expect(typeof setArgs[3]).toBe('number');
+    expect(setArgs[4]).toBe('NX');
+
+    // Compare-and-delete called with the same token
+    expect(mockRedis.eval).toHaveBeenCalledOnce();
+    const evalArgs = mockRedis.eval.mock.calls[0] as [
+      string,
+      number,
+      string,
+      string,
+    ];
+    expect(evalArgs[2]).toBe(`lock:poll:${STITCH_ID}:${STREAM_NAME}`);
+    expect(evalArgs[3]).toBe(setArgs[1]); // same token passed to both SET and eval
+
     expect(mockDb.delete).toHaveBeenCalledOnce();
   });
 
-  it('DELETE is idempotent — no error when row is absent', async () => {
+  it('DELETE is idempotent — resolves with undefined when row is absent', async () => {
     mockRedis.set.mockResolvedValue('OK');
     mockDb.delete.mockReturnValue(mockDb);
     mockDb.where.mockResolvedValue(undefined);
 
     await expect(
       controller.deleteCursor(STITCH_ID, STREAM_NAME, mockCtx),
-    ).resolves.not.toThrow();
+    ).resolves.toBeUndefined();
   });
 
-  it('DELETE releases lock even when DB delete throws', async () => {
+  it('DELETE releases lock via compare-and-delete even when DB delete throws', async () => {
     mockRedis.set.mockResolvedValue('OK');
     mockDb.delete.mockReturnValue(mockDb);
     mockDb.where.mockRejectedValue(new Error('DB error'));
@@ -106,8 +132,8 @@ describe('CursorResetController', () => {
       controller.deleteCursor(STITCH_ID, STREAM_NAME, mockCtx),
     ).rejects.toThrow('DB error');
 
-    // Lock must be released in finally
-    expect(mockRedis.del).toHaveBeenCalledOnce();
+    // Compare-and-delete must run in finally
+    expect(mockRedis.eval).toHaveBeenCalledOnce();
   });
 
   it('DELETE throws ConflictException when poll lock is already held (NX fails)', async () => {
@@ -120,23 +146,20 @@ describe('CursorResetController', () => {
     // Must not attempt DB delete
     expect(mockDb.delete).not.toHaveBeenCalled();
     // Must not attempt lock release (never acquired it)
-    expect(mockRedis.del).not.toHaveBeenCalled();
+    expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 
-  it('DELETE uses the correct lock key format', async () => {
+  it('DELETE uses the correct lock key format and NX flag', async () => {
     mockRedis.set.mockResolvedValue('OK');
     mockDb.delete.mockReturnValue(mockDb);
     mockDb.where.mockResolvedValue(undefined);
 
     await controller.deleteCursor(STITCH_ID, STREAM_NAME, mockCtx);
 
-    expect(mockRedis.set).toHaveBeenCalledWith(
-      `lock:poll:${STITCH_ID}:${STREAM_NAME}`,
-      'admin-reset',
-      'PX',
-      expect.any(Number),
-      'NX',
-    );
+    const setArgs = mockRedis.set.mock.calls[0] as unknown[];
+    expect(setArgs[0]).toBe(`lock:poll:${STITCH_ID}:${STREAM_NAME}`);
+    expect(setArgs[2]).toBe('PX');
+    expect(setArgs[4]).toBe('NX');
   });
 
   it('DELETE rejects streamName with newline characters', async () => {
@@ -171,11 +194,15 @@ describe('CursorResetController', () => {
           { syncIntervalMinutes: 30, scheduleEnabled: true },
         ]);
       } else if (table === syncCursors) {
+        // Include stateDocument in the raw DB row to prove the controller strips it.
         mockDb.where.mockResolvedValueOnce([
           {
             id: 'c1',
             stitchId: STITCH_ID,
             streamName: STREAM_NAME,
+            stateDocument: {
+              bookmarks: { Account: { replication_key_value: 'secret-token' } },
+            },
             createdAt: sixtyOneMinutesAgo,
             updatedAt: sixtyOneMinutesAgo,
           },
@@ -190,7 +217,7 @@ describe('CursorResetController', () => {
     expect(result[0].stale).toBe(true);
     expect(result[0].paused).toBe(false);
     expect(result[0].ageMs).toBeGreaterThan(2 * 30 * 60_000);
-    // stateDocument must not be present in the response
+    // stateDocument must be stripped — it may contain opaque vendor cursor tokens.
     expect(result[0]).not.toHaveProperty('stateDocument');
   });
 

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { InternalServerErrorException } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SchedulerController } from './scheduler.controller.js';
 import { SchedulerService } from './scheduler.service.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
@@ -64,6 +67,16 @@ describe('SchedulerController', () => {
     await expect(
       controller.executeStitch({ stitchId: STITCH_ID }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
+  });
+
+  it('propagates NotFoundException from service as 404 (not wrapped as 500)', async () => {
+    service.executeStitch.mockRejectedValue(
+      new NotFoundException('Stitch not found: ' + STITCH_ID),
+    );
+
+    await expect(
+      controller.executeStitch({ stitchId: STITCH_ID }),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('wraps unexpected service throws in InternalServerErrorException to prevent raw error leakage', async () => {

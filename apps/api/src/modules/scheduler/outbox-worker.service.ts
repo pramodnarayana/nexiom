@@ -27,6 +27,16 @@ const BATCH_SIZE = 20;
  * MAX_OUTBOX_ATTEMPTS, after which the record is marked 'failed' for
  * human/alerting review.
  */
+/**
+ * Returns a log-safe version of an error message.
+ * Truncates to 200 characters and strips URL credentials
+ * (e.g. https://user:token@host) that may appear in vendor API errors.
+ */
+function sanitizeError(message: string): string {
+  const stripped = message.replaceAll(/\/\/[^@\s]*@/g, '//[REDACTED]@');
+  return stripped.length > 200 ? `${stripped.slice(0, 200)}…` : stripped;
+}
+
 @Injectable()
 export class OutboxWorkerService {
   private readonly logger = new Logger(OutboxWorkerService.name);
@@ -119,7 +129,11 @@ export class OutboxWorkerService {
     record: typeof schedulerOutbox.$inferSelect,
     err: unknown,
   ): Promise<void> {
+    // Full error text is persisted to the DB column for human/alerting review.
+    // Logs only emit a sanitized snippet — raw vendor error messages may contain
+    // OAuth tokens, connection strings, or other sensitive material.
     const lastError = err instanceof Error ? err.message : String(err);
+    const safeError = sanitizeError(lastError);
 
     if (record.attempts >= MAX_OUTBOX_ATTEMPTS) {
       // Permanently failed — mark for alerting/human review.
@@ -130,7 +144,7 @@ export class OutboxWorkerService {
       this.logger.error(
         `Outbox record permanently failed: id=${record.id} action=${record.action} ` +
           `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `error="${lastError}"`,
+          `error="${safeError}"`,
       );
     } else {
       // Exponential back-off between attempts: 2s, 4s, 8s, 16s, 32s.
@@ -143,7 +157,7 @@ export class OutboxWorkerService {
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +
           `stitchId=${record.stitchId} attempt=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `nextRetryAt=${nextRetryAt.toISOString()} error="${lastError}"`,
+          `nextRetryAt=${nextRetryAt.toISOString()} error="${safeError}"`,
       );
     }
   }

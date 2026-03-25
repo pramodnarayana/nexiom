@@ -78,15 +78,23 @@ export class HttpWindmillClient extends WindmillClient {
       return;
     }
     if (res.status === 409) {
-      await res.body?.cancel();
       // Windmill returns 409 when an identical content hash already exists at this
       // path (truly idempotent).  If STITCH_RUNNER_CONTENT changed since the last
       // deploy, the hash differs and Windmill creates a new version (200).
       // A persistent 409 after a content change indicates the Windmill workspace
       // needs a manual redeploy (delete the script at the path and redeploy).
+      // Read a bounded snippet (≤1 KB) for diagnostics — discard the rest.
+      let snippet = '';
+      try {
+        const full = await res.text();
+        snippet = full.length > 1024 ? `${full.slice(0, 1024)}…` : full;
+      } catch {
+        // Ignore body-read errors — the 409 itself is sufficient signal.
+      }
       this.logger.warn(
         `Stitch-runner script at ${STITCH_RUNNER_PATH} returned 409 — ` +
-          'script content matches an existing version or a manual redeploy is needed.',
+          `script content matches an existing version or a manual redeploy is needed` +
+          (snippet ? `. Response: ${snippet}` : '.'),
       );
       return;
     }

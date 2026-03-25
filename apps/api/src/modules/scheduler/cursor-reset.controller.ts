@@ -23,6 +23,7 @@ import {
 import type { DrizzleDb } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { eq, and } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { pollLockKey } from './lock-keys.js';
 
 /** Short-lived TTL (ms) for the admin reset lock — long enough to cover the DB delete. */
@@ -56,9 +57,13 @@ export class CursorResetController {
     // the run completes.  Holding the lock during the delete prevents a new poll
     // from starting and immediately re-creating the cursor row we just removed.
     const lockKey = pollLockKey(id, streamName);
+    // Use a unique token per acquisition so the compare-and-delete release
+    // cannot accidentally free a lock held by a concurrent PollSyncRunner
+    // that acquired it between our NX set and our eventual release.
+    const lockToken = randomUUID();
     const acquired = await this.redis.set(
       lockKey,
-      'admin-reset',
+      lockToken,
       'PX',
       ADMIN_RESET_LOCK_TTL_MS,
       'NX',
@@ -79,8 +84,17 @@ export class CursorResetController {
           ),
         );
     } finally {
-      // Release immediately — we only needed the lock to prevent concurrent starts.
-      await this.redis.del(lockKey);
+      // Compare-and-delete: only remove the lock if we still own it.
+      // Prevents releasing a lock that expired and was re-acquired by a
+      // PollSyncRunner during a slow DB delete.
+      const lua = [
+        "if redis.call('get', KEYS[1]) == ARGV[1] then",
+        "  return redis.call('del', KEYS[1])",
+        'else',
+        '  return 0',
+        'end',
+      ].join('\n');
+      await this.redis.eval(lua, 1, lockKey, lockToken);
     }
 
     this.logger.log(
@@ -126,8 +140,14 @@ export class CursorResetController {
       const ageMs = now - row.updatedAt.getTime();
       // Paused stitches are never stale — cursors are not expected to advance.
       const paused = !stitch.scheduleEnabled;
+      // Explicitly enumerate fields rather than spreading — stateDocument is
+      // intentionally absent and must never appear in the HTTP response.
       return {
-        ...row,
+        id: row.id,
+        stitchId: row.stitchId,
+        streamName: row.streamName,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
         ageMs,
         paused,
         stale: paused ? false : ageMs > staleThresholdMs,

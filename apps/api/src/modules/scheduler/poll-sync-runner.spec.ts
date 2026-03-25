@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   DATABASE_CONNECTION,
@@ -421,35 +422,39 @@ describe('PollSyncRunner', () => {
 
   // ── Error paths ────────────────────────────────────────────────────────────
 
-  it('throws when the stitch does not exist', async () => {
+  it('throws NotFoundException when the stitch does not exist', async () => {
     const noStitch = makeDb({ stitch: null });
     await build({ db: noStitch });
 
+    await expect(runner.run(STITCH_ID)).rejects.toThrow(NotFoundException);
     await expect(runner.run(STITCH_ID)).rejects.toThrow(
       `Stitch not found: ${STITCH_ID}`,
     );
   });
 
-  it('throws when the connection does not exist', async () => {
+  it('throws NotFoundException when the connection does not exist', async () => {
     const noConn = makeDb({ connection: null });
     await build({ db: noConn });
 
+    await expect(runner.run(STITCH_ID)).rejects.toThrow(NotFoundException);
     await expect(runner.run(STITCH_ID)).rejects.toThrow(
       `Connection not found: ${CONN_ID}`,
     );
   });
 
-  it('throws when the piece is not registered', async () => {
+  it('throws BadRequestException when the piece is not registered', async () => {
     pieceRegistry.getPiece.mockReturnValue(undefined);
 
+    await expect(runner.run(STITCH_ID)).rejects.toThrow(BadRequestException);
     await expect(runner.run(STITCH_ID)).rejects.toThrow(
       'Piece not registered: "salesforce"',
     );
   });
 
-  it('throws when the piece does not support poll()', async () => {
+  it('throws BadRequestException when the piece does not support poll()', async () => {
     pieceRegistry.getPiece.mockReturnValue({ name: 'salesforce' });
 
+    await expect(runner.run(STITCH_ID)).rejects.toThrow(BadRequestException);
     await expect(runner.run(STITCH_ID)).rejects.toThrow(
       'does not support polling',
     );

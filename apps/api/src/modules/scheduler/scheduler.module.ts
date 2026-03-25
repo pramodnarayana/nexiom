@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { CursorManagerService } from '@nexiom/engine';
 import { TokenManagerService } from '@nexiom/connectors';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
-import { DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
+import { REDIS_CLIENT } from '@nexiom/cache';
+import { DATABASE_CONNECTION } from '@nexiom/database';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { PiecesModule } from '../pieces/pieces.module.js';
@@ -40,31 +41,22 @@ import { OutboxWorkerService } from './outbox-worker.service.js';
       // when Windmill is enabled.  In local dev (WINDMILL_ENABLED=false) the
       // stub is returned so a missing Redis or credential provider does not
       // crash the process on startup.
+      //
+      // Heavy dependencies (Redis, DB, TokenManager, etc.) are resolved lazily
+      // via ModuleRef so NestJS does not eagerly instantiate them when
+      // WINDMILL_ENABLED=false — prevents startup failures in environments where
+      // those providers are absent.
       provide: SyncRunner,
-      inject: [
-        ConfigService,
-        DATABASE_CONNECTION,
-        REDIS_CLIENT,
-        TokenManagerService,
-        PieceRegistryService,
-        CursorManagerService,
-      ],
-      useFactory: (
-        config: ConfigService,
-        db: DrizzleDb,
-        redis: Redis,
-        tokenManager: TokenManagerService,
-        pieceRegistry: PieceRegistryService,
-        cursorManager: CursorManagerService,
-      ): SyncRunner => {
+      inject: [ConfigService, ModuleRef],
+      useFactory: (config: ConfigService, moduleRef: ModuleRef): SyncRunner => {
         if (config.get<string>('WINDMILL_ENABLED') === 'true') {
           return new PollSyncRunner(
-            db,
-            redis,
+            moduleRef.get(DATABASE_CONNECTION, { strict: false }),
+            moduleRef.get(REDIS_CLIENT, { strict: false }),
             config,
-            tokenManager,
-            pieceRegistry,
-            cursorManager,
+            moduleRef.get(TokenManagerService, { strict: false }),
+            moduleRef.get(PieceRegistryService, { strict: false }),
+            moduleRef.get(CursorManagerService, { strict: false }),
           );
         }
         return new StubSyncRunner();
