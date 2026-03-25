@@ -123,7 +123,7 @@ export class TenantRateLimitGuard implements CanActivate {
     // and go straight to the per-connection probe bucket.
     const negCacheKey = `ratelimit:l1:neg:${connectionId}`;
     const isCachedMiss = await this.redis.exists(negCacheKey);
-    if (isCachedMiss) {
+    if (isCachedMiss === 1) {
       await this.applyFallbackRateLimit(
         res,
         `ratelimit:l1:probe:${connectionId}`,
