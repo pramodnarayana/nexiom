@@ -17,6 +17,8 @@ import { eq } from 'drizzle-orm';
 
 /** Default request allowance per tenant per 60-second window. */
 const DEFAULT_LIMIT = 1_000;
+/** Hard ceiling on custom rateLimitPerMin values stored in connection metadata. */
+const MAX_RATE_LIMIT = 10_000;
 /** Window duration in seconds. */
 const WINDOW_SECONDS = 60;
 
@@ -207,9 +209,12 @@ export class TenantRateLimitGuard implements CanActivate {
   }
 }
 
+const resolveLimitLogger = new Logger('TenantRateLimitGuard:resolveLimit');
+
 /**
  * Resolves the per-tenant request limit.
  * Enterprise tenants can store `rateLimitPerMin` in the connection metadata.
+ * Custom values are clamped to MAX_RATE_LIMIT to prevent extreme configurations.
  * Falls back to DEFAULT_LIMIT for standard tenants.
  */
 function resolveLimit(metadata: unknown): number {
@@ -219,7 +224,15 @@ function resolveLimit(metadata: unknown): number {
     'rateLimitPerMin' in metadata
   ) {
     const custom = (metadata as Record<string, unknown>)['rateLimitPerMin'];
-    if (typeof custom === 'number' && custom > 0) return custom;
+    if (typeof custom === 'number' && Number.isFinite(custom) && custom > 0) {
+      if (custom > MAX_RATE_LIMIT) {
+        resolveLimitLogger.warn(
+          `rateLimitPerMin value ${custom} exceeds MAX_RATE_LIMIT (${MAX_RATE_LIMIT}) — clamping`,
+        );
+        return MAX_RATE_LIMIT;
+      }
+      return custom;
+    }
   }
   return DEFAULT_LIMIT;
 }

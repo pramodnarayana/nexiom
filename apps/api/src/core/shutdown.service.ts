@@ -69,7 +69,10 @@ export class ShutdownService {
       process.exit(0);
     } catch (err) {
       clearTimeout(deadline);
-      this.logger.error('Error during graceful shutdown -- forcing exit', err);
+      this.logger.error(
+        'Error during graceful shutdown -- forcing exit',
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      );
       process.exit(1);
     }
   }

@@ -23,10 +23,6 @@ describe('ShutdownService', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    // Belt-and-suspenders: remove any listeners that may have leaked through
-    // despite the mock (e.g. in a test that temporarily restores the spy).
-    process.removeAllListeners('SIGTERM');
-    process.removeAllListeners('SIGINT');
   });
 
   /** Extract the handler registered for a given signal via process.once. */
@@ -55,6 +51,11 @@ describe('ShutdownService', () => {
       (c) => c[0] === 'SIGTERM',
     );
     expect(sigtermCalls).toHaveLength(1);
+
+    const sigintCalls = processOnceSpy.mock.calls.filter(
+      (c) => c[0] === 'SIGINT',
+    );
+    expect(sigintCalls).toHaveLength(1);
   });
 
   it('on signal, calls app.close() and then process.exit(0)', async () => {

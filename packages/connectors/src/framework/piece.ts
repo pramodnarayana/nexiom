@@ -308,11 +308,15 @@ export function createPiece(params: CreatePieceParams): Piece {
             typeof params.webhook.secretKeyEnv !== 'string' ||
             params.webhook.secretKeyEnv.trim().length === 0 ||
             typeof params.webhook.signatureHeader !== 'string' ||
-            params.webhook.signatureHeader.trim().length === 0
+            params.webhook.signatureHeader.trim().length === 0 ||
+            (params.webhook.signatureEncoding !== undefined &&
+                params.webhook.signatureEncoding !== 'base64' &&
+                params.webhook.signatureEncoding !== 'hex')
         ) {
             throw new InternalServerErrorException(
                 `[createPiece] Invalid webhook config for piece "${params.name}": ` +
-                `secretKeyEnv and signatureHeader must be non-empty strings.`,
+                `secretKeyEnv and signatureHeader must be non-empty strings, ` +
+                `and signatureEncoding (when present) must be 'base64' or 'hex'.`,
             );
         }
     }
