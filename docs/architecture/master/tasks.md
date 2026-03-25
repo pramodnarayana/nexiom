@@ -455,7 +455,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] **S1** `packages/database/src/schema/stitches.ts` + `drizzle/0014_scheduler_outbox_partial_index.sql`: composite index on `(status, next_retry_at)` upgraded to partial index on `(next_retry_at)` WHERE `status='pending'`
 - [x] **S2** `stub-sync-runner.ts`: changed terminal status from `'started'` → `'succeeded'` to match real runner
 - [x] **S3** `interval-to-cron.ts`: comment added explaining 6-field Quartz cron support in Windmill's Rust `cron` crate
-- [x] **S5** `outbox-worker.service.ts`: log messages include structured context fields (`id=`, `action=`, `stitchId=`, `attempts=`, `nextRetryAt=`, `error=`)
+- [x] **S4** `outbox-worker.service.ts`: log messages include structured context fields (`id=`, `action=`, `stitchId=`, `attempts=`, `nextRetryAt=`, `error=`)
 
 ---
 

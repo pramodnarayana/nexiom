@@ -129,11 +129,10 @@ export class OutboxWorkerService {
     record: typeof schedulerOutbox.$inferSelect,
     err: unknown,
   ): Promise<void> {
-    // Full error text is persisted to the DB column for human/alerting review.
-    // Logs only emit a sanitized snippet — raw vendor error messages may contain
-    // OAuth tokens, connection strings, or other sensitive material.
-    const lastError = err instanceof Error ? err.message : String(err);
-    const safeError = sanitizeError(lastError);
+    // Sanitize before persisting or logging — raw vendor error messages may
+    // contain OAuth tokens, connection strings, or other sensitive material.
+    const rawError = err instanceof Error ? err.message : String(err);
+    const lastError = sanitizeError(rawError);
 
     if (record.attempts >= MAX_OUTBOX_ATTEMPTS) {
       // Permanently failed — mark for alerting/human review.
@@ -144,7 +143,7 @@ export class OutboxWorkerService {
       this.logger.error(
         `Outbox record permanently failed: id=${record.id} action=${record.action} ` +
           `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `error="${safeError}"`,
+          `error="${lastError}"`,
       );
     } else {
       // Exponential back-off between attempts: 2s, 4s, 8s, 16s, 32s.
@@ -157,7 +156,7 @@ export class OutboxWorkerService {
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +
           `stitchId=${record.stitchId} attempt=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `nextRetryAt=${nextRetryAt.toISOString()} error="${safeError}"`,
+          `nextRetryAt=${nextRetryAt.toISOString()} error="${lastError}"`,
       );
     }
   }

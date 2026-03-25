@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { CursorManagerService } from '@nexiom/engine';
@@ -21,9 +21,19 @@ import { CursorResetController } from './cursor-reset.controller.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 import { OutboxWorkerService } from './outbox-worker.service.js';
 
+// Evaluated once at module load time — env vars are set before app bootstrap.
+const WINDMILL_ENABLED = process.env['WINDMILL_ENABLED'] === 'true';
+
+// CursorResetController injects REDIS_CLIENT; only register it when Redis is
+// expected to be present (i.e. WINDMILL_ENABLED=true).
+
+const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
+  ? [SchedulerController, CursorResetController]
+  : [SchedulerController];
+
 @Module({
   imports: [DbModule, ConnectionsModule, PiecesModule],
-  controllers: [SchedulerController, CursorResetController],
+  controllers: schedulerControllers,
   providers: [
     {
       provide: WindmillClient,

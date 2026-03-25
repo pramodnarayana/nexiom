@@ -26,8 +26,11 @@ import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { pollLockKey } from './lock-keys.js';
 
-/** Short-lived TTL (ms) for the admin reset lock — long enough to cover the DB delete. */
-const ADMIN_RESET_LOCK_TTL_MS = 5_000;
+// TTL for the admin cursor-reset lock.  Must be long enough to cover the DB
+// delete even under elevated database latency.  Matches the minimum floor used
+// by PollSyncRunner (5 minutes) so that a concurrent poll that starts just
+// after we acquire the lock cannot complete and reacquire before we release.
+const ADMIN_RESET_LOCK_TTL_MS = 5 * 60_000;
 
 @UseGuards(AuthGuard, SystemAdminGuard)
 @Controller('admin/stitches')
@@ -97,8 +100,10 @@ export class CursorResetController {
       await this.redis.eval(lua, 1, lockKey, lockToken);
     }
 
+    // Use the stable internal principal ID rather than email (PII) in service
+    // logs.  Audit trails that require email belong in a dedicated secure sink.
     this.logger.log(
-      `Cursor reset: stitchId=${id}, streamName=${JSON.stringify(streamName)}, operator=${ctx.user.email}`,
+      `Cursor reset: stitchId=${id}, streamName=${JSON.stringify(streamName)}, actorId=${ctx.user.id ?? '[unknown]'}`,
     );
   }
 

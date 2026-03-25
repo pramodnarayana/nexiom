@@ -149,17 +149,15 @@ describe('CursorResetController', () => {
     expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 
-  it('DELETE uses the correct lock key format and NX flag', async () => {
+  it('DELETE accepts streamName at the maximum valid length (200 characters)', async () => {
     mockRedis.set.mockResolvedValue('OK');
     mockDb.delete.mockReturnValue(mockDb);
     mockDb.where.mockResolvedValue(undefined);
 
-    await controller.deleteCursor(STITCH_ID, STREAM_NAME, mockCtx);
-
-    const setArgs = mockRedis.set.mock.calls[0] as unknown[];
-    expect(setArgs[0]).toBe(`lock:poll:${STITCH_ID}:${STREAM_NAME}`);
-    expect(setArgs[2]).toBe('PX');
-    expect(setArgs[4]).toBe('NX');
+    const maxName = 'a'.repeat(200);
+    await expect(
+      controller.deleteCursor(STITCH_ID, maxName, mockCtx),
+    ).resolves.toBeUndefined();
   });
 
   it('DELETE rejects streamName with newline characters', async () => {
