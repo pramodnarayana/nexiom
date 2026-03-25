@@ -44,11 +44,21 @@ export function getDb(): DrizzleDb {
     });
 
     dbInstance = drizzle({ client: pool, schema: schemaBundle });
-    // Drain the pool on graceful shutdown so in-flight queries finish cleanly.
-    process.once('SIGTERM', () => pool!.end());
-    process.once('SIGINT', () => pool!.end());
     return dbInstance;
 }
 
-
-
+/**
+ * Drains the pg connection pool.
+ * Called by DatabaseModule.onModuleDestroy() so pool shutdown is coordinated
+ * through app.close() rather than racing against OS signal handlers.
+ */
+export async function closeDb(): Promise<void> {
+    if (pool) {
+        try {
+            await pool.end();
+        } finally {
+            pool = undefined;
+            dbInstance = undefined;
+        }
+    }
+}

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app/app.module.js';
+import { ShutdownService } from './core/shutdown.service.js';
 
 function validateEnv(): void {
   if (process.env.WINDMILL_ENABLED === 'true') {
@@ -22,7 +23,7 @@ function validateEnv(): void {
 
 async function bootstrap() {
   validateEnv();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT || 3000;
@@ -60,6 +61,10 @@ async function bootstrap() {
   });
 
   await app.listen(port);
+  // NOTE: NestJS built-in app.enableShutdownHooks() is intentionally NOT called.
+  // ShutdownService provides the same functionality with an additional 30-second
+  // hard-deadline guard. Calling both would result in double app.close() invocations.
+  app.get(ShutdownService).enableShutdownHooks(app);
   Logger.log(
     `Application is running on: http://localhost:${port}/${globalPrefix}`,
   );

@@ -146,6 +146,24 @@ export interface FieldDescriptor extends BaseFieldDescriptor {
     label: string;
 }
 
+/**
+ * Per-piece webhook signature configuration.
+ * The WebhookSignatureGuard uses this to verify the vendor's HMAC-SHA256
+ * signature before the request reaches the ingestion controller.
+ */
+export interface PieceWebhookConfig {
+  /** Name of the environment variable holding the HMAC-SHA256 signing secret. */
+  secretKeyEnv: string;
+  /** HTTP header name that carries the vendor-generated signature (case-insensitive). */
+  signatureHeader: string;
+  /**
+   * Encoding of the signature value in the header.
+   * - `'base64'` (default) -- used by Salesforce and QuickBooks.
+   * - `'hex'`              -- for vendors that emit lowercase hex digests.
+   */
+  signatureEncoding?: 'base64' | 'hex';
+}
+
 export interface Piece {
     name: string;
     displayName: string;
@@ -197,6 +215,8 @@ export interface Piece {
         window: PollWindow,
         nextPageCursor?: Record<string, unknown>,
     ): Promise<PollPage>;
+    /** Per-piece webhook signature configuration for HMAC verification. */
+    webhook?: PieceWebhookConfig;
 }
 
 export enum PieceCategory {
@@ -237,6 +257,8 @@ export interface CreatePieceParams {
         window: PollWindow,
         nextPageCursor?: Record<string, unknown>,
     ): Promise<PollPage>;
+    /** Per-piece webhook signature configuration for HMAC verification. */
+    webhook?: PieceWebhookConfig;
 }
 
 /**
@@ -277,6 +299,28 @@ export function createPiece(params: CreatePieceParams): Piece {
         {} as Record<string, Trigger>,
     );
 
+    // Validate webhook config at construction time so misconfigured pieces
+    // fail immediately at startup rather than silently at request time.
+    if (params.webhook !== undefined) {
+        if (
+            typeof params.webhook !== 'object' ||
+            params.webhook === null ||
+            typeof params.webhook.secretKeyEnv !== 'string' ||
+            params.webhook.secretKeyEnv.trim().length === 0 ||
+            typeof params.webhook.signatureHeader !== 'string' ||
+            params.webhook.signatureHeader.trim().length === 0 ||
+            (params.webhook.signatureEncoding !== undefined &&
+                params.webhook.signatureEncoding !== 'base64' &&
+                params.webhook.signatureEncoding !== 'hex')
+        ) {
+            throw new InternalServerErrorException(
+                `[createPiece] Invalid webhook config for piece "${params.name}": ` +
+                `secretKeyEnv and signatureHeader must be non-empty strings, ` +
+                `and signatureEncoding (when present) must be 'base64' or 'hex'.`,
+            );
+        }
+    }
+
     return {
         name: params.name || '',
         displayName: params.displayName,
@@ -297,5 +341,6 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.describeFields && { describeFields: params.describeFields }),
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
         ...(params.poll && { poll: params.poll }),
+        ...(params.webhook && { webhook: params.webhook }),
     };
 }

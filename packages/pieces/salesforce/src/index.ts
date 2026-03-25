@@ -146,5 +146,10 @@ export const salesforce = createPiece({
     ],
     describeObjects,
     describeFields,
+    webhook: {
+        secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',
+        signatureHeader: 'X-Salesforce-Signature',
+        signatureEncoding: 'base64',
+    },
 });
 export { salesforceAuth } from './lib/auth.js';

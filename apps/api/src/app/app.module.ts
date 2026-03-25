@@ -25,6 +25,8 @@ import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
 import { WorkspacesModule } from '../modules/workspaces/workspaces.module.js';
 import { StitchesModule } from '../modules/stitches/stitches.module.js';
 import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
+import { WebhooksModule } from '../modules/webhooks/webhooks.module.js';
+import { ShutdownService } from '../core/shutdown.service.js';
 
 @Module({
   imports: [
@@ -90,8 +92,9 @@ import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
     WorkspacesModule,
     StitchesModule,
     SchedulerModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ShutdownService],
 })
 export class AppModule {}
