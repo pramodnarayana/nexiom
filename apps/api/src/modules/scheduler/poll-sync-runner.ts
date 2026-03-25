@@ -1,5 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import type { DrizzleDb } from '@nexiom/database';
 import {
@@ -41,6 +42,27 @@ function initialHwm(
   if (type === 'timestamp') return new Date(0).toISOString();
   return '';
 }
+
+// ---------------------------------------------------------------------------
+// Runtime schema for the state document stored in sync_cursors.state_document.
+// Validates on read so a corrupt or migrated row never silently propagates bad
+// state through the poll pipeline.
+// ---------------------------------------------------------------------------
+
+const StreamBookmarkSchema = z.object({
+  replication_key: z.string(),
+  replication_key_value: z.union([z.string(), z.number()]),
+  replication_key_type: z.enum(['timestamp', 'numeric', 'opaque']),
+  offset: z.record(z.string(), z.unknown()).optional(),
+});
+
+const SyncStateDocumentSchema = z.object({
+  bookmarks: z.record(z.string(), StreamBookmarkSchema),
+  versions: z.record(z.string(), z.number()),
+  currently_syncing: z.string().nullable(),
+});
+
+// ---------------------------------------------------------------------------
 
 /**
  * Returns a log-safe representation of the high-water mark.
@@ -334,7 +356,15 @@ export class PollSyncRunner extends SyncRunner {
       .limit(1);
 
     if (row) {
-      return row.stateDocument as SyncStateDocument;
+      const parsed = SyncStateDocumentSchema.safeParse(row.stateDocument);
+      if (!parsed.success) {
+        this.logger.warn(
+          `Corrupt state document for stitch ${stitchId} / stream "${streamName}" — resetting to default. ` +
+            `Validation errors: ${parsed.error.message}`,
+        );
+        return { bookmarks: {}, versions: {}, currently_syncing: null };
+      }
+      return parsed.data;
     }
 
     // First run — initialise with the default SyncStateDocument shape.

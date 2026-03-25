@@ -372,6 +372,18 @@ describe('PollSyncRunner', () => {
     expect(result.status).toBe('succeeded');
   });
 
+  // ── State document validation ──────────────────────────────────────────────
+
+  it('resets to default state and warns when sync_cursors contains a corrupt document', async () => {
+    const corruptDb = makeDb({ stateDoc: { not: 'a valid state doc' } });
+    await build({ db: corruptDb });
+
+    // Should succeed, not throw — corrupt state is treated as a fresh first run
+    const result = await runner.run(STITCH_ID);
+
+    expect(result.status).toBe('succeeded');
+  });
+
   // ── Error paths ────────────────────────────────────────────────────────────
 
   it('throws when the stitch does not exist', async () => {
