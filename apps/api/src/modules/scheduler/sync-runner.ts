@@ -1,18 +1,22 @@
+import type { StreamResult } from '@nexiom/engine';
+
 /**
  * SyncResult — outcome of a single stitch execution attempt.
  */
 export interface SyncResult {
   stitchId: string;
-  /** 'started' = async pipeline launched, 'succeeded' = completed inline, 'skipped' = nothing to do */
-  status: 'started' | 'succeeded' | 'skipped';
+  /** 'succeeded' = all streams polled; 'skipped' = lock contention; 'failed' = stream error. */
+  status: 'started' | 'succeeded' | 'skipped' | 'failed';
+  /** Per-stream outcomes. Present when the poll run sequence completes inline. */
+  streamResults?: StreamResult[];
 }
 
 /**
  * Abstract SyncRunner.
  *
  * Implementations:
- *   - StubSyncRunner       — no-op used until CursorManagerService (T047) ships
- *   - CursorManagerService — real sync pipeline (pending T047)
+ *   - StubSyncRunner  — no-op placeholder used in tests / when poll is disabled
+ *   - PollSyncRunner  — real Singer-style poll pipeline (T030)
  *
  * Injected into SchedulerService to decouple execution from scheduling.
  */

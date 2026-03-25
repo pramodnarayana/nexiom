@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 import { SchedulerService } from './scheduler.service.js';
@@ -28,6 +29,12 @@ export class SchedulerController {
   @Post('execute-stitch')
   @HttpCode(HttpStatus.OK)
   async executeStitch(@Body() body: ExecuteStitchBody) {
-    return await this.schedulerService.executeStitch(body.stitchId);
+    const result = await this.schedulerService.executeStitch(body.stitchId);
+    if (result.status === 'failed') {
+      throw new InternalServerErrorException(
+        `Stitch execution failed: ${body.stitchId}`,
+      );
+    }
+    return result;
   }
 }

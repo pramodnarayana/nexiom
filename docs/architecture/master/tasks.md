@@ -302,15 +302,16 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `POST /internal/scheduler/execute-stitch` — receives `{ stitchId }` from Windmill; returns `ExecuteStitchResult`
 - [x] `InternalSchedulerGuard` — validates `Authorization: Bearer <WINDMILL_INTERNAL_SECRET>` using timing-safe compare; returns `401` on mismatch
 - [x] `executeStitch` body validated via Zod (`ExecuteStitchBody` with UUID check)
-- [x] Delegates to `SyncRunner.run(stitchId)` (stub returning `{ status: 'started' }` until poll run sequence below is implemented)
-- [ ] Acquire Redis lock `lock:poll:{stitchId}:{streamName}` (TTL = stitch interval) — return `{ status: 'SKIPPED' }` with `200` if unavailable
-- [ ] Call `piece.describeStreams(credentials)` → `StreamDescriptor` for the source object
-- [ ] Read `SyncStateDocument` from `public.sync_cursors`; detect crash-resume via `currently_syncing`
-- [ ] `CursorManagerService.calculateWindow(bookmark, catalog)` → `PollWindow`
-- [ ] Paginate `piece.poll(credentials, window, nextPageCursor)` with intermediate checkpoints
-- [ ] Final checkpoint → `sync_cursors`; update `integration_stitch.last_scheduled_at`
-- [ ] Unit tests for remaining poll run sequence
-- Files: `apps/api/src/modules/scheduler/scheduler.controller.ts`, `apps/api/src/modules/scheduler/internal-scheduler.guard.ts`, `apps/api/src/modules/scheduler/execute-stitch.validation.ts`
+- [x] Delegates to `SyncRunner.run(stitchId)` via `PollSyncRunner` (replaces `StubSyncRunner`)
+- [x] `PollSyncRunner` — resolves piece via `PieceRegistryService`; obtains valid credentials via `TokenManagerService` (handles OAuth refresh)
+- [x] Acquire Redis NX lock `lock:poll:{stitchId}:{streamName}` — TTL = `max(syncIntervalMinutes × 2 × 60 000 ms, 5 × 60 000 ms)` (milliseconds); renewed before each page via atomic Lua PEXPIRE — returns `{ status: 'skipped' }` if unavailable; aborts run if lock is stolen mid-pagination
+- [x] Call `piece.describeStreams(credentials)` → `StreamDescriptor` for `stitch.sourceObject`; falls back to FULL_TABLE sentinel if not supported
+- [x] Read `SyncStateDocument` from `public.sync_cursors`; detect crash-resume via `currently_syncing` + `bookmark.offset`
+- [x] `CursorManagerService.calculateWindow(bookmark, catalog)` → `PollWindow`; set `currently_syncing` + write initial checkpoint before first page
+- [x] Paginate `piece.poll(credentials, streamName, window, cursor)` with intermediate checkpoint every `checkpointInterval` pages
+- [x] Final checkpoint → `sync_cursors` (clear `currently_syncing` + `offset`); update `integration_stitch.last_scheduled_at`
+- [x] 13 unit tests: happy path, multi-page, describeStreams, fallback descriptor, lock skip, lock release on error, crash-resume, not-found errors
+- Files: `apps/api/src/modules/scheduler/scheduler.controller.ts`, `apps/api/src/modules/scheduler/internal-scheduler.guard.ts`, `apps/api/src/modules/scheduler/execute-stitch.validation.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.spec.ts`, `apps/api/src/modules/scheduler/sync-runner.ts`
 - Depends: T028, T029, T046, T047
 
 ### T031 · api: `ReplicaService` — L2 worker

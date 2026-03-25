@@ -1,18 +1,21 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CursorManagerService } from '@nexiom/engine';
 import { DbModule } from '../../db/db.module.js';
+import { ConnectionsModule } from '../connections/connections.module.js';
+import { PiecesModule } from '../pieces/pieces.module.js';
 import { WindmillClient } from './windmill.client.js';
 import { HttpWindmillClient } from './http-windmill.client.js';
 import { StubWindmillClient } from './stub-windmill.client.js';
 import { SyncRunner } from './sync-runner.js';
-import { StubSyncRunner } from './stub-sync-runner.js';
+import { PollSyncRunner } from './poll-sync-runner.js';
 import { SchedulerService } from './scheduler.service.js';
 import { SchedulerController } from './scheduler.controller.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 import { OutboxWorkerService } from './outbox-worker.service.js';
 
 @Module({
-  imports: [DbModule],
+  imports: [DbModule, ConnectionsModule, PiecesModule],
   controllers: [SchedulerController],
   providers: [
     {
@@ -25,7 +28,8 @@ import { OutboxWorkerService } from './outbox-worker.service.js';
           : new StubWindmillClient();
       },
     },
-    { provide: SyncRunner, useClass: StubSyncRunner },
+    CursorManagerService,
+    { provide: SyncRunner, useClass: PollSyncRunner },
     SchedulerService,
     InternalSchedulerGuard,
     OutboxWorkerService,
