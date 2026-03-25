@@ -22,14 +22,20 @@ import {
 } from '@nexiom/engine';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import { SyncRunner, type SyncResult } from './sync-runner.js';
+import { pollLockKey } from './lock-keys.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** Redis key for a per-stream poll lock. */
-function lockKey(stitchId: string, streamName: string): string {
-  return `lock:poll:${stitchId}:${streamName}`;
+/**
+ * Casts OAuthCredentialBlob to the generic Record the Piece interface expects.
+ * Centralised here so any future Piece interface change only needs one update.
+ */
+function toCredentialsRecord(
+  credentials: OAuthCredentialBlob,
+): Record<string, unknown> {
+  return credentials as unknown as Record<string, unknown>;
 }
 
 /** Starting high-water mark for a stream (before any pages are processed). */
@@ -176,7 +182,7 @@ export class PollSyncRunner extends SyncRunner {
     piece: Piece,
     credentials: OAuthCredentialBlob,
   ): Promise<StreamResult> {
-    const key = lockKey(stitchId, descriptor.streamName);
+    const key = pollLockKey(stitchId, descriptor.streamName);
     // Use 2× the sync interval as the lock TTL so that a slow poll run that
     // approaches the full interval does not lose the lock mid-pagination.
     // Floor at 5 minutes to protect very short intervals.
@@ -271,7 +277,7 @@ export class PollSyncRunner extends SyncRunner {
       }
 
       const page = await piece.poll!(
-        credentials as unknown as Record<string, unknown>,
+        toCredentialsRecord(credentials),
         streamName,
         window,
         nextCursor,
@@ -413,7 +419,7 @@ export class PollSyncRunner extends SyncRunner {
   ): Promise<StreamDescriptor> {
     if (typeof piece.describeStreams === 'function') {
       const streams = await piece.describeStreams(
-        credentials as unknown as Record<string, unknown>,
+        toCredentialsRecord(credentials),
       );
       const match = streams.find((s) => s.streamName === sourceObject);
       if (match) return match;

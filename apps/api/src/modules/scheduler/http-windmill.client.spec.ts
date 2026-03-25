@@ -77,7 +77,9 @@ describe('HttpWindmillClient', () => {
       expect(getCallInit(fetchSpy, 0).method).toBe('POST');
     });
 
-    it('treats 409 Conflict as success (idempotent — script already exists)', async () => {
+    it('treats 409 as non-fatal — same content hash already deployed', async () => {
+      // Windmill returns 409 when the exact same content hash exists at the path.
+      // A new STITCH_RUNNER_CONTENT hash would produce 200 (new version created).
       fetchSpy.mockResolvedValue(mockResponse(409, 'conflict'));
       await expect(client.ensureStitchScript()).resolves.toBeUndefined();
     });
@@ -251,6 +253,28 @@ describe('HttpWindmillClient', () => {
 
       const init = getCallInit(fetchSpy, 0);
       expect(init.signal).toBeDefined();
+    });
+
+    it('omits Content-Type on GET requests (no body)', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(200, '{}'));
+      await client.scheduleExists(STITCH_ID);
+
+      const headers = getCallInit(fetchSpy, 0).headers as Record<
+        string,
+        string
+      >;
+      expect(headers['Content-Type']).toBeUndefined();
+    });
+
+    it('includes Content-Type: application/json on POST requests with a body', async () => {
+      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      await client.setScheduleEnabled(STITCH_ID, true);
+
+      const headers = getCallInit(fetchSpy, 0).headers as Record<
+        string,
+        string
+      >;
+      expect(headers['Content-Type']).toBe('application/json');
     });
   });
 });

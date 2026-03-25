@@ -66,13 +66,21 @@ describe('SchedulerController', () => {
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
-  it('propagates thrown errors from the service without wrapping', async () => {
+  it('wraps unexpected service throws in InternalServerErrorException to prevent raw error leakage', async () => {
+    // Raw errors (e.g. DB connection strings, vendor tokens) must never reach
+    // the Windmill worker response body.
     service.executeStitch.mockRejectedValue(
-      new Error(`Stitch not found: ${STITCH_ID}`),
+      new Error(`DB connection string: postgres://secret@host/db`),
     );
 
-    await expect(
-      controller.executeStitch({ stitchId: STITCH_ID }),
-    ).rejects.toThrow(`Stitch not found: ${STITCH_ID}`);
+    const err = await controller
+      .executeStitch({ stitchId: STITCH_ID })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(InternalServerErrorException);
+    // The raw message must not be forwarded.
+    expect((err as InternalServerErrorException).message).not.toContain(
+      'postgres://',
+    );
   });
 });

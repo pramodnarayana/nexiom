@@ -43,7 +43,7 @@ describe('SchedulerService', () => {
     const mockSyncRunner = {
       run: vi
         .fn()
-        .mockResolvedValue({ stitchId: STITCH_ID, status: 'started' }),
+        .mockResolvedValue({ stitchId: STITCH_ID, status: 'succeeded' }),
     };
 
     const module = await Test.createTestingModule({
@@ -220,7 +220,7 @@ describe('SchedulerService', () => {
   describe('executeStitch', () => {
     it('delegates to SyncRunner and returns the result', async () => {
       const result = await service.executeStitch(STITCH_ID);
-      expect(result).toEqual({ stitchId: STITCH_ID, status: 'started' });
+      expect(result).toEqual({ stitchId: STITCH_ID, status: 'succeeded' });
     });
   });
 });

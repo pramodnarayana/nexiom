@@ -430,15 +430,30 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T048 · api: `CursorResetEndpoint` — admin full-refresh trigger
 
-- [x] `DELETE /admin/stitches/:id/cursor/:streamName` — deletes the `sync_cursors` row for `(stitchId, streamName)`; returns `204`; idempotent (no error if row absent); triggers full refresh on next DS run
+- [x] `DELETE /admin/stitches/:id/cursor/:streamName` — deletes the `sync_cursors` row for `(stitchId, streamName)`; returns `204`; idempotent (no error if row absent); triggers full refresh on next scheduled run
 - [x] Superadmin guard only (`AuthGuard` + `SystemAdminGuard`); logs the reset with operator email for audit
-- [x] `GET /admin/stitches/:id/cursors` — lists all `sync_cursors` rows for the stitch enriched with `ageMs` and `stale` flag (`ageMs > 2 × syncIntervalMinutes × 60_000`); throws `NotFoundException` if stitch missing
+- [x] `GET /admin/stitches/:id/cursors` — lists all `sync_cursors` rows enriched with `ageMs`, `stale`, and `paused` flags; `scheduleEnabled=false` stitches never marked stale; column allowlist excludes `stateDocument` (may contain vendor tokens); throws `NotFoundException` if stitch missing
 - [x] `streamName` validated against `/^[\w.-]{1,200}$/`; invalid values rejected with `BadRequestException`; value JSON-encoded in audit log to prevent log injection
+- [x] DELETE atomically acquires the per-stream Redis lock (SET NX) before deleting to close TOCTOU race with `PollSyncRunner`; returns `409 ConflictException` if lock is held; lock released in `finally`
+- [x] Lock key format centralised in `lock-keys.ts` (shared by `PollSyncRunner` and `CursorResetController`)
 - [x] `staleThresholdMs` guarded for non-positive `syncIntervalMinutes` (returns `Infinity`)
-- [x] `row.updatedAt.getTime()` used directly (Drizzle returns JS `Date` for `timestamptz`)
-- [x] Unit tests for both endpoints (9 tests: DELETE row exists, DELETE idempotent, DELETE invalid streamName x3, GET stale true, GET stale false, GET empty cursors, GET not found); test mock rewritten to table-based dispatch
-- Files: `apps/api/src/modules/scheduler/cursor-reset.controller.ts`, `apps/api/src/modules/scheduler/cursor-reset.controller.spec.ts`
+- [x] Unit tests: 13 tests (atomic NX lock, lock release on DB error, ConflictException, streamName validation ×3, stale/paused/fresh/empty cursor scenarios, NotFoundException)
+- Files: `cursor-reset.controller.ts`, `cursor-reset.controller.spec.ts`, `lock-keys.ts`
 - Depends: T046, T029
+
+### Enterprise-grade quality pass (all scheduler module files)
+
+- [x] **C1** `outbox-worker.service.ts`: `MAX_OUTBOX_ATTEMPTS` changed from 5 → 6 (1 initial + 5 retries) to match documented back-off schedule "2s, 4s, 8s, 16s, 32s"; tests updated for new boundary (attempts=6 permanently fails, attempts=5 retries with 32s delay)
+- [x] **C3** `http-windmill.client.ts`: 409 on `ensureStitchScript` now logs WARN with explanation; removes silent swallow; dead `requestJson` method removed (W7)
+- [x] **W1** `scheduler.module.ts`: `SyncRunner` binding converted from `useClass` to conditional `useFactory`; returns `StubSyncRunner` when `WINDMILL_ENABLED=false` to avoid heavyweight dependency instantiation on dev startup
+- [x] **W2** `scheduler.controller.ts`: `executeStitch` wrapped in try/catch; raw service errors (DB strings, tokens) never reach Windmill worker HTTP response
+- [x] **W4** `poll-sync-runner.ts`: `credentials as unknown as Record<string,unknown>` double-cast centralised into `toCredentialsRecord()` helper
+- [x] **W5** `lock-keys.ts`: `pollLockKey()` extracted to shared module; `PollSyncRunner` and `CursorResetController` both import from it
+- [x] **W6** `http-windmill.client.ts`: `Content-Type: application/json` only set when request has a body (GET requests omit it)
+- [x] **S1** `packages/database/src/schema/stitches.ts` + `drizzle/0014_scheduler_outbox_partial_index.sql`: composite index on `(status, next_retry_at)` upgraded to partial index on `(next_retry_at)` WHERE `status='pending'`
+- [x] **S2** `stub-sync-runner.ts`: changed terminal status from `'started'` → `'succeeded'` to match real runner
+- [x] **S3** `interval-to-cron.ts`: comment added explaining 6-field Quartz cron support in Windmill's Rust `cron` crate
+- [x] **S5** `outbox-worker.service.ts`: log messages include structured context fields (`id=`, `action=`, `stitchId=`, `attempts=`, `nextRetryAt=`, `error=`)
 
 ---
 
