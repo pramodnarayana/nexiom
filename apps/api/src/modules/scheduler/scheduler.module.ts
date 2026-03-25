@@ -11,12 +11,13 @@ import { SyncRunner } from './sync-runner.js';
 import { PollSyncRunner } from './poll-sync-runner.js';
 import { SchedulerService } from './scheduler.service.js';
 import { SchedulerController } from './scheduler.controller.js';
+import { CursorResetController } from './cursor-reset.controller.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 import { OutboxWorkerService } from './outbox-worker.service.js';
 
 @Module({
   imports: [DbModule, ConnectionsModule, PiecesModule],
-  controllers: [SchedulerController],
+  controllers: [SchedulerController, CursorResetController],
   providers: [
     {
       provide: WindmillClient,

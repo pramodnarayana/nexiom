@@ -430,10 +430,13 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T048 · api: `CursorResetEndpoint` — admin full-refresh trigger
 
-- [ ] `DELETE /admin/stitches/:id/cursor/:streamName` — deletes the `sync_cursors` row for `(stitchId, streamName)`; returns `204`; triggers full refresh on next DS run
-- [ ] Superadmin guard only; logs the reset with operator identity for audit
-- [ ] `GET /admin/stitches/:id/cursors` — lists all `sync_cursors` rows for the stitch with `updated_at` age and stale flag (`age > 2 × syncIntervalMinutes`)
-- [ ] Unit tests for both endpoints
+- [x] `DELETE /admin/stitches/:id/cursor/:streamName` — deletes the `sync_cursors` row for `(stitchId, streamName)`; returns `204`; idempotent (no error if row absent); triggers full refresh on next DS run
+- [x] Superadmin guard only (`AuthGuard` + `SystemAdminGuard`); logs the reset with operator email for audit
+- [x] `GET /admin/stitches/:id/cursors` — lists all `sync_cursors` rows for the stitch enriched with `ageMs` and `stale` flag (`ageMs > 2 × syncIntervalMinutes × 60_000`); throws `NotFoundException` if stitch missing
+- [x] `streamName` validated against `/^[\w.-]{1,200}$/`; invalid values rejected with `BadRequestException`; value JSON-encoded in audit log to prevent log injection
+- [x] `staleThresholdMs` guarded for non-positive `syncIntervalMinutes` (returns `Infinity`)
+- [x] `row.updatedAt.getTime()` used directly (Drizzle returns JS `Date` for `timestamptz`)
+- [x] Unit tests for both endpoints (9 tests: DELETE row exists, DELETE idempotent, DELETE invalid streamName x3, GET stale true, GET stale false, GET empty cursors, GET not found); test mock rewritten to table-based dispatch
 - Files: `apps/api/src/modules/scheduler/cursor-reset.controller.ts`, `apps/api/src/modules/scheduler/cursor-reset.controller.spec.ts`
 - Depends: T046, T029
 
