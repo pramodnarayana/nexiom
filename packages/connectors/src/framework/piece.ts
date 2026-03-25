@@ -299,6 +299,24 @@ export function createPiece(params: CreatePieceParams): Piece {
         {} as Record<string, Trigger>,
     );
 
+    // Validate webhook config at construction time so misconfigured pieces
+    // fail immediately at startup rather than silently at request time.
+    if (params.webhook !== undefined) {
+        if (
+            typeof params.webhook !== 'object' ||
+            params.webhook === null ||
+            typeof params.webhook.secretKeyEnv !== 'string' ||
+            params.webhook.secretKeyEnv.trim().length === 0 ||
+            typeof params.webhook.signatureHeader !== 'string' ||
+            params.webhook.signatureHeader.trim().length === 0
+        ) {
+            throw new InternalServerErrorException(
+                `[createPiece] Invalid webhook config for piece "${params.name}": ` +
+                `secretKeyEnv and signatureHeader must be non-empty strings.`,
+            );
+        }
+    }
+
     return {
         name: params.name || '',
         displayName: params.displayName,

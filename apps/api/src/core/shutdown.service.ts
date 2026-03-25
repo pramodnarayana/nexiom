@@ -18,10 +18,21 @@ export class ShutdownService {
   private readonly logger = new Logger(ShutdownService.name);
   /** Prevents re-entrant shutdown if multiple signals arrive while draining. */
   private shuttingDown = false;
+  /** Prevents duplicate listener registration if enableShutdownHooks is called more than once. */
+  private shutdownHooksEnabled = false;
 
   enableShutdownHooks(app: INestApplication): void {
+    if (this.shutdownHooksEnabled) {
+      this.logger.warn(
+        'Shutdown hooks already registered — ignoring duplicate call',
+      );
+      return;
+    }
+    this.shutdownHooksEnabled = true;
+    // process.once ensures each signal fires the handler at most once, even if
+    // the OS delivers duplicates before the first handler finishes executing.
     for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-      process.on(signal, () => void this.shutdown(app, signal));
+      process.once(signal, () => void this.shutdown(app, signal));
     }
     this.logger.log('Graceful shutdown hooks registered (SIGTERM, SIGINT)');
   }

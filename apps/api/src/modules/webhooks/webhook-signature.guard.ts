@@ -46,8 +46,13 @@ export class WebhookSignatureGuard implements CanActivate {
       : await this.resolveAppName(connectionId);
 
     const piece = this.pieceRegistry.getPiece(appName);
+    // Fail closed: a connection referencing an unregistered piece is a
+    // configuration error — do not silently pass through.
+    if (piece === undefined) {
+      throw new NotFoundException(`Piece not registered: "${appName}"`);
+    }
     // No webhook config on this piece -- signature check is not required.
-    if (!piece?.webhook) return true;
+    if (!piece.webhook) return true;
 
     const {
       secretKeyEnv,

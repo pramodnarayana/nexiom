@@ -4,13 +4,17 @@ import type { INestApplication } from '@nestjs/common';
 
 describe('ShutdownService', () => {
   let service: ShutdownService;
-  let processOnSpy: ReturnType<typeof vi.spyOn>;
+  let processOnceSpy: ReturnType<typeof vi.spyOn>;
   let processExitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     service = new ShutdownService();
-    processOnSpy = vi.spyOn(process, 'on');
+    // Stub process.once so no real OS signal handlers are registered between tests.
+    // The spy still captures calls so we can extract handlers and invoke them manually.
+    processOnceSpy = vi
+      .spyOn(process, 'once')
+      .mockImplementation((_event, _listener) => process);
     processExitSpy = vi
       .spyOn(process, 'exit')
       .mockImplementation(() => undefined as never);
@@ -19,16 +23,38 @@ describe('ShutdownService', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    // Belt-and-suspenders: remove any listeners that may have leaked through
+    // despite the mock (e.g. in a test that temporarily restores the spy).
+    process.removeAllListeners('SIGTERM');
+    process.removeAllListeners('SIGINT');
   });
+
+  /** Extract the handler registered for a given signal via process.once. */
+  function getHandler(signal: string): (() => void) | undefined {
+    const call = processOnceSpy.mock.calls.find((c) => c[0] === signal);
+    return call?.[1] as (() => void) | undefined;
+  }
 
   it('enableShutdownHooks registers handlers for SIGTERM and SIGINT', () => {
     const app = { close: vi.fn() } as unknown as INestApplication;
 
     service.enableShutdownHooks(app);
 
-    const registeredSignals = processOnSpy.mock.calls.map((c) => c[0]);
+    const registeredSignals = processOnceSpy.mock.calls.map((c) => c[0]);
     expect(registeredSignals).toContain('SIGTERM');
     expect(registeredSignals).toContain('SIGINT');
+  });
+
+  it('is idempotent — calling enableShutdownHooks twice only registers handlers once', () => {
+    const app = { close: vi.fn() } as unknown as INestApplication;
+
+    service.enableShutdownHooks(app);
+    service.enableShutdownHooks(app);
+
+    const sigtermCalls = processOnceSpy.mock.calls.filter(
+      (c) => c[0] === 'SIGTERM',
+    );
+    expect(sigtermCalls).toHaveLength(1);
   });
 
   it('on signal, calls app.close() and then process.exit(0)', async () => {
@@ -37,13 +63,10 @@ describe('ShutdownService', () => {
 
     service.enableShutdownHooks(app);
 
-    // Find the SIGTERM handler and invoke it
-    const sigtermCall = processOnSpy.mock.calls.find((c) => c[0] === 'SIGTERM');
-    expect(sigtermCall).toBeDefined();
-    const handler = sigtermCall![1] as () => void;
-    handler();
+    const handler = getHandler('SIGTERM');
+    expect(handler).toBeDefined();
+    handler!();
 
-    // Flush microtasks
     await vi.advanceTimersByTimeAsync(0);
 
     expect(closeMock).toHaveBeenCalledOnce();
@@ -56,9 +79,8 @@ describe('ShutdownService', () => {
 
     service.enableShutdownHooks(app);
 
-    const sigtermCall = processOnSpy.mock.calls.find((c) => c[0] === 'SIGTERM');
-    const handler = sigtermCall![1] as () => void;
-    handler();
+    const handler = getHandler('SIGTERM');
+    handler!();
 
     await vi.advanceTimersByTimeAsync(0);
 
@@ -67,38 +89,32 @@ describe('ShutdownService', () => {
   });
 
   it('does not call app.close() a second time when a duplicate signal fires while draining', async () => {
-    // Simulate a slow drain (never resolves within the test window)
     const closeMock = vi.fn().mockReturnValue(new Promise(() => {}));
     const app = { close: closeMock } as unknown as INestApplication;
 
     service.enableShutdownHooks(app);
 
-    const sigtermCall = processOnSpy.mock.calls.find((c) => c[0] === 'SIGTERM');
-    const handler = sigtermCall![1] as () => void;
+    const handler = getHandler('SIGTERM');
 
     // Fire SIGTERM twice in quick succession
-    handler();
-    handler();
+    handler!();
+    handler!();
 
     await vi.advanceTimersByTimeAsync(0);
 
-    // app.close() must only be called once despite two signals
     expect(closeMock).toHaveBeenCalledOnce();
   });
 
   it('hard deadline calls process.exit(1) after 30s', async () => {
-    // app.close() never resolves
     const app = {
       close: vi.fn().mockReturnValue(new Promise(() => {})),
     } as unknown as INestApplication;
 
     service.enableShutdownHooks(app);
 
-    const sigtermCall = processOnSpy.mock.calls.find((c) => c[0] === 'SIGTERM');
-    const handler = sigtermCall![1] as () => void;
-    handler();
+    const handler = getHandler('SIGTERM');
+    handler!();
 
-    // Advance past the 30s deadline
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(processExitSpy).toHaveBeenCalledWith(1);

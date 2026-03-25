@@ -268,9 +268,10 @@ export const quickbooks = createPiece({
   ],
   describeObjects,
   describeFields,
-  webhook: {
-    secretKeyEnv: 'QUICKBOOKS_WEBHOOK_SECRET',
-    signatureHeader: 'intuit-signature',
-    signatureEncoding: 'base64',
-  },
+  // NOTE: QuickBooks webhook support is intentionally disabled.
+  // QB sends all company events to a single app endpoint identified by
+  // payload.realmId, not a per-connection URL path. The current
+  // WebhooksController resolves connections by :connectionId in the URL,
+  // which is incompatible with QB's delivery model. Re-enable this once
+  // the controller supports realmId-based connection resolution.
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import {
+  BadRequestException,
   type ExecutionContext,
   HttpException,
   HttpStatus,
@@ -12,6 +13,9 @@ import {
   TenantRateLimitGuard,
   WEBHOOK_RESOLVED_CONNECTION,
 } from './tenant-rate-limit.guard.js';
+
+const VALID_UUID = '00000000-0000-0000-0000-000000000001';
+const VALID_UUID_UNKNOWN = '00000000-0000-0000-0000-000000000999';
 
 function makeDbMock(row: Record<string, unknown> | null) {
   return {
@@ -44,6 +48,7 @@ describe('TenantRateLimitGuard', () => {
   async function setup(
     dbRow: Record<string, unknown> | null = {
       tenantId: 'tenant-1',
+      appName: 'salesforce',
       metadata: {},
     },
     redisResult: number = -1,
@@ -62,22 +67,41 @@ describe('TenantRateLimitGuard', () => {
     guard = moduleRef.get(TenantRateLimitGuard);
   }
 
+  // ── Happy path ──────────────────────────────────────────────────────────────
+
   it('returns true when Redis eval returns -1 (allowed)', async () => {
     await setup(
       { tenantId: 'tenant-1', appName: 'salesforce', metadata: {} },
       -1,
     );
-    const { ctx } = makeExecutionContext('conn-1');
+    const { ctx } = makeExecutionContext(VALID_UUID);
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
+
+  it('attaches resolvedConnection to the request for downstream guards', async () => {
+    await setup(
+      { tenantId: 'tenant-1', appName: 'salesforce', metadata: { x: 1 } },
+      -1,
+    );
+    const { ctx, requestObj } = makeExecutionContext(VALID_UUID);
+    await guard.canActivate(ctx);
+
+    expect(requestObj[WEBHOOK_RESOLVED_CONNECTION]).toEqual({
+      tenantId: 'tenant-1',
+      appName: 'salesforce',
+      metadata: { x: 1 },
+    });
+  });
+
+  // ── Rate limiting ───────────────────────────────────────────────────────────
 
   it('throws HttpException with 429 status when Redis eval returns a TTL', async () => {
     await setup(
       { tenantId: 'tenant-1', appName: 'salesforce', metadata: {} },
       45,
     );
-    const { ctx } = makeExecutionContext('conn-1');
+    const { ctx } = makeExecutionContext(VALID_UUID);
     const err = await guard.canActivate(ctx).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(
@@ -90,24 +114,9 @@ describe('TenantRateLimitGuard', () => {
       { tenantId: 'tenant-1', appName: 'salesforce', metadata: {} },
       45,
     );
-    const { ctx, setHeaderMock } = makeExecutionContext('conn-1');
+    const { ctx, setHeaderMock } = makeExecutionContext(VALID_UUID);
     await expect(guard.canActivate(ctx)).rejects.toThrow();
     expect(setHeaderMock).toHaveBeenCalledWith('Retry-After', '45');
-  });
-
-  it('attaches resolvedConnection to the request for downstream guards', async () => {
-    await setup(
-      { tenantId: 'tenant-1', appName: 'salesforce', metadata: { x: 1 } },
-      -1,
-    );
-    const { ctx, requestObj } = makeExecutionContext('conn-1');
-    await guard.canActivate(ctx);
-
-    expect(requestObj[WEBHOOK_RESOLVED_CONNECTION]).toEqual({
-      tenantId: 'tenant-1',
-      appName: 'salesforce',
-      metadata: { x: 1 },
-    });
   });
 
   it('uses DEFAULT_LIMIT (1000) when metadata.rateLimitPerMin is absent', async () => {
@@ -115,11 +124,9 @@ describe('TenantRateLimitGuard', () => {
       { tenantId: 'tenant-1', appName: 'salesforce', metadata: {} },
       -1,
     );
-    const { ctx } = makeExecutionContext('conn-1');
+    const { ctx } = makeExecutionContext(VALID_UUID);
     await guard.canActivate(ctx);
 
-    // The second arg to eval is the number of keys (1),
-    // followed by: key, limit, window_seconds
     expect(redisMock.eval).toHaveBeenCalledWith(
       expect.any(String),
       1,
@@ -138,7 +145,7 @@ describe('TenantRateLimitGuard', () => {
       },
       -1,
     );
-    const { ctx } = makeExecutionContext('conn-1');
+    const { ctx } = makeExecutionContext(VALID_UUID);
     await guard.canActivate(ctx);
 
     expect(redisMock.eval).toHaveBeenCalledWith(
@@ -150,9 +157,77 @@ describe('TenantRateLimitGuard', () => {
     );
   });
 
-  it('throws NotFoundException when connection is not found in DB', async () => {
-    await setup(null);
-    const { ctx } = makeExecutionContext('missing-conn');
+  // ── Lua TTL normalisation ───────────────────────────────────────────────────
+
+  it('treats Redis result of 0 as rate-limited (not confused with -1 allowed)', async () => {
+    // TTL of 0 means the key is about to expire — still rate-limited.
+    await setup(
+      { tenantId: 'tenant-1', appName: 'salesforce', metadata: {} },
+      0,
+    );
+    const { ctx } = makeExecutionContext(VALID_UUID);
+    const err = await guard.canActivate(ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  });
+
+  // ── UUID validation (probe protection) ─────────────────────────────────────
+
+  it('throws BadRequestException for a malformed connectionId without hitting the DB', async () => {
+    await setup(null); // DB would return nothing, but it must not be queried
+    const { ctx } = makeExecutionContext('not-a-uuid');
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(BadRequestException);
+    // DB must never be touched for malformed IDs
+    expect(db.limit).not.toHaveBeenCalled();
+    // Fallback rate limiter must still have been invoked
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      'ratelimit:l1:probe',
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it('applies probe fallback rate limit and throws 429 for a malformed ID under heavy probing', async () => {
+    await setup(null, 30); // Redis returns 30s TTL (bucket exhausted)
+    const { ctx, setHeaderMock } = makeExecutionContext('not-a-uuid');
+
+    const err = await guard.canActivate(ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+    expect(setHeaderMock).toHaveBeenCalledWith('Retry-After', '30');
+    expect(db.limit).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundException when connection is not found in DB (valid UUID)', async () => {
+    await setup(null); // no DB row, Redis returns -1 (fallback passes)
+    const { ctx } = makeExecutionContext(VALID_UUID_UNKNOWN);
     await expect(guard.canActivate(ctx)).rejects.toThrow(NotFoundException);
+    // Fallback rate limiter was applied before the 404
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:probe:${VALID_UUID_UNKNOWN}`,
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it('applies probe fallback rate limit and throws 429 for an unknown UUID under heavy probing', async () => {
+    await setup(null, 15); // Redis returns 15s TTL (bucket exhausted)
+    const { ctx, setHeaderMock } = makeExecutionContext(VALID_UUID_UNKNOWN);
+
+    const err = await guard.canActivate(ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+    expect(setHeaderMock).toHaveBeenCalledWith('Retry-After', '15');
   });
 });

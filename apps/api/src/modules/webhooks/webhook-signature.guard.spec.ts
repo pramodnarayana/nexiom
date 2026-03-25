@@ -260,6 +260,21 @@ describe('WebhookSignatureGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(NotFoundException);
   });
 
+  // ── Unregistered piece (fail-closed regression) ────────────────────────────
+
+  it('throws NotFoundException when the connection appName maps to an unregistered piece', async () => {
+    // piece = undefined (default) simulates getPiece() returning undefined
+    await setup({ appName: 'unregistered-piece' }, undefined);
+
+    const ctx = makeExecutionContext(
+      { connectionId: 'conn-1' },
+      {},
+      Buffer.from('body'),
+    );
+    // Guard must fail closed — not silently pass through
+    await expect(guard.canActivate(ctx)).rejects.toThrow(NotFoundException);
+  });
+
   it('throws ForbiddenException when rawBody is empty/missing', async () => {
     await setup(
       { appName: 'salesforce' },
