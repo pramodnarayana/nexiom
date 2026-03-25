@@ -54,8 +54,11 @@ export function getDb(): DrizzleDb {
  */
 export async function closeDb(): Promise<void> {
     if (pool) {
-        await pool.end();
-        pool = undefined;
-        dbInstance = undefined;
+        try {
+            await pool.end();
+        } finally {
+            pool = undefined;
+            dbInstance = undefined;
+        }
     }
 }

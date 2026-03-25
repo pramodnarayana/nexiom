@@ -21,6 +21,11 @@ const DEFAULT_LIMIT = 1_000;
 const MAX_RATE_LIMIT = 10_000;
 /** Window duration in seconds. */
 const WINDOW_SECONDS = 60;
+/**
+ * TTL for negative-cache entries that mark a connectionId as not found in DB.
+ * Repeated probes with the same unknown UUID hit Redis only and skip Postgres.
+ */
+const NEG_CACHE_TTL_SECONDS = 60;
 
 /** RFC 4122 UUID regex — guards run before ParseUUIDPipe so we validate here. */
 const UUID_REGEX =
@@ -42,7 +47,8 @@ export interface WebhookResolvedConnection {
 /**
  * TenantRateLimitGuard -- fixed-window token bucket per tenant.
  *
- * Redis key: `ratelimit:l1:{tenantId}`
+ * Redis key: `ratelimit:l1:{tenantId}:{connectionId}` (connection-scoped so
+ * per-connection custom limits do not bleed across connections on the same tenant).
  * TTL: 60 seconds (resets the bucket each minute).
  *
  * Enterprise tenants can have a higher limit stored in
@@ -56,8 +62,10 @@ export interface WebhookResolvedConnection {
  * Probe protection:
  *  - Malformed UUIDs are rejected before hitting the DB; a shared fallback
  *    bucket (`ratelimit:l1:probe`) throttles probe bursts.
- *  - Well-formed but unknown UUIDs receive a per-connection fallback bucket
- *    (`ratelimit:l1:probe:{connectionId}`) before the 404 is returned.
+ *  - Well-formed but unknown UUIDs: a Redis negative cache
+ *    (`ratelimit:l1:neg:{connectionId}`, 60 s TTL) lets repeated probes skip
+ *    Postgres entirely; the per-connection probe bucket
+ *    (`ratelimit:l1:probe:{connectionId}`) is applied before the 404.
  */
 @Injectable()
 export class TenantRateLimitGuard implements CanActivate {
@@ -111,6 +119,18 @@ export class TenantRateLimitGuard implements CanActivate {
       );
     }
 
+    // Negative cache: repeated probes with the same unknown UUID skip Postgres
+    // and go straight to the per-connection probe bucket.
+    const negCacheKey = `ratelimit:l1:neg:${connectionId}`;
+    const isCachedMiss = await this.redis.exists(negCacheKey);
+    if (isCachedMiss) {
+      await this.applyFallbackRateLimit(
+        res,
+        `ratelimit:l1:probe:${connectionId}`,
+      );
+      throw new NotFoundException(`Connection ${connectionId} not found`);
+    }
+
     const [conn] = await this.db
       .select({
         tenantId: appConnections.tenantId,
@@ -122,6 +142,8 @@ export class TenantRateLimitGuard implements CanActivate {
       .limit(1);
 
     if (!conn) {
+      // Populate the negative cache so the next probe for this ID skips Postgres.
+      await this.redis.set(negCacheKey, '1', 'EX', NEG_CACHE_TTL_SECONDS);
       // Apply a per-connection fallback bucket to throttle enumeration probes
       // without revealing tenant information.
       await this.applyFallbackRateLimit(
@@ -139,7 +161,9 @@ export class TenantRateLimitGuard implements CanActivate {
     };
 
     const limit = resolveLimit(conn.metadata);
-    const key = `ratelimit:l1:${conn.tenantId}`;
+    // Connection-scoped key prevents cross-connection interference when
+    // connections on the same tenant have different rateLimitPerMin values.
+    const key = `ratelimit:l1:${conn.tenantId}:${connectionId}`;
 
     await this.checkRateLimit(res, key, limit, conn.tenantId);
 
@@ -224,7 +248,13 @@ function resolveLimit(metadata: unknown): number {
     'rateLimitPerMin' in metadata
   ) {
     const custom = (metadata as Record<string, unknown>)['rateLimitPerMin'];
-    if (typeof custom === 'number' && Number.isFinite(custom) && custom > 0) {
+    if (typeof custom === 'number' && custom > 0) {
+      if (!Number.isInteger(custom)) {
+        resolveLimitLogger.warn(
+          `rateLimitPerMin value ${custom} is fractional — Redis treats counters as integers; falling back to DEFAULT_LIMIT`,
+        );
+        return DEFAULT_LIMIT;
+      }
       if (custom > MAX_RATE_LIMIT) {
         resolveLimitLogger.warn(
           `rateLimitPerMin value ${custom} exceeds MAX_RATE_LIMIT (${MAX_RATE_LIMIT}) — clamping`,

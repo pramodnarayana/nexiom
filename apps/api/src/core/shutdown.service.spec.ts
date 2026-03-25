@@ -81,6 +81,7 @@ describe('ShutdownService', () => {
     service.enableShutdownHooks(app);
 
     const handler = getHandler('SIGTERM');
+    expect(handler).toBeDefined();
     handler!();
 
     await vi.advanceTimersByTimeAsync(0);
@@ -96,6 +97,7 @@ describe('ShutdownService', () => {
     service.enableShutdownHooks(app);
 
     const handler = getHandler('SIGTERM');
+    expect(handler).toBeDefined();
 
     // Fire SIGTERM twice in quick succession
     handler!();
@@ -114,6 +116,7 @@ describe('ShutdownService', () => {
     service.enableShutdownHooks(app);
 
     const handler = getHandler('SIGTERM');
+    expect(handler).toBeDefined();
     handler!();
 
     await vi.advanceTimersByTimeAsync(30_000);

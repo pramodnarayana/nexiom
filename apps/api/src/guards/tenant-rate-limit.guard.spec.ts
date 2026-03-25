@@ -42,7 +42,11 @@ function makeExecutionContext(connectionId: string) {
 
 describe('TenantRateLimitGuard', () => {
   let guard: TenantRateLimitGuard;
-  let redisMock: { eval: ReturnType<typeof vi.fn> };
+  let redisMock: {
+    eval: ReturnType<typeof vi.fn>;
+    exists: ReturnType<typeof vi.fn>;
+    set: ReturnType<typeof vi.fn>;
+  };
   let db: ReturnType<typeof makeDbMock>;
 
   async function setup(
@@ -54,7 +58,12 @@ describe('TenantRateLimitGuard', () => {
     redisResult: number = -1,
   ) {
     db = makeDbMock(dbRow);
-    redisMock = { eval: vi.fn().mockResolvedValue(redisResult) };
+    redisMock = {
+      eval: vi.fn().mockResolvedValue(redisResult),
+      // Default: neg cache miss (0 = key does not exist)
+      exists: vi.fn().mockResolvedValue(0),
+      set: vi.fn().mockResolvedValue('OK'),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -130,7 +139,7 @@ describe('TenantRateLimitGuard', () => {
     expect(redisMock.eval).toHaveBeenCalledWith(
       expect.any(String),
       1,
-      'ratelimit:l1:tenant-1',
+      `ratelimit:l1:tenant-1:${VALID_UUID}`,
       '1000',
       '60',
     );
@@ -151,7 +160,7 @@ describe('TenantRateLimitGuard', () => {
     expect(redisMock.eval).toHaveBeenCalledWith(
       expect.any(String),
       1,
-      'ratelimit:l1:tenant-enterprise',
+      `ratelimit:l1:tenant-enterprise:${VALID_UUID}`,
       '5000',
       '60',
     );
@@ -229,5 +238,38 @@ describe('TenantRateLimitGuard', () => {
       HttpStatus.TOO_MANY_REQUESTS,
     );
     expect(setHeaderMock).toHaveBeenCalledWith('Retry-After', '15');
+  });
+
+  it('serves neg-cache hit from Redis without querying the DB', async () => {
+    await setup(null); // DB would return no rows, but must not be queried
+    // Simulate a warm negative cache entry for this connectionId
+    redisMock.exists.mockResolvedValue(1);
+    const { ctx } = makeExecutionContext(VALID_UUID_UNKNOWN);
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(NotFoundException);
+    // DB must be skipped entirely
+    expect(db.limit).not.toHaveBeenCalled();
+    // Per-connection probe bucket must still be consulted
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:probe:${VALID_UUID_UNKNOWN}`,
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it('populates the neg cache on first DB miss so subsequent probes skip Postgres', async () => {
+    await setup(null); // DB miss
+    const { ctx } = makeExecutionContext(VALID_UUID_UNKNOWN);
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(NotFoundException);
+    // The neg cache SET must have been called with the connection's key and a positive TTL
+    expect(redisMock.set).toHaveBeenCalledWith(
+      `ratelimit:l1:neg:${VALID_UUID_UNKNOWN}`,
+      '1',
+      'EX',
+      expect.any(Number),
+    );
   });
 });
