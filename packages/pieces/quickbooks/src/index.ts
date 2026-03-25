@@ -268,4 +268,9 @@ export const quickbooks = createPiece({
   ],
   describeObjects,
   describeFields,
+  webhook: {
+    secretKeyEnv: 'QUICKBOOKS_WEBHOOK_SECRET',
+    signatureHeader: 'intuit-signature',
+    signatureEncoding: 'base64',
+  },
 });

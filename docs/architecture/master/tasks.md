@@ -57,59 +57,71 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ## Phase 0.5 — Operational Hardening
 
-### T006 · package: `packages/observability/` — Pino + OpenTelemetry
+### T006 · observability: Pino + OpenObserve structured logging
 
-- [ ] Pino logger with `traceId`, `connectionId`, `layer`, `durationMs` fields
-- [ ] OpenTelemetry SDK — `withSpan(name, fn)` helper
-- [ ] Export `logger`, `tracer`, `withSpan`
-- [ ] Wire into NestJS app via `LoggerModule`
-- Files: `packages/observability/src/**`, `apps/api/src/app.module.ts`
+> **Decision (2026-03-25):** Use [Pino](https://github.com/pinojs/pino) as the NestJS logger (structured JSON, low-overhead).
+> Logs are shipped to [OpenObserve](https://github.com/openobserve/openobserve) via its HTTP ingest API using `pino-openobserve` transport
+> (or a Vector/Fluentd sidecar for zero-code-change forwarding).
+> OpenObserve provides both log storage and metrics pipeline — Prometheus `/metrics` endpoint (original T007) is not needed.
+
+- [ ] Install `pino`, `nestjs-pino`, `pino-http`, and `pino-openobserve` (or Vector sidecar approach)
+- [ ] Replace default NestJS logger with `LoggerModule.forRoot()` (nestjs-pino) — structured JSON with `traceId`, `connectionId`, `layer`, `durationMs` fields
+- [ ] Configure `pino-openobserve` transport to stream logs to OpenObserve HTTP ingest endpoint
+- [ ] Add `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_STREAM`, `OPENOBSERVE_TOKEN` to `apps/api/.env`
+- [ ] Add `pino-http` request logging middleware (log `method`, `url`, `statusCode`, `responseTime`)
+- [ ] Configure Vector or Fluentd sidecar in `docker-compose.yml` as an alternative transport
+- Files: `apps/api/src/modules/observability/**`, `apps/api/src/main.ts`, `docker-compose.yml`
 - Depends: —
 
-### T007 · api: Prometheus `/metrics` endpoint
+### T007 · observability: OpenObserve dashboards + alerting
 
-- [ ] Add `prom-client` to `apps/api`
-- [ ] Expose `/metrics` with: `sqs_queue_depth`, `pipeline_layer_duration_ms`, `token_refresh_total`, `delivery_failure_total`
-- [ ] In production: scrape target for CloudWatch agent; local: raw `/metrics`
-- Files: `apps/api/src/modules/observability/metrics.controller.ts`
+- [ ] Pipeline health dashboard (L1→L6 throughput, error rates, queue depths)
+- [ ] Token refresh metrics panel (`token_refresh_total`, `token_refresh_error_total`)
+- [ ] Alert rules: `delivery_failure_total` spike, queue depth threshold, L1 ingest error rate
+- [ ] SQS queue depth metric forwarded to OpenObserve (`sqs_queue_depth`, `pipeline_layer_duration_ms`)
 - Depends: T006
 
 ### T008 · api: `ShutdownService` — graceful SIGTERM drain
 
-- [ ] `apps/api/src/core/shutdown.service.ts`
-- [ ] Registers `SIGTERM` + `SIGINT` handlers that trigger combined drain sequence
-- [ ] Signals all BullMQ workers to stop accepting new jobs
-- [ ] Calls `QueueService.stopConsuming()` to halt SQS consumer polling
-- [ ] Awaits in-flight SQS messages and BullMQ jobs to drain (shared 30s timeout)
-- [ ] Force-closes if 30s deadline elapses before drain completes
-- [ ] Calls `app.close()` after drain (or force-close timeout)
-- Files: `apps/api/src/core/shutdown.service.ts`, `apps/api/src/main.ts`
+- [x] `apps/api/src/core/shutdown.service.ts`
+- [x] Registers `SIGTERM` + `SIGINT` handlers that trigger combined drain sequence
+- [x] Calls `app.close()` which triggers OnModuleDestroy on all providers (including QueueService.stopConsuming())
+- [x] Force-closes if 30s deadline elapses before drain completes
+- [x] Unit tests for signal registration, successful drain, error path, and hard deadline
+- Files: `apps/api/src/core/shutdown.service.ts`, `apps/api/src/core/shutdown.service.spec.ts`, `apps/api/src/main.ts`, `apps/api/src/app/app.module.ts`
 - Depends: —
 
 ### T009 · api: `WebhookSignatureGuard` — HMAC per piece
 
-- [ ] `apps/api/src/modules/webhooks/webhook-signature.guard.ts`
-- [ ] Each piece registers its HMAC secret key name + header name
-- [ ] Guard verifies signature using `timingSafeEqual`; returns `403` on mismatch
-- [ ] Salesforce + QuickBooks pieces register their guards
-- Files: `apps/api/src/modules/webhooks/webhook-signature.guard.ts`, `packages/pieces/salesforce/src/index.ts`, `packages/pieces/quickbooks/src/index.ts`
+- [x] `apps/api/src/modules/webhooks/webhook-signature.guard.ts`
+- [x] `PieceWebhookConfig` interface added to `packages/connectors/src/framework/piece.ts`
+- [x] Each piece registers its HMAC secret key name + header name via `webhook` field
+- [x] Guard verifies signature using `timingSafeEqual`; returns `403` on mismatch
+- [x] Salesforce + QuickBooks pieces register their webhook configs
+- [x] Unit tests for pass-through, valid sig, missing header, invalid sig, missing env, missing connection, empty body
+- Files: `apps/api/src/modules/webhooks/webhook-signature.guard.ts`, `apps/api/src/modules/webhooks/webhook-signature.guard.spec.ts`, `packages/connectors/src/framework/piece.ts`, `packages/pieces/salesforce/src/index.ts`, `packages/pieces/quickbooks/src/index.ts`
 - Depends: —
 
 ### T010 · api: Idempotent L1 ingestion — catch duplicate webhook
 
-- [ ] Wrap `inbound_gateway` insert in try/catch
-- [ ] On `PgError code=23505`: return `202 Accepted` (not `500`)
-- [ ] Add unit test for duplicate delivery path
-- Files: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhooks.controller.spec.ts`
+- [x] `apps/api/src/modules/webhooks/webhooks.controller.ts` — POST /webhooks/:connectionId
+- [x] `apps/api/src/modules/webhooks/webhooks.module.ts` — WebhooksModule wired into AppModule
+- [x] Wrap `inbound_gateway` insert in try/catch
+- [x] On `PgError code=23505`: return `202 Accepted` (not `500`)
+- [x] Uses `x-webhook-id` or `x-event-id` header as `extReqId` for vendor idempotency
+- [x] Unit tests for success, duplicate (23505), non-23505 error, header extraction
+- Files: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhooks.controller.spec.ts`, `apps/api/src/modules/webhooks/webhooks.module.ts`
 - Depends: —
 
 ### T011 · api: `TenantRateLimitGuard` — token bucket per tenant at L1
 
-- [ ] Redis key `ratelimit:l1:{tenantId}` — refill 1000 tokens/min
-- [ ] Returns `429` with `Retry-After` header when bucket empty
-- [ ] Enterprise tier tenants: configurable higher bucket (read from tenant record)
-- [ ] Apply to webhook + poll ingestion endpoints
-- Files: `apps/api/src/guards/tenant-rate-limit.guard.ts`
+- [x] `apps/api/src/guards/tenant-rate-limit.guard.ts` — fixed-window token bucket via Redis Lua script
+- [x] Redis key `ratelimit:l1:{tenantId}` — 1000 tokens/min default
+- [x] Returns `429` with `Retry-After` header when bucket empty
+- [x] Enterprise tier tenants: configurable higher bucket via `metadata.rateLimitPerMin`
+- [x] Applied to webhook ingestion endpoint alongside WebhookSignatureGuard
+- [x] Unit tests for allowed, rate-limited, Retry-After header, default limit, enterprise limit, missing connection
+- Files: `apps/api/src/guards/tenant-rate-limit.guard.ts`, `apps/api/src/guards/tenant-rate-limit.guard.spec.ts`
 - Depends: T001
 
 ### T012 · api: `TenantOffboardingService` — GDPR data deletion

@@ -146,6 +146,24 @@ export interface FieldDescriptor extends BaseFieldDescriptor {
     label: string;
 }
 
+/**
+ * Per-piece webhook signature configuration.
+ * The WebhookSignatureGuard uses this to verify the vendor's HMAC-SHA256
+ * signature before the request reaches the ingestion controller.
+ */
+export interface PieceWebhookConfig {
+  /** Name of the environment variable holding the HMAC-SHA256 signing secret. */
+  secretKeyEnv: string;
+  /** HTTP header name that carries the vendor-generated signature (case-insensitive). */
+  signatureHeader: string;
+  /**
+   * Encoding of the signature value in the header.
+   * - `'base64'` (default) -- used by Salesforce and QuickBooks.
+   * - `'hex'`              -- for vendors that emit lowercase hex digests.
+   */
+  signatureEncoding?: 'base64' | 'hex';
+}
+
 export interface Piece {
     name: string;
     displayName: string;
@@ -197,6 +215,8 @@ export interface Piece {
         window: PollWindow,
         nextPageCursor?: Record<string, unknown>,
     ): Promise<PollPage>;
+    /** Per-piece webhook signature configuration for HMAC verification. */
+    webhook?: PieceWebhookConfig;
 }
 
 export enum PieceCategory {
@@ -237,6 +257,8 @@ export interface CreatePieceParams {
         window: PollWindow,
         nextPageCursor?: Record<string, unknown>,
     ): Promise<PollPage>;
+    /** Per-piece webhook signature configuration for HMAC verification. */
+    webhook?: PieceWebhookConfig;
 }
 
 /**
@@ -297,5 +319,6 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.describeFields && { describeFields: params.describeFields }),
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
         ...(params.poll && { poll: params.poll }),
+        ...(params.webhook && { webhook: params.webhook }),
     };
 }
