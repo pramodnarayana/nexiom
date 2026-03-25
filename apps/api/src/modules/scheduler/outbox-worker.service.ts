@@ -155,7 +155,7 @@ export class OutboxWorkerService {
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +
-          `stitchId=${record.stitchId} attempt=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
+          `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
           `nextRetryAt=${nextRetryAt.toISOString()} error="${lastError}"`,
       );
     }
