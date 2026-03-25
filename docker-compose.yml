@@ -284,6 +284,7 @@ services:
     volumes:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - vector_data:/var/lib/vector
     environment:
       OPENOBSERVE_URL: ${OPENOBSERVE_URL:?OPENOBSERVE_URL must be set}
       OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-nexiom}
@@ -314,3 +315,4 @@ volumes:
   postgres_data:
   redis_data:
   localstack_data:
+  vector_data:

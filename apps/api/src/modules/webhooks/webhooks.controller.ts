@@ -85,24 +85,25 @@ export class WebhooksController {
     @Headers() headers: Record<string, string>,
   ): Promise<void> {
     const start = Date.now();
-    const schemaName =
-      await this.storageResolver.resolveSchemaName(connectionId);
-    const { inboundGateway } = buildTenantSchema(schemaName);
-    const inboundGatewayId = randomUUID();
-    const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
-
-    // Bind L1-specific fields so every log call in this method carries them.
-    this.logger.assign({ layer: 'L1', inboundGatewayId, extReqId });
-
-    // Strip sensitive / irrelevant headers before persisting. Only the keys
-    // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
-    const filteredHeaders = Object.fromEntries(
-      Object.entries(headers).filter(([k]) =>
-        STORED_HEADER_ALLOWLIST.has(k.toLowerCase()),
-      ),
-    );
 
     try {
+      const schemaName =
+        await this.storageResolver.resolveSchemaName(connectionId);
+      const { inboundGateway } = buildTenantSchema(schemaName);
+      const inboundGatewayId = randomUUID();
+      const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
+
+      // Bind L1-specific fields so every log call in this method carries them.
+      this.logger.assign({ layer: 'L1', inboundGatewayId, extReqId });
+
+      // Strip sensitive / irrelevant headers before persisting. Only the keys
+      // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
+      const filteredHeaders = Object.fromEntries(
+        Object.entries(headers).filter(([k]) =>
+          STORED_HEADER_ALLOWLIST.has(k.toLowerCase()),
+        ),
+      );
+
       await this.db.transaction(async (tx) => {
         // assertValidSchemaName is already called inside buildTenantSchema above,
         // but we call it again here as an explicit defence-in-depth guard directly
