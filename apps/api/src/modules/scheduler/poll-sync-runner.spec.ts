@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import {
   DATABASE_CONNECTION,
   integrationStitches,
@@ -124,8 +125,14 @@ function makePiece(pages: PollPage[], descriptors?: StreamDescriptor[]) {
 }
 
 function makeCursorManager() {
+  // Provide explicit values for every key the service reads so tests remain
+  // stable if the implementation defaults change.
   return new CursorManagerService({
-    get: () => undefined,
+    get: (key: string) => {
+      if (key === 'CURSOR_SAFETY_BUFFER_MINUTES') return '5';
+      if (key === 'CURSOR_CHECKPOINT_INTERVAL') return '10';
+      return undefined;
+    },
   } as never);
 }
 
@@ -146,6 +153,8 @@ describe('PollSyncRunner', () => {
       db?: ReturnType<typeof makeDb>;
       redis?: ReturnType<typeof makeRedis>;
       piece?: ReturnType<typeof makePiece>;
+      /** Config keys to override, e.g. { FALLBACK_KEY_PROPERTIES: 'externalId' } */
+      config?: Record<string, string | undefined>;
     } = {},
   ) {
     db = overrides.db ?? makeDb();
@@ -158,12 +167,17 @@ describe('PollSyncRunner', () => {
       makePiece([makePage([makeRecord('2026-01-01T00:00:00.000Z')])]);
     pieceRegistry = { getPiece: vi.fn().mockReturnValue(piece) };
     cursorManager = makeCursorManager();
+    const configValues = overrides.config ?? {};
 
     const module = await Test.createTestingModule({
       providers: [
         { provide: SyncRunner, useClass: PollSyncRunner },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: REDIS_CLIENT, useValue: redis },
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => configValues[key] },
+        },
         { provide: TokenManagerService, useValue: tokenManager },
         { provide: PieceRegistryService, useValue: pieceRegistry },
         { provide: CursorManagerService, useValue: cursorManager },
@@ -231,6 +245,27 @@ describe('PollSyncRunner', () => {
     await build({ piece });
     const result = await runner.run(STITCH_ID);
     expect(result.status).toBe('succeeded');
+  });
+
+  it('uses FALLBACK_KEY_PROPERTIES env var as keyProperties in FULL_TABLE fallback', async () => {
+    // Piece with no describeStreams so the FULL_TABLE fallback is triggered
+    const piece = makePiece([makePage([])]);
+    piece.describeStreams = undefined;
+    await build({
+      piece,
+      config: { FALLBACK_KEY_PROPERTIES: 'externalId, type' },
+    });
+
+    const result = await runner.run(STITCH_ID);
+
+    expect(result.status).toBe('succeeded');
+    // poll is called with the window derived from the FULL_TABLE descriptor
+    expect(piece.poll).toHaveBeenCalledWith(
+      CREDENTIALS,
+      'Account',
+      expect.objectContaining({ lowerBound: '' }),
+      undefined,
+    );
   });
 
   it('accumulates records across multiple pages', async () => {

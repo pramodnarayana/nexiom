@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
@@ -102,6 +103,7 @@ export class PollSyncRunner extends SyncRunner {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly config: ConfigService,
     private readonly tokenManager: TokenManagerService,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly cursorManager: CursorManagerService,
@@ -421,12 +423,37 @@ export class PollSyncRunner extends SyncRunner {
     }
 
     // Fallback: treat the sourceObject as a FULL_TABLE stream with no replication key.
-    // 'id' is a safe sentinel — the piece controls which fields it actually uses.
+    //
+    // CONNECTOR IMPLEMENTERS: if the source object does not have an "id" field
+    // (which is the default deduplication key used here), set the env var
+    // FALLBACK_KEY_PROPERTIES to a comma-separated list of field names that
+    // uniquely identify records for this deployment (e.g. "externalId,type").
+    // Alternatively, implement piece.describeStreams() so the correct
+    // keyProperties are returned without relying on this fallback.
     return {
       streamName: sourceObject,
       replicationMethod: 'FULL_TABLE',
-      keyProperties: ['id'],
+      keyProperties: this.fallbackKeyProperties(),
     };
+  }
+
+  /**
+   * Returns the key properties to use for FULL_TABLE deduplication when the
+   * connector piece does not provide a descriptor for the source object.
+   *
+   * Reads FALLBACK_KEY_PROPERTIES (comma-separated) from config; falls back to
+   * ['id'] if the env var is absent or empty.
+   */
+  private fallbackKeyProperties(): [string, ...string[]] {
+    const raw = this.config.get<string>('FALLBACK_KEY_PROPERTIES');
+    if (raw) {
+      const keys = raw
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean);
+      if (keys.length > 0) return keys as [string, ...string[]];
+    }
+    return ['id'];
   }
 
   // ── Bookmark helpers ──────────────────────────────────────────────────────
