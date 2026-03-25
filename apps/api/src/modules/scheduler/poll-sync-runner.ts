@@ -42,6 +42,15 @@ function initialHwm(
   return '';
 }
 
+/**
+ * Returns a log-safe representation of the high-water mark.
+ * Opaque cursors may contain vendor-issued tokens or internal identifiers
+ * that must not appear in logs; all other key types are safe to print verbatim.
+ */
+function safeHwm(hwm: string, keyType: string): string {
+  return keyType === 'opaque' ? '[REDACTED]' : hwm;
+}
+
 // ---------------------------------------------------------------------------
 
 /**
@@ -52,8 +61,11 @@ function initialHwm(
  *   2. Obtain valid credentials via TokenManagerService (handles token refresh).
  *   3. Resolve the connector piece from the registry.
  *   4. Call piece.describeStreams() to get the StreamDescriptor for sourceObject.
- *   5. Acquire a Redis NX lock per stream (TTL = stitch interval).
+ *   5. Acquire a Redis NX lock per stream
+ *      (TTL = max(syncIntervalMinutes × 2 × 60 000 ms, 5 × 60 000 ms)).
  *      Skip the stream and return { status: 'skipped' } if the lock is held.
+ *      Renew the lock before each page so long-running paginations do not
+ *      expire mid-run; abort if the lock has been stolen.
  *   6. Detect crash-resume: if state_document.currently_syncing is set, the
  *      previous run crashed mid-pagination — resume from bookmark.offset.
  *   7. Paginate piece.poll() with CursorManagerService tracking the HWM.
@@ -160,7 +172,15 @@ export class PollSyncRunner extends SyncRunner {
     }
 
     try {
-      return await this.runPollLoop(stitchId, descriptor, piece, credentials);
+      return await this.runPollLoop(
+        stitchId,
+        descriptor,
+        piece,
+        credentials,
+        key,
+        lockToken,
+        ttlMs,
+      );
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       this.logger.error(
@@ -184,6 +204,9 @@ export class PollSyncRunner extends SyncRunner {
     descriptor: StreamDescriptor,
     piece: Piece,
     credentials: OAuthCredentialBlob,
+    lockKey: string,
+    lockToken: string,
+    ttlMs: number,
   ): Promise<StreamResult> {
     const { streamName } = descriptor;
 
@@ -212,6 +235,17 @@ export class PollSyncRunner extends SyncRunner {
     let recordsIngested = 0;
 
     while (true) {
+      // Renew the lock before each page so a slow multi-page run does not lose
+      // ownership mid-pagination. Abort immediately if another worker has taken
+      // the lock (renewal returns false), which prevents concurrent writes to
+      // sync_cursors for the same stream.
+      const renewed = await this.renewLock(lockKey, lockToken, ttlMs);
+      if (!renewed) {
+        throw new Error(
+          `Lock stolen for stream "${streamName}" on stitch ${stitchId} — aborting to prevent concurrent writes`,
+        );
+      }
+
       const page = await piece.poll!(
         credentials as unknown as Record<string, unknown>,
         streamName,
@@ -236,7 +270,7 @@ export class PollSyncRunner extends SyncRunner {
         );
         await this.writeStateDoc(stitchId, streamName, stateDoc);
         this.logger.debug(
-          `Intermediate checkpoint at page ${pageCount} for stream "${streamName}" (hwm=${hwm})`,
+          `Intermediate checkpoint at page ${pageCount} for stream "${streamName}" (hwm=${safeHwm(hwm, keyType)})`,
         );
       }
 
@@ -253,7 +287,7 @@ export class PollSyncRunner extends SyncRunner {
     await this.writeStateDoc(stitchId, streamName, stateDoc);
 
     this.logger.log(
-      `Stream "${streamName}" completed: ${recordsIngested} records ingested over ${pageCount} page(s), hwm=${hwm}`,
+      `Stream "${streamName}" completed: ${recordsIngested} records ingested over ${pageCount} page(s), hwm=${safeHwm(hwm, keyType)}`,
     );
 
     return { streamName, recordsIngested, status: 'succeeded' };
@@ -321,7 +355,7 @@ export class PollSyncRunner extends SyncRunner {
       })
       .onConflictDoUpdate({
         target: [syncCursors.stitchId, syncCursors.streamName],
-        set: { stateDocument: stateDoc },
+        set: { stateDocument: stateDoc, updatedAt: new Date() },
       });
   }
 
@@ -393,6 +427,27 @@ export class PollSyncRunner extends SyncRunner {
     const token = randomUUID();
     const result = await this.redis.set(key, token, 'PX', ttlMs, 'NX');
     return result === 'OK' ? token : null;
+  }
+
+  /**
+   * Extends the lock TTL if the caller still owns it.
+   * Uses a Lua script for atomicity — prevents renewing another process's lock.
+   * Returns true if the lease was extended, false if the lock has been stolen.
+   */
+  private async renewLock(
+    key: string,
+    token: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const lua = [
+      "if redis.call('get', KEYS[1]) == ARGV[1] then",
+      "  return redis.call('pexpire', KEYS[1], ARGV[2])",
+      'else',
+      '  return 0',
+      'end',
+    ].join('\n');
+    const result = await this.redis.eval(lua, 1, key, token, String(ttlMs));
+    return result === 1;
   }
 
   /**

@@ -263,6 +263,18 @@ describe('PollSyncRunner', () => {
     );
   });
 
+  it('sets updatedAt on the sync_cursors upsert', async () => {
+    await runner.run(STITCH_ID);
+
+    expect(db.onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({
+          updatedAt: expect.any(Date) as unknown as Date,
+        }) as unknown,
+      }),
+    );
+  });
+
   // ── Lock handling ──────────────────────────────────────────────────────────
 
   it('returns skipped when the Redis lock is unavailable', async () => {
@@ -291,6 +303,39 @@ describe('PollSyncRunner', () => {
     expect(result.streamResults![0].error).toContain('vendor timeout');
     expect(redis.eval).toHaveBeenCalled(); // lock released
     // last_scheduled_at must NOT be bumped on a failed run
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('renews the lock before each page', async () => {
+    const piece = makePiece([
+      makePage([makeRecord('2026-01-01T00:00:00.000Z')], { after: 'page1' }),
+      makePage([makeRecord('2026-01-02T00:00:00.000Z')]),
+    ]);
+    await build({ piece });
+
+    await runner.run(STITCH_ID);
+
+    // eval: 1 renewal per page (2 pages) + 1 for the final lock release = 3
+    expect(redis.eval).toHaveBeenCalledTimes(3);
+  });
+
+  it('fails the stream when the lock is stolen mid-pagination', async () => {
+    const stolenRedis = {
+      set: vi.fn().mockResolvedValue('OK'), // acquire succeeds
+      eval: vi
+        .fn()
+        .mockResolvedValueOnce(0) // first renewLock call returns 0 (lock stolen)
+        .mockResolvedValue(1), // releaseLock and any further calls succeed
+    };
+    await build({ redis: stolenRedis });
+
+    const result = await runner.run(STITCH_ID);
+
+    expect(result.status).toBe('failed');
+    expect(result.streamResults![0].status).toBe('failed');
+    expect(result.streamResults![0].error).toContain('Lock stolen');
+    // Release is still attempted even when the lock was stolen
+    expect(stolenRedis.eval).toHaveBeenCalledTimes(2);
     expect(db.update).not.toHaveBeenCalled();
   });
 

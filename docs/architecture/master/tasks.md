@@ -304,7 +304,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `executeStitch` body validated via Zod (`ExecuteStitchBody` with UUID check)
 - [x] Delegates to `SyncRunner.run(stitchId)` via `PollSyncRunner` (replaces `StubSyncRunner`)
 - [x] `PollSyncRunner` — resolves piece via `PieceRegistryService`; obtains valid credentials via `TokenManagerService` (handles OAuth refresh)
-- [x] Acquire Redis NX lock `lock:poll:{stitchId}:{streamName}` (TTL = syncIntervalMinutes × 60 s) — returns `{ status: 'skipped' }` if unavailable
+- [x] Acquire Redis NX lock `lock:poll:{stitchId}:{streamName}` — TTL = `max(syncIntervalMinutes × 2 × 60 000 ms, 5 × 60 000 ms)` (milliseconds); renewed before each page via atomic Lua PEXPIRE — returns `{ status: 'skipped' }` if unavailable; aborts run if lock is stolen mid-pagination
 - [x] Call `piece.describeStreams(credentials)` → `StreamDescriptor` for `stitch.sourceObject`; falls back to FULL_TABLE sentinel if not supported
 - [x] Read `SyncStateDocument` from `public.sync_cursors`; detect crash-resume via `currently_syncing` + `bookmark.offset`
 - [x] `CursorManagerService.calculateWindow(bookmark, catalog)` → `PollWindow`; set `currently_syncing` + write initial checkpoint before first page
