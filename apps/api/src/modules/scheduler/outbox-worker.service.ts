@@ -9,7 +9,9 @@ import {
 } from '@nexiom/database';
 import { SchedulerService } from './scheduler.service.js';
 
-const MAX_OUTBOX_ATTEMPTS = 5;
+// 1 initial attempt + 5 retries = 6 total attempts.
+// Back-off delays between attempts: 2s, 4s, 8s, 16s, 32s.
+const MAX_OUTBOX_ATTEMPTS = 6;
 const BATCH_SIZE = 20;
 
 /**
@@ -25,6 +27,16 @@ const BATCH_SIZE = 20;
  * MAX_OUTBOX_ATTEMPTS, after which the record is marked 'failed' for
  * human/alerting review.
  */
+/**
+ * Returns a log-safe version of an error message.
+ * Truncates to 200 characters and strips URL credentials
+ * (e.g. https://user:token@host) that may appear in vendor API errors.
+ */
+function sanitizeError(message: string): string {
+  const stripped = message.replaceAll(/\/\/[^@\s]*@/g, '//[REDACTED]@');
+  return stripped.length > 200 ? `${stripped.slice(0, 200)}…` : stripped;
+}
+
 @Injectable()
 export class OutboxWorkerService {
   private readonly logger = new Logger(OutboxWorkerService.name);
@@ -60,7 +72,7 @@ export class OutboxWorkerService {
     if (claimed.length === 0) return;
 
     this.logger.debug(
-      `Claimed ${claimed.length} outbox record(s) for processing`,
+      `Claimed ${claimed.length} outbox record(s) for processing (ids=${claimed.map((r) => r.id).join(',')})`,
     );
 
     await Promise.allSettled(
@@ -99,7 +111,7 @@ export class OutboxWorkerService {
 
       await this.markSucceeded(record.id);
       this.logger.debug(
-        `Outbox record ${record.id}: action=${record.action} stitch=${record.stitchId} succeeded`,
+        `Outbox record succeeded: id=${record.id} action=${record.action} stitchId=${record.stitchId} attempts=${record.attempts}`,
       );
     } catch (err) {
       await this.handleFailure(record, err);
@@ -117,7 +129,10 @@ export class OutboxWorkerService {
     record: typeof schedulerOutbox.$inferSelect,
     err: unknown,
   ): Promise<void> {
-    const lastError = err instanceof Error ? err.message : String(err);
+    // Sanitize before persisting or logging — raw vendor error messages may
+    // contain OAuth tokens, connection strings, or other sensitive material.
+    const rawError = err instanceof Error ? err.message : String(err);
+    const lastError = sanitizeError(rawError);
 
     if (record.attempts >= MAX_OUTBOX_ATTEMPTS) {
       // Permanently failed — mark for alerting/human review.
@@ -126,11 +141,12 @@ export class OutboxWorkerService {
         .set({ status: 'failed', lastError, processedAt: new Date() })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.error(
-        `Outbox record ${record.id} exhausted ${MAX_OUTBOX_ATTEMPTS} attempts ` +
-          `(action=${record.action} stitch=${record.stitchId}): ${lastError}`,
+        `Outbox record permanently failed: id=${record.id} action=${record.action} ` +
+          `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
+          `error="${lastError}"`,
       );
     } else {
-      // Exponential back-off: 2s, 4s, 8s, 16s, 32s.
+      // Exponential back-off between attempts: 2s, 4s, 8s, 16s, 32s.
       const delayMs = Math.pow(2, record.attempts) * 1_000;
       const nextRetryAt = new Date(Date.now() + delayMs);
       await this.db
@@ -138,9 +154,9 @@ export class OutboxWorkerService {
         .set({ status: 'pending', lastError, nextRetryAt })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.warn(
-        `Outbox record ${record.id} failed (attempt ${record.attempts}/${MAX_OUTBOX_ATTEMPTS}) ` +
-          `(action=${record.action} stitch=${record.stitchId}) — ` +
-          `retry at ${nextRetryAt.toISOString()}: ${lastError}`,
+        `Outbox record will retry: id=${record.id} action=${record.action} ` +
+          `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
+          `nextRetryAt=${nextRetryAt.toISOString()} error="${lastError}"`,
       );
     }
   }

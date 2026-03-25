@@ -202,9 +202,29 @@ describe('OutboxWorkerService', () => {
       expect(setCall.lastError).toContain('Windmill down');
     });
 
-    it('marks record as failed after MAX_OUTBOX_ATTEMPTS attempts', async () => {
-      // attempts=5 means we are AT the limit — next failure should permanently fail
+    it('retries with 32s delay when attempts=5 (5th attempt, not yet exhausted)', async () => {
+      // With MAX_OUTBOX_ATTEMPTS=6 (1 initial + 5 retries), attempt 5 still retries.
+      // Back-off delay = 2^5 * 1000 = 32 000 ms.
       const record = makeRecord('created', 5);
+      mocks.returningClaim.mockResolvedValue([record]);
+      mocks.findFirstStitch.mockResolvedValue(STITCH);
+      scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));
+
+      await service.processOutbox();
+
+      const setCall = mocks.markChain.set.mock.calls[0][0] as {
+        status: string;
+        nextRetryAt: Date;
+      };
+      expect(setCall.status).toBe('pending');
+      // 32s delay: nextRetryAt should be approximately 32s in the future.
+      const delayMs = setCall.nextRetryAt.getTime() - Date.now();
+      expect(delayMs).toBeGreaterThan(30_000);
+      expect(delayMs).toBeLessThan(34_000);
+    });
+
+    it('permanently fails when attempts=6 (all 6 attempts exhausted)', async () => {
+      const record = makeRecord('created', 6);
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
       scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));

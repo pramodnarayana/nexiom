@@ -78,9 +78,23 @@ export class HttpWindmillClient extends WindmillClient {
       return;
     }
     if (res.status === 409) {
-      await res.body?.cancel();
-      this.logger.debug(
-        `Stitch-runner script already exists at ${STITCH_RUNNER_PATH} (409)`,
+      // Windmill returns 409 when an identical content hash already exists at this
+      // path (truly idempotent).  If STITCH_RUNNER_CONTENT changed since the last
+      // deploy, the hash differs and Windmill creates a new version (200).
+      // A persistent 409 after a content change indicates the Windmill workspace
+      // needs a manual redeploy (delete the script at the path and redeploy).
+      // Read a bounded snippet (≤1 KB) for diagnostics — discard the rest.
+      let snippet = '';
+      try {
+        const full = await res.text();
+        snippet = full.length > 1024 ? `${full.slice(0, 1024)}…` : full;
+      } catch {
+        // Ignore body-read errors — the 409 itself is sufficient signal.
+      }
+      this.logger.warn(
+        `Stitch-runner script at ${STITCH_RUNNER_PATH} returned 409 — ` +
+          `script content matches an existing version or a manual redeploy is needed` +
+          (snippet ? `. Response: ${snippet}` : '.'),
       );
       return;
     }
@@ -221,7 +235,9 @@ export class HttpWindmillClient extends WindmillClient {
       method,
       headers: {
         Authorization: `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
+        // Only set Content-Type when there is a body — some API gateways reject
+        // GET requests that carry a Content-Type header.
+        ...(body !== undefined && { 'Content-Type': 'application/json' }),
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       ...(body !== undefined && { body: JSON.stringify(body) }),
@@ -245,30 +261,5 @@ export class HttpWindmillClient extends WindmillClient {
       );
     }
     await res.body?.cancel();
-  }
-
-  /**
-   * Sends a request and parses the response body as JSON.
-   * Throws a descriptive Error on non-OK status or an empty body.
-   */
-  private async requestJson<T>(
-    method: string,
-    path: string,
-    body?: unknown,
-  ): Promise<T> {
-    const res = await this.rawRequest(method, path, body);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(
-        `Windmill API ${method} ${path} failed [${res.status}]: ${text}`,
-      );
-    }
-    const text = await res.text();
-    if (!text) {
-      throw new Error(
-        `Windmill API ${method} ${path} returned an empty body where JSON was expected`,
-      );
-    }
-    return JSON.parse(text) as T;
   }
 }

@@ -262,8 +262,12 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
     foreignColumns: [integrationStitches.id],
     name: 'scheduler_outbox_stitch_fk',
   }).onDelete('cascade'),
-  // Primary poll query: WHERE status = 'pending' AND next_retry_at <= NOW()
-  index('scheduler_outbox_poll_idx').on(table.status, table.nextRetryAt),
+  // Partial index covering only pending rows — excludes the large succeeded/failed
+  // population so the poll query (WHERE status='pending' AND next_retry_at<=NOW())
+  // stays fast as the table grows.
+  index('scheduler_outbox_poll_idx')
+    .on(table.nextRetryAt)
+    .where(sql`status = 'pending'`),
   index('scheduler_outbox_stitch_idx').on(table.stitchId),
 ]);
 

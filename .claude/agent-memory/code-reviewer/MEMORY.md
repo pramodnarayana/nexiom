@@ -38,9 +38,14 @@
 - `PollSyncRunner` implements Singer-style poll with Redis NX locks, crash-resume via `currently_syncing` + `bookmark.offset`
 - State persisted in `public.sync_cursors` (stitchId + streamName composite key, JSONB stateDocument)
 - `CursorManagerService` in `packages/engine` -- stateless, computes windows + tracks HWM
-- Lock key: `lock:poll:${stitchId}:${streamName}`, TTL = syncIntervalMinutes (potential issue: long syncs exceed TTL)
+- Lock key: `lock:poll:${stitchId}:${streamName}`, TTL = `max(syncIntervalMinutes * 2 * 60_000, 5 * 60_000)`ms
+- Lock uses Lua-atomic renew/release with owner token verification
 - `OAuthCredentialBlob` double-cast to `Record<string, unknown>` is a recurring pattern in piece calls
-- Test mock pattern: `makeDb()` with sequential callCount dispatching -- fragile, order-dependent
+- Test mock pattern: `makeDb()` with table-aware `.from()` dispatching (improved from callCount)
+- OutboxWorkerService: off-by-one risk in retry count vs back-off comment (OW-1 flagged 2026-03-25)
+- CursorResetController: TOCTOU race between lock check and cursor delete (CR-1 flagged 2026-03-25)
+- HttpWindmillClient.ensureStitchScript: does not update existing scripts on content change (HW-1 flagged 2026-03-25)
+- PollSyncRunner always instantiated even when WINDMILL_ENABLED=false (SM-1 flagged 2026-03-25)
 
 ## Schema Notes
 
