@@ -1,0 +1,49 @@
+# Vector — log shipping sidecar for Nexiom API
+#
+# Reads structured JSON from the `api` container's stdout via the Docker
+# logs source and ships to OpenObserve's HTTP bulk-ingest endpoint.
+# When OPENOBSERVE_URL is unset the http sink is effectively disabled
+# (Vector will log a warning but won't crash).
+#
+# Run as part of docker-compose (see docker-compose.yml `vector` service).
+
+# Persistent state directory for Vector's bookmarks / checkpoints.
+data_dir = "/var/lib/vector"
+
+# --- Source: Docker container logs for the `api` service ---
+[sources.api_logs]
+  type           = "docker_logs"
+  include_labels = ["com.docker.compose.service=api"]
+
+# --- Transform: parse JSON log lines emitted by pino ---
+[transforms.parse_json]
+  type   = "remap"
+  inputs = ["api_logs"]
+  source = '''
+    structured, err = parse_json(.message)
+    if err == null {
+      . = merge(., structured)
+    }
+  '''
+
+# --- Sink: OpenObserve HTTP ingest ---
+[sinks.openobserve]
+  type              = "http"
+  inputs            = ["parse_json"]
+  uri               = "${OPENOBSERVE_URL}/api/${OPENOBSERVE_ORG}/${OPENOBSERVE_STREAM}/_json"
+  method            = "post"
+  encoding.codec    = "json"
+  batch.max_bytes   = 1_048_576   # 1 MiB
+  batch.timeout_secs = 5
+
+  [sinks.openobserve.auth]
+    strategy = "bearer"
+    token    = "${OPENOBSERVE_TOKEN}"
+
+  [sinks.openobserve.buffer]
+    type = "memory"
+    max_events = 10000
+    when_full = "drop_newest"
+
+  [sinks.openobserve.request]
+    retry_max_duration_secs = 60

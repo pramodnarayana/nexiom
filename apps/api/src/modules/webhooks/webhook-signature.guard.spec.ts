@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -10,7 +10,21 @@ import { createHmac } from 'node:crypto';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { PieceRegistryService } from '../trigger/piece-registry.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { getLoggerToken } from 'nestjs-pino';
 import { WEBHOOK_RESOLVED_CONNECTION } from '../../guards/tenant-rate-limit.guard.js';
+
+const loggerMock = {
+  assign: vi.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  log: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function makeExecutionContext(
   params: Record<string, string>,
@@ -76,6 +90,10 @@ describe('WebhookSignatureGuard', () => {
         {
           provide: DATABASE_CONNECTION,
           useValue: db,
+        },
+        {
+          provide: getLoggerToken(WebhookSignatureGuard.name),
+          useValue: loggerMock,
         },
       ],
     }).compile();

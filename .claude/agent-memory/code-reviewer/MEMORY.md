@@ -47,6 +47,21 @@
 - HttpWindmillClient.ensureStitchScript: does not update existing scripts on content change (HW-1 flagged 2026-03-25)
 - PollSyncRunner always instantiated even when WINDMILL_ENABLED=false (SM-1 flagged 2026-03-25)
 
+## Observability & Webhook Pipeline
+
+- Structured logging: nestjs-pino with pino-pretty (dev) / JSON stdout + Vector sidecar (prod)
+- Log injection prevention: x-request-id validated via `/^[a-zA-Z0-9_-]{1,128}$/` regex
+- Rate limiting: Lua-script fixed-window per-tenant in Redis (`ratelimit:l1:{tenantId}:{connectionId}`)
+- Probe protection: negative cache + fallback buckets for unknown/malformed UUIDs
+- Webhook signature: HMAC-SHA256 with timingSafeEqual, per-piece config (secretKeyEnv, signatureHeader, signatureEncoding)
+- Header allowlist: only safe headers persisted to inbound_gateway (strips auth/cookie/signature)
+- Idempotency: 23505 unique_violation on known constraints (idx_l1_ext_id, inbound_gateway_trace_id_unique) returns 202
+- Tenant schema isolation: `SET LOCAL search_path` with assertValidSchemaName defense-in-depth
+- ShutdownService: custom SIGTERM/SIGINT handler with 30s hard deadline, replaces NestJS enableShutdownHooks
+- Database: singleton Pool via getDb(), closeDb() called from DatabaseModule.onModuleDestroy
+- CORS: origin allowlist from ALLOWED_ORIGINS env var -- has a bypass for no-Origin requests in prod (flagged 2026-03-25)
+- Vector config: docker_logs source -> remap parse_json -> http sink to OpenObserve (env vars required, no defaults)
+
 ## Schema Notes
 
 - envTypeEnum defined in tenant.ts, re-exported from workspace.ts

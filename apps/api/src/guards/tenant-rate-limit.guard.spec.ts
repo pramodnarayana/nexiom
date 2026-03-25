@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -9,10 +9,20 @@ import {
 } from '@nestjs/common';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { getLoggerToken } from 'nestjs-pino';
 import {
   TenantRateLimitGuard,
   WEBHOOK_RESOLVED_CONNECTION,
 } from './tenant-rate-limit.guard.js';
+
+const loggerMock = {
+  assign: vi.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  log: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
 
 const VALID_UUID = '00000000-0000-0000-0000-000000000001';
 const VALID_UUID_UNKNOWN = '00000000-0000-0000-0000-000000000999';
@@ -41,6 +51,10 @@ function makeExecutionContext(connectionId: string) {
 }
 
 describe('TenantRateLimitGuard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   let guard: TenantRateLimitGuard;
   let redisMock: {
     eval: ReturnType<typeof vi.fn>;
@@ -70,6 +84,10 @@ describe('TenantRateLimitGuard', () => {
         TenantRateLimitGuard,
         { provide: REDIS_CLIENT, useValue: redisMock },
         { provide: DATABASE_CONNECTION, useValue: db },
+        {
+          provide: getLoggerToken(TenantRateLimitGuard.name),
+          useValue: loggerMock,
+        },
       ],
     }).compile();
 
@@ -270,6 +288,93 @@ describe('TenantRateLimitGuard', () => {
       '1',
       'EX',
       expect.any(Number),
+    );
+  });
+
+  // ── resolveLimit edge cases ─────────────────────────────────────────────────
+
+  it('falls back to DEFAULT_LIMIT (1000) when rateLimitPerMin is a negative number', async () => {
+    await setup(
+      {
+        tenantId: 'tenant-1',
+        appName: 'salesforce',
+        metadata: { rateLimitPerMin: -5 },
+      },
+      -1,
+    );
+    const { ctx } = makeExecutionContext(VALID_UUID);
+    await guard.canActivate(ctx);
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:tenant-1:${VALID_UUID}`,
+      '1000',
+      '60',
+    );
+  });
+
+  it('falls back to DEFAULT_LIMIT (1000) when rateLimitPerMin is a non-number', async () => {
+    await setup(
+      {
+        tenantId: 'tenant-1',
+        appName: 'salesforce',
+        metadata: { rateLimitPerMin: 'fast' },
+      },
+      -1,
+    );
+    const { ctx } = makeExecutionContext(VALID_UUID);
+    await guard.canActivate(ctx);
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:tenant-1:${VALID_UUID}`,
+      '1000',
+      '60',
+    );
+  });
+
+  it('falls back to DEFAULT_LIMIT (1000) when rateLimitPerMin is a fractional number', async () => {
+    await setup(
+      {
+        tenantId: 'tenant-1',
+        appName: 'salesforce',
+        metadata: { rateLimitPerMin: 3.7 },
+      },
+      -1,
+    );
+    const { ctx } = makeExecutionContext(VALID_UUID);
+    await guard.canActivate(ctx);
+
+    // Redis counters are integers — fractional values must fall back to the default
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:tenant-1:${VALID_UUID}`,
+      '1000',
+      '60',
+    );
+  });
+
+  it('clamps rateLimitPerMin to MAX_RATE_LIMIT (10000) when value exceeds the ceiling', async () => {
+    await setup(
+      {
+        tenantId: 'tenant-enterprise',
+        appName: 'salesforce',
+        metadata: { rateLimitPerMin: 99999 },
+      },
+      -1,
+    );
+    const { ctx } = makeExecutionContext(VALID_UUID);
+    await guard.canActivate(ctx);
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      1,
+      `ratelimit:l1:tenant-enterprise:${VALID_UUID}`,
+      '10000',
+      '60',
     );
   });
 });

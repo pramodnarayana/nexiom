@@ -9,10 +9,10 @@ import {
   ParseUUIDPipe,
   UseGuards,
   Inject,
-  Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
@@ -54,9 +54,9 @@ const STORED_HEADER_ALLOWLIST = new Set([
 
 @Controller('webhooks')
 export class WebhooksController {
-  private readonly logger = new Logger(WebhooksController.name);
-
   constructor(
+    @InjectPinoLogger(WebhooksController.name)
+    private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
   ) {}
@@ -84,11 +84,15 @@ export class WebhooksController {
     @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ): Promise<void> {
+    const start = Date.now();
     const schemaName =
       await this.storageResolver.resolveSchemaName(connectionId);
     const { inboundGateway } = buildTenantSchema(schemaName);
     const traceId = randomUUID();
     const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
+
+    // Bind L1-specific fields so every log call in this method carries them.
+    this.logger.assign({ layer: 'L1', traceId, extReqId });
 
     // Strip sensitive / irrelevant headers before persisting. Only the keys
     // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
@@ -116,18 +120,27 @@ export class WebhooksController {
           extReqId,
         });
       });
-      this.logger.debug(
-        `L1 ingested: traceId=${traceId} connectionId=${connectionId}`,
-      );
+      const durationMs = Date.now() - start;
+      this.logger.assign({ durationMs });
+      this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
     } catch (err: unknown) {
       // Only swallow 23505 errors that come from known idempotency constraints.
       // Any other unique violation (e.g. a bug in downstream schema) must surface.
       if (isPgIdempotencyViolation(err)) {
         this.logger.debug(
-          `Duplicate webhook ignored (idempotency): connectionId=${connectionId} extReqId=${extReqId ?? 'none'}`,
+          { event: 'l1.duplicate' },
+          'Duplicate webhook ignored (idempotency)',
         );
         return;
       }
+      this.logger.error(
+        {
+          event: 'l1.error',
+          durationMs: Date.now() - start,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'L1 ingest failed',
+      );
       throw err;
     }
   }

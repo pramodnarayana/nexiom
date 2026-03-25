@@ -64,13 +64,19 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 > (or a Vector/Fluentd sidecar for zero-code-change forwarding).
 > OpenObserve provides both log storage and metrics pipeline — Prometheus `/metrics` endpoint (original T007) is not needed.
 
-- [ ] Install `pino`, `nestjs-pino`, `pino-http`, and `pino-openobserve` (or Vector sidecar approach)
-- [ ] Replace default NestJS logger with `LoggerModule.forRoot()` (nestjs-pino) — structured JSON with `traceId`, `connectionId`, `layer`, `durationMs` fields
-- [ ] Configure `pino-openobserve` transport to stream logs to OpenObserve HTTP ingest endpoint
-- [ ] Add `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_STREAM`, `OPENOBSERVE_TOKEN` to `apps/api/.env`
-- [ ] Add `pino-http` request logging middleware (log `method`, `url`, `statusCode`, `responseTime`)
-- [ ] Configure Vector or Fluentd sidecar in `docker-compose.yml` as an alternative transport
-- Files: `apps/api/src/modules/observability/**`, `apps/api/src/main.ts`, `docker-compose.yml`
+- [x] Install `nestjs-pino`, `pino-http` (prod); `pino-pretty` (devDep) — Vector sidecar used for OpenObserve transport (zero-code-change forwarding)
+- [x] `ObservabilityModule` — `LoggerModule.forRootAsync()` with `genReqId` (uses `x-request-id` header or auto-generates UUID), `customProps` emits `{ service, traceId }` on every request log; `pino-pretty` in dev, stdout JSON in prod
+- [x] L1 services migrated to `PinoLogger` with `@InjectPinoLogger`: `TenantRateLimitGuard` assigns `{ layer: 'L1', connectionId, tenantId }`; `WebhooksController` assigns `{ layer: 'L1', traceId, extReqId, durationMs }`; `WebhookSignatureGuard` assigns structured warn fields
+- [x] All three spec files updated with `getLoggerToken` mock provider, `info`/`log` methods on loggerMock, and `vi.clearAllMocks()` in `beforeEach` to prevent call-count accumulation across tests
+- [x] `resolveLimit` edge case tests added: fractional values → DEFAULT_LIMIT, negative values → DEFAULT_LIMIT, non-number values → DEFAULT_LIMIT, values > MAX_RATE_LIMIT (10000) → clamped to 10000
+- [x] `genReqId` validates `x-request-id` against `SAFE_TRACE_ID_RE` to prevent log injection; falls back to `randomUUID()` for unsafe/absent headers
+- [x] `BadRequestException` for malformed UUID uses generic message (no reflected `connectionId`)
+- [x] Error log added before re-throw in `WebhooksController` catch block for L1 ingest failures
+- [x] Add `LOG_LEVEL`, `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_STREAM`, `OPENOBSERVE_TOKEN` to `apps/api/.env`
+- [x] `pino-http` request logging wired via `LoggerModule` — logs `method`, `url`, `statusCode`, `responseTime` on every request
+- [x] Vector sidecar added to `docker-compose.yml` (`timberio/vector:0.43.0-alpine`) — reads Docker container stdout, parses JSON, ships to OpenObserve HTTP ingest; config in `vector/vector.toml`
+- [x] `main.ts`: `bufferLogs: true` + `app.useLogger(app.get(Logger))` — pino active from first module log
+- Files: `apps/api/src/modules/observability/observability.module.ts`, `apps/api/src/main.ts`, `apps/api/src/app/app.module.ts`, `apps/api/src/guards/tenant-rate-limit.guard.ts`, `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhook-signature.guard.ts`, `docker-compose.yml`, `vector/vector.toml`, `apps/api/.env`
 - Depends: —
 
 ### T007 · observability: OpenObserve dashboards + alerting

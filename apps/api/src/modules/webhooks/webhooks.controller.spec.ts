@@ -1,10 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
+
+const loggerMock = {
+  assign: vi.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  log: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+};
 
 function makeDbMock() {
   const insertMock = vi
@@ -33,6 +43,7 @@ describe('WebhooksController', () => {
   let storageResolver: { resolveSchemaName: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    vi.clearAllMocks();
     db = makeDbMock();
     storageResolver = {
       resolveSchemaName: vi.fn().mockResolvedValue('ws_test_001'),
@@ -43,6 +54,10 @@ describe('WebhooksController', () => {
       providers: [
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        {
+          provide: getLoggerToken(WebhooksController.name),
+          useValue: loggerMock,
+        },
       ],
     })
       .overrideGuard(WebhookSignatureGuard)
@@ -113,6 +128,11 @@ describe('WebhooksController', () => {
         {},
       ),
     ).rejects.toThrow('connection refused');
+
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'l1.error' }),
+      'L1 ingest failed',
+    );
   });
 
   it('uses x-webhook-id header as extReqId when present', async () => {

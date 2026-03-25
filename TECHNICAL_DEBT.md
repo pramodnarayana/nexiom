@@ -144,6 +144,42 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ## Medium Priority
 
+### 1. Kubernetes Grace Period vs Hardcoded Drain Timeout
+
+**Location**: `apps/api/src/core/shutdown.service.ts`
+**Added**: 2026-03-25
+**Impact**: Infrastructure, Process Lifecycle
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- The application hardcodes `DRAIN_TIMEOUT_MS = 25s` to exit gracefully before Kubernetes sends a `SIGKILL` at the end of its default 30-second `terminationGracePeriodSeconds`.
+- This relies on implicit knowledge of the default K8s configuration. If a DevOps engineer changes the K8s manifest without updating the Node.js source code (or vice-versa), it can lead to truncated drains and zombie processes.
+
+**Recommended Solution**:
+
+- Make `DRAIN_TIMEOUT_MS` configurable via environment variable (e.g., `SHUTDOWN_DRAIN_TIMEOUT_MS`).
+- Explicitly define `terminationGracePeriodSeconds` in the Kubernetes deployment manifests (e.g., to 35s) and inject `SHUTDOWN_DRAIN_TIMEOUT_MS=30000` via a ConfigMap, codifying the relationship in Infrastructure-as-Code.
+
+---
+
+### 2. Vector Sink Alerting / Dropped Logs
+
+**Location**: `vector/vector.toml`
+**Added**: 2026-03-25
+**Impact**: Observability, Alerting
+**Effort**: Medium (1-2 days)
+
+**Current State**:
+
+- The Vector sidecar is configured to buffer logs in memory and drop the newest logs (`when_full = "drop_newest"`) if the OpenObserve sink goes down or is unreachable.
+- This prevents the API container from hanging, but results in silent log loss because there is no external alerting configured for when Vector drops logs.
+
+**Recommended Solution**:
+
+- Configure Vector's internal metrics sink to expose `vector_buffer_discarded_events_total` to Prometheus/Grafana.
+- Set up an alert (e.g., PagerDuty or Slack) that triggers whenever logs are actively being dropped, indicating an issue with the logging infrastructure.
+
 ### 1. Cross-Module AuthGuard Import
 
 **Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`  
