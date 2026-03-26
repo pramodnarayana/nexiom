@@ -33,14 +33,34 @@ The 6-layer pipeline is updated with **Extension Points**. If a custom script ex
 
 ```typescript
 // packages/engine/src/executor/logic-resolver.ts
+import ivm from 'isolated-vm';
+
 async function executeLayer(tenantId: string, layer: string, data: any) {
   // 1. Check if this tenant has a custom override in their local directory
   const customPath = getCustomScriptPath(tenantId, layer);
 
   if (fs.existsSync(customPath)) {
-    // 2. Execute custom customer logic
-    const customModule = require(customPath);
-    return await customModule.run(data);
+    try {
+      // 2. Execute custom customer logic inside secure isolated-vm Sandbox
+      const isolate = new ivm.Isolate({ memoryLimit: 128 });
+      const context = isolate.createContextSync();
+      const code = fs.readFileSync(customPath, 'utf8');
+      
+      const script = isolate.compileScriptSync(code);
+      script.runSync(context);
+      
+      const exportedRun = context.global.getSync('run');
+      
+      // Transfer data securely to the isolate
+      const externalData = new ivm.ExternalCopy(data);
+      const result = exportedRun.applySync(undefined, [externalData.copyInto()], {
+        timeout: 1000,
+      });
+      return result;
+    } catch (err) {
+      console.error(`Tenant ${tenantId} Layer ${layer} sandboxed execution failed:`, err);
+      // Fallback
+    }
   }
 
   // 3. Fallback to Platform Generic logic

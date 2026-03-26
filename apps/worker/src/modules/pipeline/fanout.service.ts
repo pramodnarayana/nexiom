@@ -192,8 +192,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     schemaName: string,
     traceId: string,
     routeId: string,
-    layer: any,
-    status: any,
+    layer: "L1" | "L2" | "L3" | "L4" | "L5",
+    status: "PROCESSING" | "SUCCESS" | "FAIL" | "SKIPPED",
     durationMs: number,
   ) {
     const { syncLog } = buildTenantSchema(schemaName);

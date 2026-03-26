@@ -21,4 +21,4 @@ async function bootstrap() {
     process.exit(1);
   }
 }
-bootstrap().catch(() => process.exit(1));
+void bootstrap();

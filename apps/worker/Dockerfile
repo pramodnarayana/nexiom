@@ -33,13 +33,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/worker/package.json ./apps/worker/
 COPY packages ./packages
 
-# Build packages before installing prod deps? Wait, if we copy built packages from builder it's better.
-# For simplicity in this monorepo without strict pruning, we just install prod deps.
+# Install production dependencies
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
+# Copy built artifacts from builder
 COPY --from=builder --chown=nodejs:nodejs /app/apps/worker/dist ./apps/worker/dist
-# Also copy built packages/engine/dist, etc., but since TS reads from dist anyway, `pnpm install` in monorepo symlinks them. Wait, if we don't compile packages, worker won't run.
-# Actually, since engine/dist is not copied to runner, it fails. I'll copy entire packages from builder to runner to be safe.
 COPY --from=builder --chown=nodejs:nodejs /app/packages ./packages
 
 USER nodejs

@@ -111,13 +111,13 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           .onConflictDoNothing({ target: normalizedEntity.replicaId });
       });
 
-      // 2. Publish to the next queue
+      // 2. Publish to the next queue — only mark success AFTER durable enqueue
       await this.queueService.send(QueueName.NormalizedQueue, {
         traceId,
         connectionId,
       });
 
-      // 3. Mark success and audit ONLY after successful enqueue
+      // 3. Mark NORMALIZED and write L3/SUCCESS audit — runs only after send() resolves
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
@@ -132,12 +132,16 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           );
 
         const durationMs = Date.now() - start;
-        await tx.insert(syncLog).values({
-          traceId,
-          layer: "L3",
-          status: "SUCCESS",
-          durationMs,
-        });
+        // Idempotent insert: ignore if an L3/SUCCESS row already exists for this traceId
+        await tx
+          .insert(syncLog)
+          .values({
+            traceId,
+            layer: "L3",
+            status: "SUCCESS",
+            durationMs,
+          })
+          .onConflictDoNothing();
       });
 
       this.logger.log(
@@ -163,17 +167,23 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
 
+          // Only mark FAIL if not already in a terminal state (NORMALIZED = happy path won)
           await tx
             .update(inboundGateway)
             .set({ status: "FAIL" })
-            .where(sql`${inboundGateway.traceId} = ${traceId}`);
+            .where(
+              sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED' AND ${inboundGateway.status} != 'FAIL'`,
+            );
 
-          await tx.insert(syncLog).values({
-            traceId,
-            layer: "L3",
-            status: "FAIL",
-            durationMs: Date.now() - start,
-          });
+          await tx
+            .insert(syncLog)
+            .values({
+              traceId,
+              layer: "L3",
+              status: "FAIL",
+              durationMs: Date.now() - start,
+            })
+            .onConflictDoNothing();
         });
       } catch {
         // ignore rollback errors

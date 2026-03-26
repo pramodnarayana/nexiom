@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Client } from "pg";
+import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./schema.js";
 
@@ -303,6 +304,12 @@ export class DatabaseManager {
               })
               .onConflictDoNothing();
             console.log("    ✓ System Owner membership created");
+          } else if (existingMember.role !== config.ownerRoleId) {
+            await db
+              .update(schema.member)
+              .set({ role: config.ownerRoleId })
+              .where(sql`${schema.member.id} = ${existingMember.id}`);
+            console.log("    ✓ System Owner membership role restored");
           }
         } else {
           const hashedPassword = await bcrypt.hash(password, 10);
@@ -448,9 +455,7 @@ export class DatabaseManager {
       }
 
       const quotedTables = tables
-        .map(
-          (t) => `"${t.table_schema}"."${t.table_name.replaceAll('"', '""')}"`,
-        )
+        .map((t) => `"public"."${t.table_name.replaceAll('"', '""')}"`)
         .join(", ");
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
       await this.execSql(sql, client);
@@ -625,47 +630,49 @@ export class DatabaseManager {
           encryptionKey,
         );
 
-        const [inserted] = await db
-          .insert(dbSchema.appConnections)
-          .values({
-            id: fixture.id,
-            tenantId: systemTenantId,
-            appName: fixture.appName,
-            externalId: fixture.externalId,
-            displayName: fixture.displayName,
-            authType: "OAUTH2",
-            value: encryptedValue,
-            status: "ACTIVE",
-          })
-          .onConflictDoUpdate({
-            target: [
-              dbSchema.appConnections.tenantId,
-              dbSchema.appConnections.externalId,
-            ],
-            set: {
-              value: encryptedValue,
-              displayName: fixture.displayName,
-              appName: fixture.appName,
-              authType: "OAUTH2",
-              status: "ACTIVE",
-            },
-          })
-          .returning();
-
-        if (!inserted) {
-          throw new Error(
-            `Upsert returned no row for externalId=${fixture.externalId}`,
-          );
-        }
-
-        const resolved = inserted;
-
-        const schemaName = `ws_${resolved.id.replaceAll("-", "_")}`;
-        await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
-
         console.log(
-          `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
+          `  ℹ️  Provisioning connection ${fixture.appName} (preserving secrets if exists)`,
         );
+
+        await db.transaction(async (tx) => {
+          const existRes = await tx
+            .select()
+            .from(dbSchema.appConnections)
+            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`)
+            .limit(1);
+          const existing = existRes[0];
+
+          if (!existing) {
+            await tx.insert(dbSchema.appConnections).values({
+              id: fixture.id,
+              tenantId: systemTenantId,
+              appName: fixture.appName,
+              externalId: fixture.externalId,
+              displayName: fixture.displayName,
+              authType: "OAUTH2",
+              value: encryptedValue,
+              status: "INACTIVE",
+            });
+          } else {
+            await tx
+              .update(dbSchema.appConnections)
+              .set({ status: "INACTIVE" })
+              .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
+          }
+
+          const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
+          // SchemaPlan.OUTBOUND_ACTIVE creates all full pipeline stages
+          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+
+          await tx
+            .update(dbSchema.appConnections)
+            .set({ status: "ACTIVE" })
+            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
+
+          console.log(
+            `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
+          );
+        });
       }
 
       console.log("\n✅ Local dev fixtures provisioned.");

@@ -15,7 +15,7 @@ const logger = new Logger("DatabaseProvider");
  * regardless of whether the code runs as ESM source or compiled CJS in dist/.
  */
 function migrationsPath(): string {
-  return join(process.cwd(), "drizzle");
+  return join(process.cwd(), "../../packages/database/drizzle");
 }
 
 export const databaseProvider: Provider = {

@@ -23,9 +23,14 @@ function makeDbMock() {
     .mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   const executeMock = vi.fn().mockResolvedValue(undefined);
 
+  const updateMock = vi.fn().mockReturnThis();
+
   const txMock = {
     execute: executeMock,
     insert: insertMock,
+    update: updateMock,
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -245,7 +250,7 @@ describe('WebhooksController', () => {
     });
   });
 
-  it('throws and logs warning when enqueue fails', async () => {
+  it('logs warning and marks record PENDING when enqueue fails (no rethrow)', async () => {
     queueServiceMock.send.mockRejectedValueOnce(new Error('SQS down'));
 
     await expect(
@@ -254,7 +259,7 @@ describe('WebhooksController', () => {
         { foo: 'bar' },
         {},
       ),
-    ).rejects.toThrow('SQS down');
+    ).resolves.toBeUndefined();
 
     await vi.waitFor(() => {
       expect(loggerMock.warn).toHaveBeenCalledWith(

@@ -150,10 +150,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             ON "${schemaName}".normalized_entity (trace_id);
     `);
 
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_l3_replica
-            ON "${schemaName}".normalized_entity (replica_id);
-    `);
+
 
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_l3_canonical

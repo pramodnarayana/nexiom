@@ -64,17 +64,32 @@ describe("NormalizationService", () => {
 
   it("should process message normally", async () => {
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.ReplicaQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
+
     await handler({ traceId: "123", connectionId: "456" });
+
+    const expectedPayload = {
+      traceId: "123",
+      connectionId: "456",
+    };
+
     expect(queueService.send).toHaveBeenCalledWith(
       QueueName.NormalizedQueue,
-      expect.any(Object),
+      expectedPayload,
     );
   });
 
   it("should handle errors gracefully", async () => {
     db.transaction.mockRejectedValueOnce(new Error("db fail"));
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.ReplicaQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
@@ -84,6 +99,10 @@ describe("NormalizationService", () => {
   it("should throw if target connection not found", async () => {
     db.limit.mockResolvedValueOnce([]);
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.ReplicaQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
@@ -93,6 +112,10 @@ describe("NormalizationService", () => {
   it("should throw if piece not registered", async () => {
     pieceRegistry.getPiece.mockReturnValueOnce(null);
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.ReplicaQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),

@@ -124,7 +124,7 @@ export class WebhooksController {
       const traceId = inboundGatewayId;
       await this.queueService
         .send(QueueName.InboundQueue, { traceId, connectionId })
-        .catch((err: unknown) => {
+        .catch(async (err: unknown) => {
           this.logger.warn(
             {
               event: 'l1.enqueue_failed',
@@ -133,7 +133,17 @@ export class WebhooksController {
             },
             'Failed to enqueue L1 event — delivery will be delayed until retry',
           );
-          throw err;
+
+          await this.db.transaction(async (tx) => {
+            assertValidSchemaName(schemaName);
+            await tx.execute(
+              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+            );
+            await tx
+              .update(inboundGateway)
+              .set({ status: 'PENDING' })
+              .where(sql`${inboundGateway.traceId} = ${traceId}`);
+          });
         });
 
       const durationMs = Date.now() - start;
@@ -147,6 +157,50 @@ export class WebhooksController {
           { event: 'l1.duplicate' },
           'Duplicate webhook ignored (idempotency)',
         );
+
+        try {
+          const schemaName =
+            await this.storageResolver.resolveSchemaName(connectionId);
+          const { inboundGateway } = buildTenantSchema(schemaName);
+          const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
+
+          if (extReqId) {
+            await this.db.transaction(async (tx) => {
+              assertValidSchemaName(schemaName);
+              await tx.execute(
+                sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+              );
+
+              const rows = await tx
+                .select({ traceId: inboundGateway.traceId })
+                .from(inboundGateway)
+                .where(
+                  sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.connectionId} = ${connectionId}`,
+                )
+                .limit(1);
+
+              if (rows.length > 0) {
+                const existingTraceId = rows[0].traceId;
+                this.logger.debug(
+                  { event: 'l1.re-enqueue', traceId: existingTraceId },
+                  'Attempting to re-enqueue duplicate webhook',
+                );
+                await this.queueService
+                  .send(QueueName.InboundQueue, {
+                    traceId: existingTraceId,
+                    connectionId,
+                  })
+                  .catch(() => {});
+              }
+            });
+          }
+        } catch (error_: unknown) {
+          this.logger.error(
+            { err: error_ instanceof Error ? error_.message : String(error_) },
+            'Failed to lookup and re-enqueue duplicate webhook',
+          );
+        }
+
         return;
       }
       this.logger.error(

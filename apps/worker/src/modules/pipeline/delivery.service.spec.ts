@@ -84,10 +84,12 @@ describe("DeliveryService", () => {
     pieceRegistry
       .getPiece()
       .executeAction.mockRejectedValue(new Error("api error"));
+
+    const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
         update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockReturnThis(),
+        set: setMock,
         where: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
@@ -99,6 +101,10 @@ describe("DeliveryService", () => {
       }),
     );
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({
@@ -109,6 +115,14 @@ describe("DeliveryService", () => {
         outboundGatewayId: "o",
       }),
     ).resolves.toBeUndefined();
+
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "FAIL",
+        statusCode: 500,
+        resPayload: { error: "api error" },
+      }),
+    );
   });
 
   it("should throw if outbound gateway record not found", async () => {
@@ -122,6 +136,10 @@ describe("DeliveryService", () => {
       }),
     );
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({
@@ -150,6 +168,10 @@ describe("DeliveryService", () => {
       }),
     );
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({

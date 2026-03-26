@@ -31,7 +31,11 @@ function setNestedValue(obj: any, path: string, value: any): void {
  * @param data The source normalized JSON data
  * @returns An outbound JSON payload structured for the destination
  */
-export function hydratePayload(rules?: Rule[], data: Record<string, any> = {}): any {
+export function hydratePayload(
+  rules?: Rule[], 
+  data: Record<string, any> = {}, 
+  markUnmapped: boolean = false
+): any {
   rules = rules || [];
   const payload: any = {};
   for (const rule of rules) {
@@ -40,5 +44,7 @@ export function hydratePayload(rules?: Rule[], data: Record<string, any> = {}): 
          setNestedValue(payload, rule.dest, val);
      }
   }
-  return Object.keys(payload).length > 0 ? payload : data;
+  if (Object.keys(payload).length > 0) return payload;
+  if (markUnmapped) return { _unmapped: true, ...data };
+  return data;
 }
