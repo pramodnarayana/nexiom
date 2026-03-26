@@ -60,7 +60,7 @@
 - ShutdownService: custom SIGTERM/SIGINT handler with 25s hard deadline, replaces NestJS enableShutdownHooks
 - Database: singleton Pool via getDb(), closeDb() called from DatabaseModule.onModuleDestroy
 - CORS: origin allowlist from ALLOWED_ORIGINS env var -- intentionally permits requests with no Origin for non-browser clients (webhooks protected by WebhookSignatureGuard) (updated 2026-03-25)
-- Vector config: docker_logs source -> remap parse_json -> http sink to OpenObserve (env vars required, no defaults)
+- Vector config: docker_logs source -> remap parse_json -> http sink to OpenObserve (OPENOBSERVE_URL and OPENOBSERVE_TOKEN are hard-required; OPENOBSERVE_ORG and OPENOBSERVE_STREAM default to "nexiom" and "api-logs")
 
 ## Schema Notes
 

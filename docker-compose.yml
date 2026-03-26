@@ -286,10 +286,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - vector_data:/var/lib/vector
     environment:
-      OPENOBSERVE_URL: ${OPENOBSERVE_URL:?OPENOBSERVE_URL must be set}
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
       OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-nexiom}
       OPENOBSERVE_STREAM: ${OPENOBSERVE_STREAM:-api-logs}
-      OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:?OPENOBSERVE_TOKEN must be set}
+      OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:-}
     depends_on:
       - api
     networks:

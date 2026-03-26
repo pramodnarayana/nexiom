@@ -31,12 +31,8 @@ const PG_UNIQUE_VIOLATION = '23505';
  * inbound_gateway table. Only these violations are silently swallowed as 202.
  *
  * - idx_l1_ext_id   : uniqueIndex(connectionId, ext_req_id) — vendor event ID duplicate
- * - inbound_gateway_trace_id_unique : inline unique on trace_id — our own UUID dedup
  */
-const IDEMPOTENCY_CONSTRAINTS = new Set([
-  'idx_l1_ext_id',
-  'inbound_gateway_trace_id_unique',
-]);
+const IDEMPOTENCY_CONSTRAINTS = new Set(['idx_l1_ext_id']);
 
 /**
  * Headers stored alongside the payload for audit / debugging purposes.
@@ -163,10 +159,7 @@ function isPgIdempotencyViolation(err: unknown): boolean {
 
   // Fallback: pg detail text contains the idempotency column name.
   // Covers drivers that don't populate the constraint field.
-  if (
-    typeof e['detail'] === 'string' &&
-    (e['detail'].includes('ext_req_id') || e['detail'].includes('trace_id'))
-  ) {
+  if (typeof e['detail'] === 'string' && e['detail'].includes('ext_req_id')) {
     return true;
   }
 
