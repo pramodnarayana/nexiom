@@ -27,6 +27,7 @@ import { StitchesModule } from '../modules/stitches/stitches.module.js';
 import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module.js';
 import { ShutdownService } from '../core/shutdown.service.js';
+import { ObservabilityModule } from '../modules/observability/observability.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,9 @@ import { ShutdownService } from '../core/shutdown.service.js';
         '.env', // shared root env (from monorepo root)
       ],
     }),
+    // ObservabilityModule must be first so pino is active before all other modules
+    // bootstrap and emit their own startup logs.
+    ObservabilityModule,
     // Global Redis client — available to all modules via REDIS_CLIENT token
     CacheModule,
     // Global cron scheduler — required for PollerService and DlqProcessorService

@@ -2,14 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 
 /** Hard drain timeout before force-exiting the process. */
-const DRAIN_TIMEOUT_MS = 30_000;
+// Set below Kubernetes terminationGracePeriodSeconds (default 30s)
+// to allow process.exit(0) before sending SIGKILL (137).
+const DRAIN_TIMEOUT_MS = 25_000;
 
 /**
  * ShutdownService -- graceful SIGTERM/SIGINT drain.
  *
  * Registers OS signal handlers that call app.close(), which triggers
  * OnModuleDestroy hooks on all providers (including QueueService.stopConsuming()).
- * A hard 30-second deadline force-exits the process if drain stalls.
+ * A hard 25-second deadline force-exits the process if drain stalls.
  *
  * Call enableShutdownHooks(app) immediately after app.listen() in main.ts.
  */

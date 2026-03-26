@@ -10,6 +10,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { DATABASE_CONNECTION, appConnections } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
@@ -69,7 +70,12 @@ export interface WebhookResolvedConnection {
  */
 @Injectable()
 export class TenantRateLimitGuard implements CanActivate {
-  private readonly logger = new Logger(TenantRateLimitGuard.name);
+  constructor(
+    @InjectPinoLogger(TenantRateLimitGuard.name)
+    private readonly logger: PinoLogger,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+  ) {}
 
   // Lua script: check-before-increment so the counter never grows beyond
   // the limit, keeping metrics accurate and X-RateLimit-Remaining correct.
@@ -96,11 +102,6 @@ export class TenantRateLimitGuard implements CanActivate {
     'return -1',
   ].join('\n');
 
-  constructor(
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-  ) {}
-
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context
       .switchToHttp()
@@ -110,13 +111,17 @@ export class TenantRateLimitGuard implements CanActivate {
     const res = context.switchToHttp().getResponse<Response>();
     const connectionId = req.params['connectionId'];
 
+    // Bind layer early so all subsequent log calls from this guard and
+    // downstream services carry the L1 context.
+    this.logger.assign({ layer: 'L1', connectionId });
+
     // Guards execute before ParseUUIDPipe — validate format here so malformed
     // IDs never reach the database.
     if (!UUID_REGEX.test(connectionId)) {
       await this.applyFallbackRateLimit(res, 'ratelimit:l1:probe');
-      throw new BadRequestException(
-        `Invalid connectionId format: "${connectionId}"`,
-      );
+      // Do not echo the raw value back — it may contain attacker-controlled
+      // content. The connectionId is already in the pino log context via assign().
+      throw new BadRequestException('Invalid connectionId format');
     }
 
     // Negative cache: repeated probes with the same unknown UUID skip Postgres
@@ -160,6 +165,9 @@ export class TenantRateLimitGuard implements CanActivate {
       metadata: conn.metadata,
     };
 
+    // Enrich log context with resolved tenant for all downstream log calls.
+    this.logger.assign({ tenantId: conn.tenantId });
+
     const limit = resolveLimit(conn.metadata);
     // Connection-scoped key prevents cross-connection interference when
     // connections on the same tenant have different rateLimitPerMin values.
@@ -193,9 +201,7 @@ export class TenantRateLimitGuard implements CanActivate {
       // Express does not clear headers when the exception filter subsequently
       // calls res.status(429).json(...) — previously-set headers are preserved.
       res.setHeader('Retry-After', String(retryAfter));
-      this.logger.warn(
-        `Rate limit exceeded: tenantId=${tenantId} limit=${limit}/min retryAfter=${retryAfter}s`,
-      );
+      this.logger.warn({ tenantId, limit, retryAfter }, 'Rate limit exceeded');
       throw new HttpException(
         `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
         HttpStatus.TOO_MANY_REQUESTS,
@@ -222,9 +228,7 @@ export class TenantRateLimitGuard implements CanActivate {
     if (result !== -1) {
       const retryAfter = typeof result === 'number' ? result : WINDOW_SECONDS;
       res.setHeader('Retry-After', String(retryAfter));
-      this.logger.warn(
-        `Probe rate limit exceeded: key=${key} retryAfter=${retryAfter}s`,
-      );
+      this.logger.warn({ key, retryAfter }, 'Probe rate limit exceeded');
       throw new HttpException(
         `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
         HttpStatus.TOO_MANY_REQUESTS,
@@ -233,6 +237,9 @@ export class TenantRateLimitGuard implements CanActivate {
   }
 }
 
+// Module-level logger for the standalone resolveLimit function.
+// Uses @nestjs/common Logger (intercepted by pino at runtime) since
+// free functions cannot participate in NestJS dependency injection.
 const resolveLimitLogger = new Logger('TenantRateLimitGuard:resolveLimit');
 
 /**

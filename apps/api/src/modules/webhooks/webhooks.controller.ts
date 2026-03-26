@@ -9,10 +9,10 @@ import {
   ParseUUIDPipe,
   UseGuards,
   Inject,
-  Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
@@ -31,12 +31,8 @@ const PG_UNIQUE_VIOLATION = '23505';
  * inbound_gateway table. Only these violations are silently swallowed as 202.
  *
  * - idx_l1_ext_id   : uniqueIndex(connectionId, ext_req_id) — vendor event ID duplicate
- * - inbound_gateway_trace_id_unique : inline unique on trace_id — our own UUID dedup
  */
-const IDEMPOTENCY_CONSTRAINTS = new Set([
-  'idx_l1_ext_id',
-  'inbound_gateway_trace_id_unique',
-]);
+const IDEMPOTENCY_CONSTRAINTS = new Set(['idx_l1_ext_id']);
 
 /**
  * Headers stored alongside the payload for audit / debugging purposes.
@@ -54,9 +50,9 @@ const STORED_HEADER_ALLOWLIST = new Set([
 
 @Controller('webhooks')
 export class WebhooksController {
-  private readonly logger = new Logger(WebhooksController.name);
-
   constructor(
+    @InjectPinoLogger(WebhooksController.name)
+    private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
   ) {}
@@ -84,21 +80,26 @@ export class WebhooksController {
     @Body() body: unknown,
     @Headers() headers: Record<string, string>,
   ): Promise<void> {
-    const schemaName =
-      await this.storageResolver.resolveSchemaName(connectionId);
-    const { inboundGateway } = buildTenantSchema(schemaName);
-    const traceId = randomUUID();
-    const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
-
-    // Strip sensitive / irrelevant headers before persisting. Only the keys
-    // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
-    const filteredHeaders = Object.fromEntries(
-      Object.entries(headers).filter(([k]) =>
-        STORED_HEADER_ALLOWLIST.has(k.toLowerCase()),
-      ),
-    );
+    const start = Date.now();
 
     try {
+      const schemaName =
+        await this.storageResolver.resolveSchemaName(connectionId);
+      const { inboundGateway } = buildTenantSchema(schemaName);
+      const inboundGatewayId = randomUUID();
+      const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
+
+      // Bind L1-specific fields so every log call in this method carries them.
+      this.logger.assign({ layer: 'L1', inboundGatewayId, extReqId });
+
+      // Strip sensitive / irrelevant headers before persisting. Only the keys
+      // in STORED_HEADER_ALLOWLIST are written to inbound_gateway.headers.
+      const filteredHeaders = Object.fromEntries(
+        Object.entries(headers).filter(([k]) =>
+          STORED_HEADER_ALLOWLIST.has(k.toLowerCase()),
+        ),
+      );
+
       await this.db.transaction(async (tx) => {
         // assertValidSchemaName is already called inside buildTenantSchema above,
         // but we call it again here as an explicit defence-in-depth guard directly
@@ -106,28 +107,38 @@ export class WebhooksController {
         // break the safety invariant.
         assertValidSchemaName(schemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw(`"${schemaName}"`)}`,
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
         await tx.insert(inboundGateway).values({
-          traceId,
+          traceId: inboundGatewayId,
           connectionId,
           payload: body as Record<string, unknown>,
           headers: filteredHeaders,
           extReqId,
         });
       });
-      this.logger.debug(
-        `L1 ingested: traceId=${traceId} connectionId=${connectionId}`,
-      );
+      const durationMs = Date.now() - start;
+      this.logger.assign({ durationMs });
+      this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
     } catch (err: unknown) {
       // Only swallow 23505 errors that come from known idempotency constraints.
       // Any other unique violation (e.g. a bug in downstream schema) must surface.
       if (isPgIdempotencyViolation(err)) {
         this.logger.debug(
-          `Duplicate webhook ignored (idempotency): connectionId=${connectionId} extReqId=${extReqId ?? 'none'}`,
+          { event: 'l1.duplicate' },
+          'Duplicate webhook ignored (idempotency)',
         );
         return;
       }
+      this.logger.error(
+        {
+          event: 'l1.error',
+          durationMs: Date.now() - start,
+          err,
+          errMessage: err instanceof Error ? err.message : String(err),
+        },
+        'L1 ingest failed',
+      );
       throw err;
     }
   }
@@ -148,10 +159,7 @@ function isPgIdempotencyViolation(err: unknown): boolean {
 
   // Fallback: pg detail text contains the idempotency column name.
   // Covers drivers that don't populate the constraint field.
-  if (
-    typeof e['detail'] === 'string' &&
-    (e['detail'].includes('ext_req_id') || e['detail'].includes('trace_id'))
-  ) {
+  if (typeof e['detail'] === 'string' && e['detail'].includes('ext_req_id')) {
     return true;
   }
 

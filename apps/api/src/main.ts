@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Logger } from '@nestjs/common';
+import { Logger } from 'nestjs-pino';
 import { NestFactory } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app/app.module.js';
@@ -11,10 +11,10 @@ function validateEnv(): void {
       ['WINDMILL_TOKEN', 'WINDMILL_INTERNAL_SECRET'] as const
     ).filter((k) => !process.env[k]);
     if (missing.length > 0) {
-      Logger.error(
-        `WINDMILL_ENABLED=true but the following required variables are not set: ${missing.join(', ')}. ` +
+      // Logger is not yet available at this point — use console directly.
+      console.error(
+        `[Bootstrap] WINDMILL_ENABLED=true but the following required variables are not set: ${missing.join(', ')}. ` +
           `Set WINDMILL_ENABLED=false to use StubWindmillClient for local development.`,
-        'Bootstrap',
       );
       process.exit(1);
     }
@@ -23,7 +23,13 @@ function validateEnv(): void {
 
 async function bootstrap() {
   validateEnv();
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // bufferLogs: true holds NestJS bootstrap logs until the pino logger is ready,
+  // preventing a mix of default NestJS and pino output during startup.
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bufferLogs: true,
+  });
+  app.useLogger(app.get(Logger));
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const port = process.env.PORT || 3000;
@@ -50,7 +56,8 @@ async function bootstrap() {
         return;
       }
 
-      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      // Vendor webhook senders (Salesforce, QuickBooks, etc.) send no Origin header —
+      // CORS restrictions only apply to browser cross-origin requests.
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -65,14 +72,19 @@ async function bootstrap() {
   // ShutdownService provides the same functionality with an additional 30-second
   // hard-deadline guard. Calling both would result in double app.close() invocations.
   app.get(ShutdownService).enableShutdownHooks(app);
-  Logger.log(
-    `Application is running on: http://localhost:${port}/${globalPrefix}`,
-  );
+  app
+    .get(Logger)
+    .log(`Application is running on: http://localhost:${port}/${globalPrefix}`);
 }
 
 try {
   await bootstrap();
-} catch (err) {
-  Logger.error('Bootstrap failed', err);
+} catch (err: unknown) {
+  // Logger is not yet available if bootstrap itself fails before app.useLogger();
+  // fall back to console so the error is never silently swallowed.
+  console.error(
+    '[Bootstrap] Fatal error:',
+    err instanceof Error ? err.stack : String(err),
+  );
   process.exit(1);
 }

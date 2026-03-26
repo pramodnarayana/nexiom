@@ -4,12 +4,12 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION, appConnections } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
@@ -21,9 +21,9 @@ import {
 
 @Injectable()
 export class WebhookSignatureGuard implements CanActivate {
-  private readonly logger = new Logger(WebhookSignatureGuard.name);
-
   constructor(
+    @InjectPinoLogger(WebhookSignatureGuard.name)
+    private readonly logger: PinoLogger,
     private readonly config: ConfigService,
     private readonly pieceRegistry: PieceRegistryService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
@@ -62,7 +62,8 @@ export class WebhookSignatureGuard implements CanActivate {
     const secret = this.config.get<string>(secretKeyEnv);
     if (!secret) {
       this.logger.warn(
-        `Webhook secret env var "${secretKeyEnv}" is not set for piece "${appName}" -- rejecting`,
+        { appName, secretKeyEnv },
+        'Webhook secret env var is not set — rejecting',
       );
       throw new ForbiddenException(
         'Webhook signature verification is not configured',
@@ -87,15 +88,20 @@ export class WebhookSignatureGuard implements CanActivate {
     // that casing differences in hex (e.g. "ABCD" vs "abcd") and encoding
     // edge-cases do not cause false-negative rejections.
     const expectedBuf = createHmac('sha256', secret).update(rawBody).digest();
+
+    if (signatureEncoding === 'hex' && receivedSig.length % 2 !== 0) {
+      throw new ForbiddenException(
+        'Malformed webhook signature (odd-length hex)',
+      );
+    }
+
     const receivedBuf = Buffer.from(receivedSig, signatureEncoding);
 
     if (
       expectedBuf.length !== receivedBuf.length ||
       !timingSafeEqual(expectedBuf, receivedBuf)
     ) {
-      this.logger.warn(
-        `Webhook signature mismatch for connection ${connectionId} (piece="${appName}")`,
-      );
+      this.logger.warn({ connectionId, appName }, 'Webhook signature mismatch');
       throw new ForbiddenException('Invalid webhook signature');
     }
 

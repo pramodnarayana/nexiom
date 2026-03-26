@@ -275,6 +275,26 @@ services:
     networks:
       - nexiom-network
 
+  # --- Observability: Vector log-shipping sidecar ---
+  # Reads JSON from the `api` container's stdout and ships to OpenObserve.
+  # OPENOBSERVE_URL and OPENOBSERVE_TOKEN are required in production.
+  vector:
+    image: timberio/vector:0.43.0-alpine
+    restart: unless-stopped
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - vector_data:/var/lib/vector
+    environment:
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
+      OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-nexiom}
+      OPENOBSERVE_STREAM: ${OPENOBSERVE_STREAM:-api-logs}
+      OPENOBSERVE_TOKEN: ${OPENOBSERVE_TOKEN:-}
+    depends_on:
+      - api
+    networks:
+      - nexiom-network
+
   # --- Frontend ---
   web:
     build:
@@ -295,3 +315,4 @@ volumes:
   postgres_data:
   redis_data:
   localstack_data:
+  vector_data:
