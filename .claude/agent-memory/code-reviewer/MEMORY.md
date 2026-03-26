@@ -55,7 +55,7 @@
 - Probe protection: negative cache + fallback buckets for unknown/malformed UUIDs
 - Webhook signature: HMAC-SHA256 with timingSafeEqual, per-piece config (secretKeyEnv, signatureHeader, signatureEncoding)
 - Header allowlist: only safe headers persisted to inbound_gateway (strips auth/cookie/signature)
-- Idempotency: 23505 unique_violation on known constraints (idx_l1_ext_id, inbound_gateway_trace_id_unique) returns 202
+Idempotency: 23505 unique_violation on `idx_l1_ext_id` constraint returns 202 (vendor event ID duplicate)
 - Tenant schema isolation: `SET LOCAL search_path` with assertValidSchemaName defense-in-depth
 - ShutdownService: custom SIGTERM/SIGINT handler with 25s hard deadline, replaces NestJS enableShutdownHooks
 - Database: singleton Pool via getDb(), closeDb() called from DatabaseModule.onModuleDestroy
