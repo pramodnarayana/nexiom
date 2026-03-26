@@ -3,6 +3,7 @@ import {
   Inject,
   OnModuleInit,
   OnModuleDestroy,
+  Optional,
   Logger,
 } from "@nestjs/common";
 import { QueueService, QueueName } from "@nexiom/queue";
@@ -15,8 +16,7 @@ import {
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
 import { sql } from "drizzle-orm";
-// Replace with actual TokenRefreshService later
-// import { TokenRefreshService } from '../connections/token-refresh.service.js';
+import { TokenManagerService } from "@nexiom/connectors";
 
 @Injectable()
 export class DeliveryService implements OnModuleInit, OnModuleDestroy {
@@ -27,7 +27,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly pieceRegistry: PieceRegistryService,
-    // private readonly tokenRefreshService: TokenRefreshService
+    @Optional() private readonly tokenManagerService?: TokenManagerService,
   ) {}
 
   onModuleInit() {
@@ -72,9 +72,15 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         reqPayload = ob[0].reqPayload;
       });
 
-      // TODO: Acquire Redis refresh lock lock:refresh:{targetConnectionId}
-      // const credentials = await this.tokenRefreshService.getValidCredentials(targetConnectionId);
-      const credentials = {};
+      if (!this.tokenManagerService) {
+        this.logger.warn(
+          "TokenManagerService not available; skipping delivery to prevent empty credentials",
+        );
+        return;
+      }
+
+      const credentials =
+        await this.tokenManagerService.getValidCredentials(targetConnectionId);
 
       // Get target piece details
       let targetAppName = "";
@@ -91,6 +97,39 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       const piece = this.pieceRegistry.getPiece(targetAppName);
       if (!piece) throw new Error(`Piece ${targetAppName} not registered`);
 
+      if (!piece.executeAction) {
+        throw new Error(`Piece ${targetAppName} has no executeAction defined`);
+      }
+
+      // 2. Add a durable claim/idempotency record before external side effects
+      let claimed = false;
+      await this.db.transaction(async (tx) => {
+        assertValidSchemaName(srcSchemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+        );
+        const claimRes = await tx
+          .update(outboundGateway)
+          .set({
+            status: "PROCESSING",
+            attemptCount: sql`${outboundGateway.attemptCount} + 1`,
+          })
+          .where(
+            sql`${outboundGateway.id} = ${outboundGatewayId} AND (${outboundGateway.status} = 'PENDING' OR ${outboundGateway.status} = 'FAIL')`,
+          )
+          .returning({ id: outboundGateway.id });
+
+        if (claimRes.length > 0) claimed = true;
+      });
+
+      if (!claimed) {
+        this.logger.warn(
+          { event: "l5.claim_failed", outboundGatewayId },
+          "Delivery already claimed or completed by another worker",
+        );
+        return;
+      }
+
       const stitchDocs = await this.db
         .select()
         .from(integrationStitches)
@@ -98,20 +137,42 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         .limit(1);
       const targetObject = stitchDocs[0]?.targetObject ?? "";
 
+      // 3. Call piece.executeAction and derive success/failure
       let resPayload: any = null;
-      let statusCode = 200;
+      let statusCode = 500;
+      let finalStatus: "SUCCESS" | "FAIL" = "FAIL";
 
-      if (piece.executeAction) {
+      try {
         const resp = await piece.executeAction(
           targetObject,
           reqPayload as Record<string, unknown>,
-          credentials,
+          credentials as unknown as Record<string, unknown>,
         );
         resPayload = resp.body;
-        statusCode = resp.statusCode;
+        statusCode = resp.statusCode ?? 200;
+        finalStatus =
+          statusCode >= 200 && statusCode < 300 ? "SUCCESS" : "FAIL";
+      } catch (error_: unknown) {
+        // If the piece throws an unhandled error, we still consider it a failed delivery
+        // and capture the error message to persist in L6.
+        statusCode =
+          typeof error_ === "object" &&
+          error_ !== null &&
+          "statusCode" in error_
+            ? Number((error_ as Record<string, unknown>).statusCode) || 500
+            : 500;
+
+        const errorMessage =
+          error_ instanceof Error ? error_.message : String(error_);
+        resPayload = { error: errorMessage };
+        finalStatus = "FAIL";
+        this.logger.error(
+          { event: "l5.execute_failed", err: errorMessage },
+          "Piece executeAction threw an error",
+        );
       }
 
-      // L6: GEM write + final audit
+      // 4. L6: Persist result and set status according to external API response
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -120,7 +181,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
         await tx
           .update(outboundGateway)
-          .set({ resPayload, statusCode, status: "SUCCESS" })
+          .set({ resPayload, statusCode, status: finalStatus })
           .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
 
         const { syncLog } = buildTenantSchema(srcSchemaName);
@@ -128,13 +189,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           traceId,
           routeId,
           layer: "L6",
-          status: "SUCCESS",
+          status: finalStatus,
           durationMs: Date.now() - start,
         });
       });
 
       this.logger.log(
-        { event: "l6.completed", traceId },
+        { event: "l6.completed", traceId, finalStatus },
         "L6 delivery completed",
       );
     } catch (err: any) {

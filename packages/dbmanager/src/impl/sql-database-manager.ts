@@ -93,6 +93,7 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
             id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            connection_id    UUID        NOT NULL,
             trace_id         UUID        NOT NULL,
             src_req_trace_id UUID        NOT NULL,
             source_id        VARCHAR(255) NOT NULL,
@@ -100,7 +101,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             data             JSONB       NOT NULL,
             version          INTEGER     NOT NULL DEFAULT 1,
             updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_l2_entity UNIQUE (entity_type, source_id)
+            CONSTRAINT uq_l2_entity UNIQUE (connection_id, entity_type, source_id)
         );
     `);
 
@@ -139,7 +140,8 @@ export class SqlDatabaseManager implements DatabaseManager {
             replica_id     UUID        NOT NULL,
             canonical_type VARCHAR(100) NOT NULL,
             data           JSONB       NOT NULL,
-            created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_l3_replica UNIQUE (replica_id)
         );
     `);
 

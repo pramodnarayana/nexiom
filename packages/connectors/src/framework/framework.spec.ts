@@ -149,11 +149,11 @@ describe('Activepieces Framework Native Shim', () => {
         });
 
         const executeActionFn = async (
-            _objectType: string,
-            _payload: Record<string, unknown>,
-            _credentials: Record<string, unknown>,
+            objectType: string,
+            payload: Record<string, unknown>,
+            credentials: Record<string, unknown>,
         ): Promise<VendorResponse> => {
-            return { statusCode: 201, body: { id: '123' } };
+            return { statusCode: 201, body: { id: '123', objectType, payload, credentials } };
         };
 
         const piece = createPiece({
@@ -168,6 +168,14 @@ describe('Activepieces Framework Native Shim', () => {
 
         expect(piece.executeAction).toBeDefined();
         const result = await piece.executeAction!('Account', { Name: 'Acme' }, { token: 'abc' });
-        expect(result).toEqual({ statusCode: 201, body: { id: '123' } });
+        expect(result).toEqual({ 
+            statusCode: 201, 
+            body: { 
+                id: '123',
+                objectType: 'Account',
+                payload: { Name: 'Acme' },
+                credentials: { token: 'abc' }
+            } 
+        });
     });
 });

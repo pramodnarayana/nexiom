@@ -15,7 +15,7 @@ We do not create a repository for every customer. Instead, we group customers in
 
 To prevent filesystem performance issues, we use **Prefix Sharding** inside the repository:
 
-```
+```text
 /fluxnex-shard-001
 └── /shards
     └── /en (Prefix)
@@ -68,7 +68,7 @@ To avoid high-latency disk reads during a sync, the worker nodes **Sync & Cache*
 
 ### B. Security (The Sandbox)
 
-Because this is custom code, we execute it using a **Node.js VM Sandbox** (e.g., `isolated-vm` or `vm2`). This ensures:
+Because this is custom code, we execute it using a **Node.js VM Sandbox** (e.g., `isolated-vm`). We explicitly do not recommend `vm2` as it is deprecated and unsuitable for production due to repeated sandbox escape vulnerabilities (e.g., CVE-2026-22709). This ensures:
 
 - A customer's custom script cannot access `process.env`.
 - It cannot perform unauthorized network calls.

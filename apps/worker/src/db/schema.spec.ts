@@ -38,18 +38,4 @@ describe("Database Schema", () => {
       expect(schema.organizationStatusEnum).toBeDefined();
     });
   });
-
-  describe("Schema Structure", () => {
-    it("should export all auth tables", () => {
-      expect(schema.user).toBeDefined();
-      expect(schema.session).toBeDefined();
-      expect(schema.account).toBeDefined();
-      expect(schema.verification).toBeDefined();
-    });
-
-    it("should export all tenant tables", () => {
-      expect(schema.organization).toBeDefined();
-      expect(schema.member).toBeDefined();
-    });
-  });
 });

@@ -112,12 +112,12 @@ describe("DatabaseManager", () => {
   describe("Environment Safety", () => {
     it("should allow operations in test environment", async () => {
       process.env.NODE_ENV = "test";
-      await expect(manager.dropAll()).resolves.not.toThrow();
+      await expect(manager.dropAll()).resolves.toBeUndefined();
     });
 
     it("should allow operations in development environment", async () => {
       process.env.NODE_ENV = "development";
-      await expect(new DatabaseManager().dropAll()).resolves.not.toThrow();
+      await expect(new DatabaseManager().dropAll()).resolves.toBeUndefined();
     });
 
     it("should block destructive operations in production", async () => {
@@ -208,7 +208,10 @@ describe("DatabaseManager", () => {
             sql.includes("information_schema.tables")
           ) {
             return {
-              rows: [{ table_name: "user" }, { table_name: "session" }],
+              rows: [
+                { table_schema: "public", table_name: "user" },
+                { table_schema: "public", table_name: "session" },
+              ],
             };
           }
           return { rows: [] };
@@ -219,7 +222,9 @@ describe("DatabaseManager", () => {
 
       // Verify TRUNCATE call was made with found tables
       expect(clientInstance.query).toHaveBeenCalledWith(
-        expect.stringMatching(/TRUNCATE TABLE "user", "session" CASCADE;/),
+        expect.stringMatching(
+          /TRUNCATE TABLE "public"."user", "public"."session" CASCADE;/,
+        ),
       );
     });
   });

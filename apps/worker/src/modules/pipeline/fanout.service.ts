@@ -19,6 +19,7 @@ import {
   StorageResolverService,
   evaluateConditions,
   hydratePayload,
+  Condition,
 } from "@nexiom/engine";
 import { sql } from "drizzle-orm";
 
@@ -93,7 +94,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       });
 
       for (const stitch of stitches) {
-        const conditions = stitch.syncCondition as Record<string, any>[];
+        const conditions = stitch.syncCondition as Condition[];
         const matched = evaluateConditions(conditions, normalizedData);
 
         if (!matched) {
@@ -120,8 +121,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         let hydratedPayload = normalizedData;
         if (mappings.length > 0) {
           hydratedPayload = hydratePayload(
-            mappings[0].mappingRules as any[],
-            normalizedData,
+            mappings[0].mappingRules as import("@nexiom/engine").Rule[],
+            normalizedData as Record<string, unknown>,
           );
         }
 
@@ -143,14 +144,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             .returning({ id: outboundGateway.id });
 
           outboundId = outbound.id;
-
-          await tx.insert(syncLog).values({
-            traceId,
-            routeId: stitch.id,
-            layer: "L4",
-            status: "SUCCESS",
-            durationMs: Date.now() - start,
-          });
         });
 
         // Enqueue Delivery
@@ -160,6 +153,21 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           targetConnectionId: stitch.destConnectionId,
           routeId: stitch.id,
           outboundGatewayId: outboundId,
+        });
+
+        // Write syncLog L4/SUCCESS only after successful publish
+        await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          await tx.insert(syncLog).values({
+            traceId,
+            routeId: stitch.id,
+            layer: "L4",
+            status: "SUCCESS",
+            durationMs: Date.now() - start,
+          });
         });
       }
 

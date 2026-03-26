@@ -15,7 +15,6 @@ export default tseslint.config(
     languageOptions: {
       globals: {
         ...globals.node,
-        ...globals.jest,
       },
       sourceType: 'commonjs',
       parserOptions: {
@@ -35,7 +34,7 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_'
         }
       ],
-      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },

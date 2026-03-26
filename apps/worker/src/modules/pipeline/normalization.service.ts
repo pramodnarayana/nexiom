@@ -85,13 +85,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         if (!replica)
           throw new Error(`Replica record for traceId ${traceId} not found`);
 
-        const inboundRows = await tx
-          .select()
-          .from(inboundGateway)
-          .where(sql`${inboundGateway.traceId} = ${traceId}`)
-          .limit(1);
-        const inbound = inboundRows[0];
-
         let canonicalType = "RAW";
         let canonicalData = replica.data;
 
@@ -106,20 +99,37 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        // Insert into normalized_entity
-        await tx.insert(normalizedEntity).values({
-          traceId,
-          replicaId: replica.id,
-          canonicalType,
-          data: canonicalData as any,
-        });
+        // Insert into normalized_entity idempotently
+        await tx
+          .insert(normalizedEntity)
+          .values({
+            traceId,
+            replicaId: replica.id,
+            canonicalType,
+            data: canonicalData as any,
+          })
+          .onConflictDoNothing({ target: normalizedEntity.replicaId });
+      });
 
-        if (inbound) {
-          await tx
-            .update(inboundGateway)
-            .set({ status: "NORMALIZED" })
-            .where(sql`${inboundGateway.id} = ${inbound.id}`);
-        }
+      // 2. Publish to the next queue
+      await this.queueService.send(QueueName.NormalizedQueue, {
+        traceId,
+        connectionId,
+      });
+
+      // 3. Mark success and audit ONLY after successful enqueue
+      await this.db.transaction(async (tx) => {
+        assertValidSchemaName(schemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+
+        await tx
+          .update(inboundGateway)
+          .set({ status: "NORMALIZED" })
+          .where(
+            sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED'`,
+          );
 
         const durationMs = Date.now() - start;
         await tx.insert(syncLog).values({
@@ -128,11 +138,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           status: "SUCCESS",
           durationMs,
         });
-      });
-
-      await this.queueService.send(QueueName.NormalizedQueue, {
-        traceId,
-        connectionId,
       });
 
       this.logger.log(
@@ -151,12 +156,18 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       try {
         const schemaName =
           await this.storageResolver.resolveSchemaName(connectionId);
-        const { syncLog } = buildTenantSchema(schemaName);
+        const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
         await this.db.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
           await tx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
+
+          await tx
+            .update(inboundGateway)
+            .set({ status: "FAIL" })
+            .where(sql`${inboundGateway.traceId} = ${traceId}`);
+
           await tx.insert(syncLog).values({
             traceId,
             layer: "L3",

@@ -71,13 +71,19 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         }
 
         const entityType = inbound.objectType || "DEFAULT";
-        const sourceId = inbound.extReqId || inbound.traceId;
+        if (!inbound.extReqId) {
+          throw new Error(
+            `Inbound record for traceId ${traceId} is missing extReqId. A stable external identity is required for idempotency.`,
+          );
+        }
+        const sourceId = inbound.extReqId;
 
         // Upsert into replica_entity
         await tx
           .insert(replicaEntity)
           .values({
             traceId, // Current trace ID resolving the replica
+            connectionId,
             srcReqTraceId: inbound.traceId, // The L1 message trace
             entityType,
             sourceId,
@@ -85,7 +91,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             version: 1,
           })
           .onConflictDoUpdate({
-            target: [replicaEntity.entityType, replicaEntity.sourceId],
+            target: [
+              replicaEntity.connectionId,
+              replicaEntity.entityType,
+              replicaEntity.sourceId,
+            ],
             set: {
               data: inbound.payload as any,
               traceId, // Update traceId to the latest run

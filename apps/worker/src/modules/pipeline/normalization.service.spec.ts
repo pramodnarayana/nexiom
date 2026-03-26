@@ -33,6 +33,7 @@ describe("NormalizationService", () => {
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
         };

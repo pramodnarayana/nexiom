@@ -245,22 +245,22 @@ describe('WebhooksController', () => {
     });
   });
 
-  it('does not rethrow when enqueue fails — logs warning instead', async () => {
+  it('throws and logs warning when enqueue fails', async () => {
     queueServiceMock.send.mockRejectedValueOnce(new Error('SQS down'));
 
-    // Give the fire-and-forget promise time to settle
-    await controller.ingest(
-      '00000000-0000-0000-0000-000000000001',
-      { foo: 'bar' },
-      {},
-    );
+    await expect(
+      controller.ingest(
+        '00000000-0000-0000-0000-000000000001',
+        { foo: 'bar' },
+        {},
+      ),
+    ).rejects.toThrow('SQS down');
 
-    // Flush the microtask queue so the .catch() handler runs
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(loggerMock.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'l1.enqueue_failed' }),
-      expect.stringContaining('Failed to enqueue'),
-    );
+    await vi.waitFor(() => {
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'l1.enqueue_failed' }),
+        expect.stringContaining('Failed to enqueue'),
+      );
+    });
   });
 });

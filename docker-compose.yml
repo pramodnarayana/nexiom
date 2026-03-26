@@ -186,6 +186,7 @@ services:
       target: runner
     env_file:
       - apps/api/.env
+    restart: unless-stopped
     environment:
       <<: *common-env
       WINDMILL_BASE_URL: http://windmill_server:8000

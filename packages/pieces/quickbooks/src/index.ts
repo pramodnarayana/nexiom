@@ -275,8 +275,8 @@ export const quickbooks = createPiece({
     return null;
   },
   executeAction: async (_objectType: string, _payload: Record<string, unknown>, _credentials: Record<string, unknown>): Promise<VendorResponse> => {
-    // Stub — real implementation in T034
-    return { statusCode: 200, body: {} };
+    // Fail fast — real implementation in T034
+    throw new Error('QuickBooks executeAction not implemented');
   },
   // NOTE: QuickBooks webhook support is intentionally disabled.
   // QB sends all company events to a single app endpoint identified by

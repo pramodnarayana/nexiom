@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { DeliveryService } from "./delivery.service.js";
-import { QueueService } from "@nexiom/queue";
+import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
+import { TokenManagerService } from "@nexiom/connectors";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("DeliveryService", () => {
@@ -33,6 +34,7 @@ describe("DeliveryService", () => {
           set: vi.fn().mockReturnThis(),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         };
         return cb(tx);
       }),
@@ -51,6 +53,10 @@ describe("DeliveryService", () => {
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: PieceRegistryService, useValue: pieceRegistry },
+        {
+          provide: TokenManagerService,
+          useValue: { getValidCredentials: vi.fn().mockResolvedValue({}) },
+        },
       ],
     }).compile();
 
@@ -59,6 +65,10 @@ describe("DeliveryService", () => {
 
   it("should deliver message and write success", async () => {
     service.onModuleInit();
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.any(Function),
+    );
     const handler = queueService.consume.mock.calls[0][1];
     await handler({
       traceId: "123",
@@ -81,6 +91,7 @@ describe("DeliveryService", () => {
         where: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         execute: vi.fn(),
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
@@ -97,7 +108,7 @@ describe("DeliveryService", () => {
         routeId: "r",
         outboundGatewayId: "o",
       }),
-    ).rejects.toThrow("api error");
+    ).resolves.toBeUndefined();
   });
 
   it("should throw if outbound gateway record not found", async () => {
@@ -121,6 +132,34 @@ describe("DeliveryService", () => {
         outboundGatewayId: "o",
       }),
     ).rejects.toThrow("Outbound gateway record not found");
+  });
+
+  it("should return early if delivery is already claimed by another worker", async () => {
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        traceId: "123",
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("should throw if target connection not found", async () => {

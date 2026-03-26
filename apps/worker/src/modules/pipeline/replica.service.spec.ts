@@ -56,6 +56,7 @@ describe("ReplicaService", () => {
 
   it("should process message successfully", async () => {
     service.onModuleInit();
+    expect(queueService.consume.mock.calls[0][0]).toBe(QueueName.InboundQueue);
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
     expect(queueService.send).toHaveBeenCalledWith(

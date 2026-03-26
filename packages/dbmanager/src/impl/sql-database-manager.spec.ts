@@ -59,7 +59,7 @@ describe('SqlDatabaseManager', () => {
 
         // 1 schema + 4 gateway + 5 replica (2 tables + 3 indexes)
         expect(db._queryMock).toHaveBeenCalledTimes(10);
-        const allSql = db._queryMock.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
         expect(allSql).toContain('inbound_gateway');
         expect(allSql).toContain('replica_entity');
         expect(allSql).toContain('sync_cursor');
@@ -70,16 +70,25 @@ describe('SqlDatabaseManager', () => {
 
         // 1 schema + 4 gateway + 5 replica + 5 normalize (1 table + 4 indexes)
         expect(db._queryMock).toHaveBeenCalledTimes(15);
-        const allSql = db._queryMock.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
         expect(allSql).toContain('normalized_entity');
     });
 
     it('OUTBOUND_ACTIVE calls all five provisioning stages', async () => {
         await manager.applyPlan('ws_test', SchemaPlan.OUTBOUND_ACTIVE);
 
-        // 1 schema + 4 gateway + 5 replica + 5 normalize + 8 outbound (2 tables + 6 indexes)
-        expect(db._queryMock).toHaveBeenCalledTimes(23);
-        const allSql = db._queryMock.mock.calls.map((c: unknown[]) => c[0]).join('\n');
+        const expectedStageCounts = {
+            schema: 1,
+            gateway: 4,
+            replica: 5,
+            normalize: 5,
+            outbound: 8,
+            total: 23
+        };
+
+        expect(db._queryMock).toHaveBeenCalledTimes(expectedStageCounts.total);
+        const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
+        
         expect(allSql).toContain('inbound_gateway');
         expect(allSql).toContain('replica_entity');
         expect(allSql).toContain('sync_cursor');

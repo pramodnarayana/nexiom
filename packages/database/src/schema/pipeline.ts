@@ -103,6 +103,7 @@ export function buildTenantSchema(schemaName: string) {
      */
     const replicaEntity = schema.table('replica_entity', {
         id: uuid('id').defaultRandom().primaryKey(),
+        connectionId: uuid('connection_id').notNull(),
         traceId: uuid('trace_id').notNull(),
         srcReqTraceId: uuid('src_req_trace_id').notNull(),
         sourceId: varchar('source_id', { length: 255 }).notNull(),
@@ -111,7 +112,7 @@ export function buildTenantSchema(schemaName: string) {
         version: integer('version').notNull().default(1),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     }, (table) => [
-        uniqueIndex('idx_l2_unique_entity').on(table.entityType, table.sourceId),
+        uniqueIndex('idx_l2_unique_entity').on(table.connectionId, table.entityType, table.sourceId),
         index('idx_l2_trace').on(table.traceId),
         index('idx_l2_src_req').on(table.srcReqTraceId),
         index('idx_l2_data_gin').using('gin', table.data),
@@ -133,7 +134,7 @@ export function buildTenantSchema(schemaName: string) {
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
         index('idx_l3_trace').on(table.traceId),
-        index('idx_l3_replica').on(table.replicaId),
+        uniqueIndex('idx_l3_replica').on(table.replicaId),
         index('idx_l3_canonical_type').on(table.canonicalType),
         index('idx_l3_data_gin').using('gin', table.data),
     ]);

@@ -14,6 +14,7 @@ COPY packages ./packages
 COPY apps/worker ./apps/worker
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm -r --filter "@nexiom/*" build
 RUN pnpm --filter worker build
 
 # Stage 2: Production

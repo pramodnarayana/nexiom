@@ -11,7 +11,7 @@ const logger = new Logger("DatabaseProvider");
 
 /**
  * Resolves the absolute path to the drizzle migrations folder.
- * Uses process.cwd() which is always the apps/api/ project root
+ * Uses process.cwd() which is always the apps/worker/ project root
  * regardless of whether the code runs as ESM source or compiled CJS in dist/.
  */
 function migrationsPath(): string {
@@ -62,6 +62,14 @@ export const databaseProvider: Provider = {
       await migrate(db, { migrationsFolder });
       logger.log("Database migrations up to date.");
     } catch (error) {
+      try {
+        await pool.end();
+      } catch (closeError) {
+        logger.error(
+          "Failed to cleanly close database pool on fatal migration error",
+          closeError,
+        );
+      }
       logger.fatal(
         "FATAL: Database migration failed. The server will not start with an inconsistent schema.",
         error,

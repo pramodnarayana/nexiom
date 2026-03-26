@@ -119,10 +119,10 @@ export class WebhooksController {
           extReqId,
         });
       });
-      // Fire-and-forget — do not block the 202 response on queue availability.
-      // Failure to enqueue is logged but does not fail the request.
+      // Await queue delivery to ensure durability.
+      // Failure to enqueue throws immediately and aborts the 202 response.
       const traceId = inboundGatewayId;
-      this.queueService
+      await this.queueService
         .send(QueueName.InboundQueue, { traceId, connectionId })
         .catch((err: unknown) => {
           this.logger.warn(
@@ -133,6 +133,7 @@ export class WebhooksController {
             },
             'Failed to enqueue L1 event — delivery will be delayed until retry',
           );
+          throw err;
         });
 
       const durationMs = Date.now() - start;

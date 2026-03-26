@@ -434,8 +434,11 @@ export class DatabaseManager {
     const client = await this.getPgClient();
 
     try {
-      const tables = await this.querySql<{ table_name: string }>(
-        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
+      const tables = await this.querySql<{
+        table_schema: string;
+        table_name: string;
+      }>(
+        `SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`,
         client,
       );
 
@@ -445,7 +448,9 @@ export class DatabaseManager {
       }
 
       const quotedTables = tables
-        .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+        .map(
+          (t) => `"${t.table_schema}"."${t.table_name.replaceAll('"', '""')}"`,
+        )
         .join(", ");
       const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
       await this.execSql(sql, client);

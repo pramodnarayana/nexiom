@@ -1,14 +1,16 @@
 import { Module, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { CursorManagerService } from '@nexiom/engine';
+import {
+  CursorManagerService,
+  PiecesModule,
+  PieceRegistryService,
+} from '@nexiom/engine';
 import { TokenManagerService } from '@nexiom/connectors';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
-import { PiecesModule } from '@nexiom/engine';
-import { PieceRegistryService } from '@nexiom/engine';
 import { WindmillClient } from './windmill.client.js';
 import { HttpWindmillClient } from './http-windmill.client.js';
 import { StubWindmillClient } from './stub-windmill.client.js';

@@ -17,6 +17,8 @@ export type CanonicalType =
 export interface NormalizedRecord {
   canonicalType: CanonicalType;
   data: Record<string, unknown>;
+  sourceId?: string;
+  normalizedAt?: string;
 }
 
 /** Vendor API response from piece.executeAction(). */

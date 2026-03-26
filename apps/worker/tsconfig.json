@@ -21,12 +21,15 @@
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": true,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false,
+    "strictBindCallApply": true,
+    "noFallthroughCasesInSwitch": true,
     "noUnusedParameters": true
   },
   "exclude": [
     "vitest.config.mts",
     "test/vitest-e2e.config.mts"
+  ],
+  "include": [
+    "src/**/*"
   ]
 }

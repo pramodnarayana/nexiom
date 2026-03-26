@@ -68,21 +68,26 @@ describe("FanOutService", () => {
     }).compile();
 
     service = module.get<FanOutService>(FanOutService);
+    service.onModuleInit();
   });
 
   it("should fanout properly if stitches are found", async () => {
-    // Return stitches
-    const queryBuilder = db.select();
-    queryBuilder.then = function (resolve: any) {
-      resolve([
-        {
-          id: "stitch_1",
-          syncCondition: [{ field: "name", op: "eq", value: "hi" }],
-          mappingRules: [],
-        },
-      ]);
+    // Return stitches using pure vitest mock mechanisms
+    const mockQueryBuilder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: function (resolve: any) {
+        resolve([
+          {
+            id: "stitch_1",
+            syncCondition: [{ field: "name", op: "eq", value: "hi" }],
+            mappingRules: [],
+          },
+        ]);
+      },
     };
-    service.onModuleInit();
+    db.select.mockReturnValueOnce(mockQueryBuilder);
+
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
     expect(queueService.send).toHaveBeenCalledWith(
@@ -92,40 +97,51 @@ describe("FanOutService", () => {
   });
 
   it("should skip if conditions do not match", async () => {
-    // Return stitches
-    const queryBuilder = db.select();
-    queryBuilder.then = function (resolve: any) {
-      resolve([
-        {
-          id: "stitch_2",
-          syncCondition: [{ field: "name", op: "eq", value: "bye" }],
-          mappingRules: [],
-        },
-      ]);
+    const mockQueryBuilder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: function (resolve: any) {
+        resolve([
+          {
+            id: "stitch_2",
+            syncCondition: [{ field: "name", op: "eq", value: "bye" }],
+            mappingRules: [],
+          },
+        ]);
+      },
     };
-    service.onModuleInit();
+    db.select.mockReturnValueOnce(mockQueryBuilder);
+
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
     expect(queueService.send).not.toHaveBeenCalled();
   });
 
   it("should return early if no active stitches are found", async () => {
-    const queryBuilder = db.select();
-    queryBuilder.then = function (resolve: any) {
-      resolve([]); // Empty array simulating no stitches
+    const mockQueryBuilder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: function (resolve: any) {
+        resolve([]);
+      },
     };
-    service.onModuleInit();
+    db.select.mockReturnValueOnce(mockQueryBuilder);
+
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
     expect(queueService.send).not.toHaveBeenCalled();
   });
 
   it("should log and throw error if db operation fails", async () => {
-    const queryBuilder = db.select();
-    queryBuilder.then = function (_resolve: any, reject: any) {
-      reject(new Error("DB connection failed"));
+    const mockQueryBuilder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: function (_resolve: any, reject: any) {
+        reject(new Error("DB connection failed"));
+      },
     };
-    service.onModuleInit();
+    db.select.mockReturnValueOnce(mockQueryBuilder);
+
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
