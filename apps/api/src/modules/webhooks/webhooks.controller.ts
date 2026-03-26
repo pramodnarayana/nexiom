@@ -19,7 +19,8 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
+import { QueueService, QueueName } from '@nexiom/queue';
+import { StorageResolverService } from '@nexiom/engine';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 
@@ -55,6 +56,7 @@ export class WebhooksController {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -117,6 +119,22 @@ export class WebhooksController {
           extReqId,
         });
       });
+      // Fire-and-forget — do not block the 202 response on queue availability.
+      // Failure to enqueue is logged but does not fail the request.
+      const traceId = inboundGatewayId;
+      this.queueService
+        .send(QueueName.InboundQueue, { traceId, connectionId })
+        .catch((err: unknown) => {
+          this.logger.warn(
+            {
+              event: 'l1.enqueue_failed',
+              traceId,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            'Failed to enqueue L1 event — delivery will be delayed until retry',
+          );
+        });
+
       const durationMs = Date.now() - start;
       this.logger.assign({ durationMs });
       this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');

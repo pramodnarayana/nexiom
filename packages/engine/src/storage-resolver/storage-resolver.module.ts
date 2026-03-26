@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { StorageResolverService } from './storage-resolver.service.js';
+import { StorageResolverService } from '@nexiom/engine';
 
 @Module({
   providers: [StorageResolverService],

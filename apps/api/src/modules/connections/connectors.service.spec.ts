@@ -3,7 +3,7 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
-import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/connectors/framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import {

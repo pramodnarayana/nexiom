@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { PieceRegistryService } from './piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 
 interface ConnectionRow {

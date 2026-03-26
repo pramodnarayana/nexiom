@@ -12,10 +12,22 @@ export enum SchemaPlan {
     GATEWAY_ACTIVE = 'GATEWAY_ACTIVE',
 
     /**
-     * The L2 Unified Replica tables (replica_entity)
+     * The L2 Unified Replica tables (replica_entity, sync_cursor)
      * Provisioned when an object mapping is initialized.
      */
     REPLICA_ACTIVE = 'REPLICA_ACTIVE',
+
+    /**
+     * The L3 Normalization tables (normalized_entity)
+     * Provisioned when normalization is activated for a connection.
+     */
+    NORMALIZE_ACTIVE = 'NORMALIZE_ACTIVE',
+
+    /**
+     * The L5/L6 Outbound tables (outbound_gateway, sync_log)
+     * Provisioned when delivery is activated for a connection.
+     */
+    OUTBOUND_ACTIVE = 'OUTBOUND_ACTIVE',
 }
 
 /**

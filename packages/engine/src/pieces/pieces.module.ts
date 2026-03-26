@@ -2,9 +2,8 @@ import { Module } from '@nestjs/common';
 import {
   PieceRegistryService,
   PIECES,
-} from '../trigger/piece-registry.service.js';
+} from './piece-registry.service.js';
 import { PieceLoaderService } from './piece-loader.service.js';
-import { DbModule } from '../../db/db.module.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import type { Piece } from '@nexiom/connectors';
@@ -16,7 +15,7 @@ import type { Piece } from '@nexiom/connectors';
  * code changes required when adding or disabling integrations.
  */
 @Module({
-  imports: [DbModule],
+  imports: [],
   providers: [
     PieceLoaderService,
     {

@@ -17,7 +17,7 @@ import {
 } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { TokenManagerService } from '@nexiom/connectors';
-import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import type {
   ObjectDescriptor,
   FieldDescriptor,

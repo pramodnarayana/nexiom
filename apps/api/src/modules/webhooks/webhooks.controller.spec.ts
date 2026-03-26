@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { QueueService, QueueName } from '@nexiom/queue';
 import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
-import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
+import { StorageResolverService } from '@nexiom/engine';
 
 const loggerMock = {
   assign: vi.fn(),
@@ -37,6 +38,10 @@ function makeDbMock() {
   };
 }
 
+const queueServiceMock = {
+  send: vi.fn().mockResolvedValue(undefined),
+};
+
 describe('WebhooksController', () => {
   let controller: WebhooksController;
   let db: ReturnType<typeof makeDbMock>;
@@ -54,6 +59,7 @@ describe('WebhooksController', () => {
       providers: [
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        { provide: QueueService, useValue: queueServiceMock },
         {
           provide: getLoggerToken(WebhooksController.name),
           useValue: loggerMock,
@@ -223,5 +229,38 @@ describe('WebhooksController', () => {
 
     expect(capturedValues).toBeDefined();
     expect(capturedValues?.['extReqId']).toBe('qb-event-456');
+  });
+
+  it('enqueues to InboundQueue on success path', async () => {
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      { foo: 'bar' },
+      {},
+    );
+
+    expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      traceId: expect.any(String),
+      connectionId: '00000000-0000-0000-0000-000000000001',
+    });
+  });
+
+  it('does not rethrow when enqueue fails — logs warning instead', async () => {
+    queueServiceMock.send.mockRejectedValueOnce(new Error('SQS down'));
+
+    // Give the fire-and-forget promise time to settle
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      { foo: 'bar' },
+      {},
+    );
+
+    // Flush the microtask queue so the .catch() handler runs
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'l1.enqueue_failed' }),
+      expect.stringContaining('Failed to enqueue'),
+    );
   });
 });

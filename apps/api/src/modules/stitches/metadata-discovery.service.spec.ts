@@ -9,7 +9,7 @@ import { TokenManagerService } from '@nexiom/connectors';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
-import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 
 const CONN_ID = 'conn-uuid-1';
 const ORG_ID = 'org-uuid-1';

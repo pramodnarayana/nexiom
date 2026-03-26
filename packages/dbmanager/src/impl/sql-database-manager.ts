@@ -36,11 +36,21 @@ export class SqlDatabaseManager implements DatabaseManager {
             return;
         }
 
-        // 3. (Future) Ensure Replica Tables exist
-        // TODO: implement provisionReplicaTables(schemaName) before enabling REPLICA_ACTIVE in production
+        // 3. Ensure Replica Tables exist
+        await this.provisionReplicaTables(schemaName);
         if (plan === SchemaPlan.REPLICA_ACTIVE) {
             return;
         }
+
+        // 4. Ensure Normalize Tables exist
+        await this.provisionNormalizeTables(schemaName);
+        if (plan === SchemaPlan.NORMALIZE_ACTIVE) {
+            return;
+        }
+
+        // 5. Ensure Outbound Tables exist
+        await this.provisionOutboundTables(schemaName);
+        // OUTBOUND_ACTIVE — all tables provisioned
     }
 
     private async provisionGatewayTables(schemaName: string): Promise<void> {
@@ -76,6 +86,141 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_inbound_gateway_created_at
             ON "${schemaName}".inbound_gateway (created_at DESC);
+    `);
+    }
+
+    private async provisionReplicaTables(schemaName: string): Promise<void> {
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
+            id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id         UUID        NOT NULL,
+            src_req_trace_id UUID        NOT NULL,
+            source_id        VARCHAR(255) NOT NULL,
+            entity_type      VARCHAR(100) NOT NULL,
+            data             JSONB       NOT NULL,
+            version          INTEGER     NOT NULL DEFAULT 1,
+            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_l2_entity UNIQUE (entity_type, source_id)
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l2_trace
+            ON "${schemaName}".replica_entity (trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l2_src_req
+            ON "${schemaName}".replica_entity (src_req_trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l2_data_gin
+            ON "${schemaName}".replica_entity USING gin (data);
+    `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".sync_cursor (
+            id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            connection_id         UUID        NOT NULL,
+            entity_type           VARCHAR(100) NOT NULL,
+            last_sync_timestamp   VARCHAR(255) NOT NULL,
+            updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_cursor UNIQUE (connection_id, entity_type)
+        );
+    `);
+    }
+
+    private async provisionNormalizeTables(schemaName: string): Promise<void> {
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_entity (
+            id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id       UUID        NOT NULL,
+            replica_id     UUID        NOT NULL,
+            canonical_type VARCHAR(100) NOT NULL,
+            data           JSONB       NOT NULL,
+            created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l3_trace
+            ON "${schemaName}".normalized_entity (trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l3_replica
+            ON "${schemaName}".normalized_entity (replica_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l3_canonical
+            ON "${schemaName}".normalized_entity (canonical_type);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l3_data_gin
+            ON "${schemaName}".normalized_entity USING gin (data);
+    `);
+    }
+
+    private async provisionOutboundTables(schemaName: string): Promise<void> {
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".outbound_gateway (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            route_id      UUID        NOT NULL,
+            req_payload   JSONB       NOT NULL,
+            res_payload   JSONB,
+            status_code   INTEGER,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING')),
+            attempt_count INTEGER     NOT NULL DEFAULT 0,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l5_trace
+            ON "${schemaName}".outbound_gateway (trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l5_route
+            ON "${schemaName}".outbound_gateway (route_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_l5_status
+            ON "${schemaName}".outbound_gateway (status);
+    `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".sync_log (
+            id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id    UUID        NOT NULL,
+            route_id    UUID,
+            layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
+            status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY')),
+            duration_ms INTEGER,
+            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_trace
+            ON "${schemaName}".sync_log (trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_route
+            ON "${schemaName}".sync_log (route_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_trace_layer
+            ON "${schemaName}".sync_log (trace_id, layer);
     `);
     }
 }

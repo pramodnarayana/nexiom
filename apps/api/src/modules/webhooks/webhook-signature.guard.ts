@@ -13,7 +13,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION, appConnections } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
-import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import {
   WEBHOOK_RESOLVED_CONNECTION,
   type WebhookResolvedConnection,
