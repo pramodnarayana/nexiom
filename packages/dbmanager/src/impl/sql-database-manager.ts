@@ -141,8 +141,15 @@ export class SqlDatabaseManager implements DatabaseManager {
             canonical_type VARCHAR(100) NOT NULL,
             data           JSONB       NOT NULL,
             created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            published_at   TIMESTAMPTZ,
             CONSTRAINT uq_l3_replica UNIQUE (replica_id)
         );
+    `);
+
+        // Idempotently add published_at to pre-existing schemas.
+        await this.db.$client.query(`
+        ALTER TABLE "${schemaName}".normalized_entity
+            ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
     `);
 
         await this.db.$client.query(`
@@ -176,8 +183,19 @@ export class SqlDatabaseManager implements DatabaseManager {
                           CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING')),
             attempt_count INTEGER     NOT NULL DEFAULT 0,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_outbound_trace_route UNIQUE (trace_id, route_id)
         );
+    `);
+
+        // Idempotently patch pre-existing schemas provisioned before this constraint.
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".outbound_gateway
+                ADD CONSTRAINT uq_outbound_trace_route UNIQUE (trace_id, route_id);
+        EXCEPTION WHEN duplicate_table  THEN NULL;
+                 WHEN duplicate_object  THEN NULL;
+        END $$;
     `);
 
         await this.db.$client.query(`
@@ -203,8 +221,21 @@ export class SqlDatabaseManager implements DatabaseManager {
             layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
             status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY')),
             duration_ms INTEGER,
-            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_sync_log_trace_layer_status UNIQUE (trace_id, layer, status)
         );
+    `);
+
+        // Idempotently add the unique constraint to pre-existing schemas that
+        // were provisioned before this constraint was introduced.
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".sync_log
+                ADD CONSTRAINT uq_sync_log_trace_layer_status
+                UNIQUE (trace_id, layer, status);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                 WHEN duplicate_object THEN NULL;
+        END $$;
     `);
 
         await this.db.$client.query(`

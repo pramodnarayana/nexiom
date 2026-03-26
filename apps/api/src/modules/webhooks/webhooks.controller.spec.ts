@@ -23,14 +23,16 @@ function makeDbMock() {
     .mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   const executeMock = vi.fn().mockResolvedValue(undefined);
 
-  const updateMock = vi.fn().mockReturnThis();
+  // Return a fluent builder that mirrors Drizzle's tx.update(...).set(...).where(...) chain.
+  const setMock = vi.fn().mockReturnThis();
+  const whereMock = vi.fn().mockResolvedValue(undefined);
+  const updateBuilder = { set: setMock, where: whereMock };
+  const updateMock = vi.fn().mockReturnValue(updateBuilder);
 
   const txMock = {
     execute: executeMock,
     insert: insertMock,
     update: updateMock,
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue(undefined),
   };
 
   return {
@@ -40,6 +42,7 @@ function makeDbMock() {
     _tx: txMock,
     _insertMock: insertMock,
     _executeMock: executeMock,
+    _setMock: setMock,
   };
 }
 
@@ -265,6 +268,12 @@ describe('WebhooksController', () => {
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({ event: 'l1.enqueue_failed' }),
         expect.stringContaining('Failed to enqueue'),
+      );
+
+      // The controller must also mark the inbound_gateway record as PENDING
+      // so the worker can pick it up on its next poll cycle.
+      expect(db._setMock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'PENDING' }),
       );
     });
   });

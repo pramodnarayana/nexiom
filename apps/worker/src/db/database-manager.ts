@@ -128,7 +128,9 @@ export class DatabaseManager {
   }
 
   /**
-   * Check if current environment allows destructive operations
+   * Check if current environment allows destructive operations.
+   * Also validates that DATABASE_URL points to a local host so destructive
+   * operations can never accidentally reach a remote/production database.
    */
   private assertSafeEnvironment(): void {
     const env = process.env.NODE_ENV;
@@ -136,6 +138,32 @@ export class DatabaseManager {
       throw new Error(
         `Destructive database operations only allowed in: ${this.ALLOWED_ENVS.join(", ")}. Current: ${env || "unset"}`,
       );
+    }
+
+    // Guard against accidental destructive ops against remote databases even
+    // when NODE_ENV is permissive. Mirrors the host check in provisionLocal().
+    // Skip if DATABASE_URL is absent — resolvePgModule() will throw the canonical
+    // "DATABASE_URL is not defined" error when the connection is actually attempted.
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+      let host: string | null = null;
+      try {
+        host = new URL(dbUrl).hostname;
+      } catch {
+        // unparseable URL — treat as non-local
+      }
+      // "" → Unix socket (local); known loopback aliases are also local.
+      const isRemote =
+        host !== "" &&
+        host !== "localhost" &&
+        host !== "127.0.0.1" &&
+        host !== "::1";
+      if (isRemote) {
+        throw new Error(
+          `Destructive database operations refused: DATABASE_URL points to a non-local host ("${host ?? "unparseable"}"). ` +
+            `These operations are only permitted against a local database.`,
+        );
+      }
     }
   }
 
@@ -169,6 +197,19 @@ export class DatabaseManager {
     const client = await this.getPgClient();
 
     try {
+      // Drop tenant (ws_*) schemas first so foreign keys don't block public
+      const tenantSchemas = await this.querySql<{ nspname: string }>(
+        `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'ws_%' ORDER BY nspname;`,
+        client,
+      );
+      for (const { nspname } of tenantSchemas) {
+        await this.execSql(
+          `DROP SCHEMA IF EXISTS "${nspname}" CASCADE;`,
+          client,
+        );
+        console.log(`  ✓ Dropped tenant schema: ${nspname}`);
+      }
+
       // Drop drizzle schema (migration tracking)
       await this.execSql("DROP SCHEMA IF EXISTS drizzle CASCADE;", client);
       console.log("  ✓ Dropped drizzle schema");
@@ -441,7 +482,8 @@ export class DatabaseManager {
     const client = await this.getPgClient();
 
     try {
-      const tables = await this.querySql<{
+      // ── public schema tables ────────────────────────────────────────────────
+      const publicTables = await this.querySql<{
         table_schema: string;
         table_name: string;
       }>(
@@ -449,17 +491,38 @@ export class DatabaseManager {
         client,
       );
 
-      if (tables.length === 0) {
+      if (publicTables.length > 0) {
+        const quotedPublic = publicTables
+          .map((t) => `"public"."${t.table_name.replaceAll('"', '""')}"`)
+          .join(", ");
+        await this.execSql(`TRUNCATE TABLE ${quotedPublic} CASCADE;`, client);
+        console.log(`  ✓ Truncated ${publicTables.length} public tables`);
+      } else {
         console.log("  ℹ️  No tables found in public schema to truncate");
-        return;
       }
 
-      const quotedTables = tables
-        .map((t) => `"public"."${t.table_name.replaceAll('"', '""')}"`)
-        .join(", ");
-      const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
-      await this.execSql(sql, client);
-      console.log(`  ✓ Truncated ${tables.length} tables`);
+      // ── tenant (ws_*) schema tables ─────────────────────────────────────────
+      const tenantSchemas = await this.querySql<{ nspname: string }>(
+        `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'ws_%' ORDER BY nspname;`,
+        client,
+      );
+
+      for (const { nspname } of tenantSchemas) {
+        const tenantTables = await this.querySql<{ table_name: string }>(
+          `SELECT table_name FROM information_schema.tables WHERE table_schema = '${nspname.replaceAll("'", "''")}' AND table_type = 'BASE TABLE';`,
+          client,
+        );
+
+        if (tenantTables.length > 0) {
+          const quotedTenant = tenantTables
+            .map((t) => `"${nspname}"."${t.table_name.replaceAll('"', '""')}"`)
+            .join(", ");
+          await this.execSql(`TRUNCATE TABLE ${quotedTenant} CASCADE;`, client);
+          console.log(
+            `  ✓ Truncated ${tenantTables.length} tables in ${nspname}`,
+          );
+        }
+      }
     } catch (error) {
       console.log(`  ⚠️  Truncate failed: ${String(error)}`);
       throw error;

@@ -120,7 +120,9 @@ export class WebhooksController {
         });
       });
       // Await queue delivery to ensure durability.
-      // Failure to enqueue throws immediately and aborts the 202 response.
+      // Enqueue failures do NOT abort the 202 response; instead we mark the
+      // inbound_gateway record as PENDING so the worker can pick it up on its
+      // next poll cycle.
       const traceId = inboundGatewayId;
       await this.queueService
         .send(QueueName.InboundQueue, { traceId, connectionId })
@@ -134,16 +136,33 @@ export class WebhooksController {
             'Failed to enqueue L1 event — delivery will be delayed until retry',
           );
 
-          await this.db.transaction(async (tx) => {
-            assertValidSchemaName(schemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          // Mark the record PENDING so the worker retry poll can pick it up.
+          // We swallow any DB error here: failing to update the status should
+          // not prevent the controller from returning 202, since the record was
+          // already durably written in the first transaction above.
+          try {
+            await this.db.transaction(async (tx) => {
+              assertValidSchemaName(schemaName);
+              await tx.execute(
+                sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+              );
+              await tx
+                .update(inboundGateway)
+                .set({ status: 'PENDING' })
+                .where(sql`${inboundGateway.traceId} = ${traceId}`);
+            });
+          } catch (dbErr: unknown) {
+            this.logger.error(
+              {
+                event: 'l1.pending_update_failed',
+                traceId,
+                schemaName,
+                err: dbErr instanceof Error ? dbErr.message : String(dbErr),
+              },
+              'Failed to mark inbound_gateway as PENDING after enqueue failure',
             );
-            await tx
-              .update(inboundGateway)
-              .set({ status: 'PENDING' })
-              .where(sql`${inboundGateway.traceId} = ${traceId}`);
-          });
+            // Do not rethrow — the record is durable; status update is best-effort.
+          }
         });
 
       const durationMs = Date.now() - start;

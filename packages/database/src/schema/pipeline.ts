@@ -132,6 +132,11 @@ export function buildTenantSchema(schemaName: string) {
         canonicalType: varchar('canonical_type', { length: 100 }).notNull(),
         data: jsonb('data').notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+        // Durable published marker — set atomically when the record is enqueued
+        // to NormalizedQueue. Null = not yet enqueued; non-null = already published.
+        // Retries check this column before calling queueService.send() to make
+        // L3 enqueue idempotent without a separate outbox table.
+        publishedAt: timestamp('published_at', { withTimezone: true }),
     }, (table) => [
         index('idx_l3_trace').on(table.traceId),
         uniqueIndex('idx_l3_replica').on(table.replicaId),

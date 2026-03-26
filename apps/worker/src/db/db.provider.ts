@@ -2,7 +2,8 @@ import { Logger, Provider } from "@nestjs/common";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as schema from "./schema.js";
 
 import { DATABASE_CONNECTION } from "@nexiom/database";
@@ -10,12 +11,18 @@ import { DATABASE_CONNECTION } from "@nexiom/database";
 const logger = new Logger("DatabaseProvider");
 
 /**
- * Resolves the absolute path to the drizzle migrations folder.
- * Uses process.cwd() which is always the apps/worker/ project root
- * regardless of whether the code runs as ESM source or compiled CJS in dist/.
+ * Resolves the absolute path to the drizzle migrations folder relative to
+ * this module's location so the path is correct whether the worker starts
+ * from any working directory or runs as compiled CJS from dist/.
+ *
+ * Compiled layout: dist/db/db.provider.js
+ *   → dirname = dist/db/
+ *   → join(dirname, '../../packages/database/drizzle')
+ *   → <monorepo-root>/packages/database/drizzle  ✓
  */
 function migrationsPath(): string {
-  return join(process.cwd(), "../../packages/database/drizzle");
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  return join(moduleDir, "../../packages/database/drizzle");
 }
 
 export const databaseProvider: Provider = {

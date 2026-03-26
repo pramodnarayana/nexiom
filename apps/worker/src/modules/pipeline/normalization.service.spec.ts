@@ -22,7 +22,7 @@ describe("NormalizationService", () => {
       limit: vi.fn().mockResolvedValue([{ appName: "test_app" }]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {
-          execute: vi.fn(),
+          execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
@@ -120,5 +120,46 @@ describe("NormalizationService", () => {
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("Piece test_app not registered");
+  });
+
+  it("should skip enqueue when record was already published (rowCount=0)", async () => {
+    // Make the stamp UPDATE return rowCount=0 (already published)
+    db.transaction.mockImplementation(async (cb: any) => {
+      const tx = {
+        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
+          ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      };
+      return cb(tx);
+    });
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({ traceId: "123", connectionId: "456" });
+    // send should NOT be called because the record was already published
+    expect(queueService.send).not.toHaveBeenCalled();
+  });
+
+  it("should swallow inner catch error in error handler and rethrow original", async () => {
+    // First transaction throws; error-handler transaction also throws → swallowed
+    db.transaction
+      .mockRejectedValueOnce(new Error("db fail")) // main tx fails
+      .mockRejectedValueOnce(new Error("rollback")); // error-handler tx fails → swallowed
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("db fail");
   });
 });

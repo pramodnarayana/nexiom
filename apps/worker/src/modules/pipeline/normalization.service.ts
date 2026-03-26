@@ -70,6 +70,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         throw new Error(`Piece ${connectionAppName} not registered`);
       }
 
+      // Hoisted so it is readable after the transaction resolves.
+      let isNewlyPublished = false;
+
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
@@ -99,7 +102,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        // Insert into normalized_entity idempotently
+        // Insert normalizedEntity idempotently (ON CONFLICT DO NOTHING on replicaId)
         await tx
           .insert(normalizedEntity)
           .values({
@@ -109,13 +112,33 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             data: canonicalData as any,
           })
           .onConflictDoNothing({ target: normalizedEntity.replicaId });
+
+        // Atomically stamp published_at only if it is still NULL.
+        // Uses raw SQL to reference the column name, making this resilient to
+        // type cache staleness across schema migrations.
+        // rowCount: 1 = newly stamped (enqueue needed), 0 = already published (skip).
+        const stampResult = await tx.execute(
+          sql`UPDATE ${normalizedEntity}
+              SET    published_at = NOW()
+              WHERE  ${normalizedEntity.replicaId} = ${replica.id}
+                AND  published_at IS NULL`,
+        );
+        isNewlyPublished =
+          (stampResult as unknown as { rowCount: number }).rowCount > 0;
       });
 
-      // 2. Publish to the next queue — only mark success AFTER durable enqueue
-      await this.queueService.send(QueueName.NormalizedQueue, {
-        traceId,
-        connectionId,
-      });
+      if (isNewlyPublished) {
+        // 2. Publish to the next queue — only when the marker was freshly stamped
+        await this.queueService.send(QueueName.NormalizedQueue, {
+          traceId,
+          connectionId,
+        });
+      } else {
+        this.logger.debug(
+          { event: "l3.skip_enqueue", traceId },
+          "L3 already published — skipping duplicate enqueue",
+        );
+      }
 
       // 3. Mark NORMALIZED and write L3/SUCCESS audit — runs only after send() resolves
       await this.db.transaction(async (tx) => {
@@ -141,7 +164,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             status: "SUCCESS",
             durationMs,
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing({
+            target: [syncLog.traceId, syncLog.layer, syncLog.status],
+          });
       });
 
       this.logger.log(
@@ -183,7 +208,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               status: "FAIL",
               durationMs: Date.now() - start,
             })
-            .onConflictDoNothing();
+            .onConflictDoNothing({
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+            });
         });
       } catch {
         // ignore rollback errors

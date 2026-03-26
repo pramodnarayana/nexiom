@@ -213,4 +213,71 @@ describe("DeliveryService", () => {
       }),
     ).rejects.toThrow("Piece test not registered");
   });
+
+  it("should throw if piece has no executeAction", async () => {
+    pieceRegistry.getPiece.mockReturnValueOnce({
+      /* no executeAction */
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        traceId: "123",
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).rejects.toThrow("has no executeAction defined");
+  });
+
+  it("should extract statusCode from a thrown error object with statusCode property", async () => {
+    const errWithCode = { statusCode: 422, message: "Unprocessable" };
+    pieceRegistry.getPiece().executeAction.mockRejectedValueOnce(errWithCode);
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        traceId: "123",
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("should swallow rollback error and rethrow original error", async () => {
+    // First resolveSchemaName works; make the outer try fail by rejecting connDocs lookup.
+    // Then the error-handler resolveSchemaName also fails → swallowed by inner catch {}.
+    db.limit.mockResolvedValueOnce([]);
+    storageResolver.resolveSchemaName
+      .mockResolvedValueOnce("ws_1") // outer try: fetch outbound tx → ok
+      .mockRejectedValueOnce(new Error("rollback fail")); // error-handler → swallowed
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        traceId: "123",
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).rejects.toThrow("Target connection tgt not found");
+  });
 });

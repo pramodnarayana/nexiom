@@ -42,7 +42,7 @@ vi.mock("node:child_process");
 vi.mock("pg", () => {
   const mClient = {
     connect: vi.fn(),
-    query: vi.fn(),
+    query: vi.fn().mockResolvedValue({ rows: [] }),
     end: vi.fn(),
   };
   return { Client: vi.fn(() => mClient) };

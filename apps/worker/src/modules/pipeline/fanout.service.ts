@@ -141,6 +141,16 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               reqPayload: hydratedPayload,
               status: "PENDING",
             })
+            .onConflictDoUpdate({
+              target: [outboundGateway.traceId, outboundGateway.routeId],
+              set: {
+                // Merge updated payload in case mappings changed, reset status for re-delivery
+                reqPayload: hydratedPayload,
+                status: "PENDING",
+                attemptCount: sql`${outboundGateway.attemptCount} + 1`,
+                updatedAt: sql`NOW()`,
+              },
+            })
             .returning({ id: outboundGateway.id });
 
           outboundId = outbound.id;

@@ -13,9 +13,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages ./packages
 COPY apps/worker ./apps/worker
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm -r --filter "@nexiom/*" build
-RUN pnpm --filter worker build
+RUN pnpm install --frozen-lockfile && \
+    pnpm -r --filter "@nexiom/*" build && \
+    pnpm --filter worker build
 
 # Stage 2: Production
 FROM node:20-alpine AS runner
@@ -41,5 +41,15 @@ COPY --from=builder --chown=nodejs:nodejs /app/apps/worker/dist ./apps/worker/di
 COPY --from=builder --chown=nodejs:nodejs /app/packages ./packages
 
 USER nodejs
+
+# Install the healthcheck script used by the HEALTHCHECK instruction below.
+COPY --chown=nodejs:nodejs apps/worker/worker-healthcheck.sh /usr/local/bin/worker-healthcheck.sh
+# Temporarily elevate to root to chmod; then drop back to the non-root user.
+USER root
+RUN chmod +x /usr/local/bin/worker-healthcheck.sh
+USER nodejs
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD ["/usr/local/bin/worker-healthcheck.sh"]
 
 CMD ["node", "apps/worker/dist/main.js"]

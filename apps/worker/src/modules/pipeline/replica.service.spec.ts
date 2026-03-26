@@ -92,4 +92,49 @@ describe("ReplicaService", () => {
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("Inbound record for traceId 123 not found");
   });
+
+  it("should throw if inbound record is missing extReqId", async () => {
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "foo",
+            extReqId: null,
+            id: "1",
+            payload: {},
+          },
+        ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("missing extReqId");
+  });
+
+  it("should log nested error when error-handler transaction also fails", async () => {
+    // Make error-handler tx reject → caught by inner catch(error_) and logged via this.logger.error
+    db.transaction
+      .mockRejectedValueOnce(new Error("db fail")) // main tx fails
+      .mockRejectedValueOnce(new Error("rollback fail")); // error-handler tx → caught + logged
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    // Logger routes through process.stderr; spy on stderr.write to verify log output
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("db fail");
+    // NestJS serialises the log to stderr; verify the message appears somewhere
+    const output = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(output).toMatch(/Failed to write L2 error state/);
+    stderrSpy.mockRestore();
+  });
 });

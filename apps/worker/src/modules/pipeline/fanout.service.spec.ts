@@ -39,9 +39,14 @@ describe("FanOutService", () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
+            }),
+            returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
+          }),
+        }),
         then: function (resolve: any) {
           resolve([
             {
@@ -52,7 +57,7 @@ describe("FanOutService", () => {
             },
           ]);
         },
-        execute: vi.fn(),
+        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
       };
       return cb(tx);
     });
@@ -146,5 +151,50 @@ describe("FanOutService", () => {
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("DB connection failed");
+  });
+
+  it("should run hydratePayload when field mappings are found", async () => {
+    // First db.select call returns stitch; second returns a non-empty mapping
+    let selectCallIdx = 0;
+    db.select.mockImplementation(() => {
+      selectCallIdx++;
+      if (selectCallIdx === 1) {
+        // stitches
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          then: function (resolve: any) {
+            resolve([
+              {
+                id: "stitch_1",
+                syncCondition: [{ field: "name", op: "eq", value: "hi" }],
+                destConnectionId: "dest",
+              },
+            ]);
+          },
+        };
+      }
+      // fieldMappings — return a non-empty mapping with one rule
+      return {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        then: function (resolve: any) {
+          resolve([
+            {
+              mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+              sourceCanonical: "RAW",
+            },
+          ]);
+        },
+      };
+    });
+
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({ traceId: "123", connectionId: "456" });
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.any(Object),
+    );
   });
 });
