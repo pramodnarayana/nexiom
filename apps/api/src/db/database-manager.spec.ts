@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process';
 // Hoisted mocks for dynamic imports
 const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
   drizzleMocks: {
+    update: vi.fn(),
     insert: vi.fn(),
     transaction: vi.fn(),
     query: {
@@ -51,6 +52,7 @@ vi.mock('pg', () => {
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
+    update: drizzleMocks.update,
     insert: drizzleMocks.insert,
     transaction: drizzleMocks.transaction,
     query: drizzleMocks.query,
@@ -99,6 +101,17 @@ describe('DatabaseManager', () => {
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);
+
+    const makeUpdateChain = () => {
+      const chain = {
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(undefined),
+        }),
+      };
+      return chain;
+    };
+    drizzleMocks.update.mockImplementation(makeUpdateChain);
+
     drizzleMocks.transaction.mockImplementation(
       async (cb: (tx: typeof drizzleMocks) => Promise<unknown>) =>
         cb(drizzleMocks),

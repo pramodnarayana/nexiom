@@ -19,7 +19,7 @@ If applying to an existing deployment that has already run migrations under the 
 2. **Backfill Migration Record:** Insert a fake log marking the new tag as applied to prevent conflicts:
 
    ```sql
-   INSERT INTO __drizzle_migrations (id, hash, created_at)
+   INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at)
    VALUES (0, '0000_salty_stryfe', extract(epoch from now()) * 1000);
    ```
 

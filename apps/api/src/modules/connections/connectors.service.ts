@@ -507,6 +507,23 @@ export class ConnectorsService {
     connectionId: string,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Lock the parent connection row to prevent concurrent mapping inserts during verification
+      const [lockedConn] = await tx
+        .select({ id: appConnections.id })
+        .from(appConnections)
+        .where(
+          and(
+            eq(appConnections.id, connectionId),
+            eq(appConnections.tenantId, tenantId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+
+      if (!lockedConn) {
+        throw new NotFoundException(`Connection ${connectionId} not found`);
+      }
+
       const [mapping] = await tx
         .select({ id: globalEntityMap.id })
         .from(globalEntityMap)

@@ -1064,6 +1064,10 @@ export class ConnectorsController {
     @AuthContext() ctx: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
   ) {
+    const { getAdminRoleId, getOwnerRoleId } =
+      await import('@nexiom/identity/constants');
+    const adminRoleId = getAdminRoleId();
+    const ownerRoleId = getOwnerRoleId();
     const tenantId = ctx.user?.organizationId;
     if (!tenantId || !ctx.user?.id) {
       throw new BadRequestException('tenantId or user context is missing');
@@ -1082,7 +1086,7 @@ export class ConnectorsController {
 
     if (
       !orgMember ||
-      (orgMember.role !== 'admin' && orgMember.role !== 'owner')
+      (orgMember.role !== adminRoleId && orgMember.role !== ownerRoleId)
     ) {
       throw new ForbiddenException(
         'Only organization admins or owners can delete a connection',

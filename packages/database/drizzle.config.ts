@@ -41,7 +41,7 @@ if (!process.env.DATABASE_URL) {
 // checkout without a prior `pnpm build`. drizzle-kit uses ts-morph/jiti to
 // parse TypeScript directly — no compiled JS artifact is required.
 export default {
-    schema: './src/index.ts',
+    schema: './dist/schema/*.js',
     out: './drizzle',
     dialect: 'postgresql',
     dbCredentials: {

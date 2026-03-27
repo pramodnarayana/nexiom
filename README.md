@@ -56,6 +56,9 @@ docker-compose up -d
 
 # Push Schema
 pnpm --filter api db:push
+
+# Seed initial data (RBAC, System Tenant, Marketplace Pieces)
+pnpm --filter api db:seed
 ```
 
 ### 3. Development

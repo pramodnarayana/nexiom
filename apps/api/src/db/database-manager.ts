@@ -224,7 +224,7 @@ export class DatabaseManager {
 
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const schema = await import('./schema.js');
-    const { eq, sql } = await import('drizzle-orm');
+    const { eq, sql, notInArray } = await import('drizzle-orm');
     const { seedSystemRbac } =
       await import('@nexiom/identity/utils/rbac-seeding');
     const {
@@ -281,6 +281,7 @@ export class DatabaseManager {
       const monorepoRoot = path.resolve(thisFile, '../../../../..');
       const piecesDir = path.join(monorepoRoot, 'packages/pieces');
       let pieceFolders: string[];
+      let discoverySuccess = true;
       try {
         pieceFolders = await fs.readdir(piecesDir);
       } catch (readdirErr) {
@@ -289,6 +290,7 @@ export class DatabaseManager {
             `No marketplace pieces will be seeded.`,
         );
         pieceFolders = [];
+        discoverySuccess = false;
       }
       const discoveredPieces = [];
 
@@ -360,7 +362,24 @@ export class DatabaseManager {
         console.log(
           `  ✓ Upserted ${discoveredPieces.length} pieces into registry`,
         );
+
+        if (discoverySuccess) {
+          const discoveredPackageNames = discoveredPieces.map(
+            (p) => p.packageName,
+          );
+          await db
+            .update(schema.pieces)
+            .set({ enabled: false })
+            .where(
+              notInArray(schema.pieces.packageName, discoveredPackageNames),
+            );
+          console.log('  ✓ Cleaned up removed pieces from registry');
+        }
       } else {
+        if (discoverySuccess) {
+          await db.update(schema.pieces).set({ enabled: false });
+          console.log('  ✓ Disabled all pieces (none discovered)');
+        }
         console.log('  ℹ️ No pieces discovered.');
       }
 

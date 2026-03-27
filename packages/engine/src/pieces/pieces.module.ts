@@ -38,6 +38,7 @@ export class PiecesModule {
   /** Register with an explicit resolution anchor (recommended for production). */
   static forRoot(options: { anchorUrl: string }): DynamicModule {
     return {
+      global: true,
       module: PiecesModule,
       providers: [
         { provide: PIECE_LOADER_ANCHOR_URL, useValue: options.anchorUrl },
@@ -50,6 +51,7 @@ export class PiecesModule {
   /** Convenience: register without an anchor (uses import.meta.url of engine lib). */
   static register(): DynamicModule {
     return {
+      global: true,
       module: PiecesModule,
       providers: SHARED_PROVIDERS,
       exports: [PieceRegistryService],
