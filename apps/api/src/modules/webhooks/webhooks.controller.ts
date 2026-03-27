@@ -126,43 +126,16 @@ export class WebhooksController {
       const traceId = inboundGatewayId;
       await this.queueService
         .send(QueueName.InboundQueue, { traceId, connectionId })
-        .catch(async (err: unknown) => {
-          this.logger.warn(
+        .catch((err: unknown) => {
+          this.logger.error(
             {
               event: 'l1.enqueue_failed',
               traceId,
               err: err instanceof Error ? err.message : String(err),
             },
-            'Failed to enqueue L1 event — delivery will be delayed until retry',
+            'Failed to enqueue L1 event — rejecting webhook',
           );
-
-          // Mark the record PENDING so the worker retry poll can pick it up.
-          // We swallow any DB error here: failing to update the status should
-          // not prevent the controller from returning 202, since the record was
-          // already durably written in the first transaction above.
-          try {
-            await this.db.transaction(async (tx) => {
-              assertValidSchemaName(schemaName);
-              await tx.execute(
-                sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-              );
-              await tx
-                .update(inboundGateway)
-                .set({ status: 'PENDING' })
-                .where(sql`${inboundGateway.traceId} = ${traceId}`);
-            });
-          } catch (dbErr: unknown) {
-            this.logger.error(
-              {
-                event: 'l1.pending_update_failed',
-                traceId,
-                schemaName,
-                err: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              },
-              'Failed to mark inbound_gateway as PENDING after enqueue failure',
-            );
-            // Do not rethrow — the record is durable; status update is best-effort.
-          }
+          throw err;
         });
 
       const durationMs = Date.now() - start;
@@ -214,7 +187,13 @@ export class WebhooksController {
                   traceId: existingTraceIdOutside,
                   connectionId,
                 })
-                .catch(() => {});
+                .catch((err: unknown) => {
+                  this.logger.error(
+                    { err: err instanceof Error ? err.message : String(err) },
+                    'Failed to lookup and re-enqueue duplicate webhook',
+                  );
+                  throw err;
+                });
             }
           }
         } catch (error_: unknown) {

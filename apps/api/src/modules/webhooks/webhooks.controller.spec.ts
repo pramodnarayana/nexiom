@@ -253,7 +253,7 @@ describe('WebhooksController', () => {
     });
   });
 
-  it('logs warning and marks record PENDING when enqueue fails (no rethrow)', async () => {
+  it('logs error and rethrows when enqueue fails', async () => {
     queueServiceMock.send.mockRejectedValueOnce(new Error('SQS down'));
 
     await expect(
@@ -262,18 +262,12 @@ describe('WebhooksController', () => {
         { foo: 'bar' },
         {},
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('SQS down');
 
     await vi.waitFor(() => {
-      expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect(loggerMock.error).toHaveBeenCalledWith(
         expect.objectContaining({ event: 'l1.enqueue_failed' }),
-        expect.stringContaining('Failed to enqueue'),
-      );
-
-      // The controller must also mark the inbound_gateway record as PENDING
-      // so the worker can pick it up on its next poll cycle.
-      expect(db._setMock).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'PENDING' }),
+        expect.stringContaining('rejecting webhook'),
       );
     });
   });

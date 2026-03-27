@@ -132,12 +132,16 @@ export class DatabaseManager {
    * Also validates that DATABASE_URL points to a local host so destructive
    * operations can never accidentally reach a remote/production database.
    */
-  private assertSafeEnvironment(): void {
+  private assertSafeEnvironment(allowForceProvision = false): void {
     const env = process.env.NODE_ENV;
     if (!env || !this.ALLOWED_ENVS.includes(env)) {
       throw new Error(
         `Destructive database operations only allowed in: ${this.ALLOWED_ENVS.join(", ")}. Current: ${env || "unset"}`,
       );
+    }
+
+    if (allowForceProvision && process.env.FORCE_PROVISION_LOCAL === "true") {
+      return;
     }
 
     // Guard against accidental destructive ops against remote databases even
@@ -203,8 +207,9 @@ export class DatabaseManager {
         client,
       );
       for (const { nspname } of tenantSchemas) {
+        const escapedNsp = nspname.replaceAll('"', '""');
         await this.execSql(
-          `DROP SCHEMA IF EXISTS "${nspname}" CASCADE;`,
+          `DROP SCHEMA IF EXISTS "${escapedNsp}" CASCADE;`,
           client,
         );
         console.log(`  ✓ Dropped tenant schema: ${nspname}`);
@@ -352,6 +357,28 @@ export class DatabaseManager {
               .where(sql`${schema.member.id} = ${existingMember.id}`);
             console.log("    ✓ System Owner membership role restored");
           }
+
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await db
+            .insert(schema.account)
+            .values({
+              id: uuidv4(),
+              userId: userId,
+              accountId: email,
+              providerId: "credential",
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [schema.account.providerId, schema.account.accountId],
+              set: {
+                password: hashedPassword,
+                userId: userId,
+                updatedAt: now,
+              },
+            });
+          console.log("    ✓ System Owner credential updated");
         } else {
           const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -508,6 +535,7 @@ export class DatabaseManager {
       );
 
       for (const { nspname } of tenantSchemas) {
+        const escapedNsp = nspname.replaceAll('"', '""');
         const tenantTables = await this.querySql<{ table_name: string }>(
           `SELECT table_name FROM information_schema.tables WHERE table_schema = '${nspname.replaceAll("'", "''")}' AND table_type = 'BASE TABLE';`,
           client,
@@ -515,7 +543,9 @@ export class DatabaseManager {
 
         if (tenantTables.length > 0) {
           const quotedTenant = tenantTables
-            .map((t) => `"${nspname}"."${t.table_name.replaceAll('"', '""')}"`)
+            .map(
+              (t) => `"${escapedNsp}"."${t.table_name.replaceAll('"', '""')}"`,
+            )
             .join(", ");
           await this.execSql(`TRUNCATE TABLE ${quotedTenant} CASCADE;`, client);
           console.log(
@@ -600,7 +630,7 @@ export class DatabaseManager {
    * Idempotent — safe to run multiple times. Skips connections that already exist.
    */
   async provisionLocal(): Promise<void> {
-    this.assertSafeEnvironment();
+    this.assertSafeEnvironment(true);
 
     // Require an explicit opt-in flag OR confirm the DB host is local.
     const dbUrl = process.env.DATABASE_URL ?? "";

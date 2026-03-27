@@ -61,7 +61,7 @@ describe("ReplicaService", () => {
     await handler({ traceId: "123", connectionId: "456" });
     expect(queueService.send).toHaveBeenCalledWith(
       QueueName.ReplicaQueue,
-      expect.any(Object),
+      expect.objectContaining({ traceId: "123", connectionId: "456" }),
     );
   });
 

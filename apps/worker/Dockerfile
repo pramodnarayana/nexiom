@@ -44,8 +44,11 @@ USER nodejs
 
 # Install the healthcheck script used by the HEALTHCHECK instruction below.
 COPY --chown=nodejs:nodejs apps/worker/worker-healthcheck.sh /usr/local/bin/worker-healthcheck.sh
-# Temporarily elevate to root to chmod; then drop back to the non-root user.
-RUN chmod +x /usr/local/bin/worker-healthcheck.sh
+# Make healthcheck script executable and ensure procps is installed; drops privileges back via --chown/USER
+USER root
+RUN apk add --no-cache procps && \
+    chmod +x /usr/local/bin/worker-healthcheck.sh
+USER nodejs
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/worker-healthcheck.sh"]

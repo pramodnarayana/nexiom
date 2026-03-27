@@ -166,6 +166,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_l6_trace').on(table.traceId),
         index('idx_l6_route').on(table.routeId),
         index('idx_l6_status').on(table.status),
+        uniqueIndex('idx_l6_trace_route').on(table.traceId, table.routeId),
     ]);
 
     /**

@@ -72,7 +72,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
       // Hoisted so it is readable after the transaction resolves.
       let isNewlyPublished = false;
-      let replicaIdStr = "";
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
@@ -88,8 +87,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         const replica = replicaRows[0];
         if (!replica)
           throw new Error(`Replica record for traceId ${traceId} not found`);
-
-        replicaIdStr = replica.id;
 
         let canonicalType = "RAW";
         let canonicalData = replica.data;
@@ -116,34 +113,21 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           })
           .onConflictDoNothing({ target: normalizedEntity.replicaId });
 
-        const checkRows = await tx.execute(
-          sql`SELECT published_at FROM ${normalizedEntity} WHERE ${normalizedEntity.replicaId} = ${replica.id}`,
+        const updateRes = await tx.execute(
+          sql`UPDATE ${normalizedEntity}
+              SET    published_at = NOW()
+              WHERE  ${normalizedEntity.replicaId} = ${replica.id}
+                AND  published_at IS NULL`,
         );
-        const rowData = (
-          checkRows as unknown as { rows: { published_at: Date | null }[] }
-        ).rows[0];
-        isNewlyPublished = rowData && rowData.published_at === null;
+        isNewlyPublished =
+          (updateRes as unknown as { rowCount: number }).rowCount > 0;
       });
 
       if (isNewlyPublished) {
-        // 2. Publish to the next queue — only when the marker was freshly stamped
+        // Publish to the next queue — only if this worker thread won the race to stamp published_at
         await this.queueService.send(QueueName.NormalizedQueue, {
           traceId,
           connectionId,
-        });
-
-        // Stamp published_at only after durable handoff
-        await this.db.transaction(async (tx) => {
-          assertValidSchemaName(schemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-          );
-          await tx.execute(
-            sql`UPDATE ${normalizedEntity}
-                SET    published_at = NOW()
-                WHERE  ${normalizedEntity.replicaId} = ${replicaIdStr}
-                  AND  published_at IS NULL`,
-          );
         });
       } else {
         this.logger.debug(
