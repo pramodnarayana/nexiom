@@ -67,6 +67,8 @@ export const globalEntityMap = pgTable('global_entity_map', {
     ),
     index('gem_src_lookup_idx').on(table.sourceEntityId, table.sourceAppId),
     index('gem_dest_lookup_idx').on(table.destEntityId, table.destAppId),
+    index('gem_source_app_idx').on(table.sourceAppId),
+    index('gem_dest_app_idx').on(table.destAppId),
     index('gem_src_trace_idx').on(table.sourceTraceId),
     index('gem_dest_trace_idx').on(table.destTraceId),
     index('gem_stitch_idx').on(table.stitchId),

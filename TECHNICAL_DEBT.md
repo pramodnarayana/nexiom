@@ -6,7 +6,26 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
-### 1. PII Cleanup Job for Sessions
+### 1. DatabaseManager Duplication
+
+**Location**: `apps/api/src/db/database-manager.ts`, `apps/worker/src/db/database-manager.ts`  
+**Added**: 2026-03-27  
+**Impact**: Code Architecture, DRY Violation  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- Identical `DatabaseManager` implementations are duplicated across both the API and Worker applications.
+- This creates multiple sources of truth for database module initialization, seeding, and migration execution, increasing the risk of configuration drift.
+- Although `@nexiom/dbmanager` exists, it currently only exports TypeScript interfaces rather than the concrete implementation.
+
+**Recommended Solution**:
+
+- Move the concrete `DatabaseManager` implementation into `@nexiom/dbmanager`.
+- Export a global `DbManagerModule` from that package.
+- Delete the redundant files in both `apps/api` and `apps/worker` and refactor them to import the unified library service.
+
+### 2. PII Cleanup Job for Sessions
 
 **Location**: `packages/database/src/schema/identity.ts` & `apps/api/src/modules/background`  
 **Added**: 2026-03-06  
@@ -85,25 +104,18 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - Ensure the database is accessible or service-containerized in CI.
 - Update the CI workflow to enable `VITE_AUTH_GOOGLE_ENABLED=true`.
 
-### 3. Centralized Schema & Migrations
+### ~~3. Centralized Schema & Migrations~~ ✅ RESOLVED (2026-03-27)
 
-**Location**: `packages/database`, `packages/identity`, `apps/api`  
-**Added**: 2026-03-27  
-**Impact**: Developer Velocity, Migration Stability  
-**Effort**: High (1 sprint)
+**Location**: `packages/database`, `apps/api`, `apps/worker`
 
-**Current State (Anti-Pattern)**:
+**Resolution**:
 
-1. **Split-Brain Schema & Migrations**: Drizzle schemas are defined in both `@nexiom/identity` and `@nexiom/database`, while physical SQL migrations are generated in both `packages/database` and `apps/api`.
-2. **Migration Table Collisions**: Both packages write to the same `__drizzle_migrations` table by default. This causes severe orchestration errors for new developers—if the API's migrations are run first, Drizzle assumes the core database's migrations (e.g. `0003_scheduler_outbox.sql`) are already applied because the `0003` prefix matches, meaning critical core tables are silently skipped during setup.
-3. **Missing Local Dev Experience**: A developer must currently manually source missing `.env` variables and manually run multiple `pnpm --filter ... db:migrate` scripts in a precise order, which causes friction and failing environments out of the box.
+- **Single Source of Truth**: All Drizzle schemas, `drizzle.config.ts`, and `drizzle/` migrations folder live exclusively in `@nexiom/database`.
+- **Root-level DDL commands**: `pnpm db:migrate`, `pnpm db:generate`, `pnpm db:studio` — all delegate to `@nexiom/database` via the root `package.json`.
+- **Consumer packages are DDL-free**: `apps/api` and `apps/worker` no longer have `drizzle-kit` in devDependencies or any `db:generate`/`db:migrate`/`db:studio` scripts.
+- **dotenv auto-resolution**: `drizzle.config.ts` in `@nexiom/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
+- **Enterprise Piece Loader**: `PiecesModule` is now a DynamicModule with `forRoot({ anchorUrl: import.meta.url })`. All 6 host modules (ConnectionsModule, StitchesModule, TriggerModule, SchedulerModule, WebhooksModule, PipelineModule) pass their own `import.meta.url` as the resolution anchor, bypassing pnpm strict package containment in any working directory or container.
 
-**Recommended Solution (Enterprise Standard)**:
-
-- **A Single DB Package**: Centralize the entire definition of the database into `@nexiom/database`. It should hold the one-and-only `drizzle.config.ts`, all the `schema.ts` fragments, and a single `drizzle/` migrations folder.
-- **Consumer Packages**: `apps/api` and other workspaces will *only* import the TypeScript types and schema symbols. They must not run `drizzle-kit` commands or contain their own migrations.
-- **Remove DB Scripts from API**: Delete `drizzle.config.ts` from `apps/api`, and remove `db:migrate` and `db:push` from its `package.json`.
-- **Automate Setup**: Create a single `db:migrate` script at the root `package.json` that simply runs the centralized database package migrations.
 
 ### 4. Shadow Mode Direct Trigger Imports
 

@@ -19,7 +19,7 @@ import * as schema from '../db/schema.js';
 import { ConnectionsModule } from '../modules/connections/connections.module.js';
 import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
-import { StorageResolverModule } from '@nexiom/engine';
+import { StorageResolverModule, PiecesModule } from '@nexiom/engine';
 import { CacheModule } from '@nexiom/cache';
 import { QueueModule } from '@nexiom/queue';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
@@ -101,6 +101,7 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
     TenantsModule,
     InvitationsModule,
     DbModule,
+    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
     SystemAdminModule,
     RolesModule,
     ConnectionsModule,

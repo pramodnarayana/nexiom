@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as path from 'node:path';
 import { DatabaseManager } from './database-manager.js';
 import { execSync } from 'node:child_process';
 
 // Hoisted mocks for dynamic imports
 const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
   drizzleMocks: {
+    update: vi.fn(),
     insert: vi.fn(),
     transaction: vi.fn(),
     query: {
@@ -50,6 +52,7 @@ vi.mock('pg', () => {
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
+    update: drizzleMocks.update,
     insert: drizzleMocks.insert,
     transaction: drizzleMocks.transaction,
     query: drizzleMocks.query,
@@ -98,6 +101,17 @@ describe('DatabaseManager', () => {
       }),
     });
     drizzleMocks.insert.mockImplementation(makeInsertChain);
+
+    const makeUpdateChain = () => {
+      const chain = {
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(undefined),
+        }),
+      };
+      return chain;
+    };
+    drizzleMocks.update.mockImplementation(makeUpdateChain);
+
     drizzleMocks.transaction.mockImplementation(
       async (cb: (tx: typeof drizzleMocks) => Promise<unknown>) =>
         cb(drizzleMocks),
@@ -180,13 +194,16 @@ describe('DatabaseManager', () => {
   });
 
   describe('migrate()', () => {
-    it('should run drizzle-kit migrate via execSync', () => {
+    it('should run root pnpm db:migrate script via execSync', () => {
       manager.migrate();
 
+      const expectedCwd = path.resolve(__dirname, '../../../..');
+
       expect(execSync).toHaveBeenCalledWith(
-        'pnpm drizzle-kit migrate',
+        'pnpm db:migrate',
         expect.objectContaining({
           stdio: 'inherit',
+          cwd: expectedCwd,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           env: expect.objectContaining({ FORCE_COLOR: '1' }),
         }),

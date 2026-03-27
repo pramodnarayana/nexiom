@@ -2,12 +2,16 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
+  HttpCode,
+  HttpStatus,
   Body,
   UseGuards,
   Inject,
   InternalServerErrorException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   Query,
   Logger,
   Res,
@@ -20,6 +24,7 @@ import {
 import type { Response } from 'express';
 
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { getAdminRoleId, getOwnerRoleId } from '@nexiom/identity/constants';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import type { AnyProperty } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
@@ -420,25 +425,7 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId or user context is missing');
     }
 
-    const [orgMember] = await this.db
-      .select({ role: member.role })
-      .from(member)
-      .where(
-        and(
-          eq(member.userId, ctx.user.id),
-          eq(member.organizationId, tenantId),
-        ),
-      )
-      .limit(1);
-
-    if (
-      !orgMember ||
-      (orgMember.role !== 'admin' && orgMember.role !== 'owner')
-    ) {
-      throw new UnauthorizedException(
-        'Only organization admins or owners can view connection metadata',
-      );
-    }
+    await this.assertAdminOrOwner(ctx.user.id, tenantId);
 
     const [connection] = await this.db
       .select({
@@ -1050,6 +1037,50 @@ export class ConnectorsController {
       );
       throw new InternalServerErrorException(
         'Failed to save connection to database',
+      );
+    }
+  }
+
+  @Delete(':connectionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteConnection(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId || !ctx.user?.id) {
+      throw new BadRequestException('tenantId or user context is missing');
+    }
+
+    await this.assertAdminOrOwner(ctx.user.id, tenantId);
+
+    // Validates RESTRICT constraints on global_entity_map before deleting
+    await this.connectorsService.deleteConnection(tenantId, connectionId);
+  }
+
+  /**
+   * Asserts that the given user is an admin or owner of the given tenant.
+   * Throws ForbiddenException if the check fails.
+   */
+  private async assertAdminOrOwner(
+    userId: string,
+    tenantId: string,
+  ): Promise<void> {
+    const [orgMember] = await this.db
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(eq(member.userId, userId), eq(member.organizationId, tenantId)),
+      )
+      .limit(1);
+
+    if (
+      !orgMember ||
+      (orgMember.role !== getAdminRoleId() &&
+        orgMember.role !== getOwnerRoleId())
+    ) {
+      throw new ForbiddenException(
+        'Only organization admins or owners can perform this action',
       );
     }
   }

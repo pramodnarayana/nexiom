@@ -3,7 +3,6 @@ import { DbModule } from '../../db/db.module.js';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
 import { PieceRegistryService } from '@nexiom/engine';
-import { PiecesModule } from '@nexiom/engine';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
@@ -20,7 +19,7 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
  * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
  */
 @Module({
-  imports: [DbModule, PiecesModule],
+  imports: [DbModule],
   controllers: [WebhooksController],
   providers: [
     {
@@ -52,6 +51,6 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
       inject: [REDIS_CLIENT, TriggerExecutorService, PieceRegistryService],
     },
   ],
-  exports: [PiecesModule, TriggerExecutorService],
+  exports: [TriggerExecutorService],
 })
 export class TriggerModule {}

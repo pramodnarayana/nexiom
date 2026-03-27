@@ -3,6 +3,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { TextEncoder, TextDecoder } from "util";
 import * as nodeCrypto from "crypto";
+import * as IdentityPackage from "./index.js";
 
 Object.defineProperty(global, "TextEncoder", {
   writable: true,
@@ -34,23 +35,24 @@ vi.mock("better-auth/node", () => ({
   fromNodeHeaders: vi.fn(),
 }));
 
-vi.mock("./adapters/better-auth.adapter", () => ({
+vi.mock("./adapters/better-auth.adapter.js", () => ({
   BetterAuthAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-user.adapter", () => ({
+vi.mock("./adapters/drizzle-user.adapter.js", () => ({
   DrizzleUserAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-tenant.adapter", () => ({
+vi.mock("./adapters/drizzle-tenant.adapter.js", () => ({
   DrizzleTenantAdapter: class { },
 }));
-vi.mock("./adapters/drizzle-permission.adapter", () => ({
+vi.mock("./adapters/drizzle-permission.adapter.js", () => ({
   DrizzlePermissionAdapter: class { },
+}));
+vi.mock("./adapters/drizzle-role.adapter.js", () => ({
+  DrizzleRoleAdapter: class { },
 }));
 
 describe("Identity Package", () => {
-  it("should export adapters", async () => {
-    const IdentityPackage = await import("./index.js");
-
+  it("should export adapters", () => {
     expect(IdentityPackage).toBeDefined();
 
     expect((IdentityPackage as any).BetterAuthAdapter).toBeDefined();
@@ -60,5 +62,7 @@ describe("Identity Package", () => {
     expect((IdentityPackage as any).DrizzleTenantAdapter).toBeDefined();
 
     expect((IdentityPackage as any).DrizzlePermissionAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).DrizzleRoleAdapter).toBeDefined();
   });
 });

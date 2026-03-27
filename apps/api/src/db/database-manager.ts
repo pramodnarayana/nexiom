@@ -194,21 +194,24 @@ export class DatabaseManager {
    * Run pending Drizzle migrations
    */
   migrate(): void {
-    console.log('🔨 Running migrations...');
-    let cwd: string;
+    console.log('🔨 Running centralized migrations...');
+    let rootCwd: string;
     if (typeof __dirname !== 'undefined') {
-      cwd = path.resolve(__dirname, '../..');
+      rootCwd = path.resolve(__dirname, '../../../../');
     } else {
-      cwd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+      rootCwd = path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../../../../',
+      );
     }
-    // Drizzle Kit is a CLI tool, so we still use execSync here (local execution, not docker)
-    execSync('pnpm drizzle-kit migrate', {
+    // Orchestrate migrations from the root monorepo script
+    execSync('pnpm db:migrate', {
       stdio: 'inherit',
-      cwd,
+      cwd: rootCwd,
       env: { ...process.env, FORCE_COLOR: '1' },
     });
 
-    console.log('  ✓ Migrations complete');
+    console.log('  ✓ Centralized migrations complete');
   }
 
   /**
@@ -221,7 +224,7 @@ export class DatabaseManager {
 
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const schema = await import('./schema.js');
-    const { eq } = await import('drizzle-orm');
+    const { eq, sql, notInArray } = await import('drizzle-orm');
     const { seedSystemRbac } =
       await import('@nexiom/identity/utils/rbac-seeding');
     const {
@@ -262,7 +265,139 @@ export class DatabaseManager {
 
       await seedSystemRbac(db, config, console);
 
-      // 3. Seed Bootstrap Owner (User Request)
+      // 3. Seed Marketplace Pieces dynamically from monorepo (Enterprise-Grade)
+      const { v4: uuidv4Marketplace } = await import('uuid');
+      const fs = await import('node:fs/promises');
+      const path = await import('node:path');
+
+      console.log('  🧩 Auto-discovering marketplace pieces...');
+
+      // Resolve the pieces directory from the current file's location so the
+      // path is correct regardless of working directory (CI, Docker, local).
+      // __dirname equivalent for ESM: fileURLToPath(import.meta.url) gives us
+      // <monorepo>/apps/api/src/db/database-manager.{ts|js}
+      // → resolve 4 levels up to reach the monorepo root.
+      const thisFile = fileURLToPath(import.meta.url);
+      const monorepoRoot = path.resolve(path.dirname(thisFile), '../../../../');
+      const piecesDir = path.join(monorepoRoot, 'packages/pieces');
+      let pieceFolders: string[];
+      let discoverySuccess = true;
+      try {
+        pieceFolders = await fs.readdir(piecesDir);
+      } catch (readdirErr) {
+        console.warn(
+          `  ⚠️  Could not read pieces directory "${piecesDir}": ${readdirErr instanceof Error ? readdirErr.message : String(readdirErr)}. ` +
+            `No marketplace pieces will be seeded.`,
+        );
+        pieceFolders = [];
+        discoverySuccess = false;
+      }
+      const discoveredPieces = [];
+
+      for (const folder of pieceFolders) {
+        const piecePath = path.join(piecesDir, folder);
+        const stat = await fs.stat(piecePath).catch((err: unknown) => {
+          console.warn(
+            `    ⚠️ Could not stat piece folder "${folder}": ${err instanceof Error ? err.message : String(err)}. Marking discovery as failed.`,
+          );
+          discoverySuccess = false;
+          return null;
+        });
+
+        if (stat?.isDirectory()) {
+          try {
+            // Read package.json to get the canonical npm package name
+            const pkgPath = path.join(piecePath, 'package.json');
+            const pkgRaw = await fs.readFile(pkgPath, 'utf-8');
+            const pkg = JSON.parse(pkgRaw) as { name: string; version: string };
+
+            // Dynamically import the installed module just like Nexiom Engine does
+            const mod = (await import(pkg.name)) as Record<string, unknown>;
+            let pieceDef: Record<string, unknown> | null = null;
+
+            for (const exported of Object.values(mod)) {
+              if (
+                exported &&
+                typeof exported === 'object' &&
+                'name' in exported &&
+                'displayName' in exported &&
+                'logoUrl' in exported
+              ) {
+                pieceDef = exported as Record<string, unknown>;
+                break;
+              }
+            }
+
+            if (pieceDef) {
+              discoveredPieces.push({
+                id: uuidv4Marketplace(),
+                name: String(pieceDef.name),
+                displayName: String(pieceDef.displayName),
+                packageName: pkg.name,
+                version: pkg.version || 'workspace',
+                // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                logoUrl: String(pieceDef.logoUrl || ''),
+                enabled: true,
+              });
+              console.log(
+                `    ✅ Discovered piece: ${String(pieceDef.displayName)} (${pkg.name})`,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              `    ⚠️ Failed to load piece from folder ${folder}: ${e instanceof Error ? e.message : String(e)}. Marking discovery as failed.`,
+            );
+            discoverySuccess = false;
+          }
+        }
+      }
+
+      if (discoveredPieces.length > 0) {
+        await db
+          .insert(schema.pieces)
+          .values(discoveredPieces)
+          .onConflictDoUpdate({
+            target: schema.pieces.name,
+            set: {
+              displayName: sql`EXCLUDED.display_name`,
+              logoUrl: sql`EXCLUDED.logo_url`,
+              packageName: sql`EXCLUDED.package_name`,
+              version: sql`EXCLUDED.version`,
+              updatedAt: new Date(),
+            },
+          });
+        console.log(
+          `  ✓ Upserted ${discoveredPieces.length} pieces into registry`,
+        );
+
+        if (discoverySuccess) {
+          const discoveredPackageNames = discoveredPieces.map(
+            (p) => p.packageName,
+          );
+          await db
+            .update(schema.pieces)
+            .set({ enabled: false })
+            .where(
+              notInArray(schema.pieces.packageName, discoveredPackageNames),
+            );
+          console.log('  ✓ Cleaned up removed pieces from registry');
+        }
+      } else {
+        if (discoverySuccess && process.env.ALLOW_DISABLE_ALL === 'true') {
+          console.warn(
+            `  ⚠️  ALLOW_DISABLE_ALL is set. discoverySuccess=${String(discoverySuccess)}, discoveredPieces.length=${String(discoveredPieces.length)}. Disabling ALL pieces in registry.`,
+          );
+          await db.update(schema.pieces).set({ enabled: false });
+          console.log('  ✓ Disabled all pieces (none discovered)');
+        } else if (discoverySuccess) {
+          console.warn(
+            `  ⚠️  No pieces discovered but ALLOW_DISABLE_ALL is not set — skipping mass disable to avoid accidental data loss.`,
+          );
+        }
+        console.log('  ℹ️ No pieces discovered.');
+      }
+
+      // 4. Seed Bootstrap Owner (User Request)
       const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
       const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
       const name = process.env.BOOTSTRAP_ADMIN_NAME;

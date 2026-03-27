@@ -241,21 +241,24 @@ export class DatabaseManager {
    * Run pending Drizzle migrations
    */
   migrate(): void {
-    console.log("🔨 Running migrations...");
-    let cwd: string;
+    console.log("🔨 Running centralized migrations...");
+    let rootCwd: string;
     if (typeof __dirname !== "undefined") {
-      cwd = path.resolve(__dirname, "../..");
+      rootCwd = path.resolve(__dirname, "../../../../");
     } else {
-      cwd = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+      rootCwd = path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../../../",
+      );
     }
-    // Drizzle Kit is a CLI tool, so we still use execSync here (local execution, not docker)
-    execSync("pnpm drizzle-kit migrate", {
+    // Orchestrate migrations from the root monorepo script
+    execSync("pnpm db:migrate", {
       stdio: "inherit",
-      cwd,
+      cwd: rootCwd,
       env: { ...process.env, FORCE_COLOR: "1" },
     });
 
-    console.log("  ✓ Migrations complete");
+    console.log("  ✓ Centralized migrations complete");
   }
 
   /**
