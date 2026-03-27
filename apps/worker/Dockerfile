@@ -45,9 +45,7 @@ USER nodejs
 # Install the healthcheck script used by the HEALTHCHECK instruction below.
 COPY --chown=nodejs:nodejs apps/worker/worker-healthcheck.sh /usr/local/bin/worker-healthcheck.sh
 # Temporarily elevate to root to chmod; then drop back to the non-root user.
-USER root
 RUN chmod +x /usr/local/bin/worker-healthcheck.sh
-USER nodejs
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/worker-healthcheck.sh"]

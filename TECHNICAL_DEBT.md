@@ -85,24 +85,25 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - Ensure the database is accessible or service-containerized in CI.
 - Update the CI workflow to enable `VITE_AUTH_GOOGLE_ENABLED=true`.
 
-### 3. Drizzle Monorepo Database Architecture
+### 3. Centralized Schema & Migrations
 
 **Location**: `packages/database`, `packages/identity`, `apps/api`  
-**Added**: 2026-02-22  
+**Added**: 2026-03-27  
 **Impact**: Developer Velocity, Migration Stability  
 **Effort**: High (1 sprint)
 
-**Current State (3 Compounding Issues)**:
+**Current State (Anti-Pattern)**:
 
-1. **Monorepo Schema Fragmentation**: Drizzle ORM is designed to analyze a single folder of schemas. In Nexiom, schemas are split across `@nexiom/identity` and `@nexiom/database`, then aggregated in `apps/api`. Running Drizzle's migration scripts from the workspace packages lacks full context and breaks cross-package resolution in Drizzle Studio.
-2. **Environment Variable Hell**: The database connection string lives in `apps/api/.env`. Running scripts from `packages/database` fails over missing credentials without brittle `source ../../apps/api/.env` injection, which further breaks if developer environments have different Postgres users.
-3. **Broken Migration Snapshots**: Drizzle's history tracking (`drizzle/.drizzle/meta.json`) is corrupted due to a missing historical snapshot (`0001_jazzy_wild_child.sql`). Drizzle CLI currently refuses to run `db:migrate` natively because the migration chain is broken.
+1. **Split-Brain Schema & Migrations**: Drizzle schemas are defined in both `@nexiom/identity` and `@nexiom/database`, while physical SQL migrations are generated in both `packages/database` and `apps/api`.
+2. **Migration Table Collisions**: Both packages write to the same `__drizzle_migrations` table by default. This causes severe orchestration errors for new developers—if the API's migrations are run first, Drizzle assumes the core database's migrations (e.g. `0003_scheduler_outbox.sql`) are already applied because the `0003` prefix matches, meaning critical core tables are silently skipped during setup.
+3. **Missing Local Dev Experience**: A developer must currently manually source missing `.env` variables and manually run multiple `pnpm --filter ... db:migrate` scripts in a precise order, which causes friction and failing environments out of the box.
 
-**Recommended Solution**:
+**Recommended Solution (Enterprise Standard)**:
 
-- **Unify Schema Management**: Move the source of truth for all schema Generation and Migrations to the `apps/api` level where the `.env` execution context actually lives, or create a dedicated operational `packages/db-migrator` package that centrally imports all other packages and manages the single `drizzle.config.ts`.
-- **Reset Migration History**: Generate a fresh baseline database schema and squash all historical migrations to reset the corrupted `.drizzle` snapshot folder.
-- **Centralize DB Credentials**: Export a generic database URL resolution file that automatically paths to the root or `apps/api` `.env` regardless of which workspace is currently executing the CLI.
+- **A Single DB Package**: Centralize the entire definition of the database into `@nexiom/database`. It should hold the one-and-only `drizzle.config.ts`, all the `schema.ts` fragments, and a single `drizzle/` migrations folder.
+- **Consumer Packages**: `apps/api` and other workspaces will *only* import the TypeScript types and schema symbols. They must not run `drizzle-kit` commands or contain their own migrations.
+- **Remove DB Scripts from API**: Delete `drizzle.config.ts` from `apps/api`, and remove `db:migrate` and `db:push` from its `package.json`.
+- **Automate Setup**: Create a single `db:migrate` script at the root `package.json` that simply runs the centralized database package migrations.
 
 ### 4. Shadow Mode Direct Trigger Imports
 

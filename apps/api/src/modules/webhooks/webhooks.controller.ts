@@ -184,6 +184,7 @@ export class WebhooksController {
           const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
           if (extReqId) {
+            let existingTraceIdOutside: string | null = null;
             await this.db.transaction(async (tx) => {
               assertValidSchemaName(schemaName);
               await tx.execute(
@@ -199,19 +200,22 @@ export class WebhooksController {
                 .limit(1);
 
               if (rows.length > 0) {
-                const existingTraceId = rows[0].traceId;
-                this.logger.debug(
-                  { event: 'l1.re-enqueue', traceId: existingTraceId },
-                  'Attempting to re-enqueue duplicate webhook',
-                );
-                await this.queueService
-                  .send(QueueName.InboundQueue, {
-                    traceId: existingTraceId,
-                    connectionId,
-                  })
-                  .catch(() => {});
+                existingTraceIdOutside = rows[0].traceId;
               }
             });
+
+            if (existingTraceIdOutside) {
+              this.logger.debug(
+                { event: 'l1.re-enqueue', traceId: existingTraceIdOutside },
+                'Attempting to re-enqueue duplicate webhook',
+              );
+              await this.queueService
+                .send(QueueName.InboundQueue, {
+                  traceId: existingTraceIdOutside,
+                  connectionId,
+                })
+                .catch(() => {});
+            }
           }
         } catch (error_: unknown) {
           this.logger.error(

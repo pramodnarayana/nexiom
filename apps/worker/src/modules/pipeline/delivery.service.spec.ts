@@ -280,4 +280,8 @@ describe("DeliveryService", () => {
       }),
     ).rejects.toThrow("Target connection tgt not found");
   });
+
+  it("should destroy module", () => {
+    expect(() => service.onModuleDestroy()).not.toThrow();
+  });
 });

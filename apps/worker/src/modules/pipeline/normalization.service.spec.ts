@@ -22,7 +22,9 @@ describe("NormalizationService", () => {
       limit: vi.fn().mockResolvedValue([{ appName: "test_app" }]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {
-          execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
+          execute: vi
+            .fn()
+            .mockResolvedValue({ rowCount: 1, rows: [{ published_at: null }] }),
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
@@ -126,7 +128,10 @@ describe("NormalizationService", () => {
     // Make the stamp UPDATE return rowCount=0 (already published)
     db.transaction.mockImplementation(async (cb: any) => {
       const tx = {
-        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 0,
+          rows: [{ published_at: new Date() }],
+        }),
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
@@ -161,5 +166,27 @@ describe("NormalizationService", () => {
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("db fail");
+  });
+
+  it("should throw if replica not found", async () => {
+    db.transaction.mockImplementationOnce(async (cb: any) => {
+      const tx = {
+        execute: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]), // Empty
+      };
+      return cb(tx);
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("Replica record for traceId 123 not found");
+  });
+
+  it("should destroy module", () => {
+    expect(() => service.onModuleDestroy()).not.toThrow();
   });
 });

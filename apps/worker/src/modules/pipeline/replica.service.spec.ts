@@ -127,14 +127,18 @@ describe("ReplicaService", () => {
       .mockRejectedValueOnce(new Error("rollback fail")); // error-handler tx → caught + logged
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    // Logger routes through process.stderr; spy on stderr.write to verify log output
-    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+    const loggerSpy = vi.spyOn((service as any).logger, "error");
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("db fail");
-    // NestJS serialises the log to stderr; verify the message appears somewhere
-    const output = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+
+    const output = loggerSpy.mock.calls.flat().map(String).join(" ");
     expect(output).toMatch(/Failed to write L2 error state/);
-    stderrSpy.mockRestore();
+    loggerSpy.mockRestore();
+  });
+
+  it("should destroy module", () => {
+    expect(() => service.onModuleDestroy()).not.toThrow();
   });
 });

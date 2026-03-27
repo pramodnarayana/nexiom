@@ -199,7 +199,7 @@ export class DatabaseManager {
     try {
       // Drop tenant (ws_*) schemas first so foreign keys don't block public
       const tenantSchemas = await this.querySql<{ nspname: string }>(
-        `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'ws_%' ORDER BY nspname;`,
+        `SELECT nspname FROM pg_namespace WHERE left(nspname, 3) = 'ws_' ORDER BY nspname;`,
         client,
       );
       for (const { nspname } of tenantSchemas) {
@@ -503,7 +503,7 @@ export class DatabaseManager {
 
       // ── tenant (ws_*) schema tables ─────────────────────────────────────────
       const tenantSchemas = await this.querySql<{ nspname: string }>(
-        `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'ws_%' ORDER BY nspname;`,
+        `SELECT nspname FROM pg_namespace WHERE left(nspname, 3) = 'ws_' ORDER BY nspname;`,
         client,
       );
 
