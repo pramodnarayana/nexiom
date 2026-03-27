@@ -1,1 +1,0 @@
-ALTER TABLE "app_connection" ADD CONSTRAINT "app_connection_tenant_id_tenant_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenant"("id") ON DELETE cascade ON UPDATE no action;

@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1772618691690,
-      "tag": "0000_optimal_slyde",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772688194812,
-      "tag": "0001_goofy_mercury",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1772700000000,
-      "tag": "0002_consolidate_tenant_id_to_organization",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1772800000000,
-      "tag": "0003_scheduler_outbox",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1772900000000,
-      "tag": "0004_sync_cursors",
+      "when": 1774591613330,
+      "tag": "0000_salty_stryfe",
       "breakpoints": true
     }
   ]

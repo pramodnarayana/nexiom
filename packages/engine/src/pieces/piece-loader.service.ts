@@ -1,7 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { Piece } from '@nexiom/connectors';
 import { pieces, type DrizzleDb } from '@nexiom/database';
+
+/**
+ * Injection token for the host application's `import.meta.url`.
+ * When provided, the loader uses it as the anchor for resolving piece
+ * packages — this ensures correct resolution regardless of CWD.
+ *
+ * Register in PiecesModule.forRoot({ anchorUrl: import.meta.url })
+ */
+export const PIECE_LOADER_ANCHOR_URL = 'PIECE_LOADER_ANCHOR_URL';
 
 /**
  * Loads enabled Pieces from the database and dynamically imports their packages.
@@ -18,6 +27,10 @@ import { pieces, type DrizzleDb } from '@nexiom/database';
 export class PieceLoaderService {
   private readonly logger = new Logger(PieceLoaderService.name);
 
+  constructor(
+    @Optional() @Inject(PIECE_LOADER_ANCHOR_URL) private readonly anchorUrl: string | null,
+  ) {}
+
   async loadEnabledPieces(db: DrizzleDb): Promise<Piece[]> {
     const rows = await db.select({
       name: pieces.name,
@@ -33,9 +46,31 @@ export class PieceLoaderService {
 
     for (const row of rows) {
       try {
-        // Approach A: package is pre-installed in the monorepo.
-        // Approach B: install from external registry here before importing.
-        const mod = (await import(row.packageName)) as Record<string, unknown>;
+        // Resolve through the host application's module graph so pnpm strict
+        // linking doesn't hide pieces that are installed in apps/api but
+        // not declared as explicit deps of @nexiom/engine.
+        //
+        // Anchor precedence:
+        //   1. PIECE_LOADER_ANCHOR_URL token (set by host via PiecesModule.forRoot)
+        //      — most reliable: always the host's actual file path on disk.
+        //   2. import.meta.url of this file inside the engine package
+        //      — fallback: walks up to the monorepo root's node_modules.
+        //   3. Bare specifier  (pnpm strict-mode fallback, may fail)
+        let resolvedPath = row.packageName;
+        try {
+          const { createRequire } = await import('node:module');
+          const { fileURLToPath, pathToFileURL } = await import('node:url');
+          const anchor = this.anchorUrl ?? import.meta.url;
+          const anchorFile = anchor.startsWith('file://')
+            ? anchor
+            : pathToFileURL(anchor).href;
+          const hostRequire = createRequire(fileURLToPath(anchorFile));
+          resolvedPath = pathToFileURL(hostRequire.resolve(row.packageName)).href;
+        } catch {
+          // Non-fatal: fall through to bare-specifier import below.
+        }
+
+        const mod = (await import(resolvedPath)) as Record<string, unknown>;
         const piece = this.extractPiece(mod, row.name);
         if (piece) {
           loaded.push(piece);

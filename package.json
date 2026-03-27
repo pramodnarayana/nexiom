@@ -9,7 +9,10 @@
 		"test": "turbo test",
 		"typecheck": "turbo typecheck",
 		"test:cov": "turbo test:cov",
-		"prepare": "husky"
+		"prepare": "husky",
+		"db:migrate": "pnpm --filter @nexiom/database db:migrate",
+		"db:generate": "pnpm --filter @nexiom/database db:generate",
+		"db:studio": "pnpm --filter @nexiom/database db:studio"
 	},
 	"devDependencies": {
 		"@swc/cli": "^0.8.0",

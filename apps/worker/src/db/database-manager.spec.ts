@@ -180,11 +180,11 @@ describe("DatabaseManager", () => {
   });
 
   describe("migrate()", () => {
-    it("should run drizzle-kit migrate via execSync", () => {
+    it("should run root pnpm db:migrate script via execSync", () => {
       manager.migrate();
 
       expect(execSync).toHaveBeenCalledWith(
-        "pnpm drizzle-kit migrate",
+        "pnpm db:migrate",
         expect.objectContaining({
           stdio: "inherit",
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

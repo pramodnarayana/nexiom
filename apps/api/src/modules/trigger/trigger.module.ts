@@ -20,7 +20,7 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
  * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
  */
 @Module({
-  imports: [DbModule, PiecesModule],
+  imports: [DbModule, PiecesModule.forRoot({ anchorUrl: import.meta.url })],
   controllers: [WebhooksController],
   providers: [
     {
@@ -52,6 +52,9 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
       inject: [REDIS_CLIENT, TriggerExecutorService, PieceRegistryService],
     },
   ],
-  exports: [PiecesModule, TriggerExecutorService],
+  exports: [
+    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
+    TriggerExecutorService,
+  ],
 })
 export class TriggerModule {}

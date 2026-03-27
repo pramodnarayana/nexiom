@@ -7,6 +7,7 @@ import {
     primaryKey,
     index,
     uniqueIndex,
+    unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { organization } from './identity.js';
@@ -39,7 +40,7 @@ export const uiWorkspaces = pgTable('ui_workspace', {
     uniqueIndex('ui_workspace_org_name_lower_unique_idx').on(table.orgId, table.envType, sql`lower(${table.name})`),
     // Composite unique on (id, orgId) — required target for the composite FK
     // in integration_stitch that enforces workspace ↔ org co-ownership.
-    uniqueIndex('ui_workspace_id_org_unique_idx').on(table.id, table.orgId),
+    unique('ui_workspace_id_org_unique_idx').on(table.id, table.orgId),
     index('ui_workspace_org_idx').on(table.orgId),
     index('ui_workspace_env_idx').on(table.orgId, table.envType),
 ]);
