@@ -37,11 +37,13 @@ if (!process.env.DATABASE_URL) {
     );
 }
 
-// Schema points to the TypeScript source so drizzle-kit can run on a clean
-// checkout without a prior `pnpm build`. drizzle-kit uses ts-morph/jiti to
-// parse TypeScript directly — no compiled JS artifact is required.
+// Schema points to the TypeScript source files directly. drizzle-kit uses
+// jiti to parse TypeScript without a prior build step. We use a glob that
+// targets individual schema files rather than the barrel index.ts so that
+// jiti does not try to resolve the .js-extension re-exports used for ESM
+// compatibility at runtime.
 export default {
-    schema: './dist/schema/*.js',
+    schema: './src/schema/*.ts',
     out: './drizzle',
     dialect: 'postgresql',
     dbCredentials: {

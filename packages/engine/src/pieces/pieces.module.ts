@@ -1,4 +1,4 @@
-import { DynamicModule, Module, Global } from '@nestjs/common';
+import { DynamicModule, Module } from '@nestjs/common';
 import {
   PieceRegistryService,
   PIECES,
@@ -32,7 +32,6 @@ const SHARED_PROVIDERS = [
  *
  * Plain import() also works in dev (falls back gracefully).
  */
-@Global()
 @Module({})
 export class PiecesModule {
   /** Register with an explicit resolution anchor (recommended for production). */

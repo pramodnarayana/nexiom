@@ -278,7 +278,7 @@ export class DatabaseManager {
       // <monorepo>/apps/api/src/db/database-manager.{ts|js}
       // → resolve 4 levels up to reach the monorepo root.
       const thisFile = fileURLToPath(import.meta.url);
-      const monorepoRoot = path.resolve(thisFile, '../../../../..');
+      const monorepoRoot = path.resolve(path.dirname(thisFile), '../../../../');
       const piecesDir = path.join(monorepoRoot, 'packages/pieces');
       let pieceFolders: string[];
       let discoverySuccess = true;
@@ -376,9 +376,16 @@ export class DatabaseManager {
           console.log('  ✓ Cleaned up removed pieces from registry');
         }
       } else {
-        if (discoverySuccess) {
+        if (discoverySuccess && process.env.ALLOW_DISABLE_ALL === 'true') {
+          console.warn(
+            `  ⚠️  ALLOW_DISABLE_ALL is set. discoverySuccess=${String(discoverySuccess)}, discoveredPieces.length=${String(discoveredPieces.length)}. Disabling ALL pieces in registry.`,
+          );
           await db.update(schema.pieces).set({ enabled: false });
           console.log('  ✓ Disabled all pieces (none discovered)');
+        } else if (discoverySuccess) {
+          console.warn(
+            `  ⚠️  No pieces discovered but ALLOW_DISABLE_ALL is not set — skipping mass disable to avoid accidental data loss.`,
+          );
         }
         console.log('  ℹ️ No pieces discovered.');
       }

@@ -24,6 +24,7 @@ import {
 import type { Response } from 'express';
 
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { getAdminRoleId, getOwnerRoleId } from '@nexiom/identity/constants';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import type { AnyProperty } from '@nexiom/connectors';
 import { ConnectorsService } from '../connectors.service.js';
@@ -437,7 +438,8 @@ export class ConnectorsController {
 
     if (
       !orgMember ||
-      (orgMember.role !== 'admin' && orgMember.role !== 'owner')
+      (orgMember.role !== getAdminRoleId() &&
+        orgMember.role !== getOwnerRoleId())
     ) {
       throw new UnauthorizedException(
         'Only organization admins or owners can view connection metadata',
@@ -1064,8 +1066,6 @@ export class ConnectorsController {
     @AuthContext() ctx: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
   ) {
-    const { getAdminRoleId, getOwnerRoleId } =
-      await import('@nexiom/identity/constants');
     const adminRoleId = getAdminRoleId();
     const ownerRoleId = getOwnerRoleId();
     const tenantId = ctx.user?.organizationId;

@@ -59,5 +59,7 @@ describe("Identity Package", () => {
     expect((IdentityPackage as any).DrizzleTenantAdapter).toBeDefined();
 
     expect((IdentityPackage as any).DrizzlePermissionAdapter).toBeDefined();
+
+    expect((IdentityPackage as any).DrizzleRoleAdapter).toBeDefined();
   });
 });

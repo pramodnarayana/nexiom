@@ -541,7 +541,7 @@ export class ConnectorsService {
         );
       }
 
-      const [deleted] = await tx
+      const deleted = await tx
         .delete(appConnections)
         .where(
           and(
@@ -550,10 +550,7 @@ export class ConnectorsService {
           ),
         )
         .returning();
-
-      if (!deleted) {
-        throw new NotFoundException(`Connection ${connectionId} not found`);
-      }
+      void deleted; // row was guaranteed by the earlier FOR UPDATE lock
     });
   }
 
