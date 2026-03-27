@@ -47,6 +47,9 @@ vi.mock("./adapters/drizzle-tenant.adapter.js", () => ({
 vi.mock("./adapters/drizzle-permission.adapter.js", () => ({
   DrizzlePermissionAdapter: class { },
 }));
+vi.mock("./adapters/drizzle-role.adapter.js", () => ({
+  DrizzleRoleAdapter: class { },
+}));
 
 describe("Identity Package", () => {
   it("should export adapters", () => {

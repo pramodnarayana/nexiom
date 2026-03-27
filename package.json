@@ -14,7 +14,7 @@
 		"db:generate": "pnpm --filter @nexiom/database db:generate",
 		"db:studio": "pnpm --filter @nexiom/database db:studio",
 		"db:seed": "pnpm --filter api db:seed",
-		"setup:local": "{ [ -e .env ] || cp .env.example .env; } && docker compose up -d && pnpm db:migrate && pnpm db:seed"
+		"setup:local": "{ [ -e .env ] || cp .env.example .env; } && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed"
 	},
 	"devDependencies": {
 		"@swc/cli": "^0.8.0",

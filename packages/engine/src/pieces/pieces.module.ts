@@ -47,13 +47,4 @@ export class PiecesModule {
     };
   }
 
-  /** Convenience: register without an anchor (uses import.meta.url of engine lib). */
-  static register(): DynamicModule {
-    return {
-      global: true,
-      module: PiecesModule,
-      providers: SHARED_PROVIDERS,
-      exports: [PieceRegistryService],
-    };
-  }
 }

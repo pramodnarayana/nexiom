@@ -14,11 +14,16 @@ const monorepoRoot = resolve(thisDir, '../..');
 const apiEnv = resolve(monorepoRoot, 'apps/api/.env');
 const rootEnv = resolve(monorepoRoot, '.env');
 
+let eitherFound = false;
 if (existsSync(apiEnv)) {
     config({ path: apiEnv, override: false });
-} else if (existsSync(rootEnv)) {
+    eitherFound = true;
+}
+if (existsSync(rootEnv)) {
     config({ path: rootEnv, override: false });
-} else {
+    eitherFound = true;
+}
+if (!eitherFound) {
     // Neither .env file found — fall back to the existing process.env.
     // This is normal in CI/CD where DATABASE_URL is injected via environment.
     console.warn(

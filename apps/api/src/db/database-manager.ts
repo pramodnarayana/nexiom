@@ -296,7 +296,13 @@ export class DatabaseManager {
 
       for (const folder of pieceFolders) {
         const piecePath = path.join(piecesDir, folder);
-        const stat = await fs.stat(piecePath).catch(() => null);
+        const stat = await fs.stat(piecePath).catch((err: unknown) => {
+          console.warn(
+            `    ⚠️ Could not stat piece folder "${folder}": ${err instanceof Error ? err.message : String(err)}. Marking discovery as failed.`,
+          );
+          discoverySuccess = false;
+          return null;
+        });
 
         if (stat?.isDirectory()) {
           try {
@@ -338,9 +344,10 @@ export class DatabaseManager {
               );
             }
           } catch (e) {
-            console.log(
-              `    ⚠️ Failed to load piece from folder ${folder}: ${e instanceof Error ? e.message : String(e)}`,
+            console.warn(
+              `    ⚠️ Failed to load piece from folder ${folder}: ${e instanceof Error ? e.message : String(e)}. Marking discovery as failed.`,
             );
+            discoverySuccess = false;
           }
         }
       }
