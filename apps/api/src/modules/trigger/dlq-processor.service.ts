@@ -7,7 +7,7 @@ import {
   type WebhookRunParams,
   type TriggerRunParams,
 } from './trigger-executor.service.js';
-import { PieceRegistryService } from './piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 
 const MAX_ATTEMPTS = 3;
 

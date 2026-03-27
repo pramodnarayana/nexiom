@@ -26,6 +26,9 @@
 		"apps/api/**/*.{ts,tsx}": [
 			"pnpm -C apps/api exec eslint --fix"
 		],
+		"apps/worker/**/*.{ts,tsx}": [
+			"pnpm -C apps/worker exec eslint --fix"
+		],
 		"apps/web/**/*.{ts,tsx}": [
 			"pnpm -C apps/web exec eslint --fix"
 		],

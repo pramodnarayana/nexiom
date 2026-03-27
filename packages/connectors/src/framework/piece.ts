@@ -3,6 +3,7 @@ import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
 import { InternalServerErrorException } from '@nestjs/common';
 import type { FieldDescriptor as BaseFieldDescriptor } from '../intelligence/interfaces.js';
+import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
 
 /** A SaaS object available for metadata discovery. */
 export interface ObjectDescriptor {
@@ -188,6 +189,29 @@ export interface Piece {
      */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /**
+     * Converts a raw vendor record (from L2 replica) to Nexiom's canonical model.
+     * Called by NormalizationService (L3) for each entity in the replica store.
+     * Returns null if this piece does not normalize the given objectType
+     * (e.g. a trigger-only piece without a canonical mapping).
+     */
+    normalize?(
+        objectType: string,
+        raw: Record<string, unknown>,
+    ): Promise<NormalizedRecord | null>;
+    /**
+     * Executes a write action against the destination SaaS API.
+     * Called by DeliveryService (L5) with the hydrated canonical payload.
+     * Credentials are decrypted by TokenManagerService before this call.
+     *
+     * Implementers should throw a `RetryableException` for transient failures
+     * (429, 503) and let non-retryable errors propagate as-is.
+     */
+    executeAction?(
+        objectType: string,
+        payload: Record<string, unknown>,
+        credentials: Record<string, unknown>,
+    ): Promise<VendorResponse>;
+    /**
      * Fetches one page of records from the source SaaS API for the named stream.
      * The SchedulerWorker calls this once per page, passing the previous page's
      * `nextPageCursor` until `PollPage.nextPageCursor` is `undefined` (last page).
@@ -250,6 +274,10 @@ export interface CreatePieceParams {
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
     /** @see Piece.describeStreams */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
+    /** @see Piece.normalize */
+    normalize?(objectType: string, raw: Record<string, unknown>): Promise<NormalizedRecord | null>;
+    /** @see Piece.executeAction */
+    executeAction?(objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse>;
     /** @see Piece.poll */
     poll?(
         credentials: Record<string, unknown>,
@@ -340,6 +368,8 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.describeObjects && { describeObjects: params.describeObjects }),
         ...(params.describeFields && { describeFields: params.describeFields }),
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
+        ...(params.normalize && { normalize: params.normalize }),
+        ...(params.executeAction && { executeAction: params.executeAction }),
         ...(params.poll && { poll: params.poll }),
         ...(params.webhook && { webhook: params.webhook }),
     };

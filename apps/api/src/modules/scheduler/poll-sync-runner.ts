@@ -26,7 +26,7 @@ import {
   type StreamDescriptor,
   type StreamResult,
 } from '@nexiom/engine';
-import { PieceRegistryService } from '../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import { SyncRunner, type SyncResult } from './sync-runner.js';
 import { pollLockKey } from './lock-keys.js';
 

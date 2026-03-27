@@ -19,10 +19,14 @@ export class PieceLoaderService {
   private readonly logger = new Logger(PieceLoaderService.name);
 
   async loadEnabledPieces(db: DrizzleDb): Promise<Piece[]> {
-    const rows = await db.select().from(pieces).where(eq(pieces.enabled, true));
+    const rows = await db.select({
+      name: pieces.name,
+      packageName: pieces.packageName,
+      enabled: pieces.enabled
+    }).from(pieces).where(eq(pieces.enabled, true));
 
     this.logger.log(
-      `Found ${rows.length} enabled piece(s) in DB: ${rows.map((r) => r.name).join(', ')}`,
+      `Found ${rows.length} enabled piece(s) in DB: ${rows.map(r => r.name).join(', ')}`,
     );
 
     const loaded: Piece[] = [];

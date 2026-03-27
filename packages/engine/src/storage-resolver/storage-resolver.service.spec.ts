@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { StorageResolverService } from './storage-resolver.service.js';
+import { StorageResolverService } from '@nexiom/engine';
 import {
   DATABASE_CONNECTION,
   connectionStorageRegistry,

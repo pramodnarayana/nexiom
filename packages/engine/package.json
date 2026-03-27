@@ -19,7 +19,8 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@nexiom/connectors": "workspace:*"
+    "@nexiom/connectors": "workspace:*",
+    "@nexiom/database": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/common": "^11.0.1",

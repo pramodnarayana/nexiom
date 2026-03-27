@@ -4,6 +4,8 @@ import {
   PieceCategory,
   type ObjectDescriptor,
   type FieldDescriptor,
+  type NormalizedRecord,
+  type VendorResponse,
 } from '@nexiom/connectors/framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
@@ -268,6 +270,14 @@ export const quickbooks = createPiece({
   ],
   describeObjects,
   describeFields,
+  normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
+    // Stub — real mapping implemented in T032
+    return null;
+  },
+  executeAction: async (_objectType: string, _payload: Record<string, unknown>, _credentials: Record<string, unknown>): Promise<VendorResponse> => {
+    // Fail fast — real implementation in T034
+    throw new Error('QuickBooks executeAction not implemented');
+  },
   // NOTE: QuickBooks webhook support is intentionally disabled.
   // QB sends all company events to a single app endpoint identified by
   // payload.realmId, not a per-connection URL path. The current

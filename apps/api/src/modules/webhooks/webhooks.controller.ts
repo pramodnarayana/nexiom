@@ -19,7 +19,8 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
+import { QueueService, QueueName } from '@nexiom/queue';
+import { StorageResolverService } from '@nexiom/engine';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 
@@ -55,6 +56,7 @@ export class WebhooksController {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -117,6 +119,25 @@ export class WebhooksController {
           extReqId,
         });
       });
+      // Await queue delivery to ensure durability.
+      // Enqueue failures do NOT abort the 202 response; instead we mark the
+      // inbound_gateway record as PENDING so the worker can pick it up on its
+      // next poll cycle.
+      const traceId = inboundGatewayId;
+      await this.queueService
+        .send(QueueName.InboundQueue, { traceId, connectionId })
+        .catch((err: unknown) => {
+          this.logger.error(
+            {
+              event: 'l1.enqueue_failed',
+              traceId,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            'Failed to enqueue L1 event — rejecting webhook',
+          );
+          throw err;
+        });
+
       const durationMs = Date.now() - start;
       this.logger.assign({ durationMs });
       this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
@@ -128,6 +149,60 @@ export class WebhooksController {
           { event: 'l1.duplicate' },
           'Duplicate webhook ignored (idempotency)',
         );
+
+        try {
+          const schemaName =
+            await this.storageResolver.resolveSchemaName(connectionId);
+          const { inboundGateway } = buildTenantSchema(schemaName);
+          const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
+
+          if (extReqId) {
+            let existingTraceIdOutside: string | null = null;
+            await this.db.transaction(async (tx) => {
+              assertValidSchemaName(schemaName);
+              await tx.execute(
+                sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+              );
+
+              const rows = await tx
+                .select({ traceId: inboundGateway.traceId })
+                .from(inboundGateway)
+                .where(
+                  sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.connectionId} = ${connectionId}`,
+                )
+                .limit(1);
+
+              if (rows.length > 0) {
+                existingTraceIdOutside = rows[0].traceId;
+              }
+            });
+
+            if (existingTraceIdOutside) {
+              this.logger.debug(
+                { event: 'l1.re-enqueue', traceId: existingTraceIdOutside },
+                'Attempting to re-enqueue duplicate webhook',
+              );
+              await this.queueService
+                .send(QueueName.InboundQueue, {
+                  traceId: existingTraceIdOutside,
+                  connectionId,
+                })
+                .catch((err: unknown) => {
+                  this.logger.error(
+                    { err: err instanceof Error ? err.message : String(err) },
+                    'Failed to lookup and re-enqueue duplicate webhook',
+                  );
+                  throw err;
+                });
+            }
+          }
+        } catch (error_: unknown) {
+          this.logger.error(
+            { err: error_ instanceof Error ? error_.message : String(error_) },
+            'Failed to lookup and re-enqueue duplicate webhook',
+          );
+        }
+
         return;
       }
       this.logger.error(

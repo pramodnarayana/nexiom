@@ -1,6 +1,6 @@
 import { DefaultOAuthRefreshClient } from './token-refresh.service.js';
 import { EncryptionService, OAuthRefreshError } from '@nexiom/connectors';
-import { PieceRegistryService } from '../../trigger/piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/connectors/framework';
 import {
   describe,

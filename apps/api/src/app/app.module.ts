@@ -19,8 +19,9 @@ import * as schema from '../db/schema.js';
 import { ConnectionsModule } from '../modules/connections/connections.module.js';
 import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
-import { StorageResolverModule } from '../modules/storage-resolver/storage-resolver.module.js';
+import { StorageResolverModule } from '@nexiom/engine';
 import { CacheModule } from '@nexiom/cache';
+import { QueueModule } from '@nexiom/queue';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
 import { WorkspacesModule } from '../modules/workspaces/workspaces.module.js';
 import { StitchesModule } from '../modules/stitches/stitches.module.js';
@@ -43,6 +44,19 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
     ObservabilityModule,
     // Global Redis client — available to all modules via REDIS_CLIENT token
     CacheModule,
+    // Global SQS queue — available to all modules via QUEUE_SERVICE / QueueService token
+    QueueModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        infraMode: cfg.get<string>('INFRA_MODE', 'local') as
+          | 'local'
+          | 'production',
+        endpoint: cfg.get<string>('SQS_ENDPOINT'),
+        region: cfg.get<string>('AWS_REGION', 'us-east-1'),
+        accountId: cfg.get<string>('AWS_ACCOUNT_ID'),
+      }),
+    }),
     // Global cron scheduler — required for PollerService and DlqProcessorService
     ScheduleModule.forRoot(),
     IdentityModule.registerAsync({

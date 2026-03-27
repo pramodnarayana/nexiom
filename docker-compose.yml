@@ -178,6 +178,36 @@ services:
     networks:
       - nexiom-network
 
+  # --- Background Worker ---
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      target: runner
+    env_file:
+      - apps/api/.env
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      WINDMILL_BASE_URL: http://windmill_server:8000
+      WINDMILL_WORKSPACE: nexiom
+      WINDMILL_ENABLED: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      MAIL_MOCK: "false"
+    depends_on:
+      api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+
   # --- Migrator (Ephemeral) ---
   migrator:
     build:

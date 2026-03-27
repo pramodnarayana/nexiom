@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import type { DrizzleDb } from '@nexiom/database';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { TriggerExecutorService } from './trigger-executor.service.js';
-import { PieceRegistryService } from './piece-registry.service.js';
+import { PieceRegistryService } from '@nexiom/engine';
 
 interface ActiveConnection {
   workspace_id: string;

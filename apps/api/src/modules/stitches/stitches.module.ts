@@ -3,7 +3,7 @@ import { AuthModule } from '@nexiom/auth';
 import { CacheModule } from '@nexiom/cache';
 import { EncryptionService, AesEncryptionService } from '@nexiom/connectors';
 import { DbModule } from '../../db/db.module.js';
-import { PiecesModule } from '../pieces/pieces.module.js';
+import { PiecesModule } from '@nexiom/engine';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesAdminController } from './stitches-admin.controller.js';

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { QueueService, QueueName } from '@nexiom/queue';
 import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
-import { StorageResolverService } from '../storage-resolver/storage-resolver.service.js';
+import { StorageResolverService } from '@nexiom/engine';
 
 const loggerMock = {
   assign: vi.fn(),
@@ -22,9 +23,16 @@ function makeDbMock() {
     .mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
   const executeMock = vi.fn().mockResolvedValue(undefined);
 
+  // Return a fluent builder that mirrors Drizzle's tx.update(...).set(...).where(...) chain.
+  const setMock = vi.fn().mockReturnThis();
+  const whereMock = vi.fn().mockResolvedValue(undefined);
+  const updateBuilder = { set: setMock, where: whereMock };
+  const updateMock = vi.fn().mockReturnValue(updateBuilder);
+
   const txMock = {
     execute: executeMock,
     insert: insertMock,
+    update: updateMock,
   };
 
   return {
@@ -34,8 +42,13 @@ function makeDbMock() {
     _tx: txMock,
     _insertMock: insertMock,
     _executeMock: executeMock,
+    _setMock: setMock,
   };
 }
+
+const queueServiceMock = {
+  send: vi.fn().mockResolvedValue(undefined),
+};
 
 describe('WebhooksController', () => {
   let controller: WebhooksController;
@@ -54,6 +67,7 @@ describe('WebhooksController', () => {
       providers: [
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        { provide: QueueService, useValue: queueServiceMock },
         {
           provide: getLoggerToken(WebhooksController.name),
           useValue: loggerMock,
@@ -223,5 +237,38 @@ describe('WebhooksController', () => {
 
     expect(capturedValues).toBeDefined();
     expect(capturedValues?.['extReqId']).toBe('qb-event-456');
+  });
+
+  it('enqueues to InboundQueue on success path', async () => {
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      { foo: 'bar' },
+      {},
+    );
+
+    expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      traceId: expect.any(String),
+      connectionId: '00000000-0000-0000-0000-000000000001',
+    });
+  });
+
+  it('logs error and rethrows when enqueue fails', async () => {
+    queueServiceMock.send.mockRejectedValueOnce(new Error('SQS down'));
+
+    await expect(
+      controller.ingest(
+        '00000000-0000-0000-0000-000000000001',
+        { foo: 'bar' },
+        {},
+      ),
+    ).rejects.toThrow('SQS down');
+
+    await vi.waitFor(() => {
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'l1.enqueue_failed' }),
+        expect.stringContaining('rejecting webhook'),
+      );
+    });
   });
 });

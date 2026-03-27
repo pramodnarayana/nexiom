@@ -4,6 +4,8 @@ import {
     PieceCategory,
     type ObjectDescriptor,
     type FieldDescriptor,
+    type NormalizedRecord,
+    type VendorResponse,
 } from '@nexiom/connectors/framework';
 
 
@@ -146,6 +148,14 @@ export const salesforce = createPiece({
     ],
     describeObjects,
     describeFields,
+    normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
+        // Stub — real mapping implemented in T032
+        return null;
+    },
+    executeAction: async (_objectType: string, _payload: Record<string, unknown>, _credentials: Record<string, unknown>): Promise<VendorResponse> => {
+        // Stub — real implementation in T034
+        return { statusCode: 200, body: {} };
+    },
     webhook: {
         secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',
         signatureHeader: 'X-Salesforce-Signature',

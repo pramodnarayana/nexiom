@@ -49,6 +49,7 @@
     "@nexiom/identity": "workspace:*",
     "@nexiom/piece-quickbooks": "workspace:*",
     "@nexiom/piece-salesforce": "workspace:*",
+    "@nexiom/queue": "workspace:*",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",
     "class-transformer": "^0.5.1",

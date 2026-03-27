@@ -142,10 +142,10 @@ export class TriggerExecutorService {
   async runOnEnable(params: TriggerRunParams): Promise<void> {
     const context = this.buildContext(params);
     try {
-      // 1. Ensure the gateway tables are provisioned lazily
+      // 1. Ensure all pipeline tables are provisioned lazily
       await this.dbManager.applyPlan(
         params.workspaceId,
-        SchemaPlan.GATEWAY_ACTIVE,
+        SchemaPlan.OUTBOUND_ACTIVE,
       );
 
       // 2. Invoke the trigger enablement logic (e.g. Subscribe to webhook)

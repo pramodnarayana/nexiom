@@ -9,6 +9,7 @@ import {
     HostHttpClient,
     HttpMethod,
 } from './index.js';
+import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { Redis } from 'ioredis';
@@ -110,5 +111,71 @@ describe('Activepieces Framework Native Shim', () => {
         expect(result).toEqual({ success: true, id: '001A000001bcdefQAA' });
 
         sendRequestSpy.mockRestore();
+    });
+
+    it('forwards normalize from CreatePieceParams to the Piece instance', async () => {
+        const auth = PieceAuth.OAuth2({
+            authUrl: 'https://example.com/auth',
+            tokenUrl: 'https://example.com/token',
+            required: true,
+            scope: [],
+        });
+
+        const normalizeFn = async (objectType: string, raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
+            return { canonicalType: 'CRM_CONTACT', data: { ...raw, _type: objectType } };
+        };
+
+        const piece = createPiece({
+            name: 'test_normalize',
+            displayName: 'Test',
+            logoUrl: '',
+            auth,
+            actions: [],
+            triggers: [],
+            normalize: normalizeFn,
+        });
+
+        expect(piece.normalize).toBeDefined();
+        const result = await piece.normalize!('Account', { Name: 'Acme' });
+        expect(result).toEqual({ canonicalType: 'CRM_CONTACT', data: { Name: 'Acme', _type: 'Account' } });
+    });
+
+    it('forwards executeAction from CreatePieceParams to the Piece instance', async () => {
+        const auth = PieceAuth.OAuth2({
+            authUrl: 'https://example.com/auth',
+            tokenUrl: 'https://example.com/token',
+            required: true,
+            scope: [],
+        });
+
+        const executeActionFn = async (
+            objectType: string,
+            payload: Record<string, unknown>,
+            credentials: Record<string, unknown>,
+        ): Promise<VendorResponse> => {
+            return { statusCode: 201, body: { id: '123', objectType, payload, credentials } };
+        };
+
+        const piece = createPiece({
+            name: 'test_execute',
+            displayName: 'Test',
+            logoUrl: '',
+            auth,
+            actions: [],
+            triggers: [],
+            executeAction: executeActionFn,
+        });
+
+        expect(piece.executeAction).toBeDefined();
+        const result = await piece.executeAction!('Account', { Name: 'Acme' }, { token: 'abc' });
+        expect(result).toEqual({ 
+            statusCode: 201, 
+            body: { 
+                id: '123',
+                objectType: 'Account',
+                payload: { Name: 'Acme' },
+                credentials: { token: 'abc' }
+            } 
+        });
     });
 });
