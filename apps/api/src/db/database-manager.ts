@@ -272,11 +272,25 @@ export class DatabaseManager {
 
       console.log('  🧩 Auto-discovering marketplace pieces...');
 
-      // Resolve the pieces directory robustly (relative to monorepo root)
-      // Whether we are in apps/api or root, process.cwd() is apps/api during db:seed script
-      const monorepoRoot = path.resolve(process.cwd(), '../..');
+      // Resolve the pieces directory from the current file's location so the
+      // path is correct regardless of working directory (CI, Docker, local).
+      // __dirname equivalent for ESM: fileURLToPath(import.meta.url) gives us
+      // <monorepo>/apps/api/src/db/database-manager.{ts|js}
+      // → resolve 4 levels up to reach the monorepo root.
+      const { fileURLToPath: _fileURLToPath } = await import('node:url');
+      const thisFile = _fileURLToPath(import.meta.url);
+      const monorepoRoot = path.resolve(thisFile, '../../../../..');
       const piecesDir = path.join(monorepoRoot, 'packages/pieces');
-      const pieceFolders = await fs.readdir(piecesDir).catch(() => []);
+      let pieceFolders: string[];
+      try {
+        pieceFolders = await fs.readdir(piecesDir);
+      } catch (readdirErr) {
+        console.warn(
+          `  ⚠️  Could not read pieces directory "${piecesDir}": ${readdirErr instanceof Error ? readdirErr.message : String(readdirErr)}. ` +
+            `No marketplace pieces will be seeded.`,
+        );
+        pieceFolders = [];
+      }
       const discoveredPieces = [];
 
       for (const folder of pieceFolders) {

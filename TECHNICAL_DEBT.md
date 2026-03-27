@@ -6,7 +6,26 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
-### 1. PII Cleanup Job for Sessions
+### 1. DatabaseManager Duplication
+
+**Location**: `apps/api/src/db/database-manager.ts`, `apps/worker/src/db/database-manager.ts`  
+**Added**: 2026-03-27  
+**Impact**: Code Architecture, DRY Violation  
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- Identical `DatabaseManager` implementations are duplicated across both the API and Worker applications.
+- This creates multiple sources of truth for database module initialization, seeding, and migration execution, increasing the risk of configuration drift.
+- Although `@nexiom/dbmanager` exists, it currently only exports TypeScript interfaces rather than the concrete implementation.
+
+**Recommended Solution**:
+
+- Move the concrete `DatabaseManager` implementation into `@nexiom/dbmanager`.
+- Export a global `DbManagerModule` from that package.
+- Delete the redundant files in both `apps/api` and `apps/worker` and refactor them to import the unified library service.
+
+### 2. PII Cleanup Job for Sessions
 
 **Location**: `packages/database/src/schema/identity.ts` & `apps/api/src/modules/background`  
 **Added**: 2026-03-06  

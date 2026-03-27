@@ -27,7 +27,7 @@ async function bootstrap() {
   // preventing a mix of default NestJS and pino output during startup.
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
-    bufferLogs: false,
+    bufferLogs: true,
   });
   app.useLogger(app.get(Logger));
   const globalPrefix = 'api';

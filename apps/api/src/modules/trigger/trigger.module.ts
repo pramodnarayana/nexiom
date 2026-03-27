@@ -20,7 +20,7 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
  * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
  */
 @Module({
-  imports: [DbModule, PiecesModule.forRoot({ anchorUrl: import.meta.url })],
+  imports: [DbModule, PiecesModule],
   controllers: [WebhooksController],
   providers: [
     {
@@ -53,7 +53,10 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
     },
   ],
   exports: [
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
+    // PiecesModule.forRoot() must NOT appear here — exports lists provider tokens/classes,
+    // not DynamicModule initialisation calls. PieceRegistryService is the exported symbol
+    // that consumers can inject after importing TriggerModule.
+    PieceRegistryService,
     TriggerExecutorService,
   ],
 })

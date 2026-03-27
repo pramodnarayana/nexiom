@@ -9,12 +9,7 @@ import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
 
 @Module({
-  imports: [
-    QueueModule,
-    DbModule,
-    StorageResolverModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
-  ],
+  imports: [QueueModule, DbModule, StorageResolverModule, PiecesModule],
   providers: [
     ReplicaService,
     NormalizationService,

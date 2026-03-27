@@ -34,12 +34,12 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.1.11",
-    "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
+    "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.8",
     "typescript": "^5.7.3"
   }

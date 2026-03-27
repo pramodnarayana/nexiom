@@ -34,11 +34,7 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
   : [SchedulerController];
 
 @Module({
-  imports: [
-    DbModule,
-    ConnectionsModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
-  ],
+  imports: [DbModule, ConnectionsModule, PiecesModule],
   controllers: schedulerControllers,
   providers: [
     {

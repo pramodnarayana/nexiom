@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseManager } from "./database-manager.js";
 import { execSync } from "node:child_process";
+import * as path from "node:path";
 
 // Hoisted mocks for dynamic imports
 const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
@@ -183,10 +184,14 @@ describe("DatabaseManager", () => {
     it("should run root pnpm db:migrate script via execSync", () => {
       manager.migrate();
 
+      const expectedCwd = path.resolve(__dirname, "../../../..");
+
       expect(execSync).toHaveBeenCalledWith(
         "pnpm db:migrate",
         expect.objectContaining({
           stdio: "inherit",
+
+          cwd: expectedCwd,
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           env: expect.objectContaining({ FORCE_COLOR: "1" }),
         }),

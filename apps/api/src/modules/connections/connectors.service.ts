@@ -7,6 +7,7 @@ import {
   Inject,
   HttpException,
   UnauthorizedException,
+  ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -19,10 +20,11 @@ import {
   appConnections,
   AppConnectionStatus,
   connectionStorageRegistry,
+  globalEntityMap,
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -493,6 +495,46 @@ export class ConnectorsService {
       throw new InternalServerErrorException(
         'Failed to save connection to database',
       );
+    }
+  }
+
+  /**
+   * Deletes an app_connection. Validates absence of global_entity_map references
+   * to satisfy RESTRICT FK constraints, surfacing a clear error if mappings exist.
+   */
+  async deleteConnection(
+    tenantId: string,
+    connectionId: string,
+  ): Promise<void> {
+    const [mapping] = await this.db
+      .select({ id: globalEntityMap.id })
+      .from(globalEntityMap)
+      .where(
+        or(
+          eq(globalEntityMap.sourceAppId, connectionId),
+          eq(globalEntityMap.destAppId, connectionId),
+        ),
+      )
+      .limit(1);
+
+    if (mapping) {
+      throw new ConflictException(
+        'Cannot delete connection as it is currently in use by active integration stitch mappings. Please archive or delete the dependent mappings first.',
+      );
+    }
+
+    const [deleted] = await this.db
+      .delete(appConnections)
+      .where(
+        and(
+          eq(appConnections.id, connectionId),
+          eq(appConnections.tenantId, tenantId),
+        ),
+      )
+      .returning();
+
+    if (!deleted) {
+      throw new NotFoundException(`Connection ${connectionId} not found`);
     }
   }
 

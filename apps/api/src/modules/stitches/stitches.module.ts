@@ -13,13 +13,7 @@ import { StitchesService } from './stitches.service.js';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 
 @Module({
-  imports: [
-    DbModule,
-    AuthModule,
-    CacheModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
-    ConnectionsModule,
-  ],
+  imports: [DbModule, AuthModule, CacheModule, PiecesModule, ConnectionsModule],
   controllers: [
     StitchesController,
     StitchesAdminController,

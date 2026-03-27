@@ -2,6 +2,9 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
+  HttpCode,
+  HttpStatus,
   Body,
   UseGuards,
   Inject,
@@ -1052,5 +1055,20 @@ export class ConnectorsController {
         'Failed to save connection to database',
       );
     }
+  }
+
+  @Delete(':connectionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteConnection(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+  ) {
+    const tenantId = ctx.user?.organizationId;
+    if (!tenantId) {
+      throw new BadRequestException('tenantId context is missing');
+    }
+
+    // Validates RESTRICT constraints on global_entity_map before deleting
+    await this.connectorsService.deleteConnection(tenantId, connectionId);
   }
 }

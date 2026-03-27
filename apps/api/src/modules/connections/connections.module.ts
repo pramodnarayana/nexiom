@@ -27,7 +27,7 @@ import { type DrizzleDb } from '@nexiom/database';
  * close the socket on shutdown — closing it a second time would cause errors.
  */
 @Module({
-  imports: [DbModule, PiecesModule.forRoot({ anchorUrl: import.meta.url })],
+  imports: [DbModule, PiecesModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
     {
