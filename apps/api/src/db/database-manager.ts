@@ -277,8 +277,7 @@ export class DatabaseManager {
       // __dirname equivalent for ESM: fileURLToPath(import.meta.url) gives us
       // <monorepo>/apps/api/src/db/database-manager.{ts|js}
       // → resolve 4 levels up to reach the monorepo root.
-      const { fileURLToPath: _fileURLToPath } = await import('node:url');
-      const thisFile = _fileURLToPath(import.meta.url);
+      const thisFile = fileURLToPath(import.meta.url);
       const monorepoRoot = path.resolve(thisFile, '../../../../..');
       const piecesDir = path.join(monorepoRoot, 'packages/pieces');
       let pieceFolders: string[];

@@ -33,10 +33,7 @@ const SHARED_PROVIDERS = [
  * Plain import() also works in dev (falls back gracefully).
  */
 @Global()
-@Module({
-  providers: SHARED_PROVIDERS,
-  exports: [PieceRegistryService, PieceLoaderService, PIECES],
-})
+@Module({})
 export class PiecesModule {
   /** Register with an explicit resolution anchor (recommended for production). */
   static forRoot(options: { anchorUrl: string }): DynamicModule {
@@ -46,7 +43,7 @@ export class PiecesModule {
         { provide: PIECE_LOADER_ANCHOR_URL, useValue: options.anchorUrl },
         ...SHARED_PROVIDERS,
       ],
-      exports: [PieceRegistryService],
+      exports: [PieceRegistryService, PieceLoaderService, PIECES],
     };
   }
 

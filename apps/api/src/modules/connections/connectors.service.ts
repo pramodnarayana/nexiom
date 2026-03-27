@@ -506,36 +506,38 @@ export class ConnectorsService {
     tenantId: string,
     connectionId: string,
   ): Promise<void> {
-    const [mapping] = await this.db
-      .select({ id: globalEntityMap.id })
-      .from(globalEntityMap)
-      .where(
-        or(
-          eq(globalEntityMap.sourceAppId, connectionId),
-          eq(globalEntityMap.destAppId, connectionId),
-        ),
-      )
-      .limit(1);
+    await this.db.transaction(async (tx) => {
+      const [mapping] = await tx
+        .select({ id: globalEntityMap.id })
+        .from(globalEntityMap)
+        .where(
+          or(
+            eq(globalEntityMap.sourceAppId, connectionId),
+            eq(globalEntityMap.destAppId, connectionId),
+          ),
+        )
+        .limit(1);
 
-    if (mapping) {
-      throw new ConflictException(
-        'Cannot delete connection as it is currently in use by active integration stitch mappings. Please archive or delete the dependent mappings first.',
-      );
-    }
+      if (mapping) {
+        throw new ConflictException(
+          'Cannot delete connection as it is currently in use. Please delete the associated integration stitches to remove these dependencies.',
+        );
+      }
 
-    const [deleted] = await this.db
-      .delete(appConnections)
-      .where(
-        and(
-          eq(appConnections.id, connectionId),
-          eq(appConnections.tenantId, tenantId),
-        ),
-      )
-      .returning();
+      const [deleted] = await tx
+        .delete(appConnections)
+        .where(
+          and(
+            eq(appConnections.id, connectionId),
+            eq(appConnections.tenantId, tenantId),
+          ),
+        )
+        .returning();
 
-    if (!deleted) {
-      throw new NotFoundException(`Connection ${connectionId} not found`);
-    }
+      if (!deleted) {
+        throw new NotFoundException(`Connection ${connectionId} not found`);
+      }
+    });
   }
 
   /**

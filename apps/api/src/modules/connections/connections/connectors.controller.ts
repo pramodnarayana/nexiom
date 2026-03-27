@@ -11,6 +11,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   Query,
   Logger,
   Res,
@@ -1064,8 +1065,28 @@ export class ConnectorsController {
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
   ) {
     const tenantId = ctx.user?.organizationId;
-    if (!tenantId) {
-      throw new BadRequestException('tenantId context is missing');
+    if (!tenantId || !ctx.user?.id) {
+      throw new BadRequestException('tenantId or user context is missing');
+    }
+
+    const [orgMember] = await this.db
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, ctx.user.id),
+          eq(member.organizationId, tenantId),
+        ),
+      )
+      .limit(1);
+
+    if (
+      !orgMember ||
+      (orgMember.role !== 'admin' && orgMember.role !== 'owner')
+    ) {
+      throw new ForbiddenException(
+        'Only organization admins or owners can delete a connection',
+      );
     }
 
     // Validates RESTRICT constraints on global_entity_map before deleting

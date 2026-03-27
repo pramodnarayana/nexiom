@@ -11,12 +11,7 @@ import { ObservabilityModule } from '../observability/observability.module.js';
 // for this injection to resolve. If CacheModule is ever made non-global,
 // add `CacheModule` to the imports array here.
 @Module({
-  imports: [
-    DbModule,
-    StorageResolverModule,
-    PiecesModule.forRoot({ anchorUrl: import.meta.url }),
-    ObservabilityModule,
-  ],
+  imports: [DbModule, StorageResolverModule, PiecesModule, ObservabilityModule],
   controllers: [WebhooksController],
   providers: [WebhookSignatureGuard, TenantRateLimitGuard],
 })
