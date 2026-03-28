@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { TraceService } from './trace.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { getTableName } from 'drizzle-orm';
 import { StorageResolverService } from '@nexiom/engine';
 import { PinoLogger } from 'nestjs-pino';
 
@@ -10,15 +11,7 @@ import { PinoLogger } from 'nestjs-pino';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@nexiom/database', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@nexiom/database')>();
-  return {
-    ...actual,
-    // Do not mock buildTenantSchema so it returns real table/column metadata objects
-    // This ensures TraceService passes valid columns to drizzle queries.
-    assertValidSchemaName: vi.fn(),
-  };
-});
+// The actual @nexiom/database package is used for assertValidSchemaName and buildTenantSchema
 
 const loggerMock = {
   debug: vi.fn(),
@@ -160,6 +153,13 @@ describe('TraceService', () => {
       );
     });
 
+    it('throws or prevents unsafe identifier construction when schema is invalid', async () => {
+      mockResolver.resolveSchemaName = vi
+        .fn()
+        .mockResolvedValue('unsafe"schema;DROP TABLE;');
+      await expect(service.listTraces(ORG_ID, STITCH_ID, 50)).rejects.toThrow();
+    });
+
     it('throws BadRequestException for invalid composite cursor', async () => {
       // cursor must have the format "<ISO>:<uuid>"
       await expect(
@@ -215,10 +215,39 @@ describe('TraceService', () => {
       // Composite cursor: "<ISO>:<uuid>"
       expect(result.nextCursor).toMatch(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z:.+-/);
 
-      // Assert SQL predicates
-      expect(capture.fromArgs).toHaveLength(1);
-      expect(capture.whereArgs.length).toBeGreaterThan(0);
-      expect(capture.orderByArgs.length).toBeGreaterThan(0);
+      // Assert SQL predicates — use Drizzle getTableName() to avoid circular JSON.stringify
+
+      const tableNameFromArg = getTableName(
+        capture.fromArgs[0] as Parameters<typeof getTableName>[0],
+      );
+      expect(tableNameFromArg).toBe('sync_log');
+
+      // Recursive value-finder: avoids circular refs from PgTable column objects
+      function findValue(obj: unknown, target: string, depth = 0): boolean {
+        if (depth > 20) return false;
+        if (obj === null || obj === undefined) return false;
+        if (typeof obj === 'string') return obj.includes(target);
+        if (
+          typeof obj === 'number' ||
+          typeof obj === 'boolean' ||
+          typeof obj === 'bigint'
+        )
+          return String(obj).includes(target);
+        if (Array.isArray(obj))
+          return obj.some((v) => findValue(v, target, depth + 1));
+        if (typeof obj === 'object')
+          return Object.values(obj as Record<string, unknown>).some((v) =>
+            findValue(v, target, depth + 1),
+          );
+        return false;
+      }
+
+      // where args contain the routeId (stitchId) in their queryChunks
+      expect(findValue(capture.whereArgs, STITCH_ID)).toBe(true);
+
+      // orderBy args reference timestamp and id column names
+      expect(findValue(capture.orderByArgs, 'timestamp')).toBe(true);
+      expect(findValue(capture.orderByArgs, 'id')).toBe(true);
     });
 
     it('accepts a valid composite cursor without throwing', async () => {
@@ -337,7 +366,40 @@ describe('TraceService', () => {
 
       // getTrace checks trace existence + loads timeline inside one tx,
       // then loads the actual payload rows across two schemas.
-      expect(capture.fromArgs).toContainEqual(expect.anything());
+
+      const fromTables = capture.fromArgs.map((f: unknown) =>
+        getTableName(f as Parameters<typeof getTableName>[0]),
+      );
+      // Should query syncLog, inboundGateway, replicaEntity, normalizedEntity, outbound_gateway
+      expect(fromTables).toContain('sync_log');
+      expect(fromTables).toContain('inbound_gateway');
+      expect(fromTables).toContain('replica_entity');
+      expect(fromTables).toContain('normalized_entity');
+      expect(fromTables).toContain('outbound_gateway');
+
+      // where args contain TRACE_ID and STITCH_ID values somewhere in the AST
+      const whereFlat = capture.whereArgs.flat();
+      // Use a recursive value-finder to avoid circular JSON issues
+      function findValue(obj: unknown, target: string, depth = 0): boolean {
+        if (depth > 20) return false;
+        if (typeof obj === 'string') return obj.includes(target);
+        if (
+          typeof obj === 'number' ||
+          typeof obj === 'boolean' ||
+          typeof obj === 'bigint'
+        )
+          return String(obj).includes(target);
+        if (Array.isArray(obj))
+          return obj.some((v) => findValue(v, target, depth + 1));
+        if (obj && typeof obj === 'object') {
+          return Object.values(obj as Record<string, unknown>).some((v) =>
+            findValue(v, target, depth + 1),
+          );
+        }
+        return false;
+      }
+      expect(findValue(whereFlat, TRACE_ID)).toBe(true);
+      expect(findValue(whereFlat, STITCH_ID)).toBe(true);
     });
   });
 });

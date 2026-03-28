@@ -186,6 +186,7 @@ export class TraceService {
     const schemaName = await this.storageResolver.resolveSchemaName(
       stitch.srcConnectionId,
     );
+    assertValidSchemaName(schemaName);
     const { syncLog } = buildTenantSchema(schemaName);
 
     // Composite cursor condition: rows before (timestamp, id) in DESC order
@@ -272,9 +273,11 @@ export class TraceService {
       this.storageResolver.resolveSchemaName(stitch.destConnectionId),
     ]);
 
+    assertValidSchemaName(srcSchemaName);
     const { syncLog, inboundGateway, replicaEntity, normalizedEntity } =
       buildTenantSchema(srcSchemaName);
 
+    assertValidSchemaName(destSchemaName);
     const { outboundGateway } = buildTenantSchema(destSchemaName);
 
     const [srcResults, l5Rows] = await Promise.all([

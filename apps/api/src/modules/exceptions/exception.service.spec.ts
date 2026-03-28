@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ExceptionService } from './exception.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
@@ -17,6 +21,7 @@ vi.mock('@nexiom/database', async (importOriginal) => {
     ...actual,
     buildTenantSchema: vi.fn(() => ({
       outboundGateway: 'outbound_gateway_table',
+      deliveryOutbox: 'delivery_outbox_table',
     })),
     assertValidSchemaName: vi.fn(),
   };
@@ -58,6 +63,7 @@ const MOCK_OUTBOUND_ROW = {
   status: 'FAIL',
   createdAt: new Date('2026-01-01'),
   updatedAt: UPDATED_AT,
+  updatedAtRaw: String(UPDATED_AT.getTime() / 1000),
 };
 
 function buildCountChain(count: number) {
@@ -67,10 +73,13 @@ function buildCountChain(count: number) {
   return chain;
 }
 
-function buildDataChain(rows: unknown[]) {
+function buildDataChain(rows: unknown[], captureWhere: unknown[] = []) {
   const chain: Record<string, unknown> = {};
   chain['from'] = vi.fn().mockReturnValue(chain);
-  chain['where'] = vi.fn().mockReturnValue(chain);
+  chain['where'] = vi.fn().mockImplementation((arg) => {
+    captureWhere.push(arg);
+    return chain;
+  });
   chain['orderBy'] = vi.fn().mockReturnValue(chain);
   chain['limit'] = vi.fn().mockResolvedValue(rows);
   return chain;
@@ -93,7 +102,10 @@ function buildResolveSelectChain(rows: unknown[]) {
   return chain;
 }
 
-function buildMockDb(outboundRows: unknown[] = [MOCK_OUTBOUND_ROW]) {
+function buildMockDb(
+  outboundRows: unknown[] = [MOCK_OUTBOUND_ROW],
+  captureWhere: unknown[] = [],
+) {
   let selectCallCount = 0;
   const tx = {
     execute: vi.fn().mockResolvedValue(undefined),
@@ -103,9 +115,10 @@ function buildMockDb(outboundRows: unknown[] = [MOCK_OUTBOUND_ROW]) {
       if (selectCallCount % 2 === 1) {
         return buildCountChain(outboundRows.length);
       }
-      return buildDataChain(outboundRows);
+      return buildDataChain(outboundRows, captureWhere);
     }),
     update: vi.fn().mockReturnValue(buildUpdateChain()),
+    insert: vi.fn().mockReturnValue(buildUpdateChain([{ id: 'outbox-id' }])),
   };
 
   return {
@@ -176,12 +189,13 @@ describe('ExceptionService', () => {
       expect(result.nextCursor).toBeNull();
     });
 
-    it('skips unresolvable connections gracefully', async () => {
+    it('throws BadRequestException when connection schema cannot be resolved', async () => {
       mockResolver.resolveSchemaName = vi
         .fn()
         .mockRejectedValue(new Error('not found'));
-      const result = await service.listExceptions(ORG_ID);
-      expect(result.data).toHaveLength(0);
+      await expect(service.listExceptions(ORG_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('respects limit pagination param', async () => {
@@ -199,6 +213,22 @@ describe('ExceptionService', () => {
       const page1 = await service.listExceptions(ORG_ID, {}, { limit: 1 });
       expect(page1.nextCursor).toBeDefined();
 
+      const captureWhere: unknown[] = [];
+      let selectCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) =>
+          fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            select: vi.fn().mockImplementation(() => {
+              selectCallCount++;
+              return selectCallCount % 2 === 1
+                ? buildCountChain(1)
+                : buildDataChain([MOCK_OUTBOUND_ROW], captureWhere);
+            }),
+          }),
+        );
+
       // Second call (uses returned cursor)
       const page2 = await service.listExceptions(
         ORG_ID,
@@ -207,8 +237,12 @@ describe('ExceptionService', () => {
       );
       // Data matches mock outbound row; in real implementation rows shift
       expect(page2.data).toHaveLength(1);
-      // Given our mock always yields the same row for size 1, hasMore remains the same,
-      // but we assert the service can consume the previous cursor without throwing.
+      expect(captureWhere.length).toBeGreaterThan(0);
+      // The where clause is an and() containing statusSql, routeFilter, and the cursor
+      // condition.  We confirm the cursor was threaded through by asserting:
+      //  1. where() was called (captureWhere is non-empty)
+      //  2. the result round-trips without throwing (page2 returns data)
+      expect(page2.data).toHaveLength(1);
       expect(page2.nextCursor).toBeDefined();
     });
 
@@ -218,44 +252,127 @@ describe('ExceptionService', () => {
         .mockResolvedValue([MOCK_STITCH]);
       mockResolver.resolveSchemaName = vi.fn().mockResolvedValue('ws_dest_001');
 
-      const unresolved = await service.listExceptions(
+      const captureWhere1: unknown[] = [];
+      const captureWhere2: unknown[] = [];
+      let selectCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) =>
+          fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            select: vi.fn().mockImplementation(() => {
+              selectCallCount++;
+              if (selectCallCount <= 2) {
+                return selectCallCount % 2 === 1
+                  ? buildCountChain(1)
+                  : buildDataChain([MOCK_OUTBOUND_ROW], captureWhere1);
+              } else {
+                return selectCallCount % 2 === 1
+                  ? buildCountChain(1)
+                  : buildDataChain([MOCK_OUTBOUND_ROW], captureWhere2);
+              }
+            }),
+          }),
+        );
+
+      await service.listExceptions(
         ORG_ID,
         { status: 'unresolved' },
         { limit: 5 },
       );
-      expect(unresolved.data).toHaveLength(1);
 
-      const dismissed = await service.listExceptions(
+      await service.listExceptions(
         ORG_ID,
         { status: 'dismissed' },
         { limit: 5 },
       );
-      expect(dismissed.data).toHaveLength(1);
+
+      const safeStringify = (obj: unknown) =>
+        JSON.stringify(obj, (_k, v: unknown) =>
+          typeof v === 'symbol' ? String(v) : v,
+        );
+
+      const str1 = safeStringify(captureWhere1[0]);
+      const str2 = safeStringify(captureWhere2[0]);
+
+      expect(str1).toContain('FAIL');
+      expect(str2).toContain('DISMISSED');
+      expect(str1).not.toEqual(str2);
     });
   });
 
   describe('retryException()', () => {
-    beforeEach(() => {
-      // resolveOutboundRow uses a select chain that ends with .limit()
+    // retryException runs 4 transactions:
+    //   TX-1 (resolveOutboundRow): SELECT to find the outbound row
+    //   TX-2 (retryException):     UPDATE status + INSERT outbox row
+    //   TX-3 (retryException):     SELECT outbox row to read payload
+    //   TX-4 (retryException):     UPDATE outbox row as delivered
+    function buildRetryTransactions(
+      updatedRows: unknown[] = [{ id: OUTBOUND_ID }],
+    ) {
+      const OUTBOX_ROW_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+      const outboxPayload = {
+        outboundGatewayId: OUTBOUND_ID,
+        routeId: STITCH_ID,
+        traceId: TRACE_ID,
+        connectionId: SRC_CONN,
+        targetConnectionId: DEST_CONN,
+      };
+
+      // TX-1: resolveOutboundRow SELECT chain
       const resolveTx = {
         execute: vi.fn().mockResolvedValue(undefined),
         select: vi
           .fn()
           .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
       };
-      const updateTx = {
+
+      // TX-2: UPDATE status + INSERT into delivery_outbox
+      const insertChain: Record<string, unknown> = {};
+      insertChain['values'] = vi.fn().mockReturnValue(insertChain);
+      insertChain['returning'] = vi
+        .fn()
+        .mockResolvedValue([{ id: OUTBOX_ROW_ID }]);
+      const updateInsertTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockReturnValue(buildUpdateChain(updatedRows)),
+        insert: vi.fn().mockReturnValue(insertChain),
+      };
+
+      // TX-3: SELECT outbox row back
+      const selectOutboxChain: Record<string, unknown> = {};
+      selectOutboxChain['from'] = vi.fn().mockReturnValue(selectOutboxChain);
+      selectOutboxChain['where'] = vi.fn().mockReturnValue(selectOutboxChain);
+      selectOutboxChain['limit'] = vi
+        .fn()
+        .mockResolvedValue([{ id: OUTBOX_ROW_ID, payload: outboxPayload }]);
+      const selectOutboxTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnValue(selectOutboxChain),
+      };
+
+      // TX-4: UPDATE outbox row as delivered
+      const markDeliveredTx = {
         execute: vi.fn().mockResolvedValue(undefined),
         update: vi
           .fn()
-          .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+          .mockReturnValue(buildUpdateChain([{ id: OUTBOX_ROW_ID }])),
       };
+
       let txCallCount = 0;
-      mockDb.transaction = vi
+      return vi
         .fn()
         .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
           txCallCount++;
-          return fn(txCallCount === 1 ? resolveTx : updateTx);
+          if (txCallCount === 1) return fn(resolveTx);
+          if (txCallCount === 2) return fn(updateInsertTx);
+          if (txCallCount === 3) return fn(selectOutboxTx);
+          return fn(markDeliveredTx);
         });
+    }
+
+    beforeEach(() => {
+      mockDb.transaction = buildRetryTransactions();
     });
 
     it('resets status to PENDING and enqueues to DeliveryQueue', async () => {
@@ -274,24 +391,7 @@ describe('ExceptionService', () => {
     });
 
     it('throws ConflictException when status transition is invalid (0 rows updated)', async () => {
-      const resolveTx = {
-        execute: vi.fn().mockResolvedValue(undefined),
-        select: vi
-          .fn()
-          .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
-      };
-      const updateTx = {
-        execute: vi.fn().mockResolvedValue(undefined),
-        update: vi.fn().mockReturnValue(buildUpdateChain([])), // 0 rows updated
-      };
-      let txCallCount = 0;
-      mockDb.transaction = vi
-        .fn()
-        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
-          txCallCount++;
-          return fn(txCallCount === 1 ? resolveTx : updateTx);
-        });
-
+      mockDb.transaction = buildRetryTransactions([]); // 0 rows updated triggers ConflictException
       await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
         ConflictException,
       );

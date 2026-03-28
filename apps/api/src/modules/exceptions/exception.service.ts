@@ -45,6 +45,7 @@ export interface ExceptionItem {
   status: string;
   createdAt: Date;
   updatedAt: Date;
+  updatedAtRaw: string;
 }
 
 export interface ExceptionListResult {
@@ -66,20 +67,24 @@ export interface ExceptionListResult {
 // Cursor helpers
 // ---------------------------------------------------------------------------
 
-function encodeExceptionCursor(updatedAt: Date, id: string): string {
-  return `${updatedAt.toISOString()}:${id}`;
+function encodeExceptionCursor(updatedAtRaw: string, id: string): string {
+  return `${updatedAtRaw}:${id}`;
 }
 
-function parseExceptionCursor(cursor: string): { updatedAt: Date; id: string } {
+function parseExceptionCursor(cursor: string): {
+  updatedAtRaw: string;
+  id: string;
+} {
   const sepIdx = cursor.lastIndexOf(':');
   if (sepIdx === -1) {
     throw new BadRequestException(
-      'Invalid exception cursor — expected "<updatedAt>:<id>"',
+      'Invalid exception cursor — expected "<updatedAtRaw>:<id>"',
     );
   }
-  const updatedAt = new Date(cursor.slice(0, sepIdx));
+  const updatedAtRaw = cursor.slice(0, sepIdx);
   const id = cursor.slice(sepIdx + 1);
-  if (isNaN(updatedAt.getTime())) {
+
+  if (!updatedAtRaw || isNaN(Number(updatedAtRaw))) {
     throw new BadRequestException(
       'Invalid exception cursor: timestamp component invalid',
     );
@@ -89,7 +94,7 @@ function parseExceptionCursor(cursor: string): { updatedAt: Date; id: string } {
       'Invalid exception cursor: id component is not a valid UUID',
     );
   }
-  return { updatedAt, id };
+  return { updatedAtRaw, id };
 }
 
 @Injectable()
@@ -129,10 +134,16 @@ export class ExceptionService {
 
     let cursorCondition: ReturnType<typeof or> | undefined = undefined;
     if (pagination.cursor) {
-      const { updatedAt, id } = parseExceptionCursor(pagination.cursor);
+      const { updatedAtRaw, id } = parseExceptionCursor(pagination.cursor);
       cursorCondition = or(
-        lt(sql`updated_at`, updatedAt),
-        and(sql`updated_at = ${updatedAt}`, lt(sql`id`, id)),
+        lt(
+          sql`updated_at`,
+          sql`to_timestamp(${updatedAtRaw}::double precision)`,
+        ),
+        and(
+          sql`updated_at = to_timestamp(${updatedAtRaw}::double precision)`,
+          lt(sql`id`, id),
+        ),
       );
     }
 
@@ -162,12 +173,12 @@ export class ExceptionService {
       let schemaName: string;
       try {
         schemaName = await this.storageResolver.resolveSchemaName(destConnId);
-      } catch {
-        this.logger.warn(
-          { destConnId },
-          'exception.list: could not resolve schema, skipping connection',
+      } catch (error) {
+        throw new BadRequestException(
+          `Failed to resolve schema for destination connection ${destConnId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
         );
-        continue;
       }
 
       const { outboundGateway } = buildTenantSchema(schemaName);
@@ -200,7 +211,19 @@ export class ExceptionService {
 
         // Always fetch limit + 1 to prevent starvation and compute pagination correctly across schemas
         const dataQuery = tx
-          .select()
+          .select({
+            id: outboundGateway.id,
+            traceId: outboundGateway.traceId,
+            routeId: outboundGateway.routeId,
+            reqPayload: outboundGateway.reqPayload,
+            resPayload: outboundGateway.resPayload,
+            statusCode: outboundGateway.statusCode,
+            attemptCount: outboundGateway.attemptCount,
+            status: outboundGateway.status,
+            createdAt: outboundGateway.createdAt,
+            updatedAt: outboundGateway.updatedAt,
+            updatedAtRaw: sql<string>`extract(epoch from ${outboundGateway.updatedAt})::text`,
+          })
           .from(outboundGateway)
           .where(cursorWhereClause)
           .orderBy(
@@ -234,13 +257,14 @@ export class ExceptionService {
           status: row.status,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
+          updatedAtRaw: row.updatedAtRaw,
         });
       }
     }
 
     // Sort to deterministically break ties and avoid duplicates across pages
     allRows.sort((a, b) => {
-      const timeDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
+      const timeDiff = Number(b.updatedAtRaw) - Number(a.updatedAtRaw);
       if (timeDiff !== 0) return timeDiff;
       return b.id.localeCompare(a.id);
     });
@@ -256,7 +280,7 @@ export class ExceptionService {
       limit,
       nextCursor:
         hasMore && lastRow
-          ? encodeExceptionCursor(lastRow.updatedAt, lastRow.id)
+          ? encodeExceptionCursor(lastRow.updatedAtRaw, lastRow.id)
           : null,
     };
   }
@@ -291,7 +315,9 @@ export class ExceptionService {
       );
     }
 
-    const { outboundGateway } = buildTenantSchema(schemaName);
+    const { outboundGateway, deliveryOutbox } = buildTenantSchema(schemaName);
+
+    let outboxId: string = '';
 
     await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
@@ -316,14 +342,52 @@ export class ExceptionService {
         );
       }
 
-      await this.queueService.send(QueueName.DeliveryQueue, {
-        outboundGatewayId,
-        routeId: outboundGatewayRow.routeId,
-        traceId: outboundGatewayRow.traceId,
-        connectionId: stitch.srcConnectionId,
-        targetConnectionId: stitch.destConnectionId,
-      });
+      const [outboxRow] = await tx
+        .insert(deliveryOutbox)
+        .values({
+          payload: {
+            outboundGatewayId,
+            routeId: outboundGatewayRow.routeId,
+            traceId: outboundGatewayRow.traceId,
+            connectionId: stitch.srcConnectionId,
+            targetConnectionId: stitch.destConnectionId,
+          },
+          status: 'PENDING',
+        })
+        .returning({ id: deliveryOutbox.id });
+
+      outboxId = outboxRow.id;
     });
+
+    const outboxRows = await this.db.transaction(async (tx) => {
+      assertValidSchemaName(schemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+      return tx
+        .select()
+        .from(deliveryOutbox)
+        .where(eq(deliveryOutbox.id, outboxId))
+        .limit(1);
+    });
+
+    if (outboxRows.length > 0) {
+      await this.queueService.send(
+        QueueName.DeliveryQueue,
+        outboxRows[0].payload as Record<string, unknown>,
+      );
+
+      await this.db.transaction(async (tx) => {
+        assertValidSchemaName(schemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        await tx
+          .update(deliveryOutbox)
+          .set({ status: 'SUCCESS', deliveredAt: new Date() } as never)
+          .where(eq(deliveryOutbox.id, outboxId));
+      });
+    }
 
     this.logger.info(
       { id: outboundGatewayId, traceId: outboundGatewayRow.traceId },

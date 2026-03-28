@@ -209,6 +209,19 @@ export function buildTenantSchema(schemaName: string) {
         uniqueIndex('idx_unique_cursor').on(table.connectionId, table.entityType),
     ]);
 
+    /**
+     * DELIVERY OUTBOX
+     *
+     * Transactional outbox for reliable queue handoff.
+     */
+    const deliveryOutbox = schema.table('delivery_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        payload: jsonb('payload').notNull(),
+        status: pipelineStatusEnum('status').notNull().default('PENDING'),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+        deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    });
+
     return {
         inboundGateway,
         replicaEntity,
@@ -216,6 +229,7 @@ export function buildTenantSchema(schemaName: string) {
         outboundGateway,
         syncLog,
         syncCursor,
+        deliveryOutbox,
     };
 }
 
