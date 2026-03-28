@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 import { eq, and, desc, lt, or, sql as drizzleSql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
@@ -143,11 +143,12 @@ function parseCursor(cursor: string): ParsedCursor {
 @Injectable()
 export class TraceService {
   constructor(
-    @InjectPinoLogger(TraceService.name)
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
-  ) {}
+  ) {
+    this.logger.setContext(TraceService.name);
+  }
 
   /**
    * Returns a paginated timeline of sync_log entries for a given stitch.

@@ -4,7 +4,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { TraceService } from './trace.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
-import { getLoggerToken } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -26,6 +26,8 @@ const loggerMock = {
   warn: vi.fn(),
   error: vi.fn(),
   log: vi.fn(),
+  setContext: vi.fn(),
+  assign: vi.fn(),
 };
 
 const NOW = new Date('2026-01-01T12:00:00Z');
@@ -67,7 +69,8 @@ function buildSelectChain(rows: unknown[], capture?: CallCapture) {
     capture?.orderByArgs.push(args);
     return chain;
   });
-  chain['limit'] = vi.fn().mockResolvedValue(rows);
+  chain['limit'] = vi.fn().mockImplementation(() => chain);
+  chain['then'] = (resolve: (val: unknown) => void) => resolve(rows);
   return chain;
 }
 
@@ -132,7 +135,7 @@ describe('TraceService', () => {
         TraceService,
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: StorageResolverService, useValue: mockResolver },
-        { provide: getLoggerToken(TraceService.name), useValue: loggerMock },
+        { provide: PinoLogger, useValue: loggerMock },
       ],
     }).compile();
 
@@ -304,21 +307,22 @@ describe('TraceService', () => {
         },
       ];
 
+      const expectedCallRows = [
+        syncLogRows, // 1: existence check (syncLog)
+        syncLogRows, // 2: layers fetch (syncLog)
+        inboundRows, // 3: L1 row (inbound)
+        [], // 4: L2 row (replica / stitch)
+        [], // 5: L3 row (outbox)
+        outboundRows, // 6: L3 row (outbound)
+      ];
+
       let selectCount = 0;
       const tx = {
         execute: vi.fn().mockResolvedValue(undefined),
         select: vi.fn().mockImplementation(() => {
+          const rows = expectedCallRows[selectCount] || [];
           selectCount++;
-          // 1: existence check (syncLog)
-          // 2: layers fetch (syncLog)
-          // 3: L1 row (inbound)
-          // 4: L2 row (replica) -> []
-          // 5: L3 row (outbound)
-          if (selectCount === 1 || selectCount === 2)
-            return buildSelectChain(syncLogRows, capture);
-          if (selectCount === 3) return buildSelectChain(inboundRows, capture);
-          if (selectCount === 5) return buildSelectChain(outboundRows, capture);
-          return buildSelectChain([], capture); // L2 empty
+          return buildSelectChain(rows, capture);
         }),
       };
       mockDb.transaction = vi

@@ -5,7 +5,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 import { eq, inArray, and, or, lt, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
@@ -95,12 +95,13 @@ function parseExceptionCursor(cursor: string): { updatedAt: Date; id: string } {
 @Injectable()
 export class ExceptionService {
   constructor(
-    @InjectPinoLogger(ExceptionService.name)
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly queueService: QueueService,
-  ) {}
+  ) {
+    this.logger.setContext(ExceptionService.name);
+  }
 
   /**
    * Lists outbound_gateway exception rows across all dest-connection schemas
@@ -121,7 +122,10 @@ export class ExceptionService {
     filter: { status?: ExceptionStatus } = {},
     pagination: { limit?: number; cursor?: string } = {},
   ): Promise<ExceptionListResult> {
-    const limit = Math.min(pagination.limit ?? 50, RECENT_EXCEPTION_LIMIT);
+    const limit = Math.min(
+      Math.max(1, pagination.limit ?? 50),
+      RECENT_EXCEPTION_LIMIT,
+    );
 
     let cursorCondition: ReturnType<typeof or> | undefined = undefined;
     if (pagination.cursor) {
@@ -183,8 +187,6 @@ export class ExceptionService {
         ? and(whereClause, cursorCondition)
         : whereClause;
 
-      const remainingQuota = limit + 1 - allRows.length;
-
       const { rows, rowCount } = await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
@@ -196,19 +198,16 @@ export class ExceptionService {
           .from(outboundGateway)
           .where(whereClause);
 
-        // Conditional row fetch based on remaining global quota
-        const dataQuery =
-          remainingQuota > 0
-            ? tx
-                .select()
-                .from(outboundGateway)
-                .where(cursorWhereClause)
-                .orderBy(
-                  sql`${outboundGateway.updatedAt} DESC`,
-                  sql`${outboundGateway.id} DESC`,
-                )
-                .limit(remainingQuota)
-            : Promise.resolve([]);
+        // Always fetch limit + 1 to prevent starvation and compute pagination correctly across schemas
+        const dataQuery = tx
+          .select()
+          .from(outboundGateway)
+          .where(cursorWhereClause)
+          .orderBy(
+            sql`${outboundGateway.updatedAt} DESC`,
+            sql`${outboundGateway.id} DESC`,
+          )
+          .limit(limit + 1);
 
         const [countResult, dataRows] = await Promise.all([
           countQuery,
@@ -281,31 +280,6 @@ export class ExceptionService {
       outboundGatewayId,
     );
 
-    const { outboundGateway } = buildTenantSchema(schemaName);
-
-    const updated = await this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
-      return tx
-        .update(outboundGateway)
-        .set({ status: 'PENDING' } as never)
-        .where(
-          and(
-            eq(outboundGateway.id, outboundGatewayId),
-            sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
-          ),
-        )
-        .returning({ id: outboundGateway.id });
-    });
-
-    if (updated.length === 0) {
-      throw new ConflictException(
-        `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
-      );
-    }
-
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: eq(integrationStitches.id, outboundGatewayRow.routeId),
       columns: { srcConnectionId: true, destConnectionId: true },
@@ -317,12 +291,38 @@ export class ExceptionService {
       );
     }
 
-    await this.queueService.send(QueueName.DeliveryQueue, {
-      outboundGatewayId,
-      routeId: outboundGatewayRow.routeId,
-      traceId: outboundGatewayRow.traceId,
-      connectionId: stitch.srcConnectionId,
-      targetConnectionId: stitch.destConnectionId,
+    const { outboundGateway } = buildTenantSchema(schemaName);
+
+    await this.db.transaction(async (tx) => {
+      assertValidSchemaName(schemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+
+      const updatedRows = await tx
+        .update(outboundGateway)
+        .set({ status: 'PENDING' } as never)
+        .where(
+          and(
+            eq(outboundGateway.id, outboundGatewayId),
+            sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
+          ),
+        )
+        .returning({ id: outboundGateway.id });
+
+      if (updatedRows.length === 0) {
+        throw new ConflictException(
+          `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
+        );
+      }
+
+      await this.queueService.send(QueueName.DeliveryQueue, {
+        outboundGatewayId,
+        routeId: outboundGatewayRow.routeId,
+        traceId: outboundGatewayRow.traceId,
+        connectionId: stitch.srcConnectionId,
+        targetConnectionId: stitch.destConnectionId,
+      });
     });
 
     this.logger.info(
@@ -402,8 +402,15 @@ export class ExceptionService {
   }> {
     const stitches = await this.db.query.integrationStitches.findMany({
       where: eq(integrationStitches.orgId, orgId),
-      columns: { destConnectionId: true },
+      columns: { id: true, destConnectionId: true },
     });
+
+    const stitchIds = stitches.map((s) => s.id);
+    if (stitchIds.length === 0) {
+      throw new NotFoundException(
+        `Exception ${outboundGatewayId} not found for this organization`,
+      );
+    }
 
     const destConnIds = [...new Set(stitches.map((s) => s.destConnectionId))];
 
@@ -434,7 +441,12 @@ export class ExceptionService {
               routeId: outboundGateway.routeId,
             })
             .from(outboundGateway)
-            .where(eq(outboundGateway.id, outboundGatewayId))
+            .where(
+              and(
+                eq(outboundGateway.id, outboundGatewayId),
+                inArray(outboundGateway.routeId, stitchIds),
+              ),
+            )
             .limit(1);
         });
 

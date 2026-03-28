@@ -5,7 +5,7 @@ import { ExceptionService } from './exception.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
 import { QueueService, QueueName } from '@nexiom/queue';
-import { getLoggerToken } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -28,6 +28,8 @@ const loggerMock = {
   warn: vi.fn(),
   error: vi.fn(),
   log: vi.fn(),
+  setContext: vi.fn(),
+  assign: vi.fn(),
 };
 
 const ORG_ID = 'org-1';
@@ -149,10 +151,7 @@ describe('ExceptionService', () => {
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: StorageResolverService, useValue: mockResolver },
         { provide: QueueService, useValue: mockQueue },
-        {
-          provide: getLoggerToken(ExceptionService.name),
-          useValue: loggerMock,
-        },
+        { provide: PinoLogger, useValue: loggerMock },
       ],
     }).compile();
 
