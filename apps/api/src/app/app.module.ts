@@ -29,6 +29,8 @@ import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module.js';
 import { ShutdownService } from '../core/shutdown.service.js';
 import { ObservabilityModule } from '../modules/observability/observability.module.js';
+import { TraceModule } from '../modules/trace/trace.module.js';
+import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
 
 @Module({
   imports: [
@@ -112,6 +114,8 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
     StitchesModule,
     SchedulerModule,
     WebhooksModule,
+    TraceModule,
+    ExceptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService, ShutdownService],
