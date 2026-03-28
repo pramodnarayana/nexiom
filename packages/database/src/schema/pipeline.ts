@@ -19,11 +19,12 @@ export const pipelineStatusEnum = pgEnum('pipeline_status_enum', [
     'PROCESSING',
     'REPLICATED',
     'NORMALIZED',
-    'SKIPPED',   // sync condition did not match
+    'SKIPPED',    // sync condition did not match (fan-out filter)
     'PENDING',
     'SUCCESS',
     'FAIL',
     'RETRY',
+    'DISMISSED',  // operator explicitly dismissed a failed delivery — no further retries
 ]);
 
 export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [

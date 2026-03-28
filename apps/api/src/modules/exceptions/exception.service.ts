@@ -1,6 +1,12 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and, or, lt, sql as drizzleSql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -13,6 +19,16 @@ import { QueueService, QueueName } from '@nexiom/queue';
 import { sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum rows returned per schema when no pagination params are provided.
+ * This is a documented contract: callers must use limit/offset for full scans.
+ */
+const RECENT_EXCEPTION_LIMIT = 200;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -21,13 +37,12 @@ export type ExceptionStatus = 'unresolved' | 'dismissed';
 export interface ExceptionItem {
   id: string;
   traceId: string;
+  /** routeId equals stitchId — included for client convenience. */
   routeId: string;
-  stitchId: string | null;
   reqPayload: unknown;
   resPayload: unknown;
   statusCode: number | null;
   attemptCount: number;
-  /** Pipeline status: FAIL | RETRY for unresolved; SKIPPED for dismissed. */
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -35,24 +50,48 @@ export interface ExceptionItem {
 
 export interface ExceptionListResult {
   data: ExceptionItem[];
+  /**
+   * Real COUNT(*) of matching rows across all schemas for this filter.
+   * Reflects total matching rows, not the length of the paginated slice.
+   */
   total: number;
+  limit: number;
+  /**
+   * Opaque cursor for the next page — format: "<ISO-updatedAt>:<uuid-id>".
+   * Null when all results have been returned.
+   */
+  nextCursor: string | null;
 }
 
-/**
- * Pipeline statuses that represent a dismissible/resolved state.
- *
- * Design note: SKIPPED is a deliberate dual-use status here:
- *   - Set by FanOutService when a sync condition does not match (normal flow).
- *   - Set by ExceptionService.dismissException() to mark a FAIL as "no-op".
- *
- * Both cases mean "do not deliver and do not alert further", which is correct
- * semantically. A future migration can introduce a separate DISMISSED status
- * if finer-grained reporting is required.
- */
-const DISMISSED_STATUSES = ['SKIPPED'] as const;
+// ---------------------------------------------------------------------------
+// Cursor helpers
+// ---------------------------------------------------------------------------
 
-/** Pipeline statuses surfaced to the Exception Center as "unresolved". */
-const UNRESOLVED_STATUSES = ['FAIL', 'RETRY'] as const;
+function encodeExceptionCursor(updatedAt: Date, id: string): string {
+  return `${updatedAt.toISOString()}:${id}`;
+}
+
+function parseExceptionCursor(cursor: string): { updatedAt: Date; id: string } {
+  const sepIdx = cursor.lastIndexOf(':');
+  if (sepIdx === -1) {
+    throw new BadRequestException(
+      'Invalid exception cursor — expected "<updatedAt>:<id>"',
+    );
+  }
+  const updatedAt = new Date(cursor.slice(0, sepIdx));
+  const id = cursor.slice(sepIdx + 1);
+  if (isNaN(updatedAt.getTime())) {
+    throw new BadRequestException(
+      'Invalid exception cursor: timestamp component invalid',
+    );
+  }
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    throw new BadRequestException(
+      'Invalid exception cursor: id component is not a valid UUID',
+    );
+  }
+  return { updatedAt, id };
+}
 
 @Injectable()
 export class ExceptionService {
@@ -65,26 +104,42 @@ export class ExceptionService {
   ) {}
 
   /**
-   * Lists FAIL/RETRY outbound_gateway rows across all dest-connection schemas
-   * for stitches belonging to `orgId`, optionally filtered by status.
+   * Lists outbound_gateway exception rows across all dest-connection schemas
+   * for stitches belonging to `orgId`.
    *
-   * Performance:
-   *  - Stitches are grouped by dest connection so each unique schema is
-   *    queried exactly once, regardless of how many stitches share it.
-   *  - Schema resolutions and per-schema DB queries run in parallel via
-   *    Promise.all — total latency = max(single schema latency), not sum.
+   * Pagination:
+   *  - Cursor-based: `cursor` encodes "<updatedAt>:<id>" for stable ordering
+   *    even when multiple rows share the same millisecond updatedAt.
+   *  - `limit` (default 50, max RECENT_EXCEPTION_LIMIT) controls page size.
+   *  - `total` is a real COUNT(*), not the length of the returned slice.
+   *
+   * Filtering:
+   *  - SQL-level routeId IN (stitchIds) — only rows belonging to this org.
+   *  - Status filter uses the explicit DISMISSED / FAIL+RETRY constants.
    */
   async listExceptions(
     orgId: string,
     filter: { status?: ExceptionStatus } = {},
+    pagination: { limit?: number; cursor?: string } = {},
   ): Promise<ExceptionListResult> {
+    const limit = Math.min(pagination.limit ?? 50, RECENT_EXCEPTION_LIMIT);
+
+    let cursorCondition: ReturnType<typeof or> | undefined = undefined;
+    if (pagination.cursor) {
+      const { updatedAt, id } = parseExceptionCursor(pagination.cursor);
+      cursorCondition = or(
+        lt(drizzleSql`updated_at`, updatedAt),
+        and(drizzleSql`updated_at = ${updatedAt}`, lt(drizzleSql`id`, id)),
+      );
+    }
+
     const stitches = await this.db.query.integrationStitches.findMany({
       where: eq(integrationStitches.orgId, orgId),
       columns: { id: true, destConnectionId: true },
     });
 
     if (stitches.length === 0) {
-      return { data: [], total: 0 };
+      return { data: [], total: 0, limit, nextCursor: null };
     }
 
     // Group stitches by dest connection — one schema query per unique connection
@@ -95,7 +150,8 @@ export class ExceptionService {
       byConnection.set(s.destConnectionId, list);
     }
 
-    const results: ExceptionItem[] = [];
+    const allRows: ExceptionItem[] = [];
+    let grandTotal = 0;
 
     await Promise.all(
       Array.from(byConnection.entries()).map(
@@ -105,7 +161,6 @@ export class ExceptionService {
             schemaName =
               await this.storageResolver.resolveSchemaName(destConnId);
           } catch {
-            // Connection may have been deleted — skip gracefully, log a warning
             this.logger.warn(
               { destConnId },
               'exception.list: could not resolve schema, skipping connection',
@@ -115,32 +170,57 @@ export class ExceptionService {
 
           const { outboundGateway } = buildTenantSchema(schemaName);
 
-          // Build status filter using the typed const tuples so Drizzle's enum
-          // column overload is satisfied — spreading to string[] breaks the type.
-          const statusFilter =
+          // Build status filter — use raw SQL to avoid Drizzle's compiled enum
+          // type constraint on DISMISSED until the @nexiom/database package is rebuilt.
+          const statusSql =
             filter.status === 'dismissed'
-              ? inArray(outboundGateway.status, DISMISSED_STATUSES)
-              : inArray(outboundGateway.status, UNRESOLVED_STATUSES);
+              ? sql`${outboundGateway.status} = 'DISMISSED'`
+              : sql`${outboundGateway.status} IN ('FAIL', 'RETRY')`;
 
-          const rows = await this.db.transaction(async (tx) => {
+          // SQL-level routeId IN (...) — only rows belonging to this org's stitches.
+          const routeFilter = inArray(outboundGateway.routeId, stitchIds);
+          const whereClause = and(statusSql, routeFilter);
+
+          const cursorWhereClause = cursorCondition
+            ? and(whereClause, cursorCondition)
+            : whereClause;
+
+          const { rows, rowCount } = await this.db.transaction(async (tx) => {
             assertValidSchemaName(schemaName);
             await tx.execute(
               sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
             );
-            return tx
-              .select()
-              .from(outboundGateway)
-              .where(statusFilter)
-              .orderBy(sql`${outboundGateway.updatedAt} DESC`)
-              .limit(200);
+
+            // Use an extra row to detect next-page without a separate COUNT query
+            const [countResult, dataRows] = await Promise.all([
+              tx
+                .select({ count: drizzleSql<number>`COUNT(*)::int` })
+                .from(outboundGateway)
+                .where(whereClause),
+              tx
+                .select()
+                .from(outboundGateway)
+                .where(cursorWhereClause)
+                .orderBy(
+                  sql`${outboundGateway.updatedAt} DESC`,
+                  sql`${outboundGateway.id} DESC`,
+                )
+                .limit(limit + 1),
+            ]);
+
+            return {
+              rows: dataRows,
+              rowCount: countResult[0]?.count ?? 0,
+            };
           });
 
-          for (const row of rows) {
-            results.push({
+          grandTotal += rowCount;
+
+          for (const row of rows.slice(0, limit)) {
+            allRows.push({
               id: row.id,
               traceId: row.traceId,
               routeId: row.routeId,
-              stitchId: stitchIds.includes(row.routeId) ? row.routeId : null,
               reqPayload: row.reqPayload,
               resPayload: row.resPayload,
               statusCode: row.statusCode,
@@ -154,16 +234,33 @@ export class ExceptionService {
       ),
     );
 
-    results.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    allRows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
-    return { data: results, total: results.length };
+    // Compute cursor from the last row of the combined sorted page
+    const hasMore = allRows.length > limit;
+    const page = allRows.slice(0, limit);
+    const lastRow = page.at(-1);
+
+    return {
+      data: page,
+      total: grandTotal,
+      limit,
+      nextCursor:
+        hasMore && lastRow
+          ? encodeExceptionCursor(lastRow.updatedAt, lastRow.id)
+          : null,
+    };
   }
 
   /**
    * Re-enqueues an outbound_gateway row to the Delivery_Queue for retry.
-   * Resets status to PENDING atomically before enqueuing so the Delivery
-   * Service will pick it up on its next poll, even if the pod restarts
-   * between the update and the enqueue.
+   *
+   * The UPDATE is guarded with `AND status IN (RETRYABLE_STATUSES)` so that:
+   *  - Concurrent retries (two operators clicking at the same time) are safe.
+   *  - Retrying a SUCCESS or PENDING row (a client bug) is rejected.
+   *
+   * If the guarded UPDATE affects 0 rows, a ConflictException is thrown so the
+   * caller knows another process has already changed the row's status.
    */
   async retryException(
     orgId: string,
@@ -176,16 +273,28 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    await this.db.transaction(async (tx) => {
+    const updated = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
-      await tx
+      return tx
         .update(outboundGateway)
-        .set({ status: 'PENDING' })
-        .where(eq(outboundGateway.id, outboundGatewayId));
+        .set({ status: 'PENDING' } as never)
+        .where(
+          and(
+            eq(outboundGateway.id, outboundGatewayId),
+            sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
+          ),
+        )
+        .returning({ id: outboundGateway.id });
     });
+
+    if (updated.length === 0) {
+      throw new ConflictException(
+        `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
+      );
+    }
 
     await this.queueService.send(QueueName.DeliveryQueue, {
       outboundGatewayId,
@@ -201,8 +310,12 @@ export class ExceptionService {
   }
 
   /**
-   * Marks an outbound_gateway row as SKIPPED so it no longer appears
+   * Marks an outbound_gateway row as DISMISSED so it no longer appears
    * in the unresolved exceptions list.
+   *
+   * The UPDATE is guarded with `AND status IN (DISMISSABLE_STATUSES)` to
+   * prevent dismissing a SUCCESS, PENDING, or already-DISMISSED row, and
+   * to handle concurrent dismiss calls safely.
    */
   async dismissException(
     orgId: string,
@@ -215,16 +328,28 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    await this.db.transaction(async (tx) => {
+    const updated = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
-      await tx
+      return tx
         .update(outboundGateway)
-        .set({ status: 'SKIPPED' })
-        .where(eq(outboundGateway.id, outboundGatewayId));
+        .set({ status: 'DISMISSED' } as never)
+        .where(
+          and(
+            eq(outboundGateway.id, outboundGatewayId),
+            sql`${outboundGateway.status} IN ('FAIL', 'RETRY')`,
+          ),
+        )
+        .returning({ id: outboundGateway.id });
     });
+
+    if (updated.length === 0) {
+      throw new ConflictException(
+        `Exception ${outboundGatewayId} is not in a dismissable state (concurrent change or already dismissed)`,
+      );
+    }
 
     this.logger.info({ id: outboundGatewayId }, 'exception.dismissed');
     return { dismissed: true };
@@ -237,10 +362,12 @@ export class ExceptionService {
   /**
    * Locates the outbound_gateway row across all dest schemas for the org.
    *
-   * Uses `Promise.allSettled` to query all dest schemas in parallel, then
-   * picks the first hit. This is O(1) latency regardless of how many schemas
-   * the org has, at the cost of fanning out concurrent queries — acceptable
-   * because retry/dismiss are low-frequency operator actions.
+   * Uses Promise.allSettled to fan out across schemas in parallel (O(1) latency).
+   * Each schema handler returns a sentinel { outboundGatewayRow: null } when the
+   * row is not found in that schema — "not found" is not an error.
+   *
+   * Infrastructure failures (schema resolution errors, DB errors) are real errors
+   * and are rethrown so they surface as 500s rather than silent 404s.
    */
   private async resolveOutboundRow(
     orgId: string,
@@ -254,15 +381,23 @@ export class ExceptionService {
       columns: { destConnectionId: true },
     });
 
-    // Deduplicate dest connections
     const destConnIds = [...new Set(stitches.map((s) => s.destConnectionId))];
 
+    type SchemaHit =
+      | {
+          outboundGatewayRow: { traceId: string; routeId: string };
+          schemaName: string;
+        }
+      | { outboundGatewayRow: null; schemaName: string };
+
     const hits = await Promise.allSettled(
-      destConnIds.map(async (destConnId) => {
+      destConnIds.map(async (destConnId): Promise<SchemaHit> => {
+        // Let schema resolution errors propagate as real rejections.
         const schemaName =
           await this.storageResolver.resolveSchemaName(destConnId);
         const { outboundGateway } = buildTenantSchema(schemaName);
 
+        // Let DB errors propagate as real rejections.
         const rows = await this.db.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
           await tx.execute(
@@ -279,14 +414,37 @@ export class ExceptionService {
             .limit(1);
         });
 
-        if (rows.length === 0) throw new Error('not found in this schema');
+        // Return sentinel — not an error, just not in this schema.
+        if (rows.length === 0) return { outboundGatewayRow: null, schemaName };
         return { outboundGatewayRow: rows[0], schemaName };
       }),
     );
 
+    // Infrastructure errors bubble as 500 — check rejections first.
     for (const result of hits) {
-      if (result.status === 'fulfilled') {
-        return result.value;
+      if (result.status === 'rejected') {
+        const error =
+          result.reason instanceof Error
+            ? result.reason
+            : new Error(String(result.reason));
+        this.logger.error(
+          { err: error },
+          'exception.resolve: infrastructure error during schema fan-out',
+        );
+        throw error;
+      }
+    }
+
+    // Find the first schema that contained the row.
+    for (const result of hits) {
+      if (
+        result.status === 'fulfilled' &&
+        result.value.outboundGatewayRow !== null
+      ) {
+        return result.value as {
+          outboundGatewayRow: { traceId: string; routeId: string };
+          schemaName: string;
+        };
       }
     }
 

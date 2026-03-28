@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { eq, and, desc, lt } from 'drizzle-orm';
+import { eq, and, desc, lt, or, sql as drizzleSql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -21,6 +21,7 @@ import { sql } from 'drizzle-orm';
 // ---------------------------------------------------------------------------
 
 export interface TraceSummary {
+  id: string;
   traceId: string;
   layer: string;
   status: string;
@@ -31,7 +32,10 @@ export interface TraceSummary {
 
 export interface TraceListResult {
   data: TraceSummary[];
-  /** Opaque cursor for the next page — pass as `cursor` query param. */
+  /**
+   * Opaque composite cursor for the next page.
+   * Format: "<ISO-timestamp>:<uuid-id>" — both components required for stable ordering.
+   */
   nextCursor: string | null;
 }
 
@@ -85,6 +89,57 @@ export interface FullTrace {
 const MAX_PAGE_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
 
+// ---------------------------------------------------------------------------
+// Cursor helpers
+// ---------------------------------------------------------------------------
+
+interface ParsedCursor {
+  timestamp: Date;
+  id: string;
+}
+
+/**
+ * Encodes a composite cursor from a sync_log row.
+ * Format: "<ISO-timestamp>:<rowId>" — both components guarantee stable ordering.
+ */
+function encodeCursor(timestamp: Date, id: string): string {
+  return `${timestamp.toISOString()}:${id}`;
+}
+
+/**
+ * Parses and validates a composite cursor string.
+ * Throws BadRequestException on malformed input so the caller surfaces a 400.
+ */
+function parseCursor(cursor: string): ParsedCursor {
+  const separatorIdx = cursor.lastIndexOf(':');
+  if (separatorIdx === -1) {
+    throw new BadRequestException(
+      'Invalid cursor format — expected "<timestamp>:<id>"',
+    );
+  }
+  const ts = cursor.slice(0, separatorIdx);
+  const id = cursor.slice(separatorIdx + 1);
+
+  const timestamp = new Date(ts);
+  if (isNaN(timestamp.getTime())) {
+    throw new BadRequestException(
+      'Invalid cursor: timestamp component is not a valid date',
+    );
+  }
+  // UUID format: 8-4-4-4-12 hex chars
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    throw new BadRequestException(
+      'Invalid cursor: id component is not a valid UUID',
+    );
+  }
+
+  return { timestamp, id };
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
 @Injectable()
 export class TraceService {
   constructor(
@@ -96,8 +151,17 @@ export class TraceService {
 
   /**
    * Returns a paginated timeline of sync_log entries for a given stitch.
-   * Pagination is cursor-based: `cursor` is an ISO timestamp of the oldest
-   * entry on the previous page (exclusive lower bound).
+   *
+   * Scoping:
+   *  - Only rows where routeId = stitchId are returned, preventing leakage of
+   *    traces from other stitches that share the same source connection.
+   *    (L1/L2 rows with routeId IS NULL are excluded — they have no route context.)
+   *
+   * Pagination:
+   *  - Cursor is a composite of (timestamp, id) to guarantee stable ordering even
+   *    when multiple rows share the same millisecond timestamp.
+   *  - Condition: (timestamp < cursorTs) OR (timestamp = cursorTs AND id < cursorId)
+   *  - Ordering: timestamp DESC, id DESC
    */
   async listTraces(
     orgId: string,
@@ -107,7 +171,6 @@ export class TraceService {
   ): Promise<TraceListResult> {
     const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_LIMIT);
 
-    // Single query — verifies ownership AND fetches the connection ID we need
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: and(
         eq(integrationStitches.id, stitchId),
@@ -119,41 +182,48 @@ export class TraceService {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
-    // sync_log lives in the source connection's tenant schema
     const schemaName = await this.storageResolver.resolveSchemaName(
       stitch.srcConnectionId,
     );
     const { syncLog } = buildTenantSchema(schemaName);
 
-    // Build cursor condition — entries strictly older than the cursor timestamp
-    let cursorCondition = undefined;
+    // Composite cursor condition: rows before (timestamp, id) in DESC order
+    let cursorCondition: ReturnType<typeof or> | undefined = undefined;
     if (cursor) {
-      const cursorDate = new Date(cursor);
-      if (isNaN(cursorDate.getTime())) {
-        throw new BadRequestException('Invalid cursor value');
-      }
-      cursorCondition = lt(syncLog.timestamp, cursorDate);
+      const { timestamp: cursorTs, id: cursorId } = parseCursor(cursor);
+      // (ts < cursorTs) OR (ts = cursorTs AND id < cursorId)
+      cursorCondition = or(
+        lt(syncLog.timestamp, cursorTs),
+        and(
+          drizzleSql`${syncLog.timestamp} = ${cursorTs}`,
+          lt(syncLog.id, cursorId),
+        ),
+      );
     }
 
-    // Fetch one extra row to detect if there is a next page
+    // Fetch one extra row to detect next-page without a COUNT query
     const rows = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
-      return tx
-        .select({
-          traceId: syncLog.traceId,
-          layer: syncLog.layer,
-          status: syncLog.status,
-          durationMs: syncLog.durationMs,
-          routeId: syncLog.routeId,
-          timestamp: syncLog.timestamp,
-        })
-        .from(syncLog)
-        .where(cursorCondition)
-        .orderBy(desc(syncLog.timestamp))
-        .limit(safeLimit + 1);
+      return (
+        tx
+          .select({
+            id: syncLog.id,
+            traceId: syncLog.traceId,
+            layer: syncLog.layer,
+            status: syncLog.status,
+            durationMs: syncLog.durationMs,
+            routeId: syncLog.routeId,
+            timestamp: syncLog.timestamp,
+          })
+          .from(syncLog)
+          // Scope to this stitch's routeId — prevents cross-stitch leakage
+          .where(and(eq(syncLog.routeId, stitchId), cursorCondition))
+          .orderBy(desc(syncLog.timestamp), desc(syncLog.id))
+          .limit(safeLimit + 1)
+      );
     });
 
     const hasMore = rows.length > safeLimit;
@@ -162,20 +232,29 @@ export class TraceService {
 
     return {
       data: page as TraceSummary[],
-      nextCursor: hasMore && lastRow ? lastRow.timestamp.toISOString() : null,
+      nextCursor:
+        hasMore && lastRow ? encodeCursor(lastRow.timestamp, lastRow.id) : null,
     };
   }
 
   /**
    * Returns the full trace for a single traceId — all sync_log rows plus
-   * the hydrated L1/L2/L3/L5–L6 data rows for that trace.
+   * the hydrated L1/L2/L3/L5–L6 data rows for that trace, all scoped to
+   * the verified stitch so cross-stitch data leakage is impossible.
+   *
+   * Stitch validation:
+   *  - The sync_log query is additionally filtered by routeId = stitchId,
+   *    so a traceId that belongs to a different stitch returns 0 layers
+   *    and is surfaced as a 404.
+   *  - L5/L6 (outbound_gateway) is filtered by both traceId AND routeId = stitchId.
+   *  - L1–L3 are filtered by traceId only (they live in the src schema and
+   *    do not carry a routeId at ingestion time for early-layer entries).
    */
   async getTrace(
     orgId: string,
     stitchId: string,
     traceId: string,
   ): Promise<FullTrace> {
-    // Single query — verifies ownership AND fetches both connection IDs
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: and(
         eq(integrationStitches.id, stitchId),
@@ -187,7 +266,6 @@ export class TraceService {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
-    // Resolve both schemas in parallel — halves latency vs sequential resolution
     const [srcSchemaName, destSchemaName] = await Promise.all([
       this.storageResolver.resolveSchemaName(stitch.srcConnectionId),
       this.storageResolver.resolveSchemaName(stitch.destConnectionId),
@@ -198,9 +276,9 @@ export class TraceService {
 
     const { outboundGateway } = buildTenantSchema(destSchemaName);
 
-    // Run L1–L3 queries in source schema and L5–L6 in dest schema in parallel
     const [layers, l1Rows, l2Rows, l3Rows, l5Rows] = await Promise.all([
-      // All sync_log entries for this trace (any layer)
+      // sync_log: scoped to both traceId AND routeId = stitchId
+      // A traceId not produced by this stitch will return 0 rows → 404 below
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -214,10 +292,12 @@ export class TraceService {
             timestamp: syncLog.timestamp,
           })
           .from(syncLog)
-          .where(eq(syncLog.traceId, traceId))
+          .where(
+            and(eq(syncLog.traceId, traceId), eq(syncLog.routeId, stitchId)),
+          )
           .orderBy(syncLog.timestamp);
       }),
-      // L1 inbound_gateway
+      // L1: traceId scope (connectionId = src implied by schema)
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -226,10 +306,15 @@ export class TraceService {
         return tx
           .select()
           .from(inboundGateway)
-          .where(eq(inboundGateway.traceId, traceId))
+          .where(
+            and(
+              eq(inboundGateway.traceId, traceId),
+              eq(inboundGateway.connectionId, stitch.srcConnectionId),
+            ),
+          )
           .limit(1);
       }),
-      // L2 replica_entity
+      // L2
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -238,10 +323,15 @@ export class TraceService {
         return tx
           .select()
           .from(replicaEntity)
-          .where(eq(replicaEntity.traceId, traceId))
+          .where(
+            and(
+              eq(replicaEntity.traceId, traceId),
+              eq(replicaEntity.connectionId, stitch.srcConnectionId),
+            ),
+          )
           .limit(1);
       }),
-      // L3 normalized_entity
+      // L3
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -253,7 +343,7 @@ export class TraceService {
           .where(eq(normalizedEntity.traceId, traceId))
           .limit(1);
       }),
-      // L5/L6 outbound_gateway (dest schema)
+      // L5/L6: scoped to both traceId AND routeId = stitchId
       this.db.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
@@ -262,13 +352,22 @@ export class TraceService {
         return tx
           .select()
           .from(outboundGateway)
-          .where(eq(outboundGateway.traceId, traceId))
+          .where(
+            and(
+              eq(outboundGateway.traceId, traceId),
+              eq(outboundGateway.routeId, stitchId),
+            ),
+          )
           .limit(1);
       }),
     ]);
 
+    // If sync_log returns 0 rows with the combined (traceId + routeId) filter,
+    // the trace either doesn't exist or belongs to a different stitch.
     if (layers.length === 0) {
-      throw new NotFoundException(`Trace ${traceId} not found`);
+      throw new NotFoundException(
+        `Trace ${traceId} not found for stitch ${stitchId}`,
+      );
     }
 
     this.logger.debug(

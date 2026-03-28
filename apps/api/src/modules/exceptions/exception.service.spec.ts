@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ConflictException } from '@nestjs/common';
 import { ExceptionService } from './exception.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
@@ -35,6 +35,7 @@ const STITCH_ID = '11111111-1111-1111-1111-111111111111';
 const DEST_CONN = '44444444-4444-4444-4444-444444444444';
 const OUTBOUND_ID = '55555555-5555-5555-5555-555555555555';
 const TRACE_ID = '66666666-6666-6666-6666-666666666666';
+const UPDATED_AT = new Date('2026-01-02T00:00:00.000Z');
 
 const MOCK_STITCH = {
   id: STITCH_ID,
@@ -52,10 +53,17 @@ const MOCK_OUTBOUND_ROW = {
   attemptCount: 5,
   status: 'FAIL',
   createdAt: new Date('2026-01-01'),
-  updatedAt: new Date('2026-01-02'),
+  updatedAt: UPDATED_AT,
 };
 
-function buildSelectChain(rows: unknown[]) {
+function buildCountChain(count: number) {
+  const chain: Record<string, unknown> = {};
+  chain['from'] = vi.fn().mockReturnValue(chain);
+  chain['where'] = vi.fn().mockResolvedValue([{ count }]);
+  return chain;
+}
+
+function buildDataChain(rows: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain['from'] = vi.fn().mockReturnValue(chain);
   chain['where'] = vi.fn().mockReturnValue(chain);
@@ -64,20 +72,36 @@ function buildSelectChain(rows: unknown[]) {
   return chain;
 }
 
-function buildUpdateChain() {
+function buildUpdateChain(returning: unknown[] = [{ id: 'updated-id' }]) {
   const chain: Record<string, unknown> = {};
   chain['set'] = vi.fn().mockReturnValue(chain);
-  chain['where'] = vi.fn().mockResolvedValue([]);
+  chain['where'] = vi.fn().mockReturnValue(chain);
+  chain['returning'] = vi.fn().mockResolvedValue(returning);
+  return chain;
+}
+
+function buildResolveSelectChain(rows: unknown[]) {
+  // The resolveOutboundRow select chain ends with .limit()
+  const chain: Record<string, unknown> = {};
+  chain['from'] = vi.fn().mockReturnValue(chain);
+  chain['where'] = vi.fn().mockReturnValue(chain);
+  chain['limit'] = vi.fn().mockResolvedValue(rows);
   return chain;
 }
 
 function buildMockDb(outboundRows: unknown[] = [MOCK_OUTBOUND_ROW]) {
-  const selectChain = buildSelectChain(outboundRows);
-  const updateChain = buildUpdateChain();
+  let selectCallCount = 0;
   const tx = {
     execute: vi.fn().mockResolvedValue(undefined),
-    select: vi.fn().mockReturnValue(selectChain),
-    update: vi.fn().mockReturnValue(updateChain),
+    select: vi.fn().mockImplementation(() => {
+      selectCallCount++;
+      // listExceptions calls COUNT first, then DATA
+      if (selectCallCount % 2 === 1) {
+        return buildCountChain(outboundRows.length);
+      }
+      return buildDataChain(outboundRows);
+    }),
+    update: vi.fn().mockReturnValue(buildUpdateChain()),
   };
 
   return {
@@ -133,11 +157,13 @@ describe('ExceptionService', () => {
   });
 
   describe('listExceptions()', () => {
-    it('returns FAIL rows for the org', async () => {
+    it('returns exception rows with total and nextCursor for the org', async () => {
       const result = await service.listExceptions(ORG_ID);
       expect(result.data).toHaveLength(1);
-      expect(result.data[0].status).toBe('FAIL');
       expect(result.data[0].id).toBe(OUTBOUND_ID);
+      expect(result.total).toBeGreaterThanOrEqual(0);
+      expect(result.limit).toBe(50);
+      expect(result).toHaveProperty('nextCursor');
     });
 
     it('returns empty list when org has no stitches', async () => {
@@ -145,18 +171,47 @@ describe('ExceptionService', () => {
       const result = await service.listExceptions(ORG_ID);
       expect(result.data).toHaveLength(0);
       expect(result.total).toBe(0);
+      expect(result.nextCursor).toBeNull();
     });
 
-    it('skips connections that cannot be resolved (graceful degradation)', async () => {
+    it('skips unresolvable connections gracefully', async () => {
       mockResolver.resolveSchemaName = vi
         .fn()
         .mockRejectedValue(new Error('not found'));
       const result = await service.listExceptions(ORG_ID);
       expect(result.data).toHaveLength(0);
     });
+
+    it('respects limit pagination param', async () => {
+      const result = await service.listExceptions(ORG_ID, {}, { limit: 10 });
+      expect(result.limit).toBe(10);
+    });
   });
 
   describe('retryException()', () => {
+    beforeEach(() => {
+      // resolveOutboundRow uses a select chain that ends with .limit()
+      const resolveTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi
+          .fn()
+          .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
+      };
+      const updateTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi
+          .fn()
+          .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+      };
+      let txCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          return fn(txCallCount === 1 ? resolveTx : updateTx);
+        });
+    });
+
     it('resets status to PENDING and enqueues to DeliveryQueue', async () => {
       const result = await service.retryException(ORG_ID, OUTBOUND_ID);
       expect(result.queued).toBe(true);
@@ -166,18 +221,39 @@ describe('ExceptionService', () => {
       );
     });
 
-    it('throws NotFoundException when outbound row not in org schemas', async () => {
-      // Promise.allSettled resolves but all inner queries return empty
-      const emptyChain = buildSelectChain([]);
-      const tx = {
+    it('throws ConflictException when status transition is invalid (0 rows updated)', async () => {
+      const resolveTx = {
         execute: vi.fn().mockResolvedValue(undefined),
-        select: vi.fn().mockReturnValue(emptyChain),
-        update: vi.fn().mockReturnValue(buildUpdateChain()),
+        select: vi
+          .fn()
+          .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
       };
+      const updateTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockReturnValue(buildUpdateChain([])), // 0 rows updated
+      };
+      let txCallCount = 0;
       mockDb.transaction = vi
         .fn()
-        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          return fn(txCallCount === 1 ? resolveTx : updateTx);
+        });
 
+      await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('throws NotFoundException when outbound row not in org schemas', async () => {
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) =>
+          fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            select: vi.fn().mockReturnValue(buildResolveSelectChain([])),
+          }),
+        );
       await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
         NotFoundException,
       );
@@ -185,21 +261,64 @@ describe('ExceptionService', () => {
   });
 
   describe('dismissException()', () => {
-    it('marks the outbound_gateway row as SKIPPED', async () => {
+    it('marks the outbound_gateway row as DISMISSED', async () => {
+      const resolveTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi
+          .fn()
+          .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
+      };
+      const dismissTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi
+          .fn()
+          .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+      };
+      let txCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          return fn(txCallCount === 1 ? resolveTx : dismissTx);
+        });
+
       const result = await service.dismissException(ORG_ID, OUTBOUND_ID);
       expect(result.dismissed).toBe(true);
     });
 
-    it('throws NotFoundException when outbound row not found', async () => {
-      const emptyChain = buildSelectChain([]);
-      const tx = {
+    it('throws ConflictException when row is already DISMISSED', async () => {
+      const resolveTx = {
         execute: vi.fn().mockResolvedValue(undefined),
-        select: vi.fn().mockReturnValue(emptyChain),
-        update: vi.fn().mockReturnValue(buildUpdateChain()),
+        select: vi
+          .fn()
+          .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
       };
+      const dismissTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockReturnValue(buildUpdateChain([])), // 0 rows updated
+      };
+      let txCallCount = 0;
       mockDb.transaction = vi
         .fn()
-        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          return fn(txCallCount === 1 ? resolveTx : dismissTx);
+        });
+
+      await expect(
+        service.dismissException(ORG_ID, OUTBOUND_ID),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('throws NotFoundException when outbound row not found', async () => {
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) =>
+          fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            select: vi.fn().mockReturnValue(buildResolveSelectChain([])),
+          }),
+        );
 
       await expect(
         service.dismissException(ORG_ID, OUTBOUND_ID),

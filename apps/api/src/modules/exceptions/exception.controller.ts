@@ -5,6 +5,8 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  ParseIntPipe,
+  DefaultValuePipe,
   UseGuards,
   Inject,
   BadRequestException,
@@ -23,15 +25,17 @@ export class ExceptionController {
   ) {}
 
   /**
-   * GET /exceptions?status=unresolved|dismissed
+   * GET /exceptions?status=unresolved|dismissed&limit=50&offset=0
    *
-   * Returns all FAIL/RETRY outbound_gateway rows across the org's stitches.
-   * Defaults to `status=unresolved` (FAIL + RETRY) when omitted.
+   * Returns paginated FAIL/RETRY/DISMISSED outbound_gateway rows for the org.
+   * `total` reflects the real COUNT(*) across all schemas for the given filter.
    */
   @Get()
   async listExceptions(
     @AuthContext() ctx: RequestAuthContext,
     @Query('status') status?: string,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    @Query('cursor') cursor?: string,
   ) {
     const orgId = ctx.user?.organizationId;
     if (!orgId) {
@@ -48,9 +52,11 @@ export class ExceptionController {
       );
     }
 
-    return this.exceptionService.listExceptions(orgId, {
-      status: status as ExceptionStatus | undefined,
-    });
+    return this.exceptionService.listExceptions(
+      orgId,
+      { status: status as ExceptionStatus | undefined },
+      { limit, cursor },
+    );
   }
 
   /**
