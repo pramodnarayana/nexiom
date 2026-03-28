@@ -82,7 +82,7 @@ export class ExceptionController {
   /**
    * POST /exceptions/:id/dismiss
    *
-   * Marks the outbound_gateway row as SKIPPED so it no longer appears
+   * Marks the outbound_gateway row as DISMISSED so it no longer appears
    * in the unresolved exceptions list.
    */
   @Post(':id/dismiss')

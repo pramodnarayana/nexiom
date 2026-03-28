@@ -108,6 +108,7 @@ function buildMockDb(outboundRows: unknown[] = [MOCK_OUTBOUND_ROW]) {
     query: {
       integrationStitches: {
         findMany: vi.fn().mockResolvedValue([MOCK_STITCH]),
+        findFirst: vi.fn().mockResolvedValue(MOCK_STITCH),
       },
     },
     transaction: vi

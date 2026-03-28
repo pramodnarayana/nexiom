@@ -153,51 +153,54 @@ export class ExceptionService {
     const allRows: ExceptionItem[] = [];
     let grandTotal = 0;
 
-    await Promise.all(
-      Array.from(byConnection.entries()).map(
-        async ([destConnId, stitchIds]) => {
-          let schemaName: string;
-          try {
-            schemaName =
-              await this.storageResolver.resolveSchemaName(destConnId);
-          } catch {
-            this.logger.warn(
-              { destConnId },
-              'exception.list: could not resolve schema, skipping connection',
-            );
-            return;
-          }
+    // Cumulatively fetch rows from each schema (respecting their per-schema cursor)
+    // until we have limit+1 total in allRows. Continue looping to get the total count.
+    for (const [destConnId, stitchIds] of byConnection.entries()) {
+      let schemaName: string;
+      try {
+        schemaName = await this.storageResolver.resolveSchemaName(destConnId);
+      } catch {
+        this.logger.warn(
+          { destConnId },
+          'exception.list: could not resolve schema, skipping connection',
+        );
+        continue;
+      }
 
-          const { outboundGateway } = buildTenantSchema(schemaName);
+      const { outboundGateway } = buildTenantSchema(schemaName);
 
-          // Build status filter — use raw SQL to avoid Drizzle's compiled enum
-          // type constraint on DISMISSED until the @nexiom/database package is rebuilt.
-          const statusSql =
-            filter.status === 'dismissed'
-              ? sql`${outboundGateway.status} = 'DISMISSED'`
-              : sql`${outboundGateway.status} IN ('FAIL', 'RETRY')`;
+      // Build status filter — use raw SQL to avoid Drizzle's compiled enum
+      // type constraint on DISMISSED until the @nexiom/database package is rebuilt.
+      const statusSql =
+        filter.status === 'dismissed'
+          ? sql`${outboundGateway.status} = 'DISMISSED'`
+          : sql`${outboundGateway.status} IN ('FAIL', 'RETRY')`;
 
-          // SQL-level routeId IN (...) — only rows belonging to this org's stitches.
-          const routeFilter = inArray(outboundGateway.routeId, stitchIds);
-          const whereClause = and(statusSql, routeFilter);
+      // SQL-level routeId IN (...) — only rows belonging to this org's stitches.
+      const routeFilter = inArray(outboundGateway.routeId, stitchIds);
+      const whereClause = and(statusSql, routeFilter);
 
-          const cursorWhereClause = cursorCondition
-            ? and(whereClause, cursorCondition)
-            : whereClause;
+      const cursorWhereClause = cursorCondition
+        ? and(whereClause, cursorCondition)
+        : whereClause;
 
-          const { rows, rowCount } = await this.db.transaction(async (tx) => {
-            assertValidSchemaName(schemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-            );
+      const remainingQuota = limit + 1 - allRows.length;
 
-            // Use an extra row to detect next-page without a separate COUNT query
-            const [countResult, dataRows] = await Promise.all([
-              tx
-                .select({ count: drizzleSql<number>`COUNT(*)::int` })
-                .from(outboundGateway)
-                .where(whereClause),
-              tx
+      const { rows, rowCount } = await this.db.transaction(async (tx) => {
+        assertValidSchemaName(schemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+
+        const countQuery = tx
+          .select({ count: drizzleSql<number>`COUNT(*)::int` })
+          .from(outboundGateway)
+          .where(whereClause);
+
+        // Conditional row fetch based on remaining global quota
+        const dataQuery =
+          remainingQuota > 0
+            ? tx
                 .select()
                 .from(outboundGateway)
                 .where(cursorWhereClause)
@@ -205,36 +208,44 @@ export class ExceptionService {
                   sql`${outboundGateway.updatedAt} DESC`,
                   sql`${outboundGateway.id} DESC`,
                 )
-                .limit(limit + 1),
-            ]);
+                .limit(remainingQuota)
+            : Promise.resolve([]);
 
-            return {
-              rows: dataRows,
-              rowCount: countResult[0]?.count ?? 0,
-            };
-          });
+        const [countResult, dataRows] = await Promise.all([
+          countQuery,
+          dataQuery,
+        ]);
 
-          grandTotal += rowCount;
+        return {
+          rows: dataRows,
+          rowCount: countResult[0]?.count ?? 0,
+        };
+      });
 
-          for (const row of rows.slice(0, limit)) {
-            allRows.push({
-              id: row.id,
-              traceId: row.traceId,
-              routeId: row.routeId,
-              reqPayload: row.reqPayload,
-              resPayload: row.resPayload,
-              statusCode: row.statusCode,
-              attemptCount: row.attemptCount,
-              status: row.status,
-              createdAt: row.createdAt,
-              updatedAt: row.updatedAt,
-            });
-          }
-        },
-      ),
-    );
+      grandTotal += rowCount;
 
-    allRows.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      for (const row of rows) {
+        allRows.push({
+          id: row.id,
+          traceId: row.traceId,
+          routeId: row.routeId,
+          reqPayload: row.reqPayload,
+          resPayload: row.resPayload,
+          statusCode: row.statusCode,
+          attemptCount: row.attemptCount,
+          status: row.status,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        });
+      }
+    }
+
+    // Sort to deterministically break ties and avoid duplicates across pages
+    allRows.sort((a, b) => {
+      const timeDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return b.id.localeCompare(a.id);
+    });
 
     // Compute cursor from the last row of the combined sorted page
     const hasMore = allRows.length > limit;
@@ -296,9 +307,23 @@ export class ExceptionService {
       );
     }
 
+    const stitch = await this.db.query.integrationStitches.findFirst({
+      where: eq(integrationStitches.id, outboundGatewayRow.routeId),
+      columns: { srcConnectionId: true, destConnectionId: true },
+    });
+
+    if (!stitch) {
+      throw new NotFoundException(
+        `Stitch ${outboundGatewayRow.routeId} not found for retry payload`,
+      );
+    }
+
     await this.queueService.send(QueueName.DeliveryQueue, {
       outboundGatewayId,
+      routeId: outboundGatewayRow.routeId,
       traceId: outboundGatewayRow.traceId,
+      connectionId: stitch.srcConnectionId,
+      targetConnectionId: stitch.destConnectionId,
     });
 
     this.logger.info(

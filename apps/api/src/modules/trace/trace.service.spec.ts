@@ -14,13 +14,8 @@ vi.mock('@nexiom/database', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@nexiom/database')>();
   return {
     ...actual,
-    buildTenantSchema: vi.fn(() => ({
-      syncLog: 'syncLog_table',
-      inboundGateway: 'inboundGateway_table',
-      replicaEntity: 'replicaEntity_table',
-      normalizedEntity: 'normalizedEntity_table',
-      outboundGateway: 'outboundGateway_table',
-    })),
+    // Do not mock buildTenantSchema so it returns real table/column metadata objects
+    // This ensures TraceService passes valid columns to drizzle queries.
     assertValidSchemaName: vi.fn(),
   };
 });
@@ -224,8 +219,14 @@ describe('TraceService', () => {
 
   describe('getTrace()', () => {
     it('throws NotFoundException when trace has no sync_log rows for this stitch', async () => {
-      // All 5 parallel transactions return [] — layers.length === 0 → 404
-      mockDb.transaction = vi.fn().mockResolvedValue([]);
+      // Execute the cb to test query building, but return empty array to trigger 404
+      const tx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnValue(buildSelectChain([])),
+      };
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
       await expect(
         service.getTrace(ORG_ID, STITCH_ID, TRACE_ID),
       ).rejects.toThrow(NotFoundException);
@@ -241,8 +242,14 @@ describe('TraceService', () => {
     });
 
     it('resolves parallel schema resolution for src and dest', async () => {
-      // getTrace calls resolveSchemaName twice (src + dest) in parallel
-      mockDb.transaction = vi.fn().mockResolvedValue([]);
+      // Execute the cb to test query building, but return empty array to trigger 404
+      const tx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnValue(buildSelectChain([])),
+      };
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
       await expect(
         service.getTrace(ORG_ID, STITCH_ID, TRACE_ID),
       ).rejects.toThrow();

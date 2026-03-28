@@ -276,74 +276,73 @@ export class TraceService {
 
     const { outboundGateway } = buildTenantSchema(destSchemaName);
 
-    const [layers, l1Rows, l2Rows, l3Rows, l5Rows] = await Promise.all([
-      // sync_log: scoped to both traceId AND routeId = stitchId
-      // A traceId not produced by this stitch will return 0 rows → 404 below
+    const [srcResults, l5Rows] = await Promise.all([
+      // Source schema logic: batch all 4 queries into one transaction to save pool connections
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
         );
-        return tx
-          .select({
-            layer: syncLog.layer,
-            status: syncLog.status,
-            durationMs: syncLog.durationMs,
-            timestamp: syncLog.timestamp,
-          })
+
+        // 1. Existence check: trace must have at least one route-bound sync_log entry for this stitch
+        const exists = await tx
+          .select({ id: syncLog.id })
           .from(syncLog)
           .where(
             and(eq(syncLog.traceId, traceId), eq(syncLog.routeId, stitchId)),
           )
-          .orderBy(syncLog.timestamp);
-      }),
-      // L1: traceId scope (connectionId = src implied by schema)
-      this.db.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-        );
-        return tx
-          .select()
-          .from(inboundGateway)
-          .where(
-            and(
-              eq(inboundGateway.traceId, traceId),
-              eq(inboundGateway.connectionId, stitch.srcConnectionId),
-            ),
-          )
           .limit(1);
+
+        if (exists.length === 0) {
+          return null;
+        }
+
+        // Run the 4 actual data queries in parallel inside the single transaction
+        const [layers, l1Rows, l2Rows, l3Rows] = await Promise.all([
+          // Full timeline without routeId filter to capture early layers (L1/L2 where routeId is NULL)
+          tx
+            .select({
+              layer: syncLog.layer,
+              status: syncLog.status,
+              durationMs: syncLog.durationMs,
+              timestamp: syncLog.timestamp,
+            })
+            .from(syncLog)
+            .where(eq(syncLog.traceId, traceId))
+            .orderBy(syncLog.timestamp),
+          // L1: traceId scope (connectionId = src implied by schema)
+          tx
+            .select()
+            .from(inboundGateway)
+            .where(
+              and(
+                eq(inboundGateway.traceId, traceId),
+                eq(inboundGateway.connectionId, stitch.srcConnectionId),
+              ),
+            )
+            .limit(1),
+          // L2
+          tx
+            .select()
+            .from(replicaEntity)
+            .where(
+              and(
+                eq(replicaEntity.traceId, traceId),
+                eq(replicaEntity.connectionId, stitch.srcConnectionId),
+              ),
+            )
+            .limit(1),
+          // L3
+          tx
+            .select()
+            .from(normalizedEntity)
+            .where(eq(normalizedEntity.traceId, traceId))
+            .limit(1),
+        ]);
+
+        return { layers, l1Rows, l2Rows, l3Rows };
       }),
-      // L2
-      this.db.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-        );
-        return tx
-          .select()
-          .from(replicaEntity)
-          .where(
-            and(
-              eq(replicaEntity.traceId, traceId),
-              eq(replicaEntity.connectionId, stitch.srcConnectionId),
-            ),
-          )
-          .limit(1);
-      }),
-      // L3
-      this.db.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-        );
-        return tx
-          .select()
-          .from(normalizedEntity)
-          .where(eq(normalizedEntity.traceId, traceId))
-          .limit(1);
-      }),
-      // L5/L6: scoped to both traceId AND routeId = stitchId
+      // L5/L6: dest schema
       this.db.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
@@ -362,13 +361,13 @@ export class TraceService {
       }),
     ]);
 
-    // If sync_log returns 0 rows with the combined (traceId + routeId) filter,
-    // the trace either doesn't exist or belongs to a different stitch.
-    if (layers.length === 0) {
+    if (!srcResults) {
       throw new NotFoundException(
         `Trace ${traceId} not found for stitch ${stitchId}`,
       );
     }
+
+    const { layers, l1Rows, l2Rows, l3Rows } = srcResults;
 
     this.logger.debug(
       { stitchId, traceId, layerCount: layers.length },
