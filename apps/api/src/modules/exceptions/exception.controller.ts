@@ -25,10 +25,10 @@ export class ExceptionController {
   ) {}
 
   /**
-   * GET /exceptions?status=unresolved|dismissed&limit=50&offset=0
+   * GET /exceptions?status=unresolved|dismissed&limit=50&cursor=<cursor>
    *
    * Returns paginated FAIL/RETRY/DISMISSED outbound_gateway rows for the org.
-   * `total` reflects the real COUNT(*) across all schemas for the given filter.
+   * Uses cursor-based pagination for stable iteration over large org-wide datasets.
    */
   @Get()
   async listExceptions(

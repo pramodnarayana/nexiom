@@ -309,7 +309,7 @@ export class TraceService {
             })
             .from(syncLog)
             .where(eq(syncLog.traceId, traceId))
-            .orderBy(syncLog.timestamp),
+            .orderBy(syncLog.timestamp, syncLog.id),
           // L1: traceId scope (connectionId = src implied by schema)
           tx
             .select()

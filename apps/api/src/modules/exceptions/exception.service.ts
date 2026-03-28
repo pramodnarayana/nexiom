@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { eq, inArray, and, or, lt, sql as drizzleSql } from 'drizzle-orm';
+import { eq, inArray, and, or, lt, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -16,7 +16,6 @@ import {
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
 import { QueueService, QueueName } from '@nexiom/queue';
-import { sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -128,8 +127,8 @@ export class ExceptionService {
     if (pagination.cursor) {
       const { updatedAt, id } = parseExceptionCursor(pagination.cursor);
       cursorCondition = or(
-        lt(drizzleSql`updated_at`, updatedAt),
-        and(drizzleSql`updated_at = ${updatedAt}`, lt(drizzleSql`id`, id)),
+        lt(sql`updated_at`, updatedAt),
+        and(sql`updated_at = ${updatedAt}`, lt(sql`id`, id)),
       );
     }
 
@@ -193,7 +192,7 @@ export class ExceptionService {
         );
 
         const countQuery = tx
-          .select({ count: drizzleSql<number>`COUNT(*)::int` })
+          .select({ count: sql<number>`COUNT(*)::int` })
           .from(outboundGateway)
           .where(whereClause);
 

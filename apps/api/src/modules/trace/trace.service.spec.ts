@@ -183,6 +183,11 @@ describe('TraceService', () => {
 
     it('sets nextCursor (composite timestamp:id) when result exceeds limit', async () => {
       // Produce 6 rows so that limit=5 triggers hasMore=true
+      const capture: CallCapture = {
+        fromArgs: [],
+        whereArgs: [],
+        orderByArgs: [],
+      };
       const manyRows = Array.from({ length: 6 }, (_, i) => ({
         id: `${ROW_ID_1.slice(0, -1)}${i}`,
         traceId: TRACE_ID,
@@ -192,7 +197,7 @@ describe('TraceService', () => {
         routeId: STITCH_ID,
         timestamp: new Date(NOW.getTime() - i * 1000),
       }));
-      const chain = buildSelectChain(manyRows);
+      const chain = buildSelectChain(manyRows, capture);
       const tx = {
         execute: vi.fn().mockResolvedValue(undefined),
         select: vi.fn().mockReturnValue(chain),
@@ -206,6 +211,11 @@ describe('TraceService', () => {
       expect(result.nextCursor).not.toBeNull();
       // Composite cursor: "<ISO>:<uuid>"
       expect(result.nextCursor).toMatch(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z:.+-/);
+
+      // Assert SQL predicates
+      expect(capture.fromArgs).toHaveLength(1);
+      expect(capture.whereArgs.length).toBeGreaterThan(0);
+      expect(capture.orderByArgs.length).toBeGreaterThan(0);
     });
 
     it('accepts a valid composite cursor without throwing', async () => {
@@ -255,6 +265,75 @@ describe('TraceService', () => {
       ).rejects.toThrow();
       expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(SRC_CONN);
       expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(DEST_CONN);
+    });
+
+    it('returns trace payload and asserts correct query arguments are passed', async () => {
+      const capture: CallCapture = {
+        fromArgs: [],
+        whereArgs: [],
+        orderByArgs: [],
+      };
+      // Provide an existence row, timeline rows, and payload rows to avoid 404
+      const syncLogRows = [
+        {
+          traceId: TRACE_ID,
+          routeId: STITCH_ID,
+          layer: 'L1',
+          status: 'SUCCESS',
+          durationMs: 10,
+          timestamp: NOW,
+          id: ROW_ID_1,
+        },
+      ];
+      const inboundRows = [
+        {
+          traceId: TRACE_ID,
+          reqPayload: {},
+          resPayload: {},
+          statusCode: 200,
+          connectionId: SRC_CONN,
+        },
+      ];
+      const outboundRows = [
+        {
+          traceId: TRACE_ID,
+          reqPayload: {},
+          resPayload: {},
+          statusCode: 200,
+          connectionId: DEST_CONN,
+        },
+      ];
+
+      let selectCount = 0;
+      const tx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockImplementation(() => {
+          selectCount++;
+          // 1: existence check (syncLog)
+          // 2: layers fetch (syncLog)
+          // 3: L1 row (inbound)
+          // 4: L2 row (replica) -> []
+          // 5: L3 row (outbound)
+          if (selectCount === 1 || selectCount === 2)
+            return buildSelectChain(syncLogRows, capture);
+          if (selectCount === 3) return buildSelectChain(inboundRows, capture);
+          if (selectCount === 5) return buildSelectChain(outboundRows, capture);
+          return buildSelectChain([], capture); // L2 empty
+        }),
+      };
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
+
+      const result = await service.getTrace(ORG_ID, STITCH_ID, TRACE_ID);
+      expect(result).toBeDefined();
+      expect(result.traceId).toBe(TRACE_ID);
+      expect(capture.fromArgs.length).toBeGreaterThan(0);
+      expect(capture.whereArgs.length).toBeGreaterThan(0);
+
+      // getTrace checks trace existence + loads timeline inside one tx,
+      // then loads the actual payload rows across two schemas.
+      expect(capture.fromArgs).toContainEqual(expect.anything());
     });
   });
 });

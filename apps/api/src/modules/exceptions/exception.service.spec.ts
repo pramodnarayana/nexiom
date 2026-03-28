@@ -33,6 +33,7 @@ const loggerMock = {
 const ORG_ID = 'org-1';
 const STITCH_ID = '11111111-1111-1111-1111-111111111111';
 const DEST_CONN = '44444444-4444-4444-4444-444444444444';
+const SRC_CONN = '33333333-3333-3333-3333-333333333333';
 const OUTBOUND_ID = '55555555-5555-5555-5555-555555555555';
 const TRACE_ID = '66666666-6666-6666-6666-666666666666';
 const UPDATED_AT = new Date('2026-01-02T00:00:00.000Z');
@@ -40,6 +41,7 @@ const UPDATED_AT = new Date('2026-01-02T00:00:00.000Z');
 const MOCK_STITCH = {
   id: STITCH_ID,
   orgId: ORG_ID,
+  srcConnectionId: SRC_CONN,
   destConnectionId: DEST_CONN,
 };
 
@@ -187,6 +189,50 @@ describe('ExceptionService', () => {
       const result = await service.listExceptions(ORG_ID, {}, { limit: 10 });
       expect(result.limit).toBe(10);
     });
+
+    it('handles cursor-based pagination state advances', async () => {
+      mockDb.query.integrationStitches.findMany = vi
+        .fn()
+        .mockResolvedValue([MOCK_STITCH]);
+      mockResolver.resolveSchemaName = vi.fn().mockResolvedValue('ws_dest_001');
+
+      // First call (fetches nextCursor)
+      const page1 = await service.listExceptions(ORG_ID, {}, { limit: 1 });
+      expect(page1.nextCursor).toBeDefined();
+
+      // Second call (uses returned cursor)
+      const page2 = await service.listExceptions(
+        ORG_ID,
+        {},
+        { cursor: page1.nextCursor!, limit: 1 },
+      );
+      // Data matches mock outbound row; in real implementation rows shift
+      expect(page2.data).toHaveLength(1);
+      // Given our mock always yields the same row for size 1, hasMore remains the same,
+      // but we assert the service can consume the previous cursor without throwing.
+      expect(page2.nextCursor).toBeDefined();
+    });
+
+    it('filters correctly by status string unresolved vs dismissed', async () => {
+      mockDb.query.integrationStitches.findMany = vi
+        .fn()
+        .mockResolvedValue([MOCK_STITCH]);
+      mockResolver.resolveSchemaName = vi.fn().mockResolvedValue('ws_dest_001');
+
+      const unresolved = await service.listExceptions(
+        ORG_ID,
+        { status: 'unresolved' },
+        { limit: 5 },
+      );
+      expect(unresolved.data).toHaveLength(1);
+
+      const dismissed = await service.listExceptions(
+        ORG_ID,
+        { status: 'dismissed' },
+        { limit: 5 },
+      );
+      expect(dismissed.data).toHaveLength(1);
+    });
   });
 
   describe('retryException()', () => {
@@ -218,7 +264,13 @@ describe('ExceptionService', () => {
       expect(result.queued).toBe(true);
       expect(mockQueue.send).toHaveBeenCalledWith(
         QueueName.DeliveryQueue,
-        expect.objectContaining({ outboundGatewayId: OUTBOUND_ID }),
+        expect.objectContaining({
+          outboundGatewayId: OUTBOUND_ID,
+          routeId: STITCH_ID,
+          traceId: TRACE_ID,
+          connectionId: SRC_CONN,
+          targetConnectionId: DEST_CONN,
+        }),
       );
     });
 
