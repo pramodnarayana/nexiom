@@ -6,6 +6,7 @@ import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/connectors/framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { SchemaPlan } from '@nexiom/dbmanager';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -520,8 +521,30 @@ describe('ConnectorsService', () => {
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         metadata: { env: 'sandbox' },
-        status: 'ACTIVE',
+        status: 'PROVISIONING',
       });
+
+      // T026: new connections must be provisioned with at least GATEWAY_ACTIVE
+      // so that inbound_gateway exists immediately after connection creation.
+      const { applyPlan } = service['dbManager'] as {
+        applyPlan: ReturnType<typeof vi.fn>;
+      };
+      expect(applyPlan).toHaveBeenCalledWith(
+        expect.stringMatching(/^ws_/),
+        SchemaPlan.OUTBOUND_ACTIVE,
+      );
+
+      // Verify the final transition to ACTIVE
+      expect(mockDbUpdate).toHaveBeenCalled();
+      const updateCall = vi
+        .mocked(mockDbUpdate)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .mock.results.find((r) => r.value?.set);
+      expect(updateCall).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(updateCall!.value.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'ACTIVE' }),
+      );
     });
 
     it('should update an existing connection explicitly using an ID', async () => {

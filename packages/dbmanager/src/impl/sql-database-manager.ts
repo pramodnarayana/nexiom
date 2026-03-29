@@ -180,7 +180,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             res_payload   JSONB,
             status_code   INTEGER,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
-                          CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING')),
+                          CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
             attempt_count INTEGER     NOT NULL DEFAULT 0,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -197,6 +197,36 @@ export class SqlDatabaseManager implements DatabaseManager {
                  WHEN duplicate_object  THEN NULL;
         END $$;
     `);
+
+        // Widen the check constraint for existing schemas. Postgres auto-names the original
+        // constraint 'outbound_gateway_status_check'. We try to drop it and add our
+        // explicitly named 'ck_outbound_status' constraint.
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".outbound_gateway DROP CONSTRAINT IF EXISTS outbound_gateway_status_check;
+        EXCEPTION WHEN undefined_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".outbound_gateway DROP CONSTRAINT IF EXISTS ck_outbound_status;
+        EXCEPTION WHEN undefined_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'ck_outbound_status' 
+                  AND conrelid = '"${schemaName}".outbound_gateway'::regclass
+            ) THEN
+                ALTER TABLE "${schemaName}".outbound_gateway
+                    ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED'));
+            END IF;
+        END $$;
+        `);
 
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_l5_trace
@@ -219,7 +249,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             trace_id    UUID        NOT NULL,
             route_id    UUID,
             layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
-            status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY')),
+            status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY','DISMISSED')),
             duration_ms INTEGER,
             timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_sync_log_trace_layer_status UNIQUE (trace_id, layer, status)
@@ -251,6 +281,63 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_log_trace_layer
             ON "${schemaName}".sync_log (trace_id, layer);
+    `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            connection_id UUID        NOT NULL,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
+            ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
+    `);
+
+        /**
+         * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.
+         *
+         * Written by the Fan-Out engine (L4) inside the same DB transaction as
+         * outbound_gateway. The OutboxWorker (L5) polls this table and publishes
+         * to Delivery_Queue, marking the row delivered_at on success.
+         * This guarantees at-least-once delivery even if the process crashes
+         * between the DB commit and the queue publish.
+
+         */
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".delivery_outbox (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            payload       JSONB       NOT NULL,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempt_count INTEGER     NOT NULL DEFAULT 0,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            delivered_at  TIMESTAMPTZ
+        );
+    `);
+
+        // Idempotent upgrade — add attempt_count to schemas provisioned before this column
+        // was introduced (matches the published_at patch pattern in provisionNormalizeTables).
+        await this.db.$client.query(`
+        ALTER TABLE "${schemaName}".delivery_outbox
+            ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+    `);
+
+        // Partial index — the OutboxWorker only polls PENDING rows;
+        // keeping the scan O(unprocessed) rather than O(all-time).
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_delivery_outbox_pending
+            ON "${schemaName}".delivery_outbox (created_at)
+            WHERE status = 'PENDING';
     `);
     }
 }

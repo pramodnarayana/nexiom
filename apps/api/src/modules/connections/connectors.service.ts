@@ -24,7 +24,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -370,7 +370,6 @@ export class ConnectorsService {
           };
         }
 
-        // 2. Create the net-new connection
         let connection;
         try {
           [connection] = await tx
@@ -385,16 +384,53 @@ export class ConnectorsService {
               expiresAt,
               metadata,
               envType: envType ?? 'PRODUCTION',
-              status: AppConnectionStatus.ACTIVE,
+              status: AppConnectionStatus.PROVISIONING,
             })
             .returning({ id: appConnections.id });
         } catch (err: unknown) {
-          this.throwOnDuplicateConnection(
-            extractPgError(err),
-            displayName,
-            externalId,
-          );
-          throw err;
+          const pgErr = extractPgError(err);
+          if (pgErr?.code === '23505') {
+            // Unique constraint violation; check if there is a FAILED connection to reprovision
+            const existingFailed = await tx
+              .select()
+              .from(appConnections)
+              .where(
+                and(
+                  eq(appConnections.tenantId, tenantId),
+                  eq(appConnections.appName, providerName),
+                  externalId
+                    ? or(
+                        eq(appConnections.displayName, displayName),
+                        eq(appConnections.externalId, externalId),
+                      )
+                    : eq(appConnections.displayName, displayName),
+                  eq(appConnections.status, AppConnectionStatus.FAILED),
+                ),
+              )
+              .limit(1);
+
+            if (existingFailed.length > 0 && existingFailed[0]) {
+              const [updated] = await tx
+                .update(appConnections)
+                .set({
+                  authType,
+                  value,
+                  expiresAt,
+                  metadata,
+                  envType: envType ?? 'PRODUCTION',
+                  status: AppConnectionStatus.PROVISIONING,
+                  updatedAt: new Date(),
+                })
+                .where(eq(appConnections.id, existingFailed[0].id))
+                .returning({ id: appConnections.id });
+
+              connection = updated;
+            } else {
+              this.throwOnDuplicateConnection(pgErr, displayName, externalId);
+            }
+          } else {
+            throw err;
+          }
         }
 
         if (!connection) {
@@ -447,8 +483,26 @@ export class ConnectorsService {
       try {
         await this.dbManager.applyPlan(
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.NAMESPACE_ONLY,
+          SchemaPlan.OUTBOUND_ACTIVE,
         );
+
+        // Transition to ACTIVE only after schema is successfully provisioned
+        await this.db.transaction(async (tx) => {
+          await tx
+            .update(appConnections)
+            .set({ status: AppConnectionStatus.ACTIVE })
+            .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
+
+          await tx
+            .update(connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+            .where(
+              eq(
+                connectionStorageRegistry.connectionId,
+                workspaceProvisionInfo.connectionId,
+              ),
+            );
+        });
       } catch (applyError) {
         this.logger.error(
           `applyPlan failed for ${providerName} (connectionId: ${workspaceProvisionInfo.connectionId}, createdRegistry: ${workspaceProvisionInfo.createdRegistry}, createdAppConnection: ${workspaceProvisionInfo.createdAppConnection}), rolling back provisioned records...`,
@@ -457,18 +511,12 @@ export class ConnectorsService {
         try {
           await this.db.transaction(async (tx) => {
             if (workspaceProvisionInfo.createdRegistry) {
-              await tx
-                .delete(connectionStorageRegistry)
-                .where(
-                  eq(
-                    connectionStorageRegistry.connectionId,
-                    workspaceProvisionInfo.connectionId,
-                  ),
-                );
+              // Intentionally keeping the registry to allow reprovisioning
             }
             if (workspaceProvisionInfo.createdAppConnection) {
               await tx
-                .delete(appConnections)
+                .update(appConnections)
+                .set({ status: AppConnectionStatus.FAILED })
                 .where(
                   eq(appConnections.id, workspaceProvisionInfo.connectionId),
                 );
@@ -480,6 +528,20 @@ export class ConnectorsService {
             rollbackError,
           );
         }
+
+        if (workspaceProvisionInfo.schemaName) {
+          try {
+            await this.db.execute(
+              sql`DROP SCHEMA IF EXISTS ${sql.identifier(workspaceProvisionInfo.schemaName)} CASCADE`,
+            );
+          } catch (dropError) {
+            this.logger.error(
+              `Failed to drop schema ${workspaceProvisionInfo.schemaName} during rollback for ${providerName}`,
+              dropError,
+            );
+          }
+        }
+
         throw new InternalServerErrorException(
           'Failed to provision workspace namespace',
         );

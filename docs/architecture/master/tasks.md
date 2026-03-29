@@ -263,21 +263,21 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ## Phase 3 — 6-Layer Pipeline + Scheduler Execution
 
-### T026 · db-manager: New schema plans — REPLICA, NORMALIZE, OUTBOUND
+### T026 · db-manager: New schema plans — REPLICA, NORMALIZE, OUTBOUND ✅ COMPLETE
 
-- [ ] Add `REPLICA_ACTIVE` plan: creates `replica_entity`, `sync_cursor`
-- [ ] Add `NORMALIZE_ACTIVE` plan: creates `normalized_entity`
-- [ ] Add `OUTBOUND_ACTIVE` plan: creates `outbound_gateway`, `sync_log`
-- [ ] Apply all three when a connection is activated in `TriggerExecutorService.applyPlan()`
+- [x] Add `REPLICA_ACTIVE` plan: creates `replica_entity`, `sync_cursor`
+- [x] Add `NORMALIZE_ACTIVE` plan: creates `normalized_entity`
+- [x] Add `OUTBOUND_ACTIVE` plan: creates `outbound_gateway`, `sync_log`
+- [x] Apply all three when a connection is activated in `TriggerExecutorService.applyPlan()` and `ConnectorsService`
 - Files: `packages/dbmanager/src/plans/**`, `apps/api/src/modules/triggers/trigger-executor.service.ts`
 - Depends: T005
 
-### T027 · api: Update L1 — non-blocking webhook handler
+### T027 · api: Update L1 — non-blocking webhook handler ✅ COMPLETE
 
-- [ ] After `inbound_gateway` insert, enqueue `{ traceId, connectionId }` to `Inbound_Queue`
-- [ ] Return `202 Accepted` without awaiting downstream
-- [ ] Add `WebhookSignatureGuard` to the controller (from T009)
-- [ ] Unit tests cover: success path, duplicate (idempotent from T010), signature failure
+- [x] After `inbound_gateway` insert, enqueue `{ traceId, connectionId }` to `Inbound_Queue`
+- [x] Return `202 Accepted` without awaiting downstream
+- [x] Add `WebhookSignatureGuard` to the controller (from T009)
+- [x] Unit tests cover: success path, duplicate (idempotent from T010), signature failure
 - Files: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhooks.controller.spec.ts`
 - Depends: T003, T009, T010, T026
 
@@ -332,15 +332,15 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/scheduler/scheduler.controller.ts`, `apps/api/src/modules/scheduler/internal-scheduler.guard.ts`, `apps/api/src/modules/scheduler/execute-stitch.validation.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.spec.ts`, `apps/api/src/modules/scheduler/sync-runner.ts`
 - Depends: T028, T029, T046, T047
 
-### T031 · api: `ReplicaService` — L2 worker
+### T031 · api: `ReplicaService` — L2 worker ✅ COMPLETE
 
-- [ ] Consumes `Inbound_Queue`
-- [ ] Resolves schema via `StorageResolverService`
-- [ ] `UPSERT` into `replica_entity` on `(entity_type, source_id)`, increments `version`
-- [ ] Updates `inbound_gateway.status` → `REPLICATED`
-- [ ] Writes `sync_log` row `{ layer: 'L2', status: 'SUCCESS', durationMs }`
-- [ ] Pushes `{ traceId }` to `Replica_Queue`
-- [ ] Unit tests
+- [x] Consumes `Inbound_Queue`
+- [x] Resolves schema via `StorageResolverService`
+- [x] `UPSERT` into `replica_entity` on `(entity_type, source_id)`, increments `version`
+- [x] Updates `inbound_gateway.status` → `REPLICATED`
+- [x] Writes `sync_log` row `{ layer: 'L2', status: 'SUCCESS', durationMs }`
+- [x] Pushes `{ traceId }` to `Replica_Queue`
+- [x] Unit tests
 - Files: `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica.service.spec.ts`
 - Depends: T003, T026, T006
 
@@ -481,17 +481,17 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T036 · api: Trace API
 
-- [ ] `GET /stitches/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
-- [ ] `GET /stitches/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
+- [x] `GET /stitches/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
+- [x] `GET /stitches/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
 - Files: `apps/api/src/modules/intelligence/trace.controller.ts`, `apps/api/src/modules/intelligence/trace.service.ts`
 - Depends: T035
 
 ### T037 · api: Exception Center API
 
-- [ ] `GET /exceptions?orgId=...&status=unresolved`
-- [ ] `POST /exceptions/:id/retry` — re-enqueues `outboundGatewayId` to `Delivery_Queue`
-- [ ] `POST /exceptions/:id/dismiss`
-- [ ] `ExceptionService` reads from DLQ metadata stored in Redis/DB
+- [x] `GET /exceptions?orgId=...&status=unresolved`
+- [x] `POST /exceptions/:id/retry` — re-enqueues `outboundGatewayId` to `Delivery_Queue`
+- [x] `POST /exceptions/:id/dismiss`
+- [x] `ExceptionService` reads from DLQ metadata stored in Redis/DB
 - Files: `apps/api/src/modules/pipeline/exception.service.ts`, `apps/api/src/modules/intelligence/exception.controller.ts`
 - Depends: T035
 
@@ -570,6 +570,27 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ---
 
+## Phase 7 — Delivery Outbox Resiliency
+
+### T051 · api: Delivery Outbox Pattern
+
+- [x] Add `delivery_outbox` Drizzle schema mappings and PostgreSQL CHECK constraint enums.
+- [x] Refactor `ConnectorsService` to use PROVISIONING before database completion.
+- [x] Implement robust `ReplicaOutboxService` atomic locks guaranteeing L2 -> L3 transport logic.
+- [x] Strip untyped `durationMs` hacks and substitute row-level skip locks and `replica_outbox` commits in L2 worker.
+- Files: `packages/database/src/schema/pipeline.ts`, `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica-outbox.service.ts`
+
+### T052 · api: Hardened L3 & L4 Pipeline Outbox
+
+- [ ] Create `normalized_outbox` Drizzle schema and provisioning migrations.
+- [ ] Refactor `NormalizationService` (L3) to use the new atomic outbox for safely transmitting to L4.
+- [ ] Refactor `FanOutService` (L4) to use the existing `delivery_outbox` schema instead of directly hitting the queue.
+- [ ] Implement `NormalizedOutboxWorker` to handle the batch relay to NormalizationQueue.
+- Files: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/normalized-outbox.worker.ts`
+- Depends: T051
+
+---
+
 ## Summary
 
 | Phase | Tasks | Key deliverable |
@@ -583,5 +604,34 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |
+| 7 — Delivery Outbox | T051–T052 | Delivery Outbox Resiliency |
 
-**Total: 50 tasks**
+**Total: 52 tasks**
+
+---
+
+## Recommended Next Sprint (priority order)
+
+> The `feat/trace-exception-api` branch is merged. T036 and T037 are complete.
+> The following tasks are unblocked and should be tackled next.
+
+### Immediate — unblock the pipeline (required before end-to-end testing)
+
+1. **T032** — `NormalizationService` (L3 worker): depends on T031.
+
+2. **T033** — `FanOutService` (L4 worker): depends on T032. Already partially implemented in `apps/worker`; needs crash-safety tests and `syncCondition` evaluation.
+
+3. **T034** — `DeliveryService` (L5 worker): depends on T033.
+
+4. **T035** — L6 GEM write + audit: final write-back, unblocks T038/T039 UI.
+
+### UI unblocked now (no pipeline dependency)
+
+1. **T038** — `RouteIntelligencePage` web UI: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer. Uses the live T036 trace API — can be built in parallel with pipeline work.
+
+2. **T039** — `ExceptionCenterPage` web UI: exception table, retry/dismiss actions per row, bulk actions. Uses the live T037 exception API.
+
+### Clean-up required before next feature
+
+1. **T007** — OpenObserve dashboards + alerting: now that T036/T037 are live, pipeline health metrics (L1→L6 throughput, exception spike alerts) should be set up.
+
