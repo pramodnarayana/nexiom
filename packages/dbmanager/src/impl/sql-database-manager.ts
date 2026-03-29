@@ -275,6 +275,26 @@ export class SqlDatabaseManager implements DatabaseManager {
             ON "${schemaName}".sync_log (trace_id, layer);
     `);
 
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            connection_id UUID        NOT NULL,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_replica_outbox_pending
+            ON "${schemaName}".replica_outbox (next_retry_at ASC)
+            WHERE status = 'PENDING';
+    `);
+
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.
          *
@@ -283,6 +303,7 @@ export class SqlDatabaseManager implements DatabaseManager {
          * to Delivery_Queue, marking the row delivered_at on success.
          * This guarantees at-least-once delivery even if the process crashes
          * between the DB commit and the queue publish.
+
          */
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".delivery_outbox (

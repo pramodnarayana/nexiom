@@ -521,7 +521,7 @@ describe('ConnectorsService', () => {
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         metadata: { env: 'sandbox' },
-        status: 'ACTIVE',
+        status: 'PROVISIONING',
       });
 
       // T026: new connections must be provisioned with at least GATEWAY_ACTIVE

@@ -8,6 +8,7 @@ import {
     timestamp,
     index,
     uniqueIndex,
+    text,
 } from 'drizzle-orm/pg-core';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,12 @@ export const pipelineStatusEnum = pgEnum('pipeline_status_enum', [
 export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [
     'L1', 'L2', 'L3', 'L4', 'L5', 'L6',
 ]);
+
+export const OutboundGatewayStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY', 'DISMISSED'] as const;
+export type OutboundGatewayStatus = (typeof OutboundGatewayStatus)[number];
+
+export const DeliveryOutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;
+export type DeliveryOutboxStatus = (typeof DeliveryOutboxStatus)[number];
 
 // ---------------------------------------------------------------------------
 // Tenant Schema Builder
@@ -159,7 +166,7 @@ export function buildTenantSchema(schemaName: string) {
         reqPayload: jsonb('req_payload').notNull(),
         resPayload: jsonb('res_payload'),
         statusCode: integer('status_code'),
-        status: pipelineStatusEnum('status').notNull().default('PENDING'),
+        status: text('status').$type<OutboundGatewayStatus>().notNull().default('PENDING'),
         attemptCount: integer('attempt_count').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
@@ -210,6 +217,23 @@ export function buildTenantSchema(schemaName: string) {
     ]);
 
     /**
+     * REPLICA OUTBOX
+     *
+     * Transactional outbox pattern used to safely decouple the L1/L2 database
+     * commit from the external queue handoff (L2 -> L3) to guarantee delivery.
+     */
+    const replicaOutbox = schema.table('replica_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        connectionId: uuid('connection_id').notNull(),
+        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    });
+
+    /**
      * DELIVERY OUTBOX
      *
      * Transactional outbox for reliable queue handoff.
@@ -217,7 +241,7 @@ export function buildTenantSchema(schemaName: string) {
     const deliveryOutbox = schema.table('delivery_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         payload: jsonb('payload').notNull(),
-        status: pipelineStatusEnum('status').notNull().default('PENDING'),
+        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
         attemptCount: integer('attempt_count').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         deliveredAt: timestamp('delivered_at', { withTimezone: true }),
@@ -230,6 +254,7 @@ export function buildTenantSchema(schemaName: string) {
         outboundGateway,
         syncLog,
         syncCursor,
+        replicaOutbox,
         deliveryOutbox,
     };
 }

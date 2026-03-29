@@ -385,7 +385,7 @@ export class ConnectorsService {
               expiresAt,
               metadata,
               envType: envType ?? 'PRODUCTION',
-              status: AppConnectionStatus.ACTIVE,
+              status: AppConnectionStatus.PROVISIONING,
             })
             .returning({ id: appConnections.id });
         } catch (err: unknown) {
@@ -449,6 +449,12 @@ export class ConnectorsService {
           workspaceProvisionInfo.schemaName,
           SchemaPlan.OUTBOUND_ACTIVE,
         );
+
+        // Transition to ACTIVE only after schema is successfully provisioned
+        await this.db
+          .update(appConnections)
+          .set({ status: AppConnectionStatus.ACTIVE })
+          .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
       } catch (applyError) {
         this.logger.error(
           `applyPlan failed for ${providerName} (connectionId: ${workspaceProvisionInfo.connectionId}, createdRegistry: ${workspaceProvisionInfo.createdRegistry}, createdAppConnection: ${workspaceProvisionInfo.createdAppConnection}), rolling back provisioned records...`,
@@ -468,7 +474,8 @@ export class ConnectorsService {
             }
             if (workspaceProvisionInfo.createdAppConnection) {
               await tx
-                .delete(appConnections)
+                .update(appConnections)
+                .set({ status: AppConnectionStatus.FAILED })
                 .where(
                   eq(appConnections.id, workspaceProvisionInfo.connectionId),
                 );

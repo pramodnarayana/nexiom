@@ -481,17 +481,17 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### T036 · api: Trace API
 
-- [ ] `GET /stitches/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
-- [ ] `GET /stitches/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
+- [x] `GET /stitches/:id/traces?limit=50&cursor=...` — paginated list from `sync_log`
+- [x] `GET /stitches/:id/traces/:traceId` — full trace with per-layer detail (joins `inbound_gateway`, `replica_entity`, `normalized_entity`, `outbound_gateway`)
 - Files: `apps/api/src/modules/intelligence/trace.controller.ts`, `apps/api/src/modules/intelligence/trace.service.ts`
 - Depends: T035
 
 ### T037 · api: Exception Center API
 
-- [ ] `GET /exceptions?orgId=...&status=unresolved`
-- [ ] `POST /exceptions/:id/retry` — re-enqueues `outboundGatewayId` to `Delivery_Queue`
-- [ ] `POST /exceptions/:id/dismiss`
-- [ ] `ExceptionService` reads from DLQ metadata stored in Redis/DB
+- [x] `GET /exceptions?orgId=...&status=unresolved`
+- [x] `POST /exceptions/:id/retry` — re-enqueues `outboundGatewayId` to `Delivery_Queue`
+- [x] `POST /exceptions/:id/dismiss`
+- [x] `ExceptionService` reads from DLQ metadata stored in Redis/DB
 - Files: `apps/api/src/modules/pipeline/exception.service.ts`, `apps/api/src/modules/intelligence/exception.controller.ts`
 - Depends: T035
 
@@ -570,6 +570,28 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ---
 
+## Phase 7 — Delivery Outbox Resiliency
+
+### T051 · api: Delivery Outbox Pattern
+
+- [x] Add `delivery_outbox` Drizzle schema mappings and PostgreSQL CHECK constraint enums.
+- [x] Refactor `ConnectorsService` to use PROVISIONING before database completion.
+- [x] Implement robust `ReplicaOutboxService` atomic locks guaranteeing L2 -> L3 transport logic.
+- [x] Strip untyped `durationMs` hacks and substitute row-level skip locks and `replica_outbox` commits in L2 worker.
+- Files: `packages/database/src/schema/pipeline.ts`, `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica-outbox.service.ts`
+- Depends: T032
+
+### T052 · api: Hardened L3 & L4 Pipeline Outbox
+
+- [ ] Create `normalized_outbox` Drizzle schema and provisioning migrations.
+- [ ] Refactor `NormalizationService` (L3) to use the new atomic outbox for safely transmitting to L4.
+- [ ] Refactor `FanOutService` (L4) to use the existing `delivery_outbox` schema instead of directly hitting the queue.
+- [ ] Implement `NormalizedOutboxWorker` to handle the batch relay to NormalizationQueue.
+- Files: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/normalized-outbox.worker.ts`
+- Depends: T051
+
+---
+
 ## Summary
 
 | Phase | Tasks | Key deliverable |
@@ -583,9 +605,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |
-| 7 — Delivery Outbox | T051 | Delivery Outbox Resiliency (Complete) |
+| 7 — Delivery Outbox | T051–T052 | Delivery Outbox Resiliency |
 
-**Total: 51 tasks**
+**Total: 52 tasks**
 
 ---
 

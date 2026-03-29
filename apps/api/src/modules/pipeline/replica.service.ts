@@ -63,7 +63,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { inboundGateway, replicaEntity, syncLog } =
+      const { inboundGateway, replicaEntity, syncLog, replicaOutbox } =
         buildTenantSchema(schemaName);
 
       const didReplicate = await this.db.transaction(async (tx) => {
@@ -78,7 +78,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           .where(
             and(
               eq(inboundGateway.traceId, traceId),
-              sql`${inboundGateway.status} != 'REPLICATED'`,
+              eq(inboundGateway.status, 'RECEIVED'),
             ),
           )
           .returning();
@@ -100,7 +100,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           }
 
           this.logger.debug(`Trace ${traceId} already replicated. Skipping.`);
-          return false;
+          return { replicated: false, durationMs: 0 };
         }
 
         // 2. Determine entityType and sourceId
@@ -149,52 +149,42 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             },
           });
 
-        // 4. (Removed immediate STATUS='REPLICATED' update here, deferred to outbox confirm)
+        // 4. Mark L1 as REPLICATED immediately in THIS transaction
+        await tx
+          .update(inboundGateway)
+          .set({ status: 'REPLICATED' })
+          .where(eq(inboundGateway.traceId, traceId));
 
-        // 5. Append to sync_log as PENDING (Outbox pattern)
+        // 5. Audit syncLog as SUCCESS (no more PENDING phase)
         const durationMs = Date.now() - new Date(l1Record.createdAt).getTime();
         await tx
           .insert(syncLog)
           .values({
             traceId,
             layer: 'L2',
-            status: 'PENDING',
+            status: 'SUCCESS',
             durationMs,
           })
           .onConflictDoNothing();
 
-        return durationMs;
+        // 6. Insert into Transactional Outbox (decouples DB commit from Queue network hop)
+        await tx.insert(replicaOutbox).values({
+          traceId,
+          connectionId,
+          status: 'PENDING',
+        });
+
+        return { replicated: true, durationMs };
       });
 
-      if (!didReplicate) {
+      if (!didReplicate?.replicated) {
         return;
       }
 
-      // 6. Push to L3 Normalization Queue
-      await this.queueService.send(QueueName.ReplicaQueue, {
-        traceId,
-        connectionId,
-      });
-
-      // 7. Success state update (Confirm Outbox)
-      await this.db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-        // Mark L1 REPLICATED
-        await tx
-          .update(inboundGateway)
-          .set({ status: 'REPLICATED' })
-          .where(eq(inboundGateway.traceId, traceId));
-        // Mark syncLog SUCCESS
-        await tx
-          .update(syncLog)
-          .set({ status: 'SUCCESS' })
-          .where(and(eq(syncLog.traceId, traceId), eq(syncLog.layer, 'L2')));
-      });
+      // 7. No external queueing logic needed here - Outbox worker handles this relay
 
       this.logger.info(
-        { durationMs: didReplicate },
+        { durationMs: didReplicate.durationMs },
         `Trace ${traceId} successfully replicated (L2)`,
       );
     } catch (err: unknown) {

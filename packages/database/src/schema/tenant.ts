@@ -9,13 +9,15 @@ export const envTypeEnum = pgEnum('env_type_enum', ['PRODUCTION', 'SANDBOX']);
 // Auth type enum — matches Activepieces' AppConnectionType pattern
 export const authTypeEnum = pgEnum('auth_type_enum', ['OAUTH2', 'API_KEY', 'BASIC']);
 
-export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED']);
+export const connectionStatusEnum = pgEnum('connection_status_enum', ['ACTIVE', 'INACTIVE', 'REVOKED', 'EXPIRED', 'PROVISIONING', 'FAILED']);
 
 export const AppConnectionStatus = {
     ACTIVE: 'ACTIVE',
     INACTIVE: 'INACTIVE',
     EXPIRED: 'EXPIRED',
     REVOKED: 'REVOKED',
+    PROVISIONING: 'PROVISIONING',
+    FAILED: 'FAILED',
 } as const;
 export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppConnectionStatus];
 

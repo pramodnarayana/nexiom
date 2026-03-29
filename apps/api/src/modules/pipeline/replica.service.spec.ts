@@ -134,30 +134,32 @@ describe('ReplicaService', () => {
       );
 
       // Verify L2 audit insert directly (for syncLog)
-      expect(txMock.insert).toHaveBeenCalledTimes(2);
+      expect(txMock.insert).toHaveBeenCalledTimes(3);
       expect(txMock.values).toHaveBeenCalledWith(
         expect.objectContaining({
           traceId: '123-abc',
           layer: 'L2',
-          status: 'PENDING',
+          status: 'SUCCESS',
           durationMs: expect.any(Number),
         }),
       );
 
-      // Verify updates (Atomic PROCESSING -> REPLICATED -> syncLog SUCCESS)
-      expect(txMock.update).toHaveBeenCalledTimes(3);
-      expect(txMock.set).toHaveBeenCalledWith({ status: 'PROCESSING' });
-      expect(txMock.set).toHaveBeenCalledWith({ status: 'REPLICATED' });
-      expect(txMock.set).toHaveBeenCalledWith({ status: 'SUCCESS' });
-
-      // Verify L2 send
-      expect(queueServiceMock.send).toHaveBeenCalledWith(
-        QueueName.ReplicaQueue,
-        {
+      // Verify Replica Outbox insert
+      expect(txMock.values).toHaveBeenCalledWith(
+        expect.objectContaining({
           traceId: '123-abc',
           connectionId: 'conn-1',
-        },
+          status: 'PENDING',
+        }),
       );
+
+      // Verify updates (Atomic PROCESSING -> REPLICATED)
+      expect(txMock.update).toHaveBeenCalledTimes(2);
+      expect(txMock.set).toHaveBeenCalledWith({ status: 'PROCESSING' });
+      expect(txMock.set).toHaveBeenCalledWith({ status: 'REPLICATED' });
+
+      // Ensure direct queue service is NO LONGER called
+      expect(queueServiceMock.send).not.toHaveBeenCalled();
     });
 
     it('should throw if L1 record is missing', async () => {

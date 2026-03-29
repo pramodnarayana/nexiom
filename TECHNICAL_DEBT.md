@@ -6,6 +6,25 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
+### 1. Hardened L3 & L4 Pipeline Outbox Refactoring
+
+**Location**: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`  
+**Added**: 2026-03-29  
+**Impact**: Reliability, Data Integrity, Architecture  
+**Effort**: Medium (2-3 days)
+
+**Current State**:
+
+- L3 (\`NormalizationService\`) and L4 (\`FanOutService\`) both combine database transactions directly with external queue publishing (\`this.queueService.send\`), violating the Single Responsibility Principle and exposing the pipeline to two-phase commit vulnerabilities.
+- If L3 or L4 crashes immediately after queuing the next message, the downstream worker proceeds, but the local success audits (e.g. \`syncLog\`, \`inbound_gateway\` updates) roll back in Postgres, leading to duplicate processing limits.
+
+**Recommended Solution**:
+
+- **L3 (Normalization):** Create a new \`normalized_outbox\` Drizzle schema, insert into it atomically within the primary L3 transaction, and introduce a \`NormalizedOutboxService\` to relay those records to L4.
+- **L4 (FanOut):** Remove direct queue sending. Configure \`FanOutService\` to transactionally insert outbound events directly into the preexisting \`delivery_outbox\` schema. Ensure the relay worker correctly routes these events downstream to L5 \`DeliveryQueue\`.
+
+---
+
 ### 1. DatabaseManager Duplication
 
 **Location**: `apps/api/src/db/database-manager.ts`, `apps/worker/src/db/database-manager.ts`  
