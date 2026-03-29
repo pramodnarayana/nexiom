@@ -272,12 +272,12 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `packages/dbmanager/src/plans/**`, `apps/api/src/modules/triggers/trigger-executor.service.ts`
 - Depends: T005
 
-### T027 · api: Update L1 — non-blocking webhook handler
+### T027 · api: Update L1 — non-blocking webhook handler ✅ COMPLETE
 
-- [ ] After `inbound_gateway` insert, enqueue `{ traceId, connectionId }` to `Inbound_Queue`
-- [ ] Return `202 Accepted` without awaiting downstream
-- [ ] Add `WebhookSignatureGuard` to the controller (from T009)
-- [ ] Unit tests cover: success path, duplicate (idempotent from T010), signature failure
+- [x] After `inbound_gateway` insert, enqueue `{ traceId, connectionId }` to `Inbound_Queue`
+- [x] Return `202 Accepted` without awaiting downstream
+- [x] Add `WebhookSignatureGuard` to the controller (from T009)
+- [x] Unit tests cover: success path, duplicate (idempotent from T010), signature failure
 - Files: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhooks.controller.spec.ts`
 - Depends: T003, T009, T010, T026
 
@@ -584,4 +584,40 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |
 
-**Total: 50 tasks**
+**Total: 51 tasks**
+
+---
+
+## Recommended Next Sprint (priority order)
+
+> The `feat/trace-exception-api` branch is merged. T036 and T037 are complete.
+> The following tasks are unblocked and should be tackled next.
+
+### Immediate — unblock the pipeline (required before end-to-end testing)
+
+1. **T051** ✅ — `delivery_outbox` DB migration: table added to `provisionOutboundTables()` with `attempt_count`, expanded status CHECK (`PENDING/PROCESSING/SUCCESS/FAIL/RETRY`), idempotent `ADD COLUMN` upgrade patch for existing schemas, and partial index on PENDING rows. T026 GATEWAY_ACTIVE provisioning gap also fixed in this branch.
+
+2. **T031** — `ReplicaService` (L2 worker): consumes `Inbound_Queue`, upserts `replica_entity`, advances status. This unblocks T032→T033→T034→T035 and makes the full L1→L6 pipeline executable.
+
+3. **T032** — `NormalizationService` (L3 worker): depends on T031.
+
+4. **T033** — `FanOutService` (L4 worker): depends on T032. Already partially implemented in `apps/worker`; needs crash-safety tests and `syncCondition` evaluation.
+
+5. **T034** — `DeliveryService` (L5 worker): depends on T033.
+
+6. **T035** — L6 GEM write + audit: final write-back, unblocks T038/T039 UI.
+
+### UI unblocked now (no pipeline dependency)
+
+7. **T038** — `RouteIntelligencePage` web UI: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer. Uses the live T036 trace API — can be built in parallel with pipeline work.
+
+8. **T039** — `ExceptionCenterPage` web UI: exception table, retry/dismiss actions per row, bulk actions. Uses the live T037 exception API.
+
+### Clean-up required before next feature
+
+9. **T027** — Wire `WebhookSignatureGuard` + queue enqueue into the L1 webhook handler (currently `webhooks.controller.ts` only inserts to DB; it does not publish to `Inbound_Queue`).
+
+10. **T026** — DBManager provisioning plans for REPLICA / NORMALIZE / OUTBOUND schemas — new connections are not getting the pipeline tables created on activation.
+
+11. **T007** — OpenObserve dashboards + alerting: now that T036/T037 are live, pipeline health metrics (L1→L6 throughput, exception spike alerts) should be set up.
+

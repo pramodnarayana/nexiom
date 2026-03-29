@@ -6,6 +6,7 @@ import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/connectors/framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { SchemaPlan } from '@nexiom/dbmanager';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -522,6 +523,16 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
         status: 'ACTIVE',
       });
+
+      // T026: new connections must be provisioned with at least GATEWAY_ACTIVE
+      // so that inbound_gateway exists immediately after connection creation.
+      const { applyPlan } = service['dbManager'] as {
+        applyPlan: ReturnType<typeof vi.fn>;
+      };
+      expect(applyPlan).toHaveBeenCalledWith(
+        expect.stringMatching(/^ws_/),
+        SchemaPlan.OUTBOUND_ACTIVE,
+      );
     });
 
     it('should update an existing connection explicitly using an ID', async () => {

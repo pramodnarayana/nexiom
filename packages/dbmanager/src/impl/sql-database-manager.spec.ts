@@ -82,18 +82,23 @@ describe('SqlDatabaseManager', () => {
             gateway: 4,
             replica: 5,
             normalize: 5,
-            outbound: 8,
-            total: 23
+            // outbound_gateway (1) + uq patch DO $$ (1) + 3 indexes
+            // + sync_log (1) + uq patch DO $$ (1) + 3 indexes
+            // + delivery_outbox (1) + ADD COLUMN attempt_count patch (1) + partial index (1) = 13
+            outbound: 13,
+            total: 28
         };
 
         expect(db._queryMock).toHaveBeenCalledTimes(expectedStageCounts.total);
         const allSql = db._queryMock.mock.calls.map((c: any[]) => String(c[0])).join('\n');
-        
+
         expect(allSql).toContain('inbound_gateway');
         expect(allSql).toContain('replica_entity');
         expect(allSql).toContain('sync_cursor');
         expect(allSql).toContain('normalized_entity');
         expect(allSql).toContain('outbound_gateway');
         expect(allSql).toContain('sync_log');
+        expect(allSql).toContain('delivery_outbox');
+        expect(allSql).toContain('attempt_count');
     });
 });

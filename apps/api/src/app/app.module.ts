@@ -28,6 +28,7 @@ import { StitchesModule } from '../modules/stitches/stitches.module.js';
 import { SchedulerModule } from '../modules/scheduler/scheduler.module.js';
 import { WebhooksModule } from '../modules/webhooks/webhooks.module.js';
 import { ShutdownService } from '../core/shutdown.service.js';
+import { PipelineModule } from '../modules/pipeline/pipeline.module.js';
 import { ObservabilityModule } from '../modules/observability/observability.module.js';
 import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
@@ -114,6 +115,7 @@ import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
     StitchesModule,
     SchedulerModule,
     WebhooksModule,
+    PipelineModule,
     TraceModule,
     ExceptionsModule,
   ],

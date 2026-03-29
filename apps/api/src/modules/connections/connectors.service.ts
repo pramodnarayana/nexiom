@@ -447,7 +447,7 @@ export class ConnectorsService {
       try {
         await this.dbManager.applyPlan(
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.NAMESPACE_ONLY,
+          SchemaPlan.OUTBOUND_ACTIVE,
         );
       } catch (applyError) {
         this.logger.error(
