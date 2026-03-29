@@ -32,9 +32,21 @@ export class ReplicaOutboxService {
       .from(connectionStorageRegistry)
       .groupBy(connectionStorageRegistry.dataNamespace);
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
     );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[${workspaces[index].dataNamespace}] drainWorkspaceOutbox failed: ${
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason)
+          }`,
+        );
+      }
+    });
   }
 
   private async drainWorkspaceOutbox(schemaName: string): Promise<void> {
@@ -51,11 +63,14 @@ export class ReplicaOutboxService {
         .set({
           status: 'PROCESSING',
           attempts: sql`${replicaOutbox.attempts} + 1`,
+          nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
         .where(
           sql`${replicaOutbox.id} IN (
             SELECT id FROM "${sql.raw(schemaName)}".replica_outbox
-            WHERE status = 'PENDING' OR (status = 'RETRY' AND next_retry_at <= NOW())
+            WHERE status = 'PENDING' 
+               OR (status = 'RETRY' AND next_retry_at <= NOW())
+               OR (status = 'PROCESSING' AND next_retry_at <= NOW())
             ORDER BY next_retry_at ASC
             LIMIT ${BATCH_SIZE}
             FOR UPDATE SKIP LOCKED

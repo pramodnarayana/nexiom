@@ -10,6 +10,7 @@ import {
     uniqueIndex,
     text,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
 // Enums (shared across pipeline layers)
@@ -231,7 +232,11 @@ export function buildTenantSchema(schemaName: string) {
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    });
+    }, (table) => [
+        index('idx_replica_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+    ]);
 
     /**
      * DELIVERY OUTBOX

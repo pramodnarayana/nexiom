@@ -35,11 +35,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           !payload ||
           typeof payload !== 'object' ||
           !('traceId' in payload) ||
-          !('connectionId' in payload)
+          !('connectionId' in payload) ||
+          typeof (payload as Record<string, unknown>).traceId !== 'string' ||
+          typeof (payload as Record<string, unknown>).connectionId !== 'string'
         ) {
           this.logger.warn(
             { msg: payload },
-            'Received invalid message from InboundQueue',
+            'Received invalid message from InboundQueue: traceId and connectionId must be strings',
           );
           return;
         }
@@ -58,7 +60,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     const { traceId, connectionId } = msg;
 
     // Bind L2 pipeline context to structured logging
-    this.logger.assign({ layer: 'L2', traceId, connectionId });
+    const logCtx = { layer: 'L2', traceId, connectionId };
 
     try {
       const schemaName =
@@ -99,7 +101,10 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             );
           }
 
-          this.logger.debug(`Trace ${traceId} already replicated. Skipping.`);
+          this.logger.debug(
+            logCtx,
+            `Trace ${traceId} already replicated. Skipping.`,
+          );
           return { replicated: false, durationMs: 0 };
         }
 

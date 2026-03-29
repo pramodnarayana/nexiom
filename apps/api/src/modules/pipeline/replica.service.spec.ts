@@ -22,6 +22,7 @@ describe('ReplicaService', () => {
     queueServiceMock = {
       consume: vi.fn(),
       send: vi.fn(),
+      stopConsuming: vi.fn(),
     };
 
     storageResolverMock = {
@@ -99,6 +100,13 @@ describe('ReplicaService', () => {
         expect.any(Function),
         { maxConcurrent: 5 },
       );
+    });
+  });
+
+  describe('onModuleDestroy', () => {
+    it('should stop consuming queues', async () => {
+      await service.onModuleDestroy();
+      expect(queueServiceMock.stopConsuming).toHaveBeenCalled();
     });
   });
 

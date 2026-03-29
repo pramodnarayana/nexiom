@@ -533,6 +533,18 @@ describe('ConnectorsService', () => {
         expect.stringMatching(/^ws_/),
         SchemaPlan.OUTBOUND_ACTIVE,
       );
+
+      // Verify the final transition to ACTIVE
+      expect(mockDbUpdate).toHaveBeenCalled();
+      const updateCall = vi
+        .mocked(mockDbUpdate)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        .mock.results.find((r) => r.value?.set);
+      expect(updateCall).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(updateCall!.value.set).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'ACTIVE' }),
+      );
     });
 
     it('should update an existing connection explicitly using an ID', async () => {

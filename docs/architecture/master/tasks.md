@@ -579,7 +579,6 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] Implement robust `ReplicaOutboxService` atomic locks guaranteeing L2 -> L3 transport logic.
 - [x] Strip untyped `durationMs` hacks and substitute row-level skip locks and `replica_outbox` commits in L2 worker.
 - Files: `packages/database/src/schema/pipeline.ts`, `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica-outbox.service.ts`
-- Depends: T032
 
 ### T052 · api: Hardened L3 & L4 Pipeline Outbox
 

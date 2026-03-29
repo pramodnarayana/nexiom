@@ -290,9 +290,9 @@ export class SqlDatabaseManager implements DatabaseManager {
     `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_replica_outbox_pending
-            ON "${schemaName}".replica_outbox (next_retry_at ASC)
-            WHERE status = 'PENDING';
+        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
+            ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'RETRY');
     `);
 
         /**
