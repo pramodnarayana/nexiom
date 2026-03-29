@@ -64,6 +64,10 @@ describe('ReplicaService', () => {
 
     dbMock = {
       transaction: vi.fn(async (cb) => cb(txMock)),
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: 'test-conn' }]),
     };
 
     const module: TestingModule = await Test.createTestingModule({

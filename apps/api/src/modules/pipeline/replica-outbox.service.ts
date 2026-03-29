@@ -1,6 +1,7 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { eq, sql } from 'drizzle-orm';
+import { notInArray, eq, sql } from 'drizzle-orm';
+import { SchemaPlan } from '@nexiom/dbmanager';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -9,7 +10,6 @@ import {
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
-import { StorageResolverService } from '@nexiom/engine';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
@@ -21,7 +21,6 @@ export class ReplicaOutboxService {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly queueService: QueueService,
-    private readonly storageResolver: StorageResolverService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
@@ -30,6 +29,12 @@ export class ReplicaOutboxService {
     const workspaces = await this.db
       .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
       .from(connectionStorageRegistry)
+      .where(
+        notInArray(connectionStorageRegistry.schemaPlan, [
+          SchemaPlan.NAMESPACE_ONLY,
+          'PROVISIONING',
+        ]),
+      )
       .groupBy(connectionStorageRegistry.dataNamespace);
 
     const results = await Promise.allSettled(

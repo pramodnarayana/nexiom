@@ -487,20 +487,22 @@ export class ConnectorsService {
         );
 
         // Transition to ACTIVE only after schema is successfully provisioned
-        await this.db
-          .update(appConnections)
-          .set({ status: AppConnectionStatus.ACTIVE })
-          .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
+        await this.db.transaction(async (tx) => {
+          await tx
+            .update(appConnections)
+            .set({ status: AppConnectionStatus.ACTIVE })
+            .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
 
-        await this.db
-          .update(connectionStorageRegistry)
-          .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-          .where(
-            eq(
-              connectionStorageRegistry.connectionId,
-              workspaceProvisionInfo.connectionId,
-            ),
-          );
+          await tx
+            .update(connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+            .where(
+              eq(
+                connectionStorageRegistry.connectionId,
+                workspaceProvisionInfo.connectionId,
+              ),
+            );
+        });
       } catch (applyError) {
         this.logger.error(
           `applyPlan failed for ${providerName} (connectionId: ${workspaceProvisionInfo.connectionId}, createdRegistry: ${workspaceProvisionInfo.createdRegistry}, createdAppConnection: ${workspaceProvisionInfo.createdAppConnection}), rolling back provisioned records...`,

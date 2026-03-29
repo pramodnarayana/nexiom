@@ -3,11 +3,17 @@ import {
   Inject,
   OnModuleInit,
   OnModuleDestroy,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
-import { DATABASE_CONNECTION, buildTenantSchema } from '@nexiom/database';
+import {
+  DATABASE_CONNECTION,
+  buildTenantSchema,
+  appConnections,
+  AppConnectionStatus,
+} from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { eq, sql, and } from 'drizzle-orm';
 
@@ -63,6 +69,23 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     const logCtx = { layer: 'L2', traceId, connectionId };
 
     try {
+      const activeCheck = await this.db
+        .select({ id: appConnections.id })
+        .from(appConnections)
+        .where(
+          and(
+            eq(appConnections.id, connectionId),
+            eq(appConnections.status, AppConnectionStatus.ACTIVE),
+          ),
+        )
+        .limit(1);
+
+      if (activeCheck.length === 0) {
+        throw new NotFoundException(
+          `Connection ${connectionId} is not ACTIVE or does not exist`,
+        );
+      }
+
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
       const { inboundGateway, replicaEntity, syncLog, replicaOutbox } =
@@ -70,7 +93,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       const didReplicate = await this.db.transaction(async (tx) => {
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
         );
 
         // 1. Atomic grab L1 record
