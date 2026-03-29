@@ -33,6 +33,16 @@ describe('ReplicaService', () => {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([
+        {
+          traceId: '123-abc',
+          status: 'RECEIVED',
+          objectType: 'Contact',
+          extReqId: 'ext-456',
+          payload: { id: 'sf-789', name: 'Test' },
+          createdAt: new Date().toISOString(),
+        },
+      ]),
       limit: vi.fn().mockResolvedValue([
         {
           traceId: '123-abc',
@@ -108,8 +118,9 @@ describe('ReplicaService', () => {
       );
       expect(dbMock.transaction).toHaveBeenCalled();
 
-      // Verify L1 fetched
-      expect(txMock.select).toHaveBeenCalled();
+      // Verify L1 fetched with atomic update
+      expect(txMock.update).toHaveBeenCalled();
+      expect(txMock.returning).toHaveBeenCalled();
 
       // Verify UPSERT Replica
       expect(txMock.insert).toHaveBeenCalled();
@@ -122,9 +133,22 @@ describe('ReplicaService', () => {
         }),
       );
 
-      // Verify L1 updated to REPLICATED
-      expect(txMock.update).toHaveBeenCalled();
+      // Verify L2 audit insert directly (for syncLog)
+      expect(txMock.insert).toHaveBeenCalledTimes(2);
+      expect(txMock.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          traceId: '123-abc',
+          layer: 'L2',
+          status: 'PENDING',
+          durationMs: expect.any(Number),
+        }),
+      );
+
+      // Verify updates (Atomic PROCESSING -> REPLICATED -> syncLog SUCCESS)
+      expect(txMock.update).toHaveBeenCalledTimes(3);
+      expect(txMock.set).toHaveBeenCalledWith({ status: 'PROCESSING' });
       expect(txMock.set).toHaveBeenCalledWith({ status: 'REPLICATED' });
+      expect(txMock.set).toHaveBeenCalledWith({ status: 'SUCCESS' });
 
       // Verify L2 send
       expect(queueServiceMock.send).toHaveBeenCalledWith(
@@ -137,13 +161,15 @@ describe('ReplicaService', () => {
     });
 
     it('should throw if L1 record is missing', async () => {
-      txMock.limit.mockResolvedValueOnce([]); // No records
+      txMock.returning.mockResolvedValueOnce([]); // No records updated
+      txMock.limit.mockResolvedValueOnce([]); // No records found fallback
       await expect(
         processMessageFn({ traceId: 'missing', connectionId: 'conn-1' }),
       ).rejects.toThrow('Inbound gateway record not found');
     });
 
     it('should return early if L1 record is already REPLICATED', async () => {
+      txMock.returning.mockResolvedValueOnce([]); // No row updated (already handled)
       txMock.limit.mockResolvedValueOnce([
         { traceId: '123', status: 'REPLICATED' },
       ]);

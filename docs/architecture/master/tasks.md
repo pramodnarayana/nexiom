@@ -583,6 +583,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | Sandbox/Production routing |
+| 7 — Delivery Outbox | T051 | Delivery Outbox Resiliency (Complete) |
 
 **Total: 51 tasks**
 
@@ -595,29 +596,21 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### Immediate — unblock the pipeline (required before end-to-end testing)
 
-1. **T051** ✅ — `delivery_outbox` DB migration: table added to `provisionOutboundTables()` with `attempt_count`, expanded status CHECK (`PENDING/PROCESSING/SUCCESS/FAIL/RETRY`), idempotent `ADD COLUMN` upgrade patch for existing schemas, and partial index on PENDING rows. T026 GATEWAY_ACTIVE provisioning gap also fixed in this branch.
+1. **T032** — `NormalizationService` (L3 worker): depends on T031.
 
-2. **T031** — `ReplicaService` (L2 worker): consumes `Inbound_Queue`, upserts `replica_entity`, advances status. This unblocks T032→T033→T034→T035 and makes the full L1→L6 pipeline executable.
+2. **T033** — `FanOutService` (L4 worker): depends on T032. Already partially implemented in `apps/worker`; needs crash-safety tests and `syncCondition` evaluation.
 
-3. **T032** — `NormalizationService` (L3 worker): depends on T031.
+3. **T034** — `DeliveryService` (L5 worker): depends on T033.
 
-4. **T033** — `FanOutService` (L4 worker): depends on T032. Already partially implemented in `apps/worker`; needs crash-safety tests and `syncCondition` evaluation.
-
-5. **T034** — `DeliveryService` (L5 worker): depends on T033.
-
-6. **T035** — L6 GEM write + audit: final write-back, unblocks T038/T039 UI.
+4. **T035** — L6 GEM write + audit: final write-back, unblocks T038/T039 UI.
 
 ### UI unblocked now (no pipeline dependency)
 
-7. **T038** — `RouteIntelligencePage` web UI: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer. Uses the live T036 trace API — can be built in parallel with pipeline work.
+1. **T038** — `RouteIntelligencePage` web UI: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer. Uses the live T036 trace API — can be built in parallel with pipeline work.
 
-8. **T039** — `ExceptionCenterPage` web UI: exception table, retry/dismiss actions per row, bulk actions. Uses the live T037 exception API.
+2. **T039** — `ExceptionCenterPage` web UI: exception table, retry/dismiss actions per row, bulk actions. Uses the live T037 exception API.
 
 ### Clean-up required before next feature
 
-9. **T027** — Wire `WebhookSignatureGuard` + queue enqueue into the L1 webhook handler (currently `webhooks.controller.ts` only inserts to DB; it does not publish to `Inbound_Queue`).
-
-10. **T026** — DBManager provisioning plans for REPLICA / NORMALIZE / OUTBOUND schemas — new connections are not getting the pipeline tables created on activation.
-
-11. **T007** — OpenObserve dashboards + alerting: now that T036/T037 are live, pipeline health metrics (L1→L6 throughput, exception spike alerts) should be set up.
+1. **T007** — OpenObserve dashboards + alerting: now that T036/T037 are live, pipeline health metrics (L1→L6 throughput, exception spike alerts) should be set up.
 

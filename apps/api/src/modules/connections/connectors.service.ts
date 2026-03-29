@@ -24,7 +24,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -480,6 +480,20 @@ export class ConnectorsService {
             rollbackError,
           );
         }
+
+        if (workspaceProvisionInfo.schemaName) {
+          try {
+            await this.db.execute(
+              sql`DROP SCHEMA IF EXISTS ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')} CASCADE`,
+            );
+          } catch (dropError) {
+            this.logger.error(
+              `Failed to drop schema ${workspaceProvisionInfo.schemaName} during rollback for ${providerName}`,
+              dropError,
+            );
+          }
+        }
+
         throw new InternalServerErrorException(
           'Failed to provision workspace namespace',
         );

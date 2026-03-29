@@ -218,6 +218,7 @@ export function buildTenantSchema(schemaName: string) {
         id: uuid('id').defaultRandom().primaryKey(),
         payload: jsonb('payload').notNull(),
         status: pipelineStatusEnum('status').notNull().default('PENDING'),
+        attemptCount: integer('attempt_count').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     });

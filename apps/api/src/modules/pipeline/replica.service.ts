@@ -9,7 +9,7 @@ import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
 import { DATABASE_CONNECTION, buildTenantSchema } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 
 interface InboundMessage {
   traceId: string;
@@ -31,14 +31,27 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     this.queueService.consume(
       QueueName.InboundQueue,
       async (payload: unknown) => {
+        if (
+          !payload ||
+          typeof payload !== 'object' ||
+          !('traceId' in payload) ||
+          !('connectionId' in payload)
+        ) {
+          this.logger.warn(
+            { msg: payload },
+            'Received invalid message from InboundQueue',
+          );
+          return;
+        }
         await this.processMessage(payload as InboundMessage);
       },
       { maxConcurrent: 5 },
     );
   }
 
-  onModuleDestroy() {
-    // QueueService.stopConsuming() handles stopping the consumer globally
+  async onModuleDestroy() {
+    // Stop consuming to drain the queue before teardown
+    await this.queueService.stopConsuming();
   }
 
   private async processMessage(msg: InboundMessage): Promise<void> {
@@ -47,12 +60,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     // Bind L2 pipeline context to structured logging
     this.logger.assign({ layer: 'L2', traceId, connectionId });
 
-    if (!traceId || !connectionId) {
-      this.logger.warn({ msg }, 'Received invalid message from InboundQueue');
-      return;
-    }
-
-    const start = Date.now();
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
@@ -64,20 +71,34 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
-        // 1. Fetch L1 record
-        const [l1Record] = await tx
-          .select()
-          .from(inboundGateway)
-          .where(eq(inboundGateway.traceId, traceId))
-          .limit(1);
+        // 1. Atomic grab L1 record
+        const updatedRecords = await tx
+          .update(inboundGateway)
+          .set({ status: 'PROCESSING' })
+          .where(
+            and(
+              eq(inboundGateway.traceId, traceId),
+              sql`${inboundGateway.status} != 'REPLICATED'`,
+            ),
+          )
+          .returning();
+
+        const l1Record = updatedRecords[0];
 
         if (!l1Record) {
-          throw new Error(
-            `Inbound gateway record not found for traceId ${traceId}`,
-          );
-        }
+          // If no row updated, it might be already REPLICATED or missing
+          const [existing] = await tx
+            .select()
+            .from(inboundGateway)
+            .where(eq(inboundGateway.traceId, traceId))
+            .limit(1);
 
-        if (l1Record.status === 'REPLICATED') {
+          if (!existing) {
+            throw new Error(
+              `Inbound gateway record not found for traceId ${traceId}`,
+            );
+          }
+
           this.logger.debug(`Trace ${traceId} already replicated. Skipping.`);
           return false;
         }
@@ -128,25 +149,21 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             },
           });
 
-        // 4. Update L1 status
-        await tx
-          .update(inboundGateway)
-          .set({ status: 'REPLICATED' })
-          .where(eq(inboundGateway.traceId, traceId));
+        // 4. (Removed immediate STATUS='REPLICATED' update here, deferred to outbox confirm)
 
-        // 5. Append to sync_log
+        // 5. Append to sync_log as PENDING (Outbox pattern)
         const durationMs = Date.now() - new Date(l1Record.createdAt).getTime();
         await tx
           .insert(syncLog)
           .values({
             traceId,
             layer: 'L2',
-            status: 'SUCCESS',
+            status: 'PENDING',
             durationMs,
           })
           .onConflictDoNothing();
 
-        return true;
+        return durationMs;
       });
 
       if (!didReplicate) {
@@ -159,8 +176,25 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         connectionId,
       });
 
+      // 7. Success state update (Confirm Outbox)
+      await this.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        // Mark L1 REPLICATED
+        await tx
+          .update(inboundGateway)
+          .set({ status: 'REPLICATED' })
+          .where(eq(inboundGateway.traceId, traceId));
+        // Mark syncLog SUCCESS
+        await tx
+          .update(syncLog)
+          .set({ status: 'SUCCESS' })
+          .where(and(eq(syncLog.traceId, traceId), eq(syncLog.layer, 'L2')));
+      });
+
       this.logger.info(
-        { durationMs: Date.now() - start },
+        { durationMs: didReplicate },
         `Trace ${traceId} successfully replicated (L2)`,
       );
     } catch (err: unknown) {

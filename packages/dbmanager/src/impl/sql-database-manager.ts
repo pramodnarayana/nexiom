@@ -180,7 +180,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             res_payload   JSONB,
             status_code   INTEGER,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
-                          CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING')),
+                          CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
             attempt_count INTEGER     NOT NULL DEFAULT 0,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -197,6 +197,28 @@ export class SqlDatabaseManager implements DatabaseManager {
                  WHEN duplicate_object  THEN NULL;
         END $$;
     `);
+
+        // Widen the check constraint for existing schemas. Postgres auto-names the original
+        // constraint 'outbound_gateway_status_check'. We try to drop it and add our
+        // explicitly named 'ck_outbound_status' constraint.
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".outbound_gateway DROP CONSTRAINT IF EXISTS outbound_gateway_status_check;
+        EXCEPTION WHEN undefined_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".outbound_gateway DROP CONSTRAINT IF EXISTS ck_outbound_status;
+        EXCEPTION WHEN undefined_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        ALTER TABLE "${schemaName}".outbound_gateway
+            ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED'));
+        `);
 
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_l5_trace
