@@ -263,12 +263,12 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ## Phase 3 — 6-Layer Pipeline + Scheduler Execution
 
-### T026 · db-manager: New schema plans — REPLICA, NORMALIZE, OUTBOUND
+### T026 · db-manager: New schema plans — REPLICA, NORMALIZE, OUTBOUND ✅ COMPLETE
 
-- [ ] Add `REPLICA_ACTIVE` plan: creates `replica_entity`, `sync_cursor`
-- [ ] Add `NORMALIZE_ACTIVE` plan: creates `normalized_entity`
-- [ ] Add `OUTBOUND_ACTIVE` plan: creates `outbound_gateway`, `sync_log`
-- [ ] Apply all three when a connection is activated in `TriggerExecutorService.applyPlan()`
+- [x] Add `REPLICA_ACTIVE` plan: creates `replica_entity`, `sync_cursor`
+- [x] Add `NORMALIZE_ACTIVE` plan: creates `normalized_entity`
+- [x] Add `OUTBOUND_ACTIVE` plan: creates `outbound_gateway`, `sync_log`
+- [x] Apply all three when a connection is activated in `TriggerExecutorService.applyPlan()` and `ConnectorsService`
 - Files: `packages/dbmanager/src/plans/**`, `apps/api/src/modules/triggers/trigger-executor.service.ts`
 - Depends: T005
 
@@ -332,15 +332,15 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/scheduler/scheduler.controller.ts`, `apps/api/src/modules/scheduler/internal-scheduler.guard.ts`, `apps/api/src/modules/scheduler/execute-stitch.validation.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.ts`, `apps/api/src/modules/scheduler/poll-sync-runner.spec.ts`, `apps/api/src/modules/scheduler/sync-runner.ts`
 - Depends: T028, T029, T046, T047
 
-### T031 · api: `ReplicaService` — L2 worker
+### T031 · api: `ReplicaService` — L2 worker ✅ COMPLETE
 
-- [ ] Consumes `Inbound_Queue`
-- [ ] Resolves schema via `StorageResolverService`
-- [ ] `UPSERT` into `replica_entity` on `(entity_type, source_id)`, increments `version`
-- [ ] Updates `inbound_gateway.status` → `REPLICATED`
-- [ ] Writes `sync_log` row `{ layer: 'L2', status: 'SUCCESS', durationMs }`
-- [ ] Pushes `{ traceId }` to `Replica_Queue`
-- [ ] Unit tests
+- [x] Consumes `Inbound_Queue`
+- [x] Resolves schema via `StorageResolverService`
+- [x] `UPSERT` into `replica_entity` on `(entity_type, source_id)`, increments `version`
+- [x] Updates `inbound_gateway.status` → `REPLICATED`
+- [x] Writes `sync_log` row `{ layer: 'L2', status: 'SUCCESS', durationMs }`
+- [x] Pushes `{ traceId }` to `Replica_Queue`
+- [x] Unit tests
 - Files: `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica.service.spec.ts`
 - Depends: T003, T026, T006
 
