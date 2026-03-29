@@ -212,12 +212,12 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       // 7. No external queueing logic needed here - Outbox worker handles this relay
 
       this.logger.info(
-        { durationMs: didReplicate.durationMs },
+        { ...logCtx, durationMs: didReplicate.durationMs },
         `Trace ${traceId} successfully replicated (L2)`,
       );
     } catch (err: unknown) {
       this.logger.error(
-        { err: err instanceof Error ? err.stack : String(err) },
+        { ...logCtx, err: err instanceof Error ? err.stack : String(err) },
         `Failed to process L2 replication for trace ${traceId}`,
       );
       throw err;

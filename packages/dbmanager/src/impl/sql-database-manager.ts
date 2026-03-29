@@ -216,8 +216,16 @@ export class SqlDatabaseManager implements DatabaseManager {
         `);
 
         await this.db.$client.query(`
-        ALTER TABLE "${schemaName}".outbound_gateway
-            ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED'));
+        DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'ck_outbound_status' 
+                  AND conrelid = '"${schemaName}".outbound_gateway'::regclass
+            ) THEN
+                ALTER TABLE "${schemaName}".outbound_gateway
+                    ADD CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED'));
+            END IF;
+        END $$;
         `);
 
         await this.db.$client.query(`

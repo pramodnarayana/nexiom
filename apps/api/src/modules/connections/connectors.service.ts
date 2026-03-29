@@ -398,12 +398,12 @@ export class ConnectorsService {
                 and(
                   eq(appConnections.tenantId, tenantId),
                   eq(appConnections.appName, providerName),
-                  or(
-                    eq(appConnections.displayName, displayName),
-                    externalId
-                      ? eq(appConnections.externalId, externalId)
-                      : undefined,
-                  ),
+                  externalId
+                    ? or(
+                        eq(appConnections.displayName, displayName),
+                        eq(appConnections.externalId, externalId),
+                      )
+                    : eq(appConnections.displayName, displayName),
                   eq(appConnections.status, AppConnectionStatus.FAILED),
                 ),
               )
@@ -532,7 +532,7 @@ export class ConnectorsService {
         if (workspaceProvisionInfo.schemaName) {
           try {
             await this.db.execute(
-              sql`DROP SCHEMA IF EXISTS ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')} CASCADE`,
+              sql`DROP SCHEMA IF EXISTS ${sql.identifier(workspaceProvisionInfo.schemaName)} CASCADE`,
             );
           } catch (dropError) {
             this.logger.error(

@@ -32,7 +32,6 @@ export class ReplicaOutboxService {
       .where(
         notInArray(connectionStorageRegistry.schemaPlan, [
           SchemaPlan.NAMESPACE_ONLY,
-          'PROVISIONING',
         ]),
       )
       .groupBy(connectionStorageRegistry.dataNamespace);
@@ -72,7 +71,7 @@ export class ReplicaOutboxService {
         })
         .where(
           sql`${replicaOutbox.id} IN (
-            SELECT id FROM "${sql.raw(schemaName)}".replica_outbox
+            SELECT id FROM ${sql.identifier(schemaName)}.replica_outbox
             WHERE status = 'PENDING' 
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
