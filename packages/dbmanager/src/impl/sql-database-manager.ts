@@ -323,6 +323,15 @@ export class SqlDatabaseManager implements DatabaseManager {
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
 
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".replica_outbox
+                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
+
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.
          *
@@ -352,14 +361,36 @@ export class SqlDatabaseManager implements DatabaseManager {
 
         await this.db.$client.query(`
         DO $$ BEGIN
+            -- Step 1: drop legacy columns that no longer exist in schema
             ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS delivered_at;
             ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS last_error VARCHAR(500);
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS trace_id UUID;
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id UUID;
-            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id UUID;
+
+            -- Step 2: add new columns nullable first (safe on existing rows)
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS attempts      INTEGER     DEFAULT 0;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS last_error    VARCHAR(500);
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ DEFAULT NOW();
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS trace_id             UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id  UUID;
+
+            -- Step 3: backfill NULLs with sentinel UUIDs so NOT NULL can be set
+            UPDATE "${schemaName}".delivery_outbox
+               SET trace_id            = gen_random_uuid() WHERE trace_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET route_id            = gen_random_uuid() WHERE route_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET outbound_gateway_id = gen_random_uuid() WHERE outbound_gateway_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET attempts            = 0                 WHERE attempts IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET next_retry_at       = NOW()             WHERE next_retry_at IS NULL;
+
+            -- Step 4: enforce NOT NULL now that all rows are populated
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN trace_id            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN route_id            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN outbound_gateway_id SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN attempts            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN next_retry_at       SET NOT NULL;
         EXCEPTION WHEN duplicate_column THEN NULL;
         END $$;
         `);

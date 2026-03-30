@@ -124,11 +124,18 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         // (in apps/api) will deliver this to ReplicaQueue with retries.
         // traceId is the consumer deduplication key; if a duplicate is delivered
         // the L3 ON CONFLICT DO NOTHING on replicaId makes it idempotent.
-        await tx.insert(replicaOutbox).values({
-          traceId,
-          connectionId,
-          status: "PENDING",
-        });
+        // onConflictDoNothing guards against InboundQueue message redelivery
+        // producing a second outbox row for the same (traceId, connectionId).
+        await tx
+          .insert(replicaOutbox)
+          .values({
+            traceId,
+            connectionId,
+            status: "PENDING",
+          })
+          .onConflictDoNothing({
+            target: [replicaOutbox.traceId, replicaOutbox.connectionId],
+          });
       });
 
       this.logger.log(

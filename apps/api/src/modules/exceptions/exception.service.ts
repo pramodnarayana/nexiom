@@ -342,7 +342,10 @@ export class ExceptionService {
         );
       }
 
-      const [outboxRow] = await tx
+      // onConflictDoNothing makes this idempotent: if the operator retries the
+      // same exception twice, the second insert is silently skipped and the
+      // existing outbox row (already PENDING or PROCESSING) drives delivery.
+      const inserted = await tx
         .insert(deliveryOutbox)
         .values({
           traceId: outboundGatewayRow.traceId,
@@ -357,9 +360,30 @@ export class ExceptionService {
           },
           status: 'PENDING',
         })
+        .onConflictDoNothing({
+          target: [
+            deliveryOutbox.traceId,
+            deliveryOutbox.routeId,
+            deliveryOutbox.outboundGatewayId,
+          ],
+        })
         .returning({ id: deliveryOutbox.id });
 
-      outboxId = outboxRow.id;
+      if (inserted.length > 0) {
+        outboxId = inserted[0].id;
+      } else {
+        // Row already exists — fetch its id so the send loop can still mark it SUCCESS.
+        const existing = await tx
+          .select({ id: deliveryOutbox.id })
+          .from(deliveryOutbox)
+          .where(
+            sql`${deliveryOutbox.traceId} = ${outboundGatewayRow.traceId}
+            AND ${deliveryOutbox.routeId} = ${outboundGatewayRow.routeId}
+            AND ${deliveryOutbox.outboundGatewayId} = ${outboundGatewayId}`,
+          )
+          .limit(1);
+        if (existing.length > 0) outboxId = existing[0].id;
+      }
     });
 
     const outboxRows = await this.db.transaction(async (tx) => {

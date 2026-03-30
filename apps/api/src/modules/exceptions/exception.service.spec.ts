@@ -330,6 +330,7 @@ describe('ExceptionService', () => {
       // TX-2: UPDATE status + INSERT into delivery_outbox
       const insertChain: Record<string, unknown> = {};
       insertChain['values'] = vi.fn().mockReturnValue(insertChain);
+      insertChain['onConflictDoNothing'] = vi.fn().mockReturnValue(insertChain);
       insertChain['returning'] = vi
         .fn()
         .mockResolvedValue([{ id: OUTBOX_ROW_ID }]);
