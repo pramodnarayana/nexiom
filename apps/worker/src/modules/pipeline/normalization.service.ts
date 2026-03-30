@@ -117,12 +117,19 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           .returning({ id: normalizedEntity.id });
 
         if (insertRes.length > 0) {
-          // Write to normalizedOutbox to hand off L3 -> L4 execution reliably
-          await tx.insert(normalizedOutbox).values({
-            traceId,
-            connectionId,
-            status: "PENDING",
-          });
+          // onConflictDoNothing prevents duplicate outbox rows on ReplicaQueue replay.
+          // The unique constraint idx_normalized_outbox_trace on (traceId, connectionId)
+          // backs this target.
+          await tx
+            .insert(normalizedOutbox)
+            .values({
+              traceId,
+              connectionId,
+              status: "PENDING",
+            })
+            .onConflictDoNothing({
+              target: [normalizedOutbox.traceId, normalizedOutbox.connectionId],
+            });
 
           // Mark INBOUND GATEWAY as NORMALIZED
           await tx

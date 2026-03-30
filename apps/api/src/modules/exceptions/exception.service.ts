@@ -386,22 +386,36 @@ export class ExceptionService {
       }
     });
 
-    const outboxRows = await this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
-      return tx
-        .select()
-        .from(deliveryOutbox)
-        .where(eq(deliveryOutbox.id, outboxId))
-        .limit(1);
-    });
+    // Atomic claim: UPDATE status='PROCESSING' WHERE id=outboxId AND status='PENDING'
+    // RETURNING payload. This races safely with DeliveryOutboxWorker — exactly one
+    // claimant wins and publishes; the other skips.  If the row is already
+    // PROCESSING/SUCCESS (worker got there first) we return queued:true idempotently.
+    const claimed = outboxId
+      ? await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          return tx
+            .update(deliveryOutbox)
+            .set({ status: 'PROCESSING' } as never)
+            .where(
+              and(
+                eq(deliveryOutbox.id, outboxId),
+                sql`${deliveryOutbox.status} = 'PENDING'`,
+              ),
+            )
+            .returning({
+              id: deliveryOutbox.id,
+              payload: deliveryOutbox.payload,
+            });
+        })
+      : [];
 
-    if (outboxRows.length > 0) {
+    if (claimed.length > 0) {
       await this.queueService.send(
         QueueName.DeliveryQueue,
-        outboxRows[0].payload as Record<string, unknown>,
+        claimed[0].payload as Record<string, unknown>,
       );
 
       await this.db.transaction(async (tx) => {
@@ -411,7 +425,7 @@ export class ExceptionService {
         );
         await tx
           .update(deliveryOutbox)
-          .set({ status: 'SUCCESS' })
+          .set({ status: 'SUCCESS' } as never)
           .where(eq(deliveryOutbox.id, outboxId));
       });
     }

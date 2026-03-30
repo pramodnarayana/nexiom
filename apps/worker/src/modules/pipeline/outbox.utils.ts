@@ -8,6 +8,11 @@ export async function processInChunks<T, R>(
   concurrency: number,
   fn: (item: T) => Promise<R>,
 ): Promise<PromiseSettledResult<R>[]> {
+  if (!Number.isInteger(concurrency) || concurrency <= 0) {
+    throw new Error(
+      `processInChunks: concurrency must be a positive integer, got ${concurrency}`,
+    );
+  }
   const results: PromiseSettledResult<R>[] = [];
   for (let i = 0; i < items.length; i += concurrency) {
     const chunk = items.slice(i, i + concurrency);

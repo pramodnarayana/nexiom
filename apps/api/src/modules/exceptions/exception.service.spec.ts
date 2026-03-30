@@ -304,12 +304,18 @@ describe('ExceptionService', () => {
   describe('retryException()', () => {
     // retryException runs 4 transactions:
     //   TX-1 (resolveOutboundRow): SELECT to find the outbound row
-    //   TX-2 (retryException):     UPDATE status + INSERT outbox row
-    //   TX-3 (retryException):     SELECT outbox row to read payload
-    //   TX-4 (retryException):     UPDATE outbox row as delivered
-    function buildRetryTransactions(
-      updatedRows: unknown[] = [{ id: OUTBOUND_ID }],
-    ) {
+    //   TX-2 (retryException):     UPDATE outboundGateway status + INSERT outbox row (idempotent)
+    //   TX-3 (retryException):     Atomic claim — UPDATE delivery_outbox SET status='PROCESSING'
+    //                              WHERE id=outboxId AND status='PENDING' RETURNING payload
+    //   TX-4 (retryException):     UPDATE delivery_outbox SET status='SUCCESS'
+    function buildRetryTransactions({
+      updatedRows = [{ id: OUTBOUND_ID }] as unknown[],
+      insertReturning = [
+        { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' },
+      ] as unknown[],
+      // fallback select when insert conflicts (insertReturning = [])
+      fallbackSelect = [] as unknown[],
+    } = {}) {
       const OUTBOX_ROW_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
       const outboxPayload = {
         outboundGatewayId: OUTBOUND_ID,
@@ -327,32 +333,42 @@ describe('ExceptionService', () => {
           .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
       };
 
-      // TX-2: UPDATE status + INSERT into delivery_outbox
+      // TX-2: UPDATE outboundGateway + INSERT into delivery_outbox (idempotent via onConflictDoNothing).
+      // When insertReturning=[] simulates a conflict — the code then falls back to a SELECT.
       const insertChain: Record<string, unknown> = {};
       insertChain['values'] = vi.fn().mockReturnValue(insertChain);
       insertChain['onConflictDoNothing'] = vi.fn().mockReturnValue(insertChain);
-      insertChain['returning'] = vi
+      insertChain['returning'] = vi.fn().mockResolvedValue(insertReturning);
+
+      // Fallback select chain used when insert conflicts (inserted.length === 0)
+      const fallbackSelectChain: Record<string, unknown> = {};
+      fallbackSelectChain['from'] = vi
         .fn()
-        .mockResolvedValue([{ id: OUTBOX_ROW_ID }]);
+        .mockReturnValue(fallbackSelectChain);
+      fallbackSelectChain['where'] = vi
+        .fn()
+        .mockReturnValue(fallbackSelectChain);
+      fallbackSelectChain['limit'] = vi.fn().mockResolvedValue(fallbackSelect);
+
       const updateInsertTx = {
         execute: vi.fn().mockResolvedValue(undefined),
         update: vi.fn().mockReturnValue(buildUpdateChain(updatedRows)),
         insert: vi.fn().mockReturnValue(insertChain),
+        // select is only invoked when insert is a no-op (conflict path)
+        select: vi.fn().mockReturnValue(fallbackSelectChain),
       };
 
-      // TX-3: SELECT outbox row back
-      const selectOutboxChain: Record<string, unknown> = {};
-      selectOutboxChain['from'] = vi.fn().mockReturnValue(selectOutboxChain);
-      selectOutboxChain['where'] = vi.fn().mockReturnValue(selectOutboxChain);
-      selectOutboxChain['limit'] = vi
-        .fn()
-        .mockResolvedValue([{ id: OUTBOX_ROW_ID, payload: outboxPayload }]);
-      const selectOutboxTx = {
+      // TX-3: Atomic claim — UPDATE SET status='PROCESSING' RETURNING payload.
+      // Returns the payload if this process wins the race; returns [] if worker got there first.
+      const claimUpdateChain = buildUpdateChain([
+        { id: OUTBOX_ROW_ID, payload: outboxPayload },
+      ]);
+      const claimTx = {
         execute: vi.fn().mockResolvedValue(undefined),
-        select: vi.fn().mockReturnValue(selectOutboxChain),
+        update: vi.fn().mockReturnValue(claimUpdateChain),
       };
 
-      // TX-4: UPDATE outbox row as delivered
+      // TX-4: UPDATE delivery_outbox SET status='SUCCESS'
       const markDeliveredTx = {
         execute: vi.fn().mockResolvedValue(undefined),
         update: vi
@@ -367,7 +383,7 @@ describe('ExceptionService', () => {
           txCallCount++;
           if (txCallCount === 1) return fn(resolveTx);
           if (txCallCount === 2) return fn(updateInsertTx);
-          if (txCallCount === 3) return fn(selectOutboxTx);
+          if (txCallCount === 3) return fn(claimTx);
           return fn(markDeliveredTx);
         });
     }
@@ -391,8 +407,71 @@ describe('ExceptionService', () => {
       );
     });
 
+    it('returns queued:true idempotently when insert conflicts (row already exists)', async () => {
+      // Simulate onConflictDoNothing no-op: insert returns [] but the existing row
+      // is found via the fallback select, then the claim succeeds normally.
+      mockDb.transaction = buildRetryTransactions({
+        insertReturning: [], // conflict — no new row inserted
+        fallbackSelect: [{ id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' }], // existing row found
+      });
+
+      const result = await service.retryException(ORG_ID, OUTBOUND_ID);
+      expect(result.queued).toBe(true);
+      // Queue was still called because the claim TX succeeded
+      expect(mockQueue.send).toHaveBeenCalledWith(
+        QueueName.DeliveryQueue,
+        expect.objectContaining({ outboundGatewayId: OUTBOUND_ID }),
+      );
+    });
+
+    it('returns queued:true without double-publish when claim loses the race', async () => {
+      // TX-3 (claim UPDATE) returns [] — DeliveryOutboxWorker already claimed it.
+      // The service must NOT call queueService.send (avoid duplicate delivery).
+      let txCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          if (txCallCount === 1)
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              select: vi
+                .fn()
+                .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
+            });
+          if (txCallCount === 2) {
+            const insertChain: Record<string, unknown> = {};
+            insertChain['values'] = vi.fn().mockReturnValue(insertChain);
+            insertChain['onConflictDoNothing'] = vi
+              .fn()
+              .mockReturnValue(insertChain);
+            insertChain['returning'] = vi
+              .fn()
+              .mockResolvedValue([{ id: 'out-x' }]);
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              update: vi
+                .fn()
+                .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+              insert: vi.fn().mockReturnValue(insertChain),
+              select: vi.fn().mockReturnValue(buildResolveSelectChain([])),
+            });
+          }
+          // TX-3: claim returns [] — worker already owns this row
+          return fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            update: vi.fn().mockReturnValue(buildUpdateChain([])),
+          });
+        });
+
+      const result = await service.retryException(ORG_ID, OUTBOUND_ID);
+      expect(result.queued).toBe(true);
+      // Must NOT publish — would cause duplicate delivery
+      expect(mockQueue.send).not.toHaveBeenCalled();
+    });
+
     it('throws ConflictException when status transition is invalid (0 rows updated)', async () => {
-      mockDb.transaction = buildRetryTransactions([]); // 0 rows updated triggers ConflictException
+      mockDb.transaction = buildRetryTransactions({ updatedRows: [] }); // 0 rows updated triggers ConflictException
       await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
         ConflictException,
       );

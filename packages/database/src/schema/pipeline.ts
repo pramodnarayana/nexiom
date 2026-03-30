@@ -253,6 +253,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_normalized_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.connectionId),
     ]);
 
     /**

@@ -31,6 +31,9 @@ describe("NormalizationService", () => {
         ) => ({
           values: vi.fn().mockReturnValue({
             onConflictDoNothing: vi.fn().mockReturnValue({
+              // directly awaitable (for normalizedOutbox insert that has no .returning())
+              then: (res: any) => Promise.resolve(undefined).then(res),
+              // also supports .returning() for chains that need it
               returning: vi.fn().mockResolvedValue(returnVal),
             }),
             returning: vi.fn().mockResolvedValue(returnVal),

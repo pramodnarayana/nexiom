@@ -325,6 +325,20 @@ export class SqlDatabaseManager implements DatabaseManager {
 
         await this.db.$client.query(`
         DO $$ BEGIN
+            -- Deduplicate: keep the earliest row per (trace_id, connection_id)
+            -- before adding the unique constraint so existing schemas don't fail.
+            DELETE FROM "${schemaName}".replica_outbox ro
+            WHERE ro.id NOT IN (
+                SELECT DISTINCT ON (trace_id, connection_id) id
+                FROM "${schemaName}".replica_outbox
+                ORDER BY trace_id, connection_id, created_at ASC
+            );
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
             ALTER TABLE "${schemaName}".replica_outbox
                 ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
         EXCEPTION WHEN duplicate_table THEN NULL;
@@ -361,9 +375,8 @@ export class SqlDatabaseManager implements DatabaseManager {
 
         await this.db.$client.query(`
         DO $$ BEGIN
-            -- Step 1: drop legacy columns that no longer exist in schema
+            -- Step 1: drop delivered_at (legacy column no longer in schema)
             ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS delivered_at;
-            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
 
             -- Step 2: add new columns nullable first (safe on existing rows)
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS attempts      INTEGER     DEFAULT 0;
@@ -373,7 +386,15 @@ export class SqlDatabaseManager implements DatabaseManager {
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id  UUID;
 
-            -- Step 3: backfill NULLs with sentinel UUIDs so NOT NULL can be set
+            -- Step 3: copy attempt_count into attempts before dropping the old column
+            -- preserves existing retry counters from pre-migration rows.
+            UPDATE "${schemaName}".delivery_outbox
+               SET attempts = attempt_count WHERE attempt_count IS NOT NULL AND attempts = 0;
+
+            -- Step 4: drop the old column now that values are copied
+            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
+
+            -- Step 5: backfill remaining NULLs with sentinel values so NOT NULL can be set
             UPDATE "${schemaName}".delivery_outbox
                SET trace_id            = gen_random_uuid() WHERE trace_id IS NULL;
             UPDATE "${schemaName}".delivery_outbox
@@ -385,7 +406,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             UPDATE "${schemaName}".delivery_outbox
                SET next_retry_at       = NOW()             WHERE next_retry_at IS NULL;
 
-            -- Step 4: enforce NOT NULL now that all rows are populated
+            -- Step 6: enforce NOT NULL now that all rows are populated
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN trace_id            SET NOT NULL;
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN route_id            SET NOT NULL;
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN outbound_gateway_id SET NOT NULL;
