@@ -390,6 +390,13 @@ export class ExceptionService {
     // RETURNING payload. This races safely with DeliveryOutboxWorker — exactly one
     // claimant wins and publishes; the other skips.  If the row is already
     // PROCESSING/SUCCESS (worker got there first) we return queued:true idempotently.
+    //
+    // Intentional design: operator-triggered claims do NOT increment `attempts` or
+    // adjust `nextRetryAt`.  Manual retries initiated from the UI bypass the
+    // exponential back-off schedule and should not consume the row's worker retry
+    // budget (MAX_ATTEMPTS).  The row transitions directly to SUCCESS after the
+    // operator's publish succeeds, which is consistent with "operator fixed the
+    // problem and wants immediate re-delivery".
     const claimed = outboxId
       ? await this.db.transaction(async (tx) => {
           assertValidSchemaName(schemaName);

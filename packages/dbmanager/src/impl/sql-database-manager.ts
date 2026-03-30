@@ -188,6 +188,15 @@ export class SqlDatabaseManager implements DatabaseManager {
             ON "${schemaName}".normalized_outbox (status, next_retry_at ASC)
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".normalized_outbox
+                ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, connection_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {
@@ -333,7 +342,7 @@ export class SqlDatabaseManager implements DatabaseManager {
                 FROM "${schemaName}".replica_outbox
                 ORDER BY trace_id, connection_id, created_at ASC
             );
-        EXCEPTION WHEN others THEN NULL;
+        EXCEPTION WHEN SQLSTATE '42P01' THEN NULL; -- table doesn't exist yet: safe to skip
         END $$;
         `);
 
@@ -388,8 +397,11 @@ export class SqlDatabaseManager implements DatabaseManager {
 
             -- Step 3: copy attempt_count into attempts before dropping the old column
             -- preserves existing retry counters from pre-migration rows.
+            -- Treat NULL attempts as eligible (0 OR NULL) to handle partially migrated rows.
             UPDATE "${schemaName}".delivery_outbox
-               SET attempts = attempt_count WHERE attempt_count IS NOT NULL AND attempts = 0;
+               SET attempts = attempt_count
+             WHERE attempt_count IS NOT NULL
+               AND (attempts = 0 OR attempts IS NULL);
 
             -- Step 4: drop the old column now that values are copied
             ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;

@@ -180,12 +180,17 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED' AND ${inboundGateway.status} != 'FAIL'`,
             );
 
-          await tx.insert(syncLog).values({
-            traceId,
-            layer: "L3",
-            status: "FAIL",
-            durationMs: Date.now() - start,
-          });
+          // onConflictDoNothing prevents uq_sync_log_trace_layer_status violations on
+          // replay — if a FAIL row for this trace/layer already exists, skip silently.
+          await tx
+            .insert(syncLog)
+            .values({
+              traceId,
+              layer: "L3",
+              status: "FAIL",
+              durationMs: Date.now() - start,
+            })
+            .onConflictDoNothing();
         });
       } catch {
         // ignore rollback errors
