@@ -141,11 +141,6 @@ export function buildTenantSchema(schemaName: string) {
         canonicalType: varchar('canonical_type', { length: 100 }).notNull(),
         data: jsonb('data').notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-        // Durable published marker — set atomically when the record is enqueued
-        // to NormalizedQueue. Null = not yet enqueued; non-null = already published.
-        // Retries check this column before calling queueService.send() to make
-        // L3 enqueue idempotent without a separate outbox table.
-        publishedAt: timestamp('published_at', { withTimezone: true }),
     }, (table) => [
         index('idx_l3_trace').on(table.traceId),
         uniqueIndex('idx_l3_replica').on(table.replicaId),
@@ -197,6 +192,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_log_trace').on(table.traceId),
         index('idx_log_route').on(table.routeId),
         index('idx_log_layer').on(table.traceId, table.layer),
+        uniqueIndex('uq_sync_log_trace_layer_status').on(table.traceId, table.layer, table.status),
     ]);
 
     /**
@@ -236,21 +232,54 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_replica_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_replica_outbox_trace').on(table.traceId, table.connectionId),
+    ]);
+
+    /**
+     * NORMALIZED OUTBOX
+     *
+     * Transactional outbox pattern used to safely decouple L3 commit
+     * from external queue handoff (L3 -> L4) to guarantee delivery.
+     */
+    const normalizedOutbox = schema.table('normalized_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        connectionId: uuid('connection_id').notNull(),
+        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    }, (table) => [
+        index('idx_normalized_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.connectionId),
     ]);
 
     /**
      * DELIVERY OUTBOX
      *
-     * Transactional outbox for reliable queue handoff.
+     * Transactional outbox used to safely decouple L4 Fan-Out execution
+     * from external queue handoff (L4 -> L5). Holds the queue message payload.
      */
     const deliveryOutbox = schema.table('delivery_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        routeId: uuid('route_id').notNull(),
+        outboundGatewayId: uuid('outbound_gateway_id').notNull(),
         payload: jsonb('payload').notNull(),
         status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
-        attemptCount: integer('attempt_count').notNull().default(0),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-        deliveredAt: timestamp('delivered_at', { withTimezone: true }),
-    });
+    }, (table) => [
+        index('idx_delivery_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_delivery_unique_dispatch').on(table.traceId, table.routeId, table.outboundGatewayId),
+    ]);
 
     return {
         inboundGateway,
@@ -260,6 +289,7 @@ export function buildTenantSchema(schemaName: string) {
         syncLog,
         syncCursor,
         replicaOutbox,
+        normalizedOutbox,
         deliveryOutbox,
     };
 }

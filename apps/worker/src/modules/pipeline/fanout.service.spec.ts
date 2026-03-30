@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -11,8 +11,24 @@ describe("FanOutService", () => {
   let queueService: any;
   let db: any;
   let storageResolver: any;
+  let mockTxInsert: any;
 
   beforeEach(async () => {
+    // Chainable insert builder that supports all patterns used in FanOutService:
+    //   outboundGateway: insert().values().onConflictDoUpdate().returning()
+    //   deliveryOutbox:  insert().values().onConflictDoNothing()
+    //   syncLog:         insert().values()
+    mockTxInsert = vi.fn().mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoUpdate: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
+        }),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
+        // plain insert().values() resolves immediately
+        then: (res: any) => Promise.resolve(undefined).then(res),
+      }),
+    });
     queueService = { consume: vi.fn(), send: vi.fn() };
 
     const queryBuilder: any = Object.assign(Promise.resolve([]), {
@@ -49,14 +65,7 @@ describe("FanOutService", () => {
               ]
             : [],
         ),
-        insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockReturnValue({
-            onConflictDoUpdate: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
-            }),
-            returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
-          }),
-        }),
+        insert: mockTxInsert,
         execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
       });
       return cb(tx);
@@ -95,10 +104,7 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).toHaveBeenCalledWith(
-      QueueName.DeliveryQueue,
-      expect.any(Object),
-    );
+    expect(mockTxInsert).toHaveBeenCalled();
   });
 
   it("should skip if conditions do not match", async () => {
@@ -119,7 +125,7 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).not.toHaveBeenCalled();
+    expect(mockTxInsert).toHaveBeenCalledTimes(1);
   });
 
   it("should return early if no active stitches are found", async () => {
@@ -131,7 +137,7 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).not.toHaveBeenCalled();
+    expect(mockTxInsert).not.toHaveBeenCalled();
   });
 
   it("should log and throw error if db operation fails", async () => {
@@ -189,10 +195,7 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).toHaveBeenCalledWith(
-      QueueName.DeliveryQueue,
-      expect.any(Object),
-    );
+    expect(mockTxInsert).toHaveBeenCalled();
   });
 
   it("should record stitch failure and continue to next stitch if a route fails", async () => {
@@ -216,15 +219,16 @@ describe("FanOutService", () => {
     );
     db.select.mockReturnValueOnce(mockQueryBuilder);
 
-    queueService.send
-      .mockRejectedValueOnce(new Error("Simulated enqueue error"))
-      .mockResolvedValueOnce(undefined);
+    mockTxInsert.mockImplementationOnce(() => {
+      throw new Error("Simulated enqueue error");
+    });
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
 
-    // Ensure it continued past the error to process the second stitch!
-    expect(queueService.send).toHaveBeenCalledTimes(2);
+    // Since in the loop it encountered two stitches, and one throws, the other succeeds.
+    // 1 read tx + 1 failed tx + 1 fail writeSyncLog tx + 1 success tx = 4 tx calls
+    expect(db.transaction).toHaveBeenCalledTimes(4);
   });
 
   it("should destroy module", () => {

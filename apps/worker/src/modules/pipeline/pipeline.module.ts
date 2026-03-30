@@ -7,6 +7,8 @@ import { ReplicaService } from "./replica.service.js";
 import { NormalizationService } from "./normalization.service.js";
 import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
+import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
+import { DeliveryOutboxWorker } from "./delivery-outbox.worker.js";
 
 @Module({
   imports: [QueueModule, DbModule, StorageResolverModule, PiecesModule],
@@ -15,6 +17,8 @@ import { DeliveryService } from "./delivery.service.js";
     NormalizationService,
     FanOutService,
     DeliveryService,
+    NormalizedOutboxWorker,
+    DeliveryOutboxWorker,
   ],
   exports: [
     ReplicaService,

@@ -48,8 +48,13 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { inboundGateway, replicaEntity, normalizedEntity, syncLog } =
-        buildTenantSchema(schemaName);
+      const {
+        inboundGateway,
+        replicaEntity,
+        normalizedEntity,
+        normalizedOutbox,
+        syncLog,
+      } = buildTenantSchema(schemaName);
 
       let connectionAppName = "";
 
@@ -69,9 +74,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       if (!piece) {
         throw new Error(`Piece ${connectionAppName} not registered`);
       }
-
-      // Hoisted so it is readable after the transaction resolves.
-      let isNewlyPublished = false;
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
@@ -103,7 +105,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         }
 
         // Insert normalizedEntity idempotently (ON CONFLICT DO NOTHING on replicaId)
-        await tx
+        const insertRes = await tx
           .insert(normalizedEntity)
           .values({
             traceId,
@@ -111,58 +113,46 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             canonicalType,
             data: canonicalData as any,
           })
-          .onConflictDoNothing({ target: normalizedEntity.replicaId });
+          .onConflictDoNothing({ target: normalizedEntity.replicaId })
+          .returning({ id: normalizedEntity.id });
 
-        const updateRes = await tx.execute(
-          sql`UPDATE ${normalizedEntity}
-              SET    published_at = NOW()
-              WHERE  ${normalizedEntity.replicaId} = ${replica.id}
-                AND  published_at IS NULL`,
-        );
-        isNewlyPublished =
-          (updateRes as unknown as { rowCount: number }).rowCount > 0;
-      });
+        if (insertRes.length > 0) {
+          // onConflictDoNothing prevents duplicate outbox rows on ReplicaQueue replay.
+          // The unique constraint idx_normalized_outbox_trace on (traceId, connectionId)
+          // backs this target.
+          await tx
+            .insert(normalizedOutbox)
+            .values({
+              traceId,
+              connectionId,
+              status: "PENDING",
+            })
+            .onConflictDoNothing({
+              target: [normalizedOutbox.traceId, normalizedOutbox.connectionId],
+            });
 
-      if (isNewlyPublished) {
-        // Publish to the next queue — only if this worker thread won the race to stamp published_at
-        await this.queueService.send(QueueName.NormalizedQueue, {
-          traceId,
-          connectionId,
-        });
-      } else {
-        this.logger.debug(
-          { event: "l3.skip_enqueue", traceId },
-          "L3 already published — skipping duplicate enqueue",
-        );
-      }
+          // Mark INBOUND GATEWAY as NORMALIZED
+          await tx
+            .update(inboundGateway)
+            .set({ status: "NORMALIZED" })
+            .where(
+              sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED'`,
+            );
 
-      // 3. Mark NORMALIZED and write L3/SUCCESS audit — runs only after send() resolves
-      await this.db.transaction(async (tx) => {
-        assertValidSchemaName(schemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-
-        await tx
-          .update(inboundGateway)
-          .set({ status: "NORMALIZED" })
-          .where(
-            sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED'`,
-          );
-
-        const durationMs = Date.now() - start;
-        // Idempotent insert: ignore if an L3/SUCCESS row already exists for this traceId
-        await tx
-          .insert(syncLog)
-          .values({
-            traceId,
-            layer: "L3",
-            status: "SUCCESS",
-            durationMs,
-          })
-          .onConflictDoNothing({
-            target: [syncLog.traceId, syncLog.layer, syncLog.status],
-          });
+          const durationMs = Date.now() - start;
+          // onConflictDoNothing on (traceId, layer, status) prevents duplicate audit rows on replay.
+          await tx
+            .insert(syncLog)
+            .values({
+              traceId,
+              layer: "L3",
+              status: "SUCCESS",
+              durationMs,
+            })
+            .onConflictDoNothing({
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+            });
+        }
       });
 
       this.logger.log(
@@ -196,6 +186,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED' AND ${inboundGateway.status} != 'FAIL'`,
             );
 
+          // onConflictDoNothing prevents uq_sync_log_trace_layer_status violations on
+          // replay — if a FAIL row for this trace/layer already exists, skip silently.
           await tx
             .insert(syncLog)
             .values({

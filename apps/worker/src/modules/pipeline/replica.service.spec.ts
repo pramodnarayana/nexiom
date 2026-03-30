@@ -54,15 +54,60 @@ describe("ReplicaService", () => {
     service = module.get<ReplicaService>(ReplicaService);
   });
 
-  it("should process message successfully", async () => {
+  it("should process message successfully and write to replicaOutbox atomically", async () => {
+    // Expose a named spy to track what was inserted inside the transaction
+    const capturedInserts: any[] = [];
+    db.transaction.mockImplementationOnce(async (cb: any) => {
+      const mockInsert = vi.fn().mockImplementation(() => ({
+        values: vi.fn().mockImplementation((vals: any) => {
+          capturedInserts.push(vals);
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "1" }]),
+            }),
+            onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+            then: (res: any) => Promise.resolve(undefined).then(res),
+          };
+        }),
+      }));
+      const tx = {
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "foo",
+            extReqId: "bar",
+            id: "1",
+            payload: {},
+          },
+        ]),
+        insert: mockInsert,
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      };
+      return cb(tx);
+    });
+
     service.onModuleInit();
     expect(queueService.consume.mock.calls[0][0]).toBe(QueueName.InboundQueue);
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).toHaveBeenCalledWith(
-      QueueName.ReplicaQueue,
-      expect.objectContaining({ traceId: "123", connectionId: "456" }),
+
+    // Message must NOT be sent directly — the outbox sweeper owns delivery
+    expect(queueService.send).not.toHaveBeenCalled();
+    // The main transaction must have run
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    // The replicaOutbox insert must have been called with PENDING status
+    const outboxInsert = capturedInserts.find(
+      (v) =>
+        v.status === "PENDING" &&
+        v.traceId === "123" &&
+        v.connectionId === "456",
     );
+    expect(outboxInsert).toBeDefined();
   });
 
   it("should handle errors gracefully and update sync log to FAIL", async () => {

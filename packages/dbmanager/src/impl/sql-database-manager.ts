@@ -168,6 +168,35 @@ export class SqlDatabaseManager implements DatabaseManager {
         CREATE INDEX IF NOT EXISTS idx_l3_data_gin
             ON "${schemaName}".normalized_entity USING gin (data);
     `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_outbox (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            connection_id UUID        NOT NULL,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_normalized_outbox_claim
+            ON "${schemaName}".normalized_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
+    `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".normalized_outbox
+                ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, connection_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {
@@ -303,6 +332,29 @@ export class SqlDatabaseManager implements DatabaseManager {
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
 
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            -- Deduplicate: keep the earliest row per (trace_id, connection_id)
+            -- before adding the unique constraint so existing schemas don't fail.
+            DELETE FROM "${schemaName}".replica_outbox ro
+            WHERE ro.id NOT IN (
+                SELECT DISTINCT ON (trace_id, connection_id) id
+                FROM "${schemaName}".replica_outbox
+                ORDER BY trace_id, connection_id, created_at ASC
+            );
+        EXCEPTION WHEN SQLSTATE '42P01' THEN NULL; -- table doesn't exist yet: safe to skip
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".replica_outbox
+                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
+
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.
          *
@@ -316,28 +368,79 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".delivery_outbox (
             id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            route_id      UUID        NOT NULL,
+            outbound_gateway_id UUID  NOT NULL,
             payload       JSONB       NOT NULL,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
-            attempt_count INTEGER     NOT NULL DEFAULT 0,
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            delivered_at  TIMESTAMPTZ
+            CONSTRAINT uq_delivery_outbox UNIQUE (trace_id, route_id, outbound_gateway_id)
         );
     `);
 
-        // Idempotent upgrade — add attempt_count to schemas provisioned before this column
-        // was introduced (matches the published_at patch pattern in provisionNormalizeTables).
         await this.db.$client.query(`
-        ALTER TABLE "${schemaName}".delivery_outbox
-            ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
-    `);
+        DO $$ BEGIN
+            -- Step 1: drop delivered_at (legacy column no longer in schema)
+            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS delivered_at;
 
-        // Partial index — the OutboxWorker only polls PENDING rows;
-        // keeping the scan O(unprocessed) rather than O(all-time).
+            -- Step 2: add new columns nullable first (safe on existing rows)
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS attempts      INTEGER     DEFAULT 0;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS last_error    VARCHAR(500);
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ DEFAULT NOW();
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS trace_id             UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id  UUID;
+
+            -- Step 3: copy attempt_count into attempts before dropping the old column
+            -- preserves existing retry counters from pre-migration rows.
+            -- Treat NULL attempts as eligible (0 OR NULL) to handle partially migrated rows.
+            UPDATE "${schemaName}".delivery_outbox
+               SET attempts = attempt_count
+             WHERE attempt_count IS NOT NULL
+               AND (attempts = 0 OR attempts IS NULL);
+
+            -- Step 4: drop the old column now that values are copied
+            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
+
+            -- Step 5: backfill remaining NULLs with sentinel values so NOT NULL can be set
+            UPDATE "${schemaName}".delivery_outbox
+               SET trace_id            = gen_random_uuid() WHERE trace_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET route_id            = gen_random_uuid() WHERE route_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET outbound_gateway_id = gen_random_uuid() WHERE outbound_gateway_id IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET attempts            = 0                 WHERE attempts IS NULL;
+            UPDATE "${schemaName}".delivery_outbox
+               SET next_retry_at       = NOW()             WHERE next_retry_at IS NULL;
+
+            -- Step 6: enforce NOT NULL now that all rows are populated
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN trace_id            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN route_id            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN outbound_gateway_id SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN attempts            SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN next_retry_at       SET NOT NULL;
+        EXCEPTION WHEN duplicate_column THEN NULL;
+        END $$;
+        `);
+
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_delivery_outbox_pending
-            ON "${schemaName}".delivery_outbox (created_at)
-            WHERE status = 'PENDING';
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".delivery_outbox
+                ADD CONSTRAINT uq_delivery_outbox UNIQUE (trace_id, route_id, outbound_gateway_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_delivery_outbox_claim
+            ON "${schemaName}".delivery_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
     }
 }
