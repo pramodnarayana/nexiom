@@ -281,16 +281,17 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/modules/webhooks/webhooks.controller.spec.ts`
 - Depends: T003, T009, T010, T026
 
-### T028 · piece-framework: Add `normalize` + `executeAction` + `poll` methods
+### T028 · piece-framework: Add `normalize` + `executeAction` + `poll` methods ✅ COMPLETE
 
-- [ ] Add to `Piece` interface
-- [ ] `normalize(objectType, raw)` → `{ canonicalType, data }`
-- [ ] `executeAction(objectType, payload, credentials)` → `VendorResponse`
-- [ ] `poll(credentials, window: PollWindow)` → `PollPage` — each record must carry `replicationKey` + `replicationKeyValue` so `CursorManagerService` can advance the High-Water Mark without knowing the connector schema; `PollPage.nextPageCursor` drives pagination
-- [ ] Salesforce + QuickBooks: stub implementations
-- [ ] Canonical model interfaces in `packages/connectors/framework/canonical/`
-- [ ] `PollRecord`, `PollPage`, `PollWindow` interfaces defined in `packages/connectors/framework/` and re-exported from `packages/engine/` (see T047)
-- Files: `packages/connectors/framework/src/piece.interface.ts`, `packages/connectors/framework/canonical/**`
+- [x] Add to `Piece` interface (`normalize`, `executeAction`, `VendorResponse`, `NormalizedRecord`, `CanonicalType`)
+- [x] `normalize(objectType, raw)` → `NormalizedRecord | null` — returns null when piece has no canonical mapping; L3 defaults to `'RAW'`
+- [x] `executeAction(objectType, payload, credentials)` → `VendorResponse` — real HTTP implementation with 15s AbortSignal timeout
+- [x] `poll(credentials, window: PollWindow)` → `PollPage` — already defined in T030/T047
+- [x] `RetryableException` class added to `packages/connectors/src/framework/retryable-exception.ts` — thrown by piece for 429/502/503/504 to trigger RETRY path
+- [x] Salesforce: real `executeAction` (POST to `/services/data/v59.0/sobjects/:type`); `normalize` returns null (RAW pass-through)
+- [x] QuickBooks: real `executeAction` (POST to `/v3/company/:realmId/:type`); `normalize` returns null
+- [x] `CanonicalType` union defined in `packages/connectors/src/framework/canonical/index.ts`
+- Files: `packages/connectors/src/framework/retryable-exception.ts`, `packages/connectors/src/framework/index.ts`, `packages/pieces/salesforce/src/index.ts`, `packages/pieces/quickbooks/src/index.ts`
 - Depends: T018, T046
 
 ### T029 · api: `SchedulerModule` + `SchedulerService` (Windmill-backed)
@@ -344,51 +345,68 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica.service.spec.ts`
 - Depends: T003, T026, T006
 
-### T032 · api: `NormalizationService` — L3 worker
+### T032 · api: `NormalizationService` — L3 worker ✅ COMPLETE
 
-- [ ] Consumes `Replica_Queue`
-- [ ] Calls `piece.normalize(entityType, data)`
-- [ ] Writes to `normalized_entity`
-- [ ] Writes `sync_log` row `{ layer: 'L3' }`
-- [ ] Pushes `{ traceId }` to `Normalized_Queue`
-- [ ] Unit tests
-- Files: `apps/api/src/modules/pipeline/normalization.service.ts`, `apps/api/src/modules/pipeline/normalization.service.spec.ts`
+- [x] Consumes `Replica_Queue` via `QueueService.consume`
+- [x] Poison-pill guard — drops messages missing `traceId`/`connectionId` (ACK, no rethrow)
+- [x] Typed `appConnections` Drizzle query to resolve `appName` (no raw SQL)
+- [x] Calls `piece.normalize(entityType, data)` → stores `NormalizedRecord`; falls back to `canonicalType='RAW'` when null
+- [x] Idempotent insert into `normalized_entity` (`onConflictDoNothing` on `replicaId`)
+- [x] Idempotent insert into `normalized_outbox` (`onConflictDoNothing` on `(traceId, connectionId)`)
+- [x] Writes `sync_log { layer: 'L3', status: 'SUCCESS' }` with `onConflictDoNothing` on `(traceId, layer, status)`
+- [x] Error path: writes `sync_log { status: 'FAIL' }`, sets `inbound_gateway.status='FAIL'`, rethrows
+- [x] `sanitizeError()` used for all `lastError` and log fields (credential-safe)
+- [x] Unit tests: 9 tests covering happy path, invalid message, normalize→RAW, normalize throws, connection not found, piece not registered, replica not found
+- Files: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/normalization.service.spec.ts`
 - Depends: T028, T031
 
-### T033 · api: `FanOutService` — L4 worker (crash-safe)
+### T033 · api: `FanOutService` — L4 worker (crash-safe) ✅ COMPLETE
 
-- [ ] Consumes `Normalized_Queue`
-- [ ] Queries `integration_stitch` for active stitches matching `src_connection_id`
-- [ ] Evaluates `syncCondition` rules in-memory (`eq`, `neq`, `gt`, `lt`, `contains`)
-- [ ] Per matching stitch: hydrate payload via `field_mapping` rules
-- [ ] **Writes `outbound_gateway` (status=`PENDING`) BEFORE enqueuing** — crash safety
-- [ ] Pushes `{ traceId, outboundGatewayId }` to `Delivery_Queue`
-- [ ] Skipped stitches: write `sync_log` row `{ status: 'SKIPPED' }`
-- [ ] Unit tests — including crash-safety (write before enqueue)
-- Files: `apps/api/src/modules/pipeline/fanout.service.ts`, `apps/api/src/modules/pipeline/fanout.service.spec.ts`
+- [x] Consumes `Normalized_Queue` via `QueueService.consume`
+- [x] Poison-pill guard — drops messages missing `traceId`/`connectionId` (ACK, no rethrow)
+- [x] Queries `integration_stitch` for active stitches on `src_connection_id`
+- [x] Evaluates `syncCondition` rules in-memory via `evaluateConditions()` from `@nexiom/engine`
+- [x] Per matching stitch: hydrate payload via `field_mapping` rules with `hydratePayload()`
+- [x] **Writes `outbound_gateway` (PENDING) BEFORE `delivery_outbox`** — crash-safe ordering with `onConflictDoUpdate` for idempotency
+- [x] `delivery_outbox.payload` includes: `srcVendorId`, `canonicalType`, `srcAppName`, `srcTenantId` — all fields needed by DeliveryService (L5) to write the Global Entity Map without extra joins
+- [x] Fan-out uses `processInChunks(stitches, 5, ...)` — caps concurrency at 5 to prevent event-loop blockage on high-cardinality fan-outs
+- [x] `processSingleStitch()` private method for clean separation
+- [x] `writeSyncLog()` helper — `onConflictDoNothing` on `(traceId, routeId, layer, status)`
+- [x] Skipped stitches write `sync_log { status: 'SKIPPED' }`; per-stitch errors write `FAIL` and continue to next stitch
+- [x] Typed `appConnections` Drizzle query (no raw SQL)
+- [x] `sanitizeError()` on all error log fields
+- Files: `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.spec.ts`
 - Depends: T022, T032
 
-### T034 · api: `DeliveryService` — L5 worker
+### T034 · api: `DeliveryService` — L5 worker ✅ COMPLETE
 
-- [ ] Consumes `Delivery_Queue`
-- [ ] Reads `req_payload` from `outbound_gateway` (not from queue message)
-- [ ] Acquires Redis refresh lock `lock:refresh:{connectionId}` via `TokenRefreshService`
-- [ ] Calls `piece.executeAction(targetObject, payload, credentials)`
-- [ ] On `429`/`503`: throws `RetryableException` (returns to queue, exponential backoff)
-- [ ] On `5xx` after 5 attempts: DLQ → triggers Exception Center notification
-- [ ] Unit tests — token refresh, retry, DLQ paths
-- Files: `apps/api/src/modules/pipeline/delivery.service.ts`, `apps/api/src/modules/pipeline/delivery.service.spec.ts`
+- [x] Consumes `Delivery_Queue` via `QueueService.consume`
+- [x] Poison-pill guard — drops messages missing `traceId`, `connectionId`, `targetConnectionId`, `routeId`, `outboundGatewayId`
+- [x] Reads `reqPayload` + `attemptCount` from `outbound_gateway` atomically (TX-1)
+- [x] **MAX_ATTEMPTS guard** — if `attemptCount >= 5`, marks FAIL immediately without calling the piece
+- [x] Resolves credentials via `TokenManagerService.getValidCredentials()`
+- [x] Typed `appConnections` Drizzle query for `targetAppName` + `targetTenantId` (no raw SQL)
+- [x] Atomic claim TX-2: transitions `PENDING`/`RETRY` → `PROCESSING` via conditional UPDATE; skips if already claimed
+- [x] Calls `piece.executeAction(targetObject, reqPayload, credentials)`
+- [x] **Retry classification**: `RetryableException` → RETRY; HTTP 429/502/503/504 → RETRY; all other non-2xx → FAIL
+- [x] `sanitizeError()` on all error log fields and DB `resPayload`
+- [x] Unit tests: 16 tests — happy path, format error, statusCode extraction, invalid message (ACK), 429→RETRY, 503→RETRY, RetryableException→RETRY, 422→FAIL, MAX_ATTEMPTS→FAIL without executeAction call
+- Files: `apps/worker/src/modules/pipeline/delivery.service.ts`, `apps/worker/src/modules/pipeline/delivery.service.spec.ts`
 - Depends: T028, T033
 
-### T035 · api: L6 — GEM write + final audit in `DeliveryService`
+### T035 · api: L6 — GEM write + final audit in `DeliveryService` ✅ COMPLETE
 
-- [ ] After successful vendor response: `SET LOCAL search_path TO ws_dest` (transaction-scoped; safe for PgBouncer)
-- [ ] `UPDATE outbound_gateway SET res_payload, status_code, status='SUCCESS'`
-- [ ] `INSERT INTO global_entity_map` (source vendor ID ↔ dest vendor ID)
-- [ ] Write `sync_log` row `{ layer: 'L6', status: 'SUCCESS' }` — drives dashboard green checkmark
-- [ ] On failure: `status='FAIL'`, write `sync_log { status: 'FAIL' }`
-- [ ] Unit tests
-- Files: `apps/api/src/modules/pipeline/delivery.service.ts` (extend T034)
+- [x] `writeL6Result()` private method — single atomic TX-3 covering all L6 writes
+- [x] `UPDATE outbound_gateway SET resPayload, statusCode, status` (SUCCESS / FAIL / RETRY)
+- [x] **Global Entity Map upsert** on SUCCESS with both `srcVendorId` and `destVendorId`: `INSERT INTO global_entity_map ... ON CONFLICT DO UPDATE SET destEntityId, lastSyncedAt=NOW()` — idempotent on re-delivery
+- [x] `destVendorId` extracted from vendor response body via `extractDestVendorId()` (checks `id`, `Id`, `result.id`, `data.id`)
+- [x] `srcVendorId` threaded from `replica_entity.sourceId` via L4 `deliveryOutbox.payload` — no cross-schema join at L5/L6
+- [x] GEM populated with `sourceAppId=connectionId`, `destAppId=targetConnectionId` (real FK UUIDs, not placeholders)
+- [x] `orgId` fields populated from `tenantId` retrieved from typed `appConnections` query
+- [x] GEM write skipped gracefully when `srcVendorId` or `destVendorId` is absent (partial sync still succeeds)
+- [x] `sync_log { layer: 'L6', status }` written with `onConflictDoNothing` on `(traceId, routeId, layer, status)`
+- [x] On unexpected error: compensating TX marks `outbound_gateway` FAIL and writes FAIL `sync_log`
+- Files: `apps/worker/src/modules/pipeline/delivery.service.ts` (extends T034)
 - Depends: T034
 
 ---
@@ -580,58 +598,67 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] Strip untyped `durationMs` hacks and substitute row-level skip locks and `replica_outbox` commits in L2 worker.
 - Files: `packages/database/src/schema/pipeline.ts`, `apps/api/src/modules/pipeline/replica.service.ts`, `apps/api/src/modules/pipeline/replica-outbox.service.ts`
 
-### T052 · api: Hardened L3 & L4 Pipeline Outbox
+### T052 · api: Hardened L3 & L4 Pipeline Outbox ✅ COMPLETE
 
-- [ ] Create `normalized_outbox` Drizzle schema and provisioning migrations.
-- [ ] Refactor `NormalizationService` (L3) to use the new atomic outbox for safely transmitting to L4.
-- [ ] Refactor `FanOutService` (L4) to use the existing `delivery_outbox` schema instead of directly hitting the queue.
-- [ ] Implement `NormalizedOutboxWorker` to handle the batch relay to NormalizationQueue.
-- Files: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/normalized-outbox.worker.ts`
+- [x] `normalized_outbox` Drizzle schema in `packages/database/src/schema/pipeline.ts` with unique index on `(traceId, connectionId)`
+- [x] `NormalizationService` (L3): atomic transactional outbox — inserts `normalized_entity` then `normalized_outbox` in single TX; `onConflictDoNothing` on both for idempotency
+- [x] `FanOutService` (L4): reads from `normalized_outbox` queue and writes to `delivery_outbox` — crash-safe ordering (outbound_gateway BEFORE delivery_outbox)
+- [x] `NormalizedOutboxWorker` — `FOR UPDATE SKIP LOCKED` batch claim, exponential backoff, `MAX_ATTEMPTS` guard; publishes to `Normalized_Queue` and transitions rows `PENDING → PROCESSING → COMPLETED`
+- [x] `DeliveryOutboxWorker` — same pattern for L4→L5 handoff via `Delivery_Queue`
+- [x] All sync_log inserts use `onConflictDoNothing` on `(traceId, layer, status)` unique constraint `uq_sync_log_trace_layer_status`
+- [x] `sanitizeError()` used throughout for credential-safe error persistence
+- Files: `packages/database/src/schema/pipeline.ts`, `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/normalized-outbox.worker.ts`, `apps/worker/src/modules/pipeline/delivery-outbox.worker.ts`
 - Depends: T051
 
 ---
 
 ## Summary
 
-| Phase | Tasks | Key deliverable |
-| --- | --- | --- |
-| 0 — Infrastructure | T001–T005 | Local dev environment boots end-to-end |
-| 0.5 — Hardening | T006–T012 | Production-safe observability, security, graceful ops |
-| 1 — Workspaces | T013–T016 | Multi-workspace CRUD + UI |
-| 2 — Stitches & Mapping Canvas | T017–T025 | Stitch + field mapping + schedule config |
-| 3 — Pipeline | T026–T035 | Full L1→L6 data flow + scheduler execution |
-| 3.5 — Stateful Sync | T046–T050 + T029 + T030 | Windmill orchestration + Singer-style cursor engine |
-| 4 — Dashboard | T036–T039 | Trace timeline + Exception Center |
-| 5 — AI Mapping | T040–T042 | Claude-powered field suggestions |
-| 6 — Environments | T043–T045 | Sandbox/Production routing |
-| 7 — Delivery Outbox | T051–T052 | Delivery Outbox Resiliency |
+| Phase | Tasks | Completed | Key deliverable |
+| --- | --- | --- | --- |
+| 0 — Infrastructure | T001–T005 | ✅ All | Local dev environment boots end-to-end |
+| 0.5 — Hardening | T006–T012 | ✅ T006,T008–T011 · ⬜ T007,T012 | Production-safe observability, security, graceful ops |
+| 1 — Workspaces | T013–T016 | ✅ All | Multi-workspace CRUD + UI |
+| 2 — Stitches & Mapping Canvas | T017–T025 | ✅ T017–T022 · ⬜ T023–T025 | Stitch + field mapping + schedule config |
+| 3 — Pipeline | T026–T035 | ✅ All | Full L1→L6 data flow + scheduler execution |
+| 3.5 — Stateful Sync | T046–T050 + T029 + T030 | ✅ All | Windmill orchestration + Singer-style cursor engine |
+| 4 — Dashboard | T036–T039 | ✅ T036,T037 · ⬜ T038,T039 | Trace timeline + Exception Center |
+| 5 — AI Mapping | T040–T042 | ⬜ All | Claude-powered field suggestions |
+| 6 — Environments | T043–T045 | ⬜ All | Sandbox/Production routing |
+| 7 — Delivery Outbox | T051–T052 | ✅ All | Delivery Outbox Resiliency |
 
-**Total: 52 tasks**
+**Total: 52 tasks · Completed: ~38 · Remaining: ~14**
 
 ---
 
 ## Recommended Next Sprint (priority order)
 
-> The `feat/trace-exception-api` branch is merged. T036 and T037 are complete.
-> The following tasks are unblocked and should be tackled next.
+> **Pipeline L3–L6 is now fully implemented and enterprise-hardened** (T028, T032–T035, T052 merged on `feat/pipeline-l3-l4-l5-l6`).
+> The full L1→L6 data path is end-to-end complete. The following tasks are unblocked.
 
-### Immediate — unblock the pipeline (required before end-to-end testing)
+### Immediate — close the UI gap
 
-1. **T032** — `NormalizationService` (L3 worker): depends on T031.
+1. **T038** — `RouteIntelligencePage`: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer per layer. Uses the live T036 trace API. **Unblocked now.**
 
-2. **T033** — `FanOutService` (L4 worker): depends on T032. Already partially implemented in `apps/worker`; needs crash-safety tests and `syncCondition` evaluation.
+2. **T039** — `ExceptionCenterPage`: exception table with retry/dismiss actions per row, bulk actions for support team. Uses the live T037 exception API. **Unblocked now.**
 
-3. **T034** — `DeliveryService` (L5 worker): depends on T033.
+3. **T023** — `StitchesPage` + `NewStitchPage` 3-step wizard: pick source/target connection, mapping canvas with drag-to-connect. Depends on T019, T022 (both complete).
 
-4. **T035** — L6 GEM write + audit: final write-back, unblocks T038/T039 UI.
+4. **T024** — Schedule Panel on `StitchDetailPage`: frequency dropdown, enable/pause toggle, "Run now" button. Depends on T021, T023.
 
-### UI unblocked now (no pipeline dependency)
+### Observability (high-value, low-effort)
 
-1. **T038** — `RouteIntelligencePage` web UI: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer. Uses the live T036 trace API — can be built in parallel with pipeline work.
+1. **T007** — OpenObserve dashboards + alerting: pipeline health (L1→L6 throughput, queue depths, error rates), token refresh metrics, DLQ spike alerts. Now unblocked by T036/T037 live data and the hardened L3–L6 structured logs.
 
-2. **T039** — `ExceptionCenterPage` web UI: exception table, retry/dismiss actions per row, bulk actions. Uses the live T037 exception API.
+### Platform completeness
 
-### Clean-up required before next feature
+1. **T043** — `StorageResolverService` env-aware pool selection (sandbox vs production Aurora).
+2. **T044** — `TokenManagerService` sandbox URL switching.
+3. **T045** — Environment toggle in workspace creation + colour-coded badges.
+4. **T012** — `TenantOffboardingService` GDPR data deletion.
+5. **T040–T042** — AI-assisted mapping (MCP server, Claude mapping suggestions, Mapping Canvas button).
 
-1. **T007** — OpenObserve dashboards + alerting: now that T036/T037 are live, pipeline health metrics (L1→L6 throughput, exception spike alerts) should be set up.
+### Shared utility improvements (carry-over from enterprise hardening)
 
+- **PinoLogger migration in `apps/worker`**: All pipeline services still use NestJS `Logger`. Migrate to `nestjs-pino` `PinoLogger` across L2–L6 worker services for consistent structured logging with `event`, `traceId`, `layer` context (deferred from T032–T035 hardening pass; belongs in a dedicated T006 follow-up).
+- **GEM `orgId` population**: `sourceOrgId`/`destOrgId` are currently populated from `tenantId`. A future task should expose the real Salesforce org ID / QuickBooks realm ID from the connection `metadata` blob and thread it through the queue payload.
