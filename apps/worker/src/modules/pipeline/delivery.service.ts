@@ -24,7 +24,6 @@ import { RetryableException } from "@nexiom/connectors";
 import {
   sanitizeError,
   isValidPipelineMessage,
-  isRetryableStatusCode,
   extractDestVendorId,
 } from "../../shared/pipeline.utils.js";
 
@@ -102,7 +101,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       },
       "L5 Delivery started",
     );
-
+    let claimed = false;
     try {
       const srcSchemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
@@ -111,6 +110,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // ── TX-1: Read reqPayload and current attemptCount from outbound_gateway ─
       let reqPayload: Record<string, unknown> = {};
       let currentAttemptCount = 0;
+      let currentStatus = "";
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -120,6 +120,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .select({
             reqPayload: outboundGateway.reqPayload,
             attemptCount: outboundGateway.attemptCount,
+            status: outboundGateway.status,
           })
           .from(outboundGateway)
           .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
@@ -127,6 +128,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         if (!ob.length) throw new Error("Outbound gateway record not found");
         reqPayload = ob[0].reqPayload as Record<string, unknown>;
         currentAttemptCount = ob[0].attemptCount ?? 0;
+        currentStatus = ob[0].status;
       });
 
       // ── MAX_ATTEMPTS guard ────────────────────────────────────────────────
@@ -151,16 +153,20 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           connectionId,
           traceId,
           routeId,
-          null,
-          500,
-          "FAIL",
+          null, // resPayload
+          500, // statusCode
+          "FAIL", // finalStatus
           start,
-          undefined,
+          undefined, // destVendorId
           canonicalType,
           srcAppName,
           srcTenantId,
           srcVendorId,
           targetConnectionId,
+          undefined, // targetAppName
+          undefined, // targetTenantId
+          currentAttemptCount, // expectedAttemptCount
+          currentStatus, // expectedStatus
         );
         return;
       }
@@ -202,7 +208,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // Uses conditional WHERE to prevent double-processing if another worker
       // already claimed the row (FOR UPDATE SKIP LOCKED at the outbox worker level
       // provides the first guard; this is the second guard at service level).
-      let claimed = false;
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -265,12 +270,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
         if (statusCode >= 200 && statusCode < 300) {
           finalStatus = "SUCCESS";
-        } else if (
-          (typeof resp.retry === "boolean" && resp.retry === true) ||
-          (resp.retry === undefined && isRetryableStatusCode(statusCode))
-        ) {
-          // Piece explicitly opts-in to retry via response.retry flag,
-          // or omitted flag and HTTP status code indicates a transient vendor-side failure.
+        } else if (resp.retry === true) {
+          // Piece explicitly opts-in to retry via response.retry flag
           finalStatus = "RETRY";
         } else {
           // Non-2xx without explicit retry opt-in — permanent failure.
@@ -357,6 +358,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetConnectionId,
         targetAppName,
         targetTenantId,
+        currentAttemptCount + 1, // expectedAttemptCount
+        "PROCESSING", // expectedStatus
       );
 
       this.logger.log(
@@ -364,41 +367,45 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         "L6 delivery completed",
       );
     } catch (err: unknown) {
-      // On unexpected error, attempt to mark outbound_gateway as FAIL and write error sync_log.
-      try {
-        const srcSchemaName =
-          await this.storageResolver.resolveSchemaName(connectionId);
-        await this.db.transaction(async (tx) => {
-          assertValidSchemaName(srcSchemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-          );
-          const { outboundGateway, syncLog } = buildTenantSchema(srcSchemaName);
-          await tx
-            .update(outboundGateway)
-            .set({ status: "FAIL" })
-            .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
-          await tx
-            .insert(syncLog)
-            .values({
-              traceId,
-              routeId,
-              layer: "L6",
-              status: "FAIL",
-              durationMs: Date.now() - start,
-            })
-            .onConflictDoNothing({
-              // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
-              target: [
-                syncLog.traceId,
-                syncLog.routeId,
-                syncLog.layer,
-                syncLog.status,
-              ],
-            });
-        });
-      } catch {
-        // Swallow rollback errors — original error is rethrown below.
+      if (claimed) {
+        // On unexpected error, attempt to mark outbound_gateway as FAIL and write error sync_log.
+        try {
+          const srcSchemaName =
+            await this.storageResolver.resolveSchemaName(connectionId);
+          await this.db.transaction(async (tx) => {
+            assertValidSchemaName(srcSchemaName);
+            await tx.execute(
+              sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+            );
+            const { outboundGateway, syncLog } =
+              buildTenantSchema(srcSchemaName);
+            await tx
+              .update(outboundGateway)
+              .set({ status: "FAIL" })
+              .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
+            await tx
+              .insert(syncLog)
+              .values({
+                traceId,
+                routeId,
+                layer: "L6",
+                status: "FAIL",
+                durationMs: Date.now() - start,
+              })
+              .onConflictDoNothing({
+                // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
+                target: [
+                  syncLog.traceId,
+                  syncLog.routeId,
+                  syncLog.layer,
+                  syncLog.status,
+                ],
+                where: sql`${syncLog.routeId} IS NOT NULL`,
+              });
+          });
+        } catch {
+          // Swallow rollback errors — original error is rethrown below.
+        }
       }
       throw err;
     }
@@ -427,6 +434,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     targetConnectionId: string,
     targetAppName?: string,
     targetTenantId?: string,
+    expectedAttemptCount?: number,
+    expectedStatus?: string,
   ): Promise<void> {
     const { outboundGateway, syncLog } = buildTenantSchema(srcSchemaName);
 
@@ -436,11 +445,21 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
       );
 
-      // Update outbound_gateway with result
-      await tx
+      // Update outbound_gateway with result conditionally to prevent clobbering
+      // if another transaction already processed this attempt.
+      const updateQ = tx
         .update(outboundGateway)
-        .set({ resPayload: resPayload ?? {}, statusCode, status: finalStatus })
-        .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
+        .set({ resPayload: resPayload ?? {}, statusCode, status: finalStatus });
+
+      if (expectedAttemptCount !== undefined && expectedStatus !== undefined) {
+        await updateQ.where(
+          sql`${outboundGateway.id} = ${outboundGatewayId} 
+              AND ${outboundGateway.attemptCount} = ${expectedAttemptCount}
+              AND ${outboundGateway.status} = ${expectedStatus}`,
+        );
+      } else {
+        await updateQ.where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
+      }
 
       // ── Global Entity Map upsert (L6 write) ──────────────────────────────
       // Only write GEM on successful delivery with both source and destination IDs.
@@ -500,13 +519,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           durationMs: Date.now() - start,
         })
         .onConflictDoNothing({
-          // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+          // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
           target: [
             syncLog.traceId,
             syncLog.routeId,
             syncLog.layer,
             syncLog.status,
           ],
+          where: sql`${syncLog.routeId} IS NOT NULL`,
         });
     });
   }

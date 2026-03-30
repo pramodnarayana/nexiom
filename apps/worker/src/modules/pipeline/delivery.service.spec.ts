@@ -315,10 +315,12 @@ describe("DeliveryService", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("should set RETRY status when piece returns 429 (rate limit)", async () => {
-    pieceRegistry
-      .getPiece()
-      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 429 });
+  it("should set RETRY status when piece returns 429 with explicit retry flag", async () => {
+    pieceRegistry.getPiece().executeAction.mockResolvedValueOnce({
+      body: {},
+      statusCode: 429,
+      retry: true,
+    });
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
@@ -350,10 +352,12 @@ describe("DeliveryService", () => {
     );
   });
 
-  it("should set RETRY status when piece returns 503 (service unavailable)", async () => {
-    pieceRegistry
-      .getPiece()
-      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 503 });
+  it("should set RETRY status when piece returns 503 with explicit retry flag", async () => {
+    pieceRegistry.getPiece().executeAction.mockResolvedValueOnce({
+      body: {},
+      statusCode: 503,
+      retry: true,
+    });
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
@@ -488,5 +492,42 @@ describe("DeliveryService", () => {
     });
     // executeAction must NOT have been called — piece protected from overuse
     expect(executeAction).not.toHaveBeenCalled();
+  });
+  it("should NOT rewrite outbound gateway if claimed is false during pre-claim exception", async () => {
+    const updateSpy = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        update: updateSpy,
+        set: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([]),
+      }),
+    );
+    // Trigger pre-claim error by removing the token manager completely
+    (service as any).tokenManagerService = null;
+    service.onModuleInit();
+
+    // We expect the original error to be thrown to the caller!
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        traceId: "t1",
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).rejects.toThrow("TokenManagerService unavailable");
+
+    // The catch block must NOT have executed update set status = FAIL
+    // Since it was during an un-claimed state (token resolution is before DB claim)
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });

@@ -183,13 +183,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               durationMs,
             })
             .onConflictDoNothing({
-              // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
-              target: [
-                syncLog.traceId,
-                syncLog.routeId,
-                syncLog.layer,
-                syncLog.status,
-              ],
+              // uq_sync_log_unrouted covers (traceId, layer, status) where routeId IS NULL
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+              where: sql`${syncLog.routeId} IS NULL`,
             });
         }
       });
@@ -246,13 +242,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               durationMs: Date.now() - start,
             })
             .onConflictDoNothing({
-              // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
-              target: [
-                syncLog.traceId,
-                syncLog.routeId,
-                syncLog.layer,
-                syncLog.status,
-              ],
+              // uq_sync_log_unrouted covers (traceId, layer, status) where routeId IS NULL
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+              where: sql`${syncLog.routeId} IS NULL`,
             });
         });
       } catch {

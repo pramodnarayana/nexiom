@@ -129,7 +129,12 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           .from(replicaEntity)
           .where(sql`${replicaEntity.traceId} = ${traceId}`)
           .limit(1);
-        srcVendorId = replicaRows[0]?.sourceId ?? undefined;
+        if (!replicaRows.length) {
+          throw new Error(
+            `Replica record not found for GEM threading (traceId=${traceId})`,
+          );
+        }
+        srcVendorId = replicaRows[0].sourceId ?? undefined;
       });
 
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
@@ -141,8 +146,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .from(appConnections)
         .where(eq(appConnections.id, connectionId))
         .limit(1);
-      const srcAppName = srcConnRows[0]?.appName ?? "unknown";
-      const srcTenantId = srcConnRows[0]?.tenantId ?? "unknown";
+
+      if (!srcConnRows.length) {
+        throw new Error(
+          `Source connection record not found for GEM metadata (connectionId=${connectionId}, traceId=${traceId})`,
+        );
+      }
+      const srcAppName = srcConnRows[0].appName;
+      const srcTenantId = srcConnRows[0].tenantId;
 
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
@@ -343,14 +354,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             durationMs: Date.now() - start,
           })
           .onConflictDoNothing({
-            // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
-            // ensuring that each route's SUCCESS is recorded uniquely.
+            // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
             target: [
               syncLog.traceId,
               syncLog.routeId,
               syncLog.layer,
               syncLog.status,
             ],
+            where: sql`${syncLog.routeId} IS NOT NULL`,
           });
       });
     } catch (err) {
@@ -403,13 +414,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           durationMs,
         })
         .onConflictDoNothing({
-          // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+          // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
           target: [
             syncLog.traceId,
             syncLog.routeId,
             syncLog.layer,
             syncLog.status,
           ],
+          where: sql`${syncLog.routeId} IS NOT NULL`,
         });
     });
   }
