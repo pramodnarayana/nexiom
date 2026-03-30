@@ -113,9 +113,10 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             canonicalType,
             data: canonicalData as any,
           })
-          .onConflictDoNothing({ target: normalizedEntity.replicaId });
+          .onConflictDoNothing({ target: normalizedEntity.replicaId })
+          .returning({ id: normalizedEntity.id });
 
-        if (insertRes.rowCount != null && insertRes.rowCount > 0) {
+        if (insertRes.length > 0) {
           // Write to normalizedOutbox to hand off L3 -> L4 execution reliably
           await tx.insert(normalizedOutbox).values({
             traceId,
@@ -132,17 +133,12 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             );
 
           const durationMs = Date.now() - start;
-          await tx
-            .insert(syncLog)
-            .values({
-              traceId,
-              layer: "L3",
-              status: "SUCCESS",
-              durationMs,
-            })
-            .onConflictDoNothing({
-              target: [syncLog.traceId, syncLog.layer, syncLog.status],
-            });
+          await tx.insert(syncLog).values({
+            traceId,
+            layer: "L3",
+            status: "SUCCESS",
+            durationMs,
+          });
         }
       });
 
@@ -177,17 +173,12 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED' AND ${inboundGateway.status} != 'FAIL'`,
             );
 
-          await tx
-            .insert(syncLog)
-            .values({
-              traceId,
-              layer: "L3",
-              status: "FAIL",
-              durationMs: Date.now() - start,
-            })
-            .onConflictDoNothing({
-              target: [syncLog.traceId, syncLog.layer, syncLog.status],
-            });
+          await tx.insert(syncLog).values({
+            traceId,
+            layer: "L3",
+            status: "FAIL",
+            durationMs: Date.now() - start,
+          });
         });
       } catch {
         // ignore rollback errors

@@ -54,15 +54,15 @@ describe("ReplicaService", () => {
     service = module.get<ReplicaService>(ReplicaService);
   });
 
-  it("should process message successfully", async () => {
+  it("should process message successfully and write to replicaOutbox atomically", async () => {
     service.onModuleInit();
     expect(queueService.consume.mock.calls[0][0]).toBe(QueueName.InboundQueue);
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(queueService.send).toHaveBeenCalledWith(
-      QueueName.ReplicaQueue,
-      expect.objectContaining({ traceId: "123", connectionId: "456" }),
-    );
+    // Message must NOT be sent directly — the outbox sweeper owns delivery
+    expect(queueService.send).not.toHaveBeenCalled();
+    // The main transaction must have run (which inserts into replicaOutbox)
+    expect(db.transaction).toHaveBeenCalledTimes(1);
   });
 
   it("should handle errors gracefully and update sync log to FAIL", async () => {

@@ -170,16 +170,28 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               .returning({ id: outboundGateway.id });
 
             // Write atomical outbox handoff to L5 DeliveryQueue
-            await tx.insert(deliveryOutbox).values({
-              payload: {
+            await tx
+              .insert(deliveryOutbox)
+              .values({
                 traceId,
-                connectionId,
-                targetConnectionId: stitch.destConnectionId,
                 routeId: stitch.id,
                 outboundGatewayId: outbound.id,
-              },
-              status: "PENDING",
-            });
+                payload: {
+                  traceId,
+                  connectionId,
+                  targetConnectionId: stitch.destConnectionId,
+                  routeId: stitch.id,
+                  outboundGatewayId: outbound.id,
+                },
+                status: "PENDING",
+              })
+              .onConflictDoNothing({
+                target: [
+                  deliveryOutbox.traceId,
+                  deliveryOutbox.routeId,
+                  deliveryOutbox.outboundGatewayId,
+                ],
+              });
 
             // Write syncLog L4/SUCCESS identically inside single transaction
             await tx.insert(syncLog).values({

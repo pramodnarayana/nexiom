@@ -262,6 +262,9 @@ export function buildTenantSchema(schemaName: string) {
      */
     const deliveryOutbox = schema.table('delivery_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        routeId: uuid('route_id').notNull(),
+        outboundGatewayId: uuid('outbound_gateway_id').notNull(),
         payload: jsonb('payload').notNull(),
         status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
@@ -272,6 +275,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_delivery_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_delivery_unique_dispatch').on(table.traceId, table.routeId, table.outboundGatewayId),
     ]);
 
     return {

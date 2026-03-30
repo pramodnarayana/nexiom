@@ -49,7 +49,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { inboundGateway, replicaEntity, syncLog } =
+      const { inboundGateway, replicaEntity, replicaOutbox, syncLog } =
         buildTenantSchema(schemaName);
 
       await this.db.transaction(async (tx) => {
@@ -105,8 +105,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           })
           .returning({ id: replicaEntity.id });
 
-        //
-
         // Update inbound_gateway status
         await tx
           .update(inboundGateway)
@@ -121,12 +119,16 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           status: "SUCCESS",
           durationMs,
         });
-      });
 
-      // Enqueue to ReplicaQueue
-      await this.queueService.send(QueueName.ReplicaQueue, {
-        traceId,
-        connectionId,
+        // Atomically write the outbox entry — the ReplicaOutboxService sweeper
+        // (in apps/api) will deliver this to ReplicaQueue with retries.
+        // traceId is the consumer deduplication key; if a duplicate is delivered
+        // the L3 ON CONFLICT DO NOTHING on replicaId makes it idempotent.
+        await tx.insert(replicaOutbox).values({
+          traceId,
+          connectionId,
+          status: "PENDING",
+        });
       });
 
       this.logger.log(

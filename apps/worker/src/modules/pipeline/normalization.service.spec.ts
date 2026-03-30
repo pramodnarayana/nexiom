@@ -15,7 +15,7 @@ describe("NormalizationService", () => {
   let mockTxInsert: any;
 
   beforeEach(async () => {
-    mockTxInsert = vi.fn().mockReturnThis();
+    mockTxInsert = vi.fn();
     queueService = { consume: vi.fn(), send: vi.fn() };
     db = {
       select: vi.fn().mockReturnThis(),
@@ -23,6 +23,22 @@ describe("NormalizationService", () => {
       where: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([{ appName: "test_app" }]),
       transaction: vi.fn().mockImplementation(async (cb) => {
+        // Build a chainable insert that supports:
+        //   insert(t).values({}).onConflictDoNothing({}).returning({})  → [{ id }]
+        //   insert(t).values({})                                        → resolves
+        const makeInsertChain = (
+          returnVal: any[] = [{ id: "new_normalized_1" }],
+        ) => ({
+          values: vi.fn().mockReturnValue({
+            onConflictDoNothing: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue(returnVal),
+            }),
+            returning: vi.fn().mockResolvedValue(returnVal),
+            // plain insert().values() with no conflict resolution
+            then: (res: any) => Promise.resolve(undefined).then(res),
+          }),
+        });
+        mockTxInsert.mockImplementation(() => makeInsertChain());
         const tx = {
           execute: vi
             .fn()
@@ -36,8 +52,6 @@ describe("NormalizationService", () => {
               { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
             ]),
           insert: mockTxInsert,
-          values: vi.fn().mockReturnThis(),
-          onConflictDoNothing: vi.fn().mockReturnThis(),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
         };
@@ -135,9 +149,15 @@ describe("NormalizationService", () => {
           .mockResolvedValue([
             { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
           ]),
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-        onConflictDoNothing: vi.fn().mockReturnThis(),
+        // Returns [] from .returning() → simulates conflict (record already exists)
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            onConflictDoNothing: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([]),
+            }),
+            then: (res: any) => Promise.resolve(undefined).then(res),
+          }),
+        }),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
       };

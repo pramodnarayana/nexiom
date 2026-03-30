@@ -52,8 +52,10 @@ describe("DeliveryOutboxWorker", () => {
   it("should claim and process pending outbox rows successfully", async () => {
     await worker.processOutbox();
 
+    // idempotencyKey is the outbox row id — added by the worker for stable deduplication
     expect(queueService.send).toHaveBeenCalledWith(QueueName.DeliveryQueue, {
       routeId: "123",
+      idempotencyKey: "out_1",
     });
 
     expect(db.update).toHaveBeenCalled();

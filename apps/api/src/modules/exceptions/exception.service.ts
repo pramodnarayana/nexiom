@@ -345,6 +345,9 @@ export class ExceptionService {
       const [outboxRow] = await tx
         .insert(deliveryOutbox)
         .values({
+          traceId: outboundGatewayRow.traceId,
+          routeId: outboundGatewayRow.routeId,
+          outboundGatewayId,
           payload: {
             outboundGatewayId,
             routeId: outboundGatewayRow.routeId,
@@ -384,7 +387,7 @@ export class ExceptionService {
         );
         await tx
           .update(deliveryOutbox)
-          .set({ status: 'SUCCESS', deliveredAt: new Date() } as never)
+          .set({ status: 'SUCCESS' })
           .where(eq(deliveryOutbox.id, outboxId));
       });
     }

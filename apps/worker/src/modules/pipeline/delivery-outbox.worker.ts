@@ -14,6 +14,20 @@ import { QueueService } from "@nexiom/queue";
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 
+async function processInChunks<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const chunk = items.slice(i, i + concurrency);
+    const chunkResults = await Promise.allSettled(chunk.map(fn));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
 @Injectable()
 export class DeliveryOutboxWorker {
   private readonly logger = new Logger(DeliveryOutboxWorker.name);
@@ -35,8 +49,10 @@ export class DeliveryOutboxWorker {
       )
       .groupBy(connectionStorageRegistry.dataNamespace);
 
-    const results = await Promise.allSettled(
-      workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
+    const results = await processInChunks(
+      workspaces,
+      5, // Concurrency cap for processing workspaces
+      (ws) => this.drainWorkspaceOutbox(ws.dataNamespace),
     );
 
     results.forEach((result, index) => {
@@ -58,7 +74,7 @@ export class DeliveryOutboxWorker {
     // Atomically claim rows
     const claimed = await this.db.transaction(async (tx) => {
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
 
       return tx
@@ -89,9 +105,23 @@ export class DeliveryOutboxWorker {
     );
 
     // Process claimed rows
-    await Promise.allSettled(
-      claimed.map((row) => this.processOutboxRow(schemaName, row)),
+    const results = await processInChunks(
+      claimed,
+      5, // Concurrency cap array for queue publish ops
+      (row) => this.processOutboxRow(schemaName, row),
     );
+
+    results.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        this.logger.error(
+          `[${schemaName}] processOutboxRow critically failed for row id=${claimed[idx].id}: ${
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason)
+          }`,
+        );
+      }
+    });
   }
 
   private async processOutboxRow(
@@ -104,43 +134,59 @@ export class DeliveryOutboxWorker {
   ): Promise<void> {
     const { deliveryOutbox } = buildTenantSchema(schemaName);
 
+    let queueSuccess = false;
     try {
       // Send to L5 Queue (DeliveryQueue -> consumed by DeliveryService)
-      await this.queueService.send(
-        QueueName.DeliveryQueue,
-        row.payload as Record<string, unknown>,
-      );
-
-      // Mark success
-      await this.db
-        .update(deliveryOutbox)
-        .set({ status: "SUCCESS" })
-        .where(eq(deliveryOutbox.id, row.id));
-
-      this.logger.debug(
-        `[${schemaName}] Delivered L4->L5 outbox row id=${row.id}`,
-      );
+      await this.queueService.send(QueueName.DeliveryQueue, {
+        ...(row.payload as Record<string, unknown>),
+        idempotencyKey: row.id, // provide stable key
+      });
+      queueSuccess = true;
     } catch (err) {
       const lastError = err instanceof Error ? err.message : String(err);
-
-      if (row.attempts >= MAX_ATTEMPTS) {
-        await this.db
-          .update(deliveryOutbox)
-          .set({ status: "FAIL", lastError })
-          .where(eq(deliveryOutbox.id, row.id));
+      try {
+        if (row.attempts >= MAX_ATTEMPTS) {
+          await this.db
+            .update(deliveryOutbox)
+            .set({ status: "FAIL", lastError })
+            .where(eq(deliveryOutbox.id, row.id));
+          this.logger.error(
+            `[${schemaName}] DeliveryOutbox dispatch permanently failed for outbox id=${row.id}: ${lastError}`,
+          );
+        } else {
+          const delayMs = Math.pow(2, row.attempts) * 1_000;
+          const nextRetryAt = new Date(Date.now() + delayMs);
+          await this.db
+            .update(deliveryOutbox)
+            .set({ status: "RETRY", lastError, nextRetryAt })
+            .where(eq(deliveryOutbox.id, row.id));
+          this.logger.warn(
+            `[${schemaName}] DeliveryOutbox dispatch delayed for outbox id=${row.id} (attempt ${row.attempts}): ${lastError}`,
+          );
+        }
+      } catch (dbErr) {
         this.logger.error(
-          `[${schemaName}] DeliveryOutbox dispatch permanently failed for outbox id=${row.id}: ${lastError}`,
+          `[${schemaName}] Failed to persist FAIL/RETRY status for delivery_outbox id=${row.id}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
         );
-      } else {
-        const delayMs = Math.pow(2, row.attempts) * 1_000;
-        const nextRetryAt = new Date(Date.now() + delayMs);
+      }
+      return; // Stop processing this row
+    }
 
+    if (queueSuccess) {
+      try {
+        // Mark success
         await this.db
           .update(deliveryOutbox)
-          .set({ status: "RETRY", lastError, nextRetryAt })
+          .set({ status: "SUCCESS" })
           .where(eq(deliveryOutbox.id, row.id));
-        this.logger.warn(
-          `[${schemaName}] DeliveryOutbox dispatch delayed for outbox id=${row.id} (attempt ${row.attempts}): ${lastError}`,
+
+        this.logger.debug(
+          `[${schemaName}] Delivered L4->L5 outbox row id=${row.id}`,
+        );
+      } catch (dbErr) {
+        const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+        this.logger.error(
+          `[${schemaName}] Published to queue but failed to update status to SUCCESS for delivery_outbox id=${row.id}: ${msg}`,
         );
       }
     }

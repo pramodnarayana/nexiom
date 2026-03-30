@@ -168,6 +168,26 @@ export class SqlDatabaseManager implements DatabaseManager {
         CREATE INDEX IF NOT EXISTS idx_l3_data_gin
             ON "${schemaName}".normalized_entity USING gin (data);
     `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_outbox (
+            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            connection_id UUID        NOT NULL,
+            status        TEXT        NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_normalized_outbox_claim
+            ON "${schemaName}".normalized_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
+    `);
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {
@@ -316,28 +336,47 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".delivery_outbox (
             id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID        NOT NULL,
+            route_id      UUID        NOT NULL,
+            outbound_gateway_id UUID  NOT NULL,
             payload       JSONB       NOT NULL,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
-            attempt_count INTEGER     NOT NULL DEFAULT 0,
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            delivered_at  TIMESTAMPTZ
+            CONSTRAINT uq_delivery_outbox UNIQUE (trace_id, route_id, outbound_gateway_id)
         );
     `);
 
-        // Idempotent upgrade — add attempt_count to schemas provisioned before this column
-        // was introduced (matches the published_at patch pattern in provisionNormalizeTables).
         await this.db.$client.query(`
-        ALTER TABLE "${schemaName}".delivery_outbox
-            ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
-    `);
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS delivered_at;
+            ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS last_error VARCHAR(500);
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS trace_id UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id UUID;
+        EXCEPTION WHEN duplicate_column THEN NULL;
+        END $$;
+        `);
 
-        // Partial index — the OutboxWorker only polls PENDING rows;
-        // keeping the scan O(unprocessed) rather than O(all-time).
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_delivery_outbox_pending
-            ON "${schemaName}".delivery_outbox (created_at)
-            WHERE status = 'PENDING';
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".delivery_outbox
+                ADD CONSTRAINT uq_delivery_outbox UNIQUE (trace_id, route_id, outbound_gateway_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
+        `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_delivery_outbox_claim
+            ON "${schemaName}".delivery_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
     }
 }

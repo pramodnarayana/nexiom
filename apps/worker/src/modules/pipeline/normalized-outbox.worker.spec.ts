@@ -53,10 +53,11 @@ describe("NormalizedOutboxWorker", () => {
   it("should claim and process pending outbox rows successfully", async () => {
     await worker.processOutbox();
 
-    // Verify it sent to Queue
+    // Verify it sent to Queue (with stable idempotency key derived from outbox row id)
     expect(queueService.send).toHaveBeenCalledWith(QueueName.NormalizedQueue, {
       traceId: "trace_1",
       connectionId: "conn_1",
+      idempotencyKey: "out_1",
     });
 
     // Verify it marked success (second db.update call after transaction claims)

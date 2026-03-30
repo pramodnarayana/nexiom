@@ -14,12 +14,19 @@ describe("FanOutService", () => {
   let mockTxInsert: any;
 
   beforeEach(async () => {
+    // Chainable insert builder that supports all patterns used in FanOutService:
+    //   outboundGateway: insert().values().onConflictDoUpdate().returning()
+    //   deliveryOutbox:  insert().values().onConflictDoNothing()
+    //   syncLog:         insert().values()
     mockTxInsert = vi.fn().mockReturnValue({
       values: vi.fn().mockReturnValue({
         onConflictDoUpdate: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
         }),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
         returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
+        // plain insert().values() resolves immediately
+        then: (res: any) => Promise.resolve(undefined).then(res),
       }),
     });
     queueService = { consume: vi.fn(), send: vi.fn() };
