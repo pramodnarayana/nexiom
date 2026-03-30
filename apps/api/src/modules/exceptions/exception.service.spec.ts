@@ -470,6 +470,164 @@ describe('ExceptionService', () => {
       expect(mockQueue.send).not.toHaveBeenCalled();
     });
 
+    it('transitions deliveryOutbox PROCESSING → RETRY and rethrows when queueService.send fails', async () => {
+      // TX-3 (claim) succeeds but queueService.send throws.
+      // A compensating TX must set status='RETRY' and the error propagates.
+      const OUTBOX_ROW_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+      const outboxPayload = {
+        outboundGatewayId: OUTBOUND_ID,
+        routeId: STITCH_ID,
+        traceId: TRACE_ID,
+        connectionId: SRC_CONN,
+        targetConnectionId: DEST_CONN,
+      };
+
+      // Capture whatever .set() is called with inside the compensating transaction
+      let capturedRevertSet: unknown;
+      const revertChain = buildUpdateChain([{ id: OUTBOX_ROW_ID }]);
+      const originalRevertSet = revertChain.set as ReturnType<typeof vi.fn>;
+      revertChain['set'] = vi.fn().mockImplementation((args: unknown) => {
+        capturedRevertSet = args;
+        return originalRevertSet(args) as unknown;
+      });
+      const revertToRetryTx = {
+        execute: vi.fn().mockResolvedValue(undefined),
+        update: vi.fn().mockReturnValue(revertChain),
+      };
+
+      let txCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          if (txCallCount === 1)
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              select: vi
+                .fn()
+                .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
+            });
+          if (txCallCount === 2) {
+            const insertChain: Record<string, unknown> = {};
+            insertChain['values'] = vi.fn().mockReturnValue(insertChain);
+            insertChain['onConflictDoNothing'] = vi
+              .fn()
+              .mockReturnValue(insertChain);
+            insertChain['returning'] = vi
+              .fn()
+              .mockResolvedValue([{ id: OUTBOX_ROW_ID }]);
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              update: vi
+                .fn()
+                .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+              insert: vi.fn().mockReturnValue(insertChain),
+              select: vi.fn().mockReturnValue(buildResolveSelectChain([])),
+            });
+          }
+          // TX-3: claim succeeds — returns the row with payload
+          if (txCallCount === 3)
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              update: vi
+                .fn()
+                .mockReturnValue(
+                  buildUpdateChain([
+                    { id: OUTBOX_ROW_ID, payload: outboxPayload },
+                  ]),
+                ),
+            });
+          // TX-4: compensating RETRY update (triggered by the catch block)
+          return fn(revertToRetryTx);
+        });
+
+      mockQueue.send = vi
+        .fn()
+        .mockRejectedValue(new Error('queue unavailable'));
+
+      await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
+        'queue unavailable',
+      );
+
+      // Compensating transaction must have fired and set status='RETRY'
+      expect(revertToRetryTx.update).toHaveBeenCalledTimes(1);
+      expect(capturedRevertSet).toMatchObject({ status: 'RETRY' });
+      expect(capturedRevertSet).toHaveProperty('nextRetryAt');
+    });
+
+    it('sets nextRetryAt in the claim UPDATE to prevent immediate worker re-claim', async () => {
+      // Verify the claim transaction sets both status='PROCESSING' and nextRetryAt.
+      let capturedClaimSet: unknown;
+      const OUTBOX_ROW_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+      const outboxPayload = {
+        outboundGatewayId: OUTBOUND_ID,
+        routeId: STITCH_ID,
+        traceId: TRACE_ID,
+        connectionId: SRC_CONN,
+        targetConnectionId: DEST_CONN,
+      };
+
+      let txCallCount = 0;
+      mockDb.transaction = vi
+        .fn()
+        .mockImplementation((fn: (t: unknown) => Promise<unknown>) => {
+          txCallCount++;
+          if (txCallCount === 1)
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              select: vi
+                .fn()
+                .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
+            });
+          if (txCallCount === 2) {
+            const insertChain: Record<string, unknown> = {};
+            insertChain['values'] = vi.fn().mockReturnValue(insertChain);
+            insertChain['onConflictDoNothing'] = vi
+              .fn()
+              .mockReturnValue(insertChain);
+            insertChain['returning'] = vi
+              .fn()
+              .mockResolvedValue([{ id: OUTBOX_ROW_ID }]);
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              update: vi
+                .fn()
+                .mockReturnValue(buildUpdateChain([{ id: OUTBOUND_ID }])),
+              insert: vi.fn().mockReturnValue(insertChain),
+              select: vi.fn().mockReturnValue(buildResolveSelectChain([])),
+            });
+          }
+          // TX-3: spy on what .set() receives in the claim transaction
+          if (txCallCount === 3) {
+            const chain = buildUpdateChain([
+              { id: OUTBOX_ROW_ID, payload: outboxPayload },
+            ]);
+            const originalSet = chain.set as ReturnType<typeof vi.fn>;
+            chain['set'] = vi.fn().mockImplementation((args: unknown) => {
+              capturedClaimSet = args;
+              return originalSet(args) as unknown;
+            });
+            return fn({
+              execute: vi.fn().mockResolvedValue(undefined),
+              update: vi.fn().mockReturnValue(chain),
+            });
+          }
+          // TX-4: SUCCESS update
+          return fn({
+            execute: vi.fn().mockResolvedValue(undefined),
+            update: vi
+              .fn()
+              .mockReturnValue(buildUpdateChain([{ id: OUTBOX_ROW_ID }])),
+          });
+        });
+
+      await service.retryException(ORG_ID, OUTBOUND_ID);
+
+      // The claim set call must include both status and nextRetryAt
+      expect(capturedClaimSet).toMatchObject({ status: 'PROCESSING' });
+      expect(capturedClaimSet).toHaveProperty('nextRetryAt');
+    });
+
     it('throws ConflictException when status transition is invalid (0 rows updated)', async () => {
       mockDb.transaction = buildRetryTransactions({ updatedRows: [] }); // 0 rows updated triggers ConflictException
       await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(

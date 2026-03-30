@@ -140,12 +140,18 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             );
 
           const durationMs = Date.now() - start;
-          await tx.insert(syncLog).values({
-            traceId,
-            layer: "L3",
-            status: "SUCCESS",
-            durationMs,
-          });
+          // onConflictDoNothing on (traceId, layer, status) prevents duplicate audit rows on replay.
+          await tx
+            .insert(syncLog)
+            .values({
+              traceId,
+              layer: "L3",
+              status: "SUCCESS",
+              durationMs,
+            })
+            .onConflictDoNothing({
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+            });
         }
       });
 
@@ -190,7 +196,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               status: "FAIL",
               durationMs: Date.now() - start,
             })
-            .onConflictDoNothing();
+            .onConflictDoNothing({
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+            });
         });
       } catch {
         // ignore rollback errors

@@ -192,6 +192,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_log_trace').on(table.traceId),
         index('idx_log_route').on(table.routeId),
         index('idx_log_layer').on(table.traceId, table.layer),
+        uniqueIndex('uq_sync_log_trace_layer_status').on(table.traceId, table.layer, table.status),
     ]);
 
     /**

@@ -403,9 +403,14 @@ export class ExceptionService {
           await tx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
+          // Also push nextRetryAt 1 minute forward so the worker cannot immediately
+          // re-claim the row while this operator publish is in-flight.
           return tx
             .update(deliveryOutbox)
-            .set({ status: 'PROCESSING' } as never)
+            .set({
+              status: 'PROCESSING',
+              nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
+            } as never)
             .where(
               and(
                 eq(deliveryOutbox.id, outboxId),
@@ -420,10 +425,37 @@ export class ExceptionService {
       : [];
 
     if (claimed.length > 0) {
-      await this.queueService.send(
-        QueueName.DeliveryQueue,
-        claimed[0].payload as Record<string, unknown>,
-      );
+      try {
+        await this.queueService.send(
+          QueueName.DeliveryQueue,
+          claimed[0].payload as Record<string, unknown>,
+        );
+      } catch (sendErr) {
+        // Publish failed — move row back to RETRY so the worker can reattempt.
+        // Do not increment attempts here (operator retries are budget-neutral).
+        this.logger.warn(
+          {
+            id: outboundGatewayId,
+            outboxId,
+            err: sendErr instanceof Error ? sendErr.message : String(sendErr),
+          },
+          'exception.retry: queueService.send failed — reverting to RETRY',
+        );
+        await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          await tx
+            .update(deliveryOutbox)
+            .set({
+              status: 'RETRY',
+              nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
+            } as never)
+            .where(eq(deliveryOutbox.id, outboxId));
+        });
+        throw sendErr;
+      }
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
