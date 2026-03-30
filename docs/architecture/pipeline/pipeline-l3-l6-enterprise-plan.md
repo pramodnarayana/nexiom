@@ -152,6 +152,7 @@ async executeAction(objectType: string, payload: Record<string, unknown>, creden
 **Changes:**
 
 1. **Replace raw `app_connection` query** with typed `appConnections` Drizzle query:
+
    ```typescript
    import { appConnections } from '@nexiom/database';
    // ...
@@ -163,6 +164,7 @@ async executeAction(objectType: string, payload: Record<string, unknown>, creden
    ```
 
 2. **Message validation** — guard at top of `processMessage`:
+
    ```typescript
    if (!traceId || typeof traceId !== 'string' || !connectionId || typeof connectionId !== 'string') {
      this.logger.warn({ event: 'l3.invalid_message', msg: rawMsg },
@@ -199,11 +201,13 @@ Add three new test cases:
 3. **Inline SUCCESS `syncLog` insert** — also needs `onConflictDoNothing` with the same 4-column target.
 
 4. **Change stitch loop from `for...of` to `processInChunks`**:
+
    ```typescript
    import { processInChunks } from './outbox.utils.js';
    // ...
    await processInChunks(stitches, 5, (stitch) => this.processSingleStitch(schemaName, traceId, connectionId, normalizedData, canonicalType, stitch, start));
    ```
+
    Extract the per-stitch logic into a private `processSingleStitch()` method.
 
 5. **Message validation** — same guard as L3.
@@ -216,6 +220,7 @@ Add three new test cases:
    - Add `srcConnectionId: connectionId` and `destConnectionId: stitch.destConnectionId` to payload (needed by L6 for GEM write)
 
    Full delivery outbox payload shape:
+
    ```typescript
    {
      traceId,
@@ -246,6 +251,7 @@ Add three new test cases:
 **Changes:**
 
 1. **Replace raw `app_connection` query** with typed `appConnections`:
+
    ```typescript
    import { appConnections, safeAppConnectionColumns } from '@nexiom/database';
    // ...
@@ -259,6 +265,7 @@ Add three new test cases:
 2. **Message validation** — validate `traceId`, `connectionId`, `targetConnectionId`, `routeId`, `outboundGatewayId` at start.
 
 3. **`MAX_ATTEMPTS` guard** — read `attemptCount` from `outbound_gateway` row when fetching `reqPayload`. Before calling `executeAction`, check:
+
    ```typescript
    const MAX_DELIVERY_ATTEMPTS = 5;
    if (ob[0].attemptCount >= MAX_DELIVERY_ATTEMPTS) {
@@ -269,13 +276,22 @@ Add three new test cases:
    }
    ```
 
-4. **Retry classification using `RetryableException` and `RETRYABLE_STATUS_CODES`**:
+4. **Retry classification — `RetryableException` takes priority over status code heuristics**:
+
    ```typescript
    import { RetryableException } from '@nexiom/connectors';
    import { isRetryableStatusCode, sanitizeError } from '../../shared/pipeline.utils.js';
 
-   // In the executeAction catch block:
-   if (error_ instanceof RetryableException || isRetryableStatusCode(statusCode)) {
+   // When piece RETURNS a response (success branch):
+   // isRetryableStatusCode is safe here — the piece explicitly returned this status.
+   if (isRetryableStatusCode(statusCode)) { finalStatus = 'RETRY'; }
+
+   // When piece THROWS (catch branch):
+   // Only retry if the piece opts-in via RetryableException or retryable:true flag.
+   // Do NOT retry plain thrown 5xx — we cannot tell if the operation completed.
+   if (error_ instanceof RetryableException) {
+     finalStatus = 'RETRY';
+   } else if (errObj['retryable'] === true) {
      finalStatus = 'RETRY';
    } else {
      finalStatus = 'FAIL';
@@ -289,6 +305,7 @@ Add three new test cases:
 6. **`syncLog` L5 write** — the current code only writes `sync_log { layer: 'L6' }` on success or failure. Add `sync_log { layer: 'L5', status: 'PROCESSING' }` at claim time and update it to SUCCESS/FAIL/RETRY in the L6 transaction. (Matches the L1–L4 pattern of one sync_log row per layer per outcome.)
 
 7. **L6 GEM write** — in the SUCCESS branch of the L6 transaction:
+
    ```typescript
    import { globalEntityMap } from '@nexiom/database';
 
@@ -298,16 +315,16 @@ Add three new test cases:
    if (srcVendorId && destVendorId) {
      await tx.insert(globalEntityMap).values({
        stitchId: routeId,
-       sourceAppName: srcAppName,      // from appConnections lookup (cache in memory)
+       sourceAppName: srcAppName,
        sourceAppId: connectionId,
-       sourceOrgId: '—',               // TODO: pass orgId through queue msg in future
+       sourceOrgId: srcTenantId,
        sourceEntityType: msg.canonicalType as string ?? 'UNKNOWN',
        sourceEntityId: srcVendorId,
        sourceRefLayer: 'L2',
        sourceTraceId: traceId,
        destAppName: targetAppName,
        destAppId: targetConnectionId,
-       destOrgId: '—',
+       destOrgId: targetTenantId,
        destEntityType: msg.canonicalType as string ?? 'UNKNOWN',
        destEntityId: destVendorId,
        destRefLayer: 'L6',
@@ -322,6 +339,7 @@ Add three new test cases:
    ```
 
    `extractDestVendorId(body)` helper:
+
    ```typescript
    function extractDestVendorId(body: unknown): string | undefined {
      if (typeof body !== 'object' || body === null) return undefined;

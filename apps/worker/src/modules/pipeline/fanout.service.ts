@@ -292,8 +292,10 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             target: [outboundGateway.traceId, outboundGateway.routeId],
             set: {
               reqPayload: hydratedPayload,
+              // Reset to PENDING on replay so the delivery outbox worker can
+              // re-claim the row. attemptCount is intentionally omitted here
+              // — L5 (DeliveryService) is the sole owner of retry accounting.
               status: "PENDING",
-              attemptCount: sql`${outboundGateway.attemptCount} + 1`,
               updatedAt: sql`NOW()`,
             },
           })

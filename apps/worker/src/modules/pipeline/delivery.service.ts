@@ -212,9 +212,16 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .set({
             status: "PROCESSING",
             attemptCount: sql`${outboundGateway.attemptCount} + 1`,
+            updatedAt: sql`NOW()`,
           })
           .where(
-            sql`${outboundGateway.id} = ${outboundGatewayId} AND (${outboundGateway.status} = 'PENDING' OR ${outboundGateway.status} = 'RETRY')`,
+            sql`${outboundGateway.id} = ${outboundGatewayId}
+              AND (
+                ${outboundGateway.status} = 'PENDING'
+                OR ${outboundGateway.status} = 'RETRY'
+                OR (${outboundGateway.status} = 'PROCESSING'
+                    AND ${outboundGateway.updatedAt} <= NOW() - INTERVAL '5 minutes')
+              )`,
           )
           .returning({ id: outboundGateway.id });
 
@@ -258,14 +265,22 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         if (statusCode >= 200 && statusCode < 300) {
           finalStatus = "SUCCESS";
         } else if (isRetryableStatusCode(statusCode)) {
-          // Transient vendor error — retry via delivery outbox worker backoff
+          // The piece returned a transient HTTP status (429/502/503/504).
+          // This is safe to retry because the piece controls the response
+          // and explicitly returned a status indicating transient failure.
           finalStatus = "RETRY";
         } else {
+          // Non-2xx, non-retryable vendor response — treat as permanent failure.
+          // We cannot know if the operation was applied server-side, so we
+          // do NOT retry to avoid duplicate side-effects.
           finalStatus = "FAIL";
         }
       } catch (error_: unknown) {
-        // RetryableException signals a transient failure that should be retried.
-        // Any other error is treated as a permanent failure.
+        // ── Retry classification for thrown errors ────────────────────────────
+        // ONLY retry if the piece explicitly opts-in via RetryableException
+        // or marks the error with `retryable: true`. Plain thrown errors
+        // (including 5xx from fetch) are treated as FAIL because we cannot
+        // guarantee the piece operation is idempotent.
         if (error_ instanceof RetryableException) {
           statusCode = error_.statusCode;
           finalStatus = "RETRY";
@@ -282,13 +297,22 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           );
         } else {
           const errObj = error_ as Record<string, unknown>;
+          // Check for explicit opt-in retry flag set by the piece on the error object.
+          const isExplicitlyRetryable =
+            typeof errObj?.["retryable"] === "boolean"
+              ? errObj["retryable"]
+              : false;
+
           statusCode =
             typeof errObj?.["statusCode"] === "number"
               ? errObj["statusCode"]
               : 500;
 
-          // Even non-retryable thrown status codes may be transient (502/503/504)
-          if (isRetryableStatusCode(statusCode)) {
+          // Respect the piece's explicit retryable flag; otherwise FAIL.
+          // We deliberately do NOT consult isRetryableStatusCode here because
+          // the piece threw (vs returning) — we cannot tell if the remote
+          // operation completed, so retrying risks duplicate writes.
+          if (isExplicitlyRetryable) {
             finalStatus = "RETRY";
           } else {
             finalStatus = "FAIL";
@@ -300,6 +324,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               event: "l5.execute_failed",
               err: sanitizeError(error_),
               statusCode,
+              retryable: isExplicitlyRetryable,
               traceId,
               routeId,
               layer: "L5",
