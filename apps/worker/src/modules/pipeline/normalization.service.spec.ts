@@ -133,7 +133,7 @@ describe("NormalizationService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
-    ).rejects.toThrow("Piece test_app not registered");
+    ).rejects.toThrow("not registered in PieceRegistry");
   });
 
   it("should skip enqueue when record was already published (rowCount=0)", async () => {
@@ -207,5 +207,46 @@ describe("NormalizationService", () => {
 
   it("should destroy module", () => {
     expect(() => service.onModuleDestroy()).not.toThrow();
+  });
+
+  // ── Enterprise hardening tests ──────────────────────────────────────────────
+
+  it("should ACK and return early on invalid message (missing traceId)", async () => {
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    // Should not throw — just ACK (return) so SQS does not redeliver the poison pill
+    await expect(
+      handler({ connectionId: "456" }), // traceId missing
+    ).resolves.toBeUndefined();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("should store RAW record when piece.normalize returns null", async () => {
+    // Simulate a piece that has no canonical mapping for this object type
+    pieceRegistry.getPiece.mockReturnValueOnce({
+      normalize: vi.fn().mockResolvedValue(null),
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({ traceId: "123", connectionId: "456" });
+    // Transaction should have been called — record stored with canonicalType='RAW'
+    expect(db.transaction).toHaveBeenCalled();
+    // The tx insert should have been called (normalizedEntity and normalizedOutbox)
+    expect(mockTxInsert).toHaveBeenCalled();
+  });
+
+  it("should write FAIL sync_log and rethrow when piece.normalize throws", async () => {
+    const normalizeError = new Error("normalize failed");
+    pieceRegistry.getPiece.mockReturnValueOnce({
+      normalize: vi.fn().mockRejectedValue(normalizeError),
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    // Error should propagate — rejected promise means SQS redelivers for retry
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("normalize failed");
+    // Error-handler transaction attempted (for FAIL sync_log)
+    expect(db.transaction).toHaveBeenCalled();
   });
 });

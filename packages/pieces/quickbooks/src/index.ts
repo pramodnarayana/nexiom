@@ -271,12 +271,41 @@ export const quickbooks = createPiece({
   describeObjects,
   describeFields,
   normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
-    // Stub — real mapping implemented in T032
+    // Returns null — QuickBooks records do not map to a pre-defined CanonicalType.
+    // NormalizationService (L3) handles null by storing the raw record with
+    // canonicalType='RAW'. Field-level mapping is applied in L4 via field_mapping rules.
     return null;
   },
-  executeAction: async (_objectType: string, _payload: Record<string, unknown>, _credentials: Record<string, unknown>): Promise<VendorResponse> => {
-    // Fail fast — real implementation in T034
-    throw new Error('QuickBooks executeAction not implemented');
+  executeAction: async (objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse> => {
+    // Writes a single entity to the QuickBooks Online v3 API.
+    // In local/Prism mode baseUrl points to localhost:4011.
+    // In production, baseUrl is the QB API endpoint; realmId identifies the company.
+    const realmId = (credentials['realmId'] as string | undefined) ?? (credentials['realm_id'] as string | undefined) ?? 'stub';
+    const accessToken = (credentials['access_token'] as string | undefined) ?? (credentials['accessToken'] as string | undefined) ?? 'stub';
+    const baseUrl = (credentials['base_url'] as string | undefined) ?? 'https://quickbooks.api.intuit.com';
+    const url = `${baseUrl}/v3/company/${encodeURIComponent(realmId)}/${objectType.toLowerCase()}`;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+        throw new Error(`QuickBooks API request timed out after 15s executing ${objectType}`);
+      }
+      throw err;
+    }
+
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    return { statusCode: res.status, body };
   },
   // NOTE: QuickBooks webhook support is intentionally disabled.
   // QB sends all company events to a single app endpoint identified by

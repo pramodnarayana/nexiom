@@ -5,15 +5,21 @@ import {
   OnModuleDestroy,
   Logger,
 } from "@nestjs/common";
+import { eq } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
+  appConnections,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
 import { sql } from "drizzle-orm";
+import {
+  sanitizeError,
+  isValidPipelineMessage,
+} from "../../shared/pipeline.utils.js";
 
 @Injectable()
 export class NormalizationService implements OnModuleInit, OnModuleDestroy {
@@ -36,12 +42,28 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
   private async processMessage(rawMsg: unknown): Promise<void> {
     const msg = rawMsg as Record<string, unknown>;
+
+    // ── Poison-pill guard ─────────────────────────────────────────────────────
+    // If the message is missing required fields, ACK it (return without throwing)
+    // to prevent the SQS message from being redelivered indefinitely.
+    if (!isValidPipelineMessage(msg, ["traceId", "connectionId"])) {
+      this.logger.warn(
+        {
+          event: "l3.invalid_message",
+          layer: "L3",
+          msg: JSON.stringify(msg).slice(0, 200),
+        },
+        "L3: dropping invalid message — missing traceId or connectionId",
+      );
+      return;
+    }
+
     const traceId = msg.traceId as string;
     const connectionId = msg.connectionId as string;
     const start = Date.now();
 
     this.logger.debug(
-      { event: "l3.started", traceId, connectionId },
+      { event: "l3.started", traceId, connectionId, layer: "L3" },
       "L3 normalization started",
     );
 
@@ -56,23 +78,28 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         syncLog,
       } = buildTenantSchema(schemaName);
 
-      let connectionAppName = "";
-
-      // Get connection details to resolve piece
-      const connDocs = await this.db
-        .select({ appName: sql<string>`app_name` })
-        .from(sql`app_connection`)
-        .where(sql`id = ${connectionId}`)
+      // ── Resolve piece for this connection ─────────────────────────────────
+      // Query the public-schema app_connection table using typed Drizzle columns
+      // to get the appName needed for piece resolution. Never use raw sql`` here
+      // — appConnections provides compile-time safety and prevents SQL injection.
+      const connRows = await this.db
+        .select({ appName: appConnections.appName })
+        .from(appConnections)
+        .where(eq(appConnections.id, connectionId))
         .limit(1);
 
-      if (!connDocs[0]) {
-        throw new Error(`Connection ${connectionId} not found`);
+      if (!connRows[0]) {
+        throw new Error(
+          `Connection ${connectionId} not found in app_connection`,
+        );
       }
-      connectionAppName = connDocs[0].appName;
+      const connectionAppName = connRows[0].appName;
 
       const piece = this.pieceRegistry.getPiece(connectionAppName);
       if (!piece) {
-        throw new Error(`Piece ${connectionAppName} not registered`);
+        throw new Error(
+          `Piece "${connectionAppName}" not registered in PieceRegistry`,
+        );
       }
 
       await this.db.transaction(async (tx) => {
@@ -93,6 +120,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         let canonicalType = "RAW";
         let canonicalData = replica.data;
 
+        // ── Normalize via piece ───────────────────────────────────────────────
+        // piece.normalize returns null when the piece does not define a canonical
+        // mapping (most pieces). In that case we store data as-is with type 'RAW'.
         if (piece.normalize) {
           const normalized = await piece.normalize(
             replica.entityType,
@@ -104,22 +134,24 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        // Insert normalizedEntity idempotently (ON CONFLICT DO NOTHING on replicaId)
+        // ── Idempotent insert of normalizedEntity ─────────────────────────────
+        // ON CONFLICT DO NOTHING on replicaId prevents duplicate rows when the
+        // ReplicaQueue message is redelivered (at-least-once delivery).
         const insertRes = await tx
           .insert(normalizedEntity)
           .values({
             traceId,
             replicaId: replica.id,
             canonicalType,
-            data: canonicalData as any,
+            data: canonicalData as Record<string, unknown>,
           })
           .onConflictDoNothing({ target: normalizedEntity.replicaId })
           .returning({ id: normalizedEntity.id });
 
         if (insertRes.length > 0) {
-          // onConflictDoNothing prevents duplicate outbox rows on ReplicaQueue replay.
+          // ── Transactional outbox for L3→L4 handoff ──────────────────────────
           // The unique constraint idx_normalized_outbox_trace on (traceId, connectionId)
-          // backs this target.
+          // ensures the outbox row is not duplicated on replay.
           await tx
             .insert(normalizedOutbox)
             .values({
@@ -131,7 +163,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               target: [normalizedOutbox.traceId, normalizedOutbox.connectionId],
             });
 
-          // Mark INBOUND GATEWAY as NORMALIZED
+          // Mark inbound gateway as NORMALIZED (idempotent guard on status)
           await tx
             .update(inboundGateway)
             .set({ status: "NORMALIZED" })
@@ -140,7 +172,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             );
 
           const durationMs = Date.now() - start;
-          // onConflictDoNothing on (traceId, layer, status) prevents duplicate audit rows on replay.
+          // onConflictDoNothing on (traceId, layer, status) prevents duplicate audit
+          // rows on replay — matches unique constraint uq_sync_log_trace_layer_status.
           await tx
             .insert(syncLog)
             .values({
@@ -156,15 +189,24 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       });
 
       this.logger.log(
-        { event: "l3.completed", traceId, durationMs: Date.now() - start },
+        {
+          event: "l3.completed",
+          traceId,
+          connectionId,
+          layer: "L3",
+          durationMs: Date.now() - start,
+        },
         "L3 normalization completed",
       );
     } catch (err) {
+      const safeErr = sanitizeError(err);
       this.logger.error(
         {
           event: "l3.error",
           traceId,
-          err: err instanceof Error ? err.message : String(err),
+          connectionId,
+          layer: "L3",
+          err: safeErr,
         },
         "L3 normalization failed",
       );
@@ -178,7 +220,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
 
-          // Only mark FAIL if not already in a terminal state (NORMALIZED = happy path won)
+          // Only mark FAIL if not already in a terminal state
+          // (NORMALIZED means the happy path already won — do not overwrite)
           await tx
             .update(inboundGateway)
             .set({ status: "FAIL" })
@@ -201,7 +244,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             });
         });
       } catch {
-        // ignore rollback errors
+        // Swallow rollback errors — original error is rethrown below.
+        // The outbox worker will retry on next cycle.
       }
       throw err;
     }

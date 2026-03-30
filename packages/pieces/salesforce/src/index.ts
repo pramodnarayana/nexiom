@@ -149,12 +149,41 @@ export const salesforce = createPiece({
     describeObjects,
     describeFields,
     normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
-        // Stub — real mapping implemented in T032
+        // Returns null — Salesforce records do not map to a pre-defined CanonicalType.
+        // NormalizationService (L3) handles null by storing the raw record with
+        // canonicalType='RAW'. Field-level mapping is applied in L4 via field_mapping rules.
         return null;
     },
-    executeAction: async (_objectType: string, _payload: Record<string, unknown>, _credentials: Record<string, unknown>): Promise<VendorResponse> => {
-        // Stub — real implementation in T034
-        return { statusCode: 200, body: {} };
+    executeAction: async (objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse> => {
+        // Writes a single record to the Salesforce sObject API.
+        // In local/Prism mode instanceUrl points to localhost:4010.
+        // In production it is the org's Salesforce instanceUrl (e.g. https://myorg.salesforce.com).
+        const instanceUrl = getInstanceUrl(credentials);
+        const accessToken = getAccessToken(credentials);
+        const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects/${encodeURIComponent(objectType)}`;
+
+        let res: Response;
+        try {
+            res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(15_000),
+            });
+        } catch (err: unknown) {
+            if (err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+                // Timeout is retryable — the record may not have been written yet
+                throw new Error(`Salesforce API request timed out after 15s executing ${objectType}`);
+            }
+            throw err;
+        }
+
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        return { statusCode: res.status, body };
     },
     webhook: {
         secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',

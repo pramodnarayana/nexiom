@@ -29,11 +29,15 @@ describe("DeliveryService", () => {
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          onConflictDoUpdate: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         };
         return cb(tx);
@@ -42,9 +46,15 @@ describe("DeliveryService", () => {
     storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_1") };
     pieceRegistry = {
       getPiece: vi.fn().mockReturnValue({
-        executeAction: vi.fn().mockResolvedValue({ body: {}, statusCode: 200 }),
+        executeAction: vi
+          .fn()
+          .mockResolvedValue({ body: { id: "DEST-001" }, statusCode: 200 }),
       }),
     };
+    // Return target appName + tenantId from the non-transactional select chain
+    db.limit.mockResolvedValue([
+      { appName: "test", targetObject: "obj", tenantId: "tenant_1" },
+    ]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -93,11 +103,13 @@ describe("DeliveryService", () => {
         where: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         execute: vi.fn(),
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
       }),
     );
     service.onModuleInit();
@@ -240,9 +252,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
@@ -283,5 +297,196 @@ describe("DeliveryService", () => {
 
   it("should destroy module", () => {
     expect(() => service.onModuleDestroy()).not.toThrow();
+  });
+
+  // ── Enterprise hardening tests ──────────────────────────────────────────────
+
+  it("should ACK and return early on invalid message (missing traceId)", async () => {
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({
+        connectionId: "456",
+        targetConnectionId: "tgt",
+        routeId: "r",
+        outboundGatewayId: "o",
+      }),
+    ).resolves.toBeUndefined();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("should set RETRY status when piece returns 429 (rate limit)", async () => {
+    pieceRegistry
+      .getPiece()
+      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 429 });
+    const setMock = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        update: vi.fn().mockReturnThis(),
+        set: setMock,
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({
+      traceId: "t1",
+      connectionId: "456",
+      targetConnectionId: "tgt",
+      routeId: "r",
+      outboundGatewayId: "o",
+    });
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "RETRY" }),
+    );
+  });
+
+  it("should set RETRY status when piece returns 503 (service unavailable)", async () => {
+    pieceRegistry
+      .getPiece()
+      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 503 });
+    const setMock = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        update: vi.fn().mockReturnThis(),
+        set: setMock,
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({
+      traceId: "t1",
+      connectionId: "456",
+      targetConnectionId: "tgt",
+      routeId: "r",
+      outboundGatewayId: "o",
+    });
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "RETRY" }),
+    );
+  });
+
+  it("should set RETRY status when piece throws RetryableException", async () => {
+    const { RetryableException } = await import("@nexiom/connectors");
+    pieceRegistry
+      .getPiece()
+      .executeAction.mockRejectedValueOnce(
+        new RetryableException("rate limited", 429),
+      );
+    const setMock = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        update: vi.fn().mockReturnThis(),
+        set: setMock,
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({
+      traceId: "t1",
+      connectionId: "456",
+      targetConnectionId: "tgt",
+      routeId: "r",
+      outboundGatewayId: "o",
+    });
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "RETRY" }),
+    );
+  });
+
+  it("should set FAIL status for permanent 4xx errors (422 unprocessable)", async () => {
+    pieceRegistry
+      .getPiece()
+      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 422 });
+    const setMock = vi.fn().mockReturnThis();
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        update: vi.fn().mockReturnThis(),
+        set: setMock,
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({
+      traceId: "t1",
+      connectionId: "456",
+      targetConnectionId: "tgt",
+      routeId: "r",
+      outboundGatewayId: "o",
+    });
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "FAIL" }),
+    );
+  });
+
+  it("should set FAIL and skip executeAction when MAX_ATTEMPTS exceeded", async () => {
+    const executeAction = pieceRegistry.getPiece().executeAction;
+    db.transaction.mockImplementation(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        // attemptCount >= 5 triggers MAX_ATTEMPTS guard
+        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 5 }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({
+      traceId: "t1",
+      connectionId: "456",
+      targetConnectionId: "tgt",
+      routeId: "r",
+      outboundGatewayId: "o",
+    });
+    // executeAction must NOT have been called — piece protected from overuse
+    expect(executeAction).not.toHaveBeenCalled();
   });
 });
