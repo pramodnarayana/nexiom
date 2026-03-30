@@ -345,7 +345,9 @@ Add three new test cases:
      if (typeof body !== 'object' || body === null) return undefined;
      const b = body as Record<string, unknown>;
      // Common vendor ID field names: Salesforce uses 'id', QuickBooks uses 'Id'
-     const raw = b['id'] ?? b['Id'] ?? b['result']?.id ?? b['data']?.id;
+     const raw = b['id'] ?? b['Id'] ?? 
+                 (b['result'] as Record<string, unknown> | undefined)?.['id'] ?? 
+                 (b['data'] as Record<string, unknown> | undefined)?.['id'];
      return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
    }
    ```

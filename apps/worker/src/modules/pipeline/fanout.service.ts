@@ -343,9 +343,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             durationMs: Date.now() - start,
           })
           .onConflictDoNothing({
-            // uq_sync_log_trace_layer_status covers (traceId, layer, status)
-            // — routeId is NOT part of the DB unique index.
-            target: [syncLog.traceId, syncLog.layer, syncLog.status],
+            // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+            // ensuring that each route's SUCCESS is recorded uniquely.
+            target: [
+              syncLog.traceId,
+              syncLog.routeId,
+              syncLog.layer,
+              syncLog.status,
+            ],
           });
       });
     } catch (err) {
@@ -398,9 +403,13 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           durationMs,
         })
         .onConflictDoNothing({
-          // uq_sync_log_trace_layer_status covers (traceId, layer, status)
-          // — routeId is NOT part of the DB unique index.
-          target: [syncLog.traceId, syncLog.layer, syncLog.status],
+          // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+          target: [
+            syncLog.traceId,
+            syncLog.routeId,
+            syncLog.layer,
+            syncLog.status,
+          ],
         });
     });
   }

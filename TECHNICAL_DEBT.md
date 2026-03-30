@@ -255,6 +255,26 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
+### 3. Drizzle-Kit ESM Module Resolution
+
+**Location**: `packages/database/drizzle.config.ts`, `packages/database/package.json`
+**Added**: 2026-03-30
+**Impact**: Developer Experience, CI/CD Pipeline Reliability
+**Effort**: Low (0.5 days)
+
+**Current State**:
+
+- The `@nexiom/database` workspace uses `drizzle-kit` for schema generation but strictly enforces Node ECMAScript module resolution (`type: "module"`). 
+- Because `drizzle-kit`'s default `jiti` loader struggles to resolve explicit `.js` import extensions back to the raw `.ts` schema definitions, developers continuously hit `MODULE_NOT_FOUND` errors when running `db:generate`.
+- The current temporary workaround involves manually editing `drizzle.config.ts` to target the compiled `./dist/schema/*.js` paths just to generate migrations.
+
+**Recommended Solution**:
+
+- **Option A (Build-First Pipeline - Recommended)**: Permanently lock `drizzle.config.ts` to `schema: './dist/schema/*.js'` and update the generation script to compile first automatically: `"db:generate": "pnpm build && drizzle-kit generate"`. This is fully robust for remote CI/CD environments.
+- **Option B (Execution Loader)**: Retain the `.ts` configuration but update the `db:generate` script to explicitly use Node's `tsx` loader to bypass Jiti's resolution flaws: `"db:generate": "node --import tsx node_modules/drizzle-kit/bin.cjs generate"`.
+
+---
+
 ### Low Priority
 
 ### 1. Replace custom Logger with Pino

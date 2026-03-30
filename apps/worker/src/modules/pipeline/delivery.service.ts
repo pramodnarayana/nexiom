@@ -267,10 +267,10 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           finalStatus = "SUCCESS";
         } else if (
           (typeof resp.retry === "boolean" && resp.retry === true) ||
-          isRetryableStatusCode(statusCode)
+          (resp.retry === undefined && isRetryableStatusCode(statusCode))
         ) {
           // Piece explicitly opts-in to retry via response.retry flag,
-          // or the HTTP status code indicates a transient vendor-side failure.
+          // or omitted flag and HTTP status code indicates a transient vendor-side failure.
           finalStatus = "RETRY";
         } else {
           // Non-2xx without explicit retry opt-in — permanent failure.
@@ -388,9 +388,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               durationMs: Date.now() - start,
             })
             .onConflictDoNothing({
-              // uq_sync_log_trace_layer_status covers (traceId, layer, status)
-              // — routeId is NOT part of the DB unique index.
-              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+              // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+              target: [
+                syncLog.traceId,
+                syncLog.routeId,
+                syncLog.layer,
+                syncLog.status,
+              ],
             });
         });
       } catch {
@@ -496,9 +500,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           durationMs: Date.now() - start,
         })
         .onConflictDoNothing({
-          // uq_sync_log_trace_layer_status covers (traceId, layer, status)
-          // — routeId is NOT part of the DB unique index.
-          target: [syncLog.traceId, syncLog.layer, syncLog.status],
+          // uq_sync_log_trace_layer_status covers (traceId, routeId, layer, status)
+          target: [
+            syncLog.traceId,
+            syncLog.routeId,
+            syncLog.layer,
+            syncLog.status,
+          ],
         });
     });
   }
