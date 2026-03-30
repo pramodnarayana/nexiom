@@ -71,7 +71,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { normalizedEntity, outboundGateway, syncLog } =
+      const { normalizedEntity, outboundGateway, deliveryOutbox, syncLog } =
         buildTenantSchema(schemaName);
 
       let normalizedData: any = null;
@@ -127,8 +127,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             );
           }
 
-          let outboundId: string = "";
-          let alreadySucceeded = false;
           await this.db.transaction(async (tx) => {
             assertValidSchemaName(schemaName);
             await tx.execute(
@@ -144,7 +142,10 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               .limit(1);
 
             if (successLogs.length > 0) {
-              alreadySucceeded = true;
+              this.logger.debug(
+                { event: "l4.skip_success", traceId, routeId: stitch.id },
+                "Route already succeeded previously, skipping",
+              );
               return;
             }
 
@@ -168,32 +169,19 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               })
               .returning({ id: outboundGateway.id });
 
-            outboundId = outbound.id;
-          });
+            // Write atomical outbox handoff to L5 DeliveryQueue
+            await tx.insert(deliveryOutbox).values({
+              payload: {
+                traceId,
+                connectionId,
+                targetConnectionId: stitch.destConnectionId,
+                routeId: stitch.id,
+                outboundGatewayId: outbound.id,
+              },
+              status: "PENDING",
+            });
 
-          if (alreadySucceeded) {
-            this.logger.debug(
-              { event: "l4.skip_success", traceId, routeId: stitch.id },
-              "Route already succeeded previously, skipping",
-            );
-            continue;
-          }
-
-          // Enqueue Delivery
-          await this.queueService.send(QueueName.DeliveryQueue, {
-            traceId,
-            connectionId,
-            targetConnectionId: stitch.destConnectionId,
-            routeId: stitch.id,
-            outboundGatewayId: outboundId,
-          });
-
-          // Write syncLog L4/SUCCESS only after successful publish
-          await this.db.transaction(async (tx) => {
-            assertValidSchemaName(schemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-            );
+            // Write syncLog L4/SUCCESS identically inside single transaction
             await tx.insert(syncLog).values({
               traceId,
               routeId: stitch.id,

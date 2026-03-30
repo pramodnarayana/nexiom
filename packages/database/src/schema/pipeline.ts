@@ -141,11 +141,6 @@ export function buildTenantSchema(schemaName: string) {
         canonicalType: varchar('canonical_type', { length: 100 }).notNull(),
         data: jsonb('data').notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-        // Durable published marker — set atomically when the record is enqueued
-        // to NormalizedQueue. Null = not yet enqueued; non-null = already published.
-        // Retries check this column before calling queueService.send() to make
-        // L3 enqueue idempotent without a separate outbox table.
-        publishedAt: timestamp('published_at', { withTimezone: true }),
     }, (table) => [
         index('idx_l3_trace').on(table.traceId),
         uniqueIndex('idx_l3_replica').on(table.replicaId),
@@ -239,18 +234,45 @@ export function buildTenantSchema(schemaName: string) {
     ]);
 
     /**
+     * NORMALIZED OUTBOX
+     *
+     * Transactional outbox pattern used to safely decouple L3 commit
+     * from external queue handoff (L3 -> L4) to guarantee delivery.
+     */
+    const normalizedOutbox = schema.table('normalized_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        connectionId: uuid('connection_id').notNull(),
+        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    }, (table) => [
+        index('idx_normalized_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+    ]);
+
+    /**
      * DELIVERY OUTBOX
      *
-     * Transactional outbox for reliable queue handoff.
+     * Transactional outbox used to safely decouple L4 Fan-Out execution
+     * from external queue handoff (L4 -> L5). Holds the queue message payload.
      */
     const deliveryOutbox = schema.table('delivery_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         payload: jsonb('payload').notNull(),
         status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
-        attemptCount: integer('attempt_count').notNull().default(0),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-        deliveredAt: timestamp('delivered_at', { withTimezone: true }),
-    });
+    }, (table) => [
+        index('idx_delivery_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+    ]);
 
     return {
         inboundGateway,
@@ -260,6 +282,7 @@ export function buildTenantSchema(schemaName: string) {
         syncLog,
         syncCursor,
         replicaOutbox,
+        normalizedOutbox,
         deliveryOutbox,
     };
 }
