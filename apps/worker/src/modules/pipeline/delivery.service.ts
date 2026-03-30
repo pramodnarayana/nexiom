@@ -166,11 +166,12 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (!this.tokenManagerService) {
-        this.logger.warn(
-          { event: "l5.no_token_manager", traceId, layer: "L5" },
-          "TokenManagerService not available; skipping delivery",
+        // TokenManagerService is required for credential resolution.
+        // Throwing here leaves outbound_gateway untouched so the delivery
+        // outbox worker will redeliver the message after the backoff window.
+        throw new Error(
+          `TokenManagerService unavailable — cannot resolve credentials for connection ${targetConnectionId} (traceId=${traceId})`,
         );
-        return;
       }
 
       const credentials =
@@ -264,15 +265,15 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
         if (statusCode >= 200 && statusCode < 300) {
           finalStatus = "SUCCESS";
-        } else if (isRetryableStatusCode(statusCode)) {
-          // The piece returned a transient HTTP status (429/502/503/504).
-          // This is safe to retry because the piece controls the response
-          // and explicitly returned a status indicating transient failure.
+        } else if (
+          (typeof resp.retry === "boolean" && resp.retry === true) ||
+          isRetryableStatusCode(statusCode)
+        ) {
+          // Piece explicitly opts-in to retry via response.retry flag,
+          // or the HTTP status code indicates a transient vendor-side failure.
           finalStatus = "RETRY";
         } else {
-          // Non-2xx, non-retryable vendor response — treat as permanent failure.
-          // We cannot know if the operation was applied server-side, so we
-          // do NOT retry to avoid duplicate side-effects.
+          // Non-2xx without explicit retry opt-in — permanent failure.
           finalStatus = "FAIL";
         }
       } catch (error_: unknown) {
@@ -387,12 +388,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               durationMs: Date.now() - start,
             })
             .onConflictDoNothing({
-              target: [
-                syncLog.traceId,
-                syncLog.routeId,
-                syncLog.layer,
-                syncLog.status,
-              ],
+              // uq_sync_log_trace_layer_status covers (traceId, layer, status)
+              // — routeId is NOT part of the DB unique index.
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
             });
         });
       } catch {
@@ -498,12 +496,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           durationMs: Date.now() - start,
         })
         .onConflictDoNothing({
-          target: [
-            syncLog.traceId,
-            syncLog.routeId,
-            syncLog.layer,
-            syncLog.status,
-          ],
+          // uq_sync_log_trace_layer_status covers (traceId, layer, status)
+          // — routeId is NOT part of the DB unique index.
+          target: [syncLog.traceId, syncLog.layer, syncLog.status],
         });
     });
   }

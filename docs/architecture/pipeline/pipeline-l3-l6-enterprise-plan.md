@@ -88,10 +88,11 @@ The `Piece` interface already has `normalize`, `executeAction`, `poll`, `describ
 Add to `createPiece(...)`:
 
 ```typescript
-async normalize(objectType: string, raw: Record<string, unknown>) {
-  // Pass-through: Salesforce data is stored as-is in L2;
-  // mapping to canonical model is handled by field_mapping rules in L4.
-  return { canonicalType: objectType.toUpperCase(), data: raw };
+async normalize(_objectType: string, _raw: Record<string, unknown>) {
+  // Returns null — Salesforce records are stored as-is in L2 (RAW pass-through).
+  // Field mapping to canonical model happens via field_mapping rules in L4.
+  // NormalizationService falls back to canonicalType='RAW' when null is returned.
+  return null;
 },
 
 async executeAction(
@@ -99,17 +100,15 @@ async executeAction(
   payload: Record<string, unknown>,
   credentials: Record<string, unknown>,
 ) {
-  // Stub: in local mode (Prism) POST to instanceUrl/sobjects/{objectType}
-  // In production this will call the real Salesforce REST API.
   const instanceUrl = (credentials['instance_url'] as string | undefined) ?? 'http://localhost:4010';
-  const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/${objectType}`, {
+  const res = await fetch(`${instanceUrl}/services/data/v59.0/sobjects/${objectType}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${credentials['access_token'] as string ?? 'stub'}`,
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(15_000), // 15s — matches T028 implementation
   });
   const body = await res.json() as Record<string, unknown>;
   return { statusCode: res.status, body };
@@ -121,8 +120,9 @@ async executeAction(
 Same pattern, adapted for QuickBooks:
 
 ```typescript
-async normalize(objectType: string, raw: Record<string, unknown>) {
-  return { canonicalType: objectType.toUpperCase(), data: raw };
+async normalize(_objectType: string, _raw: Record<string, unknown>) {
+  // Returns null — RAW pass-through (see Salesforce note above).
+  return null;
 },
 
 async executeAction(objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>) {
@@ -136,7 +136,7 @@ async executeAction(objectType: string, payload: Record<string, unknown>, creden
       Authorization: `Bearer ${credentials['access_token'] as string ?? 'stub'}`,
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(15_000), // 15s — matches T028 implementation
   });
   const body = await res.json() as Record<string, unknown>;
   return { statusCode: res.status, body };
