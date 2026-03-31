@@ -27,4 +27,13 @@ export interface VendorResponse {
   statusCode: number;
   /** Parsed response body. */
   body: Record<string, unknown>;
+  /**
+   * Optional piece-layer retry opt-in.
+   * Set to `true` to signal DeliveryService that this response should be
+   * retried (e.g. rate-limited, temporary unavailability) without the piece
+   * needing to throw a RetryableException. Defaults to false when absent.
+   * Use RetryableException for thrown errors; use this field for returned
+   * non-2xx responses that are safe to retry.
+   */
+  retry?: boolean;
 }

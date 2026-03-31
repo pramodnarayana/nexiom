@@ -8,6 +8,13 @@
       "when": 1774591613330,
       "tag": "0000_salty_stryfe",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774888433959,
+      "tag": "0001_aromatic_dazzler",
+      "breakpoints": true
     }
   ]
 }
