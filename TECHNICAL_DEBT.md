@@ -255,23 +255,36 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 3. Drizzle-Kit ESM Module Resolution
+### ~~3. Drizzle-Kit ESM Module Resolution~~ ✅ RESOLVED (2026-03-31)
 
 **Location**: `packages/database/drizzle.config.ts`, `packages/database/package.json`
 **Added**: 2026-03-30
 **Impact**: Developer Experience, CI/CD Pipeline Reliability
 **Effort**: Low (0.5 days)
 
+**Resolution**:
+
+- **Implemented Option A**: Permanently locked `drizzle.config.ts` to `schema: './dist/schema/*.js'` and updated *all* DDL script entries (`db:generate`, `db:migrate`, `db:studio`) to compile first automatically (`"db:generate": "pnpm build && drizzle-kit generate"`, etc.). This bypassed jiti's loader failures with ESM `.js` extensions while ensuring all commands are fully robust in fresh environments (enterprise-grade).
+
+---
+
+### 4. Centralized Mock Gateway / Mock Service Worker (MSW)
+
+**Location**: `docker-compose.yml`, `apps/api`, `apps/worker`
+**Added**: 2026-03-31
+**Impact**: Infrastructure Scalability, Developer Experience, RAM utilization
+**Effort**: Medium (2-3 days)
+
 **Current State**:
 
-- The `@nexiom/database` workspace uses `drizzle-kit` for schema generation but strictly enforces Node ECMAScript module resolution (`type: "module"`). 
-- Because `drizzle-kit`'s default `jiti` loader struggles to resolve explicit `.js` import extensions back to the raw `.ts` schema definitions, developers continuously hit `MODULE_NOT_FOUND` errors when running `db:generate`.
-- The current temporary workaround involves manually editing `drizzle.config.ts` to target the compiled `./dist/schema/*.js` paths just to generate migrations.
+- The local development environment uses `stoplight/prism` as individualized Docker containers for each vendor API (e.g., `prism-salesforce`, `prism-quickbooks`).
+- If the integration catalog scales to 600+ vendors, running 600+ Docker containers locally will consume massive system resources and crash developer laptops.
+- Individual mock containers violate the concept of a lightweight, enterprise-grade development backend.
 
 **Recommended Solution**:
 
-- **Option A (Build-First Pipeline - Recommended)**: Permanently lock `drizzle.config.ts` to `schema: './dist/schema/*.js'` and update the generation script to compile first automatically: `"db:generate": "pnpm build && drizzle-kit generate"`. This is fully robust for remote CI/CD environments.
-- **Option B (Execution Loader)**: Retain the `.ts` configuration but update the `db:generate` script to explicitly use Node's `tsx` loader to bypass Jiti's resolution flaws: `"db:generate": "node --import tsx node_modules/drizzle-kit/bin.cjs generate"`.
+- **Option A (Centralized Mock Server)**: Remove individual Prism containers. Build a single, standalone Node.js or Go Mock Gateway container that parses the entire `packages/pieces/*/openapi.json` directory tree dynamically and handles URL routing structure (e.g., `/mock/salesforce/...`, `/mock/quickbooks/...`).
+- **Option B (MSW Network Interception)**: Bypass Docker mocks completely. Integrate **Mock Service Worker (MSW)** natively into `apps/api` and `apps/worker` to dynamically intercept Node.js outbound HTTP requests at the network layer and resolve them against the `openapi.json` specs during `NODE_ENV=development`.
 
 ---
 

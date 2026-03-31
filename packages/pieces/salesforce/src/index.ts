@@ -156,7 +156,7 @@ export const salesforce = createPiece({
     },
     executeAction: async (objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse> => {
         // Writes a single record to the Salesforce sObject API.
-        // In local/Prism mode instanceUrl points to localhost:4010.
+        // In local/mock mode instanceUrl points to http://mock_gateway:4000/mock/salesforce
         // In production it is the org's Salesforce instanceUrl (e.g. https://myorg.salesforce.com).
         const instanceUrl = getInstanceUrl(credentials);
         const accessToken = getAccessToken(credentials);

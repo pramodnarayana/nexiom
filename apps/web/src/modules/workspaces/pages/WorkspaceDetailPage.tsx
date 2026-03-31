@@ -79,7 +79,9 @@ export function WorkspaceDetailPage() {
     void fetchWorkspace();
     void fetchConnections();
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       fetchSeqRef.current++;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       connSeqRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);

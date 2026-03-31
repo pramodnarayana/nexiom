@@ -4,8 +4,8 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
 import {
@@ -24,16 +24,16 @@ interface InboundMessage {
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(ReplicaService.name);
+
   constructor(
-    @InjectPinoLogger(ReplicaService.name)
-    private readonly logger: PinoLogger,
     private readonly queueService: QueueService,
     private readonly storageResolver: StorageResolverService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
   ) {}
 
   onModuleInit() {
-    this.logger.info('Starting L2 Replica worker...');
+    this.logger.log('Starting L2 Replica worker...');
     this.queueService.consume(
       QueueName.InboundQueue,
       async (payload: unknown) => {
@@ -46,8 +46,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           typeof (payload as Record<string, unknown>).connectionId !== 'string'
         ) {
           this.logger.warn(
-            { msg: payload },
-            'Received invalid message from InboundQueue: traceId and connectionId must be strings',
+            `Received invalid message from InboundQueue: traceId and connectionId must be strings. Payload: ${JSON.stringify(payload)}`,
           );
           return;
         }
@@ -125,8 +124,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           }
 
           this.logger.debug(
-            logCtx,
-            `Trace ${traceId} already replicated. Skipping.`,
+            `[${connectionId}] Trace ${traceId} already replicated. Skipping.`,
           );
           return { replicated: false, durationMs: 0 };
         }
@@ -211,14 +209,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       // 7. No external queueing logic needed here - Outbox worker handles this relay
 
-      this.logger.info(
-        { ...logCtx, durationMs: didReplicate.durationMs },
-        `Trace ${traceId} successfully replicated (L2)`,
+      this.logger.log(
+        `[${logCtx.connectionId}] Trace ${traceId} successfully replicated (L2) in ${didReplicate.durationMs}ms`,
       );
     } catch (err: unknown) {
       this.logger.error(
-        { ...logCtx, err: err instanceof Error ? err.stack : String(err) },
-        `Failed to process L2 replication for trace ${traceId}`,
+        `[${logCtx.connectionId}] Failed to process L2 replication for trace ${traceId}`,
+        err instanceof Error ? err.stack : String(err),
       );
       throw err;
     }

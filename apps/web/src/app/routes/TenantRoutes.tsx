@@ -22,6 +22,9 @@ import { WorkspacesPage } from '../../modules/workspaces/pages/WorkspacesPage';
 import { WorkspaceDetailPage } from '../../modules/workspaces/pages/WorkspaceDetailPage';
 import { StitchesPage } from '../../modules/stitches/pages/StitchesPage';
 import { CreateStitchPage } from '../../modules/stitches/pages/CreateStitchPage';
+import { ExceptionCenterPage } from '../../modules/exceptions/pages/ExceptionCenterPage';
+import { PipelineTracePage } from '../../modules/trace/pages/PipelineTracePage';
+import { AlertTriangle } from 'lucide-react';
 
 export function TenantRoutes() {
     const navGroups = [
@@ -29,6 +32,7 @@ export function TenantRoutes() {
             title: "",
             items: [
                 { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
+                { label: 'Exceptions', href: '/dashboard/exceptions', icon: AlertTriangle },
                 { label: 'Users', href: '/dashboard/users', icon: Users },
                 { label: 'Marketplace', href: '/dashboard/marketplace', icon: Blocks },
                 { label: 'Active Connections', href: '/dashboard/active-connections', icon: Plug2 },
@@ -89,6 +93,8 @@ export function TenantRoutes() {
                             <Route path="workspaces/:id" element={<WorkspaceDetailPage />} />
                             <Route path="workspaces/:id/stitches" element={<StitchesPage />} />
                             <Route path="workspaces/:id/stitches/new" element={<CreateStitchPage />} />
+                            <Route path="workspaces/:id/stitches/:stitchId/traces" element={<PipelineTracePage />} />
+                            <Route path="exceptions" element={<ExceptionCenterPage />} />
                         </Route>
                     </Routes>
                 </Refine>

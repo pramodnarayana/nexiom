@@ -28,9 +28,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:generate": "pnpm build && drizzle-kit generate",
+    "db:migrate": "pnpm build && drizzle-kit migrate",
+    "db:studio": "pnpm build && drizzle-kit studio"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.11",
