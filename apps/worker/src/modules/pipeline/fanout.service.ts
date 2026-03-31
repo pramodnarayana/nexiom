@@ -391,8 +391,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
   private async writeSyncLog(
     schemaName: string,
     traceId: string,
-    routeId: string,
-    layer: "L1" | "L2" | "L3" | "L4" | "L5",
+    routeId: string | null,
+    layer: "L4",
     status: "PROCESSING" | "SUCCESS" | "FAIL" | "SKIPPED",
     durationMs: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],

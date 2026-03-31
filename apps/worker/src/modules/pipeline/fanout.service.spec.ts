@@ -300,13 +300,24 @@ describe("FanOutService", () => {
       );
     });
 
+    const mockValues = mockTxInsert().values;
+    mockTxInsert.mockClear();
+
     mockTxInsert.mockImplementationOnce(() => {
       throw new Error("Simulated enqueue error");
     });
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
-    expect(db.transaction).toHaveBeenCalledTimes(4);
+
+    // Ensure observable outcomes: a FAIL log is written for the failed stitch,
+    // and a SUCCESS log is written for the successful stitch.
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "FAIL", routeId: "stitch_fail" }),
+    );
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "SUCCESS", routeId: "stitch_success" }),
+    );
   });
 
   it("should return gracefully and record failure if source connection record (GEM) is not found", async () => {
