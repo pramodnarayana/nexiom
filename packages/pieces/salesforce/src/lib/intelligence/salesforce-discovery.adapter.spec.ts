@@ -3,7 +3,7 @@ import { SalesforceDiscoveryAdapter } from './salesforce-discovery.adapter.js';
 import { sfFetch } from '../sf-fetch.js';
 import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';
-import type { TriggerStore } from '@nexiom/connectors/framework';
+import type { TriggerStore } from '@nexiom/piece-framework';
 
 vi.mock('@nexiom/connectors/intelligence', async (importOriginal) => {
     const mod = await importOriginal() as any;

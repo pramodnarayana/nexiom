@@ -2,7 +2,6 @@ import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
 import { InternalServerErrorException } from '@nestjs/common';
-import type { FieldDescriptor as BaseFieldDescriptor } from '../intelligence/interfaces.js';
 import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
 
 /** A SaaS object available for metadata discovery. */
@@ -138,13 +137,14 @@ export type StreamDescriptor =
           keyProperties: [string, ...string[]];
       };
 
-/**
- * A single field within a SaaS object schema, as exposed by the Piece API.
- * Extends the intelligence-layer BaseFieldDescriptor with `label` for UI display.
- * `referenceTo` and all other base fields are inherited.
- */
-export interface FieldDescriptor extends BaseFieldDescriptor {
+export interface FieldDescriptor {
+    name: string;
     label: string;
+    type: string;
+    filterable: boolean;
+    sortable: boolean;
+    nillable: boolean;
+    referenceTo?: string[];
 }
 
 /**

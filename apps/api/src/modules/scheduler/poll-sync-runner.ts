@@ -17,7 +17,8 @@ import {
   syncCursors,
 } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/connectors';
-import type { Piece, OAuthCredentialBlob } from '@nexiom/connectors';
+import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import type { Piece } from '@nexiom/piece-framework';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {
   CursorManagerService,

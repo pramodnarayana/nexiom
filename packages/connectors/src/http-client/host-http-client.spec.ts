@@ -6,10 +6,11 @@ import {
     PieceAuth,
     httpClient,
     initializeHttpClient,
-    HostHttpClient,
     HttpMethod,
-} from './index.js';
-import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
+    NormalizedRecord,
+    VendorResponse
+} from '@nexiom/piece-framework';
+import { HostHttpClient } from './host-http-client.js';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { Redis } from 'ioredis';
@@ -17,11 +18,11 @@ import { Redis } from 'ioredis';
 describe('Activepieces Framework Native Shim', () => {
     beforeEach(() => {
         // Initialize the singleton to prevent the "accessed before platform initialization" throw
-        initializeHttpClient(
+        initializeHttpClient(new HostHttpClient(
             {} as TokenManagerService,
             { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
-            { incr: vi.fn().mockResolvedValue(1), expire: vi.fn() } as unknown as Redis
-        );
+            { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+        ));
     });
 
     it('Should successfully type-check and instantiate a mocked Salesforce piece exactly like Activepieces', async () => {

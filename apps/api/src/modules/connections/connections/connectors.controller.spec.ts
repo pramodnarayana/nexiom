@@ -1,4 +1,4 @@
-import type { Piece } from '@nexiom/connectors/framework';
+import type { Piece } from '@nexiom/piece-framework';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';

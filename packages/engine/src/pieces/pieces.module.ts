@@ -6,7 +6,7 @@ import {
 import { PieceLoaderService, PIECE_LOADER_ANCHOR_URL } from './piece-loader.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import type { Piece } from '@nexiom/connectors';
+import type { Piece } from '@nexiom/piece-framework';
 
 const SHARED_PROVIDERS = [
   PieceLoaderService,

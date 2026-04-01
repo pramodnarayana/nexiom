@@ -390,7 +390,7 @@ describe("DeliveryService", () => {
   });
 
   it("should set RETRY status when piece throws RetryableException", async () => {
-    const { RetryableException } = await import("@nexiom/connectors");
+    const { RetryableException } = await import("@nexiom/piece-framework");
     pieceRegistry
       .getPiece()
       .executeAction.mockRejectedValueOnce(

@@ -1,5 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import type { Piece, Trigger } from '@nexiom/connectors';
+import type { Piece, Trigger } from '@nexiom/piece-framework';
 
 /** NestJS injection token for the list of registered Pieces. */
 export const PIECES = 'PIECES';

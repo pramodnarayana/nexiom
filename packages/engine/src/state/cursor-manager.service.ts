@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { ReplicationKeyType, StreamDescriptor, PollWindow, PollRecord } from '@nexiom/connectors/framework';
+import type { ReplicationKeyType, StreamDescriptor, PollWindow, PollRecord } from '@nexiom/piece-framework';
 import type { StreamBookmark } from './cursor-manager.types.js';
 
 /**

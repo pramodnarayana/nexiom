@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TriggerExecutorService } from './trigger-executor.service.js';
-import { TriggerStrategy } from '@nexiom/connectors';
-import type { Trigger } from '@nexiom/connectors';
+import { TriggerStrategy } from '@nexiom/piece-framework';
+import type { Trigger } from '@nexiom/piece-framework';
 
 function makeMockDb() {
   return {

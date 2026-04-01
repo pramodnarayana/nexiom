@@ -20,7 +20,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@nexiom/connectors": "workspace:*",
+    "@nexiom/piece-framework": "workspace:*",
     "dayjs": "^1.11.19"
   }
 }

@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
 import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
 import { PieceRegistryService } from '@nexiom/engine';
-import type { Piece } from '@nexiom/connectors/framework';
+import type { Piece } from '@nexiom/piece-framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import {

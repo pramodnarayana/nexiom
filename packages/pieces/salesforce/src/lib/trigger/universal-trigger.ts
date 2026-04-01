@@ -1,4 +1,4 @@
-import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/connectors/framework';
+import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/piece-framework';
 import { salesforceAuth } from '../auth.js';
 
 import {

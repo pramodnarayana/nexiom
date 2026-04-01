@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import type { Piece } from '@nexiom/connectors';
+import type { Piece } from '@nexiom/piece-framework';
 import { pieces, type DrizzleDb } from '@nexiom/database';
 
 /**

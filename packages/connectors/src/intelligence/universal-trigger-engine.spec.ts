@@ -8,7 +8,7 @@ import type {
     IBulkAdapter,
     ObjectSchema
 } from './interfaces.js';
-import type { TriggerStore } from '../framework/index.js';
+import type { TriggerStore } from '@nexiom/piece-framework';
 
 // Mock dependencies
 vi.mock('./smart-cursor-selector.js', () => ({

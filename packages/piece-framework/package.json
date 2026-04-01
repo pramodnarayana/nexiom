@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/engine",
+  "name": "@nexiom/piece-framework",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -18,20 +18,10 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage"
   },
-  "dependencies": {
-    "@nexiom/connectors": "workspace:*",
-    "@nexiom/database": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*"
-  },
   "devDependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.2",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.9"
-  },
-  "peerDependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.2"
+    "vitest": "^4.0.18"
   }
 }

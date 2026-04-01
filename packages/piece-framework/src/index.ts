@@ -8,9 +8,8 @@ export * from './retryable-exception.js';
 export {
     httpClient,
     initializeHttpClient,
-    HostHttpClient,
+    HttpClient,
     HttpMethod,
     HttpRequest,
     HttpResponse,
-    
 } from './http-client.js';

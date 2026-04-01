@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PieceRegistryService } from '@nexiom/engine';
-import type { Piece } from '@nexiom/connectors';
+import type { Piece } from '@nexiom/piece-framework';
 
 // A minimal mock piece — this service is generic and has no knowledge of real integrations.
 const mockPiece: Piece = {

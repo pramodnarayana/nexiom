@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/connectors/framework';
+import type { TriggerStore } from '@nexiom/piece-framework';
 import { SF_API_VERSION } from './common/index.js';
 
 /** Thrown when Salesforce returns 401. The caller must refresh / re-auth. */
