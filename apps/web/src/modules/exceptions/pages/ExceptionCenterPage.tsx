@@ -64,6 +64,7 @@ export function ExceptionCenterPage() {
       } else {
         await dismissException(id);
       }
+      setError(null);
       // Remove after successful delete
       setExceptions((prev) => prev.filter((item) => item.id !== id));
     } catch (e: unknown) {
@@ -79,6 +80,9 @@ export function ExceptionCenterPage() {
 
   const getReasonFromPayload = (resPayload: unknown, statusCode: number | null): string => {
     if (!resPayload) return statusCode ? `HTTP ${statusCode}` : 'Unknown failure';
+    if (typeof resPayload === 'string' || typeof resPayload === 'number' || typeof resPayload === 'boolean') {
+      return String(resPayload);
+    }
     if (typeof resPayload === 'object' && resPayload !== null) {
       const p = resPayload as Record<string, unknown>;
       if (p.message) return typeof p.message === 'string' ? p.message : JSON.stringify(p.message);

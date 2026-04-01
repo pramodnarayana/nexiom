@@ -112,7 +112,7 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
       <>
         <div className="flex items-center gap-4 py-4 px-2 overflow-x-auto snap-x hidden-scrollbar">
           {details.layers.map((l, i) => (
-            <div key={l.layer} className="flex items-center gap-4 shrink-0 snap-center">
+            <div key={`${l.layer}-${i}`} className="flex items-center gap-4 shrink-0 snap-center">
               <LayerTimeline layer={l.layer} status={l.status} durationMs={l.durationMs} />
               {i < details.layers.length - 1 && (
                 <div className="h-0.5 w-8 bg-border overflow-hidden rounded-full">

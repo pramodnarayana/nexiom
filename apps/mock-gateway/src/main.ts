@@ -21,68 +21,87 @@ const candidatePaths = [
 
 const piecesDir = candidatePaths.find(p => existsSync(p));
 
-if (piecesDir) {
-  const pieces = readdirSync(piecesDir, { withFileTypes: true })
-    .filter(dirent => dirent.isDirectory())
-    .map(dirent => dirent.name);
+async function bootstrap() {
+  if (piecesDir) {
+    const pieces = readdirSync(piecesDir, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
 
-  for (const piece of pieces) {
-    const specPath = join(piecesDir, piece, 'openapi.json');
-    if (existsSync(specPath)) {
-      const api = new OpenAPIBackend({ definition: specPath });
-      
-      api.register({
-        notFound: (c, req, res) => res.status(404).json({ err: `Mock route ${req.path} not found in ${piece} spec` }),
-        notImplemented: async (c, req, res) => {
+    for (const piece of pieces) {
+      const specPath = join(piecesDir, piece, 'openapi.json');
+      if (existsSync(specPath)) {
+        const api = new OpenAPIBackend({ definition: specPath });
+        
+        api.register({
+          notFound: (c, req, res) => res.status(404).json({ err: `Mock route ${req.path} not found in ${piece} spec` }),
+          notImplemented: async (c, req, res) => {
+            try {
+              // Generate mock dynamically from OpenAPI components/schema examples
+              const operationId = (c.operation.operationId as string | undefined) ?? c.operation.path;
+              const mock = await c.api.mockResponseForOperation(operationId);
+              return res.status(200).json(mock);
+            } catch (e: unknown) {
+              logger.warn({ err: e }, `Failed to generate strict OpenAPI mock for ${piece} ${req.path}`);
+              return res.status(200).json({ id: 'dummy-success', status: 'mocked' });
+            }
+          },
+          validationFail: (c, req, res) => res.status(400).json({ err: c.validation.errors }),
+        });
+        
+        await api.init();
+        
+        logger.info(`Mounted mock proxy for ${piece} at /mock/${piece}`);
+        
+        const convertExpressReqToHandleRequest = (r: express.Request): import('openapi-backend').Request => ({
+          method: r.method,
+          path: r.path,
+          headers: r.headers as Record<string, string | string[]>,
+          query: r.query as Record<string, string | string[]>,
+          body: r.body,
+        });
+
+        app.use(`/mock/${piece}`, async (req, res, next) => {
           try {
-            // Generate mock dynamically from OpenAPI components/schema examples
-            const operationId = (c.operation.operationId as string | undefined) ?? c.operation.path;
-            const mock = await c.api.mockResponseForOperation(operationId);
-            return res.status(200).json(mock);
-          } catch (e: unknown) {
-            logger.warn({ err: e }, `Failed to generate strict OpenAPI mock for ${piece} ${req.path}`);
-            return res.status(200).json({ id: 'dummy-success', status: 'mocked' });
+            await api.handleRequest(
+              convertExpressReqToHandleRequest(req),
+              req, 
+              res
+            );
+          } catch (err) {
+            next(err);
           }
-        },
-        validationFail: (c, req, res) => res.status(400).json({ err: c.validation.errors }),
-      });
-      
-      api.init();
-      
-      logger.info(`Mounted mock proxy for ${piece} at /mock/${piece}`);
-      
-      const convertExpressReqToHandleRequest = (r: express.Request): import('openapi-backend').Request => ({
-        method: r.method,
-        path: r.path,
-        headers: r.headers as Record<string, string | string[]>,
-        query: r.query as Record<string, string | string[]>,
-        body: r.body,
-      });
-
-      app.use(`/mock/${piece}`, (req, res) => api.handleRequest(
-        convertExpressReqToHandleRequest(req),
-        req, 
-        res
-      ));
+        });
+      }
     }
-  }
-} else {
-  logger.error('Pieces directory could not be located in any of the candidate paths.');
-  process.exit(1);
-}
-
-app.get('/health', (req, res) => res.send({ status: 'ok' }));
-
-function normalizePort(val: string | undefined): number {
-  const parsedPort = Number.parseInt(val || '4001', 10);
-  if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-    logger.error(`Invalid port value: ${val}`);
+  } else {
+    logger.error('Pieces directory could not be located in any of the candidate paths.');
     process.exit(1);
   }
-  return parsedPort;
+
+  app.get('/health', (req, res) => res.send({ status: 'ok' }));
+
+  // Global error handler
+  app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    logger.error({ err }, 'Unhandled mock gateway error');
+    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  });
+
+  function normalizePort(val: string | undefined): number {
+    const parsedPort = Number.parseInt(val || '4001', 10);
+    if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      logger.error(`Invalid port value: ${val}`);
+      process.exit(1);
+    }
+    return parsedPort;
+  }
+
+  const validatedPort = normalizePort(process.env.PORT);
+  app.listen(validatedPort, () => {
+    logger.info(`Centralized Mock Gateway listening on port ${validatedPort}`);
+  });
 }
 
-const validatedPort = normalizePort(process.env.PORT);
-app.listen(validatedPort, () => {
-  logger.info(`Centralized Mock Gateway listening on port ${validatedPort}`);
+bootstrap().catch((err: Error) => {
+  logger.error({ err }, 'Bootstrap failed');
+  process.exit(1);
 });
