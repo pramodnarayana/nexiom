@@ -76,13 +76,13 @@ export function WorkspaceDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    const fetchRef = fetchSeqRef;
+    const connRef = connSeqRef;
     void fetchWorkspace();
     void fetchConnections();
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      fetchSeqRef.current++;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      connSeqRef.current++;
+      fetchRef.current++;
+      connRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);
 

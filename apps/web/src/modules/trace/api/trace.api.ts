@@ -63,19 +63,23 @@ export interface FullTrace {
 }
 
 export async function listTraces(
-  _workspaceId: string, // Not utilized in the endpoint structure currently
+  workspaceId: string, // Utilize this now
   stitchId: string,
   params?: { limit?: number; cursor?: string }
 ): Promise<TraceListResult> {
   const query = new URLSearchParams();
-  if (params?.limit) query.set('limit', params.limit.toString());
-  if (params?.cursor) query.set('cursor', params.cursor);
+  if (workspaceId) query.set('workspaceId', workspaceId);
+  if (params?.limit !== undefined && Number.isFinite(params.limit)) query.set('limit', params.limit.toString());
+  if (params?.cursor !== undefined) query.set('cursor', params.cursor);
 
-  const res = await apiClient.get<TraceListResult>(`/stitches/${stitchId}/traces?${query.toString()}`);
+  const res = await apiClient.get<TraceListResult>(`/stitches/${encodeURIComponent(stitchId)}/traces?${query.toString()}`);
   return res.data;
 }
 
-export async function getTrace(stitchId: string, traceId: string): Promise<FullTrace> {
-  const res = await apiClient.get<FullTrace>(`/stitches/${stitchId}/traces/${traceId}`);
+export async function getTrace(workspaceId: string, stitchId: string, traceId: string): Promise<FullTrace> {
+  const query = new URLSearchParams();
+  if (workspaceId) query.set('workspaceId', workspaceId);
+  
+  const res = await apiClient.get<FullTrace>(`/stitches/${encodeURIComponent(stitchId)}/traces/${encodeURIComponent(traceId)}?${query.toString()}`);
   return res.data;
 }

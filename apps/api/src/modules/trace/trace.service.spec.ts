@@ -137,7 +137,7 @@ describe('TraceService', () => {
 
   describe('listTraces()', () => {
     it('returns paginated sync_log rows for the stitch', async () => {
-      const result = await service.listTraces(ORG_ID, STITCH_ID, 50);
+      const result = await service.listTraces(ORG_ID, STITCH_ID, undefined, 50);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].layer).toBe('L1');
       expect(result.data[0].routeId).toBe(STITCH_ID);
@@ -148,28 +148,42 @@ describe('TraceService', () => {
       mockDb.query.integrationStitches.findFirst = vi
         .fn()
         .mockResolvedValue(null);
-      await expect(service.listTraces(ORG_ID, STITCH_ID, 50)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.listTraces(ORG_ID, STITCH_ID, undefined, 50),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws or prevents unsafe identifier construction when schema is invalid', async () => {
       mockResolver.resolveSchemaName = vi
         .fn()
         .mockResolvedValue('unsafe"schema;DROP TABLE;');
-      await expect(service.listTraces(ORG_ID, STITCH_ID, 50)).rejects.toThrow();
+      await expect(
+        service.listTraces(ORG_ID, STITCH_ID, undefined, 50),
+      ).rejects.toThrow();
     });
 
     it('throws BadRequestException for invalid composite cursor', async () => {
       // cursor must have the format "<ISO>:<uuid>"
       await expect(
-        service.listTraces(ORG_ID, STITCH_ID, 50, 'not-a-valid-cursor'),
+        service.listTraces(
+          ORG_ID,
+          STITCH_ID,
+          undefined,
+          50,
+          'not-a-valid-cursor',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when cursor timestamp is invalid', async () => {
       await expect(
-        service.listTraces(ORG_ID, STITCH_ID, 50, `not-a-date:${STITCH_ID}`),
+        service.listTraces(
+          ORG_ID,
+          STITCH_ID,
+          undefined,
+          50,
+          `not-a-date:${STITCH_ID}`,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -178,6 +192,7 @@ describe('TraceService', () => {
         service.listTraces(
           ORG_ID,
           STITCH_ID,
+          undefined,
           50,
           `${NOW.toISOString()}:not-a-uuid`,
         ),
@@ -209,7 +224,7 @@ describe('TraceService', () => {
         .fn()
         .mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx));
 
-      const result = await service.listTraces(ORG_ID, STITCH_ID, 5);
+      const result = await service.listTraces(ORG_ID, STITCH_ID, undefined, 5);
       expect(result.data).toHaveLength(5);
       expect(result.nextCursor).not.toBeNull();
       // Composite cursor: "<ISO>:<uuid>"
@@ -254,7 +269,7 @@ describe('TraceService', () => {
       const validCursor = `${NOW_MINUS_1.toISOString()}:${ROW_ID_2}`;
       // Should not throw — cursor is valid
       await expect(
-        service.listTraces(ORG_ID, STITCH_ID, 50, validCursor),
+        service.listTraces(ORG_ID, STITCH_ID, undefined, 50, validCursor),
       ).resolves.toBeDefined();
     });
   });
@@ -270,7 +285,7 @@ describe('TraceService', () => {
         .fn()
         .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
       await expect(
-        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID),
+        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID, undefined),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -279,7 +294,7 @@ describe('TraceService', () => {
         .fn()
         .mockResolvedValue(null);
       await expect(
-        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID),
+        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID, undefined),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -293,7 +308,7 @@ describe('TraceService', () => {
         .fn()
         .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
       await expect(
-        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID),
+        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID, undefined),
       ).rejects.toThrow();
       expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(SRC_CONN);
       expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(DEST_CONN);
@@ -358,7 +373,12 @@ describe('TraceService', () => {
         .fn()
         .mockImplementation((cb: (t: unknown) => unknown) => cb(tx));
 
-      const result = await service.getTrace(ORG_ID, STITCH_ID, TRACE_ID);
+      const result = await service.getTrace(
+        ORG_ID,
+        STITCH_ID,
+        TRACE_ID,
+        undefined,
+      );
       expect(result).toBeDefined();
       expect(result.traceId).toBe(TRACE_ID);
       expect(capture.fromArgs.length).toBeGreaterThan(0);

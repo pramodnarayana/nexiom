@@ -5,11 +5,11 @@ import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Skeleton } from '@/shared/components/ui/skeleton';
-import { 
-  listTraces, 
-  getTrace, 
-  type TraceSummary, 
-  type FullTrace 
+import {
+  listTraces,
+  getTrace,
+  type TraceSummary,
+  type FullTrace
 } from '../api/trace.api';
 
 // Colors for status dots
@@ -27,9 +27,9 @@ const getStatusBorder = (status: string) => {
   return 'border-border';
 };
 
-function LayerTimeline({ layer, status, durationMs }: { layer: string, status: string, durationMs?: number | null }) {
+function LayerTimeline({ layer, status, durationMs }: Readonly<{ layer: string, status: string, durationMs?: number | null }>) {
   const isPulsing = status === 'PROCESSING' || status === 'PENDING';
-  
+
   return (
     <div className={`flex flex-col items-center justify-center p-3 rounded-xl border bg-card/60 backdrop-blur-md transition-all ${getStatusBorder(status)}`}>
       <div className="flex items-center gap-2 mb-1">
@@ -47,7 +47,7 @@ function LayerTimeline({ layer, status, durationMs }: { layer: string, status: s
   );
 }
 
-function JsonViewer({ title, data, className = '' }: { title: string; data: unknown; className?: string }) {
+function JsonViewer({ title, data, className = '' }: Readonly<{ title: string; data: unknown; className?: string }>) {
   if (!data) return null;
   return (
     <div className={`rounded-xl border bg-muted/20 overflow-hidden ${className}`}>
@@ -64,17 +64,18 @@ function JsonViewer({ title, data, className = '' }: { title: string; data: unkn
   );
 }
 
-function TraceRow({ summary, stitchId }: { summary: TraceSummary; stitchId: string }) {
+function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceSummary; stitchId: string, workspaceId: string }>) {
   const [expanded, setExpanded] = useState(false);
   const [details, setDetails] = useState<FullTrace | null>(null);
   const [loading, setLoading] = useState(false);
   const [rowParent] = useAutoAnimate<HTMLDivElement>();
 
   const handleToggle = async () => {
+    if (loading) return;
     if (!expanded && !details) {
       setLoading(true);
       try {
-        const full = await getTrace(stitchId, summary.traceId);
+        const full = await getTrace(workspaceId, stitchId, summary.traceId);
         setDetails(full);
       } catch (e) {
         console.error(e);
@@ -82,19 +83,59 @@ function TraceRow({ summary, stitchId }: { summary: TraceSummary; stitchId: stri
         setLoading(false);
       }
     }
-    setExpanded(!expanded);
+    setExpanded(prev => !prev);
   };
 
+  let expandedContent = null;
+  if (loading) {
+    expandedContent = (
+      <div className="flex items-center gap-3 justify-center py-10 opacity-60">
+        <div className="flex gap-1">
+          <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" />
+          <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" style={{ animationDelay: '0.1s' }} />
+          <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" style={{ animationDelay: '0.2s' }} />
+        </div>
+        <span className="text-sm font-medium tracking-tight">Fetching deep trace...</span>
+      </div>
+    );
+  } else if (details) {
+    expandedContent = (
+      <>
+        <div className="flex items-center gap-4 py-4 px-2 overflow-x-auto snap-x hidden-scrollbar">
+          {details.layers.map((l, i) => (
+            <div key={l.layer} className="flex items-center gap-4 shrink-0 snap-center">
+              <LayerTimeline layer={l.layer} status={l.status} durationMs={l.durationMs} />
+              {i < details.layers.length - 1 && (
+                <div className="h-0.5 w-8 bg-border overflow-hidden rounded-full">
+                  <div className="h-full w-full bg-primary/40 rounded-full animate-pulse" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <JsonViewer title="L1 Inbound (Raw)" data={details.inboundGateway?.payload} />
+          <JsonViewer title="L2 Replica Data" data={details.replicaEntity?.data} />
+          <JsonViewer title="L3 Normalized Canonical" data={details.normalizedEntity?.data} />
+          <JsonViewer title="L4/L5 Outbound Request" data={details.outboundGateway?.reqPayload} />
+          <JsonViewer title="L6 Vendor Response" data={details.outboundGateway?.resPayload} />
+        </div>
+      </>
+    );
+  }
+
   return (
-    <div 
+    <div
       ref={rowParent}
-      className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
-        expanded ? 'bg-card/90 shadow-lg border-primary/20 ring-1 ring-primary/10' : 'bg-card/40 hover:bg-card/60 hover:shadow-sm'
-      }`}
+      className={`rounded-2xl border transition-all duration-300 overflow-hidden ${expanded ? 'bg-card/90 shadow-lg border-primary/20 ring-1 ring-primary/10' : 'bg-card/40 hover:bg-card/60 hover:shadow-sm'
+        }`}
     >
-      <div 
-        className="flex items-center justify-between p-5 cursor-pointer select-none"
+      <button
+        type="button"
+        className="w-full flex items-center justify-between p-5 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         onClick={handleToggle}
+        aria-expanded={expanded}
       >
         <div className="flex items-center gap-4">
           <div className={`p-2 rounded-full transition-colors ${expanded ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
@@ -127,47 +168,15 @@ function TraceRow({ summary, stitchId }: { summary: TraceSummary; stitchId: stri
             <span className="text-xs font-bold uppercase tracking-wider opacity-80">{summary.status}</span>
           </div>
         </div>
-      </div>
+      </button>
 
-        {expanded && (
-          <div className="border-t bg-gradient-to-b from-background/50 to-muted/20">
-            <div className="p-6 space-y-8">
-              {loading ? (
-                <div className="flex items-center gap-3 justify-center py-10 opacity-60">
-                  <div className="flex gap-1">
-                    <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" />
-                    <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" style={{ animationDelay: '0.1s' }} />
-                    <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" style={{ animationDelay: '0.2s' }} />
-                  </div>
-                  <span className="text-sm font-medium tracking-tight">Fetching deep trace...</span>
-                </div>
-              ) : details ? (
-                <>
-                  <div className="flex items-center gap-4 py-4 px-2 overflow-x-auto snap-x hidden-scrollbar">
-                    {details.layers.map((l, i) => (
-                      <div key={i} className="flex items-center gap-4 shrink-0 snap-center">
-                        <LayerTimeline layer={l.layer} status={l.status} durationMs={l.durationMs} />
-                        {i < details.layers.length - 1 && (
-                          <div className="h-0.5 w-8 bg-border overflow-hidden rounded-full">
-                            <div className="h-full w-full bg-primary/40 rounded-full animate-pulse" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <JsonViewer title="L1 Inbound (Raw)" data={details.inboundGateway?.payload} />
-                    <JsonViewer title="L2 Replica Data" data={details.replicaEntity?.data} />
-                    <JsonViewer title="L3 Normalized Canonical" data={details.normalizedEntity?.data} />
-                    <JsonViewer title="L4/L5 Outbound Request" data={details.outboundGateway?.reqPayload} />
-                    <JsonViewer title="L6 Vendor Response" data={details.outboundGateway?.resPayload} />
-                  </div>
-                </>
-              ) : null}
-            </div>
+      {expanded && (
+        <div className="border-t bg-gradient-to-b from-background/50 to-muted/20">
+          <div className="p-6 space-y-8">
+            {expandedContent}
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }
@@ -182,7 +191,10 @@ export function PipelineTracePage() {
   const fetchSeqRef = useRef(0);
 
   const fetchTraces = useCallback(async () => {
-    if (!stitchId || !workspaceId) return;
+    if (!stitchId || !workspaceId) {
+      setLoading(false);
+      return;
+    }
     const seq = ++fetchSeqRef.current;
     try {
       setLoading(true);
@@ -202,6 +214,36 @@ export function PipelineTracePage() {
     void fetchTraces();
   }, [fetchTraces]);
 
+  let pageContent = null;
+  if (loading) {
+    pageContent = (
+      <div className="space-y-4">
+        {Array.from({ length: 4 }).map(() => (
+          <Skeleton key={crypto.randomUUID()} className="h-24 w-full rounded-2xl" />
+        ))}
+      </div>
+    );
+  } else if (traces.length === 0) {
+    pageContent = (
+      <div className="relative border rounded-3xl p-16 text-center overflow-hidden bg-card/20">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-background to-background" />
+        <Activity className="relative mx-auto h-12 w-12 mb-4 text-primary/40 animate-pulse" />
+        <h2 className="relative text-xl font-medium tracking-tight">No traces found</h2>
+        <p className="relative text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
+          This integration hasn't processed any events yet. Once an event flows through the L1 gateway, its trace timeline will appear here.
+        </p>
+      </div>
+    );
+  } else {
+    pageContent = (
+      <div className="space-y-4" ref={listParent}>
+        {traces.map((trace) => (
+          <TraceRow key={trace.id} summary={trace} stitchId={stitchId!} workspaceId={workspaceId!} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between mb-8">
@@ -211,7 +253,7 @@ export function PipelineTracePage() {
             End-to-end trace timeline for stitch validation and debugging.
           </p>
         </div>
-        
+
         <Button variant="outline" size="sm" onClick={() => void fetchTraces()} disabled={loading} className="gap-2 rounded-full">
           <Activity className="h-4 w-4" />
           Live Poll
@@ -225,28 +267,7 @@ export function PipelineTracePage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="space-y-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
-          ))}
-        </div>
-      ) : traces.length === 0 ? (
-        <div className="relative border rounded-3xl p-16 text-center overflow-hidden bg-card/20">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-background to-background" />
-          <Activity className="relative mx-auto h-12 w-12 mb-4 text-primary/40 animate-pulse" />
-          <h2 className="relative text-xl font-medium tracking-tight">No traces found</h2>
-          <p className="relative text-sm text-muted-foreground mt-2 max-w-sm mx-auto">
-            This integration hasn't processed any events yet. Once an event flows through the L1 gateway, its trace timeline will appear here.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4" ref={listParent}>
-            {traces.map((trace) => (
-              <TraceRow key={trace.id} summary={trace} stitchId={stitchId!} />
-            ))}
-        </div>
-      )}
+      {pageContent}
     </div>
   );
 }

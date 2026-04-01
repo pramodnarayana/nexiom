@@ -135,7 +135,6 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **dotenv auto-resolution**: `drizzle.config.ts` in `@nexiom/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
 - **Enterprise Piece Loader**: `PiecesModule` is now a DynamicModule with `forRoot({ anchorUrl: import.meta.url })`. All 6 host modules (ConnectionsModule, StitchesModule, TriggerModule, SchedulerModule, WebhooksModule, PipelineModule) pass their own `import.meta.url` as the resolution anchor, bypassing pnpm strict package containment in any working directory or container.
 
-
 ### 4. Shadow Mode Direct Trigger Imports
 
 **Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts` & Quickbooks  
@@ -212,7 +211,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - Configure Vector's internal metrics sink to expose `vector_buffer_discarded_events_total` to Prometheus/Grafana.
 - Set up an alert (e.g., PagerDuty or Slack) that triggers whenever logs are actively being dropped, indicating an issue with the logging infrastructure.
 
-### 1. Cross-Module AuthGuard Import
+## Observability Edge Cases
 
 **Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`  
 **Added**: 2026-02-23  
@@ -273,18 +272,21 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 **Location**: `docker-compose.yml`, `apps/api`, `apps/worker`
 **Added**: 2026-03-31
 **Impact**: Infrastructure Scalability, Developer Experience, RAM utilization
-**Effort**: Medium (2-3 days)
+**Effort**: Low (remaining tasks)
 
 **Current State**:
 
-- The local development environment uses `stoplight/prism` as individualized Docker containers for each vendor API (e.g., `prism-salesforce`, `prism-quickbooks`).
-- If the integration catalog scales to 600+ vendors, running 600+ Docker containers locally will consume massive system resources and crash developer laptops.
-- Individual mock containers violate the concept of a lightweight, enterprise-grade development backend.
+- Local development now uses a centralized `mock_gateway` container to serve mocks instead of individual Prism containers.
+- Option A (Centralized Mock Server) is successfully implemented and active in docker-compose.
+- Remaining gaps:
+  - Dynamic loading from `packages/pieces/*/openapi.json` edge-cases need monitoring.
+  - The routing pattern `/mock/{vendor}/...` requires integration notes for `apps/api` and `apps/worker`.
 
 **Recommended Solution**:
 
-- **Option A (Centralized Mock Server)**: Remove individual Prism containers. Build a single, standalone Node.js or Go Mock Gateway container that parses the entire `packages/pieces/*/openapi.json` directory tree dynamically and handles URL routing structure (e.g., `/mock/salesforce/...`, `/mock/quickbooks/...`).
-- **Option B (MSW Network Interception)**: Bypass Docker mocks completely. Integrate **Mock Service Worker (MSW)** natively into `apps/api` and `apps/worker` to dynamically intercept Node.js outbound HTTP requests at the network layer and resolve them against the `openapi.json` specs during `NODE_ENV=development`.
+- ✅ Option A (Centralized Mock Gateway) is implemented.
+- Finalize documentation for API/Worker pointing to the mock gateway.
+- Option B (MSW Network Interception) can be tracked as an optional future alternative if Docker network overhead becomes an issue.
 
 ---
 

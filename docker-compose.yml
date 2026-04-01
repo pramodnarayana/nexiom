@@ -42,14 +42,14 @@ services:
   # DATABASE_POOLED_URL points here; use it for services that benefit from
   # connection pooling (e.g. high-concurrency workers).
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:1.21.0
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${POSTGRES_USER:-user}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
       DB_NAME: ${POSTGRES_DB:-nexiom_local}
-      AUTH_TYPE: trust
+      AUTH_TYPE: md5
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "200"
       DEFAULT_POOL_SIZE: "20"
@@ -239,8 +239,7 @@ services:
   # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
   # memory. Requires `privileged: true` on the worker container.
   windmill_init:
-    image: ghcr.io/windmill-labs/windmill:main
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     command: ["windmill", "init"]
     environment:
       <<: *windmill-env
@@ -251,8 +250,7 @@ services:
       - nexiom-network
 
   windmill_server:
-    image: ghcr.io/windmill-labs/windmill:main
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     restart: unless-stopped
     environment:
       <<: *windmill-env
@@ -274,8 +272,7 @@ services:
       - nexiom-network
 
   windmill_worker:
-    image: ghcr.io/windmill-labs/windmill:main
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     restart: unless-stopped
     # privileged required for ENABLE_UNSHARE_PID
     privileged: true

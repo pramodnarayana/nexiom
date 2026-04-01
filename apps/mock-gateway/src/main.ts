@@ -62,11 +62,21 @@ if (existsSync(piecesDir)) {
   }
 } else {
   logger.error(`Pieces directory could not be located at ${piecesDir}`);
+  process.exit(1);
 }
 
 app.get('/health', (req, res) => res.send({ status: 'ok' }));
 
-const port = process.env.PORT || 4001;
-app.listen(port, () => {
-  logger.info(`Centralized Mock Gateway listening on port ${port}`);
+function normalizePort(val: string | undefined): number {
+  const parsedPort = Number.parseInt(val || '4001', 10);
+  if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+    logger.error(`Invalid port value: ${val}`);
+    process.exit(1);
+  }
+  return parsedPort;
+}
+
+const validatedPort = normalizePort(process.env.PORT);
+app.listen(validatedPort, () => {
+  logger.info(`Centralized Mock Gateway listening on port ${validatedPort}`);
 });

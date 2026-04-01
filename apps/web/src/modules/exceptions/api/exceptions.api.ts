@@ -29,20 +29,20 @@ export async function listExceptions(params?: {
   cursor?: string;
 }): Promise<ExceptionListResult> {
   const query = new URLSearchParams();
-  if (params?.status) query.set('status', params.status);
-  if (params?.limit) query.set('limit', params.limit.toString());
-  if (params?.cursor) query.set('cursor', params.cursor);
+  if (params?.status !== undefined && params?.status !== null) query.set('status', params.status.toString());
+  if (params?.limit !== undefined && params?.limit !== null) query.set('limit', params.limit.toString());
+  if (params?.cursor !== undefined && params?.cursor !== null) query.set('cursor', params.cursor.toString());
 
   const res = await apiClient.get<ExceptionListResult>(`/exceptions?${query.toString()}`);
   return res.data;
 }
 
 export async function retryException(id: string): Promise<{ queued: boolean }> {
-  const res = await apiClient.post<{ queued: boolean }>(`/exceptions/${id}/retry`);
+  const res = await apiClient.post<{ queued: boolean }>(`/exceptions/${encodeURIComponent(id)}/retry`);
   return res.data;
 }
 
 export async function dismissException(id: string): Promise<{ dismissed: boolean }> {
-  const res = await apiClient.post<{ dismissed: boolean }>(`/exceptions/${id}/dismiss`);
+  const res = await apiClient.post<{ dismissed: boolean }>(`/exceptions/${encodeURIComponent(id)}/dismiss`);
   return res.data;
 }

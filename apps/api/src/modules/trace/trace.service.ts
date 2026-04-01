@@ -3,9 +3,10 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { eq, and, desc, lt, or, sql as drizzleSql } from 'drizzle-orm';
+import { eq, and, desc, lt, or, sql as drizzleSql, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -14,7 +15,6 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
-import { sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -121,7 +121,7 @@ function parseCursor(cursor: string): ParsedCursor {
   const id = cursor.slice(separatorIdx + 1);
 
   const timestamp = new Date(ts);
-  if (isNaN(timestamp.getTime())) {
+  if (Number.isNaN(timestamp.getTime())) {
     throw new BadRequestException(
       'Invalid cursor: timestamp component is not a valid date',
     );
@@ -167,6 +167,7 @@ export class TraceService {
   async listTraces(
     orgId: string,
     stitchId: string,
+    workspaceId: string | undefined,
     limit = DEFAULT_LIMIT,
     cursor?: string,
   ): Promise<TraceListResult> {
@@ -177,10 +178,15 @@ export class TraceService {
         eq(integrationStitches.id, stitchId),
         eq(integrationStitches.orgId, orgId),
       ),
-      columns: { id: true, srcConnectionId: true },
+      columns: { id: true, srcConnectionId: true, workspaceId: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
+    }
+    if (workspaceId && stitch.workspaceId !== workspaceId) {
+      throw new ForbiddenException(
+        `Trace access denied for workspace ${workspaceId}`,
+      );
     }
 
     const schemaName = await this.storageResolver.resolveSchemaName(
@@ -256,16 +262,27 @@ export class TraceService {
     orgId: string,
     stitchId: string,
     traceId: string,
+    workspaceId: string | undefined,
   ): Promise<FullTrace> {
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: and(
         eq(integrationStitches.id, stitchId),
         eq(integrationStitches.orgId, orgId),
       ),
-      columns: { id: true, srcConnectionId: true, destConnectionId: true },
+      columns: {
+        id: true,
+        srcConnectionId: true,
+        destConnectionId: true,
+        workspaceId: true,
+      },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
+    }
+    if (workspaceId && stitch.workspaceId !== workspaceId) {
+      throw new ForbiddenException(
+        `Trace access denied for workspace ${workspaceId}`,
+      );
     }
 
     const [srcSchemaName, destSchemaName] = await Promise.all([

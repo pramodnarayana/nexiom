@@ -65,7 +65,7 @@ export function ExceptionCenterPage() {
       // Optimistic remove
       setExceptions((prev) => prev.filter((item) => item.id !== id));
     } catch (e: unknown) {
-      alert(`Failed to ${action} exception: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Failed to ${action} exception: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setActionStates((prev) => {
         const next = { ...prev };
@@ -79,11 +79,117 @@ export function ExceptionCenterPage() {
     if (!resPayload) return statusCode ? `HTTP ${statusCode}` : 'Unknown failure';
     if (typeof resPayload === 'object' && resPayload !== null) {
       const p = resPayload as Record<string, unknown>;
-      if (p.message) return String(p.message);
+      if (p.message) return typeof p.message === 'string' ? p.message : JSON.stringify(p.message);
       if (p.error) return typeof p.error === 'string' ? p.error : JSON.stringify(p.error);
     }
-    return String(resPayload);
+    return JSON.stringify(resPayload);
   };
+
+  let tableContent = null;
+  if (loading) {
+    tableContent = Array.from({ length: 5 }).map(() => (
+      <TableRow key={crypto.randomUUID()}>
+        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+        <TableCell><Skeleton className="h-4 w-64" /></TableCell>
+        <TableCell className="text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
+        <TableCell className="text-center"><Skeleton className="h-6 w-16 mx-auto rounded-full" /></TableCell>
+        <TableCell className="text-right flex justify-end gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-20" />
+        </TableCell>
+      </TableRow>
+    ));
+  } else if (exceptions.length === 0) {
+    tableContent = (
+      <TableRow>
+        <TableCell colSpan={6} className="h-64 text-center">
+          <div className="relative flex flex-col items-center justify-center p-8 overflow-hidden rounded-xl border border-dashed bg-muted/10">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5" />
+            <SearchX className="h-10 w-10 text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-medium text-foreground relative">No {statusFilter} exceptions</h3>
+            <p className="text-sm text-muted-foreground relative mt-1 max-w-sm">
+              Your pipelines are healthy. We couldn't find any {statusFilter} records matching these criteria.
+            </p>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  } else {
+    tableContent = (
+      <>
+        {exceptions.map((exc) => {
+          const action = actionStates[exc.id];
+          const isRetrying = action?.type === 'retry' && action.loading;
+          const isDismissing = action?.type === 'dismiss' && action.loading;
+
+          return (
+            <TableRow
+              key={exc.id}
+              className={`group hover:bg-muted/30 transition-colors ${action ? 'opacity-50' : ''}`}
+            >
+              <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                {new Date(exc.updatedAt).toLocaleString()}
+              </TableCell>
+              <TableCell>
+                <div className="font-mono text-xs">{exc.routeId.slice(0, 13)}...</div>
+              </TableCell>
+              <TableCell>
+                <div className="max-w-[300px] truncate text-sm font-medium">
+                  {getReasonFromPayload(exc.resPayload, exc.statusCode)}
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                  {exc.attemptCount}
+                </span>
+              </TableCell>
+              <TableCell className="text-center">
+                {exc.status === 'RETRY' || exc.status === 'FAIL' ? (
+                  <div className="flex items-center justify-center gap-1.5 text-destructive">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive"></span>
+                    </span>
+                    <span className="text-xs font-medium uppercase">{exc.status}</span>
+                  </div>
+                ) : (
+                  <Badge variant="secondary" className="text-[10px] uppercase">{exc.status}</Badge>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {statusFilter === 'unresolved' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!!action}
+                        onClick={() => void handleAction(exc.id, 'dismiss')}
+                        className="h-8 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors rounded-full"
+                      >
+                        {isDismissing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Dismiss'}
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={!!action}
+                        onClick={() => void handleAction(exc.id, 'retry')}
+                        className="h-8 rounded-full shadow-sm hover:shadow active:scale-95 transition-all"
+                      >
+                        {isRetrying ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                        Retry
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </>
+    );
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -132,106 +238,7 @@ export function ExceptionCenterPage() {
             </TableRow>
           </TableHeader>
           <TableBody ref={parent}>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-64" /></TableCell>
-                  <TableCell className="text-center"><Skeleton className="h-4 w-8 mx-auto" /></TableCell>
-                  <TableCell className="text-center"><Skeleton className="h-6 w-16 mx-auto rounded-full" /></TableCell>
-                  <TableCell className="text-right flex justify-end gap-2">
-                    <Skeleton className="h-8 w-16" />
-                    <Skeleton className="h-8 w-20" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : exceptions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-64 text-center">
-                  <div className="relative flex flex-col items-center justify-center p-8 overflow-hidden rounded-xl border border-dashed bg-muted/10">
-                    <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5" />
-                    <SearchX className="h-10 w-10 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-medium text-foreground relative">No {statusFilter} exceptions</h3>
-                    <p className="text-sm text-muted-foreground relative mt-1 max-w-sm">
-                      Your pipelines are healthy. We couldn't find any {statusFilter} records matching these criteria.
-                    </p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              <>
-                {exceptions.map((exc) => {
-                  const action = actionStates[exc.id];
-                  const isRetrying = action?.type === 'retry' && action.loading;
-                  const isDismissing = action?.type === 'dismiss' && action.loading;
-
-                  return (
-                    <TableRow
-                      key={exc.id}
-                      className={`group hover:bg-muted/30 transition-colors ${action ? 'opacity-50' : ''}`}
-                    >
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {new Date(exc.updatedAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-mono text-xs">{exc.routeId.slice(0, 13)}...</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[300px] truncate text-sm font-medium">
-                          {getReasonFromPayload(exc.resPayload, exc.statusCode)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                          {exc.attemptCount}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {exc.status === 'RETRY' || exc.status === 'FAIL' ? (
-                          <div className="flex items-center justify-center gap-1.5 text-destructive">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive"></span>
-                            </span>
-                            <span className="text-xs font-medium uppercase">{exc.status}</span>
-                          </div>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px] uppercase">{exc.status}</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {statusFilter === 'unresolved' && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={!!action}
-                                onClick={() => void handleAction(exc.id, 'dismiss')}
-                                className="h-8 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors rounded-full"
-                              >
-                                {isDismissing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Dismiss'}
-                              </Button>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                disabled={!!action}
-                                onClick={() => void handleAction(exc.id, 'retry')}
-                                className="h-8 rounded-full shadow-sm hover:shadow active:scale-95 transition-all"
-                              >
-                                {isRetrying ? <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-                                Retry
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </>
-            )}
+            {tableContent}
           </TableBody>
         </Table>
       </div>

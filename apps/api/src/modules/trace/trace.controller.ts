@@ -32,13 +32,20 @@ export class TraceController {
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('cursor') cursor?: string,
+    @Query('workspaceId') workspaceId?: string,
   ) {
     const orgId = ctx.user?.organizationId;
     if (!orgId) {
       throw new BadRequestException('Organization context is missing');
     }
 
-    return this.traceService.listTraces(orgId, stitchId, limit, cursor);
+    return this.traceService.listTraces(
+      orgId,
+      stitchId,
+      workspaceId,
+      limit,
+      cursor,
+    );
   }
 
   /**
@@ -52,12 +59,13 @@ export class TraceController {
     @AuthContext() ctx: RequestAuthContext,
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Param('traceId', ParseUUIDPipe) traceId: string,
+    @Query('workspaceId') workspaceId?: string,
   ) {
     const orgId = ctx.user?.organizationId;
     if (!orgId) {
       throw new BadRequestException('Organization context is missing');
     }
 
-    return this.traceService.getTrace(orgId, stitchId, traceId);
+    return this.traceService.getTrace(orgId, stitchId, traceId, workspaceId);
   }
 }

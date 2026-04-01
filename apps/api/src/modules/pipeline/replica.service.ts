@@ -65,7 +65,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     const { traceId, connectionId } = msg;
 
     // Bind L2 pipeline context to structured logging
-    const logCtx = { layer: 'L2', traceId, connectionId };
 
     try {
       const activeCheck = await this.db
@@ -210,11 +209,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       // 7. No external queueing logic needed here - Outbox worker handles this relay
 
       this.logger.log(
-        `[${logCtx.connectionId}] Trace ${traceId} successfully replicated (L2) in ${didReplicate.durationMs}ms`,
+        `[${connectionId}] Trace ${traceId} successfully replicated (L2) in ${didReplicate.durationMs}ms`,
       );
     } catch (err: unknown) {
       this.logger.error(
-        `[${logCtx.connectionId}] Failed to process L2 replication for trace ${traceId}`,
+        `[${connectionId}] Failed to process L2 replication for trace ${traceId}`,
         err instanceof Error ? err.stack : String(err),
       );
       throw err;
