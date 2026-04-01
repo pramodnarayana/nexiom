@@ -135,7 +135,6 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **dotenv auto-resolution**: `drizzle.config.ts` in `@nexiom/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
 - **Enterprise Piece Loader**: `PiecesModule` is now a DynamicModule with `forRoot({ anchorUrl: import.meta.url })`. All 6 host modules (ConnectionsModule, StitchesModule, TriggerModule, SchedulerModule, WebhooksModule, PipelineModule) pass their own `import.meta.url` as the resolution anchor, bypassing pnpm strict package containment in any working directory or container.
 
-
 ### 4. Shadow Mode Direct Trigger Imports
 
 **Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts` & Quickbooks  
@@ -212,6 +211,8 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - Configure Vector's internal metrics sink to expose `vector_buffer_discarded_events_total` to Prometheus/Grafana.
 - Set up an alert (e.g., PagerDuty or Slack) that triggers whenever logs are actively being dropped, indicating an issue with the logging infrastructure.
 
+## Observability Edge Cases
+
 ### 1. Cross-Module AuthGuard Import
 
 **Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`  
@@ -255,23 +256,39 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 3. Drizzle-Kit ESM Module Resolution
+### ~~3. Drizzle-Kit ESM Module Resolution~~ ✅ RESOLVED (2026-03-31)
 
 **Location**: `packages/database/drizzle.config.ts`, `packages/database/package.json`
 **Added**: 2026-03-30
 **Impact**: Developer Experience, CI/CD Pipeline Reliability
 **Effort**: Low (0.5 days)
 
+**Resolution**:
+
+- **Implemented Option A**: Permanently locked `drizzle.config.ts` to `schema: './dist/schema/*.js'` and updated *all* DDL script entries (`db:generate`, `db:migrate`, `db:studio`) to compile first automatically (`"db:generate": "pnpm build && drizzle-kit generate"`, etc.). This bypassed jiti's loader failures with ESM `.js` extensions while ensuring all commands are fully robust in fresh environments (enterprise-grade).
+
+---
+
+### 4. Centralized Mock Gateway / Mock Service Worker (MSW)
+
+**Location**: `docker-compose.yml`, `apps/api`, `apps/worker`
+**Added**: 2026-03-31
+**Impact**: Infrastructure Scalability, Developer Experience, RAM utilization
+**Effort**: Low (remaining tasks)
+
 **Current State**:
 
-- The `@nexiom/database` workspace uses `drizzle-kit` for schema generation but strictly enforces Node ECMAScript module resolution (`type: "module"`). 
-- Because `drizzle-kit`'s default `jiti` loader struggles to resolve explicit `.js` import extensions back to the raw `.ts` schema definitions, developers continuously hit `MODULE_NOT_FOUND` errors when running `db:generate`.
-- The current temporary workaround involves manually editing `drizzle.config.ts` to target the compiled `./dist/schema/*.js` paths just to generate migrations.
+- Local development now uses a centralized `mock_gateway` container to serve mocks instead of individual Prism containers.
+- Option A (Centralized Mock Server) is successfully implemented and active in docker-compose.
+- Remaining gaps:
+  - Dynamic loading from `packages/pieces/*/openapi.json` edge-cases need monitoring.
+  - The routing pattern `/mock/{vendor}/...` requires integration notes for `apps/api` and `apps/worker`.
 
 **Recommended Solution**:
 
-- **Option A (Build-First Pipeline - Recommended)**: Permanently lock `drizzle.config.ts` to `schema: './dist/schema/*.js'` and update the generation script to compile first automatically: `"db:generate": "pnpm build && drizzle-kit generate"`. This is fully robust for remote CI/CD environments.
-- **Option B (Execution Loader)**: Retain the `.ts` configuration but update the `db:generate` script to explicitly use Node's `tsx` loader to bypass Jiti's resolution flaws: `"db:generate": "node --import tsx node_modules/drizzle-kit/bin.cjs generate"`.
+- ✅ Option A (Centralized Mock Gateway) is implemented.
+- Finalize documentation for API/Worker pointing to the mock gateway.
+- Option B (MSW Network Interception) can be tracked as an optional future alternative if Docker network overhead becomes an issue.
 
 ---
 

@@ -76,11 +76,13 @@ export function WorkspaceDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    const fetchRef = fetchSeqRef;
+    const connRef = connSeqRef;
     void fetchWorkspace();
     void fetchConnections();
     return () => {
-      fetchSeqRef.current++;
-      connSeqRef.current++;
+      fetchRef.current++;
+      connRef.current++;
     };
   }, [fetchWorkspace, fetchConnections]);
 

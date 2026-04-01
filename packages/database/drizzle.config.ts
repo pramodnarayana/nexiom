@@ -42,13 +42,11 @@ if (!process.env.DATABASE_URL) {
     );
 }
 
-// Schema points to the TypeScript source files directly. drizzle-kit uses
-// jiti to parse TypeScript without a prior build step. We use a glob that
-// targets individual schema files rather than the barrel index.ts so that
-// jiti does not try to resolve the .js-extension re-exports used for ESM
-// compatibility at runtime.
+// Schema points to the compiled JavaScript source files.
+// This bypasses jiti's difficulty in resolving explicit .js extensions
+// inside TypeScript files when using type: "module" (ESM resolution).
 export default {
-    schema: './src/schema/*.ts',
+    schema: './dist/schema/*.js',
     out: './drizzle',
     dialect: 'postgresql',
     dbCredentials: {

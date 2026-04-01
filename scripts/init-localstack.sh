@@ -38,8 +38,6 @@ for QUEUE in "${QUEUES[@]}"; do
     --query 'Attributes.QueueArn' \
     --output text)
 
-  REDRIVE_POLICY="{\"deadLetterTargetArn\":\"${DLQ_ARN}\",\"maxReceiveCount\":\"5\"}"
-
   # Get existing queue URL; create only when missing so CreateQueue never sees
   # a QueueAlreadyExists-with-different-attributes error.
   if ! QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "$QUEUE" --query 'QueueUrl' --output text 2>/dev/null); then
@@ -47,9 +45,10 @@ for QUEUE in "${QUEUES[@]}"; do
     QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "$QUEUE" --query 'QueueUrl' --output text)
   fi
 
+  REDRIVE_POLICY_JSON=$(printf '{"RedrivePolicy":"{\\"deadLetterTargetArn\\":\\"%s\\",\\"maxReceiveCount\\":\\"5\\"}"}' "$DLQ_ARN")
   awslocal sqs set-queue-attributes \
     --queue-url "$QUEUE_URL" \
-    --attributes "RedrivePolicy=${REDRIVE_POLICY}" > /dev/null
+    --attributes "$REDRIVE_POLICY_JSON" > /dev/null
   echo "[init-localstack]   ✓ $QUEUE (redrive → $DLQ_NAME)"
 done
 

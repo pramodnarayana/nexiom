@@ -513,21 +513,21 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/pipeline/exception.service.ts`, `apps/api/src/modules/intelligence/exception.controller.ts`
 - Depends: T035
 
-### T038 · web: `RouteIntelligencePage`
+### T038 · web: `PipelineTracePage` (formerly `RouteIntelligencePage`)
 
-- [ ] Horizontal L1→L6 pipeline diagram with coloured status dots (green/amber/red)
-- [ ] Paginated record list — each row shows trace summary
-- [ ] Expandable row → JSON viewer per layer (payload at each stage)
-- [ ] 5-second auto-refresh (or SSE if available)
-- Files: `apps/web/src/modules/intelligence/RouteIntelligencePage.tsx`
+- [x] Horizontal L1→L6 pipeline diagram with coloured status dots (green/amber/red)
+- [x] Paginated record list — each row shows trace summary
+- [x] Expandable row → JSON viewer per layer (payload at each stage)
+- [x] 5-second auto-refresh (or SSE if available)
+- Files: `apps/web/src/modules/trace/pages/PipelineTracePage.tsx`
 - Depends: T036
 
 ### T039 · web: `ExceptionCenterPage`
 
-- [ ] Table of DLQ items: route name, record ID, failure reason, attempt count, timestamp
-- [ ] "Retry" + "Dismiss" actions per row
-- [ ] Bulk retry/dismiss for support team
-- Files: `apps/web/src/modules/intelligence/ExceptionCenterPage.tsx`
+- [x] Table of DLQ items: route name, record ID, failure reason, attempt count, timestamp
+- [x] "Retry" + "Dismiss" actions per row
+- [ ] Bulk retry/dismiss for support team (deferred)
+- Files: `apps/web/src/modules/exceptions/pages/ExceptionCenterPage.tsx`
 - Depends: T037
 
 ---
@@ -622,7 +622,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 2 — Stitches & Mapping Canvas | T017–T025 | ✅ T017–T022 · ⬜ T023–T025 | Stitch + field mapping + schedule config |
 | 3 — Pipeline | T026–T035 | ✅ All | Full L1→L6 data flow + scheduler execution |
 | 3.5 — Stateful Sync | T046–T050 + T029 + T030 | ✅ All | Windmill orchestration + Singer-style cursor engine |
-| 4 — Dashboard | T036–T039 | ✅ T036,T037 · ⬜ T038,T039 | Trace timeline + Exception Center |
+| 4 — Dashboard | T036–T039 | ✅ All | Trace timeline + Exception Center |
 | 5 — AI Mapping | T040–T042 | ⬜ All | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | ⬜ All | Sandbox/Production routing |
 | 7 — Delivery Outbox | T051–T052 | ✅ All | Delivery Outbox Resiliency |
@@ -638,13 +638,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ### Immediate — close the UI gap
 
-1. **T038** — `RouteIntelligencePage`: horizontal L1→L6 pipeline diagram, paginated trace list, expandable JSON viewer per layer. Uses the live T036 trace API. **Unblocked now.**
+1. **T023** — `StitchesPage` + `NewStitchPage` 3-step wizard: pick source/target connection, mapping canvas with drag-to-connect. Depends on T019, T022 (both complete).
 
-2. **T039** — `ExceptionCenterPage`: exception table with retry/dismiss actions per row, bulk actions for support team. Uses the live T037 exception API. **Unblocked now.**
-
-3. **T023** — `StitchesPage` + `NewStitchPage` 3-step wizard: pick source/target connection, mapping canvas with drag-to-connect. Depends on T019, T022 (both complete).
-
-4. **T024** — Schedule Panel on `StitchDetailPage`: frequency dropdown, enable/pause toggle, "Run now" button. Depends on T021, T023.
+2. **T024** — Schedule Panel on `StitchDetailPage`: frequency dropdown, enable/pause toggle, "Run now" button. Depends on T021, T023.
 
 ### Observability (high-value, low-effort)
 

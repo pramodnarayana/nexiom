@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { eq, and, desc, lt, or, sql as drizzleSql } from 'drizzle-orm';
+import { eq, and, desc, lt, or, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -14,7 +14,6 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
-import { sql } from 'drizzle-orm';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -121,7 +120,7 @@ function parseCursor(cursor: string): ParsedCursor {
   const id = cursor.slice(separatorIdx + 1);
 
   const timestamp = new Date(ts);
-  if (isNaN(timestamp.getTime())) {
+  if (Number.isNaN(timestamp.getTime())) {
     throw new BadRequestException(
       'Invalid cursor: timestamp component is not a valid date',
     );
@@ -167,17 +166,24 @@ export class TraceService {
   async listTraces(
     orgId: string,
     stitchId: string,
+    workspaceId: string | undefined,
     limit = DEFAULT_LIMIT,
     cursor?: string,
   ): Promise<TraceListResult> {
     const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_LIMIT);
 
     const stitch = await this.db.query.integrationStitches.findFirst({
-      where: and(
-        eq(integrationStitches.id, stitchId),
-        eq(integrationStitches.orgId, orgId),
-      ),
-      columns: { id: true, srcConnectionId: true },
+      where: workspaceId
+        ? and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+            eq(integrationStitches.workspaceId, workspaceId),
+          )
+        : and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+          ),
+      columns: { id: true, srcConnectionId: true, workspaceId: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
@@ -196,10 +202,7 @@ export class TraceService {
       // (ts < cursorTs) OR (ts = cursorTs AND id < cursorId)
       cursorCondition = or(
         lt(syncLog.timestamp, cursorTs),
-        and(
-          drizzleSql`${syncLog.timestamp} = ${cursorTs}`,
-          lt(syncLog.id, cursorId),
-        ),
+        and(sql`${syncLog.timestamp} = ${cursorTs}`, lt(syncLog.id, cursorId)),
       );
     }
 
@@ -256,13 +259,25 @@ export class TraceService {
     orgId: string,
     stitchId: string,
     traceId: string,
+    workspaceId: string | undefined,
   ): Promise<FullTrace> {
     const stitch = await this.db.query.integrationStitches.findFirst({
-      where: and(
-        eq(integrationStitches.id, stitchId),
-        eq(integrationStitches.orgId, orgId),
-      ),
-      columns: { id: true, srcConnectionId: true, destConnectionId: true },
+      where: workspaceId
+        ? and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+            eq(integrationStitches.workspaceId, workspaceId),
+          )
+        : and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+          ),
+      columns: {
+        id: true,
+        srcConnectionId: true,
+        destConnectionId: true,
+        workspaceId: true,
+      },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);

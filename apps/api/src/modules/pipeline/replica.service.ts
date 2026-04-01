@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
 import {
@@ -25,12 +25,13 @@ interface InboundMessage {
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
   constructor(
-    @InjectPinoLogger(ReplicaService.name)
     private readonly logger: PinoLogger,
     private readonly queueService: QueueService,
     private readonly storageResolver: StorageResolverService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-  ) {}
+  ) {
+    this.logger.setContext(ReplicaService.name);
+  }
 
   onModuleInit() {
     this.logger.info('Starting L2 Replica worker...');
@@ -45,9 +46,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           typeof (payload as Record<string, unknown>).traceId !== 'string' ||
           typeof (payload as Record<string, unknown>).connectionId !== 'string'
         ) {
+          let safePayload = '[unserializable payload]';
+          try {
+            safePayload = JSON.stringify(payload);
+          } catch {
+            // fallback for circular refs
+          }
           this.logger.warn(
-            { msg: payload },
-            'Received invalid message from InboundQueue: traceId and connectionId must be strings',
+            { payload: safePayload },
+            'Received invalid message from InboundQueue: traceId and connectionId must be strings.',
           );
           return;
         }
@@ -66,7 +73,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     const { traceId, connectionId } = msg;
 
     // Bind L2 pipeline context to structured logging
-    const logCtx = { layer: 'L2', traceId, connectionId };
 
     try {
       const activeCheck = await this.db
@@ -125,8 +131,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           }
 
           this.logger.debug(
-            logCtx,
-            `Trace ${traceId} already replicated. Skipping.`,
+            { connectionId, traceId },
+            'Trace already replicated. Skipping.',
           );
           return { replicated: false, durationMs: 0 };
         }
@@ -212,13 +218,18 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       // 7. No external queueing logic needed here - Outbox worker handles this relay
 
       this.logger.info(
-        { ...logCtx, durationMs: didReplicate.durationMs },
-        `Trace ${traceId} successfully replicated (L2)`,
+        {
+          traceId,
+          connectionId,
+          layer: 'L2',
+          durationMs: didReplicate.durationMs,
+        },
+        'Trace successfully replicated (L2)',
       );
     } catch (err: unknown) {
       this.logger.error(
-        { ...logCtx, err: err instanceof Error ? err.stack : String(err) },
-        `Failed to process L2 replication for trace ${traceId}`,
+        { err, traceId, connectionId, layer: 'L2' },
+        'Failed to process L2 replication for trace',
       );
       throw err;
     }

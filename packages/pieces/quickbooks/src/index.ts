@@ -278,7 +278,7 @@ export const quickbooks = createPiece({
   },
   executeAction: async (objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse> => {
     // Writes a single entity to the QuickBooks Online v3 API.
-    // In local/Prism mode baseUrl points to localhost:4011.
+    // In local/mock mode baseUrl points to http://mock_gateway:4000/mock/quickbooks.
     // In production, baseUrl is the QB API endpoint; realmId identifies the company.
     const realmId = (credentials['realmId'] as string | undefined) ?? (credentials['realm_id'] as string | undefined) ?? 'stub';
     const accessToken = (credentials['access_token'] as string | undefined) ?? (credentials['accessToken'] as string | undefined) ?? 'stub';

@@ -42,18 +42,18 @@ services:
   # DATABASE_POOLED_URL points here; use it for services that benefit from
   # connection pooling (e.g. high-concurrency workers).
   pgbouncer:
-    image: bitnami/pgbouncer:1.23.1
+    image: edoburu/pgbouncer:1.21.0
     environment:
-      POSTGRESQL_HOST: postgres
-      POSTGRESQL_PORT: 5432
-      POSTGRESQL_USERNAME: ${POSTGRES_USER:-user}
-      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRESQL_DATABASE: ${POSTGRES_DB:-nexiom_local}
-      PGBOUNCER_AUTH_TYPE: trust
-      PGBOUNCER_POOL_MODE: transaction
-      PGBOUNCER_MAX_CLIENT_CONN: "200"
-      PGBOUNCER_DEFAULT_POOL_SIZE: "20"
-      PGBOUNCER_PORT: 5432
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      DB_NAME: ${POSTGRES_DB:-nexiom_local}
+      AUTH_TYPE: md5
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      LISTEN_PORT: 5432
     ports:
       - "5433:5432"
     healthcheck:
@@ -92,29 +92,16 @@ services:
     networks:
       - nexiom-network
 
-  # --- Prism (OpenAPI Mock Server) ---
-  # Serves mock Salesforce / QuickBooks API responses for local dev.
-  # Hit http://localhost:4010/services/data/v59.0/sobjects (Salesforce)
-  # or http://localhost:4011/v3/company/... (QuickBooks) to test metadata discovery.
-  prism-salesforce:
-    image: stoplight/prism:4
-    command: mock -h 0.0.0.0 /specs/openapi.json
+  # --- Centralized Mock Gateway ---
+  # Replaces individual Prism containers. Dynamically serves all OpenAPI mocks.
+  # Hit http://localhost:4000/mock/salesforce/... or /mock/quickbooks/...
+  mock_gateway:
+    build:
+      context: .
+      dockerfile: apps/mock-gateway/Dockerfile
+      target: runner
     ports:
-      - "4010:4010"
-    volumes:
-      - ./packages/pieces/salesforce/openapi.json:/specs/openapi.json:ro
-    networks:
-      - nexiom-network
-
-  prism-quickbooks:
-    image: stoplight/prism:4
-    # Prism defaults to internal port 4010; -p 4010 is explicit for clarity.
-    # Host port 4011 maps to container port 4010 — distinct from prism-salesforce.
-    command: mock -h 0.0.0.0 -p 4010 /specs/openapi.json
-    ports:
-      - "4011:4010"
-    volumes:
-      - ./packages/pieces/quickbooks/openapi.json:/specs/openapi.json:ro
+      - "4000:4000"
     networks:
       - nexiom-network
 
@@ -252,8 +239,7 @@ services:
   # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
   # memory. Requires `privileged: true` on the worker container.
   windmill_init:
-    image: ghcr.io/windmill-labs/windmill:v1.662.0
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     command: ["windmill", "init"]
     environment:
       <<: *windmill-env
@@ -264,8 +250,7 @@ services:
       - nexiom-network
 
   windmill_server:
-    image: ghcr.io/windmill-labs/windmill:v1.662.0
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     restart: unless-stopped
     environment:
       <<: *windmill-env
@@ -287,8 +272,7 @@ services:
       - nexiom-network
 
   windmill_worker:
-    image: ghcr.io/windmill-labs/windmill:v1.662.0
-    pull_policy: always
+    image: ghcr.io/windmill-labs/windmill:v1.341.0
     restart: unless-stopped
     # privileged required for ENABLE_UNSHARE_PID
     privileged: true

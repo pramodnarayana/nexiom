@@ -8,7 +8,7 @@ import { ReplicaService } from './replica.service.js';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { getLoggerToken } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 describe('ReplicaService', () => {
@@ -74,13 +74,14 @@ describe('ReplicaService', () => {
       providers: [
         ReplicaService,
         {
-          provide: getLoggerToken(ReplicaService.name),
+          provide: PinoLogger,
           useValue: {
             info: vi.fn(),
             warn: vi.fn(),
             error: vi.fn(),
             debug: vi.fn(),
             assign: vi.fn(),
+            setContext: vi.fn(),
           },
         },
         { provide: QueueService, useValue: queueServiceMock },

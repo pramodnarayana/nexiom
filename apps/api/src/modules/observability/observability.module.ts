@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -28,6 +28,7 @@ const SAFE_TRACE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
  *  - layer        : set by pipeline services ("L1", "L2", …)
  *  - durationMs   : set by controllers after the operation completes
  */
+@Global()
 @Module({
   imports: [
     LoggerModule.forRootAsync({
