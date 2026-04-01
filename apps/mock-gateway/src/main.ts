@@ -13,18 +13,15 @@ app.use(cors());
 app.use(express.json());
 app.use(pinoHttp({ logger }));
 
-// Depending on if we run from the app root (`node apps/mock-gateway/dist/main.js`) 
-// or from Docker (`node /app/apps/mock-gateway/dist/main.js`), the packages logic shifts.
-let piecesDir = join(process.cwd(), '../../packages/pieces');
-if (!existsSync(piecesDir)) {
-  piecesDir = join(process.cwd(), 'packages/pieces');
-  if (!existsSync(piecesDir)) {
-    // Docker execution context where apps/mock-gateway runs from /app
-    piecesDir = join(process.cwd(), '../packages/pieces');
-  }
-}
+const candidatePaths = [
+  join(process.cwd(), '../../packages/pieces'),
+  join(process.cwd(), 'packages/pieces'),
+  join(process.cwd(), '../packages/pieces'),
+];
 
-if (existsSync(piecesDir)) {
+const piecesDir = candidatePaths.find(p => existsSync(p));
+
+if (piecesDir) {
   const pieces = readdirSync(piecesDir, { withFileTypes: true })
     .filter(dirent => dirent.isDirectory())
     .map(dirent => dirent.name);
@@ -39,7 +36,8 @@ if (existsSync(piecesDir)) {
         notImplemented: async (c, req, res) => {
           try {
             // Generate mock dynamically from OpenAPI components/schema examples
-            const mock = await c.api.mockResponseForOperation(c.operation.operationId as string || c.operation.path);
+            const operationId = (c.operation.operationId as string | undefined) ?? c.operation.path;
+            const mock = await c.api.mockResponseForOperation(operationId);
             return res.status(200).json(mock);
           } catch (e: unknown) {
             logger.warn({ err: e }, `Failed to generate strict OpenAPI mock for ${piece} ${req.path}`);
@@ -61,7 +59,7 @@ if (existsSync(piecesDir)) {
     }
   }
 } else {
-  logger.error(`Pieces directory could not be located at ${piecesDir}`);
+  logger.error('Pieces directory could not be located in any of the candidate paths.');
   process.exit(1);
 }
 

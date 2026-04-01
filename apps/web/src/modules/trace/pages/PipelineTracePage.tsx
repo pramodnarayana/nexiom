@@ -48,7 +48,7 @@ function LayerTimeline({ layer, status, durationMs }: Readonly<{ layer: string, 
 }
 
 function JsonViewer({ title, data, className = '' }: Readonly<{ title: string; data: unknown; className?: string }>) {
-  if (!data) return null;
+  if (data === null || data === undefined) return null;
   return (
     <div className={`rounded-xl border bg-muted/20 overflow-hidden ${className}`}>
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b">
@@ -68,22 +68,25 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
   const [expanded, setExpanded] = useState(false);
   const [details, setDetails] = useState<FullTrace | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorObj, setErrorObj] = useState<unknown>(null);
   const [rowParent] = useAutoAnimate<HTMLDivElement>();
 
   const handleToggle = async () => {
     if (loading) return;
+    setExpanded(prev => !prev);
     if (!expanded && !details) {
       setLoading(true);
+      setErrorObj(null);
       try {
         const full = await getTrace(workspaceId, stitchId, summary.traceId);
         setDetails(full);
       } catch (e) {
         console.error(e);
+        setErrorObj(e);
       } finally {
         setLoading(false);
       }
     }
-    setExpanded(prev => !prev);
   };
 
   let expandedContent = null;
@@ -96,6 +99,12 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
           <span className="animate-bounce inline-block h-2 w-2 rounded-full bg-primary" style={{ animationDelay: '0.2s' }} />
         </div>
         <span className="text-sm font-medium tracking-tight">Fetching deep trace...</span>
+      </div>
+    );
+  } else if (errorObj) {
+    expandedContent = (
+      <div className="flex items-center gap-3 justify-center py-10">
+        <span className="text-sm font-medium text-destructive">Failed to load detailed trace.</span>
       </div>
     );
   } else if (details) {

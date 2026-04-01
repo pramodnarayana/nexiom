@@ -45,7 +45,7 @@ for QUEUE in "${QUEUES[@]}"; do
     QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "$QUEUE" --query 'QueueUrl' --output text)
   fi
 
-  REDRIVE_POLICY_JSON='{"RedrivePolicy":"{\"deadLetterTargetArn\":\"'"${DLQ_ARN}"'\",\"maxReceiveCount\":\"5\"}"}'
+  REDRIVE_POLICY_JSON=$(printf '{"RedrivePolicy":"{\\"deadLetterTargetArn\\":\\"%s\\",\\"maxReceiveCount\\":\\"5\\"}"}' "$DLQ_ARN")
   awslocal sqs set-queue-attributes \
     --queue-url "$QUEUE_URL" \
     --attributes "$REDRIVE_POLICY_JSON" > /dev/null

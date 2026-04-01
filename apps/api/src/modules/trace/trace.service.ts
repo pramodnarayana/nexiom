@@ -3,7 +3,6 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { eq, and, desc, lt, or, sql as drizzleSql, sql } from 'drizzle-orm';
@@ -174,19 +173,20 @@ export class TraceService {
     const safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_LIMIT);
 
     const stitch = await this.db.query.integrationStitches.findFirst({
-      where: and(
-        eq(integrationStitches.id, stitchId),
-        eq(integrationStitches.orgId, orgId),
-      ),
+      where: workspaceId
+        ? and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+            eq(integrationStitches.workspaceId, workspaceId),
+          )
+        : and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+          ),
       columns: { id: true, srcConnectionId: true, workspaceId: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
-    }
-    if (workspaceId && stitch.workspaceId !== workspaceId) {
-      throw new ForbiddenException(
-        `Trace access denied for workspace ${workspaceId}`,
-      );
     }
 
     const schemaName = await this.storageResolver.resolveSchemaName(
@@ -265,10 +265,16 @@ export class TraceService {
     workspaceId: string | undefined,
   ): Promise<FullTrace> {
     const stitch = await this.db.query.integrationStitches.findFirst({
-      where: and(
-        eq(integrationStitches.id, stitchId),
-        eq(integrationStitches.orgId, orgId),
-      ),
+      where: workspaceId
+        ? and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+            eq(integrationStitches.workspaceId, workspaceId),
+          )
+        : and(
+            eq(integrationStitches.id, stitchId),
+            eq(integrationStitches.orgId, orgId),
+          ),
       columns: {
         id: true,
         srcConnectionId: true,
@@ -278,11 +284,6 @@ export class TraceService {
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
-    }
-    if (workspaceId && stitch.workspaceId !== workspaceId) {
-      throw new ForbiddenException(
-        `Trace access denied for workspace ${workspaceId}`,
-      );
     }
 
     const [srcSchemaName, destSchemaName] = await Promise.all([

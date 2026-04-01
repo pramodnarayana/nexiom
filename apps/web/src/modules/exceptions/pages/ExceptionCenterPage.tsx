@@ -20,6 +20,8 @@ import {
   type ExceptionStatus,
 } from '../api/exceptions.api';
 
+const SKELETON_KEYS = ['skeleton-1', 'skeleton-2', 'skeleton-3', 'skeleton-4', 'skeleton-5'];
+
 export function ExceptionCenterPage() {
   const [exceptions, setExceptions] = useState<ExceptionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,8 +89,8 @@ export function ExceptionCenterPage() {
 
   let tableContent = null;
   if (loading) {
-    tableContent = Array.from({ length: 5 }).map(() => (
-      <TableRow key={crypto.randomUUID()}>
+    tableContent = SKELETON_KEYS.map((key) => (
+      <TableRow key={key}>
         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
         <TableCell><Skeleton className="h-4 w-40" /></TableCell>
         <TableCell><Skeleton className="h-4 w-64" /></TableCell>
@@ -129,7 +131,14 @@ export function ExceptionCenterPage() {
               className={`group hover:bg-muted/30 transition-colors ${action ? 'opacity-50' : ''}`}
             >
               <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                {new Date(exc.updatedAt).toLocaleString()}
+                {new Intl.DateTimeFormat('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                }).format(new Date(exc.updatedAt))}
               </TableCell>
               <TableCell>
                 <div className="font-mono text-xs">{exc.routeId.slice(0, 13)}...</div>
@@ -201,10 +210,12 @@ export function ExceptionCenterPage() {
           </p>
         </div>
         
-        <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg border">
+        <div role="radiogroup" aria-label="Exception Status Filter" className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg border">
           {(['unresolved', 'dismissed'] as const).map((s) => (
             <button
               key={s}
+              role="radio"
+              aria-checked={statusFilter === s}
               onClick={() => setStatusFilter(s)}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                 statusFilter === s 

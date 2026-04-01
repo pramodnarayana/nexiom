@@ -32,12 +32,14 @@ const SRC_CONN = '33333333-3333-3333-3333-333333333333';
 const DEST_CONN = '44444444-4444-4444-4444-444444444444';
 const ROW_ID_1 = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const ROW_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+const WORKSPACE_ID = 'ws-999';
 
 const MOCK_STITCH = {
   id: STITCH_ID,
   orgId: ORG_ID,
   srcConnectionId: SRC_CONN,
   destConnectionId: DEST_CONN,
+  workspaceId: WORKSPACE_ID,
 };
 
 // Captures the arguments passed to from()/where()/orderBy() so tests can
@@ -136,7 +138,29 @@ describe('TraceService', () => {
   });
 
   describe('listTraces()', () => {
-    it('returns paginated sync_log rows for the stitch', async () => {
+    it('returns paginated sync_log rows for the stitch when workspaceId matches', async () => {
+      const result = await service.listTraces(
+        ORG_ID,
+        STITCH_ID,
+        WORKSPACE_ID,
+        50,
+      );
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].layer).toBe('L1');
+      expect(result.data[0].routeId).toBe(STITCH_ID);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('throws NotFoundException when workspaceId does not match stitch workspace', async () => {
+      mockDb.query.integrationStitches.findFirst = vi
+        .fn()
+        .mockResolvedValue(null);
+      await expect(
+        service.listTraces(ORG_ID, STITCH_ID, 'other-workspace-id', 50),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns paginated sync_log rows for the stitch (legacy un-scoped)', async () => {
       const result = await service.listTraces(ORG_ID, STITCH_ID, undefined, 50);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].layer).toBe('L1');
@@ -275,6 +299,15 @@ describe('TraceService', () => {
   });
 
   describe('getTrace()', () => {
+    it('throws NotFoundException when workspaceId does not match stitch workspace', async () => {
+      mockDb.query.integrationStitches.findFirst = vi
+        .fn()
+        .mockResolvedValue(null);
+      await expect(
+        service.getTrace(ORG_ID, STITCH_ID, TRACE_ID, 'other-workspace-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
     it('throws NotFoundException when trace has no sync_log rows for this stitch', async () => {
       // Execute the cb to test query building, but return empty array to trigger 404
       const tx = {
@@ -377,12 +410,22 @@ describe('TraceService', () => {
         ORG_ID,
         STITCH_ID,
         TRACE_ID,
-        undefined,
+        WORKSPACE_ID,
       );
       expect(result).toBeDefined();
       expect(result.traceId).toBe(TRACE_ID);
       expect(capture.fromArgs.length).toBeGreaterThan(0);
       expect(capture.whereArgs.length).toBeGreaterThan(0);
+
+      // Verify un-scoped legacy call also succeeds
+      selectCount = 0;
+      const resultUnscoped = await service.getTrace(
+        ORG_ID,
+        STITCH_ID,
+        TRACE_ID,
+        undefined,
+      );
+      expect(resultUnscoped).toBeDefined();
 
       // getTrace checks trace existence + loads timeline inside one tx,
       // then loads the actual payload rows across two schemas.

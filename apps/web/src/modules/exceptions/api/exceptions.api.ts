@@ -33,7 +33,8 @@ export async function listExceptions(params?: {
   if (params?.limit !== undefined && params?.limit !== null) query.set('limit', params.limit.toString());
   if (params?.cursor !== undefined && params?.cursor !== null) query.set('cursor', params.cursor.toString());
 
-  const res = await apiClient.get<ExceptionListResult>(`/exceptions?${query.toString()}`);
+  const qs = query.toString();
+  const res = await apiClient.get<ExceptionListResult>(qs ? `/exceptions?${qs}` : `/exceptions`);
   return res.data;
 }
 

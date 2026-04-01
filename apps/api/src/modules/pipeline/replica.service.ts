@@ -4,8 +4,8 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   NotFoundException,
-  Logger,
 } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
 import {
@@ -24,16 +24,17 @@ interface InboundMessage {
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(ReplicaService.name);
-
   constructor(
+    private readonly logger: PinoLogger,
     private readonly queueService: QueueService,
     private readonly storageResolver: StorageResolverService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-  ) {}
+  ) {
+    this.logger.setContext(ReplicaService.name);
+  }
 
   onModuleInit() {
-    this.logger.log('Starting L2 Replica worker...');
+    this.logger.info('Starting L2 Replica worker...');
     this.queueService.consume(
       QueueName.InboundQueue,
       async (payload: unknown) => {
@@ -45,8 +46,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           typeof (payload as Record<string, unknown>).traceId !== 'string' ||
           typeof (payload as Record<string, unknown>).connectionId !== 'string'
         ) {
+          let safePayload = '[unserializable payload]';
+          try {
+            safePayload = JSON.stringify(payload);
+          } catch {
+            // fallback for circular refs
+          }
           this.logger.warn(
-            `Received invalid message from InboundQueue: traceId and connectionId must be strings. Payload: ${JSON.stringify(payload)}`,
+            { payload: safePayload },
+            'Received invalid message from InboundQueue: traceId and connectionId must be strings.',
           );
           return;
         }
@@ -208,13 +216,19 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       // 7. No external queueing logic needed here - Outbox worker handles this relay
 
-      this.logger.log(
-        `[${connectionId}] Trace ${traceId} successfully replicated (L2) in ${didReplicate.durationMs}ms`,
+      this.logger.info(
+        {
+          traceId,
+          connectionId,
+          layer: 'L2',
+          durationMs: didReplicate.durationMs,
+        },
+        'Trace successfully replicated (L2)',
       );
     } catch (err: unknown) {
       this.logger.error(
-        `[${connectionId}] Failed to process L2 replication for trace ${traceId}`,
-        err instanceof Error ? err.stack : String(err),
+        { err, traceId, connectionId, layer: 'L2' },
+        'Failed to process L2 replication for trace',
       );
       throw err;
     }

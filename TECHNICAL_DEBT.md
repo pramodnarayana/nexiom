@@ -213,6 +213,8 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ## Observability Edge Cases
 
+### 1. Cross-Module AuthGuard Import
+
 **Location**: `apps/api/src/modules/connections/connections/connectors.controller.ts`  
 **Added**: 2026-02-23  
 **Impact**: Code Architecture, Module Coupling  

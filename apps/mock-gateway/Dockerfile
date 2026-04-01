@@ -16,7 +16,6 @@ RUN pnpm deploy --legacy --filter mock-gateway --prod /app/deploy
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
 
 RUN addgroup -S mockgateway && adduser -S mockgateway -G mockgateway
 
