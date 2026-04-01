@@ -16,14 +16,14 @@ import {
 const getStatusColor = (status: string) => {
   if (status === 'SUCCESS' || status === 'COMPLETED') return 'bg-green-500 shadow-green-500/50';
   if (status === 'FAIL') return 'bg-destructive shadow-destructive/50';
-  if (status === 'RETRY' || status === 'PENDING') return 'bg-amber-500 shadow-amber-500/50';
+  if (status === 'RETRY' || status === 'PENDING' || status === 'PROCESSING') return 'bg-amber-500 shadow-amber-500/50';
   return 'bg-muted-foreground/50';
 };
 
 const getStatusBorder = (status: string) => {
   if (status === 'SUCCESS' || status === 'COMPLETED') return 'border-green-500/20';
   if (status === 'FAIL') return 'border-destructive/20';
-  if (status === 'RETRY' || status === 'PENDING') return 'border-amber-500/20';
+  if (status === 'RETRY' || status === 'PENDING' || status === 'PROCESSING') return 'border-amber-500/20';
   return 'border-border';
 };
 
@@ -236,7 +236,7 @@ export function PipelineTracePage() {
         ))}
       </div>
     );
-  } else if (traces.length === 0) {
+  } else if (traces.length === 0 && !loading && !error) {
     pageContent = (
       <div className="relative border rounded-3xl p-16 text-center overflow-hidden bg-card/20">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-background to-background" />

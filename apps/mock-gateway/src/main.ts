@@ -38,8 +38,8 @@ async function bootstrap() {
             try {
               // Generate mock dynamically from OpenAPI components/schema examples
               const operationId = (c.operation.operationId as string | undefined) ?? c.operation.path;
-              const mock = await c.api.mockResponseForOperation(operationId);
-              return res.status(200).json(mock);
+              const { status, mock } = await c.api.mockResponseForOperation(operationId) as { status: number, mock: any };
+              return res.status(status).json(mock);
             } catch (e: unknown) {
               logger.warn({ err: e }, `Failed to generate strict OpenAPI mock for ${piece} ${req.path}`);
               return res.status(200).json({ id: 'dummy-success', status: 'mocked' });
@@ -82,12 +82,20 @@ async function bootstrap() {
 
   // Global error handler
   app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    logger.error({ err }, 'Unhandled mock gateway error');
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+    const status = (err as any).status || (err as any).statusCode || 500;
+    const expose = (err as any).expose === true;
+    
+    logger.error({ err, status, expose }, 'Unhandled mock gateway error');
+    
+    if (expose) {
+      res.status(status).json({ error: 'Error', message: err.message });
+    } else {
+      res.status(status).json({ error: 'Internal Server Error', message: 'An unexpected error occurred' });
+    }
   });
 
   function normalizePort(val: string | undefined): number {
-    const parsedPort = Number.parseInt(val || '4001', 10);
+    const parsedPort = Number.parseInt(val || '4000', 10);
     if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
       logger.error(`Invalid port value: ${val}`);
       process.exit(1);

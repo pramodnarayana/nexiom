@@ -59,14 +59,22 @@ export function ExceptionCenterPage() {
   const handleAction = async (id: string, action: 'retry' | 'dismiss') => {
     setActionStates((prev) => ({ ...prev, [id]: { type: action, loading: true } }));
     try {
+      let success = false;
       if (action === 'retry') {
-        await retryException(id);
+        const res = await retryException(id);
+        success = !!res.queued;
       } else {
-        await dismissException(id);
+        const res = await dismissException(id);
+        success = !!res.dismissed;
       }
-      setError(null);
-      // Remove after successful delete
-      setExceptions((prev) => prev.filter((item) => item.id !== id));
+
+      if (success) {
+        setError(null);
+        // Remove after successful delete
+        setExceptions((prev) => prev.filter((item) => item.id !== id));
+      } else {
+        setError(`Failed to ${action} exception: server returned unsuccessful response.`);
+      }
     } catch (e: unknown) {
       setError(`Failed to ${action} exception: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -79,14 +87,14 @@ export function ExceptionCenterPage() {
   };
 
   const getReasonFromPayload = (resPayload: unknown, statusCode: number | null): string => {
-    if (!resPayload) return statusCode ? `HTTP ${statusCode}` : 'Unknown failure';
+    if (resPayload === undefined || resPayload === null) return statusCode ? `HTTP ${statusCode}` : 'Unknown failure';
     if (typeof resPayload === 'string' || typeof resPayload === 'number' || typeof resPayload === 'boolean') {
       return String(resPayload);
     }
     if (typeof resPayload === 'object' && resPayload !== null) {
       const p = resPayload as Record<string, unknown>;
-      if (p.message) return typeof p.message === 'string' ? p.message : JSON.stringify(p.message);
-      if (p.error) return typeof p.error === 'string' ? p.error : JSON.stringify(p.error);
+      if ('message' in p) return typeof p.message === 'string' ? p.message : JSON.stringify(p.message);
+      if ('error' in p) return typeof p.error === 'string' ? p.error : JSON.stringify(p.error);
     }
     return JSON.stringify(resPayload);
   };
@@ -106,7 +114,7 @@ export function ExceptionCenterPage() {
         </TableCell>
       </TableRow>
     ));
-  } else if (exceptions.length === 0) {
+  } else if (exceptions.length === 0 && !loading && !error) {
     tableContent = (
       <TableRow>
         <TableCell colSpan={6} className="h-64 text-center">
