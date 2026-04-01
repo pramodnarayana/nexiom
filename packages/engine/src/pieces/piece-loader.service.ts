@@ -124,7 +124,12 @@ export class PieceLoaderService {
       typeof v['actions'] === 'object' &&
       v['actions'] !== null &&
       typeof v['triggers'] === 'object' &&
-      v['triggers'] !== null
+      v['triggers'] !== null &&
+      typeof v['auth'] === 'object' &&
+      v['auth'] !== null &&
+      Array.isArray(v['categories']) &&
+      v['categories'].length > 0 &&
+      typeof v['categories'][0] === 'string'
     );
   }
 }

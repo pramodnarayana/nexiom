@@ -1023,6 +1023,9 @@ importers:
 
   packages/pieces/quickbooks:
     dependencies:
+      '@nexiom/connectors':
+        specifier: workspace:*
+        version: link:../../connectors
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../../piece-framework
@@ -1036,6 +1039,9 @@ importers:
 
   packages/pieces/salesforce:
     dependencies:
+      '@nexiom/connectors':
+        specifier: workspace:*
+        version: link:../../connectors
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../../piece-framework

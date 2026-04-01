@@ -33,6 +33,9 @@ export interface HttpClient {
 let _httpClientInstance: HttpClient | null = null;
 
 export function initializeHttpClient(client: HttpClient) {
+    if (_httpClientInstance) {
+        throw new Error('HttpClient already initialized');
+    }
     _httpClientInstance = client;
 }
 

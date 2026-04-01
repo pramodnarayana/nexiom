@@ -3,13 +3,15 @@ import {
     InternalServerErrorException,
     BadGatewayException,
     BadRequestException,
+    OnModuleInit,
 } from '@nestjs/common';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 
-import { HttpClient, HttpRequest, HttpResponse, HttpMethod } from '@nexiom/piece-framework';
+import type { HttpClient, HttpRequest, HttpResponse } from '@nexiom/piece-framework';
+import { HttpMethod, initializeHttpClient } from '@nexiom/piece-framework';
 
 /** How long a trace context is retained before it is treated as expired (5 minutes). */
 const EXECUTION_STATE_TTL_MS = 5 * 60 * 1000;
@@ -25,7 +27,7 @@ interface InternalExecutionState {
  * It is solely responsible for enterprise reliability: Distributed Rate Limiting, Retries, Audit Logs, and DLQ errors.
  */
 @Injectable()
-export class HostHttpClient implements HttpClient {
+export class HostHttpClient implements HttpClient, OnModuleInit {
     // A global AsyncLocalStorage map or static context to bind the current executing connectionId to generic fetch calls
     private static readonly executionState = new Map<string, InternalExecutionState>();
     /** Single shared cleanup timer — prevents one timer per bindExecutionCtx call. */
@@ -36,6 +38,14 @@ export class HostHttpClient implements HttpClient {
         private readonly db: DrizzleDb,
         private readonly redis: Redis,
     ) { }
+
+    onModuleInit() {
+        try {
+            initializeHttpClient(this);
+        } catch {
+            // Already initialized, harmless when running e.g. tests or multiple modules
+        }
+    }
 
     /**
      * Called by the Sync Engine right before executing `action.run()`.

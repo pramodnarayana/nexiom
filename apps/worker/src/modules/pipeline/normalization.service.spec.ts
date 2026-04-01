@@ -32,13 +32,15 @@ describe("NormalizationService", () => {
           values: vi.fn().mockReturnValue({
             onConflictDoNothing: vi.fn().mockReturnValue({
               // directly awaitable (for normalizedOutbox insert that has no .returning())
-              then: (res: any) => Promise.resolve(undefined).then(res),
+              then: (onfulfilled?: ((value: any) => any) | null) =>
+                Promise.resolve(undefined as any).then(onfulfilled),
               // also supports .returning() for chains that need it
               returning: vi.fn().mockResolvedValue(returnVal),
             }),
             returning: vi.fn().mockResolvedValue(returnVal),
             // plain insert().values() with no conflict resolution
-            then: (res: any) => Promise.resolve(undefined).then(res),
+            then: (onfulfilled?: ((value: any) => any) | null) =>
+              Promise.resolve(undefined as any).then(onfulfilled),
           }),
         });
         mockTxInsert.mockImplementation(() => makeInsertChain());
@@ -158,7 +160,8 @@ describe("NormalizationService", () => {
             onConflictDoNothing: vi.fn().mockReturnValue({
               returning: vi.fn().mockResolvedValue([]),
             }),
-            then: (res: any) => Promise.resolve(undefined).then(res),
+            then: (onfulfilled?: ((value: any) => any) | null) =>
+              Promise.resolve(undefined as any).then(onfulfilled),
           }),
         }),
         update: vi.fn().mockReturnThis(),

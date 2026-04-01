@@ -35,7 +35,6 @@ export async function runQuickBooksQuery(
     const { since, lastId } = parseCursorState(lastCursorParams);
 
     const sql = QuickBooksQueryAdapter.buildQBOQuery(entityType, {
-        objectName: entityType,
         cursorField: 'MetaData.LastUpdatedTime',
         cursorValue: since,
         cursorIdField: 'Id',

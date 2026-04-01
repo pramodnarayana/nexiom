@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll } from 'vitest';
 import {
     createPiece,
     createAction,
@@ -7,16 +7,15 @@ import {
     httpClient,
     initializeHttpClient,
     HttpMethod,
-    NormalizedRecord,
-    VendorResponse
 } from '@nexiom/piece-framework';
+import type { NormalizedRecord, VendorResponse } from '@nexiom/piece-framework';
 import { HostHttpClient } from './host-http-client.js';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { Redis } from 'ioredis';
 
 describe('Activepieces Framework Native Shim', () => {
-    beforeEach(() => {
+    beforeAll(() => {
         // Initialize the singleton to prevent the "accessed before platform initialization" throw
         initializeHttpClient(new HostHttpClient(
             {} as TokenManagerService,

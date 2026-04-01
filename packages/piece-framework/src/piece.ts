@@ -1,8 +1,14 @@
 import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
-import { InternalServerErrorException } from '@nestjs/common';
 import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
+
+export class PieceInternalServerError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'PieceInternalServerError';
+    }
+}
 
 /** A SaaS object available for metadata discovery. */
 export interface ObjectDescriptor {
@@ -298,7 +304,7 @@ export function createPiece(params: CreatePieceParams): Piece {
     const actionsMap = params.actions.reduce(
         (acc, action) => {
             if (acc[action.name]) {
-                throw new InternalServerErrorException(`Duplicate action name: ${action.name}`);
+                throw new PieceInternalServerError(`Duplicate action name: ${action.name}`);
             }
             acc[action.name] = action;
             return acc;
@@ -319,7 +325,7 @@ export function createPiece(params: CreatePieceParams): Piece {
                 return acc;
             }
             if (acc[trigger.name]) {
-                throw new InternalServerErrorException(`Duplicate trigger name: ${trigger.name}`);
+                throw new PieceInternalServerError(`Duplicate trigger name: ${trigger.name}`);
             }
             acc[trigger.name] = trigger;
             return acc;
@@ -341,7 +347,7 @@ export function createPiece(params: CreatePieceParams): Piece {
                 params.webhook.signatureEncoding !== 'base64' &&
                 params.webhook.signatureEncoding !== 'hex')
         ) {
-            throw new InternalServerErrorException(
+            throw new PieceInternalServerError(
                 `[createPiece] Invalid webhook config for piece "${params.name}": ` +
                 `secretKeyEnv and signatureHeader must be non-empty strings, ` +
                 `and signatureEncoding (when present) must be 'base64' or 'hex'.`,
@@ -357,7 +363,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         auth: params.auth,
         categories: (params.categories ?? []).map((cat) => {
             if (!Object.values(PieceCategory).includes(cat)) {
-                throw new InternalServerErrorException(`Invalid PieceCategory: ${String(cat)}`);
+                throw new PieceInternalServerError(`Invalid PieceCategory: ${String(cat)}`);
             }
             return cat;
         }),
