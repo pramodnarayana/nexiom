@@ -612,7 +612,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ---
 
-## Phase 8 — Fleet Sharded Custom Logic
+## Phase 8 — Fleet Sharding
 
 ### T053 · engine: Custom Logic Extension Hook (`isolated-vm`)
 

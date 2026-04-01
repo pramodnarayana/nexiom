@@ -21,7 +21,7 @@ export class QuickBooksQueryAdapter {
             query = `SELECT * FROM ${entityType} WHERE ${spec.cursorField} > '${spec.cursorValue}' ORDER BY ${spec.cursorField} ASC`;
         }
 
-        if (safeLimit !== 0) {
+        if (safeLimit !== 0 && safeLimit !== undefined) {
             query += ` MAXRESULTS ${safeLimit}`;
         }
         return query;
@@ -52,9 +52,13 @@ export class QuickBooksQueryAdapter {
         }
     }
 
-    private static parseLimit(limit?: number | string): number {
+    private static parseLimit(limit?: number | string): number | undefined {
         if (limit === undefined) return 100;
         if (limit === 0) return 0;
+
+        if (typeof limit === 'string' && limit.trim() === '') {
+            return undefined;
+        }
 
         const parsed = Number(limit);
         if (Number.isNaN(parsed) || parsed < 0) {

@@ -42,8 +42,11 @@ export class HostHttpClient implements HttpClient, OnModuleInit {
     onModuleInit() {
         try {
             initializeHttpClient(this);
-        } catch {
-            // Already initialized, harmless when running e.g. tests or multiple modules
+        } catch (error) {
+            if (error instanceof Error && error.message === 'HttpClient already initialized') {
+                return; // Idempotent re-init is safe
+            }
+            throw error; // Rethrow real failures
         }
     }
 
@@ -119,7 +122,7 @@ export class HostHttpClient implements HttpClient, OnModuleInit {
         const duration = Date.now() - startTime;
 
         // Parse Body
-        const responseBody = await this.parseResponseBody(response);
+        const responseBody = await this.parseResponseBody(response, request.responseType);
 
         const payload: HttpResponse = {
             status: response.status,
@@ -253,7 +256,18 @@ export class HostHttpClient implements HttpClient, OnModuleInit {
         };
     }
 
-    private async parseResponseBody(response: Response): Promise<any> {
+    private async parseResponseBody(response: Response, responseType?: 'json' | 'text' | 'arraybuffer' | 'stream'): Promise<any> {
+        if (responseType === 'arraybuffer') {
+            return response.arrayBuffer();
+        }
+        if (responseType === 'stream') {
+            return response.body;
+        }
+        if (responseType === 'text') {
+            return response.text();
+        }
+
+        // Default to JSON strategy
         const text = await response.text();
         try {
             return JSON.parse(text);

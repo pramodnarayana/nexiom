@@ -13,7 +13,7 @@ export interface HttpRequest {
     headers?: Record<string, string>;
     body?: any;
     queryParams?: Record<string, string>;
-    responseType?: any;
+    responseType?: 'json' | 'text' | 'arraybuffer' | 'stream';
     authentication?: {
         type: string;
         token: string;

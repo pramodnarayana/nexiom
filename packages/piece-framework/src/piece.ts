@@ -303,13 +303,13 @@ export function createPiece(params: CreatePieceParams): Piece {
     // Convert Action array to a Record for O(1) invocation lookups
     const actionsMap = params.actions.reduce(
         (acc, action) => {
-            if (acc[action.name]) {
+            if (Object.hasOwn(acc, action.name)) {
                 throw new PieceInternalServerError(`Duplicate action name: ${action.name}`);
             }
             acc[action.name] = action;
             return acc;
         },
-        {} as Record<string, Action>,
+        Object.create(null) as Record<string, Action>,
     );
 
     const triggersMap = (params.triggers || []).reduce(
@@ -324,13 +324,13 @@ export function createPiece(params: CreatePieceParams): Piece {
                 console.warn('[createPiece] Skipping invalid trigger entry — missing or non-string name:', trigger);
                 return acc;
             }
-            if (acc[trigger.name]) {
+            if (Object.hasOwn(acc, trigger.name)) {
                 throw new PieceInternalServerError(`Duplicate trigger name: ${trigger.name}`);
             }
             acc[trigger.name] = trigger;
             return acc;
         },
-        {} as Record<string, Trigger>,
+        Object.create(null) as Record<string, Trigger>,
     );
 
     // Validate webhook config at construction time so misconfigured pieces

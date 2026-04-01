@@ -129,7 +129,7 @@ export class PieceLoaderService {
       v['auth'] !== null &&
       Array.isArray(v['categories']) &&
       v['categories'].length > 0 &&
-      typeof v['categories'][0] === 'string'
+      v['categories'].every(c => typeof c === 'string')
     );
   }
 }

@@ -178,4 +178,70 @@ describe('Activepieces Framework Native Shim', () => {
             } 
         });
     });
+
+    describe('HostHttpClient Response Parsing', () => {
+        let client: HostHttpClient;
+        
+        beforeAll(() => {
+            client = new HostHttpClient(
+                {} as TokenManagerService,
+                { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
+                { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+            );
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('should deeply parse JSON by default', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"hello":"world"}',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' });
+            expect(result.body).toEqual({ hello: 'world' });
+        });
+
+        it('should parse text when responseType is text', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'text/plain' }),
+                text: async () => 'hello world',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'text' });
+            expect(result.body).toBe('hello world');
+        });
+
+        it('should return arrayBuffer when responseType is arraybuffer', async () => {
+            const buffer = new ArrayBuffer(8);
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+                arrayBuffer: async () => buffer,
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'arraybuffer' });
+            expect(result.body).toBe(buffer);
+        });
+
+        it('should return raw stream when responseType is stream', async () => {
+            const stream = 'fake_stream' as any;
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+                body: stream,
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'stream' });
+            expect(result.body).toBe(stream);
+        });
+    });
 });
