@@ -10,7 +10,7 @@ export interface ExceptionItem {
   resPayload: unknown;
   statusCode: number | null;
   attemptCount: number;
-  status: string;
+  status: 'FAIL' | 'RETRY' | 'DISMISSED';
   createdAt: string;
   updatedAt: string;
   updatedAtRaw: string;

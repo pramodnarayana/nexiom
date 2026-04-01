@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import { AlertCircle, Activity, ChevronRight, FileJson } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Button } from '@/shared/components/ui/button';
@@ -192,6 +192,7 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
 
 export function PipelineTracePage() {
   const { id: workspaceId, stitchId } = useParams<{ id: string; stitchId: string }>();
+
   const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,11 +225,14 @@ export function PipelineTracePage() {
   }, [fetchTraces]);
 
   let pageContent = null;
+  if (!workspaceId || !stitchId) {
+    return <Navigate to="/dashboard" replace />;
+  }
   if (loading) {
     pageContent = (
       <div className="space-y-4">
-        {Array.from({ length: 4 }).map(() => (
-          <Skeleton key={crypto.randomUUID()} className="h-24 w-full rounded-2xl" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full rounded-2xl" />
         ))}
       </div>
     );
@@ -247,7 +251,7 @@ export function PipelineTracePage() {
     pageContent = (
       <div className="space-y-4" ref={listParent}>
         {traces.map((trace) => (
-          <TraceRow key={trace.id} summary={trace} stitchId={stitchId!} workspaceId={workspaceId!} />
+          <TraceRow key={trace.id} summary={trace} stitchId={stitchId} workspaceId={workspaceId} />
         ))}
       </div>
     );

@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { eq, and, desc, lt, or, sql as drizzleSql, sql } from 'drizzle-orm';
+import { eq, and, desc, lt, or, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -202,10 +202,7 @@ export class TraceService {
       // (ts < cursorTs) OR (ts = cursorTs AND id < cursorId)
       cursorCondition = or(
         lt(syncLog.timestamp, cursorTs),
-        and(
-          drizzleSql`${syncLog.timestamp} = ${cursorTs}`,
-          lt(syncLog.id, cursorId),
-        ),
+        and(sql`${syncLog.timestamp} = ${cursorTs}`, lt(syncLog.id, cursorId)),
       );
     }
 

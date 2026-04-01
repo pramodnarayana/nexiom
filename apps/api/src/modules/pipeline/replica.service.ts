@@ -131,7 +131,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           }
 
           this.logger.debug(
-            `[${connectionId}] Trace ${traceId} already replicated. Skipping.`,
+            { connectionId, traceId },
+            'Trace already replicated. Skipping.',
           );
           return { replicated: false, durationMs: 0 };
         }

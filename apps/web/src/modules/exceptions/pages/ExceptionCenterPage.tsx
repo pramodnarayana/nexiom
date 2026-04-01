@@ -64,7 +64,7 @@ export function ExceptionCenterPage() {
       } else {
         await dismissException(id);
       }
-      // Optimistic remove
+      // Remove after successful delete
       setExceptions((prev) => prev.filter((item) => item.id !== id));
     } catch (e: unknown) {
       setError(`Failed to ${action} exception: ${e instanceof Error ? e.message : String(e)}`);
@@ -141,7 +141,9 @@ export function ExceptionCenterPage() {
                 }).format(new Date(exc.updatedAt))}
               </TableCell>
               <TableCell>
-                <div className="font-mono text-xs">{exc.routeId.slice(0, 13)}...</div>
+                <div className="font-mono text-xs">
+                  {exc.routeId.length > 13 ? exc.routeId.slice(0, 13) + '...' : exc.routeId}
+                </div>
               </TableCell>
               <TableCell>
                 <div className="max-w-[300px] truncate text-sm font-medium">
@@ -167,7 +169,7 @@ export function ExceptionCenterPage() {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
+                <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
                   {statusFilter === 'unresolved' && (
                     <>
                       <Button

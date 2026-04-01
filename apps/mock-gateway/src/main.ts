@@ -51,8 +51,16 @@ if (piecesDir) {
       
       logger.info(`Mounted mock proxy for ${piece} at /mock/${piece}`);
       
+      const convertExpressReqToHandleRequest = (r: express.Request): import('openapi-backend').Request => ({
+        method: r.method,
+        path: r.path,
+        headers: r.headers as Record<string, string | string[]>,
+        query: r.query as Record<string, string | string[]>,
+        body: r.body,
+      });
+
       app.use(`/mock/${piece}`, (req, res) => api.handleRequest(
-        req as never, 
+        convertExpressReqToHandleRequest(req),
         req, 
         res
       ));
