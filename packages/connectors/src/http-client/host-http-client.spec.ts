@@ -208,6 +208,19 @@ describe('Activepieces Framework Native Shim', () => {
             expect(result.body).toEqual({ hello: 'world' });
         });
 
+        it('should correctly return non-ok responses without throwing', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: false,
+                status: 404,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"error":"Not Found"}',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' });
+            expect(result.status).toBe(404);
+            expect(result.body).toEqual({ error: 'Not Found' });
+        });
+
         it('should parse text when responseType is text', async () => {
             vi.spyOn(globalThis, 'fetch').mockResolvedValue({
                 ok: true,
