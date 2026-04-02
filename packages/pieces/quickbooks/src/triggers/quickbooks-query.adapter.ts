@@ -57,7 +57,7 @@ export class QuickBooksQueryAdapter {
         if (limit === 0) return 0;
 
         if (typeof limit === 'string' && limit.trim() === '') {
-            return undefined;
+            return 100;
         }
 
         const parsed = Number(limit);

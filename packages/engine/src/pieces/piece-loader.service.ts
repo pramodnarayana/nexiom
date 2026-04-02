@@ -128,7 +128,6 @@ export class PieceLoaderService {
       typeof v['auth'] === 'object' &&
       v['auth'] !== null &&
       Array.isArray(v['categories']) &&
-      v['categories'].length > 0 &&
       v['categories'].every(c => typeof c === 'string')
     );
   }
