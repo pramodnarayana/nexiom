@@ -4,7 +4,7 @@ import {
   OAuthRefreshError,
   EncryptionService,
 } from '@nexiom/connectors';
-import { PropertyType, resolveOAuth2Url } from '@nexiom/connectors/framework';
+import { PropertyType, resolveOAuth2Url } from '@nexiom/piece-framework';
 import {
   appConnections,
   AppConnectionStatus,

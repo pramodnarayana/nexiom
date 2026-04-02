@@ -1,8 +1,9 @@
-import type { QuerySpec } from '@nexiom/connectors/intelligence';
-
-export type QBOQuerySpec = Omit<QuerySpec, 'autoJoins'> & {
+export type QBOQuerySpec = {
+    cursorField: string;
+    cursorValue: string;
     cursorIdField?: string;
     cursorIdValue?: string;
+    limit?: number | string;
 };
 
 export class QuickBooksQueryAdapter {
@@ -54,6 +55,10 @@ export class QuickBooksQueryAdapter {
     private static parseLimit(limit?: number | string): number {
         if (limit === undefined) return 100;
         if (limit === 0) return 0;
+
+        if (typeof limit === 'string' && limit.trim() === '') {
+            return 100;
+        }
 
         const parsed = Number(limit);
         if (Number.isNaN(parsed) || parsed < 0) {

@@ -1,15 +1,7 @@
-import type { TriggerStore } from '../framework/index.js';
+import type { TriggerStore, FieldDescriptor } from '@nexiom/piece-framework';
 import type { ObjectHint } from './optimization-registry.js';
 
-/** Describes a single field in an SaaS object. */
-export interface FieldDescriptor {
-    name: string;
-    type: string;          // 'string' | 'datetime' | 'reference' | 'currency' | …
-    filterable: boolean;
-    sortable: boolean;
-    nillable: boolean;
-    referenceTo?: string[];
-}
+
 
 /** Describes a relationship to child records. */
 export interface ChildRelationshipDescriptor {

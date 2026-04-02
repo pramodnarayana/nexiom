@@ -11,11 +11,6 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./framework": {
-      "types": "./dist/framework/index.d.ts",
-      "import": "./dist/framework/index.js",
-      "default": "./dist/framework/index.js"
-    },
     "./intelligence": {
       "types": "./dist/intelligence/index.d.ts",
       "import": "./dist/intelligence/index.js",
@@ -30,6 +25,7 @@
   },
   "dependencies": {
     "@nexiom/database": "workspace:*",
+    "@nexiom/piece-framework": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "ioredis": "^5.3.2"
   },

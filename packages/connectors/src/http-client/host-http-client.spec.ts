@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, afterEach } from 'vitest';
 import {
     createPiece,
     createAction,
@@ -6,22 +6,26 @@ import {
     PieceAuth,
     httpClient,
     initializeHttpClient,
-    HostHttpClient,
     HttpMethod,
-} from './index.js';
-import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
+} from '@nexiom/piece-framework';
+import type { NormalizedRecord, VendorResponse } from '@nexiom/piece-framework';
+import { HostHttpClient } from './host-http-client.js';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { Redis } from 'ioredis';
 
 describe('Activepieces Framework Native Shim', () => {
-    beforeEach(() => {
+    beforeAll(() => {
         // Initialize the singleton to prevent the "accessed before platform initialization" throw
-        initializeHttpClient(
+        initializeHttpClient(new HostHttpClient(
             {} as TokenManagerService,
             { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
-            { incr: vi.fn().mockResolvedValue(1), expire: vi.fn() } as unknown as Redis
-        );
+            { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+        ));
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
     });
 
     it('Should successfully type-check and instantiate a mocked Salesforce piece exactly like Activepieces', async () => {
@@ -109,8 +113,6 @@ describe('Activepieces Framework Native Shim', () => {
         });
 
         expect(result).toEqual({ success: true, id: '001A000001bcdefQAA' });
-
-        sendRequestSpy.mockRestore();
     });
 
     it('forwards normalize from CreatePieceParams to the Piece instance', async () => {
@@ -176,6 +178,85 @@ describe('Activepieces Framework Native Shim', () => {
                 payload: { Name: 'Acme' },
                 credentials: { token: 'abc' }
             } 
+        });
+    });
+
+    describe('HostHttpClient Response Parsing', () => {
+        let client: HostHttpClient;
+        
+        beforeAll(() => {
+            client = new HostHttpClient(
+                {} as TokenManagerService,
+                { execute: vi.fn().mockResolvedValue([]) } as unknown as DrizzleDb,
+                { eval: vi.fn().mockResolvedValue(1) } as unknown as Redis
+            );
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('should deeply parse JSON by default', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"hello":"world"}',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' });
+            expect(result.body).toEqual({ hello: 'world' });
+        });
+
+        it('should correctly return non-ok responses without throwing', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: false,
+                status: 404,
+                headers: new Headers({ 'Content-Type': 'application/json' }),
+                text: async () => '{"error":"Not Found"}',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com' });
+            expect(result.status).toBe(404);
+            expect(result.body).toEqual({ error: 'Not Found' });
+        });
+
+        it('should parse text when responseType is text', async () => {
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'text/plain' }),
+                text: async () => 'hello world',
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'text' });
+            expect(result.body).toBe('hello world');
+        });
+
+        it('should return arrayBuffer when responseType is arraybuffer', async () => {
+            const buffer = new ArrayBuffer(8);
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+                arrayBuffer: async () => buffer,
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'arraybuffer' });
+            expect(result.body).toBe(buffer);
+        });
+
+        it('should return raw stream when responseType is stream', async () => {
+            const stream = 'fake_stream' as any;
+            vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+                ok: true,
+                status: 200,
+                headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+                body: stream,
+            } as any);
+
+            const result = await client.sendRequest({ method: HttpMethod.GET, url: 'https://example.com', responseType: 'stream' });
+            expect(result.body).toBe(stream);
         });
     });
 });

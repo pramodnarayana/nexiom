@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/connectors/framework';
+import type { TriggerStore } from '@nexiom/piece-framework';
 import { quickbooksCommon, resolveEnvironment, type QuickbooksEntityResponse } from '../lib/common.js';
 import { type ObjectHint } from '@nexiom/connectors/intelligence';
 import { QuickBooksQueryAdapter } from './quickbooks-query.adapter.js';
@@ -35,7 +35,6 @@ export async function runQuickBooksQuery(
     const { since, lastId } = parseCursorState(lastCursorParams);
 
     const sql = QuickBooksQueryAdapter.buildQBOQuery(entityType, {
-        objectName: entityType,
         cursorField: 'MetaData.LastUpdatedTime',
         cursorValue: since,
         cursorIdField: 'Id',

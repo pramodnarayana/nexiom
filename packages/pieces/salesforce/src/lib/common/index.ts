@@ -3,8 +3,8 @@ import {
 	HttpMethod,
 	httpClient,
 	Property
-} from '@nexiom/connectors/framework';
-import type { HttpResponse } from '@nexiom/connectors/framework';
+} from '@nexiom/piece-framework';
+import type { HttpResponse } from '@nexiom/piece-framework';
 import { salesforceAuth } from '../auth.js';
 
 /** Salesforce REST API version — must match the version in openapi.json. */

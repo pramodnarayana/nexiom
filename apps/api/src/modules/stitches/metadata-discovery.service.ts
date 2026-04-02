@@ -18,11 +18,11 @@ import {
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { TokenManagerService } from '@nexiom/connectors';
 import { PieceRegistryService } from '@nexiom/engine';
+import type { OAuthCredentialBlob } from '@nexiom/connectors';
 import type {
   ObjectDescriptor,
   FieldDescriptor,
-  OAuthCredentialBlob,
-} from '@nexiom/connectors';
+} from '@nexiom/piece-framework';
 
 // Single source of truth for metadata cache TTL.
 const TTL_SECONDS = 5 * 60; // 5 minutes

@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import type { Piece } from '@nexiom/connectors';
+import type { Piece } from '@nexiom/piece-framework';
 import { pieces, type DrizzleDb } from '@nexiom/database';
 
 /**
@@ -124,7 +124,11 @@ export class PieceLoaderService {
       typeof v['actions'] === 'object' &&
       v['actions'] !== null &&
       typeof v['triggers'] === 'object' &&
-      v['triggers'] !== null
+      v['triggers'] !== null &&
+      typeof v['auth'] === 'object' &&
+      v['auth'] !== null &&
+      Array.isArray(v['categories']) &&
+      v['categories'].every(c => typeof c === 'string')
     );
   }
 }

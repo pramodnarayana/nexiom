@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PollerService } from './poller.service.js';
 /* eslint-disable @typescript-eslint/unbound-method */
-import { TriggerStrategy } from '@nexiom/connectors';
+import { TriggerStrategy } from '@nexiom/piece-framework';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
 import { PieceRegistryService } from '@nexiom/engine';
 

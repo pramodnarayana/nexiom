@@ -6,7 +6,7 @@ import {
   Optional,
   Logger,
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import {
   DATABASE_CONNECTION,
@@ -18,9 +18,8 @@ import {
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
-import { sql } from "drizzle-orm";
 import { TokenManagerService } from "@nexiom/connectors";
-import { RetryableException } from "@nexiom/connectors";
+import { RetryableException } from "@nexiom/piece-framework";
 import {
   sanitizeError,
   isValidPipelineMessage,

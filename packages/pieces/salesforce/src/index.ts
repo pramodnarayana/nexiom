@@ -6,7 +6,7 @@ import {
     type FieldDescriptor,
     type NormalizedRecord,
     type VendorResponse,
-} from '@nexiom/connectors/framework';
+} from '@nexiom/piece-framework';
 
 
 import { salesforceUniversalTrigger } from './lib/trigger/universal-trigger.js';

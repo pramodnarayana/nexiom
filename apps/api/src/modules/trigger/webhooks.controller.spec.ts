@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { WebhooksController } from './webhooks.controller.js';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { TriggerStrategy } from '@nexiom/connectors';
+import { TriggerStrategy } from '@nexiom/piece-framework';
 import { PieceRegistryService } from '@nexiom/engine';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
 

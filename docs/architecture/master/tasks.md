@@ -612,6 +612,25 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 
 ---
 
+## Phase 8 — Fleet Sharding
+
+### T053 · engine: Custom Logic Extension Hook (`isolated-vm`)
+
+- [ ] Add `isolated-vm` dependency to `@nexiom/engine`.
+- [ ] Implement `LogicResolverService` that checks the local shard directory for a tenant's custom script before falling back to generic pipeline logic.
+- [ ] Run custom scripts within a secure `ivm.Isolate` context with strict memory buffers and timeouts (e.g., 128MB, 1s timeout) to prevent platform DoS.
+- Files: `packages/engine/src/executor/logic-resolver.ts`
+- Depends: T035
+
+### T054 · worker: GitOps Shard Synchronization
+
+- [ ] Implement a worker cron service that pulls/fetches mapped Git Shard repositories (e.g. `fluxnex-shard-001`) onto the local disk every 5 minutes.
+- [ ] Implement an in-memory or Redis-backed cache invalidation when a shard is updated so the `LogicResolverService` uses the latest custom logic from customers.
+- Files: `apps/worker/src/modules/gitops/shard-sync.service.ts`
+- Depends: T053
+
+---
+
 ## Summary
 
 | Phase | Tasks | Completed | Key deliverable |
@@ -626,8 +645,9 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 5 — AI Mapping | T040–T042 | ⬜ All | Claude-powered field suggestions |
 | 6 — Environments | T043–T045 | ⬜ All | Sandbox/Production routing |
 | 7 — Delivery Outbox | T051–T052 | ✅ All | Delivery Outbox Resiliency |
+| 8 — Fleet Sharding | T053–T054 | ⬜ All | Sandboxed execution of customer logic |
 
-**Total: 52 tasks · Completed: ~38 · Remaining: ~14**
+**Total: 54 tasks · Completed: ~38 · Remaining: ~16**
 
 ---
 

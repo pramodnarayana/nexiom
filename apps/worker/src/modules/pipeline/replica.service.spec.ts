@@ -66,7 +66,8 @@ describe("ReplicaService", () => {
               returning: vi.fn().mockResolvedValue([{ id: "1" }]),
             }),
             onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-            then: (res: any) => Promise.resolve(undefined).then(res),
+            then: (onfulfilled?: ((value: any) => any) | null) =>
+              Promise.resolve(undefined as any).then(onfulfilled),
           };
         }),
       }));

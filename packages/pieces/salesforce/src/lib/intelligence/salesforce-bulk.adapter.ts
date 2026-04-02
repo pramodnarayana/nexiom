@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/connectors/framework';
+import type { TriggerStore } from '@nexiom/piece-framework';
 import {
     type IBulkAdapter,
     IgtLogger

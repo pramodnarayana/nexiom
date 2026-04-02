@@ -10,12 +10,10 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  AppCredentialError,
-  resolveOAuth2Url,
-  PropertyType,
-} from '@nexiom/connectors';
-import type { OAuth2Auth, OAuthCredentialBlob } from '@nexiom/connectors';
+import { AppCredentialError } from '@nexiom/connectors';
+import { resolveOAuth2Url, PropertyType } from '@nexiom/piece-framework';
+import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,
   AppConnectionStatus,

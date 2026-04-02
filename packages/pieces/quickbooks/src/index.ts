@@ -6,7 +6,7 @@ import {
   type FieldDescriptor,
   type NormalizedRecord,
   type VendorResponse,
-} from '@nexiom/connectors/framework';
+} from '@nexiom/piece-framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';

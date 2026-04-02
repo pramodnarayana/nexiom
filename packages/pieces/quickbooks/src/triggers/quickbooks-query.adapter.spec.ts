@@ -7,7 +7,6 @@ describe('QuickBooksQueryAdapter', () => {
 
         it('should build a standard query with all parameters', () => {
             const result = QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
-                objectName: 'Invoice',
                 cursorField: 'MetaData.LastUpdatedTime',
                 cursorValue: '2026-01-01T00:00:00.000Z',
                 limit: 100
@@ -18,7 +17,6 @@ describe('QuickBooksQueryAdapter', () => {
 
         it('should build a query without MAXRESULTS if limit is 0', () => {
             const result = QuickBooksQueryAdapter.buildQBOQuery('Customer', {
-                objectName: 'Customer',
                 cursorField: 'MetaData.CreateTime',
                 cursorValue: '2025-12-31T23:59:59Z',
                 limit: 0
@@ -29,7 +27,6 @@ describe('QuickBooksQueryAdapter', () => {
 
         it('should default to MAXRESULTS 100 if limit is undefined', () => {
             const result = QuickBooksQueryAdapter.buildQBOQuery('Account', {
-                objectName: 'Account',
                 cursorField: 'Id',
                 cursorValue: '100',
                 limit: undefined
@@ -41,7 +38,6 @@ describe('QuickBooksQueryAdapter', () => {
         it('should throw an error for invalid entityType formats to prevent SQL injection', () => {
             expect(() => {
                 QuickBooksQueryAdapter.buildQBOQuery('Invoice; DROP TABLE Invoice', {
-                    objectName: 'Invoice',
                     cursorField: 'Id',
                     cursorValue: '1',
                     limit: 10
@@ -52,7 +48,6 @@ describe('QuickBooksQueryAdapter', () => {
         it('should throw an error for invalid cursor formats to prevent SQL injection', () => {
             expect(() => {
                 QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
-                    objectName: 'Invoice',
                     cursorField: 'Id',
                     cursorValue: "1' OR '1'='1",
                     limit: 10
@@ -63,7 +58,6 @@ describe('QuickBooksQueryAdapter', () => {
         it('should throw an error for invalid cursorField formats to prevent SQL injection', () => {
             expect(() => {
                 QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
-                    objectName: 'Invoice',
                     cursorField: 'Id; DROP TABLE Invoice',
                     cursorValue: '1',
                     limit: 10
@@ -74,7 +68,6 @@ describe('QuickBooksQueryAdapter', () => {
         it('should throw an error for invalid limit formats to prevent SQL injection', () => {
             expect(() => {
                 QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
-                    objectName: 'Invoice',
                     cursorField: 'Id',
                     cursorValue: '1',
                     limit: '10; DROP TABLE' as any
@@ -83,7 +76,6 @@ describe('QuickBooksQueryAdapter', () => {
 
             expect(() => {
                 QuickBooksQueryAdapter.buildQBOQuery('Invoice', {
-                    objectName: 'Invoice',
                     cursorField: 'Id',
                     cursorValue: '1',
                     limit: -5

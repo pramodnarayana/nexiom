@@ -1,4 +1,4 @@
-import { PieceAuth, Property } from '@nexiom/connectors/framework';
+import { PieceAuth, Property } from '@nexiom/piece-framework';
 
 export const salesforceAuth = PieceAuth.OAuth2({
     description: 'Connect your Salesforce account',

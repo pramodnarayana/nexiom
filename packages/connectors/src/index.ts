@@ -3,7 +3,7 @@
  *
  * Entrypoints:
  *   - `@nexiom/connectors`           — runtime services (encryption, token manager)
- *   - `@nexiom/connectors/framework` — piece/action/trigger/auth/property definitions
+ *   - `@nexiom/piece-framework` — piece/action/trigger/auth/property definitions
  */
 
 // Crypto utilities
@@ -13,8 +13,7 @@ export * from './crypto/encryption.service.js';
 // Token management (OAuth refresh, credential storage)
 export * from './oauth/token-manager.service.js';
 
-// Framework — Piece, Action, Trigger, Auth, Property definitions
-export * from './framework/index.js';
+
 
 /**
  * @deprecated The ProviderRegistry and dynamic `OAuthProvider` architectures have been removed in favor of the `PieceRegistry` flow.
@@ -27,3 +26,4 @@ export interface OAuthProvider { }
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SalesforceConnector { }
 
+export * from "./http-client/host-http-client.js";

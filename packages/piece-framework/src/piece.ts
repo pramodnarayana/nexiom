@@ -1,9 +1,14 @@
 import { Action } from './action.js';
 import { PieceAuthProperty } from './auth.js';
 import { Trigger } from './trigger.js';
-import { InternalServerErrorException } from '@nestjs/common';
-import type { FieldDescriptor as BaseFieldDescriptor } from '../intelligence/interfaces.js';
 import type { NormalizedRecord, VendorResponse } from './canonical/index.js';
+
+export class PieceInternalServerError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'PieceInternalServerError';
+    }
+}
 
 /** A SaaS object available for metadata discovery. */
 export interface ObjectDescriptor {
@@ -138,13 +143,14 @@ export type StreamDescriptor =
           keyProperties: [string, ...string[]];
       };
 
-/**
- * A single field within a SaaS object schema, as exposed by the Piece API.
- * Extends the intelligence-layer BaseFieldDescriptor with `label` for UI display.
- * `referenceTo` and all other base fields are inherited.
- */
-export interface FieldDescriptor extends BaseFieldDescriptor {
+export interface FieldDescriptor {
+    name: string;
     label: string;
+    type: string;
+    filterable: boolean;
+    sortable: boolean;
+    nillable: boolean;
+    referenceTo?: string[];
 }
 
 /**
@@ -297,13 +303,13 @@ export function createPiece(params: CreatePieceParams): Piece {
     // Convert Action array to a Record for O(1) invocation lookups
     const actionsMap = params.actions.reduce(
         (acc, action) => {
-            if (acc[action.name]) {
-                throw new InternalServerErrorException(`Duplicate action name: ${action.name}`);
+            if (Object.hasOwn(acc, action.name)) {
+                throw new PieceInternalServerError(`Duplicate action name: ${action.name}`);
             }
             acc[action.name] = action;
             return acc;
         },
-        {} as Record<string, Action>,
+        Object.create(null) as Record<string, Action>,
     );
 
     const triggersMap = (params.triggers || []).reduce(
@@ -318,13 +324,13 @@ export function createPiece(params: CreatePieceParams): Piece {
                 console.warn('[createPiece] Skipping invalid trigger entry — missing or non-string name:', trigger);
                 return acc;
             }
-            if (acc[trigger.name]) {
-                throw new InternalServerErrorException(`Duplicate trigger name: ${trigger.name}`);
+            if (Object.hasOwn(acc, trigger.name)) {
+                throw new PieceInternalServerError(`Duplicate trigger name: ${trigger.name}`);
             }
             acc[trigger.name] = trigger;
             return acc;
         },
-        {} as Record<string, Trigger>,
+        Object.create(null) as Record<string, Trigger>,
     );
 
     // Validate webhook config at construction time so misconfigured pieces
@@ -341,7 +347,7 @@ export function createPiece(params: CreatePieceParams): Piece {
                 params.webhook.signatureEncoding !== 'base64' &&
                 params.webhook.signatureEncoding !== 'hex')
         ) {
-            throw new InternalServerErrorException(
+            throw new PieceInternalServerError(
                 `[createPiece] Invalid webhook config for piece "${params.name}": ` +
                 `secretKeyEnv and signatureHeader must be non-empty strings, ` +
                 `and signatureEncoding (when present) must be 'base64' or 'hex'.`,
@@ -357,7 +363,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         auth: params.auth,
         categories: (params.categories ?? []).map((cat) => {
             if (!Object.values(PieceCategory).includes(cat)) {
-                throw new InternalServerErrorException(`Invalid PieceCategory: ${String(cat)}`);
+                throw new PieceInternalServerError(`Invalid PieceCategory: ${String(cat)}`);
             }
             return cat;
         }),

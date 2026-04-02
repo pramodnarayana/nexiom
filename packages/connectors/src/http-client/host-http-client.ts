@@ -3,40 +3,15 @@ import {
     InternalServerErrorException,
     BadGatewayException,
     BadRequestException,
+    OnModuleInit,
 } from '@nestjs/common';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
 import { DrizzleDb } from '@nexiom/database';
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 
-export enum HttpMethod {
-    GET = 'GET',
-    POST = 'POST',
-    PUT = 'PUT',
-    PATCH = 'PATCH',
-    DELETE = 'DELETE',
-    HEAD = 'HEAD',
-}
-
-export interface HttpRequest {
-    method: HttpMethod;
-    url: string;
-    headers?: Record<string, string>;
-    body?: any;
-    queryParams?: Record<string, string>;
-    responseType?: any;
-    authentication?: {
-        type: string;
-        token: string;
-    };
-}
-
-export interface HttpResponse<T = any> {
-    status: number;
-    headers: Record<string, string>;
-    body: T;
-}
-
+import type { HttpClient, HttpRequest, HttpResponse } from '@nexiom/piece-framework';
+import { HttpMethod, initializeHttpClient } from '@nexiom/piece-framework';
 
 /** How long a trace context is retained before it is treated as expired (5 minutes). */
 const EXECUTION_STATE_TTL_MS = 5 * 60 * 1000;
@@ -52,7 +27,7 @@ interface InternalExecutionState {
  * It is solely responsible for enterprise reliability: Distributed Rate Limiting, Retries, Audit Logs, and DLQ errors.
  */
 @Injectable()
-export class HostHttpClient {
+export class HostHttpClient implements HttpClient, OnModuleInit {
     // A global AsyncLocalStorage map or static context to bind the current executing connectionId to generic fetch calls
     private static readonly executionState = new Map<string, InternalExecutionState>();
     /** Single shared cleanup timer — prevents one timer per bindExecutionCtx call. */
@@ -63,6 +38,17 @@ export class HostHttpClient {
         private readonly db: DrizzleDb,
         private readonly redis: Redis,
     ) { }
+
+    onModuleInit() {
+        try {
+            initializeHttpClient(this);
+        } catch (error) {
+            if (error instanceof Error && error.message === 'HttpClient already initialized') {
+                return; // Idempotent re-init is safe
+            }
+            throw error; // Rethrow real failures
+        }
+    }
 
     /**
      * Called by the Sync Engine right before executing `action.run()`.
@@ -136,7 +122,7 @@ export class HostHttpClient {
         const duration = Date.now() - startTime;
 
         // Parse Body
-        const responseBody = await this.parseResponseBody(response);
+        const responseBody = await this.parseResponseBody(response, request.responseType);
 
         const payload: HttpResponse = {
             status: response.status,
@@ -270,7 +256,18 @@ export class HostHttpClient {
         };
     }
 
-    private async parseResponseBody(response: Response): Promise<any> {
+    private async parseResponseBody(response: Response, responseType?: 'json' | 'text' | 'arraybuffer' | 'stream'): Promise<any> {
+        if (responseType === 'arraybuffer') {
+            return response.arrayBuffer();
+        }
+        if (responseType === 'stream') {
+            return response.body;
+        }
+        if (responseType === 'text') {
+            return response.text();
+        }
+
+        // Default to JSON strategy
         const text = await response.text();
         try {
             return JSON.parse(text);
@@ -418,30 +415,4 @@ export class HostHttpClient {
     }
 }
 
-/**
- * Global instance for Activepieces context execution.
- * Throws an error if accessed before being fully initialized by the host platform to prevent null panics.
- */
-let _httpClientInstance: HostHttpClient | null = null;
 
-export function initializeHttpClient(
-    tokenManager: TokenManagerService,
-    db: DrizzleDb,
-    redis: Redis
-) {
-    _httpClientInstance ??= new HostHttpClient(tokenManager, db, redis);
-}
-
-export const httpClient = new Proxy({} as HostHttpClient, {
-    get: (_target, prop) => {
-        if (!_httpClientInstance) {
-            throw new InternalServerErrorException('HostHttpClient accessed before platform initialization');
-        }
-        const value = (_httpClientInstance as any)[prop];
-        // Bind methods to the instance to ensure `this` works inside sendRequest
-        if (typeof value === 'function') {
-            return value.bind(_httpClientInstance);
-        }
-        return value;
-    }
-});

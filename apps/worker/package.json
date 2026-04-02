@@ -43,6 +43,7 @@
     "@nexiom/dbmanager": "workspace:*",
     "@nexiom/engine": "workspace:*",
     "@nexiom/identity": "workspace:*",
+    "@nexiom/piece-framework": "workspace:*",
     "@nexiom/piece-quickbooks": "workspace:*",
     "@nexiom/piece-salesforce": "workspace:*",
     "@nexiom/queue": "workspace:*",

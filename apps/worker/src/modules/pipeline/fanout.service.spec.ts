@@ -32,7 +32,8 @@ describe("FanOutService", () => {
         }),
         onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
         returning: vi.fn().mockResolvedValue([{ id: "outbound_1" }]),
-        then: (res: any) => Promise.resolve(undefined).then(res),
+        then: (onfulfilled?: ((value: any) => any) | null) =>
+          Promise.resolve(undefined as any).then(onfulfilled),
       }),
     });
     queueService = { consume: vi.fn(), send: vi.fn() };

@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/connectors/framework';
+import type { TriggerStore } from '@nexiom/piece-framework';
 import { sfFetch } from '../sf-fetch.js';
 import { SF_API_VERSION } from '../common/index.js';
 
