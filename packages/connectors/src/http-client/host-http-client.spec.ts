@@ -24,6 +24,10 @@ describe('Activepieces Framework Native Shim', () => {
         ));
     });
 
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it('Should successfully type-check and instantiate a mocked Salesforce piece exactly like Activepieces', async () => {
         // 1. Mock standard Activepieces Auth Definition
         const auth = PieceAuth.OAuth2({
@@ -109,8 +113,6 @@ describe('Activepieces Framework Native Shim', () => {
         });
 
         expect(result).toEqual({ success: true, id: '001A000001bcdefQAA' });
-
-        sendRequestSpy.mockRestore();
     });
 
     it('forwards normalize from CreatePieceParams to the Piece instance', async () => {

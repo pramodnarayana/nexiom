@@ -21,7 +21,7 @@ export class QuickBooksQueryAdapter {
             query = `SELECT * FROM ${entityType} WHERE ${spec.cursorField} > '${spec.cursorValue}' ORDER BY ${spec.cursorField} ASC`;
         }
 
-        if (safeLimit !== 0 && safeLimit !== undefined) {
+        if (safeLimit !== 0) {
             query += ` MAXRESULTS ${safeLimit}`;
         }
         return query;
@@ -52,7 +52,7 @@ export class QuickBooksQueryAdapter {
         }
     }
 
-    private static parseLimit(limit?: number | string): number | undefined {
+    private static parseLimit(limit?: number | string): number {
         if (limit === undefined) return 100;
         if (limit === 0) return 0;
 
