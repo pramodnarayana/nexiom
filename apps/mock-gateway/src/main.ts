@@ -95,7 +95,7 @@ async function bootstrap() {
   });
 
   function normalizePort(val: string | undefined): number {
-    const parsedPort = Number.parseInt(val || '4000', 10);
+    const parsedPort = Number.parseInt(val || '4001', 10);
     if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
       logger.error(`Invalid port value: ${val}`);
       process.exit(1);

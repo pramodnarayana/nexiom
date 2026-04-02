@@ -37,10 +37,7 @@ import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [
-        'apps/api/.env', // api-specific overrides (from monorepo root)
-        '.env', // shared root env (from monorepo root)
-      ],
+      envFilePath: '../../.env',
     }),
     // ObservabilityModule must be first so pino is active before all other modules
     // bootstrap and emit their own startup logs.
