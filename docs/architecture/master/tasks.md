@@ -234,21 +234,125 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `apps/api/src/modules/stitches/field-mappings.controller.ts`
 - Depends: T020
 
-### T023 · web: `StitchesPage` + `NewStitchPage` 3-step wizard
+### T022B · engine: `MappingEngine` — Standard Execution Engine
 
-- [ ] Step 1: Pick source connection → source object (from metadata API)
-- [ ] Step 2: Pick target connection → target object
-- [ ] Step 3: Mapping Canvas — two-column field table, drag-to-connect, "+ Add Condition" row
-- Files: `apps/web/src/modules/stitches/StitchesPage.tsx`, `apps/web/src/modules/stitches/NewStitchPage.tsx`, `apps/web/src/modules/stitches/MappingCanvas.tsx`
-- Depends: T019, T022
+> Spec: `docs/architecture/sync_strategy/sync_strategy.md` §3B, §3.5
+> Location: `engine/application/mapping/` (Application Layer of the Sync Engine)
 
-### T024 · web: Schedule Panel on `StitchDetailPage`
+First net-new code written directly inside `engine/application/`. Takes the
+Mapping Config + Stitch Config + Canonical Composite JSON and produces the
+target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
-- [ ] Frequency dropdown (30min / 1hr / 2hr / 4hr / 6hr / 12hr / 24hr)
-- [ ] Enable / Pause toggle
-- [ ] "Last synced" + "Next sync in ~X min" display (computed from `last_scheduled_at + interval`)
-- [ ] "Run now" button → calls `POST /stitches/:id/schedule/trigger`
-- Files: `apps/web/src/modules/stitches/StitchDetailPage.tsx`, `apps/web/src/modules/stitches/components/SchedulePanel.tsx`
+- [ ] **`mapping.types.ts`** — shared types
+  - `MappingRule: { srcPath: string; destPath: string; formula?: FormulaRef }`
+  - `FormulaRef: { name: string; args: Record<string, unknown> }`
+  - `StitchConfig: Record<string, unknown>` (typed JSONB from `integration_stitch.config`)
+  - `MappingInput: { compositeJson, mappingRules, stitchConfig }`
+  - `MappingResult: { payload: Record<string, unknown>; warnings: string[] }`
+
+- [ ] **`formula-library.ts`** — platform-verified transform functions
+  - `dateFormat(value, format)` — e.g. `"2024-01-30"` → `"30/01/2024"`
+  - `concat(...values)` — joins multiple source fields into one string
+  - `unitConvert(value, from, to)` — e.g. lbs → kg
+  - `coalesce(...values)` — returns first non-null value
+  - Each function is registered in a `FORMULA_REGISTRY` map; unknown formula names throw a clear error
+  - Unit tested for all functions + unknown formula error path
+
+- [ ] **`config-applicator.ts`** — applies `StitchConfig` behavioral flags to the built payload
+  - Called after field mapping; receives the assembled payload + stitchConfig
+  - Example: if `stitchConfig.useTaxCode === true` → sets `payload.TxnTaxDetail = { TaxCode: stitchConfig.taxCodeDefault }`
+  - Example: if `stitchConfig.currencyOverride` → overrides `payload.CurrencyRef.value`
+  - Applicator rules defined per piece via `piece.describeConfig()`
+
+- [ ] **`mapping-engine.ts`** — main entry point: `MappingEngine` class
+  - `build(input: MappingInput): MappingResult`
+  - Step 1: Iterates `mappingRules`; for each rule: `getNestedValue(compositeJson, srcPath)` → applies `formula` if present → `setNestedValue(payload, destPath, value)`
+  - Step 2: `configApplicator.apply(payload, stitchConfig)` — layers behavioral flags
+  - Step 3: Returns `{ payload, warnings }` — warnings for unmapped fields, missing formula args
+  - `FanOutService` (`apps/worker`) updated to call `MappingEngine.build()` in place of legacy `hydratePayload()`
+
+- [ ] **`engine/application/mapping/package.json`** — `@nexiom/mapping`, exports `MappingEngine`, types
+
+- [ ] **Unit tests** (`mapping-engine.spec.ts`)
+  - Field mapping: src path resolved, dest path set
+  - Formula applied: dateFormat, concat, coalesce
+  - Unknown formula: throws with clear message
+  - Config applicator: `useTaxCode=true` adds TxnTaxDetail; `false` leaves payload unchanged
+  - Missing src path: warning emitted, field skipped
+  - Unsafe path segment: throws (proto-pollution guard)
+
+- Files:
+  - `engine/application/mapping/src/mapping.types.ts`
+  - `engine/application/mapping/src/formula-library.ts`
+  - `engine/application/mapping/src/config-applicator.ts`
+  - `engine/application/mapping/src/mapping-engine.ts`
+  - `engine/application/mapping/src/mapping-engine.spec.ts`
+  - `engine/application/mapping/package.json`
+  - `apps/worker/src/modules/pipeline/fanout.service.ts` (updated import)
+- Depends: T022, T055-phase-1
+
+### T023 · web: `StitchesPage` + `NewStitchPage` — Policy-Aware 3-Step Wizard
+
+> Spec: `docs/architecture/sync_strategy/sync_strategy.md` §1, §4
+
+- [ ] **`StitchesPage`** — list all stitches for the workspace; "+ New Stitch" CTA
+- [ ] **Step 1 — Source Selection (Policy-Driven)**
+  - Query `GET /workspaces/:id/connections/available` — connections are auto-populated by the Policy Engine (RBAC/ABAC); no manual picker needed
+  - User selects a Source Connection from the auto-populated list, then selects a Source Object (calls `GET /stitches/metadata/:connectionId/objects`)
+  - On Source Object selection, call the **Dependency Discovery Service** (`GET /stitches/metadata/:connectionId/objects/:objectName/related`) to retrieve the "Business Universe" (parent 1:1 and child 1:N related objects)
+  - Render discovered related objects as a **pre-checked, immutable dependency list** — user sees them but cannot uncheck them
+- [ ] **Step 2 — Target Selection (Policy-Driven)**
+  - Target Connection auto-populated by Policy Engine (same `available` endpoint, filtered to workspace env_type)
+  - User selects Target Connection, then Target Object
+- [ ] **Step 3 — No-Code Mapping Canvas + Configuration**
+
+  **Tab A — Field Mapping:**
+  - **Source panel:** fields displayed as **human-readable labels** grouped by entity (e.g., `Load → Total Weight`, `Account → Tax ID`, `Stop → Delivery Date`) — sourced from `describeFields` display names, never raw JSON keys
+  - **Target panel:** flat list of target object field labels (e.g., `Invoice → Total Amount`, `Invoice → Vendor Tax ID`)
+  - Each target field has a **Drop Zone** — user drags a source field label into it; no JSON path is ever shown or typed
+  - Internally the platform maps the selected label to its JSON path (`data.Account.TaxId`) and stores it in the Mapping Config — fully transparent to the user
+  - **Formula Library** dropdown available per mapping row: platform-verified transform functions applied via simple inputs — never free-form code
+  - `"+ Add Condition"` row for `syncCondition` rules — field comparison dropdowns only
+
+  **Tab B — Configuration:**
+  - Renders the stitch's **behavioral options** returned by `piece.describeConfig()`
+  - Each option is a **toggle** (boolean), **dropdown** (enumerated), or **text input** (default value) — never free-form expressions
+  - Example: `Use Tax Code` (toggle) + `Default Tax Code` (text), `Currency Override` (dropdown), `Duplicate Strategy` (dropdown)
+  - Saved as `config` JSONB on `integration_stitch` — read by the Standard Execution Engine at runtime alongside the Mapping Config
+  - Options the customer does not configure use piece-defined defaults
+
+  On completion: calls `POST /stitches` (with `config`), then `POST /stitches/:id/mappings`
+
+- Files:
+  - `apps/web/src/modules/stitches/StitchesPage.tsx`
+  - `apps/web/src/modules/stitches/NewStitchPage.tsx`
+  - `apps/web/src/modules/stitches/MappingCanvas.tsx`
+  - `apps/web/src/modules/stitches/components/DependencyList.tsx`
+  - `apps/web/src/modules/stitches/components/FormulaLibrary.tsx`
+  - `apps/web/src/modules/stitches/components/StitchConfigPanel.tsx`
+- Depends: T019, T022, T022B
+
+### T024 · web: `StitchDetailPage` — Schedule Panel + Composite Context
+
+> Spec: `docs/architecture/sync_strategy/sync_strategy.md` §3A, §3.5
+
+- [ ] **Schedule Panel** (`SchedulePanel.tsx`)
+  - Frequency dropdown (30min / 1hr / 2hr / 4hr / 6hr / 12hr / 24hr)
+  - Enable / Pause toggle (calls `PATCH /stitches/:id/schedule`)
+  - "Last synced" + "Next sync in ~X min" display (computed from `last_scheduled_at + syncIntervalMinutes`)
+  - "Run now" button → calls `POST /stitches/:id/schedule/trigger` → shows job-dispatched toast
+- [ ] **Configuration Panel** (`StitchConfigPanel.tsx`)
+  - Editable view of the stitch's behavioral flags (same controls as T023 Tab B — toggles, dropdowns, text inputs)
+  - Calls `PATCH /stitches/:id` with updated `config` on save
+  - Allows post-creation edits without re-running the full wizard (e.g., customer decides to enable Tax Code after go-live)
+- [ ] **Related Objects Panel** (`RelatedObjectsPanel.tsx`)
+  - Read-only list of the auto-enrolled related objects from Step 1 (Dependency Discovery)
+  - Displays `entity_type`, `source_id` pattern, and sync status — makes it clear what will be included in the Composite JSON at L4
+- [ ] **Mapping Summary** — compact read-only view of the field mappings created in T023, displayed as `Source Entity → Field Label` → formula (if any) → `Target Field Label`; never shows raw JSON paths
+- Files:
+  - `apps/web/src/modules/stitches/StitchDetailPage.tsx`
+  - `apps/web/src/modules/stitches/components/SchedulePanel.tsx`
+  - `apps/web/src/modules/stitches/components/RelatedObjectsPanel.tsx`
 - Depends: T021, T023
 
 ### T025 · web: Admin/Support schedule override page
@@ -647,7 +751,62 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 | 7 — Delivery Outbox | T051–T052 | ✅ All | Delivery Outbox Resiliency |
 | 8 — Fleet Sharding | T053–T054 | ⬜ All | Sandboxed execution of customer logic |
 
-**Total: 54 tasks · Completed: ~38 · Remaining: ~16**
+> Total: 54 tasks · Completed: ~38 · Remaining: ~16
+
+---
+---
+
+## Phase 9 — Monorepo Architecture Restructure
+
+> Spec: `docs/architecture/sync_strategy/sync_strategy.md` §0
+>
+> **Goal:** Establish a clear top-level directory boundary between the
+> **Nexiom Sync Engine** (core business / IP) and **Infrastructure packages**
+> (commodity plumbing). All net-new engine code must go in `engine/` from
+> this point forward. Existing misplaced packages migrate incrementally.
+
+### T055 · infra: Monorepo Directory Restructure — `engine/` + `packages/`
+
+- [ ] **Phase 0 — Scaffold `engine/` directory** (prerequisite for T022B)
+  - Create `engine/platform/` and `engine/application/` directories
+  - Add root `engine/README.md` documenting the Platform vs Application boundary
+  - Add `engine/application/mapping/` scaffold (empty package) for T022B
+  - Update root `pnpm-workspace.yaml` to include `engine/*/*` glob
+  - Update root `tsconfig.json` / `turbo.json` path aliases
+  - **No existing code moves in this phase** — zero disruption
+
+- [ ] **Phase 1 — Migrate engine platform primitives**
+  - Move `packages/engine/` → `engine/platform/core/` (`@nexiom/engine` package name unchanged)
+  - `CursorManagerService`, `StorageResolver`, `evaluator`, `hydrator`, `path-utils` — all stay, just relocate
+  - Update all import paths in `apps/api`, `apps/worker`
+  - All tests must pass before merge
+
+- [ ] **Phase 2 — Migrate piece framework**
+  - Move `packages/piece-framework/` → `engine/platform/piece-framework/` (`@nexiom/piece-framework` unchanged)
+  - Generic `Piece`, `Action`, `Trigger`, `Poll` contracts only — no vendor code
+
+- [ ] **Phase 3 — Migrate application packages**
+  - Move `packages/connectors/` → `engine/application/connectors/` (`@nexiom/connectors` unchanged)
+  - Move `packages/pieces/` → `engine/application/pieces/` (`@nexiom/pieces` unchanged)
+  - Salesforce + QuickBooks implementations move with their tests
+
+- [ ] **Phase 4 — Verify `packages/` contains only infrastructure**
+  - Remaining in `packages/`: `queue`, `database`, `cache`, `infra-adapters`, `auth`, `identity`, `dbmanager`, `eslint-config`
+  - Add `packages/README.md`: "Infrastructure packages — commodity, not core IP"
+  - Add `engine/README.md`: "Nexiom Sync Engine — core IP. See docs/architecture/sync_strategy/"
+  - Enforce via ESLint `import/no-restricted-paths` rule: `packages/*` must never import from `engine/*`
+
+- Files:
+  - `pnpm-workspace.yaml`
+  - `turbo.json`
+  - `tsconfig.json`
+  - `engine/README.md`
+  - `packages/README.md`
+  - `engine/platform/core/` (was `packages/engine/`)
+  - `engine/platform/piece-framework/` (was `packages/piece-framework/`)
+  - `engine/application/connectors/` (was `packages/connectors/`)
+  - `engine/application/pieces/` (was `packages/pieces/`)
+- Depends: — (can start any time, phase 0 is prerequisite for T022B)
 
 ---
 
@@ -656,15 +815,19 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 > **Pipeline L3–L6 is now fully implemented and enterprise-hardened** (T028, T032–T035, T052 merged on `feat/pipeline-l3-l4-l5-l6`).
 > The full L1→L6 data path is end-to-end complete. The following tasks are unblocked.
 
-### Immediate — close the UI gap
+### Immediate — Architecture foundation
 
-1. **T023** — `StitchesPage` + `NewStitchPage` 3-step wizard: pick source/target connection, mapping canvas with drag-to-connect. Depends on T019, T022 (both complete).
+1. **T055 Phase 0** — Scaffold `engine/` directory + workspace config. Zero disruption. Prerequisite for T022B.
+2. **T022B** — `MappingEngine` in `engine/application/mapping/`. First engine application code. Unblocks T023.
 
-2. **T024** — Schedule Panel on `StitchDetailPage`: frequency dropdown, enable/pause toggle, "Run now" button. Depends on T021, T023.
+### Close the UI gap
+
+1. **T023** — `StitchesPage` + `NewStitchPage` 3-step wizard (policy-driven connections, dependency discovery, no-code canvas + config tab). Depends on T022B.
+2. **T024** — `StitchDetailPage` with Schedule Panel + Configuration Panel + Related Objects Panel.
 
 ### Observability (high-value, low-effort)
 
-1. **T007** — OpenObserve dashboards + alerting: pipeline health (L1→L6 throughput, queue depths, error rates), token refresh metrics, DLQ spike alerts. Now unblocked by T036/T037 live data and the hardened L3–L6 structured logs.
+1. **T007** — OpenObserve dashboards + alerting: pipeline health (L1→L6 throughput, queue depths, error rates), token refresh metrics, DLQ spike alerts.
 
 ### Platform completeness
 
