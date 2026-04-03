@@ -226,6 +226,7 @@ describe("QueueService", () => {
       // No consumers registered — stopConsuming resolves immediately
       await disabledService.stopConsuming();
       debugSpy.mockRestore();
+      await disabledService.onModuleDestroy();
     });
   });
 
