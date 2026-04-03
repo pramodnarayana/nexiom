@@ -48,6 +48,10 @@ export class QueueService implements IQueueService, OnModuleDestroy {
     payload: unknown,
     options?: SendOptions,
   ): Promise<void> {
+    if (this.options.enabled === false) {
+      this.logger.debug(`Queue disabled — dropping send to ${queueName}`);
+      return;
+    }
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl(queueName),

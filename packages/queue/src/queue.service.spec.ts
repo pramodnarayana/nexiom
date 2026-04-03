@@ -126,6 +126,24 @@ describe("QueueService", () => {
       const [cmd] = mockSend.mock.calls[0];
       expect(cmd.DelaySeconds).toBeUndefined();
     });
+
+    it("is a no-op and logs debug when enabled is false", async () => {
+      const disabledService = new QueueService({
+        infraMode: "local",
+        endpoint: "http://localhost:4566",
+        enabled: false,
+      });
+      const debugSpy = vi.spyOn(Logger.prototype, "debug");
+
+      await disabledService.send(QueueName.InboundQueue, { traceId: "x" });
+
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining("dropping send"),
+      );
+      debugSpy.mockRestore();
+      await disabledService.onModuleDestroy();
+    });
   });
 
   // ---------------------------------------------------------------------------

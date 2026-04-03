@@ -53,26 +53,42 @@ pnpm install
 # Setup Environment
 cp .env.example .env
 
-# Fully provision all local infrastructure (Docker, Database migrations, & Seed data)
+# Fully provision all local infrastructure:
+# starts ALL Docker services (including api, worker, web via --profile app),
+# runs database migrations, and seeds initial data
 pnpm setup:local
 ```
 
+> **Note:** `setup:local` validates that `.env` exists before touching Docker.
+> If `.env` is missing, the command exits immediately with a clear error — nothing is started and no data is lost.
+
 ### 3. Hard Reset (Optional)
 
-If you ever need to completely wipe your local environment and databases to start fresh from a perfect state:
+If you ever need to completely wipe your local environment and databases to start fresh:
 
 ```bash
+# Full reset — tears down all containers + volumes, then re-provisions everything
 pnpm infra:reset
+
+# Light reset — tears down containers + volumes, then provisions lightweight stack only
+pnpm infra:light:reset
 ```
 
+> **Safety:** Both commands validate `.env` exists **before** running `docker compose down -v`.
+> If `.env` is missing, the reset is aborted — your volumes are never destroyed.
+
 ### 4. Development
+
 Launch the full stack in parallel:
+
 ```bash
 pnpm dev
 ```
 
 #### Lightweight Mode (API & Web only)
+
 If you are only working on API endpoints (e.g. AI Copilot) and don't want background queues (LocalStack/Windmill) consuming RAM or spamming connection logs:
+
 ```bash
 # Provision only lightweight containers (Postgres, Redis, Mock-Gateway)
 pnpm setup:light

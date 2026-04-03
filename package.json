@@ -15,10 +15,11 @@
 		"db:generate": "pnpm --filter @nexiom/database db:generate",
 		"db:studio": "pnpm --filter @nexiom/database db:studio",
 		"db:seed": "pnpm --filter api db:seed",
-		"infra:reset": "docker compose down -v && pnpm setup:local",
-		"infra:light:reset": "docker compose down -v && pnpm setup:light",
-		"setup:local": "{ [ -e .env ] || { echo '\\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\\n'; exit 1; }; } && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
-		"setup:light": "{ [ -e .env ] || { echo '\\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\\n'; exit 1; }; } && docker compose up -d postgres redis mock_gateway --wait && pnpm db:migrate && pnpm db:seed"
+		"check:env": "{ [ -e .env ] || { echo '\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\n'; exit 1; }; }",
+		"infra:reset": "pnpm check:env && docker compose down -v && pnpm setup:local",
+		"infra:light:reset": "pnpm check:env && docker compose down -v && pnpm setup:light",
+		"setup:local": "pnpm check:env && docker compose --profile app up -d --wait && pnpm db:migrate && pnpm db:seed",
+		"setup:light": "pnpm check:env && docker compose up -d postgres redis mock_gateway --wait && pnpm db:migrate && pnpm db:seed"
 	},
 	"devDependencies": {
 		"@swc/cli": "^0.8.0",
