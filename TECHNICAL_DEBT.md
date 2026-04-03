@@ -208,12 +208,12 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Recommended Solution**:
 
-- **Automated Secrets**: Integrate a CLI-based secret manager (e.g., 1Password CLI `op run`, Doppler, or Infisical) to dynamically inject environment variables at runtime, completely eliminating the physical `.env` file from local machines.
+- **Automated Secrets**: Integrate a CLI-based secret manager (e.g., 1Password CLI `op run`, Doppler, or Infisical) to dynamically inject environment variables at runtime, eliminating the physical `.env` file from local machines.
 - **DevContainers**: Implement `.devcontainer/devcontainer.json` to fully orchestrate the development environment. This allows seamless "Open in GitHub Codespaces" or VSCode DevContainers, guaranteeing absolute OS and dependency parity across the entire team without installing anything but Docker.
 
 ---
 
-### 2. Vector Sink Alerting / Dropped Logs
+### 3. Vector Sink Alerting / Dropped Logs
 
 **Location**: `vector/vector.toml`
 **Added**: 2026-03-25

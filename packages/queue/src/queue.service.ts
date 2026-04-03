@@ -65,6 +65,13 @@ export class QueueService implements IQueueService, OnModuleDestroy {
     handler: (payload: unknown) => Promise<void>,
     options?: ConsumeOptions,
   ): void {
+    if (this.options.enabled === false) {
+      this.logger.debug(
+        `Queue consumption disabled — skipping consumer for ${queueName}`,
+      );
+      return;
+    }
+
     if (this.consumers.has(queueName)) {
       this.logger.warn(
         `Consumer already running for ${queueName} — ignoring duplicate call`,

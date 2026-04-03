@@ -239,7 +239,7 @@ services:
       - nexiom-network
 
   # --- Windmill (Scheduler) ---
-  # windmill_init creates the schema on the 'windmill' database (one-shot, service_completed_successfully).
+  # Schema migrations are performed by windmill_server at startup or by a separate migration job.
   # windmill_server is the stateless API + UI; windmill_worker executes stitch-runner scripts.
   # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
   # memory. Requires `privileged: true` on the worker container.

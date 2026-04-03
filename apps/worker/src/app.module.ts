@@ -7,7 +7,7 @@ import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: "../../.env" }),
+    ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     PiecesModule.forRoot({ anchorUrl: import.meta.url }),
     ScheduleModule.forRoot(),
     QueueModule.forRootAsync({
