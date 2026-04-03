@@ -194,7 +194,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 3. True Enterprise DX Setup (DevContainers & Secret Manager)
+### 2. True Enterprise DX Setup (DevContainers & Secret Manager)
 
 **Location**: Workspace Root  
 **Added**: 2026-04-02  

@@ -1,0 +1,2 @@
+ALTER TYPE "connection_status_enum" ADD VALUE IF NOT EXISTS 'PROVISIONING';
+ALTER TYPE "connection_status_enum" ADD VALUE IF NOT EXISTS 'FAILED';

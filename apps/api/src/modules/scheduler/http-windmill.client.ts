@@ -15,10 +15,10 @@ const STITCH_RUNNER_CONTENT = (apiUrl: string, secret: string) =>
 import * as wmill from "npm:windmill-client@1";
 
 export async function main(stitchId: string): Promise<object> {
-  const response = await fetch("${apiUrl}/api/internal/scheduler/execute-stitch", {
+  const response = await fetch(${JSON.stringify(apiUrl + '/api/internal/scheduler/execute-stitch')}, {
     method: "POST",
     headers: {
-      "Authorization": "Bearer ${secret}",
+      "Authorization": ${JSON.stringify('Bearer ' + secret)},
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ stitchId }),
