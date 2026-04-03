@@ -42,7 +42,7 @@ services:
   # DATABASE_POOLED_URL points here; use it for services that benefit from
   # connection pooling (e.g. high-concurrency workers).
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:v1.24.0-p0
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -84,7 +84,7 @@ services:
       - localstack_data:/var/lib/localstack
       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
     healthcheck:
-      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name inbound-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -132,8 +132,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: runner
+    profiles: ["app"]
     env_file:
-      - apps/api/.env
+      - .env
     environment:
       <<: *common-env
       # Overrides for Docker Networking
@@ -141,6 +142,7 @@ services:
       WINDMILL_BASE_URL: http://windmill_server:8000
       WINDMILL_WORKSPACE: nexiom
       WINDMILL_ENABLED: "true"
+      WINDMILL_CALLBACK_URL: http://api:3000
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_SECURE: "false"
@@ -171,8 +173,9 @@ services:
       context: .
       dockerfile: apps/worker/Dockerfile
       target: runner
+    profiles: ["app"]
     env_file:
-      - apps/api/.env
+      - .env
     restart: unless-stopped
     environment:
       <<: *common-env
@@ -201,9 +204,10 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: builder
+    profiles: ["app"]
     command: pnpm --filter api db:migrate
     env_file:
-      - apps/api/.env
+      - .env
     environment:
       <<: *common-env
     depends_on:
@@ -218,11 +222,12 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: builder
+    profiles: ["app"]
     # Bind to 0.0.0.0 so we can access it from the host
     # Use direct 'exec' via filter to find the binary in apps/api
     command: pnpm --filter api exec drizzle-kit studio --host 0.0.0.0 --port 4983
     env_file:
-      - apps/api/.env
+      - .env
     environment:
       <<: *common-env
     ports:
@@ -234,23 +239,12 @@ services:
       - nexiom-network
 
   # --- Windmill (Scheduler) ---
-  # windmill_init creates the schema on the 'windmill' database (one-shot, service_completed_successfully).
+  # Schema migrations are performed by windmill_server at startup or by a separate migration job.
   # windmill_server is the stateless API + UI; windmill_worker executes stitch-runner scripts.
   # PID namespace isolation (ENABLE_UNSHARE_PID) prevents worker jobs from reading parent process
   # memory. Requires `privileged: true` on the worker container.
-  windmill_init:
-    image: ghcr.io/windmill-labs/windmill:v1.341.0
-    command: ["windmill", "init"]
-    environment:
-      <<: *windmill-env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - nexiom-network
-
   windmill_server:
-    image: ghcr.io/windmill-labs/windmill:v1.341.0
+    image: ghcr.io/windmill-labs/windmill:1.672.0
     restart: unless-stopped
     environment:
       <<: *windmill-env
@@ -260,10 +254,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      windmill_init:
-        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -272,7 +264,7 @@ services:
       - nexiom-network
 
   windmill_worker:
-    image: ghcr.io/windmill-labs/windmill:v1.341.0
+    image: ghcr.io/windmill-labs/windmill:1.672.0
     restart: unless-stopped
     # privileged required for ENABLE_UNSHARE_PID
     privileged: true
@@ -286,6 +278,8 @@ services:
     depends_on:
       windmill_server:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - nexiom-network
 
@@ -294,6 +288,7 @@ services:
   # OPENOBSERVE_URL and OPENOBSERVE_TOKEN are required in production.
   vector:
     image: timberio/vector:0.43.0-alpine
+    profiles: ["app"]
     restart: unless-stopped
     volumes:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
@@ -314,6 +309,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    profiles: ["app"]
     ports:
       - "8080:80"
     depends_on:

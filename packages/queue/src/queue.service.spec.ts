@@ -126,6 +126,24 @@ describe("QueueService", () => {
       const [cmd] = mockSend.mock.calls[0];
       expect(cmd.DelaySeconds).toBeUndefined();
     });
+
+    it("is a no-op and logs debug when enabled is false", async () => {
+      const disabledService = new QueueService({
+        infraMode: "local",
+        endpoint: "http://localhost:4566",
+        enabled: false,
+      });
+      const debugSpy = vi.spyOn(Logger.prototype, "debug");
+
+      await disabledService.send(QueueName.InboundQueue, { traceId: "x" });
+
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining("dropping send"),
+      );
+      debugSpy.mockRestore();
+      await disabledService.onModuleDestroy();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -192,6 +210,23 @@ describe("QueueService", () => {
         expect.stringContaining("Consumer already running"),
       );
       warnSpy.mockRestore();
+    });
+
+    it("is a no-op and logs debug when enabled is false", async () => {
+      const disabledService = new QueueService({
+        infraMode: "local",
+        endpoint: "http://localhost:4566",
+        enabled: false,
+      });
+      const debugSpy = vi.spyOn(Logger.prototype, "debug");
+      disabledService.consume(QueueName.InboundQueue, async () => {});
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Queue consumption disabled"),
+      );
+      // No consumers registered — stopConsuming resolves immediately
+      await disabledService.stopConsuming();
+      debugSpy.mockRestore();
+      await disabledService.onModuleDestroy();
     });
   });
 

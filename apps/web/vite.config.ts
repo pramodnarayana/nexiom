@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename)
 export default defineConfig(() => {
 
   return {
+    envDir: '../../',
     plugins: [
       react(),
       checker({

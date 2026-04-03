@@ -21,7 +21,7 @@ import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
 import { StorageResolverModule, PiecesModule } from '@nexiom/engine';
 import { CacheModule } from '@nexiom/cache';
-import { QueueModule } from '@nexiom/queue';
+import { QueueModule, createQueueModuleOptions } from '@nexiom/queue';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
 import { WorkspacesModule } from '../modules/workspaces/workspaces.module.js';
 import { StitchesModule } from '../modules/stitches/stitches.module.js';
@@ -37,10 +37,7 @@ import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [
-        'apps/api/.env', // api-specific overrides (from monorepo root)
-        '.env', // shared root env (from monorepo root)
-      ],
+      ignoreEnvFile: true,
     }),
     // ObservabilityModule must be first so pino is active before all other modules
     // bootstrap and emit their own startup logs.
@@ -51,14 +48,7 @@ import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
     QueueModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (cfg: ConfigService) => ({
-        infraMode: cfg.get<string>('INFRA_MODE', 'local') as
-          | 'local'
-          | 'production',
-        endpoint: cfg.get<string>('SQS_ENDPOINT'),
-        region: cfg.get<string>('AWS_REGION', 'us-east-1'),
-        accountId: cfg.get<string>('AWS_ACCOUNT_ID'),
-      }),
+      useFactory: createQueueModuleOptions,
     }),
     // Global cron scheduler — required for PollerService and DlqProcessorService
     ScheduleModule.forRoot(),

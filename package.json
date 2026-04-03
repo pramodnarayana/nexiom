@@ -3,7 +3,8 @@
 	"private": true,
 	"version": "1.0.0",
 	"scripts": {
-		"dev": "turbo dev",
+		"dev": "dotenv -e .env -- turbo dev",
+		"dev:light": "dotenv -e .env -- env QUEUE_ENABLED=false pnpm --parallel --filter=api --filter=web dev",
 		"build": "turbo build",
 		"lint": "turbo lint",
 		"test": "turbo test",
@@ -14,13 +15,18 @@
 		"db:generate": "pnpm --filter @nexiom/database db:generate",
 		"db:studio": "pnpm --filter @nexiom/database db:studio",
 		"db:seed": "pnpm --filter api db:seed",
-		"setup:local": "{ [ -e .env ] || cp .env.example .env; } && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed"
+		"check:env": "{ [ -e .env ] || { echo '\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\n'; exit 1; }; }",
+		"infra:reset": "pnpm check:env && docker compose down -v && pnpm setup:local",
+		"infra:light:reset": "pnpm check:env && docker compose down -v && pnpm setup:light",
+		"setup:local": "pnpm check:env && docker compose --profile app up -d --wait && pnpm db:migrate && pnpm db:seed",
+		"setup:light": "pnpm check:env && docker compose up -d postgres redis mock_gateway --wait && pnpm db:migrate && pnpm db:seed"
 	},
 	"devDependencies": {
 		"@swc/cli": "^0.8.0",
 		"@swc/core": "^1.15.11",
 		"@types/node": "^25.0.5",
 		"@vitest/coverage-v8": "^2.1.9",
+		"dotenv-cli": "^11.0.0",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.2.7",
 		"pg": "^8.16.3",

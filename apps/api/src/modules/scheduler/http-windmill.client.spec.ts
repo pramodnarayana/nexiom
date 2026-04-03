@@ -10,11 +10,13 @@ const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 function mockConfig(): ConfigService {
   return {
+    get: <T = unknown>(_key: string, defaultValue: T): T => defaultValue,
     getOrThrow: (key: string) => {
       const map: Record<string, string> = {
         WINDMILL_BASE_URL: BASE_URL,
         WINDMILL_WORKSPACE: WORKSPACE,
         WINDMILL_TOKEN: TOKEN,
+        WINDMILL_INTERNAL_SECRET: 'test-internal-secret',
       };
       if (!(key in map)) throw new Error(`Missing config key: ${key}`);
       return map[key];

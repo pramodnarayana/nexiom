@@ -48,6 +48,10 @@ export class QueueService implements IQueueService, OnModuleDestroy {
     payload: unknown,
     options?: SendOptions,
   ): Promise<void> {
+    if (this.options.enabled === false) {
+      this.logger.debug(`Queue disabled — dropping send to ${queueName}`);
+      return;
+    }
     await this.client.send(
       new SendMessageCommand({
         QueueUrl: this.queueUrl(queueName),
@@ -65,6 +69,13 @@ export class QueueService implements IQueueService, OnModuleDestroy {
     handler: (payload: unknown) => Promise<void>,
     options?: ConsumeOptions,
   ): void {
+    if (this.options.enabled === false) {
+      this.logger.debug(
+        `Queue consumption disabled — skipping consumer for ${queueName}`,
+      );
+      return;
+    }
+
     if (this.consumers.has(queueName)) {
       this.logger.warn(
         `Consumer already running for ${queueName} — ignoring duplicate call`,

@@ -194,7 +194,26 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 2. Vector Sink Alerting / Dropped Logs
+### 2. True Enterprise DX Setup (DevContainers & Secret Manager)
+
+**Location**: Workspace Root  
+**Added**: 2026-04-02  
+**Impact**: Developer Experience, Security, Onboarding  
+**Effort**: High (1-2 sprints)
+
+**Current State**:
+
+- Local development relies on a `setup:local` package script and a local `.env` file that developers must manually fetch and configure.
+- Node.js versions, OS differences, and local caching issues can still slightly differentiate environments between developers.
+
+**Recommended Solution**:
+
+- **Automated Secrets**: Integrate a CLI-based secret manager (e.g., 1Password CLI `op run`, Doppler, or Infisical) to dynamically inject environment variables at runtime, eliminating the physical `.env` file from local machines.
+- **DevContainers**: Implement `.devcontainer/devcontainer.json` to fully orchestrate the development environment. This allows seamless "Open in GitHub Codespaces" or VSCode DevContainers, guaranteeing absolute OS and dependency parity across the entire team without installing anything but Docker.
+
+---
+
+### 3. Vector Sink Alerting / Dropped Logs
 
 **Location**: `vector/vector.toml`
 **Added**: 2026-03-25

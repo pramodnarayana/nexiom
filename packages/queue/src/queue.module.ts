@@ -20,6 +20,12 @@ export interface QueueModuleOptions {
    * LocalStack always uses '000000000000'.
    */
   accountId?: string;
+  /**
+   * When false, all consume() calls are no-ops and no SQS polling is started.
+   * Useful for lightweight dev environments without LocalStack.
+   * Default: true.
+   */
+  enabled?: boolean;
 }
 
 export interface QueueModuleAsyncOptions extends Pick<

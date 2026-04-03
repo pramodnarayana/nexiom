@@ -10,17 +10,15 @@ import {
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /** Deno TypeScript stitch-runner script deployed to Windmill workers. */
-const STITCH_RUNNER_CONTENT = `
+const STITCH_RUNNER_CONTENT = (apiUrl: string, secret: string) =>
+  `
 import * as wmill from "npm:windmill-client@1";
 
 export async function main(stitchId: string): Promise<object> {
-  const apiUrl = await wmill.getVariable("f/config/NEXIOM_API_URL");
-  const secret = await wmill.getVariable("f/config/WINDMILL_INTERNAL_SECRET");
-
-  const response = await fetch(\`\${apiUrl}/api/internal/scheduler/execute-stitch\`, {
+  const response = await fetch(${JSON.stringify(apiUrl + '/api/internal/scheduler/execute-stitch')}, {
     method: "POST",
     headers: {
-      "Authorization": \`Bearer \${secret}\`,
+      "Authorization": ${JSON.stringify('Bearer ' + secret)},
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ stitchId }),
@@ -41,12 +39,21 @@ export class HttpWindmillClient extends WindmillClient {
   private readonly baseUrl: string;
   private readonly workspace: string;
   private readonly token: string;
+  private readonly internalSecret: string;
+  private readonly callbackUrl: string;
 
   constructor(private readonly config: ConfigService) {
     super();
     this.baseUrl = this.config.getOrThrow<string>('WINDMILL_BASE_URL');
     this.workspace = this.config.getOrThrow<string>('WINDMILL_WORKSPACE');
     this.token = this.config.getOrThrow<string>('WINDMILL_TOKEN');
+    this.internalSecret = this.config.getOrThrow<string>(
+      'WINDMILL_INTERNAL_SECRET',
+    );
+    this.callbackUrl = this.config.get<string>(
+      'WINDMILL_CALLBACK_URL',
+      'http://host.docker.internal:3000',
+    );
   }
 
   async ensureStitchScript(): Promise<void> {
@@ -55,7 +62,7 @@ export class HttpWindmillClient extends WindmillClient {
       summary: 'Stitch Runner',
       description:
         'Shared Windmill script that triggers a Nexiom stitch sync via the internal scheduler API.',
-      content: STITCH_RUNNER_CONTENT,
+      content: STITCH_RUNNER_CONTENT(this.callbackUrl, this.internalSecret),
       language: 'deno',
       schema: {
         $schema: 'https://json-schema.org/draft/2020-12/schema',

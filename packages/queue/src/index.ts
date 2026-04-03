@@ -10,3 +10,4 @@ export type {
   QueueModuleOptions,
   QueueModuleAsyncOptions,
 } from "./queue.module.js";
+export { createQueueModuleOptions } from "./queue.options.js";
