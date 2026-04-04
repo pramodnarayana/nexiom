@@ -19,7 +19,9 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage"
   },
-  "dependencies": {},
+  "dependencies": {
+    "jsonata": "^2.1.0"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.9",
     "typescript": "^5.7.3",

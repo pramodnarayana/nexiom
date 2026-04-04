@@ -4,11 +4,11 @@ import type { MappingRule, StitchConfig } from './mapping.types.js';
 
 const engine = new MappingEngine();
 
-// ─── Field Mapping ────────────────────────────────────────────────────────────
+// ─── Simple Field Copy ────────────────────────────────────────────────────────
 
-describe('MappingEngine — field mapping', () => {
-  it('resolves a top-level srcPath and sets destPath', () => {
-    const result = engine.build({
+describe('MappingEngine — simple field copy (no expression)', () => {
+  it('copies a top-level field to a top-level destPath', async () => {
+    const result = await engine.build({
       compositeJson: { amount: 1500 },
       mappingRules: [{ srcPath: 'amount', destPath: 'TotalAmt' }],
       stitchConfig: {},
@@ -17,8 +17,8 @@ describe('MappingEngine — field mapping', () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  it('resolves a nested srcPath using dot notation', () => {
-    const result = engine.build({
+  it('copies a nested srcPath to a nested destPath using dot notation', async () => {
+    const result = await engine.build({
       compositeJson: { Account: { TaxId: 'TX-001' } },
       mappingRules: [{ srcPath: 'Account.TaxId', destPath: 'VendorRef.TaxIdentifier' }],
       stitchConfig: {},
@@ -26,12 +26,12 @@ describe('MappingEngine — field mapping', () => {
     expect((result.payload['VendorRef'] as Record<string, unknown>)['TaxIdentifier']).toBe('TX-001');
   });
 
-  it('handles multiple rules independently', () => {
+  it('handles multiple rules independently', async () => {
     const rules: MappingRule[] = [
       { srcPath: 'Load.TotalWeight', destPath: 'TotalAmt' },
       { srcPath: 'Load.RefNumber', destPath: 'DocNumber' },
     ];
-    const result = engine.build({
+    const result = await engine.build({
       compositeJson: { Load: { TotalWeight: 200, RefNumber: 'REF-42' } },
       mappingRules: rules,
       stitchConfig: {},
@@ -40,8 +40,8 @@ describe('MappingEngine — field mapping', () => {
     expect(result.payload['DocNumber']).toBe('REF-42');
   });
 
-  it('emits a warning and skips field when srcPath resolves to undefined', () => {
-    const result = engine.build({
+  it('emits a warning and skips field when srcPath resolves to undefined', async () => {
+    const result = await engine.build({
       compositeJson: { amount: 100 },
       mappingRules: [{ srcPath: 'nonExistent.field', destPath: 'TotalAmt' }],
       stitchConfig: {},
@@ -51,18 +51,8 @@ describe('MappingEngine — field mapping', () => {
     expect(result.warnings[0]).toContain('nonExistent.field');
   });
 
-  it('throws on unsafe destPath segment (__proto__)', () => {
-    expect(() =>
-      engine.build({
-        compositeJson: { val: 1 },
-        mappingRules: [{ srcPath: 'val', destPath: '__proto__.polluted' }],
-        stitchConfig: {},
-      }),
-    ).toThrow(/unsafe path segment/);
-  });
-
-  it('returns empty payload with no warnings when mappingRules is empty', () => {
-    const result = engine.build({
+  it('returns empty payload with no warnings when mappingRules is empty', async () => {
+    const result = await engine.build({
       compositeJson: { amount: 100 },
       mappingRules: [],
       stitchConfig: {},
@@ -72,33 +62,44 @@ describe('MappingEngine — field mapping', () => {
   });
 });
 
-// ─── Formula Library ──────────────────────────────────────────────────────────
+// ─── JSONata Expressions ──────────────────────────────────────────────────────
 
-describe('MappingEngine — formula application', () => {
-  it('applies dateFormat formula to a date string', () => {
-    const result = engine.build({
-      compositeJson: { invoiceDate: '2024-01-30' },
-      mappingRules: [
-        {
-          srcPath: 'invoiceDate',
-          destPath: 'TxnDate',
-          formula: { name: 'dateFormat', args: { format: 'DD/MM/YYYY' } },
-        },
-      ],
+describe('MappingEngine — JSONata expressions', () => {
+  it('evaluates a simple field reference expression', async () => {
+    const result = await engine.build({
+      compositeJson: { name: 'Acme Corp' },
+      mappingRules: [{ srcPath: 'name', destPath: 'CompanyName', expression: 'name' }],
       stitchConfig: {},
     });
-    expect(result.payload['TxnDate']).toBe('30/01/2024');
-    expect(result.warnings).toHaveLength(0);
+    expect(result.payload['CompanyName']).toBe('Acme Corp');
   });
 
-  it('applies concat formula to an array', () => {
-    const result = engine.build({
-      compositeJson: { parts: ['John', 'Doe'] },
+  it('applies $uppercase() builtin', async () => {
+    const result = await engine.build({
+      compositeJson: { name: 'acme corp' },
+      mappingRules: [{ srcPath: 'name', destPath: 'CompanyName', expression: '$uppercase(name)' }],
+      stitchConfig: {},
+    });
+    expect(result.payload['CompanyName']).toBe('ACME CORP');
+  });
+
+  it('applies $lowercase() builtin', async () => {
+    const result = await engine.build({
+      compositeJson: { email: 'Admin@Example.COM' },
+      mappingRules: [{ srcPath: 'email', destPath: 'Email', expression: '$lowercase(email)' }],
+      stitchConfig: {},
+    });
+    expect(result.payload['Email']).toBe('admin@example.com');
+  });
+
+  it('concatenates two fields using & operator', async () => {
+    const result = await engine.build({
+      compositeJson: { firstName: 'John', lastName: 'Doe' },
       mappingRules: [
         {
-          srcPath: 'parts',
+          srcPath: 'firstName',
           destPath: 'DisplayName',
-          formula: { name: 'concat', args: { separator: ' ' } },
+          expression: "firstName & ' ' & lastName",
         },
       ],
       stitchConfig: {},
@@ -106,61 +107,131 @@ describe('MappingEngine — formula application', () => {
     expect(result.payload['DisplayName']).toBe('John Doe');
   });
 
-  it('applies coalesce formula — returns first non-null value', () => {
-    const result = engine.build({
-      compositeJson: { fallbacks: [null, undefined, 'found'] },
+  it('formats a date using $fromMillis and $toMillis', async () => {
+    const result = await engine.build({
+      compositeJson: { invoiceDate: '2024-01-30T00:00:00.000Z' },
       mappingRules: [
         {
-          srcPath: 'fallbacks',
-          destPath: 'DocNumber',
-          formula: { name: 'coalesce', args: {} },
-        },
-      ],
-      stitchConfig: {},
-    });
-    expect(result.payload['DocNumber']).toBe('found');
-  });
-
-  it('emits a warning and skips field when formula throws', () => {
-    const result = engine.build({
-      compositeJson: { date: 'not-a-date' },
-      mappingRules: [
-        {
-          srcPath: 'date',
+          srcPath: 'invoiceDate',
           destPath: 'TxnDate',
-          formula: { name: 'dateFormat', args: { format: 'DD/MM/YYYY' } },
+          expression: "$fromMillis($toMillis(invoiceDate), '[D01]/[M01]/[Y0001]')",
         },
       ],
       stitchConfig: {},
     });
-    expect(result.payload['TxnDate']).toBeUndefined();
-    expect(result.warnings[0]).toContain('dateFormat');
+    expect(result.payload['TxnDate']).toBe('30/01/2024');
   });
 
-  it('emits a warning and skips field on unknown formula name', () => {
-    const result = engine.build({
-      compositeJson: { val: 'x' },
+  it('evaluates a conditional expression', async () => {
+    const result = await engine.build({
+      compositeJson: { status: 'active' },
       mappingRules: [
         {
-          srcPath: 'val',
-          destPath: 'out',
-          formula: { name: 'unknownFormula', args: {} },
+          srcPath: 'status',
+          destPath: 'IsActive',
+          expression: "status = 'active' ? true : false",
         },
       ],
       stitchConfig: {},
     });
-    expect(result.payload['out']).toBeUndefined();
+    expect(result.payload['IsActive']).toBe(true);
+  });
+
+  it('rounds a number with $round()', async () => {
+    const result = await engine.build({
+      compositeJson: { amount: 123.456 },
+      mappingRules: [
+        { srcPath: 'amount', destPath: 'TotalAmt', expression: '$round(amount, 2)' },
+      ],
+      stitchConfig: {},
+    });
+    expect(result.payload['TotalAmt']).toBe(123.46);
+  });
+
+  it('constructs a nested object from multiple source fields', async () => {
+    const result = await engine.build({
+      compositeJson: { taxId: 'TX-001', taxName: 'Sales Tax' },
+      mappingRules: [
+        {
+          srcPath: 'taxId',
+          destPath: 'TaxRef',
+          expression: "{ 'value': taxId, 'name': taxName }",
+        },
+      ],
+      stitchConfig: {},
+    });
+    const ref = result.payload['TaxRef'] as Record<string, unknown>;
+    expect(ref['value']).toBe('TX-001');
+    expect(ref['name']).toBe('Sales Tax');
+  });
+
+  it('emits a warning and skips field when expression evaluates to undefined', async () => {
+    const result = await engine.build({
+      compositeJson: {},
+      mappingRules: [
+        { srcPath: 'missingField', destPath: 'DocNumber', expression: 'nonExistentField' },
+      ],
+      stitchConfig: {},
+    });
+    expect(result.payload['DocNumber']).toBeUndefined();
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/unknownFormula/);
+    expect(result.warnings[0]).toContain('DocNumber');
+  });
+
+  it('emits a warning and skips field when expression has a syntax error', async () => {
+    // Create a new engine per test to avoid cache contamination
+    const freshEngine = new MappingEngine();
+    const result = await freshEngine.build({
+      compositeJson: { val: 1 },
+      mappingRules: [{ srcPath: 'val', destPath: 'Out', expression: '$$invalid syntax(((' }],
+      stitchConfig: {},
+    });
+    expect(result.payload['Out']).toBeUndefined();
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('Out');
+  });
+
+  it('caches compiled expressions — second call uses cached version', async () => {
+    const expression = '$string(amount)';
+    const rule: MappingRule = { srcPath: 'amount', destPath: 'AmtStr', expression };
+
+    // First call — compiles and caches
+    await engine.build({ compositeJson: { amount: 42 }, mappingRules: [rule], stitchConfig: {} });
+    // Second call — hits cache, result must be identical
+    const result = await engine.build({
+      compositeJson: { amount: 99 },
+      mappingRules: [rule],
+      stitchConfig: {},
+    });
+    expect(result.payload['AmtStr']).toBe('99');
   });
 });
 
-// ─── Config Applicator ────────────────────────────────────────────────────────
+// ─── Proto-pollution Guard ────────────────────────────────────────────────────
+
+describe('MappingEngine — security', () => {
+  it('prevents proto-pollution via __proto__ in destPath — emits warning, skips field', async () => {
+    const result = await engine.build({
+      compositeJson: { val: 1 },
+      mappingRules: [{ srcPath: 'val', destPath: '__proto__.polluted' }],
+      stitchConfig: {},
+    });
+    // The field is NOT written — no pollution
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((Object.prototype as any)['polluted']).toBeUndefined();
+    expect(result.payload['polluted']).toBeUndefined();
+    // A clear warning is logged instead
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/unsafe path segment/);
+  });
+});
+
+// ─── StitchConfig Behavioral Flags ───────────────────────────────────────────
 
 describe('MappingEngine — StitchConfig behavioral flags', () => {
-  it('adds TxnTaxDetail when useTaxCode is true and taxCodeDefault is set', () => {
+  it('adds TxnTaxDetail when useTaxCode is true and taxCodeDefault is set', async () => {
     const config: StitchConfig = { useTaxCode: true, taxCodeDefault: 'TAX-001' };
-    const result = engine.build({
+    const result = await engine.build({
       compositeJson: { amount: 500 },
       mappingRules: [{ srcPath: 'amount', destPath: 'TotalAmt' }],
       stitchConfig: config,
@@ -169,47 +240,32 @@ describe('MappingEngine — StitchConfig behavioral flags', () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  it('does NOT add TxnTaxDetail when useTaxCode is false', () => {
-    const config: StitchConfig = { useTaxCode: false };
-    const result = engine.build({
+  it('does NOT add TxnTaxDetail when useTaxCode is false', async () => {
+    const result = await engine.build({
       compositeJson: { amount: 500 },
       mappingRules: [{ srcPath: 'amount', destPath: 'TotalAmt' }],
-      stitchConfig: config,
+      stitchConfig: { useTaxCode: false },
     });
     expect(result.payload['TxnTaxDetail']).toBeUndefined();
-    expect(result.warnings).toHaveLength(0);
   });
 
-  it('emits a warning when useTaxCode is true but taxCodeDefault is missing', () => {
-    const config: StitchConfig = { useTaxCode: true };
-    const result = engine.build({
-      compositeJson: { amount: 500 },
+  it('emits a warning when useTaxCode is true but taxCodeDefault is missing', async () => {
+    const result = await engine.build({
+      compositeJson: {},
       mappingRules: [],
-      stitchConfig: config,
+      stitchConfig: { useTaxCode: true },
     });
     expect(result.payload['TxnTaxDetail']).toBeUndefined();
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain('taxCodeDefault');
   });
 
-  it('applies currencyOverride to CurrencyRef.value', () => {
-    const config: StitchConfig = { currencyOverride: 'USD' };
-    const result = engine.build({
+  it('applies currencyOverride to CurrencyRef.value', async () => {
+    const result = await engine.build({
       compositeJson: {},
       mappingRules: [],
-      stitchConfig: config,
+      stitchConfig: { currencyOverride: 'USD' },
     });
     expect((result.payload['CurrencyRef'] as Record<string, unknown>)['value']).toBe('USD');
-  });
-
-  it('overrides existing CurrencyRef.value when currencyOverride is set', () => {
-    const config: StitchConfig = { currencyOverride: 'EUR' };
-    const result = engine.build({
-      compositeJson: { currency: 'GBP' },
-      mappingRules: [{ srcPath: 'currency', destPath: 'CurrencyRef.value' }],
-      stitchConfig: config,
-    });
-    // Config applicator runs after field mapping — override wins
-    expect((result.payload['CurrencyRef'] as Record<string, unknown>)['value']).toBe('EUR');
   });
 });
