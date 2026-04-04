@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { MappingEngine } from './mapping-engine.js';
 import type { MappingRule, StitchConfig } from './mapping.types.js';
 
-const engine = new MappingEngine();
+let engine: MappingEngine;
+
+beforeEach(() => {
+  engine = new MappingEngine();
+});
 
 // ─── Simple Field Copy ────────────────────────────────────────────────────────
 
@@ -179,9 +183,8 @@ describe('MappingEngine — JSONata expressions', () => {
   });
 
   it('emits a warning and skips field when expression has a syntax error', async () => {
-    // Create a new engine per test to avoid cache contamination
-    const freshEngine = new MappingEngine();
-    const result = await freshEngine.build({
+    // Engine cache is reset per-test via beforeEach
+    const result = await engine.build({
       compositeJson: { val: 1 },
       mappingRules: [{ srcPath: 'val', destPath: 'Out', expression: '$$invalid syntax(((' }],
       stitchConfig: {},

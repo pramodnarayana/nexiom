@@ -118,19 +118,38 @@ function compile(src: string): CompiledExpression {
 
 // ─── MappingEngine ────────────────────────────────────────────────────────────
 
+export const MAX_EXPRESSION_CACHE = 1000;
+
 export class MappingEngine {
   /**
-   * Per-instance expression cache.
+   * Per-instance expression cache (bounded LRU).
    * Key: raw expression string  Value: compiled JSONata expression.
    * Worker processes reuse one MappingEngine instance across a batch,
    * so a given expression is compiled at most once per worker lifetime.
    */
   private readonly cache = new Map<string, CompiledExpression>();
+  
+  /** Maximum number of expressions to cache in order to limit memory growth. */
+  private readonly maxCacheSize: number;
+
+  constructor(maxCacheSize: number = MAX_EXPRESSION_CACHE) {
+    this.maxCacheSize = maxCacheSize;
+  }
 
   private getExpression(src: string): CompiledExpression {
     let expr = this.cache.get(src);
     if (!expr) {
       expr = compile(src);
+      if (this.cache.size >= this.maxCacheSize) {
+        const oldestKey = this.cache.keys().next().value;
+        if (oldestKey !== undefined) {
+          this.cache.delete(oldestKey);
+        }
+      }
+      this.cache.set(src, expr);
+    } else {
+      // LRU refresh: mark as recently used
+      this.cache.delete(src);
       this.cache.set(src, expr);
     }
     return expr;
