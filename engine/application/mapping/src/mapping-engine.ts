@@ -141,7 +141,11 @@ export class MappingEngine {
   private readonly maxCacheSize: number;
 
   constructor(maxCacheSize: number = MAX_EXPRESSION_CACHE) {
-    this.maxCacheSize = maxCacheSize;
+    if (typeof maxCacheSize !== 'number' || Number.isNaN(maxCacheSize) || maxCacheSize <= 0) {
+      this.maxCacheSize = 1;
+    } else {
+      this.maxCacheSize = Math.min(Math.floor(maxCacheSize), MAX_EXPRESSION_CACHE);
+    }
   }
 
   private getExpression(src: string): CompiledExpression {
@@ -177,7 +181,14 @@ export class MappingEngine {
     for (const rule of mappingRules) {
       let value: unknown;
 
-      if (rule.expression) {
+      if (rule.expression !== undefined) {
+        if (typeof rule.expression !== 'string' || rule.expression.trim() === '') {
+          warnings.push(
+            `MappingEngine: invalid or empty expression for destPath "${rule.destPath}" ` +
+              `— field skipped.`,
+          );
+          continue;
+        }
         // ── JSONata path ──────────────────────────────────────────────────────
         let expr: CompiledExpression;
         try {

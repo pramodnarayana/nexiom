@@ -182,6 +182,22 @@ describe('MappingEngine — JSONata expressions', () => {
     expect(result.warnings[0]).toContain('DocNumber');
   });
 
+  it('treats an empty string expression as invalid instead of falling back to simple copy', async () => {
+    const result = await engine.build({
+      compositeJson: { val: 'should_not_copy' },
+      mappingRules: [
+        { srcPath: 'val', destPath: 'Out', expression: '' },
+        { srcPath: 'val', destPath: 'Out2', expression: '   ' }
+      ],
+      stitchConfig: {},
+    });
+    expect(result.payload['Out']).toBeUndefined();
+    expect(result.payload['Out2']).toBeUndefined();
+    expect(result.warnings).toHaveLength(2);
+    expect(result.warnings[0]).toContain('invalid or empty expression for destPath "Out"');
+    expect(result.warnings[1]).toContain('invalid or empty expression for destPath "Out2"');
+  });
+
   it('emits a warning and skips field when expression has a syntax error', async () => {
     // Engine cache is reset per-test via beforeEach
     const result = await engine.build({
