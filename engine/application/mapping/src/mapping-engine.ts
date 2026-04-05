@@ -60,6 +60,7 @@ function getNestedValue(data: unknown, path: string): unknown {
   let val: unknown = data;
   for (const part of parts) {
     if (!isSafeSegment(part) || val === undefined || val === null) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(val, part)) return undefined;
     val = (val as Record<string, unknown>)[part];
   }
   return val;
@@ -100,6 +101,13 @@ function advanceOrCreate(
     );
   }
   return current[part] as Record<string, unknown>;
+}
+
+function cloneMappedValue(val: unknown): unknown {
+  if (typeof val === 'object' && val !== null) {
+    return structuredClone(val);
+  }
+  return val;
 }
 
 // ─── Expression Cache ─────────────────────────────────────────────────────────
@@ -212,7 +220,7 @@ export class MappingEngine {
       }
 
       try {
-        setNestedValue(payload, rule.destPath, value);
+        setNestedValue(payload, rule.destPath, cloneMappedValue(value));
       } catch (err) {
         warnings.push(
           `MappingEngine: could not write to destPath "${rule.destPath}" ` +

@@ -271,4 +271,17 @@ describe('MappingEngine — StitchConfig behavioral flags', () => {
     });
     expect((result.payload['CurrencyRef'] as Record<string, unknown>)['value']).toBe('USD');
   });
+
+  it('keeps source object isolated from mutations applied during post-mapping configs', async () => {
+    const sourceCurrency = { value: 'EUR' };
+    const result = await engine.build({
+      compositeJson: { originalRef: sourceCurrency },
+      mappingRules: [{ srcPath: 'originalRef', destPath: 'CurrencyRef' }],
+      stitchConfig: { currencyOverride: 'USD' },
+    });
+    // Destination is mutated
+    expect((result.payload['CurrencyRef'] as Record<string, unknown>)['value']).toBe('USD');
+    // Original is not
+    expect(sourceCurrency.value).toBe('EUR');
+  });
 });
