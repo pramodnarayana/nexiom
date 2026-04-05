@@ -22,6 +22,7 @@ export default tseslint.config(
             "import/no-restricted-paths": [
                 "error",
                 {
+                    basePath: __dirname,
                     zones: [
                         {
                             target: "./src",
