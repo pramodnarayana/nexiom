@@ -3,6 +3,7 @@ import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { getArchitectureBoundaryRule } from '../eslint-config/index.mjs';
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,7 @@ export default tseslint.config(
     {
         ignores: ['eslint.config.mjs', 'dist/**'],
     },
+        getArchitectureBoundaryRule(__dirname),
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,
     eslintPluginPrettierRecommended,

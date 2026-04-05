@@ -1,5 +1,5 @@
 {
-    "extends": "../../tsconfig.base.json",
+    "extends": "../../../tsconfig.base.json",
     "compilerOptions": {
         "rootDir": "./src",
         "outDir": "./dist",
@@ -15,7 +15,7 @@
     ],
     "references": [
         {
-            "path": "../database"
+            "path": "../../../packages/database"
         }
     ]
 }
