@@ -592,9 +592,6 @@ export class ConnectorsService {
           `Failed to provision namespace for connection ${workspaceProvisionInfo.connectionId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
           applyError,
         );
-        this.logger.error(
-          applyError instanceof Error ? applyError.message : String(applyError),
-        );
         try {
           await this.db.transaction(async (tx) => {
             if (workspaceProvisionInfo.createdRegistry) {

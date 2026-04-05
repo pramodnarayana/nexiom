@@ -4,10 +4,14 @@ import { TriggerStrategy } from '@nexiom/piece-framework';
 import type { Trigger } from '@nexiom/piece-framework';
 
 function makeMockDb() {
+  const where = vi.fn().mockResolvedValue([]);
+  const set = vi.fn().mockReturnValue({ where });
+  const update = vi.fn().mockReturnValue({ set });
   return {
     $client: {
       query: vi.fn(),
     },
+    update,
   };
 }
 

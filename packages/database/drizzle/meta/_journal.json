@@ -29,6 +29,13 @@
       "when": 1775387539103,
       "tag": "0003_add_gem_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775387600000,
+      "tag": "0004_verify_gem_indexes",
+      "breakpoints": true
     }
   ]
 }

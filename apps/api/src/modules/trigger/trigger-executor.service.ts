@@ -1,7 +1,11 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { Trigger, TriggerContext } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import {
+  DATABASE_CONNECTION,
+  connectionStorageRegistry,
+} from '@nexiom/database';
+import { eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -148,7 +152,14 @@ export class TriggerExecutorService {
         SchemaPlan.OUTBOUND_ACTIVE,
       );
 
-      // 2. Invoke the trigger enablement logic (e.g. Subscribe to webhook)
+      // 2. Persist the provisioned schemaPlan so delivery filters
+      // (which gate on connectionStorageRegistry.schemaPlan) reflect reality.
+      await this.db
+        .update(connectionStorageRegistry)
+        .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+        .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
+
+      // 3. Invoke the trigger enablement logic (e.g. Subscribe to webhook)
       await params.trigger.onEnable?.(context);
       this.logger.log('onEnable completed', {
         appName: params.appName,
