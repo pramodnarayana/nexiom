@@ -12,8 +12,15 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1774888433959,
-      "tag": "0001_aromatic_dazzler",
+      "when": 1775387140030,
+      "tag": "0001_add_status_enum_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775387539103,
+      "tag": "0002_add_gem_indexes",
       "breakpoints": true
     }
   ]

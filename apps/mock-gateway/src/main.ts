@@ -14,9 +14,9 @@ app.use(express.json());
 app.use(pinoHttp({ logger }));
 
 const candidatePaths = [
-  join(process.cwd(), '../../packages/pieces'),
-  join(process.cwd(), 'packages/pieces'),
-  join(process.cwd(), '../packages/pieces'),
+  join(process.cwd(), '../../engine/application/pieces'),
+  join(process.cwd(), 'engine/application/pieces'),
+  join(process.cwd(), '../engine/application/pieces'),
 ];
 
 const piecesDir = candidatePaths.find(p => existsSync(p));

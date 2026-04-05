@@ -524,14 +524,14 @@ describe('ConnectorsService', () => {
         status: 'PROVISIONING',
       });
 
-      // T026: new connections must be provisioned with at least GATEWAY_ACTIVE
-      // so that inbound_gateway exists immediately after connection creation.
+      // At connection setup time only the schema namespace is provisioned.
+      // The full table stack is applied incrementally when a stitch is activated.
       const { applyPlan } = service['dbManager'] as {
         applyPlan: ReturnType<typeof vi.fn>;
       };
       expect(applyPlan).toHaveBeenCalledWith(
         expect.stringMatching(/^ws_/),
-        SchemaPlan.OUTBOUND_ACTIVE,
+        SchemaPlan.NAMESPACE_ONLY,
       );
 
       // Verify the final transition to ACTIVE
