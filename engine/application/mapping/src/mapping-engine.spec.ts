@@ -301,3 +301,35 @@ describe('MappingEngine — StitchConfig behavioral flags', () => {
     expect(sourceCurrency.value).toBe('EUR');
   });
 });
+
+// ─── LRU Cache Bounding ───────────────────────────────────────────────────
+
+describe('MappingEngine — LRU Cache Bounding', () => {
+  it('normalizes invalid parameters (NaN, negative, fractional) to safe values', () => {
+    expect((new MappingEngine(NaN) as any).maxCacheSize).toBe(1);
+    expect((new MappingEngine(-5) as any).maxCacheSize).toBe(1);
+    expect((new MappingEngine(0) as any).maxCacheSize).toBe(1);
+    expect((new MappingEngine(0.5) as any).maxCacheSize).toBe(1); // Fractional < 1 becomes 1
+    // Number higher than MAX becomes MAX
+    expect((new MappingEngine(999999) as any).maxCacheSize).toBe(1000); 
+  });
+
+  it('evicts the oldest expression when the cache fills up', async () => {
+    const smallEngine = new MappingEngine(2);
+    
+    // Fill to capacity of 2
+    await smallEngine.build({ compositeJson: { a: 1 }, mappingRules: [{ srcPath: 'a', destPath: 'out', expression: 'a + 1' }], stitchConfig: {} });
+    await smallEngine.build({ compositeJson: { b: 2 }, mappingRules: [{ srcPath: 'b', destPath: 'out', expression: 'b + 1' }], stitchConfig: {} });
+    
+    expect((smallEngine as any).cache.size).toBe(2);
+    expect((smallEngine as any).cache.has('a + 1')).toBe(true);
+
+    // Add a 3rd distinct expression, evicting the oldest ('a + 1')
+    await smallEngine.build({ compositeJson: { c: 3 }, mappingRules: [{ srcPath: 'c', destPath: 'out', expression: 'c + 1' }], stitchConfig: {} });
+
+    expect((smallEngine as any).cache.size).toBe(2);
+    expect((smallEngine as any).cache.has('c + 1')).toBe(true);
+    expect((smallEngine as any).cache.has('a + 1')).toBe(false); // Evicted!
+  });
+});
+

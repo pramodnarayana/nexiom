@@ -141,11 +141,12 @@ export class MappingEngine {
   private readonly maxCacheSize: number;
 
   constructor(maxCacheSize: number = MAX_EXPRESSION_CACHE) {
-    if (typeof maxCacheSize !== 'number' || Number.isNaN(maxCacheSize) || maxCacheSize <= 0) {
+    if (typeof maxCacheSize !== 'number' || Number.isNaN(maxCacheSize)) {
       this.maxCacheSize = 1;
-    } else {
-      this.maxCacheSize = Math.min(Math.floor(maxCacheSize), MAX_EXPRESSION_CACHE);
+      return;
     }
+    const size = Math.floor(maxCacheSize);
+    this.maxCacheSize = size <= 0 ? 1 : Math.min(size, MAX_EXPRESSION_CACHE);
   }
 
   private getExpression(src: string): CompiledExpression {
