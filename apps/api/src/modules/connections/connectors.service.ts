@@ -395,26 +395,102 @@ export class ConnectorsService {
           // before we run additional queries (SELECT for FAILED reprovision, etc.)
           await tx.execute(sql`ROLLBACK TO SAVEPOINT before_unique_insert`);
           if (pgErr?.code === '23505') {
-            // Unique constraint violation; check if there is a FAILED connection to reprovision
-            const existingFailed = await tx
-              .select()
-              .from(appConnections)
-              .where(
-                and(
-                  eq(appConnections.tenantId, tenantId),
-                  eq(appConnections.appName, providerName),
-                  externalId
-                    ? or(
-                        eq(appConnections.displayName, displayName),
-                        eq(appConnections.externalId, externalId),
-                      )
-                    : eq(appConnections.displayName, displayName),
-                  eq(appConnections.status, AppConnectionStatus.FAILED),
-                ),
-              )
-              .limit(1);
+            // Identify the FAILED row based solely on the violated constraint,
+            // not via OR(displayName, externalId). An OR lookup can revive the
+            // wrong row when two different FAILED connections share one of the
+            // caller's identifiers but not the other.
+            let existingFailed: { id: string } | undefined;
 
-            if (existingFailed.length > 0 && existingFailed[0]) {
+            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+              // displayName is the blocking duplicate — query only by displayName.
+              const rows = await tx
+                .select({ id: appConnections.id })
+                .from(appConnections)
+                .where(
+                  and(
+                    eq(appConnections.tenantId, tenantId),
+                    eq(appConnections.appName, providerName),
+                    eq(appConnections.displayName, displayName),
+                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                  ),
+                )
+                .limit(1);
+              existingFailed = rows[0];
+
+              // If externalId was also supplied, verify it points to the SAME
+              // FAILED row. Divergence means two stale records share our
+              // identifiers — that is a genuine conflict, not a reprovision.
+              if (existingFailed && externalId) {
+                const byExternalId = await tx
+                  .select({ id: appConnections.id })
+                  .from(appConnections)
+                  .where(
+                    and(
+                      eq(appConnections.tenantId, tenantId),
+                      eq(appConnections.appName, providerName),
+                      eq(appConnections.externalId, externalId),
+                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                    ),
+                  )
+                  .limit(1);
+                if (
+                  byExternalId[0] &&
+                  byExternalId[0].id !== existingFailed.id
+                ) {
+                  this.throwOnDuplicateConnection(
+                    pgErr,
+                    displayName,
+                    externalId,
+                  );
+                }
+              }
+            } else if (
+              pgErr.constraint === 'tenant_external_id_unique_idx' &&
+              externalId
+            ) {
+              // externalId is the blocking duplicate — query only by externalId.
+              const rows = await tx
+                .select({ id: appConnections.id })
+                .from(appConnections)
+                .where(
+                  and(
+                    eq(appConnections.tenantId, tenantId),
+                    eq(appConnections.appName, providerName),
+                    eq(appConnections.externalId, externalId),
+                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                  ),
+                )
+                .limit(1);
+              existingFailed = rows[0];
+
+              // Cross-check: displayName must also resolve to the same FAILED row.
+              if (existingFailed) {
+                const byDisplayName = await tx
+                  .select({ id: appConnections.id })
+                  .from(appConnections)
+                  .where(
+                    and(
+                      eq(appConnections.tenantId, tenantId),
+                      eq(appConnections.appName, providerName),
+                      eq(appConnections.displayName, displayName),
+                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                    ),
+                  )
+                  .limit(1);
+                if (
+                  byDisplayName[0] &&
+                  byDisplayName[0].id !== existingFailed.id
+                ) {
+                  this.throwOnDuplicateConnection(
+                    pgErr,
+                    displayName,
+                    externalId,
+                  );
+                }
+              }
+            }
+
+            if (existingFailed) {
               const [updated] = await tx
                 .update(appConnections)
                 .set({
@@ -426,7 +502,7 @@ export class ConnectorsService {
                   status: AppConnectionStatus.PROVISIONING,
                   updatedAt: new Date(),
                 })
-                .where(eq(appConnections.id, existingFailed[0].id))
+                .where(eq(appConnections.id, existingFailed.id))
                 .returning({ id: appConnections.id });
 
               connection = updated;

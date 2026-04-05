@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import { readdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { OpenAPIBackend } from 'openapi-backend';
 import { pino } from 'pino';
 import { pinoHttp } from 'pino-http';
@@ -13,10 +14,17 @@ app.use(cors());
 app.use(express.json());
 app.use(pinoHttp({ logger }));
 
+// Resolve paths relative to this source file so they are stable regardless
+// of the working directory from which the process is launched.
+const __filename = fileURLToPath(import.meta.url);
+const pathToThisFileDir = dirname(__filename);
+
 const candidatePaths = [
-  join(process.cwd(), '../../engine/application/pieces'),
-  join(process.cwd(), 'engine/application/pieces'),
-  join(process.cwd(), '../engine/application/pieces'),
+  // Primary: 3 levels up from src/ reaches the monorepo root
+  join(pathToThisFileDir, '../../../engine/application/pieces'),
+  // Fallbacks for alternative monorepo layouts / build output locations
+  join(pathToThisFileDir, '../../engine/application/pieces'),
+  join(pathToThisFileDir, '../engine/application/pieces'),
 ];
 
 const piecesDir = candidatePaths.find(p => existsSync(p));
