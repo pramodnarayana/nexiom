@@ -65,6 +65,10 @@ vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
 
 vi.mock('../constants.js', () => constantMocks);
 
+vi.mock('node:fs/promises', () => ({
+  readdir: vi.fn().mockResolvedValue([]),
+}));
+
 describe('DatabaseManager', () => {
   let manager: DatabaseManager;
   const originalEnv = process.env.NODE_ENV;

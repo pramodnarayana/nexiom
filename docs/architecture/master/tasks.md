@@ -767,7 +767,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 ### T055 · infra: Monorepo Directory Restructure — `engine/` + `packages/`
 
-- [ ] **Phase 0 — Scaffold `engine/` directory** (prerequisite for T022B)
+- [x] **Phase 0 — Scaffold `engine/` directory** (prerequisite for T022B)
   - Create `engine/platform/` and `engine/application/` directories
   - Add root `engine/README.md` documenting the Platform vs Application boundary
   - Add `engine/application/mapping/` scaffold (empty package) for T022B
@@ -775,22 +775,22 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
   - Update root `tsconfig.json` / `turbo.json` path aliases
   - **No existing code moves in this phase** — zero disruption
 
-- [ ] **Phase 1 — Migrate engine platform primitives**
+- [x] **Phase 1 — Migrate engine platform primitives**
   - Move `packages/engine/` → `engine/platform/core/` (`@nexiom/engine` package name unchanged)
   - `CursorManagerService`, `StorageResolver`, `evaluator`, `hydrator`, `path-utils` — all stay, just relocate
   - Update all import paths in `apps/api`, `apps/worker`
   - All tests must pass before merge
 
-- [ ] **Phase 2 — Migrate piece framework**
+- [x] **Phase 2 — Migrate piece framework**
   - Move `packages/piece-framework/` → `engine/platform/piece-framework/` (`@nexiom/piece-framework` unchanged)
   - Generic `Piece`, `Action`, `Trigger`, `Poll` contracts only — no vendor code
 
-- [ ] **Phase 3 — Migrate application packages**
+- [x] **Phase 3 — Migrate application packages**
   - Move `packages/connectors/` → `engine/application/connectors/` (`@nexiom/connectors` unchanged)
   - Move `packages/pieces/` → `engine/application/pieces/` (`@nexiom/pieces` unchanged)
   - Salesforce + QuickBooks implementations move with their tests
 
-- [ ] **Phase 4 — Verify `packages/` contains only infrastructure**
+- [x] **Phase 4 — Verify `packages/` contains only infrastructure**
   - Remaining in `packages/`: `queue`, `database`, `cache`, `infra-adapters`, `auth`, `identity`, `dbmanager`, `eslint-config`
   - Add `packages/README.md`: "Infrastructure packages — commodity, not core IP"
   - Add `engine/README.md`: "Nexiom Sync Engine — core IP. See docs/architecture/sync_strategy/"

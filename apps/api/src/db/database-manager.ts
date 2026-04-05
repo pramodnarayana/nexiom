@@ -279,7 +279,7 @@ export class DatabaseManager {
       // → resolve 4 levels up to reach the monorepo root.
       const thisFile = fileURLToPath(import.meta.url);
       const monorepoRoot = path.resolve(path.dirname(thisFile), '../../../../');
-      const piecesDir = path.join(monorepoRoot, 'packages/pieces');
+      const piecesDir = path.join(monorepoRoot, 'engine/application/pieces');
       let pieceFolders: string[];
       let discoverySuccess = true;
       try {
