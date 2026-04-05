@@ -5,7 +5,7 @@ import { DatabaseManager } from './database-manager.js';
 import { execSync } from 'node:child_process';
 
 // Hoisted mocks for dynamic imports
-const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
+const { drizzleMocks, rbacMocks, constantMocks, fsMocks } = vi.hoisted(() => ({
   drizzleMocks: {
     update: vi.fn(),
     insert: vi.fn(),
@@ -37,6 +37,11 @@ const { drizzleMocks, rbacMocks, constantMocks } = vi.hoisted(() => ({
     getRequiredMemberRoleId: vi.fn(() => 'member-role'),
     getRequiredSystemTenantId: vi.fn(() => 'system-tenant'),
   },
+  fsMocks: {
+    readdir: vi.fn().mockResolvedValue(['dummy-piece']),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+    readFile: vi.fn().mockResolvedValue('{"name": "@test/piece-dummy"}'),
+  },
 }));
 
 // Mock dependencies
@@ -65,9 +70,7 @@ vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
 
 vi.mock('../constants.js', () => constantMocks);
 
-vi.mock('node:fs/promises', () => ({
-  readdir: vi.fn().mockResolvedValue([]),
-}));
+vi.mock('node:fs/promises', () => fsMocks);
 
 describe('DatabaseManager', () => {
   let manager: DatabaseManager;
@@ -258,6 +261,12 @@ describe('DatabaseManager', () => {
 
       // Verify RBAC seeding
       expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
+
+      // Verify pieces discovery check
+      const expectedPath = path.join('engine', 'application', 'pieces');
+      expect(fsMocks.readdir).toHaveBeenCalledWith(
+        expect.stringContaining(expectedPath),
+      );
     });
 
     it('should skip creating system org if it exists', async () => {
@@ -277,6 +286,12 @@ describe('DatabaseManager', () => {
       );
       expect(orgInserted).toBe(false);
       expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
+
+      // Verify pieces discovery check
+      const expectedPath = path.join('engine', 'application', 'pieces');
+      expect(fsMocks.readdir).toHaveBeenCalledWith(
+        expect.stringContaining(expectedPath),
+      );
     });
   });
 

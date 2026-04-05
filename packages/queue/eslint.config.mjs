@@ -3,6 +3,7 @@ import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import importPlugin from 'eslint-plugin-import';
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default tseslint.config(
     {
         ignores: ['eslint.config.mjs', 'dist/**'],
+    },
+        {
+        plugins: {
+            "import": importPlugin,
+        },
+        rules: {
+            "import/no-restricted-paths": [
+                "error",
+                {
+                    zones: [
+                        {
+                            target: "./src",
+                            from: "../../engine",
+                            message: "Infrastructure packages must not import from the core Sync Engine. Blast radius boundary violated."
+                        }
+                    ]
+                }
+            ]
+        }
     },
     eslint.configs.recommended,
     ...tseslint.configs.recommendedTypeChecked,
