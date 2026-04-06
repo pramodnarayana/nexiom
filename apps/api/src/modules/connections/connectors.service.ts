@@ -417,9 +417,10 @@ export class ConnectorsService {
                 .limit(1);
               existingFailed = rows[0];
 
-              // If externalId was also supplied, verify it points to the SAME
-              // FAILED row. Divergence means two stale records share our
-              // identifiers — that is a genuine conflict, not a reprovision.
+              // Cross-check: only accept this FAILED row when externalId was
+              // not supplied OR the externalId lookup resolves to the same row.
+              // If externalId resolves to a *different* row (or no row at all),
+              // clear existingFailed — both identifiers must agree on the same row.
               if (existingFailed && externalId) {
                 const byExternalId = await tx
                   .select({ id: appConnections.id })
@@ -434,14 +435,11 @@ export class ConnectorsService {
                   )
                   .limit(1);
                 if (
-                  byExternalId[0] &&
+                  !byExternalId[0] ||
                   byExternalId[0].id !== existingFailed.id
                 ) {
-                  this.throwOnDuplicateConnection(
-                    pgErr,
-                    displayName,
-                    externalId,
-                  );
+                  // externalId points to a different row or no FAILED row at all
+                  existingFailed = undefined;
                 }
               }
             } else if (
@@ -463,7 +461,10 @@ export class ConnectorsService {
                 .limit(1);
               existingFailed = rows[0];
 
-              // Cross-check: displayName must also resolve to the same FAILED row.
+              // Cross-check: only accept this FAILED row when the displayName
+              // lookup resolves to the same row.
+              // If displayName resolves to a *different* row (or no row at all),
+              // clear existingFailed — both identifiers must agree on the same row.
               if (existingFailed) {
                 const byDisplayName = await tx
                   .select({ id: appConnections.id })
@@ -478,14 +479,11 @@ export class ConnectorsService {
                   )
                   .limit(1);
                 if (
-                  byDisplayName[0] &&
+                  !byDisplayName[0] ||
                   byDisplayName[0].id !== existingFailed.id
                 ) {
-                  this.throwOnDuplicateConnection(
-                    pgErr,
-                    displayName,
-                    externalId,
-                  );
+                  // displayName points to a different row or no FAILED row at all
+                  existingFailed = undefined;
                 }
               }
             }

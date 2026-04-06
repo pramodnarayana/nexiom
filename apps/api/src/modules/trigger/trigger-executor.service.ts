@@ -152,27 +152,52 @@ export class TriggerExecutorService {
         SchemaPlan.OUTBOUND_ACTIVE,
       );
 
-      // 2. Persist the provisioned schemaPlan so delivery filters
-      // (which gate on connectionStorageRegistry.schemaPlan) reflect reality.
+      // 2. Invoke the trigger enablement logic (e.g. subscribe to webhook).
+      // The registry row is written AFTER this succeeds so that delivery
+      // workers never see OUTBOUND_ACTIVE for a workspace whose onEnable
+      // threw (e.g. webhook subscription failed).
+      await params.trigger.onEnable?.(context);
+
+      // 3. Persist the provisioned schemaPlan only once onEnable has succeeded.
       await this.db
         .update(connectionStorageRegistry)
         .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
         .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
 
-      // 3. Invoke the trigger enablement logic (e.g. Subscribe to webhook)
-      await params.trigger.onEnable?.(context);
       this.logger.log('onEnable completed', {
         appName: params.appName,
         triggerName: params.triggerName,
         workspaceId: params.workspaceId,
       });
     } catch (err) {
+      // Revert the registry row to NAMESPACE_ONLY so delivery workers do not
+      // route to this schema until onEnable is retried and succeeds.
+      try {
+        await this.db
+          .update(connectionStorageRegistry)
+          .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
+          .where(
+            eq(connectionStorageRegistry.dataNamespace, params.workspaceId),
+          );
+      } catch (revertErr) {
+        this.logger.error(
+          'Failed to revert schemaPlan after onEnable failure',
+          {
+            workspaceId: params.workspaceId,
+            error:
+              revertErr instanceof Error
+                ? revertErr.message
+                : String(revertErr),
+          },
+        );
+      }
       this.logger.error('onEnable failed', {
         appName: params.appName,
         triggerName: params.triggerName,
         workspaceId: params.workspaceId,
         error: err instanceof Error ? err.message : String(err),
       });
+
       throw err;
     }
   }
