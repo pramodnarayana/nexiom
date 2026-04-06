@@ -173,7 +173,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 ### T016 · web: `WorkspacesPage` + `WorkspaceDetailPage` + sidebar directory
 
 - [x] `WorkspacesPage` — list workspaces, "+ New Workspace" dialog (name + env toggle)
-- [x] `WorkspaceDetailPage` — assigned connections list, "Assign Connection" button
+- [x] ~`WorkspaceDetailPage` — assigned connections list, "Assign Connection" button~ (Removed: obsolete workspace-level connection assignment logic)
 - [x] Sidebar nav: each workspace renders as a **collapsible directory node** (folder icon + workspace name + env badge). Expanding a node reveals its stitches as child rows. Active route is highlighted. Only one workspace can be expanded at a time (accordion behaviour)
 - [x] "Assign Connection" picker calls `GET /workspaces/:id/connections/available` so only env-type-matched connections appear — sandbox picker never shows production connections and vice versa
 - Files: `apps/web/src/modules/workspaces/**`, `apps/web/src/components/layout/Sidebar.tsx`
@@ -243,47 +243,43 @@ First net-new code written directly inside `engine/application/`. Takes the
 Mapping Config + Stitch Config + Canonical Composite JSON and produces the
 target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
-- [ ] **`mapping.types.ts`** — shared types
+- [x] **`mapping.types.ts`** — shared types
   - `MappingRule: { srcPath: string; destPath: string; formula?: FormulaRef }`
   - `FormulaRef: { name: string; args: Record<string, unknown> }`
   - `StitchConfig: Record<string, unknown>` (typed JSONB from `integration_stitch.config`)
   - `MappingInput: { compositeJson, mappingRules, stitchConfig }`
   - `MappingResult: { payload: Record<string, unknown>; warnings: string[] }`
 
-- [ ] **`formula-library.ts`** — platform-verified transform functions
-  - `dateFormat(value, format)` — e.g. `"2024-01-30"` → `"30/01/2024"`
-  - `concat(...values)` — joins multiple source fields into one string
-  - `unitConvert(value, from, to)` — e.g. lbs → kg
-  - `coalesce(...values)` — returns first non-null value
-  - Each function is registered in a `FORMULA_REGISTRY` map; unknown formula names throw a clear error
-  - Unit tested for all functions + unknown formula error path
+- [x] **`jsonata-extensions.ts`** — IBM JSONata used for platform-verified transform functions
+  - Standard transformations offloaded to JSONata expressions instead of custom formula map.
+  - Custom functions injected via JSONata bindings if necessary.
+  - Unit tested for formula error paths.
 
-- [ ] **`config-applicator.ts`** — applies `StitchConfig` behavioral flags to the built payload
+- [x] **`config-applicator.ts`** — applies `StitchConfig` behavioral flags to the built payload
   - Called after field mapping; receives the assembled payload + stitchConfig
   - Example: if `stitchConfig.useTaxCode === true` → sets `payload.TxnTaxDetail = { TaxCode: stitchConfig.taxCodeDefault }`
   - Example: if `stitchConfig.currencyOverride` → overrides `payload.CurrencyRef.value`
   - Applicator rules defined per piece via `piece.describeConfig()`
 
-- [ ] **`mapping-engine.ts`** — main entry point: `MappingEngine` class
+- [x] **`mapping-engine.ts`** — main entry point: `MappingEngine` class
   - `build(input: MappingInput): MappingResult`
-  - Step 1: Iterates `mappingRules`; for each rule: `getNestedValue(compositeJson, srcPath)` → applies `formula` if present → `setNestedValue(payload, destPath, value)`
+  - Step 1: Iterates `mappingRules`; for each rule: evaluates JSONata `formula` if present against `compositeJson` → `setNestedValue(payload, destPath, value)`
   - Step 2: `configApplicator.apply(payload, stitchConfig)` — layers behavioral flags
   - Step 3: Returns `{ payload, warnings }` — warnings for unmapped fields, missing formula args
   - `FanOutService` (`apps/worker`) updated to call `MappingEngine.build()` in place of legacy `hydratePayload()`
 
-- [ ] **`engine/application/mapping/package.json`** — `@nexiom/mapping`, exports `MappingEngine`, types
+- [x] **`engine/application/mapping/package.json`** — `@nexiom/mapping`, exports `MappingEngine`, types
 
-- [ ] **Unit tests** (`mapping-engine.spec.ts`)
+- [x] **Unit tests** (`mapping-engine.spec.ts`)
   - Field mapping: src path resolved, dest path set
-  - Formula applied: dateFormat, concat, coalesce
-  - Unknown formula: throws with clear message
+  - Formula applied: testing JSONata expressions
   - Config applicator: `useTaxCode=true` adds TxnTaxDetail; `false` leaves payload unchanged
   - Missing src path: warning emitted, field skipped
   - Unsafe path segment: throws (proto-pollution guard)
 
 - Files:
   - `engine/application/mapping/src/mapping.types.ts`
-  - `engine/application/mapping/src/formula-library.ts`
+  - `engine/application/mapping/src/jsonata-extensions.ts`
   - `engine/application/mapping/src/config-applicator.ts`
   - `engine/application/mapping/src/mapping-engine.ts`
   - `engine/application/mapping/src/mapping-engine.spec.ts`
@@ -295,16 +291,16 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 > Spec: `docs/architecture/sync_strategy/sync_strategy.md` §1, §4
 
-- [ ] **`StitchesPage`** — list all stitches for the workspace; "+ New Stitch" CTA
-- [ ] **Step 1 — Source Selection (Policy-Driven)**
+- [x] **`StitchesPage`** — list all stitches for the workspace; "+ New Stitch" CTA
+- [x] **Step 1 — Source Selection (Policy-Driven)**
   - Query `GET /workspaces/:id/connections/available` — connections are auto-populated by the Policy Engine (RBAC/ABAC); no manual picker needed
   - User selects a Source Connection from the auto-populated list, then selects a Source Object (calls `GET /stitches/metadata/:connectionId/objects`)
   - On Source Object selection, call the **Dependency Discovery Service** (`GET /stitches/metadata/:connectionId/objects/:objectName/related`) to retrieve the "Business Universe" (parent 1:1 and child 1:N related objects)
   - Render discovered related objects as a **pre-checked, immutable dependency list** — user sees them but cannot uncheck them
-- [ ] **Step 2 — Target Selection (Policy-Driven)**
+- [x] **Step 2 — Target Selection (Policy-Driven)**
   - Target Connection auto-populated by Policy Engine (same `available` endpoint, filtered to workspace env_type)
   - User selects Target Connection, then Target Object
-- [ ] **Step 3 — No-Code Mapping Canvas + Configuration**
+- [x] **Step 3 — No-Code Mapping Canvas + Configuration**
 
   **Tab A — Field Mapping:**
   - **Source panel:** fields displayed as **human-readable labels** grouped by entity (e.g., `Load → Total Weight`, `Account → Tax ID`, `Stop → Delivery Date`) — sourced from `describeFields` display names, never raw JSON keys
@@ -336,19 +332,19 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 > Spec: `docs/architecture/sync_strategy/sync_strategy.md` §3A, §3.5
 
-- [ ] **Schedule Panel** (`SchedulePanel.tsx`)
+- [x] **Schedule Panel** (`SchedulePanel.tsx`)
   - Frequency dropdown (30min / 1hr / 2hr / 4hr / 6hr / 12hr / 24hr)
   - Enable / Pause toggle (calls `PATCH /stitches/:id/schedule`)
   - "Last synced" + "Next sync in ~X min" display (computed from `last_scheduled_at + syncIntervalMinutes`)
   - "Run now" button → calls `POST /stitches/:id/schedule/trigger` → shows job-dispatched toast
-- [ ] **Configuration Panel** (`StitchConfigPanel.tsx`)
+- [x] **Configuration Panel** (`StitchConfigPanel.tsx`)
   - Editable view of the stitch's behavioral flags (same controls as T023 Tab B — toggles, dropdowns, text inputs)
   - Calls `PATCH /stitches/:id` with updated `config` on save
   - Allows post-creation edits without re-running the full wizard (e.g., customer decides to enable Tax Code after go-live)
-- [ ] **Related Objects Panel** (`RelatedObjectsPanel.tsx`)
+- [x] **Related Objects Panel** (`RelatedObjectsPanel.tsx`)
   - Read-only list of the auto-enrolled related objects from Step 1 (Dependency Discovery)
   - Displays `entity_type`, `source_id` pattern, and sync status — makes it clear what will be included in the Composite JSON at L4
-- [ ] **Mapping Summary** — compact read-only view of the field mappings created in T023, displayed as `Source Entity → Field Label` → formula (if any) → `Target Field Label`; never shows raw JSON paths
+- [x] **Mapping Summary** — compact read-only view of the field mappings created in T023, displayed as `Source Entity → Field Label` → formula (if any) → `Target Field Label`; never shows raw JSON paths
 - Files:
   - `apps/web/src/modules/stitches/StitchDetailPage.tsx`
   - `apps/web/src/modules/stitches/components/SchedulePanel.tsx`
@@ -742,7 +738,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 | 0 — Infrastructure | T001–T005 | ✅ All | Local dev environment boots end-to-end |
 | 0.5 — Hardening | T006–T012 | ✅ T006,T008–T011 · ⬜ T007,T012 | Production-safe observability, security, graceful ops |
 | 1 — Workspaces | T013–T016 | ✅ All | Multi-workspace CRUD + UI |
-| 2 — Stitches & Mapping Canvas | T017–T025 | ✅ T017–T022 · ⬜ T023–T025 | Stitch + field mapping + schedule config |
+| 2 — Stitches & Mapping Canvas | T017–T025 | ✅ T017–T024 · ⬜ T025 | Stitch + field mapping + schedule config |
 | 3 — Pipeline | T026–T035 | ✅ All | Full L1→L6 data flow + scheduler execution |
 | 3.5 — Stateful Sync | T046–T050 + T029 + T030 | ✅ All | Windmill orchestration + Singer-style cursor engine |
 | 4 — Dashboard | T036–T039 | ✅ All | Trace timeline + Exception Center |
@@ -751,7 +747,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 | 7 — Delivery Outbox | T051–T052 | ✅ All | Delivery Outbox Resiliency |
 | 8 — Fleet Sharding | T053–T054 | ⬜ All | Sandboxed execution of customer logic |
 
-> Total: 54 tasks · Completed: ~38 · Remaining: ~16
+> Total: 54 tasks · Completed: ~40 · Remaining: ~14
 
 ---
 ---

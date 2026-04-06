@@ -30,6 +30,7 @@ interface MappingRow {
   _id: string;
   src: string;
   dest: string;
+  transform?: string;
 }
 
 interface ConditionRow {
@@ -163,7 +164,7 @@ export function MappingCanvas({
     }
     const rules: MappingRule[] = canvas.mappingRows
       .filter((r) => r.src && r.dest)
-      .map(({ src, dest }) => ({ src, dest }));
+      .map(({ src, dest, transform }) => ({ src, dest, transform }));
     const conds: SyncConditionRule[] = canvas.conditionRows
       .filter((c) => c.field && c.value)
       .map(({ field, op, value, logic }) => ({ field, op, value, logic }));
@@ -172,7 +173,7 @@ export function MappingCanvas({
 
   // ── Mapping row handlers ─────────────────────────────────────────────────
 
-  function updateMappingRow(id: string, patch: Partial<Pick<MappingRow, 'src' | 'dest'>>) {
+  function updateMappingRow(id: string, patch: Partial<Pick<MappingRow, 'src' | 'dest' | 'transform'>>) {
     dispatch({ type: 'CANVAS', update: (prev) => ({
       ...prev,
       mappingRows: prev.mappingRows.map((r) => (r._id === id ? { ...r, ...patch } : r)),
@@ -240,9 +241,12 @@ export function MappingCanvas({
     <div className="space-y-6">
       {/* ── Field Mappings ────────────────────────────────────────────────── */}
       <div>
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-2">
+        <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Source — {sourceObject}
+          </p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Transformation (JSONata)
           </p>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Destination — {targetObject}
@@ -252,7 +256,7 @@ export function MappingCanvas({
 
         <div className="space-y-2">
           {mappingRows.map((row) => (
-            <div key={row._id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+            <div key={row._id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
               <Combobox
                 options={srcFieldOptions}
                 value={row.src}
@@ -262,6 +266,21 @@ export function MappingCanvas({
                 emptyMessage="No matching fields."
                 className="h-8 text-sm"
               />
+
+              <Select
+                value={row.transform || 'none'}
+                onValueChange={(v) => { updateMappingRow(row._id, { transform: v === 'none' ? undefined : v }); }}
+              >
+                <SelectTrigger className="h-8 text-sm font-mono">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="$uppercase($)" className="font-mono">$uppercase($)</SelectItem>
+                  <SelectItem value="$lowercase($)" className="font-mono">$lowercase($)</SelectItem>
+                  <SelectItem value="$trim($)" className="font-mono">$trim($)</SelectItem>
+                </SelectContent>
+              </Select>
 
               <Combobox
                 options={destFieldOptions}

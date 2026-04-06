@@ -115,34 +115,19 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                 {(() => {
                                     const stitchesHref = `${wsHref}/stitches`;
                                     const isStitchesActive = location.pathname === stitchesHref || location.pathname.startsWith(`${stitchesHref}/`);
-                                    const isConnectionsActive = !isStitchesActive && (location.pathname === wsHref || location.pathname.startsWith(`${wsHref}/`));
                                     return (
-                                        <>
-                                            <Link
-                                                to={stitchesHref}
-                                                aria-current={isStitchesActive ? 'page' : undefined}
-                                                className={cn(
-                                                    'block text-xs py-1 px-2 rounded',
-                                                    isStitchesActive
-                                                        ? 'text-primary bg-primary/10 font-medium'
-                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                                                )}
-                                            >
-                                                Stitches
-                                            </Link>
-                                            <Link
-                                                to={wsHref}
-                                                aria-current={isConnectionsActive ? 'page' : undefined}
-                                                className={cn(
-                                                    'block text-xs py-1 px-2 rounded',
-                                                    isConnectionsActive
-                                                        ? 'text-primary bg-primary/10 font-medium'
-                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                                                )}
-                                            >
-                                                Connections
-                                            </Link>
-                                        </>
+                                        <Link
+                                            to={stitchesHref}
+                                            aria-current={isStitchesActive ? 'page' : undefined}
+                                            className={cn(
+                                                'block text-xs py-1 px-2 rounded',
+                                                isStitchesActive
+                                                    ? 'text-primary bg-primary/10 font-medium'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                            )}
+                                        >
+                                            Stitches
+                                        </Link>
                                     );
                                 })()}
                             </div>

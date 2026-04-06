@@ -62,4 +62,35 @@ export class MetadataController {
       objectName,
     );
   }
+
+  @Get(':connectionId/objects/:objectName/related')
+  @RequirePermission('stitches', 'read')
+  describeRelatedObjects(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('objectName') objectName: string,
+  ) {
+    if (!/^[\w]{1,255}$/.test(objectName)) {
+      throw new BadRequestException(
+        'objectName must be 1-255 alphanumeric/underscore characters.',
+      );
+    }
+    return this.metadataDiscovery.describeRelatedObjects(
+      requireOrgId(auth),
+      connectionId,
+      objectName,
+    );
+  }
+
+  @Get(':connectionId/config')
+  @RequirePermission('stitches', 'read')
+  describeConfig(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+  ) {
+    return this.metadataDiscovery.describeConfig(
+      requireOrgId(auth),
+      connectionId,
+    );
+  }
 }

@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/lib/api-client';
+import type { FieldMappingResponse } from './field-mappings.api';
 
 export type StitchStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 
@@ -21,6 +22,8 @@ export interface StitchResponse {
   syncIntervalMinutes: number;
   scheduleEnabled: boolean;
   lastScheduledAt: string | null;
+  config?: Record<string, unknown>;
+  fieldMappings?: FieldMappingResponse[];
   createdAt: string;
   updatedAt: string;
 }
@@ -50,12 +53,15 @@ export interface CreateStitchPayload {
     sourceCanonical: string;
     mappingRules: Array<{ src: string; dest: string; transform?: string }>;
   }>;
+  /** Stitch-level configuration options applied during mapping execution */
+  config?: Record<string, unknown>;
 }
 
 
 export interface UpdateStitchPayload {
   name?: string;
   status?: StitchStatus;
+  config?: Record<string, unknown>;
 }
 
 export interface UpdateSchedulePayload {
@@ -98,6 +104,10 @@ export async function updateSchedule(
 
 export async function archiveStitch(id: string): Promise<void> {
   await apiClient.delete(`/stitches/${id}`);
+}
+
+export async function triggerSchedule(id: string): Promise<void> {
+  await apiClient.post(`/stitches/${id}/schedule/trigger`);
 }
 
 const PRESET_SYNC_INTERVALS: { label: string; value: number }[] = [

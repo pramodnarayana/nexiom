@@ -153,6 +153,23 @@ export interface FieldDescriptor {
     referenceTo?: string[];
 }
 
+/** Describes a piece-specific configuration option offered to the user. */
+export interface ConfigOption {
+    name: string;
+    label: string;
+    type: 'boolean' | 'string' | 'select';
+    description?: string;
+    options?: Array<{ label: string; value: string }>;
+    defaultValue?: unknown;
+}
+
+/** Describes a SaaS object related to a source object via 1:1 or 1:N relations. */
+export interface RelatedObjectDescriptor {
+    objectName: string;
+    relationshipType: '1:1' | '1:N';
+    relationField: string;
+}
+
 /**
  * Per-piece webhook signature configuration.
  * The WebhookSignatureGuard uses this to verify the vendor's HMAC-SHA256
@@ -188,6 +205,10 @@ export interface Piece {
     describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
     /** Returns the field schema for a specific object. */
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
+    /** Returns the related objects (1:1 parents, 1:N children) for a specific object. */
+    describeRelatedObjects?(credentials: Record<string, unknown>, objectName: string): Promise<RelatedObjectDescriptor[]>;
+    /** Returns the configuration options available for this piece. */
+    describeConfig?(credentials: Record<string, unknown>): Promise<ConfigOption[]>;
     /**
      * Returns the Singer-style catalog for all streams this piece supports.
      * Called by SchedulerWorker before the first poll run to determine replication
@@ -278,6 +299,8 @@ export interface CreatePieceParams {
     maximumSupportedRelease?: string;
     describeObjects?(credentials: Record<string, unknown>): Promise<ObjectDescriptor[]>;
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
+    describeRelatedObjects?(credentials: Record<string, unknown>, objectName: string): Promise<RelatedObjectDescriptor[]>;
+    describeConfig?(credentials: Record<string, unknown>): Promise<ConfigOption[]>;
     /** @see Piece.describeStreams */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /** @see Piece.normalize */
@@ -373,6 +396,8 @@ export function createPiece(params: CreatePieceParams): Piece {
         maximumSupportedRelease: params.maximumSupportedRelease,
         ...(params.describeObjects && { describeObjects: params.describeObjects }),
         ...(params.describeFields && { describeFields: params.describeFields }),
+        ...(params.describeRelatedObjects && { describeRelatedObjects: params.describeRelatedObjects }),
+        ...(params.describeConfig && { describeConfig: params.describeConfig }),
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
         ...(params.normalize && { normalize: params.normalize }),
         ...(params.executeAction && { executeAction: params.executeAction }),
