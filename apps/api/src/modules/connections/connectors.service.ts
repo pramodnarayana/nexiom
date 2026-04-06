@@ -410,7 +410,7 @@ export class ConnectorsService {
                   and(
                     eq(appConnections.tenantId, tenantId),
                     eq(appConnections.appName, providerName),
-                    eq(appConnections.displayName, displayName),
+                    sql`lower(${appConnections.displayName}) = lower(${displayName})`,
                     eq(appConnections.status, AppConnectionStatus.FAILED),
                   ),
                 )
@@ -473,7 +473,7 @@ export class ConnectorsService {
                     and(
                       eq(appConnections.tenantId, tenantId),
                       eq(appConnections.appName, providerName),
-                      eq(appConnections.displayName, displayName),
+                      sql`lower(${appConnections.displayName}) = lower(${displayName})`,
                       eq(appConnections.status, AppConnectionStatus.FAILED),
                     ),
                   )

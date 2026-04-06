@@ -145,6 +145,7 @@ export class TriggerExecutorService {
 
   async runOnEnable(params: TriggerRunParams): Promise<void> {
     const context = this.buildContext(params);
+    let wroteRegistryRow = false;
     try {
       // 1. Ensure all pipeline tables are provisioned lazily
       await this.dbManager.applyPlan(
@@ -163,6 +164,7 @@ export class TriggerExecutorService {
         .update(connectionStorageRegistry)
         .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
         .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
+      wroteRegistryRow = true;
 
       this.logger.log('onEnable completed', {
         appName: params.appName,
@@ -170,26 +172,29 @@ export class TriggerExecutorService {
         workspaceId: params.workspaceId,
       });
     } catch (err) {
-      // Revert the registry row to NAMESPACE_ONLY so delivery workers do not
-      // route to this schema until onEnable is retried and succeeds.
-      try {
-        await this.db
-          .update(connectionStorageRegistry)
-          .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
-          .where(
-            eq(connectionStorageRegistry.dataNamespace, params.workspaceId),
+      // Only revert the registry row if the write actually happened.
+      // If applyPlan or onEnable threw before reaching the UPDATE, the row
+      // was never changed and reverting would be a spurious write.
+      if (wroteRegistryRow) {
+        try {
+          await this.db
+            .update(connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
+            .where(
+              eq(connectionStorageRegistry.dataNamespace, params.workspaceId),
+            );
+        } catch (revertErr) {
+          this.logger.error(
+            'Failed to revert schemaPlan after onEnable failure',
+            {
+              workspaceId: params.workspaceId,
+              error:
+                revertErr instanceof Error
+                  ? revertErr.message
+                  : String(revertErr),
+            },
           );
-      } catch (revertErr) {
-        this.logger.error(
-          'Failed to revert schemaPlan after onEnable failure',
-          {
-            workspaceId: params.workspaceId,
-            error:
-              revertErr instanceof Error
-                ? revertErr.message
-                : String(revertErr),
-          },
-        );
+        }
       }
       this.logger.error('onEnable failed', {
         appName: params.appName,

@@ -19,14 +19,20 @@ DECLARE
   missing TEXT := '';
 BEGIN
   -- Check gem_source_app_idx exists, is valid, and is ready.
-  -- Join pg_class → pg_index to avoid treating unusable stubs as present.
+  -- Join pg_namespace for BOTH the index class and the table class so the
+  -- predicate is scoped to the current schema and cannot match identically
+  -- named objects in other schemas sharing the same cluster.
   IF NOT EXISTS (
     SELECT 1
       FROM pg_class      c
-      JOIN pg_index      i ON i.indexrelid = c.oid
-      JOIN pg_class      t ON t.oid        = i.indrelid
-     WHERE c.relname = 'gem_source_app_idx'
-       AND t.relname = 'global_entity_map'
+      JOIN pg_namespace  n  ON n.oid  = c.relnamespace
+      JOIN pg_index      i  ON i.indexrelid = c.oid
+      JOIN pg_class      t  ON t.oid  = i.indrelid
+      JOIN pg_namespace  tn ON tn.oid = t.relnamespace
+     WHERE c.relname  = 'gem_source_app_idx'
+       AND n.nspname  = current_schema()
+       AND t.relname  = 'global_entity_map'
+       AND tn.nspname = current_schema()
        AND i.indisvalid  = true
        AND i.indisready  = true
   ) THEN
@@ -37,10 +43,14 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
       FROM pg_class      c
-      JOIN pg_index      i ON i.indexrelid = c.oid
-      JOIN pg_class      t ON t.oid        = i.indrelid
-     WHERE c.relname = 'gem_dest_app_idx'
-       AND t.relname = 'global_entity_map'
+      JOIN pg_namespace  n  ON n.oid  = c.relnamespace
+      JOIN pg_index      i  ON i.indexrelid = c.oid
+      JOIN pg_class      t  ON t.oid  = i.indrelid
+      JOIN pg_namespace  tn ON tn.oid = t.relnamespace
+     WHERE c.relname  = 'gem_dest_app_idx'
+       AND n.nspname  = current_schema()
+       AND t.relname  = 'global_entity_map'
+       AND tn.nspname = current_schema()
        AND i.indisvalid  = true
        AND i.indisready  = true
   ) THEN
@@ -55,4 +65,3 @@ BEGIN
       TRIM(missing);
   END IF;
 END $$;
-
