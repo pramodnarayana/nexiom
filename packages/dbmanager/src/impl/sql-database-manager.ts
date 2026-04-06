@@ -20,7 +20,7 @@ export class SqlDatabaseManager implements DatabaseManager {
     async applyPlan(schemaName: string, plan: SchemaPlan): Promise<void> {
         this.validateSchemaName(schemaName);
 
-        // 1. Always ensure namespace exists (Minimum baseline for all plans)
+        // 1. Always ensure namespace exists (minimum baseline for all plans)
         await this.db.$client.query(
             `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`,
         );
@@ -38,12 +38,14 @@ export class SqlDatabaseManager implements DatabaseManager {
 
         // 3. Ensure Replica Tables exist
         await this.provisionReplicaTables(schemaName);
+
         if (plan === SchemaPlan.REPLICA_ACTIVE) {
             return;
         }
 
         // 4. Ensure Normalize Tables exist
         await this.provisionNormalizeTables(schemaName);
+
         if (plan === SchemaPlan.NORMALIZE_ACTIVE) {
             return;
         }
@@ -395,15 +397,22 @@ export class SqlDatabaseManager implements DatabaseManager {
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id  UUID;
 
-            -- Step 3: copy attempt_count into attempts before dropping the old column
-            -- preserves existing retry counters from pre-migration rows.
-            -- Treat NULL attempts as eligible (0 OR NULL) to handle partially migrated rows.
-            UPDATE "${schemaName}".delivery_outbox
-               SET attempts = attempt_count
-             WHERE attempt_count IS NOT NULL
-               AND (attempts = 0 OR attempts IS NULL);
+            -- Step 3: copy attempt_count into attempts ONLY if attempt_count still exists.
+            -- Tables created fresh from the current schema already have 'attempts' and never
+            -- had 'attempt_count' — referencing it unconditionally causes "column does not exist".
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = '${schemaName}'
+                   AND table_name   = 'delivery_outbox'
+                   AND column_name  = 'attempt_count'
+            ) THEN
+                UPDATE "${schemaName}".delivery_outbox
+                   SET attempts = attempt_count
+                 WHERE attempt_count IS NOT NULL
+                   AND (attempts = 0 OR attempts IS NULL);
+            END IF;
 
-            -- Step 4: drop the old column now that values are copied
+            -- Step 4: drop the old column now that values are copied (safe if already gone)
             ALTER TABLE "${schemaName}".delivery_outbox DROP COLUMN IF EXISTS attempt_count;
 
             -- Step 5: backfill remaining NULLs with sentinel values so NOT NULL can be set

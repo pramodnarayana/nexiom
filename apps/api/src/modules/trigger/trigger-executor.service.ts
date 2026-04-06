@@ -1,7 +1,11 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { Trigger, TriggerContext } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import {
+  DATABASE_CONNECTION,
+  connectionStorageRegistry,
+} from '@nexiom/database';
+import { eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -141,6 +145,7 @@ export class TriggerExecutorService {
 
   async runOnEnable(params: TriggerRunParams): Promise<void> {
     const context = this.buildContext(params);
+    let wroteRegistryRow = false;
     try {
       // 1. Ensure all pipeline tables are provisioned lazily
       await this.dbManager.applyPlan(
@@ -148,20 +153,56 @@ export class TriggerExecutorService {
         SchemaPlan.OUTBOUND_ACTIVE,
       );
 
-      // 2. Invoke the trigger enablement logic (e.g. Subscribe to webhook)
+      // 2. Invoke the trigger enablement logic (e.g. subscribe to webhook).
+      // The registry row is written AFTER this succeeds so that delivery
+      // workers never see OUTBOUND_ACTIVE for a workspace whose onEnable
+      // threw (e.g. webhook subscription failed).
       await params.trigger.onEnable?.(context);
+
+      // 3. Persist the provisioned schemaPlan only once onEnable has succeeded.
+      await this.db
+        .update(connectionStorageRegistry)
+        .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+        .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
+      wroteRegistryRow = true;
+
       this.logger.log('onEnable completed', {
         appName: params.appName,
         triggerName: params.triggerName,
         workspaceId: params.workspaceId,
       });
     } catch (err) {
+      // Only revert the registry row if the write actually happened.
+      // If applyPlan or onEnable threw before reaching the UPDATE, the row
+      // was never changed and reverting would be a spurious write.
+      if (wroteRegistryRow) {
+        try {
+          await this.db
+            .update(connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
+            .where(
+              eq(connectionStorageRegistry.dataNamespace, params.workspaceId),
+            );
+        } catch (revertErr) {
+          this.logger.error(
+            'Failed to revert schemaPlan after onEnable failure',
+            {
+              workspaceId: params.workspaceId,
+              error:
+                revertErr instanceof Error
+                  ? revertErr.message
+                  : String(revertErr),
+            },
+          );
+        }
+      }
       this.logger.error('onEnable failed', {
         appName: params.appName,
         triggerName: params.triggerName,
         workspaceId: params.workspaceId,
         error: err instanceof Error ? err.message : String(err),
       });
+
       throw err;
     }
   }

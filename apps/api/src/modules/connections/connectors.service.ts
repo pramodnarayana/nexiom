@@ -349,11 +349,8 @@ export class ConnectorsService {
               )
               .returning({ id: appConnections.id });
           } catch (err: unknown) {
-            this.throwOnDuplicateConnection(
-              extractPgError(err),
-              displayName,
-              externalId,
-            );
+            const pgErr2 = extractPgError(err);
+            this.throwOnDuplicateConnection(pgErr2, displayName, externalId);
             throw err;
           }
 
@@ -369,6 +366,12 @@ export class ConnectorsService {
         }
 
         let connection;
+        // Use a savepoint so that if the INSERT violates a uniqueness constraint, the
+        // transaction can be rolled back to this point and remain usable for subsequent
+        // queries. Without a savepoint, a failed INSERT leaves the transaction in an
+        // "aborted" state and any further query — including the FAILED-connection SELECT
+        // below — will also fail with "current transaction is aborted".
+        await tx.execute(sql`SAVEPOINT before_unique_insert`);
         try {
           [connection] = await tx
             .insert(appConnections)
@@ -385,29 +388,107 @@ export class ConnectorsService {
               status: AppConnectionStatus.PROVISIONING,
             })
             .returning({ id: appConnections.id });
+          await tx.execute(sql`RELEASE SAVEPOINT before_unique_insert`);
         } catch (err: unknown) {
           const pgErr = extractPgError(err);
+          // Roll back to savepoint so the transaction is back in a clean state
+          // before we run additional queries (SELECT for FAILED reprovision, etc.)
+          await tx.execute(sql`ROLLBACK TO SAVEPOINT before_unique_insert`);
           if (pgErr?.code === '23505') {
-            // Unique constraint violation; check if there is a FAILED connection to reprovision
-            const existingFailed = await tx
-              .select()
-              .from(appConnections)
-              .where(
-                and(
-                  eq(appConnections.tenantId, tenantId),
-                  eq(appConnections.appName, providerName),
-                  externalId
-                    ? or(
-                        eq(appConnections.displayName, displayName),
-                        eq(appConnections.externalId, externalId),
-                      )
-                    : eq(appConnections.displayName, displayName),
-                  eq(appConnections.status, AppConnectionStatus.FAILED),
-                ),
-              )
-              .limit(1);
+            // Identify the FAILED row based solely on the violated constraint,
+            // not via OR(displayName, externalId). An OR lookup can revive the
+            // wrong row when two different FAILED connections share one of the
+            // caller's identifiers but not the other.
+            let existingFailed: { id: string } | undefined;
 
-            if (existingFailed.length > 0 && existingFailed[0]) {
+            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+              // displayName is the blocking duplicate — query only by displayName.
+              const rows = await tx
+                .select({ id: appConnections.id })
+                .from(appConnections)
+                .where(
+                  and(
+                    eq(appConnections.tenantId, tenantId),
+                    eq(appConnections.appName, providerName),
+                    sql`lower(${appConnections.displayName}) = lower(${displayName})`,
+                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                  ),
+                )
+                .limit(1);
+              existingFailed = rows[0];
+
+              // Cross-check: only accept this FAILED row when externalId was
+              // not supplied OR the externalId lookup resolves to the same row.
+              // If externalId resolves to a *different* row (or no row at all),
+              // clear existingFailed — both identifiers must agree on the same row.
+              if (existingFailed && externalId) {
+                const byExternalId = await tx
+                  .select({ id: appConnections.id })
+                  .from(appConnections)
+                  .where(
+                    and(
+                      eq(appConnections.tenantId, tenantId),
+                      eq(appConnections.appName, providerName),
+                      eq(appConnections.externalId, externalId),
+                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                    ),
+                  )
+                  .limit(1);
+                if (
+                  !byExternalId[0] ||
+                  byExternalId[0].id !== existingFailed.id
+                ) {
+                  // externalId points to a different row or no FAILED row at all
+                  existingFailed = undefined;
+                }
+              }
+            } else if (
+              pgErr.constraint === 'tenant_external_id_unique_idx' &&
+              externalId
+            ) {
+              // externalId is the blocking duplicate — query only by externalId.
+              const rows = await tx
+                .select({ id: appConnections.id })
+                .from(appConnections)
+                .where(
+                  and(
+                    eq(appConnections.tenantId, tenantId),
+                    eq(appConnections.appName, providerName),
+                    eq(appConnections.externalId, externalId),
+                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                  ),
+                )
+                .limit(1);
+              existingFailed = rows[0];
+
+              // Cross-check: only accept this FAILED row when the displayName
+              // lookup resolves to the same row.
+              // If displayName resolves to a *different* row (or no row at all),
+              // clear existingFailed — both identifiers must agree on the same row.
+              if (existingFailed) {
+                const byDisplayName = await tx
+                  .select({ id: appConnections.id })
+                  .from(appConnections)
+                  .where(
+                    and(
+                      eq(appConnections.tenantId, tenantId),
+                      eq(appConnections.appName, providerName),
+                      sql`lower(${appConnections.displayName}) = lower(${displayName})`,
+                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                    ),
+                  )
+                  .limit(1);
+                if (
+                  !byDisplayName[0] ||
+                  byDisplayName[0].id !== existingFailed.id
+                ) {
+                  // displayName points to a different row or no FAILED row at all
+                  existingFailed = undefined;
+                }
+              }
+            }
+
+            if (existingFailed) {
               const [updated] = await tx
                 .update(appConnections)
                 .set({
@@ -419,7 +500,7 @@ export class ConnectorsService {
                   status: AppConnectionStatus.PROVISIONING,
                   updatedAt: new Date(),
                 })
-                .where(eq(appConnections.id, existingFailed[0].id))
+                .where(eq(appConnections.id, existingFailed.id))
                 .returning({ id: appConnections.id });
 
               connection = updated;
@@ -473,18 +554,21 @@ export class ConnectorsService {
         };
       });
 
-      // 3. Apply the initial schema plan outside the transaction
       if (!workspaceProvisionInfo.schemaName) {
         // If schemaName is empty, it means this was an explicit update and no new registry was created.
         return;
       }
       try {
+        // At connection setup time, only provision the schema namespace.
+        // The full table stack (gateway, replica, normalize, outbound) is
+        // provisioned incrementally when a stitch/sync route is activated —
+        // not during the OAuth handshake.
         await this.dbManager.applyPlan(
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.OUTBOUND_ACTIVE,
+          SchemaPlan.NAMESPACE_ONLY,
         );
 
-        // Transition to ACTIVE only after schema is successfully provisioned
+        // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {
           await tx
             .update(appConnections)
@@ -493,7 +577,7 @@ export class ConnectorsService {
 
           await tx
             .update(connectionStorageRegistry)
-            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+            .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
             .where(
               eq(
                 connectionStorageRegistry.connectionId,
@@ -503,7 +587,7 @@ export class ConnectorsService {
         });
       } catch (applyError) {
         this.logger.error(
-          `applyPlan failed for ${providerName} (connectionId: ${workspaceProvisionInfo.connectionId}, createdRegistry: ${workspaceProvisionInfo.createdRegistry}, createdAppConnection: ${workspaceProvisionInfo.createdAppConnection}), rolling back provisioned records...`,
+          `Failed to provision namespace for connection ${workspaceProvisionInfo.connectionId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
           applyError,
         );
         try {
@@ -638,6 +722,15 @@ export class ConnectorsService {
         409,
       );
     }
+    // Unrecognized unique constraint — still a conflict, not a 500.
+    // Log the constraint name so it can be identified and given a proper message.
+    this.logger.error(
+      `Unrecognized unique constraint violation: "${pgErr.constraint ?? 'unknown'}" — treating as 409 Conflict`,
+    );
+    throw new HttpException(
+      'A connection with these details already exists.',
+      409,
+    );
   }
 
   private async executeTokenExchangeFetch(

@@ -1,0 +1,21 @@
+-- ============================================================
+-- OUT-OF-BAND ONLINE MIGRATION — DO NOT APPLY VIA db:migrate
+-- ============================================================
+-- Plain CREATE INDEX acquires a SHARE lock on global_entity_map
+-- for the full index build duration, blocking all concurrent writes.
+-- CREATE INDEX CONCURRENTLY avoids the write lock but cannot run
+-- inside the implicit transaction that Drizzle's migration runner uses.
+--
+-- Apply these two statements manually in a separate psql session
+-- (or via an online-migration tool) OUTSIDE of any transaction block:
+--
+--   CREATE INDEX CONCURRENTLY IF NOT EXISTS gem_source_app_idx
+--       ON global_entity_map (source_app_id);
+--
+--   CREATE INDEX CONCURRENTLY IF NOT EXISTS gem_dest_app_idx
+--       ON global_entity_map (dest_app_id);
+--
+-- Track completion in your deployment runbook before marking this
+-- migration done in production.
+-- ============================================================
+SELECT 1; -- no-op so the migration runner does not error on an otherwise-empty file
