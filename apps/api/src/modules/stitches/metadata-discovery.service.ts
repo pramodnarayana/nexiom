@@ -22,6 +22,8 @@ import type { OAuthCredentialBlob } from '@nexiom/connectors';
 import type {
   ObjectDescriptor,
   FieldDescriptor,
+  ConfigOption,
+  RelatedObjectDescriptor,
 } from '@nexiom/piece-framework';
 
 // Single source of truth for metadata cache TTL.
@@ -296,6 +298,95 @@ export class MetadataDiscoveryService implements OnModuleInit {
       });
 
     return fields;
+  }
+
+  async describeRelatedObjects(
+    orgId: string,
+    connectionId: string,
+    objectName: string,
+  ): Promise<RelatedObjectDescriptor[]> {
+    const connection = await this.resolveConnection(orgId, connectionId);
+
+    // ── 1. Redis cache ───────────────────────────────────────────────────────
+    const redisKey = `meta:related:${connectionId}:${objectName}`;
+    const cached = await this.redis.get(redisKey);
+    if (cached) {
+      return JSON.parse(cached) as RelatedObjectDescriptor[];
+    }
+
+    // ── 2. Live fetch (piece) ───────────────────────────────
+    const piece = this.pieceRegistry.getPiece(connection.appName);
+    if (!piece?.describeRelatedObjects) {
+      return [];
+    }
+
+    const credentials = await this.resolveCredentials(connectionId);
+
+    let related: RelatedObjectDescriptor[] = [];
+    try {
+      related = await piece.describeRelatedObjects(credentials, objectName);
+      await this.redis.set(
+        redisKey,
+        JSON.stringify(related),
+        'EX',
+        TTL_SECONDS,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `Connector ${connection.appName} failed to describe related objects: ${String(e)}`,
+      );
+    }
+    return related;
+  }
+
+  async describeConfig(
+    orgId: string,
+    connectionId: string,
+  ): Promise<ConfigOption[]> {
+    const connection = await this.resolveConnection(orgId, connectionId);
+
+    // ── 1. Redis cache ───────────────────────────────────────────────────────
+    const redisKey = `meta:config:${connectionId}`;
+    const cached = await this.redis.get(redisKey);
+    if (cached) {
+      return JSON.parse(cached) as ConfigOption[];
+    }
+
+    // ── 2. Live fetch ───────────────────────────────
+    const piece = this.pieceRegistry.getPiece(connection.appName);
+    if (!piece) {
+      throw new NotFoundException(
+        `Connector "${connection.appName}" not found.`,
+      );
+    }
+
+    const credentials = await this.resolveCredentials(connectionId);
+
+    let config: ConfigOption[] = [];
+    if (piece.describeConfig) {
+      try {
+        config = await piece.describeConfig(credentials);
+      } catch (e) {
+        this.logger.warn(
+          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+        );
+        return config; // Return empty on describe failure
+      }
+      try {
+        await this.redis.set(
+          redisKey,
+          JSON.stringify(config),
+          'EX',
+          TTL_SECONDS,
+        );
+      } catch (e) {
+        this.logger.warn(
+          `Failed to cache config for ${connection.appName}: ${String(e)}`,
+        );
+      }
+    }
+
+    return config;
   }
 
   // ---------------------------------------------------------------------------

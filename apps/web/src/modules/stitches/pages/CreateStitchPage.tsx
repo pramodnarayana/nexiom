@@ -12,12 +12,15 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Combobox } from '@/shared/components/ui/combobox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { AppRoutes } from '@/shared/lib/auth/constants';
-import { listWorkspaceConnections, type WorkspaceConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
+import { listAvailableConnections, type AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
 import { createStitch } from '../api/stitches.api';
 import { listObjects, type ObjectDescriptor } from '../api/metadata.api';
 import type { MappingRule } from '../api/field-mappings.api';
 import { MappingCanvas, type SyncConditionRule } from '../components/MappingCanvas';
+import { DependencyList } from '../components/DependencyList';
+import { StitchConfigPanel } from '../components/StitchConfigPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +37,7 @@ interface WizardState {
   // Step 3
   mappingRules: MappingRule[];
   syncConditions: SyncConditionRule[];
+  config: Record<string, unknown>;
 }
 
 const INITIAL_STATE: WizardState = {
@@ -44,6 +48,7 @@ const INITIAL_STATE: WizardState = {
   targetObject: '',
   mappingRules: [],
   syncConditions: [],
+  config: {},
 };
 
 // ── Step indicator ────────────────────────────────────────────────────────────
@@ -140,7 +145,7 @@ function ObjectPickerBody({
 
 interface ConnectionObjectPickerProps {
   label: string;
-  connections: WorkspaceConnectionResponse[];
+  connections: AvailableConnectionResponse[];
   connectionId: string;
   onConnectionChange: (id: string) => void;
   objects: ObjectDescriptor[];
@@ -217,7 +222,7 @@ export function CreateStitchPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Connections — loaded once on mount
-  const [connections, setConnections] = useState<WorkspaceConnectionResponse[]>([]);
+  const [connections, setConnections] = useState<AvailableConnectionResponse[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
 
@@ -235,7 +240,7 @@ export function CreateStitchPage() {
 
   useEffect(() => {
     if (!workspaceId) return;
-    listWorkspaceConnections(workspaceId)
+    listAvailableConnections(workspaceId)
       .then(setConnections)
       .catch((e: unknown) => {
         setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
@@ -298,6 +303,7 @@ export function CreateStitchPage() {
         destConnectionId: wizard.destConnectionId,
         sourceObject: wizard.sourceObject,
         targetObject: wizard.targetObject,
+        config: Object.keys(wizard.config).length > 0 ? wizard.config : undefined,
         ...(wizard.syncConditions.length > 0 && { syncCondition: wizard.syncConditions }),
         // Mappings are sent in the same request so the backend can persist them
         // atomically in a single transaction — no orphaned stitch on mapping failure.
@@ -381,6 +387,17 @@ export function CreateStitchPage() {
                 onRefreshObjects={() => { loadSrcObjects(wizard.srcConnectionId, true); }}
               />
 
+              {wizard.srcConnectionId && wizard.sourceObject && (
+                  <div className="pt-2">
+                    <DependencyList 
+                        connectionId={wizard.srcConnectionId} 
+                        objectName={wizard.sourceObject}
+                        selected={(wizard.config.selectedRelatedObjects as string[]) || []}
+                        onSelectionChange={(selected) => setWizard(prev => ({ ...prev, config: { ...prev.config, selectedRelatedObjects: selected } }))}
+                    />
+                  </div>
+              )}
+
               <div className="flex justify-between pt-2">
                 <Button variant="outline" onClick={() => { navigate(stitchesHref); }}>
                   Cancel
@@ -422,13 +439,28 @@ export function CreateStitchPage() {
           {/* ── Step 3 ────────────────────────────────────────────────────── */}
           {step === 3 && (
             <>
-              <MappingCanvas
-                srcConnectionId={wizard.srcConnectionId}
-                sourceObject={wizard.sourceObject}
-                destConnectionId={wizard.destConnectionId}
-                targetObject={wizard.targetObject}
-                onChange={handleMappingChange}
-              />
+              <Tabs defaultValue="mapping" className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="mapping">Field Mappings</TabsTrigger>
+                  <TabsTrigger value="config">Advanced Configuration</TabsTrigger>
+                </TabsList>
+                <TabsContent value="mapping" className="outline-none">
+                    <MappingCanvas
+                        srcConnectionId={wizard.srcConnectionId}
+                        sourceObject={wizard.sourceObject}
+                        destConnectionId={wizard.destConnectionId}
+                        targetObject={wizard.targetObject}
+                        onChange={handleMappingChange}
+                    />
+                </TabsContent>
+                <TabsContent value="config" className="outline-none">
+                    <StitchConfigPanel
+                        connectionId={wizard.srcConnectionId}
+                        value={wizard.config}
+                        onChange={(config) => setWizard((prev) => ({ ...prev, config }))}
+                    />
+                </TabsContent>
+              </Tabs>
 
               {submitError && (
                 <p className="text-sm text-destructive">{submitError}</p>

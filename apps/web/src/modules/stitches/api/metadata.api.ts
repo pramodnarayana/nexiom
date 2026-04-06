@@ -42,3 +42,37 @@ export async function listFields(
   );
   return res.data;
 }
+
+export interface RelatedObjectDescriptor {
+  objectName: string;
+  relationshipType: '1:1' | '1:N';
+  relationField: string;
+}
+
+export async function listRelatedObjects(
+  connectionId: string,
+  objectName: string,
+): Promise<RelatedObjectDescriptor[]> {
+  const res = await apiClient.get<RelatedObjectDescriptor[]>(
+    `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/related`,
+  );
+  return res.data;
+}
+
+export interface ConfigOption {
+  name: string;
+  label: string;
+  type: 'boolean' | 'string' | 'select';
+  description?: string;
+  options?: Array<{ label: string; value: string }>;
+  defaultValue?: unknown;
+}
+
+export async function describeConfig(
+  connectionId: string,
+): Promise<ConfigOption[]> {
+  const res = await apiClient.get<ConfigOption[]>(
+    `/stitches/metadata/${connectionId}/config`,
+  );
+  return res.data;
+}

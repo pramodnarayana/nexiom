@@ -169,6 +169,7 @@ export class StitchesService {
         eq(integrationStitches.id, id),
         eq(integrationStitches.orgId, orgId),
       ),
+      with: { fieldMappings: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${id} not found.`);

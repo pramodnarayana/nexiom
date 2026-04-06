@@ -6,6 +6,8 @@ import {
   type FieldDescriptor,
   type NormalizedRecord,
   type VendorResponse,
+  type ConfigOption,
+  type RelatedObjectDescriptor,
 } from '@nexiom/piece-framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
@@ -233,6 +235,54 @@ function describeFields(
   return Promise.resolve(fields);
 }
 
+function describeRelatedObjects(
+  _credentials: Record<string, unknown>,
+  objectName: string,
+): Promise<RelatedObjectDescriptor[]> {
+  const fields = QB_FIELDS[objectName];
+  if (!fields) {
+    return Promise.resolve([]);
+  }
+
+  const related: RelatedObjectDescriptor[] = [];
+  for (const f of fields) {
+    if (f.type === 'reference' && f.referenceTo?.length) {
+      for (const ref of f.referenceTo) {
+        related.push({ objectName: ref, relationshipType: '1:1', relationField: f.name });
+      }
+    }
+  }
+
+  const unique = new Map<string, RelatedObjectDescriptor>();
+  for (const r of related) {
+    const key = `${r.objectName}-${r.relationshipType}-${r.relationField}`;
+    if (!unique.has(key)) unique.set(key, r);
+  }
+
+  return Promise.resolve(Array.from(unique.values()).sort((a, b) => a.objectName.localeCompare(b.objectName)));
+}
+
+function describeConfig(
+  _credentials: Record<string, unknown>,
+): Promise<ConfigOption[]> {
+  return Promise.resolve([
+    {
+      name: 'useTaxCode',
+      label: 'Use Tax Code',
+      type: 'boolean',
+      description: 'Whether to attach a default Tax Code to transactions.',
+      defaultValue: false,
+    },
+    {
+      name: 'taxCodeDefault',
+      label: 'Default Tax Code',
+      type: 'string',
+      description: 'The Tax Code to use when Use Tax Code is enabled.',
+      defaultValue: 'NON',
+    }
+  ]);
+}
+
 const customApiAction = createCustomApiCallAction({
   auth: quickbooksAuth,
   baseUrl: (auth: QuickBooksAuth) => {
@@ -270,6 +320,8 @@ export const quickbooks = createPiece({
   ],
   describeObjects,
   describeFields,
+  describeRelatedObjects,
+  describeConfig,
   normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
     // Returns null — QuickBooks records do not map to a pre-defined CanonicalType.
     // NormalizationService (L3) handles null by storing the raw record with

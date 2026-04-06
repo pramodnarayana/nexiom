@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/piece-framework';
+import { PieceRegistryService } from '../index.js';
 
 // A minimal mock piece — this service is generic and has no knowledge of real integrations.
 const mockPiece: Piece = {
@@ -59,7 +59,7 @@ describe('PieceRegistryService', () => {
   it('getAllPieces should return all registered pieces', () => {
     const pieces = service.getAllPieces();
     expect(pieces.length).toBeGreaterThan(0);
-    expect(pieces.map((p) => p.name)).toContain('mock-app');
+    expect(pieces.map((p: Piece) => p.name)).toContain('mock-app');
   });
 
   it('should throw on duplicate piece names', () => {

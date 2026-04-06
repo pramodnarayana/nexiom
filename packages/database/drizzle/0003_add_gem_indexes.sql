@@ -18,4 +18,5 @@
 -- Track completion in your deployment runbook before marking this
 -- migration done in production.
 -- ============================================================
-SELECT 1; -- no-op so the migration runner does not error on an otherwise-empty file
+SELECT 1; -- Placeholder to satisfy migration runner safely.
+-- (Indexes must be built OUTSIDE transactions using CONCURRENTLY as noted above)

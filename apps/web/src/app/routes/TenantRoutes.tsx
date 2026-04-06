@@ -22,6 +22,7 @@ import { WorkspacesPage } from '../../modules/workspaces/pages/WorkspacesPage';
 import { WorkspaceDetailPage } from '../../modules/workspaces/pages/WorkspaceDetailPage';
 import { StitchesPage } from '../../modules/stitches/pages/StitchesPage';
 import { CreateStitchPage } from '../../modules/stitches/pages/CreateStitchPage';
+import { StitchDetailPage } from '../../modules/stitches/pages/StitchDetailPage';
 import { ExceptionCenterPage } from '../../modules/exceptions/pages/ExceptionCenterPage';
 import { PipelineTracePage } from '../../modules/trace/pages/PipelineTracePage';
 import { AlertTriangle } from 'lucide-react';
@@ -93,6 +94,7 @@ export function TenantRoutes() {
                             <Route path="workspaces/:id" element={<WorkspaceDetailPage />} />
                             <Route path="workspaces/:id/stitches" element={<StitchesPage />} />
                             <Route path="workspaces/:id/stitches/new" element={<CreateStitchPage />} />
+                            <Route path="workspaces/:id/stitches/:stitchId" element={<StitchDetailPage />} />
                             <Route path="workspaces/:id/stitches/:stitchId/traces" element={<PipelineTracePage />} />
                             <Route path="exceptions" element={<ExceptionCenterPage />} />
                         </Route>

@@ -6,6 +6,8 @@ import {
     type FieldDescriptor,
     type NormalizedRecord,
     type VendorResponse,
+    type ConfigOption,
+    type RelatedObjectDescriptor,
 } from '@nexiom/piece-framework';
 
 
@@ -114,6 +116,67 @@ async function describeFields(
     }));
 }
 
+async function describeRelatedObjects(
+    credentials: Record<string, unknown>,
+    objectName: string,
+): Promise<RelatedObjectDescriptor[]> {
+    const instanceUrl = getInstanceUrl(credentials);
+    const accessToken = getAccessToken(credentials);
+    const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects/${encodeURIComponent(objectName)}/describe`;
+
+    interface SfDescribeResponse {
+        childRelationships: Array<{ childSObject: string; field: string; relationshipName: string | null }>;
+        fields: Array<{ type: string; referenceTo?: string[]; name: string }>;
+    }
+    const data = await sfFetch<SfDescribeResponse>(url, accessToken);
+
+    const related: RelatedObjectDescriptor[] = [];
+    
+    // Parent objects (1:1)
+    for (const f of data.fields) {
+        if (f.type === 'reference' && f.referenceTo?.length) {
+            for (const ref of f.referenceTo) {
+                related.push({ objectName: ref, relationshipType: '1:1', relationField: f.name });
+            }
+        }
+    }
+
+    // Child objects (1:N)
+    for (const cr of data.childRelationships) {
+        // Included all child relationships, even those without a relationshipName 
+        // (common with managed package objects or implicit relations)
+        related.push({ objectName: cr.childSObject, relationshipType: '1:N', relationField: cr.field });
+    }
+
+    // Deduplicate
+    const unique = new Map<string, RelatedObjectDescriptor>();
+    for (const r of related) {
+        const key = `${r.objectName}-${r.relationshipType}-${r.relationField}`;
+        if (!unique.has(key)) unique.set(key, r);
+    }
+
+    return Array.from(unique.values()).sort((a, b) => a.objectName.localeCompare(b.objectName));
+}
+
+async function describeConfig(
+    _credentials: Record<string, unknown>,
+): Promise<ConfigOption[]> {
+    return [
+        {
+            name: 'duplicateStrategy',
+            label: 'Duplicate Strategy',
+            type: 'select',
+            description: 'Determine how to handle records with identical unique identifiers.',
+            options: [
+                { label: 'Reject Duplicate (Fail row)', value: 'reject' },
+                { label: 'Allow Duplicate (Create new)', value: 'allow' },
+                { label: 'Update Existing', value: 'update' }
+            ],
+            defaultValue: 'reject',
+        }
+    ];
+}
+
 const customApiAction = createCustomApiCallAction({
     baseUrl: (auth) => (auth).data['instance_url'],
     auth: salesforceAuth,
@@ -148,6 +211,8 @@ export const salesforce = createPiece({
     ],
     describeObjects,
     describeFields,
+    describeRelatedObjects,
+    describeConfig,
     normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
         // Returns null — Salesforce records do not map to a pre-defined CanonicalType.
         // NormalizationService (L3) handles null by storing the raw record with
