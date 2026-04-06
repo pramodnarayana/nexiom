@@ -18,5 +18,5 @@
 -- Track completion in your deployment runbook before marking this
 -- migration done in production.
 -- ============================================================
-CREATE INDEX IF NOT EXISTS gem_source_app_idx ON "global_entity_map" ("source_app_id");
-CREATE INDEX IF NOT EXISTS gem_dest_app_idx ON "global_entity_map" ("dest_app_id");
+SELECT 1; -- Placeholder to satisfy الد migration runner safely.
+-- (Indexes must be built OUTSIDE transactions using CONCURRENTLY as noted above)

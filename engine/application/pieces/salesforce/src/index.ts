@@ -143,9 +143,9 @@ async function describeRelatedObjects(
 
     // Child objects (1:N)
     for (const cr of data.childRelationships) {
-        if (cr.relationshipName) {
-            related.push({ objectName: cr.childSObject, relationshipType: '1:N', relationField: cr.field });
-        }
+        // Included all child relationships, even those without a relationshipName 
+        // (common with managed package objects or implicit relations)
+        related.push({ objectName: cr.childSObject, relationshipType: '1:N', relationField: cr.field });
     }
 
     // Deduplicate

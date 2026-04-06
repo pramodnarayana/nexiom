@@ -1,4 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+function extractErrorMessage(e: unknown, defaultMessage = 'An unexpected error occurred'): string {
+  if (typeof e === 'object' && e !== null) {
+    const err = e as { response?: { data?: { message?: string } }, message?: string };
+    if (err.response?.data?.message) return err.response.data.message;
+    if (err.message) return err.message;
+  }
+  return typeof e === 'string' ? e : defaultMessage;
+}
 import { CalendarClock, Play, Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/shared/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
@@ -61,13 +70,41 @@ export function SchedulePanel({ stitch, onUpdated }: SchedulePanelProps) {
       // The backend currently throws NotImplementedException for this, but we'll show it gracefully
       toast({
         title: 'Trigger failed',
-        description: (e as { response?: { data?: { message?: string } } })?.response?.data?.message || (e instanceof Error ? e.message : 'Could not trigger sync'),
+        description: extractErrorMessage(e, 'Could not trigger sync'),
         variant: 'destructive',
       });
     } finally {
       setTriggering(false);
     }
   };
+
+  const [nextRunText, setNextRunText] = useState('Pending execution');
+
+  useEffect(() => {
+    if (!stitch.scheduleEnabled) return;
+    
+    const updateText = () => {
+      if (!stitch.lastScheduledAt || !stitch.syncIntervalMinutes) {
+         setNextRunText(stitch.lastScheduledAt ? 'Enabled' : 'No schedule info');
+         return;
+      }
+      
+      const lastRun = new Date(stitch.lastScheduledAt).getTime();
+      const nextRun = lastRun + stitch.syncIntervalMinutes * 60000;
+      const now = Date.now();
+      
+      if (nextRun <= now) {
+         setNextRunText('Imminent / Processing');
+      } else {
+         const diffMins = Math.ceil((nextRun - now) / 60000);
+         setNextRunText(`Next sync in ~${diffMins} min`);
+      }
+    };
+    
+    updateText();
+    const timer = setInterval(updateText, 60000);
+    return () => clearInterval(timer);
+  }, [stitch.scheduleEnabled, stitch.lastScheduledAt, stitch.syncIntervalMinutes]);
 
   return (
     <Card className="border shadow-sm">
@@ -129,7 +166,7 @@ export function SchedulePanel({ stitch, onUpdated }: SchedulePanelProps) {
           {stitch.scheduleEnabled && (
             <div className="space-y-1 text-right">
               <p className="text-xs font-mono text-muted-foreground">STATUS</p>
-              <p className="text-sm font-medium text-primary">Pending execution</p>
+              <p className="text-sm font-medium text-primary">{nextRunText}</p>
             </div>
           )}
         </div>

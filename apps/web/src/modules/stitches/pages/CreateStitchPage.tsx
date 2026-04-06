@@ -391,7 +391,9 @@ export function CreateStitchPage() {
                   <div className="pt-2">
                     <DependencyList 
                         connectionId={wizard.srcConnectionId} 
-                        objectName={wizard.sourceObject} 
+                        objectName={wizard.sourceObject}
+                        selected={(wizard.config.selectedRelatedObjects as string[]) || []}
+                        onSelectionChange={(selected) => setWizard(prev => ({ ...prev, config: { ...prev.config, selectedRelatedObjects: selected } }))}
                     />
                   </div>
               )}

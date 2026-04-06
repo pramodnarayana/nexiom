@@ -26,14 +26,14 @@ export function MappingSummary({ stitch }: MappingSummaryProps) {
           </div>
         ) : (
           <div className="divide-y max-h-96 overflow-y-auto">
-            {mappings.map((fm) => (
+            {mappings.map((fm, fmIdx) => (
               fm.mappingRules.map((rule, idx) => {
                 // Remove JSONPath indicators ($., data.) from display to keep it readable
                 const cleanSrc = rule.src.replace(/^(\$\.|data\.)/, '');
                 const cleanDest = rule.dest.replace(/^(\$\.|data\.)/, '');
                 
                 return (
-                  <div key={`${fm.sourceCanonical}-${idx}`} className="flex items-center gap-4 p-4 hover:bg-muted/10 transition-colors">
+                  <div key={`${fmIdx}-${idx}`} className="flex items-center gap-4 p-4 hover:bg-muted/10 transition-colors">
                     <div className="flex-1 flex justify-end items-center gap-2">
                       <span className="text-xs text-muted-foreground">{fm.sourceCanonical}</span>
                       <Badge variant="outline" className="font-mono bg-muted/20 whitespace-normal text-right">

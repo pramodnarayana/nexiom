@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Loader2, AlertCircle, Settings2 } from 'lucide-react';
 import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
@@ -16,12 +16,19 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<ConfigOption[]>([]);
 
+  const loadTokenRef = useRef(0);
+
   useEffect(() => {
     async function load() {
+      const token = ++loadTokenRef.current;
       setLoading(true);
       setError(null);
+      setSchema([]); // Reset schema at start of new load
+
       try {
         const res = await describeConfig(connectionId);
+        if (token !== loadTokenRef.current) return;
+        
         setSchema(res);
         // Apply defaults for missing values
         const updates = { ...value };
@@ -34,12 +41,13 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
         }
         if (changed) onChange(updates);
       } catch (e) {
-        const err = e as { response?: { status: number }, message?: string };
-        if (err.response?.status !== 404) {
-          setError(err.message || 'Failed to load configuration options');
-        }
+        if (token !== loadTokenRef.current) return;
+        
+        setSchema([]); // Explicitly clear schema on errors
+        const err = e as { message?: string };
+        setError(err.message || 'Failed to load configuration options');
       } finally {
-        setLoading(false);
+        if (token === loadTokenRef.current) setLoading(false);
       }
     }
     void load();

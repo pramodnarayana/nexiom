@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import isEqual from 'lodash.isequal';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/shared/components/ui/card';
@@ -8,7 +9,7 @@ import { useToast } from '@/shared/hooks/use-toast';
 
 import { getStitch, updateStitch, type StitchResponse } from '../api/stitches.api';
 import { SchedulePanel } from '../components/SchedulePanel';
-import { RelatedObjectsPanel } from '../components/RelatedObjectsPanel';
+import { DependencyList } from '../components/DependencyList';
 import { StitchConfigPanel } from '../components/StitchConfigPanel';
 import { MappingSummary } from '../components/MappingSummary';
 
@@ -92,7 +93,7 @@ export function StitchDetailPage() {
   }
 
   // Determine if config changed
-  const isConfigDirty = JSON.stringify(configDraft) !== JSON.stringify(stitch.config || {});
+  const isConfigDirty = !isEqual(configDraft, stitch.config || {});
 
   return (
     <div className="container py-8 max-w-5xl space-y-8 animate-in fade-in duration-500">
@@ -146,7 +147,12 @@ export function StitchDetailPage() {
 
         <div className="md:col-span-4 space-y-8">
           <SchedulePanel stitch={stitch} onUpdated={setStitch} />
-          <RelatedObjectsPanel stitch={stitch} />
+          <DependencyList 
+            connectionId={stitch.srcConnectionId}
+            objectName={stitch.sourceObject}
+            selected={(configDraft?.selectedRelatedObjects as string[]) || []}
+            onSelectionChange={(selected) => setConfigDraft(prev => ({ ...(prev || {}), selectedRelatedObjects: selected }))}
+          />
         </div>
       </div>
     </div>

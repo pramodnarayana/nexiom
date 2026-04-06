@@ -315,23 +315,27 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 2. Live fetch (piece) ───────────────────────────────
-    const credentials = await this.resolveCredentials(connectionId);
-
     const piece = this.pieceRegistry.getPiece(connection.appName);
     if (!piece?.describeRelatedObjects) {
       return [];
     }
 
+    const credentials = await this.resolveCredentials(connectionId);
+
     let related: RelatedObjectDescriptor[] = [];
     try {
       related = await piece.describeRelatedObjects(credentials, objectName);
+      await this.redis.set(
+        redisKey,
+        JSON.stringify(related),
+        'EX',
+        TTL_SECONDS,
+      );
     } catch (e) {
       this.logger.warn(
         `Connector ${connection.appName} failed to describe related objects: ${String(e)}`,
       );
     }
-
-    await this.redis.set(redisKey, JSON.stringify(related), 'EX', TTL_SECONDS);
     return related;
   }
 
@@ -349,14 +353,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 2. Live fetch ───────────────────────────────
-    const credentials = await this.resolveCredentials(connectionId);
-
     const piece = this.pieceRegistry.getPiece(connection.appName);
     if (!piece) {
       throw new NotFoundException(
         `Connector "${connection.appName}" not found.`,
       );
     }
+
+    const credentials = await this.resolveCredentials(connectionId);
 
     let config: ConfigOption[] = [];
     if (piece.describeConfig) {

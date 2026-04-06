@@ -19,6 +19,7 @@ export function WorkspaceDetailPage() {
   const fetchWorkspace = useCallback(async () => {
     if (!id) return;
     const seq = ++fetchSeqRef.current;
+    setWsLoading(true);
     setWorkspace(null);
     try {
       const ws = await getWorkspace(id);
