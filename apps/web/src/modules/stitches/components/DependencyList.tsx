@@ -120,7 +120,7 @@ export function DependencyList({ connectionId, objectName, selected = [], onSele
                     type="checkbox" 
                     className="h-4 w-4 shrink-0 rounded border-gray-300 text-primary cursor-pointer accent-primary" 
                     checked={isChecked}
-                    onChange={() => {}} 
+                    onChange={() => handleToggle(mod.objectName)} 
                   />
                   <div className="flex flex-col gap-0.5 flex-1">
                     <span className="text-sm font-medium">{mod.objectName}</span>

@@ -12,7 +12,7 @@ interface StitchConfigPanelProps {
 }
 
 export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfigPanelProps) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<ConfigOption[]>([]);
 
@@ -30,16 +30,6 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
         if (token !== loadTokenRef.current) return;
         
         setSchema(res);
-        // Apply defaults for missing values
-        const updates = { ...value };
-        let changed = false;
-        for (const opt of res) {
-            if (updates[opt.name] === undefined && opt.defaultValue !== undefined) {
-                updates[opt.name] = opt.defaultValue;
-                changed = true;
-            }
-        }
-        if (changed) onChange(updates);
       } catch (e) {
         if (token !== loadTokenRef.current) return;
         
@@ -51,7 +41,7 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
       }
     }
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [connectionId]);
 
   if (loading) {
@@ -104,7 +94,7 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
                     type="checkbox"
                     id={field.name}
                     className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                    checked={!!value[field.name]}
+                    checked={value[field.name] !== undefined ? !!value[field.name] : !!field.defaultValue}
                     onChange={(e) => handleChange(field.name, e.target.checked)}
                 />
                 <Label htmlFor={field.name} className="text-sm font-normal cursor-pointer">
@@ -116,13 +106,13 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
           {field.type === 'string' && (
              <Input 
                 id={field.name}
-                value={(value[field.name] as string) || ''}
+                value={(value[field.name] as string) ?? (field.defaultValue as string) ?? ''}
                 onChange={(e) => handleChange(field.name, e.target.value)}
              />
           )}
 
           {field.type === 'select' && field.options && (
-             <Select value={(value[field.name] as string) || ''} onValueChange={(v) => handleChange(field.name, v)}>
+             <Select value={(value[field.name] as string) ?? (field.defaultValue as string) ?? ''} onValueChange={(v) => handleChange(field.name, v)}>
                 <SelectTrigger id={field.name} className="w-full">
                     <SelectValue placeholder="Select an option" />
                 </SelectTrigger>

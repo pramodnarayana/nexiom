@@ -364,7 +364,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
     let config: ConfigOption[] = [];
     if (piece.describeConfig) {
-      config = await piece.describeConfig(credentials);
+      try {
+        config = await piece.describeConfig(credentials);
+      } catch (e) {
+        this.logger.warn(
+          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+        );
+        config = [];
+      }
     }
 
     await this.redis.set(redisKey, JSON.stringify(config), 'EX', TTL_SECONDS);

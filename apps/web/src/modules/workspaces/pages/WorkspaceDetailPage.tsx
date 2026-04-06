@@ -17,7 +17,10 @@ export function WorkspaceDetailPage() {
   const fetchSeqRef = useRef(0);
 
   const fetchWorkspace = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setWsLoading(false);
+      return;
+    }
     const seq = ++fetchSeqRef.current;
     setWsLoading(true);
     setWorkspace(null);

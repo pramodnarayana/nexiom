@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { StorageResolverService } from '@nexiom/engine';
 import {
   DATABASE_CONNECTION,
   connectionStorageRegistry,
 } from '@nexiom/database';
 import { NotFoundException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { StorageResolverService } from '../index.js';
 
 describe('StorageResolverService', () => {
   let service: StorageResolverService;

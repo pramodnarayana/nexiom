@@ -57,6 +57,7 @@ export function StitchDetailPage() {
     try {
       const updated = await updateStitch(stitch.id, { config: configDraft });
       setStitch(updated);
+      setConfigDraft(updated.config || {});
       toast({ title: 'Configuration Saved', description: 'Advanced settings updated successfully.' });
     } catch (e) {
       toast({

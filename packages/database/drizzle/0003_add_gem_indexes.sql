@@ -18,5 +18,5 @@
 -- Track completion in your deployment runbook before marking this
 -- migration done in production.
 -- ============================================================
-SELECT 1; -- Placeholder to satisfy الد migration runner safely.
+SELECT 1; -- Placeholder to satisfy migration runner safely.
 -- (Indexes must be built OUTSIDE transactions using CONCURRENTLY as noted above)

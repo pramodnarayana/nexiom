@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import { CalendarClock, Play, Loader2 } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/shared/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
+import { Button } from '@/shared/components/ui/button';
+import { useToast } from '@/shared/hooks/use-toast';
+import { updateSchedule, triggerSchedule, getSyncIntervalOptions, type StitchResponse } from '../api/stitches.api';
 
 function extractErrorMessage(e: unknown, defaultMessage = 'An unexpected error occurred'): string {
   if (typeof e === 'object' && e !== null) {
@@ -8,12 +14,6 @@ function extractErrorMessage(e: unknown, defaultMessage = 'An unexpected error o
   }
   return typeof e === 'string' ? e : defaultMessage;
 }
-import { CalendarClock, Play, Loader2 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/shared/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
-import { Button } from '@/shared/components/ui/button';
-import { useToast } from '@/shared/hooks/use-toast';
-import { updateSchedule, triggerSchedule, getSyncIntervalOptions, type StitchResponse } from '../api/stitches.api';
 
 interface SchedulePanelProps {
   stitch: StitchResponse;
@@ -36,7 +36,7 @@ export function SchedulePanel({ stitch, onUpdated }: SchedulePanelProps) {
     } catch (e) {
       toast({
         title: 'Update failed',
-        description: e instanceof Error ? e.message : 'Could not update interval',
+        description: extractErrorMessage(e, 'Could not update interval'),
         variant: 'destructive',
       });
     } finally {
@@ -53,7 +53,7 @@ export function SchedulePanel({ stitch, onUpdated }: SchedulePanelProps) {
     } catch (e) {
       toast({
         title: 'Toggle failed',
-        description: e instanceof Error ? e.message : 'Could not toggle schedule',
+        description: extractErrorMessage(e, 'Could not toggle schedule'),
         variant: 'destructive',
       });
     } finally {
