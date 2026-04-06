@@ -387,8 +387,6 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     return config;
-
-    return config;
   }
 
   // ---------------------------------------------------------------------------
