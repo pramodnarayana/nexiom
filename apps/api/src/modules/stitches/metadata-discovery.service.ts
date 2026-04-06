@@ -366,6 +366,13 @@ export class MetadataDiscoveryService implements OnModuleInit {
     if (piece.describeConfig) {
       try {
         config = await piece.describeConfig(credentials);
+      } catch (e) {
+        this.logger.warn(
+          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+        );
+        return config; // Return empty on describe failure
+      }
+      try {
         await this.redis.set(
           redisKey,
           JSON.stringify(config),
@@ -374,11 +381,12 @@ export class MetadataDiscoveryService implements OnModuleInit {
         );
       } catch (e) {
         this.logger.warn(
-          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+          `Failed to cache config for ${connection.appName}: ${String(e)}`,
         );
-        config = [];
       }
     }
+
+    return config;
 
     return config;
   }
