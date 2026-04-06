@@ -366,6 +366,12 @@ export class MetadataDiscoveryService implements OnModuleInit {
     if (piece.describeConfig) {
       try {
         config = await piece.describeConfig(credentials);
+        await this.redis.set(
+          redisKey,
+          JSON.stringify(config),
+          'EX',
+          TTL_SECONDS,
+        );
       } catch (e) {
         this.logger.warn(
           `Connector ${connection.appName} failed to describe config: ${String(e)}`,
@@ -374,7 +380,6 @@ export class MetadataDiscoveryService implements OnModuleInit {
       }
     }
 
-    await this.redis.set(redisKey, JSON.stringify(config), 'EX', TTL_SECONDS);
     return config;
   }
 

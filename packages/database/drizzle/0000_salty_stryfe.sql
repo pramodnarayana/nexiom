@@ -321,6 +321,4 @@ CREATE INDEX "gem_src_lookup_idx" ON "global_entity_map" USING btree ("source_en
 CREATE INDEX "gem_dest_lookup_idx" ON "global_entity_map" USING btree ("dest_entity_id","dest_app_id");--> statement-breakpoint
 CREATE INDEX "gem_src_trace_idx" ON "global_entity_map" USING btree ("source_trace_id");--> statement-breakpoint
 CREATE INDEX "gem_dest_trace_idx" ON "global_entity_map" USING btree ("dest_trace_id");--> statement-breakpoint
-CREATE INDEX "gem_stitch_idx" ON "global_entity_map" USING btree ("stitch_id");--> statement-breakpoint
-CREATE INDEX "gem_source_app_idx" ON "global_entity_map" USING btree ("source_app_id");--> statement-breakpoint
-CREATE INDEX "gem_dest_app_idx" ON "global_entity_map" USING btree ("dest_app_id");
+CREATE INDEX "gem_stitch_idx" ON "global_entity_map" USING btree ("stitch_id");

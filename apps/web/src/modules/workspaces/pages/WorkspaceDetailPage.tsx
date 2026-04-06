@@ -18,6 +18,8 @@ export function WorkspaceDetailPage() {
 
   const fetchWorkspace = useCallback(async () => {
     if (!id) {
+      setWorkspace(null);
+      setError(null);
       setWsLoading(false);
       return;
     }
