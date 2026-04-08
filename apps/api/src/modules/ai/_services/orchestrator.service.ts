@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { google } from '@ai-sdk/google';
-import { streamText, dynamicTool, stepCountIs, type ModelMessage } from 'ai';
+import { streamText, dynamicTool, stepCountIs, type ModelMessage, convertToModelMessages, generateMessageId, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { eq, and, inArray } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -26,6 +26,9 @@ import {
   AI_COPILOT_SYSTEM_PROMPT,
   AI_COPILOT_TOOL_INSTRUCTIONS,
 } from '../_constants/prompts.js';
+
+/** Maximum parallel related object fetch calls to prevent overwhelming external APIs */
+const MAX_PARALLEL_RELATED_CALLS = 5;
 
 /** Casts OAuthCredentialBlob to the generic Record the Piece interface expects. */
 function toCredentialsRecord(
@@ -66,7 +69,7 @@ export class OrchestratorService {
   }
 
   async streamChat(
-    messages: ModelMessage[],
+    messages: UIMessage[],
     tenantId: string,
     traceId: string,
   ) {
@@ -138,9 +141,10 @@ export class OrchestratorService {
     );
 
     // ─── Step 3: Stream via Gemini ────────────────────────────────────────────
+    const modelMessages = convertToModelMessages(messages);
     const result = streamText({
       model: google('gemini-2.5-flash'),
-      messages,
+      messages: modelMessages,
       tools,
       // AI SDK v6: stopWhen replaces maxSteps. Prevents runaway LLM tool loops.
       stopWhen: stepCountIs(5),
@@ -160,7 +164,7 @@ export class OrchestratorService {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({ originalMessages: messages, generateMessageId });
   }
 
   // ─── Tool Category 1: Relationship-Aware Entity Hydrator ──────────────────
@@ -177,7 +181,7 @@ export class OrchestratorService {
   ): void {
     if (typeof piece.describeRelatedObjects !== 'function') return;
 
-    const toolName = `${conn.appName}_getEntityWithRelations`;
+    const toolName = `${conn.appName}_${conn.id}_getEntityWithRelations`;
 
     tools[toolName] = dynamicTool({
       description: [
@@ -303,41 +307,47 @@ export class OrchestratorService {
 
           this.logger.info(
             { traceId, count: relatedObjects.length },
-            'Step 4: Triggering robust Promise.all hydration graph for 1:N relations using resolved ID...',
+            'Step 4: Triggering robust concurrency-limited hydration graph for 1:N relations using resolved ID...',
           );
-          const relatedResults = await Promise.all(
-            relatedObjects.map(async (rel) => {
-              if (!(piece as any).executeFind) {
-                return {
-                  objectType: rel.objectName,
-                  relationshipType: rel.relationshipType,
-                  records: [],
-                  _note: 'executeFind not implemented on this piece',
-                };
-              }
 
-              try {
-                const filterProp = { [rel.relationField]: primaryId };
-                const records = await (piece as any).executeFind(
-                  rel.objectName,
-                  filterProp,
-                  creds,
-                );
-                return {
-                  objectType: rel.objectName,
-                  relationshipType: rel.relationshipType,
-                  records: Array.isArray(records) ? records : [records],
-                };
-              } catch (e) {
-                return {
-                  objectType: rel.objectName,
-                  relationshipType: rel.relationshipType,
-                  records: [],
-                  error: `Failed to fetch related ${rel.objectName}: ${(e as Error).message}`,
-                };
-              }
-            }),
-          );
+          const relatedResults: any[] = [];
+          for (let i = 0; i < relatedObjects.length; i += MAX_PARALLEL_RELATED_CALLS) {
+            const batch = relatedObjects.slice(i, i + MAX_PARALLEL_RELATED_CALLS);
+            const batchResults = await Promise.all(
+              batch.map(async (rel) => {
+                if (!(piece as any).executeFind) {
+                  return {
+                    objectType: rel.objectName,
+                    relationshipType: rel.relationshipType,
+                    records: [],
+                    _note: 'executeFind not implemented on this piece',
+                  };
+                }
+
+                try {
+                  const filterProp = { [rel.relationField]: primaryId };
+                  const records = await (piece as any).executeFind(
+                    rel.objectName,
+                    filterProp,
+                    creds,
+                  );
+                  return {
+                    objectType: rel.objectName,
+                    relationshipType: rel.relationshipType,
+                    records: Array.isArray(records) ? records : [records],
+                  };
+                } catch (e) {
+                  return {
+                    objectType: rel.objectName,
+                    relationshipType: rel.relationshipType,
+                    records: [],
+                    error: `Failed to fetch related ${rel.objectName}: ${(e as Error).message}`,
+                  };
+                }
+              }),
+            );
+            relatedResults.push(...batchResults);
+          }
           this.logger.info(
             { traceId },
             'Step 4 complete: Relationship graph extracted',
@@ -394,7 +404,7 @@ export class OrchestratorService {
     traceId: string,
   ): void {
     for (const [actionName, action] of Object.entries(piece.actions || {})) {
-      const toolName = `${conn.appName}_${actionName}`.replace(
+      const toolName = `${conn.appName}_${conn.id}_${actionName}`.replace(
         /[^a-zA-Z0-9_-]/g,
         '_',
       );
@@ -416,6 +426,12 @@ export class OrchestratorService {
         shape[key] = (prop as any).required ? s : s.optional();
       }
 
+      // Add confirmation parameter to schema
+      shape['confirmed'] = z
+        .boolean()
+        .optional()
+        .describe('User confirmation required before executing this action');
+
       tools[toolName] = dynamicTool({
         description: [
           action.description || `Execute: ${action.displayName}`,
@@ -427,6 +443,20 @@ export class OrchestratorService {
             { traceId, tool: toolName, connectionId: conn.id },
             'Executing action tool',
           );
+
+          // Explicit approval check before invoking action
+          const argsWithConfirm = args as Record<string, unknown> & {
+            confirmed?: boolean;
+          };
+          if (argsWithConfirm.confirmed !== true) {
+            return {
+              success: false,
+              error:
+                'Action requires explicit user confirmation. Please set confirmed=true to proceed.',
+              connectionName: conn.displayName,
+            };
+          }
+
           try {
             const result = await action.run({
               auth: creds,

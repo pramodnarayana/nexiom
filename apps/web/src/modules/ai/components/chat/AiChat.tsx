@@ -11,12 +11,8 @@ export function AiChat() {
     api: '/api/ai/chat',
     streamProtocol: 'ui-message-stream'
   };
-  const baseChatState = useChat(options as Parameters<typeof useChat>[0]);
-  const chatState = baseChatState as typeof baseChatState & Record<string, unknown>;
-  const { messages, isLoading } = chatState;
+  const { messages, status, sendMessage } = useChat(options as Parameters<typeof useChat>[0]);
   const [input, setInput] = useState('');
-
-  console.log('useChat details:', Object.keys(chatState || {}));
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -24,31 +20,18 @@ export function AiChat() {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log('💬 handleSubmit triggered with input:', input);
 
     if (!input.trim()) {
-      console.log('⚠️ Input is empty, aborting submit');
       return;
     }
-    if (isLoading) {
-      console.log('⚠️ Chat is currently loading, aborting submit');
+    if (status === 'loading') {
       return;
     }
-
-    console.log('💬 Attempting to dispatch message. Checking available chatState methods...', Object.keys(chatState));
 
     try {
-      if (typeof chatState.sendMessage === 'function') {
-        console.log('✅ Executing chatState.sendMessage({"role": "user", "content": input})');
-        ((chatState as unknown) as { sendMessage: (args: Record<string, unknown>) => void }).sendMessage({ role: 'user', content: input });
-      } else if (typeof chatState.append === 'function') {
-        console.log('✅ Executing chatState.append({"role": "user", "content": input})');
-        ((chatState as unknown) as { append: (args: Record<string, unknown>) => void }).append({ role: 'user', content: input });
-      } else {
-        console.error('❌ Neither sendMessage nor append methods were found in the chat state.', chatState);
-      }
+      sendMessage({ role: 'user', content: input });
     } catch (err) {
-      console.error('💥 Error while triggering dispatch method:', err);
+      console.error('Error while sending message:', err);
     }
 
     setInput('');
@@ -181,7 +164,7 @@ export function AiChat() {
         })}
 
         {/* Synthetic Loading Indicator for simple text generation streams */}
-        {Boolean(isLoading) && Array.isArray(messages) && messages.length > 0 && (messages as unknown as Array<Record<string, unknown>>)[messages.length - 1].role === 'user' && (
+        {status === 'loading' && Array.isArray(messages) && messages.length > 0 && (messages as unknown as Array<Record<string, unknown>>)[messages.length - 1].role === 'user' && (
           <div className="flex gap-4 justify-start animate-pulse">
             <Avatar className="w-8 h-8 shrink-0 mt-1">
               <AvatarFallback className="bg-primary/10 text-primary"><Bot size={16} /></AvatarFallback>
@@ -203,13 +186,14 @@ export function AiChat() {
             onChange={handleInputChange}
             placeholder="Type your message..."
             className="flex-1 pr-12 rounded-full border-border bg-muted/10 shadow-sm focus-visible:ring-primary/20"
-            disabled={Boolean(isLoading)}
+            disabled={status === 'loading'}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={Boolean(isLoading) || !(input || '').trim()}
+            disabled={status === 'loading' || !(input || '').trim()}
             className="absolute right-1 top-1 bottom-1 h-auto w-8 rounded-full"
+            aria-label="Send message"
           >
             <Send className="w-4 h-4" />
           </Button>

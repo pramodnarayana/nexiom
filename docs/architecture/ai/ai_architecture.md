@@ -72,4 +72,4 @@ Provides suggested subsequent actions inline:
 Entering the market as a "Zero-Stale" AI Agent appeals to:
 - **Data Residency Fears**: Customers who refuse data warehousing replicas.
 - **Instant Actions**: Customers looking for direct "Create record" capabilities without pipeline setup.
-- **Unified Search**: Small teams needing unified command-line style search capabilities over multiple disjointed apps.
+- **Unified Search**: Small teams needing unified command-line-style search capabilities over multiple disjointed apps.

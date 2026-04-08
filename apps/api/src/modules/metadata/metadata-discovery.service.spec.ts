@@ -491,6 +491,9 @@ describe('MetadataDiscoveryService', () => {
         'Account',
       );
       expect(result).toEqual(mockRelations);
+      expect(redis.get).toHaveBeenCalledWith(
+        `meta:related:${CONN_ID}:Account`,
+      );
       expect(redis.set).not.toHaveBeenCalled();
     });
 
@@ -526,7 +529,14 @@ describe('MetadataDiscoveryService', () => {
         .mockResolvedValueOnce([MOCK_CONNECTION])
         .mockResolvedValueOnce([]);
       redis.get.mockResolvedValueOnce(null);
-      const describeRelatedMock = vi.fn().mockResolvedValue([]);
+      const mockRelations = [
+        {
+          objectName: 'Invoice',
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+      ];
+      const describeRelatedMock = vi.fn().mockResolvedValue(mockRelations);
       mockPieceRegistry.getPiece.mockReturnValue({
         describeRelatedObjects: describeRelatedMock,
       });
@@ -536,7 +546,7 @@ describe('MetadataDiscoveryService', () => {
         CONN_ID,
         'Account',
       );
-      expect(result).toEqual([]);
+      expect(result).toEqual(mockRelations);
       expect(mockTokenManager.getValidCredentials).toHaveBeenCalledWith(
         CONN_ID,
       );
@@ -545,6 +555,12 @@ describe('MetadataDiscoveryService', () => {
           accessToken: DEFAULT_CREDS_BLOB.accessToken,
         }),
         'Account',
+      );
+      expect(redis.set).toHaveBeenCalledWith(
+        `meta:related:${CONN_ID}:Account`,
+        JSON.stringify(mockRelations),
+        'EX',
+        300,
       );
     });
   });
@@ -559,6 +575,7 @@ describe('MetadataDiscoveryService', () => {
 
       const result = await service.describeConfig(ORG_ID, CONN_ID);
       expect(result).toEqual(mockConfig);
+      expect(redis.get).toHaveBeenCalledWith(`meta:config:${CONN_ID}`);
       expect(redis.set).not.toHaveBeenCalled();
     });
 
@@ -616,7 +633,12 @@ describe('MetadataDiscoveryService', () => {
           accessToken: DEFAULT_CREDS_BLOB.accessToken,
         }),
       );
-      expect(redis.set).toHaveBeenCalled();
+      expect(redis.set).toHaveBeenCalledWith(
+        `meta:config:${CONN_ID}`,
+        JSON.stringify(mockConfig),
+        'EX',
+        300,
+      );
     });
   });
 });

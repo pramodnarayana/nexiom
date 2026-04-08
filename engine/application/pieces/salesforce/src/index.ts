@@ -16,6 +16,16 @@ import { salesforceAuth } from './lib/auth.js';
 
 const SF_API_VERSION = 'v59.0';
 
+class SalesforceFetchError extends Error {
+    constructor(
+        message: string,
+        public readonly status: number,
+    ) {
+        super(message);
+        this.name = 'SalesforceFetchError';
+    }
+}
+
 function getInstanceUrl(credentials: Record<string, unknown>): string {
     const data = credentials['data'] as Record<string, string> | undefined;
     const url = (credentials['instance_url'] as string) || (data?.instance_url as string);
@@ -48,7 +58,7 @@ async function sfFetch<T>(url: string, accessToken: string): Promise<T> {
     }
     if (!res.ok) {
         const body = await res.text().catch(() => '');
-        throw new Error(`Salesforce API error ${res.status}: ${body}`);
+        throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${body}`, res.status);
     }
     return res.json() as Promise<T>;
 }
@@ -261,7 +271,7 @@ export const salesforce = createPiece({
         try {
             return await sfFetch<Record<string, unknown>>(url, accessToken);
         } catch (err: unknown) {
-            if (err instanceof Error && err.message.includes('404')) {
+            if (err instanceof SalesforceFetchError && err.status === 404) {
                 return null;
             }
             throw err;
@@ -271,7 +281,27 @@ export const salesforce = createPiece({
         const instanceUrl = getInstanceUrl(credentials);
         const accessToken = getAccessToken(credentials);
 
-        // Build a dynamic SOQL WHERE clause based on the passed in Foreign Key filters
+        // (1) Strict validation: Validate objectType against metadata dictionary
+        const objects = await describeObjects(credentials);
+        const objectMatch = objects.find((o) => o.name === objectType);
+        if (!objectMatch) {
+            throw new Error(`Invalid objectType "${objectType}". Object not found in metadata dictionary.`);
+        }
+
+        // (2) Require non-empty filters to avoid broad SELECT queries
+        if (!filter || Object.keys(filter).length === 0) {
+            throw new Error(`executeFind requires non-empty filters to prevent broad SELECT queries.`);
+        }
+
+        // (3) Whitelist filter keys by comparing against object's field metadata
+        const fields = await describeFields(credentials, objectType);
+        const validFieldNames = new Set(fields.map((f) => f.name));
+        const invalidKeys = Object.keys(filter).filter((k) => !validFieldNames.has(k));
+        if (invalidKeys.length > 0) {
+            throw new Error(`Invalid filter keys for ${objectType}: ${invalidKeys.join(', ')}. Must match field metadata.`);
+        }
+
+        // Build a dynamic SOQL WHERE clause based on the validated filters
         const conditions = Object.entries(filter).map(([k, v]) => {
             const safeVal = typeof v === 'string' ? v.replace(/'/g, "\\'") : v;
             return `${k} = '${safeVal}'`;

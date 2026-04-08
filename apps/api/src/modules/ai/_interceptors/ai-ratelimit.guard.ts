@@ -60,13 +60,20 @@ export class AiRateLimitGuard implements CanActivate {
 
     const key = `ratelimit:ai:chat:${userId}`;
 
-    const result = await this.redis.eval(
-      AiRateLimitGuard.LUA_SCRIPT,
-      1,
-      key,
-      String(LIMIT),
-      String(WINDOW_SECONDS),
-    );
+    let result: number | unknown;
+    try {
+      result = await this.redis.eval(
+        AiRateLimitGuard.LUA_SCRIPT,
+        1,
+        key,
+        String(LIMIT),
+        String(WINDOW_SECONDS),
+      );
+    } catch (err) {
+      this.logger.warn({ userId, err }, 'AI chat rate limit check failed');
+      // Degrade gracefully: allow the request to proceed
+      return true;
+    }
 
     if (result !== -1) {
       const retryAfter = typeof result === 'number' ? result : WINDOW_SECONDS;

@@ -49,7 +49,13 @@ describe('AiController - Enterprise Hardened', () => {
       },
     });
 
+    const mockHeaders = new Headers();
+    mockHeaders.set('Content-Type', 'text/plain; charset=utf-8');
+    mockHeaders.set('X-Custom-Header', 'test-value');
+
     vi.spyOn(orchestratorService, 'streamChat').mockResolvedValue({
+      status: 200,
+      headers: mockHeaders,
       body: mockWebStream,
     } as unknown as Awaited<ReturnType<typeof orchestratorService.streamChat>>);
 
@@ -69,13 +75,15 @@ describe('AiController - Enterprise Hardened', () => {
       emit: vi.fn(),
     } as unknown as Response;
 
-    // We can't actually pipeline in jest easily without a full mock, but we can
-    // simply assert the Orchestrator was successfully called without crashing.
     await controller.chat(
       { messages: [] },
       mockReq,
       mockRes as unknown as Parameters<typeof controller.chat>[2],
     );
+
     expect(orchestratorService.streamChat).toHaveBeenCalled();
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain; charset=utf-8');
+    expect(mockRes.setHeader).toHaveBeenCalledWith('X-Custom-Header', 'test-value');
   });
 });

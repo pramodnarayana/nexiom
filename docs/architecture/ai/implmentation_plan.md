@@ -18,7 +18,7 @@ Phase 2: The Orchestrator Backend (NestJS locally runs LLM)
 By running the LLM orchestrator alongside the database, we instantly resolve the tenant's connections and execute tools entirely in-memory for lightning-fast Generative UI.
 
 [NEW] apps/api/src/modules/ai/_controllers/ai.controller.ts
-Exposes POST /api/v1/ai/chat.
+Exposes POST /api/ai/chat.
 Accepts the standard messages array from Vercel's useChat.
 Connection Awareness: Queries the public database to discover active SaaS Connections for the current user's org.
 Configures @ai-sdk/google (Gemini) by passing it the dynamic array of allowed connection tools native to that org.
@@ -27,7 +27,7 @@ Spawns streamText() and returns a standard Response.toDataStreamResponse().
 Add @ai-sdk/google, ai, and zod to @apps/api dependencies.
 Phase 3: Generative Business UI (React Frontend)
 [NEW] apps/web/src/modules/ai/components/chat/AiChat.tsx
-Implement Vercel AI SDK useChat hook, pointing straight to /api/v1/ai/chat.
+Implement Vercel AI SDK useChat hook, pointing straight to /api/ai/chat.
 Intelligently observes the toolInvocations array. When status is fetching, drops in Skeleton UI states to heavily mask API latency.
 [NEW] apps/web/src/modules/ai/components/cards/
 Dynamic templates such as LoadCard.tsx and InvoiceCard.tsx that intercept specified external API proxies and render them nicely into the feed instead of plaintext JSON.

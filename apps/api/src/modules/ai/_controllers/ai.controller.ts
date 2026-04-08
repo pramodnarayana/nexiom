@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream';
+import { Readable, pipeline } from 'node:stream';
 import type { Request, Response } from 'express';
 import {
   Controller,
@@ -15,11 +15,17 @@ import { AiRateLimitGuard } from '../_interceptors/ai-ratelimit.guard.js';
 import { AiTelemetryInterceptor } from '../_interceptors/ai-telemetry.interceptor.js';
 import { OrchestratorService } from '../_services/orchestrator.service.js';
 import { ChatRequest } from '../_types/chat-request.types.js';
-import type { ModelMessage } from 'ai';
+import type { UIMessage } from 'ai';
+import { PinoLogger } from 'nestjs-pino';
 
 @Controller('ai')
 export class AiController {
-  constructor(private readonly orchestrator: OrchestratorService) {}
+  constructor(
+    private readonly orchestrator: OrchestratorService,
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(AiController.name);
+  }
 
   /**
    * POST /api/v1/ai/chat
@@ -46,7 +52,7 @@ export class AiController {
     const traceId: string = req.traceId ?? 'unknown';
 
     const webResponse = await this.orchestrator.streamChat(
-      body.messages as unknown as ModelMessage[],
+      body.messages as unknown as UIMessage[],
       tenantId,
       traceId,
     );
@@ -60,7 +66,11 @@ export class AiController {
     if (webResponse.body) {
       // Use native Node.js web stream mapping to guarantee flawless chunk flushing and backpressure
       // @ts-expect-error Ignore type mismatch between Web stream and Node stream
-      Readable.fromWeb(webResponse.body).pipe(res);
+      pipeline(Readable.fromWeb(webResponse.body), res, (err) => {
+        if (err) {
+          this.logger.error('stream error', err);
+        }
+      });
     } else {
       res.end();
     }

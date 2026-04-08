@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TraceController } from './trace.controller.js';
@@ -8,13 +7,13 @@ import { BadRequestException } from '@nestjs/common';
 
 describe('TraceController', () => {
   let controller: TraceController;
-  let mockTraceService: { listTraces: any; getTrace: any };
+  let mockTraceService: jest.Mocked<TraceService>;
 
   beforeEach(async () => {
     mockTraceService = {
       listTraces: vi.fn(),
       getTrace: vi.fn(),
-    };
+    } as unknown as jest.Mocked<TraceService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TraceController],
@@ -37,6 +36,7 @@ describe('TraceController', () => {
       const mockResult = { items: [], nextCursor: null };
       mockTraceService.listTraces.mockResolvedValue(mockResult);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { user: { organizationId: 'org-1' } } as any;
       const stitchId = 'stitch-1';
 
@@ -59,11 +59,13 @@ describe('TraceController', () => {
     });
 
     it('throws BadRequestException immediately if organization is null in Auth context', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { user: null } as any;
 
       await expect(controller.listTraces(ctx, 's', 10)).rejects.toThrow(
         BadRequestException,
       );
+      expect(mockTraceService.listTraces).not.toHaveBeenCalled();
     });
   });
 
@@ -72,6 +74,7 @@ describe('TraceController', () => {
       const mockTrace = { id: 'trace-1', steps: [] };
       mockTraceService.getTrace.mockResolvedValue(mockTrace);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { user: { organizationId: 'org-1' } } as any;
       const stitchId = 'stitch-1';
       const traceId = 'trace-1';
@@ -88,11 +91,13 @@ describe('TraceController', () => {
     });
 
     it('throws BadRequestException instantly isolating logic failures from Auth context mapping', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ctx = { user: { organizationId: undefined } } as any;
 
       await expect(controller.getTrace(ctx, 's', 't')).rejects.toThrow(
         BadRequestException,
       );
+      expect(mockTraceService.getTrace).not.toHaveBeenCalled();
     });
   });
 });
