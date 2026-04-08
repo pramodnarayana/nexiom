@@ -28,3 +28,33 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+/**
+ * Returns the fully qualified API URL string.
+ */
+export const getApiUrl = (): string => apiURL;
+
+/**
+ * Enterprise centralized global fetcher for Vercel AI SDK and native web streams.
+ * Bypasses Axios internally (since Axios does not support native ReadableStreams well),
+ * but preserves the exact same global credential passing protocols.
+ */
+export const streamFetcher = async (url: string, init?: RequestInit): Promise<Response> => {
+    // 1. Maintain the global identity cookies automatically across boundaries just like apiClient
+    const finalInit = {
+        ...init,
+        credentials: 'include' as RequestCredentials,
+    };
+
+    // 2. Wrap network events
+    const response = await fetch(url, finalInit);
+
+    // 3. Centralized intercepts: globally handle auth expiration
+    if (response.status === 401) {
+        // Trigger the same auth cleanup flow as AuthProvider by dispatching a custom event
+        console.error('Streaming request rejected: session expired (401).');
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
+
+    return response;
+};

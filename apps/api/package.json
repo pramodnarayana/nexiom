@@ -30,6 +30,7 @@
     "test:e2e": "vitest run --config ./test/vitest-e2e.config.mts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.58",
     "@bufbuild/protobuf": "^2.10.2",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
@@ -47,6 +48,7 @@
     "@nexiom/piece-quickbooks": "workspace:*",
     "@nexiom/piece-salesforce": "workspace:*",
     "@nexiom/queue": "workspace:*",
+    "ai": "^6.0.146",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.10",
     "class-transformer": "^0.5.1",
@@ -58,6 +60,7 @@
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.0.1",
     "nodemailer": "^7.0.12",
+    "opossum": "^9.0.0",
     "pg": "^8.16.3",
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
@@ -79,6 +82,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.7",
     "@types/nodemailer": "^7.0.4",
+    "@types/opossum": "^8.1.9",
     "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^11.0.0",

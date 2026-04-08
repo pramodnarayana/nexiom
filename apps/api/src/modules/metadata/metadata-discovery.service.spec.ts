@@ -470,4 +470,173 @@ describe('MetadataDiscoveryService', () => {
       ).rejects.toThrow(InternalServerErrorException);
     });
   });
+
+  // ── describeRelatedObjects ──────────────────────────────────────────────────
+
+  describe('describeRelatedObjects', () => {
+    it('returns Redis-cached relations when cache is warm', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      const mockRelations = [
+        {
+          objectName: 'Invoice',
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+      ];
+      redis.get.mockResolvedValueOnce(JSON.stringify(mockRelations));
+
+      const result = await service.describeRelatedObjects(
+        ORG_ID,
+        CONN_ID,
+        'Account',
+      );
+      expect(result).toEqual(mockRelations);
+      expect(redis.get).toHaveBeenCalledWith(`meta:related:${CONN_ID}:Account`);
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('returns empty array when piece has no describeRelatedObjects', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({});
+
+      const result = await service.describeRelatedObjects(
+        ORG_ID,
+        CONN_ID,
+        'Account',
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when no piece is registered for the connector', async () => {
+      const unknownConn = { ...MOCK_CONNECTION, appName: 'unknown-app' };
+      mocks.selectRows.mockResolvedValueOnce([unknownConn]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
+
+      const result = await service.describeRelatedObjects(
+        ORG_ID,
+        CONN_ID,
+        'Account',
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('calls piece.describeRelatedObjects with credentials from TokenManagerService', async () => {
+      mocks.selectRows
+        .mockResolvedValueOnce([MOCK_CONNECTION])
+        .mockResolvedValueOnce([]);
+      redis.get.mockResolvedValueOnce(null);
+      const mockRelations = [
+        {
+          objectName: 'Invoice',
+          relationshipType: 'CHILD',
+          relationField: 'accountId',
+        },
+      ];
+      const describeRelatedMock = vi.fn().mockResolvedValue(mockRelations);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeRelatedObjects: describeRelatedMock,
+      });
+
+      const result = await service.describeRelatedObjects(
+        ORG_ID,
+        CONN_ID,
+        'Account',
+      );
+      expect(result).toEqual(mockRelations);
+      expect(mockTokenManager.getValidCredentials).toHaveBeenCalledWith(
+        CONN_ID,
+      );
+      expect(describeRelatedMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accessToken: DEFAULT_CREDS_BLOB.accessToken,
+        }),
+        'Account',
+      );
+      expect(redis.set).toHaveBeenCalledWith(
+        `meta:related:${CONN_ID}:Account`,
+        JSON.stringify(mockRelations),
+        'EX',
+        300,
+      );
+    });
+  });
+
+  // ── describeConfig ──────────────────────────────────────────────────────────
+
+  describe('describeConfig', () => {
+    it('returns Redis-cached config when cache is warm', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      const mockConfig = [{ key: 'sandbox', type: 'boolean' }];
+      redis.get.mockResolvedValueOnce(JSON.stringify(mockConfig));
+
+      const result = await service.describeConfig(ORG_ID, CONN_ID);
+      expect(result).toEqual(mockConfig);
+      expect(redis.get).toHaveBeenCalledWith(`meta:config:${CONN_ID}`);
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('returns empty array when piece has no describeConfig implemented', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({}); // Registered, but no describeConfig
+
+      const result = await service.describeConfig(ORG_ID, CONN_ID);
+      expect(result).toEqual([]);
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when no piece is registered for the connector', async () => {
+      const unknownConn = { ...MOCK_CONNECTION, appName: 'unknown-app' };
+      mocks.selectRows.mockResolvedValueOnce([unknownConn]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue(undefined);
+
+      await expect(service.describeConfig(ORG_ID, CONN_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('returns empty array cleanly when describeConfig throws internally', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeConfig: vi
+          .fn()
+          .mockRejectedValue(new Error('Connection dropped')),
+      });
+
+      const result = await service.describeConfig(ORG_ID, CONN_ID);
+      expect(result).toEqual([]);
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
+    it('calls piece.describeConfig with correctly mapped credentials and stores results to Redis', async () => {
+      mocks.selectRows.mockResolvedValueOnce([MOCK_CONNECTION]);
+      redis.get.mockResolvedValueOnce(null);
+      const mockConfig = [{ key: 'sandbox', type: 'boolean' }];
+      const describeConfigMock = vi.fn().mockResolvedValue(mockConfig);
+      mockPieceRegistry.getPiece.mockReturnValue({
+        describeConfig: describeConfigMock,
+      });
+
+      const result = await service.describeConfig(ORG_ID, CONN_ID);
+      expect(result).toEqual(mockConfig);
+      expect(mockTokenManager.getValidCredentials).toHaveBeenCalledWith(
+        CONN_ID,
+      );
+      expect(describeConfigMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accessToken: DEFAULT_CREDS_BLOB.accessToken,
+        }),
+      );
+      expect(redis.set).toHaveBeenCalledWith(
+        `meta:config:${CONN_ID}`,
+        JSON.stringify(mockConfig),
+        'EX',
+        300,
+      );
+    });
+  });
 });

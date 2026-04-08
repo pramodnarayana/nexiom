@@ -16,17 +16,28 @@ import { salesforceAuth } from './lib/auth.js';
 
 const SF_API_VERSION = 'v59.0';
 
+class SalesforceFetchError extends Error {
+    constructor(
+        message: string,
+        public readonly status: number,
+    ) {
+        super(message);
+        this.name = 'SalesforceFetchError';
+    }
+}
+
 function getInstanceUrl(credentials: Record<string, unknown>): string {
-    const url = credentials['instance_url'];
-    if (typeof url !== 'string' || !url) {
+    const data = credentials['data'] as Record<string, string> | undefined;
+    const url = (credentials['instance_url'] as string) || (data?.instance_url as string);
+    if (!url) {
         throw new Error('Salesforce credentials missing instance_url');
     }
     return url.replace(/\/$/, '');
 }
 
 function getAccessToken(credentials: Record<string, unknown>): string {
-    const token = credentials['accessToken'];
-    if (typeof token !== 'string' || !token) {
+    const token = (credentials['accessToken'] as string) || (credentials['access_token'] as string);
+    if (!token) {
         throw new Error('Salesforce credentials missing accessToken');
     }
     return token;
@@ -47,7 +58,7 @@ async function sfFetch<T>(url: string, accessToken: string): Promise<T> {
     }
     if (!res.ok) {
         const body = await res.text().catch(() => '');
-        throw new Error(`Salesforce API error ${res.status}: ${body}`);
+        throw new SalesforceFetchError(`Salesforce API error ${res.status}: ${body}`, res.status);
     }
     return res.json() as Promise<T>;
 }
@@ -128,10 +139,12 @@ async function describeRelatedObjects(
         childRelationships: Array<{ childSObject: string; field: string; relationshipName: string | null }>;
         fields: Array<{ type: string; referenceTo?: string[]; name: string }>;
     }
+
+    // Any 404s here will naturally reject. Valid API names are guaranteed by Orchestrator resolution.
     const data = await sfFetch<SfDescribeResponse>(url, accessToken);
 
     const related: RelatedObjectDescriptor[] = [];
-    
+
     // Parent objects (1:1)
     for (const f of data.fields) {
         if (f.type === 'reference' && f.referenceTo?.length) {
@@ -249,6 +262,76 @@ export const salesforce = createPiece({
 
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
         return { statusCode: res.status, body };
+    },
+    executeFetch: async (objectType: string, entityId: string, credentials: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
+        const instanceUrl = getInstanceUrl(credentials);
+        const accessToken = getAccessToken(credentials);
+        const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects/${encodeURIComponent(objectType)}/${encodeURIComponent(entityId)}`;
+
+        try {
+            return await sfFetch<Record<string, unknown>>(url, accessToken);
+        } catch (err: unknown) {
+            if (err instanceof SalesforceFetchError && err.status === 404) {
+                return null;
+            }
+            throw err;
+        }
+    },
+    executeFind: async (objectType: string, filter: Record<string, unknown>, credentials: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
+        const instanceUrl = getInstanceUrl(credentials);
+        const accessToken = getAccessToken(credentials);
+
+        // (1) Strict validation: Validate objectType against metadata dictionary
+        const objects = await describeObjects(credentials);
+        const objectMatch = objects.find((o) => o.name === objectType);
+        if (!objectMatch) {
+            throw new Error(`Invalid objectType "${objectType}". Object not found in metadata dictionary.`);
+        }
+        if (!objectMatch.queryable) {
+            throw new Error(`Object type "${objectType}" is not queryable. Cannot execute SOQL query against this object.`);
+        }
+
+        // (2) Require non-empty filters to avoid broad SELECT queries
+        if (!filter || Object.keys(filter).length === 0) {
+            throw new Error(`executeFind requires non-empty filters to prevent broad SELECT queries.`);
+        }
+
+        // (3) Whitelist filter keys by comparing against object's filterable field metadata
+        const fields = await describeFields(credentials, objectType);
+        const validFieldNames = new Set(fields.filter((f) => f.filterable).map((f) => f.name));
+        const invalidKeys = Object.keys(filter).filter((k) => !validFieldNames.has(k));
+        if (invalidKeys.length > 0) {
+            throw new Error(`Invalid filter keys for ${objectType}: ${invalidKeys.join(', ')}. Must match filterable field metadata.`);
+        }
+
+        // Build a dynamic SOQL WHERE clause based on the validated filters
+        const conditions = Object.entries(filter).map(([k, v]) => {
+            // Handle different types appropriately for SOQL
+            if (v === null || v === undefined) {
+                return `${k} = NULL`;
+            }
+            if (typeof v === 'string') {
+                // Escape backslashes first, then single quotes to prevent injection
+                const escaped = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                return `${k} = '${escaped}'`;
+            }
+            if (typeof v === 'number' || typeof v === 'boolean') {
+                // Numbers and booleans are interpolated without quotes
+                return `${k} = ${v}`;
+            }
+            // For other types, convert to string and escape
+            const strVal = String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `${k} = '${strVal}'`;
+        });
+        const whereClause = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+        // Utilizing FIELDS(ALL) to dynamically hydrate object schema without explicit discovery limits
+        const soql = `SELECT FIELDS(ALL) FROM ${objectType}${whereClause} LIMIT 20`;
+        const url = `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(soql)}`;
+
+        interface QueryRes { records: Record<string, unknown>[] }
+        const data = await sfFetch<QueryRes>(url, accessToken);
+        return data.records || [];
     },
     webhook: {
         secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',

@@ -21,7 +21,9 @@
   "dependencies": {
     "@nexiom/connectors": "workspace:*",
     "@nexiom/database": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*"
+    "@nexiom/piece-framework": "workspace:*",
+    "ai": "^6.0.146",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@nestjs/common": "^11.0.1",
