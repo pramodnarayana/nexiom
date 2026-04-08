@@ -17,16 +17,17 @@ import { salesforceAuth } from './lib/auth.js';
 const SF_API_VERSION = 'v59.0';
 
 function getInstanceUrl(credentials: Record<string, unknown>): string {
-    const url = credentials['instance_url'];
-    if (typeof url !== 'string' || !url) {
+    const data = credentials['data'] as Record<string, string> | undefined;
+    const url = (credentials['instance_url'] as string) || (data?.instance_url as string);
+    if (!url) {
         throw new Error('Salesforce credentials missing instance_url');
     }
     return url.replace(/\/$/, '');
 }
 
 function getAccessToken(credentials: Record<string, unknown>): string {
-    const token = credentials['accessToken'];
-    if (typeof token !== 'string' || !token) {
+    const token = (credentials['accessToken'] as string) || (credentials['access_token'] as string);
+    if (!token) {
         throw new Error('Salesforce credentials missing accessToken');
     }
     return token;
@@ -128,10 +129,12 @@ async function describeRelatedObjects(
         childRelationships: Array<{ childSObject: string; field: string; relationshipName: string | null }>;
         fields: Array<{ type: string; referenceTo?: string[]; name: string }>;
     }
+
+    // Any 404s here will naturally reject. Valid API names are guaranteed by Orchestrator resolution.
     const data = await sfFetch<SfDescribeResponse>(url, accessToken);
 
     const related: RelatedObjectDescriptor[] = [];
-    
+
     // Parent objects (1:1)
     for (const f of data.fields) {
         if (f.type === 'reference' && f.referenceTo?.length) {
@@ -249,6 +252,39 @@ export const salesforce = createPiece({
 
         const body = await res.json().catch(() => ({})) as Record<string, unknown>;
         return { statusCode: res.status, body };
+    },
+    executeFetch: async (objectType: string, entityId: string, credentials: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
+        const instanceUrl = getInstanceUrl(credentials);
+        const accessToken = getAccessToken(credentials);
+        const url = `${instanceUrl}/services/data/${SF_API_VERSION}/sobjects/${encodeURIComponent(objectType)}/${encodeURIComponent(entityId)}`;
+
+        try {
+            return await sfFetch<Record<string, unknown>>(url, accessToken);
+        } catch (err: unknown) {
+            if (err instanceof Error && err.message.includes('404')) {
+                return null;
+            }
+            throw err;
+        }
+    },
+    executeFind: async (objectType: string, filter: Record<string, unknown>, credentials: Record<string, unknown>): Promise<Record<string, unknown>[]> => {
+        const instanceUrl = getInstanceUrl(credentials);
+        const accessToken = getAccessToken(credentials);
+
+        // Build a dynamic SOQL WHERE clause based on the passed in Foreign Key filters
+        const conditions = Object.entries(filter).map(([k, v]) => {
+            const safeVal = typeof v === 'string' ? v.replace(/'/g, "\\'") : v;
+            return `${k} = '${safeVal}'`;
+        });
+        const whereClause = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+        // Utilizing FIELDS(ALL) to dynamically hydrate object schema without explicit discovery limits
+        const soql = `SELECT FIELDS(ALL) FROM ${objectType}${whereClause} LIMIT 20`;
+        const url = `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent(soql)}`;
+
+        interface QueryRes { records: Record<string, unknown>[] }
+        const data = await sfFetch<QueryRes>(url, accessToken);
+        return data.records || [];
     },
     webhook: {
         secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',

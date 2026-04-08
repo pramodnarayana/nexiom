@@ -239,6 +239,24 @@ export interface Piece {
         credentials: Record<string, unknown>,
     ): Promise<VendorResponse>;
     /**
+     * Dynamically fetches a single record by its definitive internal ID.
+     * Called natively by the AI Orchestrator Hydrator to avoid hardcoded Get actions.
+     */
+    executeFetch?(
+        objectType: string,
+        entityId: string,
+        credentials: Record<string, unknown>,
+    ): Promise<Record<string, unknown> | null>;
+    /**
+     * Dynamically queries multiple records using a key-value filter (e.g. Foreign Key).
+     * Used by Orchestrator Hydrator to resolve 1:N child relationship graphs.
+     */
+    executeFind?(
+        objectType: string,
+        filter: Record<string, unknown>,
+        credentials: Record<string, unknown>,
+    ): Promise<Record<string, unknown>[]>;
+    /**
      * Fetches one page of records from the source SaaS API for the named stream.
      * The SchedulerWorker calls this once per page, passing the previous page's
      * `nextPageCursor` until `PollPage.nextPageCursor` is `undefined` (last page).
@@ -307,6 +325,10 @@ export interface CreatePieceParams {
     normalize?(objectType: string, raw: Record<string, unknown>): Promise<NormalizedRecord | null>;
     /** @see Piece.executeAction */
     executeAction?(objectType: string, payload: Record<string, unknown>, credentials: Record<string, unknown>): Promise<VendorResponse>;
+    /** @see Piece.executeFetch */
+    executeFetch?(objectType: string, entityId: string, credentials: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+    /** @see Piece.executeFind */
+    executeFind?(objectType: string, filter: Record<string, unknown>, credentials: Record<string, unknown>): Promise<Record<string, unknown>[]>;
     /** @see Piece.poll */
     poll?(
         credentials: Record<string, unknown>,
@@ -401,6 +423,8 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
         ...(params.normalize && { normalize: params.normalize }),
         ...(params.executeAction && { executeAction: params.executeAction }),
+        ...(params.executeFetch && { executeFetch: params.executeFetch }),
+        ...(params.executeFind && { executeFind: params.executeFind }),
         ...(params.poll && { poll: params.poll }),
         ...(params.webhook && { webhook: params.webhook }),
     };

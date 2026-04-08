@@ -32,6 +32,8 @@ import { PipelineModule } from '../modules/pipeline/pipeline.module.js';
 import { ObservabilityModule } from '../modules/observability/observability.module.js';
 import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
+import { AiModule } from '../modules/ai/ai.module.js';
+import { MetadataModule } from '../modules/metadata/metadata.module.js';
 
 @Module({
   imports: [
@@ -108,6 +110,8 @@ import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
     PipelineModule,
     TraceModule,
     ExceptionsModule,
+    MetadataModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService, ShutdownService],

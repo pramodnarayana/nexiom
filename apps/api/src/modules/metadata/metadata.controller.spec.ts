@@ -10,6 +10,8 @@ const CONN_ID = 'conn-uuid-1';
 const mockService = {
   describeObjects: vi.fn(),
   describeFields: vi.fn(),
+  describeRelatedObjects: vi.fn(),
+  describeConfig: vi.fn(),
 };
 
 describe('MetadataController', () => {
@@ -95,5 +97,49 @@ describe('MetadataController', () => {
       CONN_ID,
       'Contact',
     );
+  });
+
+  it('describeRelatedObjects — delegates to service with orgId, connectionId, and objectName', async () => {
+    const rels = [
+      {
+        objectName: 'Invoice',
+        relationshipType: 'CHILD',
+        relationField: 'accId',
+      },
+    ];
+    mockService.describeRelatedObjects.mockResolvedValue(rels);
+
+    const result = await controller.describeRelatedObjects(
+      makeAuth(),
+      CONN_ID,
+      'Account',
+    );
+
+    expect(result).toBe(rels);
+    expect(mockService.describeRelatedObjects).toHaveBeenCalledWith(
+      ORG_ID,
+      CONN_ID,
+      'Account',
+    );
+  });
+
+  it('describeConfig — delegates to service with orgId and connectionId', async () => {
+    const config = [{ key: 'env', type: 'string' }];
+    mockService.describeConfig.mockResolvedValue(config);
+
+    const result = await controller.describeConfig(makeAuth(), CONN_ID);
+
+    expect(result).toBe(config);
+    expect(mockService.describeConfig).toHaveBeenCalledWith(ORG_ID, CONN_ID);
+  });
+
+  it('validateObjectName — guards against Redis injection by throwing BadRequestException on invalid characters', () => {
+    expect(() =>
+      controller.describeFields(makeAuth(), CONN_ID, 'Invali@d*Name'),
+    ).toThrow('objectName must be 1-255 alphanumeric/underscore characters');
+
+    expect(() =>
+      controller.describeRelatedObjects(makeAuth(), CONN_ID, ''),
+    ).toThrow('objectName must be 1-255 alphanumeric/underscore characters');
   });
 });
