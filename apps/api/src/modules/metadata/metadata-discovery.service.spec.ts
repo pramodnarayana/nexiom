@@ -491,9 +491,7 @@ describe('MetadataDiscoveryService', () => {
         'Account',
       );
       expect(result).toEqual(mockRelations);
-      expect(redis.get).toHaveBeenCalledWith(
-        `meta:related:${CONN_ID}:Account`,
-      );
+      expect(redis.get).toHaveBeenCalledWith(`meta:related:${CONN_ID}:Account`);
       expect(redis.set).not.toHaveBeenCalled();
     });
 

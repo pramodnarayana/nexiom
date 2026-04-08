@@ -1,10 +1,12 @@
-import {
-  Injectable,
-  Inject,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { google } from '@ai-sdk/google';
-import { streamText, dynamicTool, stepCountIs, convertToModelMessages, type UIMessage } from 'ai';
+import {
+  streamText,
+  dynamicTool,
+  stepCountIs,
+  convertToModelMessages,
+  type UIMessage,
+} from 'ai';
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
@@ -94,7 +96,7 @@ export class OrchestratorService {
     );
 
     // ─── Step 2: Build tool map scoped strictly to active connections ─────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const tools: Record<string, any> = {};
 
     await Promise.all(
@@ -112,7 +114,7 @@ export class OrchestratorService {
         let credentials: OAuthCredentialBlob;
         try {
           credentials = await this.tokenManager.getValidCredentials(conn.id);
-        } catch (err) {
+        } catch (err: unknown) {
           this.logger.warn(
             { traceId, connectionId: conn.id, appName: conn.appName, err },
             'Failed to fetch credentials — skipping connection tools',
@@ -170,9 +172,8 @@ export class OrchestratorService {
   // Uses piece.describeRelatedObjects() to discover and parallel-fetch ALL
   // related child/parent entities in one tool execution — no LLM chaining needed.
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private buildHydratorTool(
-    tools: Record<string, any>,
+    tools: Record<string, ReturnType<typeof dynamicTool>>,
     piece: Piece,
     conn: ActiveConnection,
     creds: Record<string, unknown>,
@@ -202,7 +203,9 @@ export class OrchestratorService {
             `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
           ),
       }),
-      execute: async ({ objectType, filters }) => {
+      execute: async (args: Record<string, unknown>) => {
+        const objectType = args.objectType as string;
+        const filters = args.filters as Record<string, string>;
         this.logger.info(
           { traceId, app: conn.appName, objectType, filters },
           'Hydrating entity with all relations',
@@ -224,10 +227,7 @@ export class OrchestratorService {
 
           const tName = objectType.toLowerCase();
           let resolvedObjectName = objectType;
-          let found = false;
-
           const match =
-            objects.find((o) => o.name === objectType) ||
             objects.find((o) => o.label === objectType) ||
             objects.find(
               (o) =>
@@ -237,7 +237,6 @@ export class OrchestratorService {
 
           if (match) {
             resolvedObjectName = match.name;
-            found = true;
           } else {
             this.logger.warn(
               { traceId, objectType },
@@ -253,17 +252,16 @@ export class OrchestratorService {
             { traceId, resolvedObjectName, filters },
             'Step 2: Executing dynamic primary filter lookup...',
           );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let primaryResult: any = null;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-          if (!(piece as any).executeFind) {
+
+          let primaryResult: Record<string, unknown> | null = null;
+
+          if (!piece.executeFind) {
             primaryResult = {
               error: `executeFind is not implemented natively on connection ${conn.appName}`,
             };
           } else {
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-              const results = await (piece as any).executeFind(
+              const results = await piece.executeFind(
                 resolvedObjectName,
                 filters,
                 creds,
@@ -271,7 +269,7 @@ export class OrchestratorService {
               if (Array.isArray(results) && results.length > 0) {
                 primaryResult = results[0]; // Take first match
               } else if (results && !Array.isArray(results)) {
-                primaryResult = results;
+                primaryResult = results as Record<string, unknown>;
               }
             } catch (e: unknown) {
               primaryResult = {
@@ -281,7 +279,7 @@ export class OrchestratorService {
           }
 
           // Extract standard universal database primary key formats
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
           const primaryId =
             primaryResult?.Id || primaryResult?.id || primaryResult?.internalId;
 
@@ -318,14 +316,19 @@ export class OrchestratorService {
             'Step 4: Triggering robust concurrency-limited hydration graph for 1:N relations using resolved ID...',
           );
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const relatedResults: any[] = [];
-          for (let i = 0; i < relatedObjects.length; i += MAX_PARALLEL_RELATED_CALLS) {
-            const batch = relatedObjects.slice(i, i + MAX_PARALLEL_RELATED_CALLS);
+          const relatedResults: Record<string, unknown>[] = [];
+          for (
+            let i = 0;
+            i < relatedObjects.length;
+            i += MAX_PARALLEL_RELATED_CALLS
+          ) {
+            const batch = relatedObjects.slice(
+              i,
+              i + MAX_PARALLEL_RELATED_CALLS,
+            );
             const batchResults = await Promise.all(
               batch.map(async (rel) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-                if (!(piece as any).executeFind) {
+                if (!piece.executeFind) {
                   return {
                     objectType: rel.objectName,
                     relationshipType: rel.relationshipType,
@@ -336,8 +339,8 @@ export class OrchestratorService {
 
                 try {
                   const filterProp = { [rel.relationField]: primaryId };
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-                  const records = await (piece as any).executeFind(
+
+                  const records = await piece.executeFind(
                     rel.objectName,
                     filterProp,
                     creds,
@@ -347,7 +350,7 @@ export class OrchestratorService {
                     relationshipType: rel.relationshipType,
                     records: Array.isArray(records) ? records : [records],
                   };
-                } catch (e) {
+                } catch (e: unknown) {
                   return {
                     objectType: rel.objectName,
                     relationshipType: rel.relationshipType,
@@ -365,9 +368,10 @@ export class OrchestratorService {
           );
 
           // --- ENTERPRISE PROMPT OPTIMIZATION ---
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+
           const validRelations = relatedResults.filter(
-            (r: any) => r && Array.isArray(r.records) && r.records.length > 0,
+            (r: Record<string, unknown>) =>
+              r && Array.isArray(r.records) && r.records.length > 0,
           );
 
           this.logger.info(
@@ -383,8 +387,10 @@ export class OrchestratorService {
             connectionName: `connection-${conn.id}`,
             [resolvedObjectName]: primaryResult,
             relations: Object.fromEntries(
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-              validRelations.map((r: any) => [`${r.objectType}|${r.relationshipType}`, r]),
+              validRelations.map((r: Record<string, unknown>) => [
+                `${String(r.objectType)}|${String(r.relationshipType)}`,
+                r,
+              ]),
             ),
           };
 
@@ -396,7 +402,7 @@ export class OrchestratorService {
             'Step 6: Handing pristine resolved graph to Vercel AI SDK...',
           );
           return finalPayload;
-        } catch (e) {
+        } catch (e: unknown) {
           this.logger.error(
             { traceId, app: conn.appName, objectType, filters, err: e },
             'Entity hydration failed',
@@ -409,7 +415,6 @@ export class OrchestratorService {
 
   // ─── Tool Category 2: Individual Action Tools (Mutations) ─────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private buildActionTools(
     tools: Record<string, any>,
     piece: Piece,
@@ -426,7 +431,7 @@ export class OrchestratorService {
       // Build typed zod schema from the action's property definitions
       const shape: Record<string, z.ZodTypeAny> = {};
       for (const [key, prop] of Object.entries(action.props || {})) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         const propType = (prop as any).type as string;
         let s: z.ZodTypeAny;
         if (['SHORT_TEXT', 'LONG_TEXT', 'SECRET_TEXT'].includes(propType))
@@ -436,11 +441,11 @@ export class OrchestratorService {
         else if (propType === 'ARRAY') s = z.array(z.any());
         else s = z.any();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         if ((prop as any).description)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           s = s.describe((prop as any).description as string);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         shape[key] = (prop as any).required ? s : s.optional();
       }
 
@@ -484,17 +489,16 @@ export class OrchestratorService {
           }
 
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            const result = await action.run({
+            const result = (await action.run({
               auth: creds,
-              propsValue: args as any,
-            });
+              propsValue: args as Record<string, unknown>,
+            })) as unknown;
             return {
               success: true,
               connectionName: `connection-${conn.id}`,
               data: result,
             };
-          } catch (e) {
+          } catch (e: unknown) {
             this.logger.error(
               { traceId, tool: toolName, err: e },
               'Action tool execution failed',
@@ -560,8 +564,8 @@ export class OrchestratorService {
    * Caches standard URL tracking artifacts and UUID stamps typically not useful for generative insights.
    * Hard caps arrays to top 2 records to prevent 1:N relations from dominating context windows.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private optimizePayloadTokens(obj: any): any {
+
+  private optimizePayloadTokens(obj: unknown): unknown {
     if (obj === null || obj === undefined || obj === '') return undefined;
     if (typeof obj !== 'object') return obj;
 
@@ -574,9 +578,8 @@ export class OrchestratorService {
       return cleanedArray.length > 0 ? cleanedArray : undefined;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pruned: Record<string, any> = {};
-    for (const key of Object.keys(obj)) {
+    const pruned: Record<string, unknown> = {};
+    for (const key of Object.keys(obj as Record<string, unknown>)) {
       // Drop enterprise system noise fields aggressively
       if (
         key === 'attributes' ||
@@ -591,7 +594,9 @@ export class OrchestratorService {
         continue;
       }
 
-      let val = this.optimizePayloadTokens(obj[key]);
+      let val = this.optimizePayloadTokens(
+        (obj as Record<string, unknown>)[key],
+      );
 
       // Truncate massively bloated string payloads
       if (typeof val === 'string' && val.length > 300) {
@@ -599,7 +604,11 @@ export class OrchestratorService {
       }
       if (val !== undefined) {
         // If it's an object and completely empty after pruning, don't include it
-        if (typeof val === 'object' && Object.keys(val).length === 0) {
+        if (
+          typeof val === 'object' &&
+          val !== null &&
+          Object.keys(val).length === 0
+        ) {
           continue;
         }
         pruned[key] = val;

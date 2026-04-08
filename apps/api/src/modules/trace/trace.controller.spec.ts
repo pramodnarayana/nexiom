@@ -4,6 +4,7 @@ import { TraceController } from './trace.controller.js';
 import { TraceService } from './trace.service.js';
 import { AuthGuard } from '@nexiom/auth';
 import { BadRequestException } from '@nestjs/common';
+import { type RequestAuthContext } from '@nexiom/auth';
 
 type MockedTraceService = {
   listTraces: Mock;
@@ -41,8 +42,9 @@ describe('TraceController', () => {
       const mockResult = { items: [], nextCursor: null };
       mockTraceService.listTraces.mockResolvedValue(mockResult);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ctx = { user: { organizationId: 'org-1' } } as any;
+      const ctx = {
+        user: { organizationId: 'org-1' },
+      } as unknown as RequestAuthContext;
       const stitchId = 'stitch-1';
 
       const result = await controller.listTraces(
@@ -64,8 +66,7 @@ describe('TraceController', () => {
     });
 
     it('throws BadRequestException immediately if organization is null in Auth context', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ctx = { user: null } as any;
+      const ctx = { user: null } as unknown as RequestAuthContext;
 
       await expect(controller.listTraces(ctx, 's', 10)).rejects.toThrow(
         BadRequestException,
@@ -79,8 +80,9 @@ describe('TraceController', () => {
       const mockTrace = { id: 'trace-1', steps: [] };
       mockTraceService.getTrace.mockResolvedValue(mockTrace);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ctx = { user: { organizationId: 'org-1' } } as any;
+      const ctx = {
+        user: { organizationId: 'org-1' },
+      } as unknown as RequestAuthContext;
       const stitchId = 'stitch-1';
       const traceId = 'trace-1';
 
@@ -96,8 +98,9 @@ describe('TraceController', () => {
     });
 
     it('throws BadRequestException instantly isolating logic failures from Auth context mapping', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ctx = { user: { organizationId: undefined } } as any;
+      const ctx = {
+        user: { organizationId: undefined },
+      } as unknown as RequestAuthContext;
 
       await expect(controller.getTrace(ctx, 's', 't')).rejects.toThrow(
         BadRequestException,

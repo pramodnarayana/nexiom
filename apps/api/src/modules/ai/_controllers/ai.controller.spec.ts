@@ -78,12 +78,24 @@ describe('AiController - Enterprise Hardened', () => {
     const mockRes = {
       setHeader: vi.fn(),
       status: vi.fn().mockReturnThis(),
-      end: vi.fn(),
-      write: passThrough.write.bind(passThrough),
-      on: passThrough.on.bind(passThrough),
-      once: passThrough.once.bind(passThrough),
-      emit: passThrough.emit.bind(passThrough),
-      pipe: passThrough.pipe.bind(passThrough),
+      end: (cb?: () => void) => {
+        passThrough.end(cb);
+      },
+      write: (...args: Parameters<typeof passThrough.write>) =>
+        passThrough.write(...args),
+      on: (...args: Parameters<typeof passThrough.on>) =>
+        passThrough.on(...args),
+      once: (...args: Parameters<typeof passThrough.once>) =>
+        passThrough.once(...args),
+      emit: (...args: Parameters<typeof passThrough.emit>) =>
+        passThrough.emit(...args),
+      pipe: (...args: Parameters<typeof passThrough.pipe>) =>
+        passThrough.pipe(...args),
+      removeListener: (
+        ...args: Parameters<typeof passThrough.removeListener>
+      ) => passThrough.removeListener(...args),
+      off: (...args: Parameters<typeof passThrough.off>) =>
+        passThrough.off(...args),
     } as unknown as Response;
 
     await controller.chat(
@@ -92,16 +104,21 @@ describe('AiController - Enterprise Hardened', () => {
       mockRes as unknown as Parameters<typeof controller.chat>[2],
     );
 
-    // Wait for stream completion
+    // Wait for stream completion triggered by the piped web stream
     await new Promise<void>((resolve) => {
-      passThrough.on('end', resolve);
-      passThrough.end();
+      passThrough.on('finish', resolve);
     });
 
     expect(orchestratorService.streamChat).toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(200);
-    expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain; charset=utf-8');
-    expect(mockRes.setHeader).toHaveBeenCalledWith('X-Custom-Header', 'test-value');
+    expect(mockRes.setHeader).toHaveBeenCalledWith(
+      'content-type',
+      'text/plain; charset=utf-8',
+    );
+    expect(mockRes.setHeader).toHaveBeenCalledWith(
+      'x-custom-header',
+      'test-value',
+    );
 
     // Verify actual streamed data
     const receivedData = Buffer.concat(chunks).toString('utf-8');

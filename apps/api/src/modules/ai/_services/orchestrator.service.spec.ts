@@ -188,8 +188,8 @@ describe('OrchestratorService - Enterprise Hardened', () => {
       'trace-id',
     );
 
-    expect(mockTools['quickbooks_updateInvoice']).toBeDefined();
-    expect(mockTools['quickbooks_updateInvoice'].description).toContain(
+    expect(mockTools['quickbooks_qb-1_updateInvoice']).toBeDefined();
+    expect(mockTools['quickbooks_qb-1_updateInvoice'].description).toContain(
       'Updates an invoice.',
     );
   });
@@ -218,16 +218,17 @@ describe('OrchestratorService - Enterprise Hardened', () => {
       { token: '123' },
       'trace-id',
     );
-    const result = await mockTools['quickbooks_updateInvoice'].execute({
+    const result = await mockTools['quickbooks_qb-1_updateInvoice'].execute({
       id: 'inv-123',
+      confirmed: true,
     });
 
     expect(result.success).toBe(true);
-    expect(result.connectionName).toBe('QB');
+    expect(result.connectionName).toBe('connection-qb-1');
     expect(result.data.status).toBe('PAID');
     expect(mockActionRun).toHaveBeenCalledWith({
       auth: { token: '123' },
-      propsValue: { id: 'inv-123' },
+      propsValue: { id: 'inv-123', confirmed: true },
     });
   });
 
@@ -255,8 +256,9 @@ describe('OrchestratorService - Enterprise Hardened', () => {
       {},
       'trace-id',
     );
-    const result = await mockTools['quickbooks_updateInvoice'].execute({
+    const result = await mockTools['quickbooks_qb-1_updateInvoice'].execute({
       id: 'inv-123',
+      confirmed: true,
     });
 
     expect(result.success).toBe(false);
@@ -279,9 +281,9 @@ describe('OrchestratorService - Enterprise Hardened', () => {
       'tenant-1',
     );
 
-    expect(mockTools['salesforce_getEntityWithRelations']).toBeDefined();
+    expect(mockTools['salesforce_sf-1_getEntityWithRelations']).toBeDefined();
     expect(
-      mockTools['salesforce_getEntityWithRelations'].description,
+      mockTools['salesforce_sf-1_getEntityWithRelations'].description,
     ).toContain('Fetches a');
   });
 
@@ -295,6 +297,9 @@ describe('OrchestratorService - Enterprise Hardened', () => {
 
     const metaSpy = vi
       .spyOn((service as any).metadataService, 'describeObjects')
+      .mockResolvedValue([{ name: 'Load', label: 'Load' }]);
+    const relSpy = vi
+      .spyOn((service as any).metadataService, 'describeRelatedObjects')
       .mockResolvedValue([]);
 
     (service as any).buildHydratorTool(
@@ -306,7 +311,7 @@ describe('OrchestratorService - Enterprise Hardened', () => {
       'tenant-1',
     );
 
-    const tool = mockTools['salesforce_getEntityWithRelations'];
+    const tool = mockTools['salesforce_sf-1_getEntityWithRelations'];
     // Let's run the native execute block
     const result = await tool.execute({
       objectType: 'Load',
