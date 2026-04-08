@@ -33,44 +33,57 @@ export interface OptimizationRegistry {
     [appName: string]: AppHints;
 }
 
-export const OPTIMIZATION_REGISTRY: OptimizationRegistry = {
-    salesforce: {
-        Contact: {
-            cursorPrecedence: ['SystemModstamp', 'LastModifiedDate'],
-            requiredFields: ['Email', 'AccountId'],
-        },
-        Invoice__c: {
-            cursorPrecedence: ['SystemModstamp'],
-            autoJoin: ['InvoiceLineItems__r'],
-            bulkThreshold: 10_000,
-        },
-        Opportunity: {
-            autoJoin: ['OpportunityLineItems'],
-            cursorPrecedence: ['SystemModstamp', 'LastModifiedDate'],
-        },
-    },
-    quickbooks: {
-        Invoice: {
-            autoJoin: ['Line'],
-            // preferPath: 'CDC' — only set if ≥ 5 entity types are polled simultaneously
-        },
-        Customer: {
-            // Customer specific hints if necessary
-        }
-    },
+function cloneHint(hint: ObjectHint): ObjectHint {
+    return {
+        ...hint,
+        cursorPrecedence: hint.cursorPrecedence ? [...hint.cursorPrecedence] : undefined,
+        autoJoin: hint.autoJoin ? [...hint.autoJoin] : undefined,
+        requiredFields: hint.requiredFields ? [...hint.requiredFields] : undefined,
+    };
+}
+
+export const OPTIMIZATION_REGISTRY: OptimizationRegistry = Object.create(null);
+OPTIMIZATION_REGISTRY.salesforce = Object.create(null);
+OPTIMIZATION_REGISTRY.salesforce.Contact = {
+    cursorPrecedence: ['SystemModstamp', 'LastModifiedDate'],
+    requiredFields: ['Email', 'AccountId'],
+};
+OPTIMIZATION_REGISTRY.salesforce.Invoice__c = {
+    cursorPrecedence: ['SystemModstamp'],
+    autoJoin: ['InvoiceLineItems__r'],
+    bulkThreshold: 10_000,
+};
+OPTIMIZATION_REGISTRY.salesforce.Opportunity = {
+    autoJoin: ['OpportunityLineItems'],
+    cursorPrecedence: ['SystemModstamp', 'LastModifiedDate'],
+};
+OPTIMIZATION_REGISTRY.quickbooks = Object.create(null);
+OPTIMIZATION_REGISTRY.quickbooks.Invoice = {
+    autoJoin: ['Line'],
+    // preferPath: 'CDC' — only set if ≥ 5 entity types are polled simultaneously
+};
+OPTIMIZATION_REGISTRY.quickbooks.Customer = {
+    // Customer specific hints if necessary
 };
 
 export function defineHints(appName: string, hints: AppHints): void {
     // Initialize app entry if missing
     if (!OPTIMIZATION_REGISTRY[appName]) {
-        OPTIMIZATION_REGISTRY[appName] = {};
+        OPTIMIZATION_REGISTRY[appName] = Object.create(null);
     }
 
     // Merge each object hint individually to preserve existing properties
     for (const objectName of Object.keys(hints)) {
+        const existing = OPTIMIZATION_REGISTRY[appName][objectName];
+        const incoming = hints[objectName];
+
+        // Clone both existing and incoming hints before merging
+        const clonedExisting = existing ? cloneHint(existing) : {};
+        const clonedIncoming = cloneHint(incoming);
+
         OPTIMIZATION_REGISTRY[appName][objectName] = {
-            ...OPTIMIZATION_REGISTRY[appName][objectName],
-            ...hints[objectName],
+            ...clonedExisting,
+            ...clonedIncoming,
         };
     }
 }
@@ -94,7 +107,7 @@ export class OptimizationService {
                 const resolverHint = await customResolver(appName, objectName, connectionId);
                 if (resolverHint && Object.keys(resolverHint).length > 0) {
                     // Return a defensive copy with cloned arrays
-                    return this.cloneHint({ ...staticHint, ...resolverHint });
+                    return cloneHint({ ...staticHint, ...resolverHint });
                 }
             } catch (e) {
                 console.debug('OptimizationService.getHint: custom resolver failed, falling back to static registry', {
@@ -107,16 +120,7 @@ export class OptimizationService {
         }
 
         // Return a defensive copy of the static hint
-        return staticHint ? this.cloneHint(staticHint) : undefined;
-    }
-
-    private cloneHint(hint: ObjectHint): ObjectHint {
-        return {
-            ...hint,
-            cursorPrecedence: hint.cursorPrecedence ? [...hint.cursorPrecedence] : undefined,
-            autoJoin: hint.autoJoin ? [...hint.autoJoin] : undefined,
-            requiredFields: hint.requiredFields ? [...hint.requiredFields] : undefined,
-        };
+        return staticHint ? cloneHint(staticHint) : undefined;
     }
 }
 
