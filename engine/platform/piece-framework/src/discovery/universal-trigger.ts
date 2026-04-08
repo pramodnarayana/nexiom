@@ -2,7 +2,7 @@ import { SmartCursorSelector } from './smart-cursor-selector.js';
 import { IgtLogger } from './igt-logger.js';
 import type { UniversalTriggerConfig, ApiRateLimit } from './interfaces.js';
 
-const log = new IgtLogger({ app: 'universal-engine' });
+const log = new IgtLogger({ app: 'universal-trigger' });
 
 export class TimeoutError extends Error {
     constructor(message: string) {

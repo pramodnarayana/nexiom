@@ -9,6 +9,9 @@ let customResolver: ConnectionHintResolver | null = null;
 export function setOptimizationResolver(resolver: ConnectionHintResolver) {
     customResolver = resolver;
 }
+export function clearOptimizationResolver() {
+    customResolver = null;
+}
 
 export interface ObjectHint {
     /** Force a specific cursor field instead of auto-selecting. */
