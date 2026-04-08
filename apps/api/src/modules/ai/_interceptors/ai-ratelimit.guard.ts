@@ -69,8 +69,9 @@ export class AiRateLimitGuard implements CanActivate {
         String(LIMIT),
         String(WINDOW_SECONDS),
       );
-    } catch (err) {
-      this.logger.warn({ userId, err }, 'AI chat rate limit check failed');
+    } catch (err: unknown) {
+      const safeErrorMessage = err instanceof Error ? err.message : String(err);
+      this.logger.warn({ userId, error: safeErrorMessage }, 'AI chat rate limit check failed');
       // Degrade gracefully: allow the request to proceed
       return true;
     }

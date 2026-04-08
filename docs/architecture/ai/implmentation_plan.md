@@ -36,7 +36,7 @@ Phase 4: Enterprise Hardening (Resiliency & Observability)
 [NEW] apps/api/src/modules/ai/_interceptors/ai-telemetry.interceptor.ts
 Telemetry & Tracing: Propagates trace_id through the LLM call into the actual piece execution for pristine upstream visibility if a provider like Salesforce rate limits the proxy.
 [MODIFY] apps/api/src/modules/ai/ai.module.ts
-Rate Limiters: Aggressive token-bucket rate limits on the /chat endpoint to shield against runaway LLM billing.
+Rate Limiters: Redis-backed fixed-window rate limiter on the /chat endpoint (implemented in AiRateLimitGuard) to shield against runaway LLM billing. Uses atomic Lua script to maintain fixed window counters with configurable limit and reset interval. The fixed-window approach tracks request counts per window; on burst traffic all requests within the limit are allowed immediately, while sustained traffic is rejected once the window limit is reached until the next window begins.
 Circuit Breakers: Wrapping upstream SaaS API calls through opossum to catch timeouts and advise the user gracefully.
 Directory Structure (Domain-Driven Design)
 text

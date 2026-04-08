@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { google } from '@ai-sdk/google';
-import { streamText, dynamicTool, stepCountIs, type ModelMessage, convertToModelMessages, generateMessageId, type UIMessage } from 'ai';
+import { streamText, dynamicTool, stepCountIs, type ModelMessage, convertToModelMessages, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { eq, and, inArray } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -141,7 +141,7 @@ export class OrchestratorService {
     );
 
     // ─── Step 3: Stream via Gemini ────────────────────────────────────────────
-    const modelMessages = convertToModelMessages(messages);
+    const modelMessages = await convertToModelMessages(messages);
     const result = streamText({
       model: google('gemini-2.5-flash'),
       messages: modelMessages,
@@ -149,7 +149,7 @@ export class OrchestratorService {
       // AI SDK v6: stopWhen replaces maxSteps. Prevents runaway LLM tool loops.
       stopWhen: stepCountIs(5),
       maxRetries: 0,
-      system: `${AI_COPILOT_SYSTEM_PROMPT}\n\n${AI_COPILOT_TOOL_INSTRUCTIONS.replace('{{connections}}', activeConnections.map((c) => c.displayName).join(', '))}`,
+      system: `${AI_COPILOT_SYSTEM_PROMPT}\n\n${AI_COPILOT_TOOL_INSTRUCTIONS.replace('{{connections}}', activeConnections.map((_c, index) => `Connection ${index + 1}`).join(', '))}`,
       onFinish: (event) => {
         this.logger.info(
           { traceId, finishReason: event.finishReason, usage: event.usage },
@@ -164,7 +164,7 @@ export class OrchestratorService {
       },
     });
 
-    return result.toUIMessageStreamResponse({ originalMessages: messages, generateMessageId });
+    return result.toUIMessageStreamResponse({ originalMessages: messages });
   }
 
   // ─── Tool Category 1: Relationship-Aware Entity Hydrator ──────────────────
@@ -188,7 +188,7 @@ export class OrchestratorService {
       description: [
         `Fetches a ${piece.displayName} entity AND ALL its related sub-entities`,
         `(e.g. Load + Stops + Line Items, Invoice + Line Items + Payments)`,
-        `in a SINGLE call. Uses "${conn.displayName}" connection.`,
+        `in a SINGLE call. Uses connection ${conn.id}.`,
         `Use this for ANY "give me details of X" or "show me X with everything" query.`,
       ].join(' '),
       inputSchema: z.object({
@@ -242,8 +242,12 @@ export class OrchestratorService {
           } else {
             this.logger.warn(
               { traceId, objectType },
-              'AI passed object type not found in Metadata Dictionary. Falling through.',
+              'AI passed object type not found in Metadata Dictionary.',
             );
+            return {
+              connectionName: `connection-${conn.id}`,
+              error: `Object type "${objectType}" not found in metadata dictionary. Please use a valid object type from the available metadata.`,
+            };
           }
 
           this.logger.info(
@@ -270,7 +274,7 @@ export class OrchestratorService {
               } else if (results && !Array.isArray(results)) {
                 primaryResult = results;
               }
-            } catch (e: any) {
+            } catch (e: unknown) {
               primaryResult = {
                 error: `Failed to find ${resolvedObjectName}: ${(e as Error).message}`,
               };
@@ -288,7 +292,7 @@ export class OrchestratorService {
               'Primary record returned null, hit an error, or lacked an explicit ID to join. Short-circuiting payload.',
             );
             return {
-              connectionName: conn.displayName,
+              connectionName: `connection-${conn.id}`,
               error:
                 primaryResult?.error ||
                 `No records found in ${resolvedObjectName} matching filters ${JSON.stringify(filters)}. Cannot join relationship graph.`,
@@ -377,11 +381,11 @@ export class OrchestratorService {
           );
 
           const rawPayload = {
-            connectionName: conn.displayName,
+            connectionName: `connection-${conn.id}`,
             [resolvedObjectName]: primaryResult,
             relations: Object.fromEntries(
               // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-              validRelations.map((r: any) => [r.objectType, r]),
+              validRelations.map((r: any) => [`${r.objectType}|${r.relationshipType}`, r]),
             ),
           };
 
@@ -450,7 +454,7 @@ export class OrchestratorService {
       tools[toolName] = dynamicTool({
         description: [
           action.description || `Execute: ${action.displayName}`,
-          `(via "${conn.displayName}" connection)`,
+          `(via connection ${conn.id})`,
         ].join(' '),
         inputSchema: z.object(shape),
         execute: async (args) => {
@@ -476,7 +480,7 @@ export class OrchestratorService {
               success: false,
               error:
                 'Action requires explicit user confirmation. Please set confirmed=true to proceed.',
-              connectionName: conn.displayName,
+              connectionName: `connection-${conn.id}`,
             };
           }
 
@@ -488,7 +492,7 @@ export class OrchestratorService {
             });
             return {
               success: true,
-              connectionName: conn.displayName,
+              connectionName: `connection-${conn.id}`,
               data: result,
             };
           } catch (e) {
@@ -499,7 +503,7 @@ export class OrchestratorService {
             return {
               success: false,
               error: `Action failed: ${(e as Error).message}`,
-              connectionName: conn.displayName,
+              connectionName: `connection-${conn.id}`,
             };
           }
         },

@@ -293,12 +293,12 @@ export const salesforce = createPiece({
             throw new Error(`executeFind requires non-empty filters to prevent broad SELECT queries.`);
         }
 
-        // (3) Whitelist filter keys by comparing against object's field metadata
+        // (3) Whitelist filter keys by comparing against object's filterable field metadata
         const fields = await describeFields(credentials, objectType);
-        const validFieldNames = new Set(fields.map((f) => f.name));
+        const validFieldNames = new Set(fields.filter((f) => f.filterable).map((f) => f.name));
         const invalidKeys = Object.keys(filter).filter((k) => !validFieldNames.has(k));
         if (invalidKeys.length > 0) {
-            throw new Error(`Invalid filter keys for ${objectType}: ${invalidKeys.join(', ')}. Must match field metadata.`);
+            throw new Error(`Invalid filter keys for ${objectType}: ${invalidKeys.join(', ')}. Must match filterable field metadata.`);
         }
 
         // Build a dynamic SOQL WHERE clause based on the validated filters

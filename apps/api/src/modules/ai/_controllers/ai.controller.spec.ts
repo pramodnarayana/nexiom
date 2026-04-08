@@ -7,6 +7,9 @@ import { AiController } from './ai.controller.js';
 import { OrchestratorService } from '../_services/orchestrator.service.js';
 import { PinoLogger } from 'nestjs-pino';
 import { Response } from 'express';
+import { PassThrough } from 'stream';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 
 describe('AiController - Enterprise Hardened', () => {
   let controller: AiController;
@@ -64,14 +67,23 @@ describe('AiController - Enterprise Hardened', () => {
       traceId: 'trace-456',
     } as unknown as Parameters<typeof controller.chat>[1];
 
+    // Use a real PassThrough stream to capture actual data
+    const passThrough = new PassThrough();
+    const chunks: Buffer[] = [];
+
+    passThrough.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
     const mockRes = {
       setHeader: vi.fn(),
       status: vi.fn().mockReturnThis(),
       end: vi.fn(),
-      write: vi.fn(),
-      on: vi.fn(),
-      once: vi.fn(),
-      emit: vi.fn(),
+      write: passThrough.write.bind(passThrough),
+      on: passThrough.on.bind(passThrough),
+      once: passThrough.once.bind(passThrough),
+      emit: passThrough.emit.bind(passThrough),
+      pipe: passThrough.pipe.bind(passThrough),
     } as unknown as Response;
 
     await controller.chat(
@@ -80,9 +92,19 @@ describe('AiController - Enterprise Hardened', () => {
       mockRes as unknown as Parameters<typeof controller.chat>[2],
     );
 
+    // Wait for stream completion
+    await new Promise<void>((resolve) => {
+      passThrough.on('end', resolve);
+      passThrough.end();
+    });
+
     expect(orchestratorService.streamChat).toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(200);
     expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain; charset=utf-8');
     expect(mockRes.setHeader).toHaveBeenCalledWith('X-Custom-Header', 'test-value');
+
+    // Verify actual streamed data
+    const receivedData = Buffer.concat(chunks).toString('utf-8');
+    expect(receivedData).toBe('Test Stream Chunk');
   });
 });
