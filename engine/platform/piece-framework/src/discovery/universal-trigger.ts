@@ -215,7 +215,7 @@ export class UniversalTrigger {
         cursorField: string,
         lastTieBreaker: string
     ): Promise<unknown[]> {
-        const { objectName, hint, queryAdapter, bulkAdapter, executeStandardQuery } = config as any;
+        const { objectName, hint, queryAdapter, bulkAdapter, executeStandardQuery } = config;
         const fieldDef = schema.fields.find((f: any) => f.name === cursorField);
         const fieldType = fieldDef?.type || 'string';
         const queryCursorValue = this.formatForQuery(lastCursor, fieldType);

@@ -32,7 +32,7 @@ import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
 /**
  * Encrypted value blob stored in app_connection.value.
- * Aliased from the connectors package so all callers share a single source of truth.
+ * Aliased from the credentials package so all callers share a single source of truth.
  */
 export type ConnectionValueBlob = OAuthCredentialBlob;
 

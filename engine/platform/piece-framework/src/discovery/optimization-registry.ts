@@ -68,9 +68,9 @@ export class OptimizationService {
      *
      * @param appName      - Canonical app name (used for static OPTIMIZATION_REGISTRY fallback).
      * @param objectName   - Vendor object name e.g. 'rtms__Load__c'.
-     * @param connectionId - Optional app_connection.id. When provided, queries the DB-backed
-     *                       profile cache (scoped per-connection for custom object support).
-     *                       When absent, falls straight through to the static registry.
+     * @param connectionId - Optional app_connection.id. When provided, the registry consults the
+     *                       pluggable ConnectionHintResolver (scoped per-connection for custom object support).
+     *                       When absent, it falls back to the static registry.
      */
     async getHint(appName: string, objectName: string, connectionId?: string): Promise<ObjectHint | undefined> {
         // Always resolve the static hint first — it is the baseline.
