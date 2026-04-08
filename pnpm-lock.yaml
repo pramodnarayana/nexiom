@@ -1069,6 +1069,9 @@ importers:
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../pieces/framework
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       typescript:
         specifier: ^5.7.3
