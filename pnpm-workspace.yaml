@@ -3,4 +3,4 @@ packages:
   - 'packages/*'
   - 'engine/platform/*'
   - 'engine/application/*'
-  - 'engine/application/pieces/*'
+  - 'packages/pieces/*'
