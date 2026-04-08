@@ -61,7 +61,18 @@ export const OPTIMIZATION_REGISTRY: OptimizationRegistry = {
 };
 
 export function defineHints(appName: string, hints: AppHints): void {
-    OPTIMIZATION_REGISTRY[appName] = { ...OPTIMIZATION_REGISTRY[appName], ...hints };
+    // Initialize app entry if missing
+    if (!OPTIMIZATION_REGISTRY[appName]) {
+        OPTIMIZATION_REGISTRY[appName] = {};
+    }
+
+    // Merge each object hint individually to preserve existing properties
+    for (const objectName of Object.keys(hints)) {
+        OPTIMIZATION_REGISTRY[appName][objectName] = {
+            ...OPTIMIZATION_REGISTRY[appName][objectName],
+            ...hints[objectName],
+        };
+    }
 }
 
 export class OptimizationService {
@@ -82,7 +93,8 @@ export class OptimizationService {
             try {
                 const resolverHint = await customResolver(appName, objectName, connectionId);
                 if (resolverHint && Object.keys(resolverHint).length > 0) {
-                    return { ...staticHint, ...resolverHint };
+                    // Return a defensive copy with cloned arrays
+                    return this.cloneHint({ ...staticHint, ...resolverHint });
                 }
             } catch (e) {
                 console.debug('OptimizationService.getHint: custom resolver failed, falling back to static registry', {
@@ -94,7 +106,17 @@ export class OptimizationService {
             }
         }
 
-        return staticHint;
+        // Return a defensive copy of the static hint
+        return staticHint ? this.cloneHint(staticHint) : undefined;
+    }
+
+    private cloneHint(hint: ObjectHint): ObjectHint {
+        return {
+            ...hint,
+            cursorPrecedence: hint.cursorPrecedence ? [...hint.cursorPrecedence] : undefined,
+            autoJoin: hint.autoJoin ? [...hint.autoJoin] : undefined,
+            requiredFields: hint.requiredFields ? [...hint.requiredFields] : undefined,
+        };
     }
 }
 
