@@ -303,8 +303,22 @@ export const salesforce = createPiece({
 
         // Build a dynamic SOQL WHERE clause based on the validated filters
         const conditions = Object.entries(filter).map(([k, v]) => {
-            const safeVal = typeof v === 'string' ? v.replace(/'/g, "\\'") : v;
-            return `${k} = '${safeVal}'`;
+            // Handle different types appropriately for SOQL
+            if (v === null || v === undefined) {
+                return `${k} = NULL`;
+            }
+            if (typeof v === 'string') {
+                // Escape backslashes first, then single quotes to prevent injection
+                const escaped = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                return `${k} = '${escaped}'`;
+            }
+            if (typeof v === 'number' || typeof v === 'boolean') {
+                // Numbers and booleans are interpolated without quotes
+                return `${k} = ${v}`;
+            }
+            // For other types, convert to string and escape
+            const strVal = String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `${k} = '${strVal}'`;
         });
         const whereClause = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
 

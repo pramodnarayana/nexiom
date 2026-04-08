@@ -1,4 +1,5 @@
-Enterprise Implementation Plan: Standalone AI (Hybrid Proxy)
+# Enterprise Implementation Plan: Standalone AI (Hybrid Proxy)
+
 This plan outlines the integration of the AI Copilot utilizing the Vercel AI SDK + Generative UI. It leverages a Hybrid Architecture: the backend tightly orchestrates the LLM logic for minimum latency, whilst internally adhering to the Model Context Protocol (MCP) tool schemas to dynamically expose the user's exact live SaaS connections.
 
 User Review Required

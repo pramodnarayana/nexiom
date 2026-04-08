@@ -21,7 +21,6 @@ describe('AiController - Enterprise Hardened', () => {
       setContext: vi.fn(),
     };
     const mockOrchestrator = { streamChat: vi.fn() };
-    const mockAiRegistry = { getProvider: vi.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiController],

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unused-vars */
 import {
   Injectable,
   Inject,
@@ -72,7 +71,7 @@ export class OrchestratorService {
     messages: UIMessage[],
     tenantId: string,
     traceId: string,
-  ) {
+  ): Promise<Response> {
     this.logger.info(
       { tenantId, traceId },
       'AI chat initiated — resolving active connections',
@@ -96,6 +95,7 @@ export class OrchestratorService {
     );
 
     // ─── Step 2: Build tool map scoped strictly to active connections ─────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: Record<string, any> = {};
 
     await Promise.all(
@@ -171,6 +171,7 @@ export class OrchestratorService {
   // Uses piece.describeRelatedObjects() to discover and parallel-fetch ALL
   // related child/parent entities in one tool execution — no LLM chaining needed.
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private buildHydratorTool(
     tools: Record<string, any>,
     piece: Piece,
@@ -249,13 +250,16 @@ export class OrchestratorService {
             { traceId, resolvedObjectName, filters },
             'Step 2: Executing dynamic primary filter lookup...',
           );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let primaryResult: any = null;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
           if (!(piece as any).executeFind) {
             primaryResult = {
               error: `executeFind is not implemented natively on connection ${conn.appName}`,
             };
           } else {
             try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
               const results = await (piece as any).executeFind(
                 resolvedObjectName,
                 filters,
@@ -274,6 +278,7 @@ export class OrchestratorService {
           }
 
           // Extract standard universal database primary key formats
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
           const primaryId =
             primaryResult?.Id || primaryResult?.id || primaryResult?.internalId;
 
@@ -310,11 +315,13 @@ export class OrchestratorService {
             'Step 4: Triggering robust concurrency-limited hydration graph for 1:N relations using resolved ID...',
           );
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const relatedResults: any[] = [];
           for (let i = 0; i < relatedObjects.length; i += MAX_PARALLEL_RELATED_CALLS) {
             const batch = relatedObjects.slice(i, i + MAX_PARALLEL_RELATED_CALLS);
             const batchResults = await Promise.all(
               batch.map(async (rel) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
                 if (!(piece as any).executeFind) {
                   return {
                     objectType: rel.objectName,
@@ -326,6 +333,7 @@ export class OrchestratorService {
 
                 try {
                   const filterProp = { [rel.relationField]: primaryId };
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
                   const records = await (piece as any).executeFind(
                     rel.objectName,
                     filterProp,
@@ -354,6 +362,7 @@ export class OrchestratorService {
           );
 
           // --- ENTERPRISE PROMPT OPTIMIZATION ---
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
           const validRelations = relatedResults.filter(
             (r: any) => r && Array.isArray(r.records) && r.records.length > 0,
           );
@@ -371,6 +380,7 @@ export class OrchestratorService {
             connectionName: conn.displayName,
             [resolvedObjectName]: primaryResult,
             relations: Object.fromEntries(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
               validRelations.map((r: any) => [r.objectType, r]),
             ),
           };
@@ -396,6 +406,7 @@ export class OrchestratorService {
 
   // ─── Tool Category 2: Individual Action Tools (Mutations) ─────────────────
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private buildActionTools(
     tools: Record<string, any>,
     piece: Piece,
@@ -412,6 +423,7 @@ export class OrchestratorService {
       // Build typed zod schema from the action's property definitions
       const shape: Record<string, z.ZodTypeAny> = {};
       for (const [key, prop] of Object.entries(action.props || {})) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
         const propType = (prop as any).type as string;
         let s: z.ZodTypeAny;
         if (['SHORT_TEXT', 'LONG_TEXT', 'SECRET_TEXT'].includes(propType))
@@ -421,8 +433,11 @@ export class OrchestratorService {
         else if (propType === 'ARRAY') s = z.array(z.any());
         else s = z.any();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
         if ((prop as any).description)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
           s = s.describe((prop as any).description as string);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
         shape[key] = (prop as any).required ? s : s.optional();
       }
 
@@ -444,7 +459,15 @@ export class OrchestratorService {
             'Executing action tool',
           );
 
-          // Explicit approval check before invoking action
+          // TODO: Security Enhancement Required - Replace LLM-driven boolean confirmation
+          // The current confirmed boolean check is fragile as the LLM can set it to true.
+          // Implement a server-issued, single-use approval token flow:
+          // 1. Create ApprovalTokenService to issue cryptographically secure tokens
+          // 2. Frontend displays confirmation UI and requests approval token from backend
+          // 3. Replace argsWithConfirm.confirmed with argsWithConfirm.approvalToken: string
+          // 4. Validate token server-side (check user, conn/displayName, expiry, single-use)
+          // 5. Invalidate token after verification to prevent replay attacks
+          // 6. Return error if token missing/invalid, success only when token verified
           const argsWithConfirm = args as Record<string, unknown> & {
             confirmed?: boolean;
           };
@@ -458,6 +481,7 @@ export class OrchestratorService {
           }
 
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
             const result = await action.run({
               auth: creds,
               propsValue: args as any,
@@ -531,8 +555,9 @@ export class OrchestratorService {
    * Generatively prunes data structures, aggressively removing `null`, `undefined`,
    * or empty objects to drastically reduce LLM context token usage.
    * Caches standard URL tracking artifacts and UUID stamps typically not useful for generative insights.
-   * Limits arrays to top 15 records to prevent 1:N relations from dominating context windows.
+   * Hard caps arrays to top 2 records to prevent 1:N relations from dominating context windows.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private optimizePayloadTokens(obj: any): any {
     if (obj === null || obj === undefined || obj === '') return undefined;
     if (typeof obj !== 'object') return obj;
@@ -546,6 +571,7 @@ export class OrchestratorService {
       return cleanedArray.length > 0 ? cleanedArray : undefined;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pruned: Record<string, any> = {};
     for (const key of Object.keys(obj)) {
       // Drop enterprise system noise fields aggressively

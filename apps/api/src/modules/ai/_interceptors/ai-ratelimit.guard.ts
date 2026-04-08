@@ -60,7 +60,7 @@ export class AiRateLimitGuard implements CanActivate {
 
     const key = `ratelimit:ai:chat:${userId}`;
 
-    let result: number | unknown;
+    let result: unknown;
     try {
       result = await this.redis.eval(
         AiRateLimitGuard.LUA_SCRIPT,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useChat } from '@ai-sdk/react';
+import { useChat, type UIMessage } from '@ai-sdk/react';
 import ReactMarkdown from 'react-markdown';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
@@ -24,12 +24,12 @@ export function AiChat() {
     if (!input.trim()) {
       return;
     }
-    if (status === 'loading') {
+    if (status === 'submitted' || status === 'streaming') {
       return;
     }
 
     try {
-      sendMessage({ role: 'user', content: input });
+      sendMessage({ text: input });
     } catch (err) {
       console.error('Error while sending message:', err);
     }
@@ -73,9 +73,9 @@ export function AiChat() {
           </div>
         )}
 
-        {(messages as unknown as Array<Record<string, unknown>>).map((m: Record<string, unknown>) => {
+        {messages.map((m: UIMessage) => {
           return (
-            <div key={String(m.id)} className={`flex gap-4 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={m.id} className={`flex gap-4 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {m.role === 'assistant' && (
                 <Avatar className="w-8 h-8 shrink-0 mt-1">
                   <AvatarFallback className="bg-primary/10 text-primary"><Bot size={16} /></AvatarFallback>
@@ -86,7 +86,7 @@ export function AiChat() {
 
 
                 {/* Text Message Content (Fallback or from Parts) */}
-                {(m.content || (Array.isArray(m.parts) && m.parts.some((p: Record<string, unknown>) => p.type === 'text'))) && (
+                {(Array.isArray(m.parts) && m.parts.some((p) => p.type === 'text')) && (
                   <div
                     className={`px-4 py-3 rounded-2xl text-sm ${m.role === 'user'
                       ? 'bg-primary text-primary-foreground rounded-tr-sm'
@@ -95,8 +95,7 @@ export function AiChat() {
                   >
                     <div className="prose prose-sm dark:prose-invert max-w-none break-words">
                       <ReactMarkdown>
-                        {String(m.content ||
-                          (Array.isArray(m.parts) ? m.parts?.filter((p: Record<string, unknown>) => p.type === 'text').map((p: Record<string, unknown>) => p.text).join('\n\n') : ''))}
+                        {String(Array.isArray(m.parts) ? m.parts?.filter((p) => p.type === 'text').map((p) => 'text' in p ? p.text : '').join('\n\n') : '')}
                       </ReactMarkdown>
                     </div>
                   </div>
@@ -164,7 +163,7 @@ export function AiChat() {
         })}
 
         {/* Synthetic Loading Indicator for simple text generation streams */}
-        {status === 'loading' && Array.isArray(messages) && messages.length > 0 && (messages as unknown as Array<Record<string, unknown>>)[messages.length - 1].role === 'user' && (
+        {(status === 'submitted' || status === 'streaming') && Array.isArray(messages) && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
           <div className="flex gap-4 justify-start animate-pulse">
             <Avatar className="w-8 h-8 shrink-0 mt-1">
               <AvatarFallback className="bg-primary/10 text-primary"><Bot size={16} /></AvatarFallback>
@@ -186,12 +185,12 @@ export function AiChat() {
             onChange={handleInputChange}
             placeholder="Type your message..."
             className="flex-1 pr-12 rounded-full border-border bg-muted/10 shadow-sm focus-visible:ring-primary/20"
-            disabled={status === 'loading'}
+            disabled={status === 'submitted' || status === 'streaming'}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={status === 'loading' || !(input || '').trim()}
+            disabled={status === 'submitted' || status === 'streaming' || !(input || '').trim()}
             className="absolute right-1 top-1 bottom-1 h-auto w-8 rounded-full"
             aria-label="Send message"
           >

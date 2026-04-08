@@ -19,11 +19,13 @@ The Standalone Copilot is designed for customers who want immediate intelligence
 The backend acts as a Functional Proxy. It translates user intent into API calls using the Model Context Protocol (MCP) and the existing Connector Pieces. We utilize the **Vercel AI SDK** to manage tool execution flows rather than purely detached background worker loops.
 
 ### A. The Orchestrator (NestJS)
+
 - **Intent Classifier**: Uses a high-speed LLM (e.g., Gemini 1.5 Flash) to identify the target app and object.
 - **MCP Server**: Dynamically exposes "Tools" to the LLM based on the user's active `app_connection` records, mapping universal piece triggers/actions into JSON schemas.
 - **Connector Proxy Service**: A specialized service that executes the `run()` function of an Activepieces Piece in "Live Mode," injecting credentials on-the-fly.
 
 ### B. Security & Identity Layer
+
 - **Auth Resolver**: The Copilot fetches encrypted OAuth tokens from the `public.app_connection` table.
 - **Token Guard**: Uses standard refresh-lock mechanisms to ensure the token is active before tool execution.
 - **Context Isolation**: Strict ABAC/RBAC validation ensures the LLM only "sees" and "calls" tools for apps the specific organization has authenticated.
@@ -33,6 +35,7 @@ The backend acts as a Functional Proxy. It translates user intent into API calls
 The frontend transforms raw JSON responses from external APIs into structured, interactive business cards using modern React tools.
 
 ### A. The Generative UI Layer
+
 Instead of simple markdown, the Copilot uses **Dynamic Component Injection**:
 - **JSON Payload**: The backend returns a raw JSON stream from the source app via the Vercel AI SDK.
 - **Component Selection**: The UI identifies the `objectType` and mounts an interactive Business Card Template. 
@@ -41,6 +44,7 @@ Instead of simple markdown, the Copilot uses **Dynamic Component Injection**:
 - **Skeleton States**: The UI automatically animates skeletons per-tool call while the backend proxies the live SaaS APIs.
 
 ### B. Actionable Intelligence (Future Plan)
+
 Provides suggested subsequent actions inline:
 - *Data*: "Invoice is overdue."
 - *Action Chip*: `[ Create Reminder in Slack ]` or `[ Mark as Paid ]`.

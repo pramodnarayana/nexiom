@@ -1,19 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TraceController } from './trace.controller.js';
 import { TraceService } from './trace.service.js';
 import { AuthGuard } from '@nexiom/auth';
 import { BadRequestException } from '@nestjs/common';
 
+type MockedTraceService = {
+  listTraces: Mock;
+  getTrace: Mock;
+};
+
 describe('TraceController', () => {
   let controller: TraceController;
-  let mockTraceService: jest.Mocked<TraceService>;
+  let mockTraceService: MockedTraceService;
 
   beforeEach(async () => {
     mockTraceService = {
       listTraces: vi.fn(),
       getTrace: vi.fn(),
-    } as unknown as jest.Mocked<TraceService>;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TraceController],
