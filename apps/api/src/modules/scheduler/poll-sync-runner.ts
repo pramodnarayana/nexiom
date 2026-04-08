@@ -16,8 +16,8 @@ import {
   appConnections,
   syncCursors,
 } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/connectors';
-import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
+import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { Piece } from '@nexiom/piece-framework';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {

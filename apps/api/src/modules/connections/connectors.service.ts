@@ -10,9 +10,9 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppCredentialError } from '@nexiom/connectors';
+import { AppCredentialError } from '@nexiom/credentials';
 import { resolveOAuth2Url, PropertyType } from '@nexiom/piece-framework';
-import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,
@@ -32,7 +32,7 @@ import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
 /**
  * Encrypted value blob stored in app_connection.value.
- * Aliased from the connectors package so all callers share a single source of truth.
+ * Aliased from the credentials package so all callers share a single source of truth.
  */
 export type ConnectionValueBlob = OAuthCredentialBlob;
 

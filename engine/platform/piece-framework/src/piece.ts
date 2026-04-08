@@ -19,9 +19,10 @@ export interface ObjectDescriptor {
 
 // ---------------------------------------------------------------------------
 // Polling framework types
-// Used by piece.poll() and the SchedulerWorker (packages/engine).
-// Defined here (packages/connectors) so that pieces can implement poll()
-// without taking a dependency on packages/engine.
+// Used by piece.poll() and the SchedulerWorker.
+// Defined here (engine/platform/piece-framework) so that pieces can implement poll()
+// without taking a dependency on the engine package.
+// Types defined: PollWindow, PollRecord, PollPage, StreamDescriptor, ReplicationKeyType.
 // ---------------------------------------------------------------------------
 
 /**

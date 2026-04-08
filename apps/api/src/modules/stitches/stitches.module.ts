@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@nexiom/auth';
 import { CacheModule } from '@nexiom/cache';
-import { EncryptionService, AesEncryptionService } from '@nexiom/connectors';
+import { EncryptionService, AesEncryptionService } from '@nexiom/credentials';
 import { DbModule } from '../../db/db.module.js';
 import { PiecesModule } from '@nexiom/engine';
 import { ConnectionsModule } from '../connections/connections.module.js';

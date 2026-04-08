@@ -15,7 +15,7 @@ export interface LocalCryptoAdapterOptions {
  * - authTag:  16 bytes → 32 hex chars
  *
  * This format is wire-compatible with the existing `AesEncryptionService`
- * in `packages/connectors/src/crypto/`.
+ * in `packages/connection-manager/src/crypto/`.
  */
 @Injectable()
 export class LocalCryptoAdapter implements IEncryptionService {

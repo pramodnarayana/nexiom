@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UniversalTriggerEngine } from './universal-trigger-engine.js';
+import { UniversalTrigger } from './universal-trigger.js';
 import { SmartCursorSelector } from './smart-cursor-selector.js';
 import type {
-    UniversalEngineConfig,
+    UniversalTriggerConfig,
     IDiscoveryAdapter,
     IQueryAdapter,
     IBulkAdapter,
@@ -28,7 +28,7 @@ vi.mock('./igt-logger.js', () => ({
 
 // Removed hardcoded sf-fetch mock
 
-describe('UniversalTriggerEngine', () => {
+describe('UniversalTrigger', () => {
     let mockStore: any;
     let mockDiscoveryAdapter: IDiscoveryAdapter;
     let mockQueryAdapter: IQueryAdapter & { buildCountQuery: ReturnType<typeof vi.fn> };
@@ -79,7 +79,7 @@ describe('UniversalTriggerEngine', () => {
         vi.mocked(SmartCursorSelector.pick).mockReturnValue('LastModifiedDate');
     });
 
-    const createConfig = (overrides = {}): UniversalEngineConfig<unknown> => ({
+    const createConfig = (overrides = {}): UniversalTriggerConfig<unknown> => ({
         auth: {},
         objectName: 'TestObject',
         store: mockStore as unknown as TriggerStore,
@@ -95,7 +95,7 @@ describe('UniversalTriggerEngine', () => {
         (mockDiscoveryAdapter.fieldExists as any).mockResolvedValue(false);
         const config = createConfig();
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         expect(records).toEqual([]);
         expect(mockStore.get).not.toHaveBeenCalledWith('igt_TestObject_LastModifiedDate');
@@ -110,7 +110,7 @@ describe('UniversalTriggerEngine', () => {
             hint: { bulkThreshold: 500 }
         });
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         expect(mockDiscoveryAdapter.describe).toHaveBeenCalled();
         expect(mockStore.get).toHaveBeenCalledWith('igt_TestObject_LastModifiedDate');
@@ -146,7 +146,7 @@ describe('UniversalTriggerEngine', () => {
             hint: { bulkThreshold: 500 }
         });
 
-        await UniversalTriggerEngine.execute(config);
+        await UniversalTrigger.execute(config);
 
         expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
             mockSchema,
@@ -165,7 +165,7 @@ describe('UniversalTriggerEngine', () => {
             hint: { bulkThreshold: 500 }
         });
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
             mockSchema,
@@ -187,7 +187,7 @@ describe('UniversalTriggerEngine', () => {
 
         const config = createConfig();
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(
             mockSchema,
@@ -206,7 +206,7 @@ describe('UniversalTriggerEngine', () => {
             executeCountQuery: undefined
         });
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         expect(mockQueryAdapter.buildQuery).toHaveBeenCalledWith(
             mockSchema,
@@ -224,7 +224,7 @@ describe('UniversalTriggerEngine', () => {
             bulkAdapter: undefined
         });
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         // Even though size is massive, we have no bulk adapter, must route to standard
         expect(mockQueryAdapter.buildCountQuery).toHaveBeenCalledWith(mockSchema, expect.anything());
@@ -243,7 +243,7 @@ describe('UniversalTriggerEngine', () => {
         });
 
         try {
-            const records = await UniversalTriggerEngine.execute(config);
+            const records = await UniversalTrigger.execute(config);
 
             // Expect empty array due to block
             expect(records).toEqual([]);
@@ -269,7 +269,7 @@ describe('UniversalTriggerEngine', () => {
 
         const config = createConfig();
 
-        const records = await UniversalTriggerEngine.execute(config);
+        const records = await UniversalTrigger.execute(config);
 
         // Preflight count should be flagged as failed without throwing entirely
         expect(mockExecuteCountQuery).toHaveBeenCalled();

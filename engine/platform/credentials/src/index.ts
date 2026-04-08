@@ -1,8 +1,8 @@
 /**
- * @nexiom/connectors — public API
+ * @nexiom/credentials — public API
  *
  * Entrypoints:
- *   - `@nexiom/connectors`           — runtime services (encryption, token manager)
+ *   - `@nexiom/credentials`           — runtime services (encryption, token manager)
  *   - `@nexiom/piece-framework` — piece/action/trigger/auth/property definitions
  */
 

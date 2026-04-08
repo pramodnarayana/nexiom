@@ -142,7 +142,7 @@ export function useConnections() {
                     vendorParams,
                 });
 
-                const popupUrl = `${apiUrl}/connectors/${providerName}?session=${sessionId}`;
+                const popupUrl = `${apiUrl}/connection-manager/${providerName}?session=${sessionId}`;
                 // Re-call openPopup with the actual URL to redirect the already-opened window
                 openPopup(popupUrl);
             } catch (err: unknown) {

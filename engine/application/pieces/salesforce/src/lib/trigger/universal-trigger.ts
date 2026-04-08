@@ -2,10 +2,10 @@ import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore 
 import { salesforceAuth } from '../auth.js';
 
 import {
-    UniversalTriggerEngine,
+    UniversalTrigger,
     optimizationService,
     IgtLogger,
-} from '@nexiom/connectors/intelligence';
+} from '@nexiom/piece-framework/discovery';
 import { sfFetch, checkSalesforceLimits, SalesforceAuthError } from '../sf-fetch.js';
 import { salesforcesCommon, SF_API_VERSION } from '../common/index.js';
 import { assertSafeSalesforceObject } from './salesforce-polling.helper.js';
@@ -14,7 +14,7 @@ import {
     SalesforceDiscoveryAdapter,
     SalesforceQueryAdapter,
     SalesforceBulkAdapter
-} from '../intelligence/index.js';
+} from '../discovery/index.js';
 
 // Fallback to legacy triggers for shadow mode
 // (Currently we only support this for polling triggers, not webhooks)
@@ -153,7 +153,7 @@ async function runUniversalTrigger(
 
     // The engine advances the cursor internally before returning,
     // so shadow mode automatically gets cursor advancement — no extra code needed.
-    const records = await UniversalTriggerEngine.execute({
+    const records = await UniversalTrigger.execute({
         auth: flatAuth,
         store,
         objectName,

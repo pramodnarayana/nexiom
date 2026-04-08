@@ -6,7 +6,26 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
-### 1. Hardened L3 & L4 Pipeline Outbox Refactoring
+### 1. AI Orchestrator & MCP Architecture Refactoring
+
+**Location**: `engine/application/ai`, `engine/platform/ai` (or similar MCP directories), and `engine/application/pieces`
+**Added**: 2026-04-08
+**Impact**: Code Architecture, Domain-Driven Design, Platform Scalability
+**Effort**: High (1 sprint)
+
+**Current State**:
+- The AI Copilot, MCP (Model Context Protocol), and the Sync Engine are currently conflated under the `engine` directory.
+- This mixes two fundamentally opposed execution contexts: Sync Engine (async, batch, high-throughput ETL) and AI Orchestrator (sync, low-latency, real-time LLM streaming).
+- MCP logic is incorrectly positioned within `engine/platform/`, despite having no relevance to database replication or webhook syncing.
+- `pieces` (Integrations) are trapped under `engine/application/pieces`, making them appear bound strictly to the Sync Engine when they should be universally accessible.
+
+**Recommended Solution**:
+- **Extract Integrations**: Move `engine/application/pieces` into a shared top-level library (e.g., `packages/integrations` or `/integrations`). Both Sync and AI domains will import from this single source of truth.
+- **Promote AI Domain**: Extract AI components out of `engine` into a dedicated top-level `ai/` or `engines/ai/` directory. This ensures AI logic doesn't inherit unnecessary ETL pipeline dependencies.
+- **Relocate MCP**: Move the Model Context Protocol abstractions out of `engine/platform/` into the new dedicated AI domain architecture.
+
+
+### 2. Hardened L3 & L4 Pipeline Outbox Refactoring
 
 **Location**: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`  
 **Added**: 2026-03-29  
@@ -25,7 +44,7 @@ This document tracks known technical debt items that should be addressed in futu
 
 ---
 
-### 1. DatabaseManager Duplication
+### 3. DatabaseManager Duplication
 
 **Location**: `apps/api/src/db/database-manager.ts`, `apps/worker/src/db/database-manager.ts`  
 **Added**: 2026-03-27  
@@ -44,7 +63,7 @@ This document tracks known technical debt items that should be addressed in futu
 - Export a global `DbManagerModule` from that package.
 - Delete the redundant files in both `apps/api` and `apps/worker` and refactor them to import the unified library service.
 
-### 2. PII Cleanup Job for Sessions
+### 4. PII Cleanup Job for Sessions
 
 **Location**: `packages/database/src/schema/identity.ts` & `apps/api/src/modules/background`  
 **Added**: 2026-03-06  
@@ -64,7 +83,7 @@ This document tracks known technical debt items that should be addressed in futu
 - This job will find sessions older than 30 days and anonymize their PII (nullify or hash), emitting audit logs.
 - Add a Drizzle migration to backfill and anonymize existing old sessions.
 
-### 2. Permission Caching Architecture
+### 5. Permission Caching Architecture
 
 **Location**: `apps/web/src/app/providers/auth-provider.ts`  
 **Added**: 2026-02-12  
@@ -104,7 +123,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 - [Permission Architecture Pattern](file:///.gemini/antigravity/brain/d18e0ee0-ce96-4db3-9e9a-041242a6c761/permission_architecture_pattern.md)
 
-### 2. CI Integration for E2E Tests
+### 6. CI Integration for E2E Tests
 
 **Location**: `apps/web/e2e`  
 **Added**: 2026-02-19  
@@ -135,7 +154,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **dotenv auto-resolution**: `drizzle.config.ts` in `@nexiom/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
 - **Enterprise Piece Loader**: `PiecesModule` is now a DynamicModule with `forRoot({ anchorUrl: import.meta.url })`. All 6 host modules (ConnectionsModule, StitchesModule, TriggerModule, SchedulerModule, WebhooksModule, PipelineModule) pass their own `import.meta.url` as the resolution anchor, bypassing pnpm strict package containment in any working directory or container.
 
-### 4. Shadow Mode Direct Trigger Imports
+### 7. Shadow Mode Direct Trigger Imports
 
 **Location**: `packages/pieces/salesforce/src/lib/trigger/universal-trigger.ts` & Quickbooks  
 **Added**: 2026-03-04  
@@ -152,7 +171,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - **Short term**: Complete Phase 3 testing (i.e., validate that the universal polling engine achieves 100% data parity and stability over a 2-week dual-run window; refer to the [QA Test Plan](/docs/qa/shadow_mode_test_plan.md) for exit criteria) and delete the legacy stubs immediately, removing the imports.
 - **Long term (if kept)**: Implement a Dependency Injection registry where legacy triggers self-register for shadow testing, keeping `universal-trigger.ts` completely unaware and decoupled.
 
-### 5. Drizzle Schema Consolidation (Modular Monolith)
+### 8. Drizzle Schema Consolidation (Modular Monolith)
 
 **Location**: `packages/database`, `packages/identity`  
 **Added**: 2026-03-05  
@@ -194,7 +213,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 2. True Enterprise DX Setup (DevContainers & Secret Manager)
+### 1. True Enterprise DX Setup (DevContainers & Secret Manager)
 
 **Location**: Workspace Root  
 **Added**: 2026-04-02  
@@ -213,7 +232,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 3. Vector Sink Alerting / Dropped Logs
+### 2. Vector Sink Alerting / Dropped Logs
 
 **Location**: `vector/vector.toml`
 **Added**: 2026-03-25
@@ -252,7 +271,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 2. Enterprise-Grade Global Frontend UI Polish
+### 1. Enterprise-Grade Global Frontend UI Polish
 
 **Location**: `apps/web/src/*`
 **Added**: 2026-02-24
@@ -275,7 +294,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### ~~3. Drizzle-Kit ESM Module Resolution~~ ✅ RESOLVED (2026-03-31)
+### ~~2. Drizzle-Kit ESM Module Resolution~~ ✅ RESOLVED (2026-03-31)
 
 **Location**: `packages/database/drizzle.config.ts`, `packages/database/package.json`
 **Added**: 2026-03-30
@@ -288,7 +307,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### 4. Centralized Mock Gateway / Mock Service Worker (MSW)
+### 3. Centralized Mock Gateway / Mock Service Worker (MSW)
 
 **Location**: `docker-compose.yml`, `apps/api`, `apps/worker`
 **Added**: 2026-03-31
@@ -311,7 +330,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 ---
 
-### Low Priority
+## Low Priority
 
 ### 1. Replace custom Logger with Pino
 

@@ -9,7 +9,7 @@ import {
   syncCursors,
 } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
-import { TokenManagerService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
 import { CursorManagerService, PieceRegistryService } from '@nexiom/engine';
 import type { StreamDescriptor, PollPage, PollRecord } from '@nexiom/engine';
 import { SyncRunner } from './sync-runner.js';

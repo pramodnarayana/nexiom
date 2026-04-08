@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
-import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
+import { EncryptionService, AppCredentialError } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/engine';
 import type { Piece } from '@nexiom/piece-framework';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';

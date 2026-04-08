@@ -1,6 +1,6 @@
 import type { TriggerStore } from '@nexiom/piece-framework';
 import { quickbooksCommon, resolveEnvironment, type QuickbooksEntityResponse } from '../lib/common.js';
-import { type ObjectHint } from '@nexiom/connectors/intelligence';
+import { type ObjectHint } from '@nexiom/piece-framework/discovery';
 import { QuickBooksQueryAdapter } from './quickbooks-query.adapter.js';
 
 export interface QuickBooksAuth {

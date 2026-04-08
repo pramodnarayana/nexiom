@@ -4,7 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrchestratorService } from './orchestrator.service.js';
 import { PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/engine';
 import { MetadataDiscoveryService } from '../../metadata/metadata-discovery.service.js';
 
