@@ -1,14 +1,13 @@
 import {
   Injectable,
   Inject,
-  Logger,
   BadRequestException,
 } from '@nestjs/common';
 import { google } from '@ai-sdk/google';
-import { streamText, dynamicTool, stepCountIs, type ModelMessage, convertToModelMessages, type UIMessage } from 'ai';
+import { streamText, dynamicTool, stepCountIs, convertToModelMessages, type UIMessage } from 'ai';
 import { z } from 'zod';
-import { eq, and, inArray } from 'drizzle-orm';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { eq, and } from 'drizzle-orm';
+import { PinoLogger } from 'nestjs-pino';
 import {
   DATABASE_CONNECTION,
   appConnections,

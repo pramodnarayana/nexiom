@@ -287,6 +287,9 @@ export const salesforce = createPiece({
         if (!objectMatch) {
             throw new Error(`Invalid objectType "${objectType}". Object not found in metadata dictionary.`);
         }
+        if (!objectMatch.queryable) {
+            throw new Error(`Object type "${objectType}" is not queryable. Cannot execute SOQL query against this object.`);
+        }
 
         // (2) Require non-empty filters to avoid broad SELECT queries
         if (!filter || Object.keys(filter).length === 0) {
