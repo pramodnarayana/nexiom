@@ -1,6 +1,6 @@
 /**
  * API client for the Connections / Integrations module.
- * Talks to apps/api /api/connection-manager/* endpoints.
+ * Talks to apps/api /api/connectors/* endpoints.
  */
 
 import { apiClient } from "@/shared/lib/api-client";
@@ -43,12 +43,12 @@ export interface ActiveConnectionResponse {
 }
 
 export async function listProviders(): Promise<ProviderResponse[]> {
-    const res = await apiClient.get<ProviderResponse[]>('/connection-manager/providers');
+    const res = await apiClient.get<ProviderResponse[]>('/connectors/providers');
     return res.data;
 }
 
 export async function listActiveConnections(): Promise<ActiveConnectionResponse[]> {
-    const res = await apiClient.get<{ data: ActiveConnectionResponse[] }>('/connection-manager/active');
+    const res = await apiClient.get<{ data: ActiveConnectionResponse[] }>('/connectors/active');
     return res.data.data;
 }
 
@@ -67,7 +67,7 @@ export async function getConnectionCredentials(connectionId: string): Promise<{
         clientId: string;
         hasClientSecret: boolean;
         vendorParams?: VendorParams;
-    }>(`/connection-manager/active/${connectionId}/credentials`);
+    }>(`/connectors/active/${connectionId}/credentials`);
     return res.data;
 }
 
@@ -76,7 +76,7 @@ export async function createOAuthSession(payload: {
     clientId: string;
     vendorParams?: VendorParams;
 }): Promise<{ sessionId: string }> {
-    const res = await apiClient.post<{ sessionId: string }>(`/connection-manager/${payload.providerName}/session`, {
+    const res = await apiClient.post<{ sessionId: string }>(`/connectors/${payload.providerName}/session`, {
         providerName: payload.providerName,
         clientId: payload.clientId,
         vendorParams: payload.vendorParams,
@@ -97,5 +97,5 @@ export async function exchangeOAuthCode(payload: {
     displayName: string;
     connectionId?: string;
 }): Promise<void> {
-    await apiClient.post('/connection-manager/oauth-exchange', payload);
+    await apiClient.post('/connectors/oauth-exchange', payload);
 }
