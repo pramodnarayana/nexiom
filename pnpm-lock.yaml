@@ -92,13 +92,13 @@ importers:
         version: link:../../packages/identity
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../engine/platform/piece-framework
+        version: link:../../packages/pieces/framework
       '@nexiom/piece-quickbooks':
         specifier: workspace:*
-        version: link:../../engine/application/pieces/quickbooks
+        version: link:../../packages/pieces/quickbooks
       '@nexiom/piece-salesforce':
         specifier: workspace:*
-        version: link:../../engine/application/pieces/salesforce
+        version: link:../../packages/pieces/salesforce
       '@nexiom/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -545,13 +545,13 @@ importers:
         version: link:../../packages/identity
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../engine/platform/piece-framework
+        version: link:../../packages/pieces/framework
       '@nexiom/piece-quickbooks':
         specifier: workspace:*
-        version: link:../../engine/application/pieces/quickbooks
+        version: link:../../packages/pieces/quickbooks
       '@nexiom/piece-salesforce':
         specifier: workspace:*
-        version: link:../../engine/application/pieces/salesforce
+        version: link:../../packages/pieces/salesforce
       '@nexiom/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -726,38 +726,6 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@25.5.0)(happy-dom@20.1.0)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)
 
-  engine/application/pieces/quickbooks:
-    dependencies:
-      '@nexiom/credentials':
-        specifier: workspace:*
-        version: link:../../../platform/credentials
-      '@nexiom/piece-framework':
-        specifier: workspace:*
-        version: link:../../../platform/piece-framework
-      dayjs:
-        specifier: ^1.11.19
-        version: 1.11.20
-    devDependencies:
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
-  engine/application/pieces/salesforce:
-    dependencies:
-      '@nexiom/credentials':
-        specifier: workspace:*
-        version: link:../../../platform/credentials
-      '@nexiom/piece-framework':
-        specifier: workspace:*
-        version: link:../../../platform/piece-framework
-      dayjs:
-        specifier: ^1.11.19
-        version: 1.11.20
-    devDependencies:
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
   engine/platform/core:
     dependencies:
       '@nexiom/credentials':
@@ -768,7 +736,7 @@ importers:
         version: link:../../../packages/database
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../piece-framework
+        version: link:../../../packages/pieces/framework
       ai:
         specifier: ^6.0.146
         version: 6.0.146(zod@4.3.5)
@@ -799,7 +767,7 @@ importers:
         version: link:../../../packages/database
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../piece-framework
+        version: link:../../../packages/pieces/framework
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
@@ -810,21 +778,6 @@ importers:
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@vitest/coverage-v8':
-        specifier: ^4.0.18
-        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
-  engine/platform/piece-framework:
-    devDependencies:
-      '@types/node':
-        specifier: ^25.5.0
-        version: 25.5.0
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
@@ -1107,6 +1060,69 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@22.19.3)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/mcp:
+    dependencies:
+      '@nestjs/common':
+        specifier: ^11.0.1
+        version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nexiom/piece-framework':
+        specifier: workspace:*
+        version: link:../pieces/framework
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/pieces/framework:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.0
+      '@vitest/coverage-v8':
+        specifier: ^4.0.18
+        version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/pieces/quickbooks:
+    dependencies:
+      '@nexiom/credentials':
+        specifier: workspace:*
+        version: link:../../../engine/platform/credentials
+      '@nexiom/piece-framework':
+        specifier: workspace:*
+        version: link:../framework
+      dayjs:
+        specifier: ^1.11.19
+        version: 1.11.20
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/pieces/salesforce:
+    dependencies:
+      '@nexiom/credentials':
+        specifier: workspace:*
+        version: link:../../../engine/platform/credentials
+      '@nexiom/piece-framework':
+        specifier: workspace:*
+        version: link:../framework
+      dayjs:
+        specifier: ^1.11.19
+        version: 1.11.20
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/queue:
     dependencies:

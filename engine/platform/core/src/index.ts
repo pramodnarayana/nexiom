@@ -11,6 +11,3 @@ export * from './storage-resolver/storage-resolver.service.js';
 
 export * from './evaluator.js';
 export * from './hydrator.js';
-
-export * from './mcp/mcp.module.js';
-export * from './mcp/builder/mcp-schema-builder.service.js';

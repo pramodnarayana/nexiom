@@ -86,7 +86,7 @@ describe('VerifyEmailPage', () => {
             );
         });
 
-        expect(screen.getByText(/verification email sent successfully/i)).toBeInTheDocument();
+        expect(await screen.findByText(/verification email sent successfully/i)).toBeInTheDocument();
     });
 
     it('shows cooldown timer after resend', async () => {
