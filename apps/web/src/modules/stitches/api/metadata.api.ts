@@ -9,7 +9,7 @@ export interface ObjectDescriptor {
 /**
  * Mirrors the FieldDescriptor returned by piece.describeFields and the
  * /stitches/metadata/:connectionId/objects/:objectName/fields endpoint.
- * Matches packages/connectors/src/framework/piece.ts FieldDescriptor exactly.
+ * Matches packages/connection-manager/src/framework/piece.ts FieldDescriptor exactly.
  */
 export interface FieldDescriptor {
   name: string;

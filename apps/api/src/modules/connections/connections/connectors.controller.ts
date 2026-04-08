@@ -25,7 +25,7 @@ import type { Response } from 'express';
 
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { getAdminRoleId, getOwnerRoleId } from '@nexiom/identity/constants';
-import { EncryptionService, AppCredentialError } from '@nexiom/connectors';
+import { EncryptionService, AppCredentialError } from '@nexiom/credentials';
 import type { AnyProperty } from '@nexiom/piece-framework';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';

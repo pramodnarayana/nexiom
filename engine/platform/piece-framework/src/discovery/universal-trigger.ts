@@ -1,6 +1,6 @@
 import { SmartCursorSelector } from './smart-cursor-selector.js';
 import { IgtLogger } from './igt-logger.js';
-import type { UniversalEngineConfig, ApiRateLimit } from './interfaces.js';
+import type { UniversalTriggerConfig, ApiRateLimit } from './interfaces.js';
 
 const log = new IgtLogger({ app: 'universal-engine' });
 
@@ -11,11 +11,11 @@ export class TimeoutError extends Error {
     }
 }
 
-export class UniversalTriggerEngine {
+export class UniversalTrigger {
     /**
      * Executes the generic, intelligent polling flow using the provided adapter configuration.
      */
-    static async execute<TAuth = unknown>(config: UniversalEngineConfig<TAuth>): Promise<unknown[]> {
+    static async execute<TAuth = unknown>(config: UniversalTriggerConfig<TAuth>): Promise<unknown[]> {
         const {
             objectName,
             hint,
@@ -141,7 +141,7 @@ export class UniversalTriggerEngine {
         return true;
     }
 
-    private static resolveConnectorLabel(config: UniversalEngineConfig<any>, fallbackObject: string): string {
+    private static resolveConnectorLabel(config: UniversalTriggerConfig<any>, fallbackObject: string): string {
         return config.checkApiLimits && !config.connectorName
             ? 'connector'
             : (config.connectorName ?? fallbackObject);
@@ -207,7 +207,7 @@ export class UniversalTriggerEngine {
     }
 
     private static async fetchRecords(
-        config: UniversalEngineConfig<any>,
+        config: UniversalTriggerConfig<any>,
         schema: any,
         totalSize: number,
         bulkThreshold: number,

@@ -10,9 +10,9 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppCredentialError } from '@nexiom/connectors';
+import { AppCredentialError } from '@nexiom/credentials';
 import { resolveOAuth2Url, PropertyType } from '@nexiom/piece-framework';
-import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,

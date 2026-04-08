@@ -18,7 +18,7 @@ import {
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
-import { TokenManagerService } from "@nexiom/connectors";
+import { TokenManagerService } from "@nexiom/credentials";
 import { RetryableException } from "@nexiom/piece-framework";
 import {
   sanitizeError,

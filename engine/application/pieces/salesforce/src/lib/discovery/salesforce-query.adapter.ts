@@ -2,7 +2,7 @@ import {
     type IQueryAdapter,
     type ObjectSchema,
     type QuerySpec
-} from '@nexiom/connectors/intelligence';
+} from '@nexiom/piece-framework/discovery';
 import { assertSafeSalesforceObject } from '../trigger/salesforce-polling.helper.js';
 
 export class SalesforceQueryAdapter implements IQueryAdapter {

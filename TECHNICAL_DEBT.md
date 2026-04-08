@@ -6,6 +6,25 @@ This document tracks known technical debt items that should be addressed in futu
 
 ## High Priority
 
+### 1. AI Orchestrator & MCP Architecture Refactoring
+
+**Location**: `engine/application/ai`, `engine/platform/ai` (or similar MCP directories), and `engine/application/pieces`
+**Added**: 2026-04-08
+**Impact**: Code Architecture, Domain-Driven Design, Platform Scalability
+**Effort**: High (1 sprint)
+
+**Current State**:
+- The AI Copilot, MCP (Model Context Protocol), and the Sync Engine are currently conflated under the `engine` directory.
+- This mixes two fundamentally opposed execution contexts: Sync Engine (async, batch, high-throughput ETL) and AI Orchestrator (sync, low-latency, real-time LLM streaming).
+- MCP logic is incorrectly positioned within `engine/platform/`, despite having no relevance to database replication or webhook syncing.
+- `pieces` (Integrations) are trapped under `engine/application/pieces`, making them appear bound strictly to the Sync Engine when they should be universally accessible.
+
+**Recommended Solution**:
+- **Extract Integrations**: Move `engine/application/pieces` into a shared top-level library (e.g., `packages/integrations` or `/integrations`). Both Sync and AI domains will import from this single source of truth.
+- **Promote AI Domain**: Extract AI components out of `engine` into a dedicated top-level `ai/` or `engines/ai/` directory. This ensures AI logic doesn't inherit unnecessary ETL pipeline dependencies.
+- **Relocate MCP**: Move the Model Context Protocol abstractions out of `engine/platform/` into the new dedicated AI domain architecture.
+
+
 ### 1. Hardened L3 & L4 Pipeline Outbox Refactoring
 
 **Location**: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`  

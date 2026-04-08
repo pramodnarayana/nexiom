@@ -6,7 +6,7 @@ import {
   PiecesModule,
   PieceRegistryService,
 } from '@nexiom/engine';
-import { TokenManagerService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { DbModule } from '../../db/db.module.js';

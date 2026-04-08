@@ -65,7 +65,7 @@ export interface IBulkAdapter<TAuth = unknown> {
 }
 
 /** Encapsulates the configuration for the Universal Trigger Engine execution. */
-export interface UniversalEngineConfig<TAuth = unknown> {
+export interface UniversalTriggerConfig<TAuth = unknown> {
     auth: TAuth;
     store: TriggerStore;
     /** The SaaS object name to poll (e.g., "Contact", "Invoice") */

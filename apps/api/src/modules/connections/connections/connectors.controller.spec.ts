@@ -2,7 +2,7 @@ import type { Piece } from '@nexiom/piece-framework';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
-import { EncryptionService } from '@nexiom/connectors';
+import { EncryptionService } from '@nexiom/credentials';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';

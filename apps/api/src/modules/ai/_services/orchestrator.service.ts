@@ -17,8 +17,8 @@ import {
   AppConnectionStatus,
 } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/connectors';
-import type { OAuthCredentialBlob } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
+import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/engine';
 import { MetadataDiscoveryService } from '../../metadata/metadata-discovery.service.js';
 import type { Piece } from '@nexiom/piece-framework';

@@ -3,7 +3,7 @@ import {
     type IDiscoveryAdapter,
     type ObjectSchema,
     IgtLogger,
-} from '@nexiom/connectors/intelligence';
+} from '@nexiom/piece-framework/discovery';
 import { SalesforceAuthError, sfFetch } from '../sf-fetch.js';
 import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';

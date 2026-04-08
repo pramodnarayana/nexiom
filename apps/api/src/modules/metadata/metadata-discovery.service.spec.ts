@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { TokenManagerService } from '@nexiom/connectors';
+import { TokenManagerService } from '@nexiom/credentials';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';

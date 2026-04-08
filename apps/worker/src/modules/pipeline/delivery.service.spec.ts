@@ -4,7 +4,7 @@ import { DeliveryService } from "./delivery.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
-import { TokenManagerService } from "@nexiom/connectors";
+import { TokenManagerService } from "@nexiom/credentials";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("DeliveryService", () => {

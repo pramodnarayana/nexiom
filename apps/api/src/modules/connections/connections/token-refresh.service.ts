@@ -3,7 +3,7 @@ import {
   OAuthRefreshClient,
   OAuthRefreshError,
   EncryptionService,
-} from '@nexiom/connectors';
+} from '@nexiom/credentials';
 import { PropertyType, resolveOAuth2Url } from '@nexiom/piece-framework';
 import {
   appConnections,

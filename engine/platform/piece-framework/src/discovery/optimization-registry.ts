@@ -1,9 +1,14 @@
 export type CursorStrategy = 'SystemModstamp' | 'LastModifiedDate' | 'CreatedDate' | (string & Record<never, never>);
 export type ExecutionPath = 'REST' | 'BULK_V2' | 'CDC';
 const VALID_EXECUTION_PATHS: ReadonlySet<string> = new Set<ExecutionPath>(['REST', 'BULK_V2', 'CDC']);
+export interface ConnectionHintResolver {
+    (appName: string, objectName: string, connectionId: string): Promise<ObjectHint | undefined>;
+}
 
-import { getDb, connectorObjectProfiles } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+let customResolver: ConnectionHintResolver | null = null;
+export function setOptimizationResolver(resolver: ConnectionHintResolver) {
+    customResolver = resolver;
+}
 
 export interface ObjectHint {
     /** Force a specific cursor field instead of auto-selecting. */
@@ -71,52 +76,14 @@ export class OptimizationService {
         // Always resolve the static hint first — it is the baseline.
         const staticHint = OPTIMIZATION_REGISTRY[appName]?.[objectName];
 
-        if (connectionId) {
+        if (connectionId && customResolver) {
             try {
-                const db = getDb();
-                const result = await db.select()
-                    .from(connectorObjectProfiles)
-                    .where(
-                        and(
-                            eq(connectorObjectProfiles.connectionId, connectionId),
-                            eq(connectorObjectProfiles.objectName, objectName)
-                        )
-                    )
-                    .limit(1);
-
-                if (result.length > 0) {
-                    // profile stores the full Metadata Discovery payload — do NOT cast
-                    // it wholesale to ObjectHint. Pick only the known optimization keys
-                    // so discovery data never silently overrides engine behaviour.
-                    const raw = result[0].profile as Record<string, unknown>;
-                    const dbHint: ObjectHint = {};
-
-                    if (Array.isArray(raw['cursorPrecedence'])) {
-                        dbHint.cursorPrecedence = raw['cursorPrecedence'] as CursorStrategy[];
-                    }
-                    if (typeof raw['bulkThreshold'] === 'number') {
-                        dbHint.bulkThreshold = raw['bulkThreshold'];
-                    }
-                    if (Array.isArray(raw['autoJoin'])) {
-                        dbHint.autoJoin = raw['autoJoin'] as string[];
-                    }
-                    if (typeof raw['preferPath'] === 'string' && VALID_EXECUTION_PATHS.has(raw['preferPath'])) {
-                        dbHint.preferPath = raw['preferPath'] as ExecutionPath;
-                    }
-                    if (Array.isArray(raw['requiredFields'])) {
-                        dbHint.requiredFields = raw['requiredFields'] as string[];
-                    }
-
-                    // DB-backed optimization keys take precedence over static registry
-                    // for matched keys; static registry fills in any gaps.
-                    if (Object.keys(dbHint).length > 0) {
-                        return { ...staticHint, ...dbHint };
-                    }
+                const dbHint = await customResolver(appName, objectName, connectionId);
+                if (dbHint && Object.keys(dbHint).length > 0) {
+                    return { ...staticHint, ...dbHint };
                 }
             } catch (e) {
-                // DB might not be connected or missing environment variables.
-                // Safe fallback to static registry.
-                console.debug('OptimizationService.getHint: DB lookup failed, falling back to static registry', {
+                console.debug('OptimizationService.getHint: custom resolver failed, falling back to static registry', {
                     appName,
                     objectName,
                     connectionId,

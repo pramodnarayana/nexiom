@@ -19,7 +19,7 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@nexiom/connectors": "workspace:*",
+    "@nexiom/credentials": "workspace:*",
     "@nexiom/database": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "ai": "^6.0.146",

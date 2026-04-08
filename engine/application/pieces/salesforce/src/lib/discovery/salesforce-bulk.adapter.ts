@@ -2,7 +2,7 @@ import type { TriggerStore } from '@nexiom/piece-framework';
 import {
     type IBulkAdapter,
     IgtLogger
-} from '@nexiom/connectors/intelligence';
+} from '@nexiom/piece-framework/discovery';
 import { sfFetch } from '../sf-fetch.js';
 import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';
