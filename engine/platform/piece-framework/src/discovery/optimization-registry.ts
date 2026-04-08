@@ -1,6 +1,5 @@
 export type CursorStrategy = 'SystemModstamp' | 'LastModifiedDate' | 'CreatedDate' | (string & Record<never, never>);
 export type ExecutionPath = 'REST' | 'BULK_V2' | 'CDC';
-const VALID_EXECUTION_PATHS: ReadonlySet<string> = new Set<ExecutionPath>(['REST', 'BULK_V2', 'CDC']);
 export interface ConnectionHintResolver {
     (appName: string, objectName: string, connectionId: string): Promise<ObjectHint | undefined>;
 }
@@ -81,9 +80,9 @@ export class OptimizationService {
 
         if (connectionId && customResolver) {
             try {
-                const dbHint = await customResolver(appName, objectName, connectionId);
-                if (dbHint && Object.keys(dbHint).length > 0) {
-                    return { ...staticHint, ...dbHint };
+                const resolverHint = await customResolver(appName, objectName, connectionId);
+                if (resolverHint && Object.keys(resolverHint).length > 0) {
+                    return { ...staticHint, ...resolverHint };
                 }
             } catch (e) {
                 console.debug('OptimizationService.getHint: custom resolver failed, falling back to static registry', {
