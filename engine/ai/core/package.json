@@ -1,0 +1,43 @@
+{
+  "name": "@nexiom/ai-engine",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.58",
+    "@nestjs/common": "^11.0.1",
+    "@nexiom/credentials": "workspace:*",
+    "@nexiom/database": "workspace:*",
+    "@nexiom/piece-framework": "workspace:*",
+    "@nexiom/piece-registry": "workspace:*",
+    "ai": "^6.0.146",
+    "nestjs-pino": "^4.3.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.1",
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.7.3",
+    "unplugin-swc": "^1.5.9",
+    "vitest": "^2.1.9"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.1"
+  }
+}

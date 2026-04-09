@@ -37,7 +37,7 @@ import {
   member,
 } from '@nexiom/database';
 import { eq, and, count, desc } from 'drizzle-orm';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { ConnectionValueBlob } from '../connectors.service.js';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { CreateOAuthSession } from '../validation/create-oauth-session.js';

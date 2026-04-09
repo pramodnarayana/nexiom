@@ -3,7 +3,7 @@ import { PollerService } from './poller.service.js';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { TriggerStrategy } from '@nexiom/piece-framework';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 
 function makeDb(rows: unknown[] = []) {
   return {

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { DbModule } from '../../db/db.module.js';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';

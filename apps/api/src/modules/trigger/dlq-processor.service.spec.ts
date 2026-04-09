@@ -3,7 +3,7 @@ import { DlqProcessorService } from './dlq-processor.service.js';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { TriggerStrategy } from '@nexiom/piece-framework';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 
 /**
  * Minimal Redis mock that supports the DLQ surface:

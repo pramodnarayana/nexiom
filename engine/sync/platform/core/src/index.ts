@@ -3,9 +3,7 @@ export {
   CursorManagerService,
   DEFAULT_CURSOR_CHECKPOINT_INTERVAL,
 } from './state/cursor-manager.service.js';
-export * from './pieces/pieces.module.js';
-export * from './pieces/piece-registry.service.js';
-export * from './pieces/piece-loader.service.js';
+
 export * from './storage-resolver/storage-resolver.module.js';
 export * from './storage-resolver/storage-resolver.service.js';
 

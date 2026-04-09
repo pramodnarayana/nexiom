@@ -26,7 +26,7 @@ import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import * as crypto from 'node:crypto';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 

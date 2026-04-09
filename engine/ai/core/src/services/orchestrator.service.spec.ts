@@ -5,8 +5,7 @@ import { OrchestratorService } from './orchestrator.service.js';
 import { PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/engine';
-import { MetadataDiscoveryService } from '../../metadata/metadata-discovery.service.js';
+import { PieceRegistryService, MetadataDiscoveryService } from '@nexiom/piece-registry';
 
 describe('OrchestratorService - Enterprise Hardened', () => {
   let service: OrchestratorService;
@@ -228,7 +227,7 @@ describe('OrchestratorService - Enterprise Hardened', () => {
     expect(result.data.status).toBe('PAID');
     expect(mockActionRun).toHaveBeenCalledWith({
       auth: { token: '123' },
-      propsValue: { id: 'inv-123', confirmed: true },
+      propsValue: { id: 'inv-123' },
     });
   });
 

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { WebhooksController } from './webhooks.controller.js';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { TriggerStrategy } from '@nexiom/piece-framework';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
 
 function makeDb(row: unknown = null) {

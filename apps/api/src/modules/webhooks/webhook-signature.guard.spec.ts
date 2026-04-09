@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { getLoggerToken } from 'nestjs-pino';
 import { WEBHOOK_RESOLVED_CONNECTION } from '../../guards/tenant-rate-limit.guard.js';

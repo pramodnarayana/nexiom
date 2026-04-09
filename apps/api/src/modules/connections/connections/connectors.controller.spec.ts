@@ -14,7 +14,7 @@ import {
   UnauthorizedException,
   HttpException,
 } from '@nestjs/common';
-import { PieceRegistryService, PIECES } from '@nexiom/engine';
+import { PieceRegistryService, PIECES } from '@nexiom/piece-registry';
 import {
   describe,
   it,

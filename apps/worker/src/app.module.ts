@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PipelineModule } from "./modules/pipeline/pipeline.module.js";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { PiecesModule } from "@nexiom/engine";
+import { PiecesModule } from "@nexiom/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
 
 @Module({

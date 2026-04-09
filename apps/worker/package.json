@@ -45,6 +45,7 @@
     "@nexiom/identity": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "@nexiom/piece-quickbooks": "workspace:*",
+    "@nexiom/piece-registry": "workspace:*",
     "@nexiom/piece-salesforce": "workspace:*",
     "@nexiom/queue": "workspace:*",
     "bcryptjs": "^3.0.3",

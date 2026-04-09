@@ -5,6 +5,7 @@ import {
   dynamicTool,
   stepCountIs,
   convertToModelMessages,
+  zodSchema,
   type UIMessage,
 } from 'ai';
 import { z } from 'zod';
@@ -19,16 +20,28 @@ import {
 import type { DrizzleDb } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/engine';
-import { MetadataDiscoveryService } from '../../metadata/metadata-discovery.service.js';
+import { PieceRegistryService, MetadataDiscoveryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
 import {
   AI_COPILOT_SYSTEM_PROMPT,
   AI_COPILOT_TOOL_INSTRUCTIONS,
-} from '../_constants/prompts.js';
+} from '../constants/prompts.js';
 
 /** Maximum parallel related object fetch calls to prevent overwhelming external APIs */
 const MAX_PARALLEL_RELATED_CALLS = 5;
+
+/**
+ * Wraps zodSchema() with an explicit `any` boundary.
+ * zodSchema<T> recursively resolves Zod's complex generic tree, causing TS2589
+ * ("type instantiation excessively deep") with Zod v3.25+ inside dynamicTool generics.
+ * This wrapper breaks the chain — dynamicTool validates the schema at runtime anyway.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toAISchema(schema: z.ZodTypeAny): any {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore TS2589 — Zod v3.25 generic depth overflows tsc; runtime is correct
+  return zodSchema(schema);
+}
 
 /** Casts OAuthCredentialBlob to the generic Record the Piece interface expects. */
 function toCredentialsRecord(
@@ -184,6 +197,19 @@ export class OrchestratorService {
 
     const toolName = `${conn.appName}_${conn.id}_getEntityWithRelations`;
 
+    const hydratorInputSchema = z.object({
+      objectType: z
+        .string()
+        .describe(
+          `The primary entity type (e.g. 'Load', 'Invoice', 'Account', 'Order')`,
+        ),
+      filters: z
+        .record(z.string(), z.string())
+        .describe(
+          `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
+        ),
+    });
+
     tools[toolName] = dynamicTool({
       description: [
         `Fetches a ${piece.displayName} entity AND ALL its related sub-entities`,
@@ -191,23 +217,14 @@ export class OrchestratorService {
         `in a SINGLE call. Uses connection ${conn.id}.`,
         `Use this for ANY "give me details of X" or "show me X with everything" query.`,
       ].join(' '),
-      inputSchema: z.object({
-        objectType: z
-          .string()
-          .describe(
-            `The primary entity type (e.g. 'Load', 'Invoice', 'Account', 'Order')`,
-          ),
-        filters: z
-          .record(z.string(), z.string())
-          .describe(
-            `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
-          ),
-      }),
-      execute: async (args: Record<string, unknown>) => {
-        const objectType = args.objectType as string;
-        const filters = args.filters as Record<string, string>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inputSchema: toAISchema(hydratorInputSchema),
+      execute: async (input: unknown) => {
+        const { objectType, filters } = input as z.infer<typeof hydratorInputSchema>;
+        const objectTypeName: string = objectType;
+        const filterMap: Record<string, string> = filters;
         this.logger.info(
-          { traceId, app: conn.appName, objectType, filters },
+          { traceId, app: conn.appName, objectType: objectTypeName, filters: filterMap },
           'Hydrating entity with all relations',
         );
 
@@ -225,10 +242,10 @@ export class OrchestratorService {
             'Step 1 complete: Metadata retrieved',
           );
 
-          const tName = objectType.toLowerCase();
-          let resolvedObjectName = objectType;
+          const tName = objectTypeName.toLowerCase();
+          let resolvedObjectName: string = objectTypeName;
           const match =
-            objects.find((o) => o.label === objectType) ||
+            objects.find((o) => o.label === objectTypeName) ||
             objects.find(
               (o) =>
                 o.name.toLowerCase() === tName ||
@@ -239,12 +256,12 @@ export class OrchestratorService {
             resolvedObjectName = match.name;
           } else {
             this.logger.warn(
-              { traceId, objectType },
+              { traceId, objectType: objectTypeName },
               'AI passed object type not found in Metadata Dictionary.',
             );
             return {
               connectionName: `connection-${conn.id}`,
-              error: `Object type "${objectType}" not found in metadata dictionary. Please use a valid object type from the available metadata.`,
+              error: `Object type "${objectTypeName}" not found in metadata dictionary. Please use a valid object type from the available metadata.`,
             };
           }
 
@@ -263,7 +280,7 @@ export class OrchestratorService {
             try {
               const results = await piece.executeFind(
                 resolvedObjectName,
-                filters,
+                filterMap,
                 creds,
               );
               if (Array.isArray(results) && results.length > 0) {
@@ -455,13 +472,17 @@ export class OrchestratorService {
         .optional()
         .describe('User confirmation required before executing this action');
 
+      const actionExecutorInputSchema = z.object(shape);
+
       tools[toolName] = dynamicTool({
         description: [
           action.description || `Execute: ${action.displayName}`,
           `(via connection ${conn.id})`,
         ].join(' '),
-        inputSchema: z.object(shape),
-        execute: async (args) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        inputSchema: toAISchema(actionExecutorInputSchema),
+        execute: async (input: unknown) => {
+          const args = input as z.infer<typeof actionExecutorInputSchema>;
           this.logger.info(
             { traceId, tool: toolName, connectionId: conn.id },
             'Executing action tool',
@@ -488,10 +509,13 @@ export class OrchestratorService {
             };
           }
 
+          // Remove orchestration-only 'confirmed' field before passing to action layer
+          const { confirmed: _confirmed, ...sanitizedArgs } = argsWithConfirm;
+
           try {
             const result = (await action.run({
               auth: creds,
-              propsValue: args as Record<string, unknown>,
+              propsValue: sanitizedArgs,
             })) as unknown;
             return {
               success: true,

@@ -63,7 +63,7 @@ nexiom/
     ├── queue/        SQS messaging
     ├── database/     Schema + migrations
     ├── cache/        Redis client
-    ├── infra-adapters/ KMS decryption, crypto
+    ├── infra/        KMS decryption, crypto
     ├── auth/         JWT, sessions
     ├── identity/     Tenant / org management
     ├── dbmanager/    Schema provisioner (ws_{id} plans)
@@ -438,7 +438,7 @@ graph LR
 
 | Concern | Code | Responsibility |
 | :--- | :--- | :--- |
-| **Platform** | `engine/platform/core/` + `packages/infra-adapters` + `packages/cache` | Manages AWS KMS decryption of tenant credentials, acquires the Redis Distributed Refresh Lock, hosts the Activepieces runtime environment that runs piece actions |
+| **Platform** | `engine/platform/core/` + `packages/infra` + `packages/cache` | Manages AWS KMS decryption of tenant credentials, acquires the Redis Distributed Refresh Lock, hosts the Activepieces runtime environment that runs piece actions |
 | **Application** | `engine/application/pieces/{vendor}/actions/{action}.ts` | The Activepieces `run()` function for the specific target action (e.g., `quickbooks.create_invoice`): constructs and fires the final HTTP request to the destination API |
 
 ---

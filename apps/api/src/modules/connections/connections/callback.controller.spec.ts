@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthCallbackController } from './callback.controller.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
 import type { Request, Response } from 'express';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
