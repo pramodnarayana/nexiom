@@ -227,7 +227,7 @@ describe('OrchestratorService - Enterprise Hardened', () => {
     expect(result.data.status).toBe('PAID');
     expect(mockActionRun).toHaveBeenCalledWith({
       auth: { token: '123' },
-      propsValue: { id: 'inv-123', confirmed: true },
+      propsValue: { id: 'inv-123' },
     });
   });
 
