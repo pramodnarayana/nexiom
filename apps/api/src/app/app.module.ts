@@ -34,7 +34,6 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
 import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
 import { AiModule } from '../modules/ai/ai.module.js';
-import { MetadataModule } from '@nexiom/piece-registry';
 
 @Module({
   imports: [
@@ -111,7 +110,6 @@ import { MetadataModule } from '@nexiom/piece-registry';
     PipelineModule,
     TraceModule,
     ExceptionsModule,
-    MetadataModule,
     AiModule,
   ],
   controllers: [AppController],

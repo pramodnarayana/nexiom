@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import {
   EncryptionService,
   TokenManagerService,
@@ -26,6 +26,7 @@ import { type DrizzleDb } from '@nexiom/database';
  * The CacheModule's RedisLifecycleService owns the connection lifecycle and will
  * close the socket on shutdown — closing it a second time would cause errors.
  */
+@Global()
 @Module({
   imports: [DbModule, PiecesModule],
   controllers: [OAuthCallbackController, ConnectorsController],
