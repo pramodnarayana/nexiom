@@ -5,13 +5,19 @@ import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
 import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
+import { streamFetcher } from '@/shared/lib/api-client';
+
+import { DefaultChatTransport } from 'ai';
+
 export function AiChat() {
-  // Safely inject stream interface overrides without breaking TS strict mode
-  const options: Record<string, unknown> = {
-    api: '/api/ai/chat',
-    streamProtocol: 'ui-message-stream'
-  };
-  const { messages, status, sendMessage } = useChat(options as Parameters<typeof useChat>[0]);
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+  const { messages, status, sendMessage } = useChat({
+    transport: new DefaultChatTransport({
+      api: `${apiBaseUrl}/ai/chat`,
+      fetch: streamFetcher as unknown as typeof fetch
+    })
+  });
+
   const [input, setInput] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,7 +35,13 @@ export function AiChat() {
     }
 
     try {
-      sendMessage({ text: input });
+      if (sendMessage) {
+        sendMessage({
+          id: Date.now().toString(),
+          role: 'user',
+          parts: [{ type: 'text', text: input }]
+        } as UIMessage);
+      }
     } catch (err) {
       console.error('Error while sending message:', err);
     }
@@ -45,6 +57,18 @@ export function AiChat() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Determine if the AI is actively fetching data or evaluating tools before yielding text content.
+  const isWaitingForResponse =
+    status === 'submitted' ||
+    (status === 'streaming' &&
+      (!messages.length ||
+        messages[messages.length - 1].role === 'user' ||
+        (messages[messages.length - 1].role === 'assistant' &&
+          (!messages[messages.length - 1].parts ||
+            !messages[messages.length - 1].parts?.some(
+              (p) => p.type === 'text' && p.text && p.text.length > 0
+            )))));
 
   return (
     <div className="flex flex-col h-full bg-background border border-border shadow-sm rounded-xl overflow-hidden relative">
@@ -162,16 +186,19 @@ export function AiChat() {
           );
         })}
 
-        {/* Synthetic Loading Indicator for simple text generation streams */}
-        {(status === 'submitted' || status === 'streaming') && Array.isArray(messages) && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+        {/* Synthetic Loading Indicator for simple text generation streams or silent tool executions */}
+        {isWaitingForResponse && (
           <div className="flex gap-4 justify-start animate-pulse">
             <Avatar className="w-8 h-8 shrink-0 mt-1">
               <AvatarFallback className="bg-primary/10 text-primary"><Bot size={16} /></AvatarFallback>
             </Avatar>
-            <div className="px-4 py-3 rounded-2xl text-sm bg-muted/40 border border-border text-foreground rounded-tl-sm flex items-center space-x-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" />
-              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce delay-75" />
-              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce delay-150" />
+            <div className="px-4 py-3 rounded-2xl text-sm bg-muted/40 border border-border text-foreground rounded-tl-sm flex items-center space-x-1 h-[44px]">
+              <div className="flex gap-1 items-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="ml-2 text-muted-foreground text-xs font-medium">Fetching live data...</span>
             </div>
           </div>
         )}
