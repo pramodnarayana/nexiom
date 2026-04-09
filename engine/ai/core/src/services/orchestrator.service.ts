@@ -5,6 +5,7 @@ import {
   dynamicTool,
   stepCountIs,
   convertToModelMessages,
+  zodSchema,
   type UIMessage,
 } from 'ai';
 import { z } from 'zod';
@@ -203,7 +204,7 @@ export class OrchestratorService {
         `in a SINGLE call. Uses connection ${conn.id}.`,
         `Use this for ANY "give me details of X" or "show me X with everything" query.`,
       ].join(' '),
-      inputSchema: hydratorInputSchema,
+      inputSchema: zodSchema(hydratorInputSchema),
       execute: async (args: z.infer<typeof hydratorInputSchema>) => {
         const objectType = args.objectType;
         const filters = args.filters;
@@ -463,7 +464,7 @@ export class OrchestratorService {
           action.description || `Execute: ${action.displayName}`,
           `(via connection ${conn.id})`,
         ].join(' '),
-        inputSchema: actionExecutorInputSchema,
+        inputSchema: zodSchema(actionExecutorInputSchema),
         execute: async (args: z.infer<typeof actionExecutorInputSchema>) => {
           this.logger.info(
             { traceId, tool: toolName, connectionId: conn.id },
@@ -491,10 +492,13 @@ export class OrchestratorService {
             };
           }
 
+          // Remove orchestration-only 'confirmed' field before passing to action layer
+          const { confirmed, ...sanitizedArgs } = argsWithConfirm;
+
           try {
             const result = (await action.run({
               auth: creds,
-              propsValue: args as Record<string, unknown>,
+              propsValue: sanitizedArgs,
             })) as unknown;
             return {
               success: true,
