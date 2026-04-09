@@ -183,6 +183,19 @@ export class OrchestratorService {
 
     const toolName = `${conn.appName}_${conn.id}_getEntityWithRelations`;
 
+    const hydratorInputSchema = z.object({
+      objectType: z
+        .string()
+        .describe(
+          `The primary entity type (e.g. 'Load', 'Invoice', 'Account', 'Order')`,
+        ),
+      filters: z
+        .record(z.string(), z.string())
+        .describe(
+          `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
+        ),
+    });
+
     tools[toolName] = dynamicTool({
       description: [
         `Fetches a ${piece.displayName} entity AND ALL its related sub-entities`,
@@ -190,21 +203,10 @@ export class OrchestratorService {
         `in a SINGLE call. Uses connection ${conn.id}.`,
         `Use this for ANY "give me details of X" or "show me X with everything" query.`,
       ].join(' '),
-      inputSchema: z.object({
-        objectType: z
-          .string()
-          .describe(
-            `The primary entity type (e.g. 'Load', 'Invoice', 'Account', 'Order')`,
-          ),
-        filters: z
-          .record(z.string(), z.string())
-          .describe(
-            `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
-          ),
-      }) as any,
-      execute: async (args: any) => {
-        const objectType = args.objectType as string;
-        const filters = args.filters as Record<string, string>;
+      inputSchema: hydratorInputSchema,
+      execute: async (args: z.infer<typeof hydratorInputSchema>) => {
+        const objectType = args.objectType;
+        const filters = args.filters;
         this.logger.info(
           { traceId, app: conn.appName, objectType, filters },
           'Hydrating entity with all relations',
@@ -454,13 +456,15 @@ export class OrchestratorService {
         .optional()
         .describe('User confirmation required before executing this action');
 
+      const actionExecutorInputSchema = z.object(shape);
+
       tools[toolName] = dynamicTool({
         description: [
           action.description || `Execute: ${action.displayName}`,
           `(via connection ${conn.id})`,
         ].join(' '),
-        inputSchema: z.object(shape) as any,
-        execute: async (args: any) => {
+        inputSchema: actionExecutorInputSchema,
+        execute: async (args: z.infer<typeof actionExecutorInputSchema>) => {
           this.logger.info(
             { traceId, tool: toolName, connectionId: conn.id },
             'Executing action tool',

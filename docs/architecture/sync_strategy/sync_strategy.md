@@ -63,7 +63,7 @@ nexiom/
     ├── queue/        SQS messaging
     ├── database/     Schema + migrations
     ├── cache/        Redis client
-    ├── infra-adapters/ KMS decryption, crypto
+    ├── infra/        KMS decryption, crypto
     ├── auth/         JWT, sessions
     ├── identity/     Tenant / org management
     ├── dbmanager/    Schema provisioner (ws_{id} plans)

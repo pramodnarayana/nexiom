@@ -735,7 +735,7 @@ Phase 6 (Environments) ← can run in parallel with Phase 1
 | --- | --- |
 | `docker-compose.yml` | Postgres, Redis, LocalStack (SQS+KMS), Prism, PgBouncer |
 | `packages/queue/` | SQS wrapper with `INFRA_MODE` switching |
-| `packages/infra/` | `LocalCryptoAdapter`, `AwsKmsAdapter`, SQS client factory |
+| `packages/infra/` | `LocalCryptoAdapter`, `AwsKmsAdapter` |
 | `packages/observability/` | Pino logger, OpenTelemetry tracer, `withSpan()` helper |
 | `packages/pieces/salesforce/openapi.json` | OpenAPI spec for Prism mocking |
 | `packages/pieces/quickbooks/openapi.json` | OpenAPI spec for Prism mocking |
