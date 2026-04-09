@@ -10,7 +10,8 @@ import {
 } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { TokenManagerService } from '@nexiom/credentials';
-import { CursorManagerService, PieceRegistryService } from '@nexiom/engine';
+import { CursorManagerService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { StreamDescriptor, PollPage, PollRecord } from '@nexiom/engine';
 import { SyncRunner } from './sync-runner.js';
 import { PollSyncRunner } from './poll-sync-runner.js';

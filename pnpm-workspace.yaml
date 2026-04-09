@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-  - 'engine/platform/*'
-  - 'engine/application/*'
+  - 'engine/sync/platform/*'
+  - 'engine/sync/application/*'
+  - 'engine/ai/*'
   - 'packages/pieces/*'

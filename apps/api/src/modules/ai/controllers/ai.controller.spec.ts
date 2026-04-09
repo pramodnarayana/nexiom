@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from '@nexiom/auth';
-import { AiRateLimitGuard } from '../_interceptors/ai-ratelimit.guard.js';
+import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiController } from './ai.controller.js';
-import { OrchestratorService } from '../_services/orchestrator.service.js';
+import { OrchestratorService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
 import { Response } from 'express';
 import { PassThrough } from 'stream';

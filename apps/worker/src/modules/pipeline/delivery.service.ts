@@ -17,7 +17,8 @@ import {
   globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
-import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
+import { StorageResolverService } from "@nexiom/engine";
+import { PieceRegistryService } from "@nexiom/piece-registry";
 import { TokenManagerService } from "@nexiom/credentials";
 import { RetryableException } from "@nexiom/piece-framework";
 import {

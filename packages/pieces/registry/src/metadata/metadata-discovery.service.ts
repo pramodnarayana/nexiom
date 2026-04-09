@@ -17,7 +17,7 @@ import {
 } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { TokenManagerService } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '../pieces/piece-registry.service.js';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type {
   ObjectDescriptor,

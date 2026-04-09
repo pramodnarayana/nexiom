@@ -14,7 +14,7 @@ import {
 } from '@nexiom/database';
 import { eq, and, desc } from 'drizzle-orm';
 import type { ConnectionValueBlob } from '../connectors.service.js';
-import { PieceRegistryService } from '@nexiom/engine';
+import { PieceRegistryService } from '@nexiom/piece-registry';
 
 @Injectable()
 export class DefaultOAuthRefreshClient implements OAuthRefreshClient {

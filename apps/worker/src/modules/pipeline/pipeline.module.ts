@@ -1,7 +1,8 @@
 import { Module } from "@nestjs/common";
 import { QueueModule } from "@nexiom/queue";
 import { DbModule } from "../../db/db.module.js";
-import { StorageResolverModule, PiecesModule } from "@nexiom/engine";
+import { StorageResolverModule } from "@nexiom/engine";
+import { PiecesModule } from "@nexiom/piece-registry";
 
 import { ReplicaService } from "./replica.service.js";
 import { NormalizationService } from "./normalization.service.js";

@@ -3,7 +3,8 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { DeliveryService } from "./delivery.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService, PieceRegistryService } from "@nexiom/engine";
+import { StorageResolverService } from "@nexiom/engine";
+import { PieceRegistryService } from "@nexiom/piece-registry";
 import { TokenManagerService } from "@nexiom/credentials";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

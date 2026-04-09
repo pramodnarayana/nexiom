@@ -111,10 +111,10 @@ All infrastructure clients switch behaviour via a single `INFRA_MODE=local|produ
 | Queue | SQS → LocalStack port `4566` | SQS → AWS |
 | API Mocks | Piece HTTP calls → Prism `localhost:4010` | Piece HTTP calls → vendor URLs |
 
-`packages/infra-adapters/` is a NestJS dynamic module — `EncryptionModule.forRootAsync()` registers the correct adapter as the `ENCRYPTION_SERVICE` provider. Consumers inject via token, never import a concrete adapter directly.
+`packages/infra/` is a NestJS dynamic module — `EncryptionModule.forRootAsync()` registers the correct adapter as the `ENCRYPTION_SERVICE` provider. Consumers inject via token, never import a concrete adapter directly.
 
 ```typescript
-// packages/infra-adapters/src/encryption.module.ts
+// packages/infra/src/encryption.module.ts
 @Global()
 @Module({})
 export class EncryptionModule {
@@ -735,7 +735,7 @@ Phase 6 (Environments) ← can run in parallel with Phase 1
 | --- | --- |
 | `docker-compose.yml` | Postgres, Redis, LocalStack (SQS+KMS), Prism, PgBouncer |
 | `packages/queue/` | SQS wrapper with `INFRA_MODE` switching |
-| `packages/infra-adapters/` | `LocalCryptoAdapter`, `AwsKmsAdapter`, SQS client factory |
+| `packages/infra/` | `LocalCryptoAdapter`, `AwsKmsAdapter`, SQS client factory |
 | `packages/observability/` | Pino logger, OpenTelemetry tracer, `withSpan()` helper |
 | `packages/pieces/salesforce/openapi.json` | OpenAPI spec for Prism mocking |
 | `packages/pieces/quickbooks/openapi.json` | OpenAPI spec for Prism mocking |

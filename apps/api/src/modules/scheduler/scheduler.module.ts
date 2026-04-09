@@ -1,11 +1,8 @@
 import { Module, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import {
-  CursorManagerService,
-  PiecesModule,
-  PieceRegistryService,
-} from '@nexiom/engine';
+import { CursorManagerService } from '@nexiom/engine';
+import { PiecesModule, PieceRegistryService } from '@nexiom/piece-registry';
 import { TokenManagerService } from '@nexiom/credentials';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { DATABASE_CONNECTION } from '@nexiom/database';

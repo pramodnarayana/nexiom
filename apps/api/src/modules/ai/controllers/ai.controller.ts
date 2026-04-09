@@ -11,10 +11,9 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nexiom/auth';
-import { AiRateLimitGuard } from '../_interceptors/ai-ratelimit.guard.js';
-import { AiTelemetryInterceptor } from '../_interceptors/ai-telemetry.interceptor.js';
-import { OrchestratorService } from '../_services/orchestrator.service.js';
-import { ChatRequest } from '../_types/chat-request.types.js';
+import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
+import { AiTelemetryInterceptor } from '../interceptors/ai-telemetry.interceptor.js';
+import { OrchestratorService, ChatRequest } from '@nexiom/ai-engine';
 import type { UIMessage } from 'ai';
 import { PinoLogger } from 'nestjs-pino';
 

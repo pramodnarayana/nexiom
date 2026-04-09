@@ -19,7 +19,8 @@ import * as schema from '../db/schema.js';
 import { ConnectionsModule } from '../modules/connections/connections.module.js';
 import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
-import { StorageResolverModule, PiecesModule } from '@nexiom/engine';
+import { StorageResolverModule } from '@nexiom/engine';
+import { PiecesModule } from '@nexiom/piece-registry';
 import { CacheModule } from '@nexiom/cache';
 import { QueueModule, createQueueModuleOptions } from '@nexiom/queue';
 import { DbManagerModule } from '../modules/dbmanager/dbmanager.module.js';
@@ -33,7 +34,7 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
 import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
 import { AiModule } from '../modules/ai/ai.module.js';
-import { MetadataModule } from '../modules/metadata/metadata.module.js';
+import { MetadataModule } from '@nexiom/piece-registry';
 
 @Module({
   imports: [

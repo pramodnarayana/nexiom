@@ -13,7 +13,7 @@ import { ConnectorsController } from './connections/connectors.controller.js';
 import { DefaultOAuthRefreshClient } from './connections/token-refresh.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
-import { PiecesModule } from '@nexiom/engine';
+import { PiecesModule } from '@nexiom/piece-registry';
 
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { type DrizzleDb } from '@nexiom/database';

@@ -32,7 +32,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - Files: `packages/queue/src/queue.constants.ts`, `packages/queue/src/queue.interfaces.ts`, `packages/queue/src/queue.service.ts`, `packages/queue/src/queue.module.ts`, `packages/queue/src/index.ts`, `packages/queue/package.json`
 - Depends: T001
 
-### T004 · module: `packages/infra-adapters/` — `EncryptionModule` NestJS dynamic module
+### T004 · module: `packages/infra/` — `EncryptionModule` NestJS dynamic module
 
 - [x] `encryption.constants.ts` — `ENCRYPTION_SERVICE` injection token
 - [x] `encryption.interface.ts` — `IEncryptionService` with `encrypt(plaintext: string): Promise<string>` and `decrypt(ciphertext: string): Promise<string>`
@@ -41,7 +41,7 @@ Each task is one commit (or one small PR). Checkboxes track completion.
 - [x] `encryption.module.ts` — `EncryptionModule.forRootAsync(options): DynamicModule`; factory provider selects adapter via `INFRA_MODE`; exports `ENCRYPTION_SERVICE` token
 - [x] Consumers inject via `@Inject(ENCRYPTION_SERVICE) private readonly encryption: IEncryptionService`
 - [x] Unit tests — verify encrypt/decrypt round-trip for both adapters; test module wiring with `overrideProvider`
-- Files: `packages/infra-adapters/src/encryption/**`, `packages/infra-adapters/src/index.ts`, `packages/infra-adapters/package.json`
+- Files: `packages/infra/src/encryption/**`, `packages/infra/src/index.ts`, `packages/infra/package.json`
 - Depends: T001
 
 ### T005 · script: `db:provision:local`

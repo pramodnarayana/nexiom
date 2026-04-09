@@ -19,13 +19,12 @@ import {
 import type { DrizzleDb } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/engine';
-import { MetadataDiscoveryService } from '../../metadata/metadata-discovery.service.js';
+import { PieceRegistryService, MetadataDiscoveryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
 import {
   AI_COPILOT_SYSTEM_PROMPT,
   AI_COPILOT_TOOL_INSTRUCTIONS,
-} from '../_constants/prompts.js';
+} from '../constants/prompts.js';
 
 /** Maximum parallel related object fetch calls to prevent overwhelming external APIs */
 const MAX_PARALLEL_RELATED_CALLS = 5;
@@ -202,8 +201,8 @@ export class OrchestratorService {
           .describe(
             `Properties to search by. E.g. {"Name": "211032"} or {"DocNumber": "123"}. Prefer intuitive visual identifiers.`,
           ),
-      }),
-      execute: async (args: Record<string, unknown>) => {
+      }) as any,
+      execute: async (args: any) => {
         const objectType = args.objectType as string;
         const filters = args.filters as Record<string, string>;
         this.logger.info(
@@ -460,8 +459,8 @@ export class OrchestratorService {
           action.description || `Execute: ${action.displayName}`,
           `(via connection ${conn.id})`,
         ].join(' '),
-        inputSchema: z.object(shape),
-        execute: async (args) => {
+        inputSchema: z.object(shape) as any,
+        execute: async (args: any) => {
           this.logger.info(
             { traceId, tool: toolName, connectionId: conn.id },
             'Executing action tool',
