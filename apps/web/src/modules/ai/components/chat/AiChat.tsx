@@ -10,9 +10,10 @@ import { streamFetcher } from '@/shared/lib/api-client';
 import { DefaultChatTransport } from 'ai';
 
 export function AiChat() {
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
   const { messages, status, sendMessage } = useChat({
     transport: new DefaultChatTransport({
-      api: `${import.meta.env.VITE_API_URL}/ai/chat`,
+      api: `${apiBaseUrl}/ai/chat`,
       fetch: streamFetcher as unknown as typeof fetch
     })
   });
