@@ -5,6 +5,21 @@ import { OrchestratorService, ChatPersistenceService } from "@nexiom/ai-engine";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import type { Redis } from "ioredis";
+import { z } from "zod";
+
+const JobPayloadSchema = z.object({
+  jobId: z.string(),
+  traceId: z.string(),
+  tenantId: z.string(),
+  conversationId: z.string(),
+  messages: z.array(
+    z.object({
+      role: z.string(),
+      content: z.string(),
+    })
+  ),
+  model: z.string().optional(),
+});
 
 @Injectable()
 export class CopilotWorker implements OnModuleInit {
@@ -28,14 +43,17 @@ export class CopilotWorker implements OnModuleInit {
 
   private async handleMessage(payload: unknown): Promise<void> {
     try {
-      const data = payload as {
-        jobId: string;
-        traceId: string;
-        tenantId: string;
-        conversationId: string;
-        messages: { role: string; content: string }[];
-        model?: string;
-      };
+      const validationResult = JobPayloadSchema.safeParse(payload);
+
+      if (!validationResult.success) {
+        this.logger.error(
+          { payload, validationError: validationResult.error },
+          'Invalid job payload received - rejecting message',
+        );
+        throw new Error(`Invalid job payload: ${validationResult.error.message}`);
+      }
+
+      const data = validationResult.data;
 
       this.logger.debug(
         `Processing AI Job ${data.jobId} for conversation ${data.conversationId}`,
@@ -101,7 +119,7 @@ export class CopilotWorker implements OnModuleInit {
         }
 
         // Publish termination marker for SSE Client
-        await this.redis.publish(`job:stream:${data.jobId}`, `0:"[DONE]"\n`);
+        await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
 
         this.logger.debug(
           `Stream fully consumed. Payload length: ${finalResponseBuilder.length}`,

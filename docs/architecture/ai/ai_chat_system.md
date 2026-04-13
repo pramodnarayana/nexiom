@@ -111,7 +111,7 @@ Server-sent events endpoint that streams AI response chunks as they are generate
 
 1. Client sends message via `POST /api/v1/ai/chat`
 2. API creates job in SQS queue and returns jobId
-3. Client subscribes to `GET /ai/jobs/{jobId}/stream` for real-time updates
+3. Client subscribes to `GET /api/v1/ai/jobs/{jobId}/stream` for real-time updates
 4. Worker consumes job from queue, processes with AI, publishes chunks to Redis
 5. SSE endpoint forwards Redis pub/sub messages to client
 6. Worker persists conversation/messages to PostgreSQL via ChatPersistenceService

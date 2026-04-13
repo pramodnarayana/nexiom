@@ -8,7 +8,6 @@ import {
 import { eq } from 'drizzle-orm';
 import { DATABASE_CONNECTION, canonicalMappings } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { PinoLogger } from 'nestjs-pino';
 import type { CreateMapping, UpdateMapping } from './mappings.validation.js';
 
@@ -17,7 +16,6 @@ export class MappingsService {
   constructor(
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
     this.logger.setContext(MappingsService.name);
   }
@@ -56,14 +54,6 @@ export class MappingsService {
         })
         .returning();
 
-      await this.invalidateCache(
-        payload.appName,
-        payload.category,
-        payload.entity,
-        payload.viewMode,
-        payload.version ?? 'v1',
-        payload.tenantId || null,
-      );
       return records[0];
     } catch (error: unknown) {
       this.logger.error(
@@ -96,15 +86,6 @@ export class MappingsService {
         throw new NotFoundException(`Mapping with ID ${id} not found`);
       }
 
-      await this.invalidateCache(
-        records[0].appName,
-        records[0].category,
-        records[0].entity,
-        records[0].viewMode,
-        records[0].version,
-        records[0].tenantId || null,
-      );
-
       return records[0];
     } catch (error: unknown) {
       // Preserve HttpException subclasses (like NotFoundException)
@@ -126,30 +107,6 @@ export class MappingsService {
 
     await this.db.delete(canonicalMappings).where(eq(canonicalMappings.id, id));
 
-    await this.invalidateCache(
-      existing.appName,
-      existing.category,
-      existing.entity,
-      existing.viewMode,
-      existing.version,
-      existing.tenantId,
-    );
-
     return { success: true };
-  }
-
-  private async invalidateCache(
-    appName: string,
-    category: string,
-    entity: string,
-    viewMode: string,
-    version: string,
-    tenantId: string | null,
-  ) {
-    // Invalidate the cache key used by the Orchestrator MappingService
-    const tenantKey = tenantId ? `tenant:${tenantId}:` : `global:`;
-    const cacheKey = `ai:canonical_mappings:${tenantKey}${appName}:${category}:${entity}:${viewMode}:${version}`;
-    await this.redis.del(cacheKey);
-    this.logger.debug({ cacheKey }, 'Invalidated mapping redis cache key');
   }
 }

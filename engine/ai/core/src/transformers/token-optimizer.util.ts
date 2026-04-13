@@ -35,6 +35,9 @@ export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unk
       .map((v) => optimizePayloadTokens(v, seen))
       .filter((v) => v !== undefined);
 
+    // Remove from seen to prevent aliasing issues
+    seen.delete(obj);
+
     if (cleanedArray.length === 0) return undefined;
     return cleanedArray;
   }
@@ -43,12 +46,13 @@ export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unk
   let fieldCount = 0;
   for (const key of Object.keys(obj as Record<string, unknown>)) {
     // Drop enterprise system noise fields aggressively (Layer 1 Algorithmic Cleaver)
+    const lowerKey = key.toLowerCase();
     if (
       key === 'attributes' ||
-      (key.toLowerCase().endsWith('id') && key.toLowerCase() !== 'id' && key.toLowerCase() !== 'internalid') ||
-      key.toLowerCase().endsWith('modstamp') ||
-      key.toLowerCase() === 'currencyisocode' ||
-      key.toLowerCase() === 'url' ||
+      ((key.endsWith('Id') || key.endsWith('ID') || lowerKey.endsWith('_id')) && lowerKey !== 'id' && lowerKey !== 'internalid') ||
+      lowerKey.endsWith('modstamp') ||
+      lowerKey === 'currencyisocode' ||
+      lowerKey === 'url' ||
       key.startsWith('_')
     ) {
       continue;
@@ -79,6 +83,9 @@ export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unk
       fieldCount++;
     }
   }
+
+  // Remove from seen to prevent aliasing issues
+  seen.delete(obj);
 
   return Object.keys(pruned).length > 0 ? pruned : undefined;
 }

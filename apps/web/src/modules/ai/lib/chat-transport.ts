@@ -1,16 +1,18 @@
 import { streamFetcher } from '@/shared/lib/api-client';
+import type { NavigateFunction } from 'react-router-dom';
 
 /**
  * Creates a custom Vercel AI SDK Fetch implementation designed to deeply integrate
  * with the new Nexiom architecture (Queueing POSTs + Polling SSE Streams).
- * 
+ *
  * Vercel `useChat({ fetch: customJobStreamFetcher })` will inject its URL and standard payload into this function.
  * We intercept it to make the internal POST call and wire up the subsequent SSE Reader seamlessly.
  */
-export async function customJobStreamFetcher(
-  url: RequestInfo | URL,
-  init?: RequestInit
-): Promise<Response> {
+export function createCustomJobStreamFetcher(navigate?: NavigateFunction) {
+  return async function customJobStreamFetcher(
+    url: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> {
   const apiUrl = typeof url === 'string' ? url : url.toString();
   
   // 1. Submit the message safely to the background worker API Queue
@@ -36,14 +38,19 @@ export async function customJobStreamFetcher(
   // Update browser URL silently without reloading if conversationId was returned.
   // This satisfies the deep-linking enterprise requirement without breaking UI state.
   if (conversationId && window.location.pathname === '/dashboard/ai') {
-    window.history.replaceState(null, '', `/dashboard/ai/chat/${conversationId}`);
+    if (navigate) {
+      navigate(`/dashboard/ai/chat/${conversationId}`, { replace: true });
+    } else {
+      window.history.replaceState(null, '', `/dashboard/ai/chat/${conversationId}`);
+    }
   }
 
   // 2. We now spawn an actual readable Fetch stream targeted at our SSE endpoint.
   // Vercel handles the event-stream natively.
   // We use streamFetcher to maintain Auth Headers!
-  const sseUrl = `${import.meta.env.VITE_API_URL}/ai/jobs/${jobId}/stream`;
-  
+  const apiBase = import.meta.env.VITE_API_URL || '/api';
+  const sseUrl = `${apiBase}/ai/jobs/${jobId}/stream`;
+
   const sseResponse = await streamFetcher(sseUrl, {
     method: 'GET',
     headers: {
@@ -58,4 +65,11 @@ export async function customJobStreamFetcher(
 
   // Provide the native raw ReadableStream back up to standard `useChat`
   return sseResponse;
+  };
 }
+
+/**
+ * Default export for backwards compatibility.
+ * For proper React Router integration, use createCustomJobStreamFetcher with navigate.
+ */
+export const customJobStreamFetcher = createCustomJobStreamFetcher();

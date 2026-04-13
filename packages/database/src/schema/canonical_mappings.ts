@@ -1,4 +1,5 @@
 import { pgTable, uuid, varchar, jsonb, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Storage for canonical JSON property mappings.
@@ -33,11 +34,16 @@ export const canonicalMappings = pgTable('canonical_mappings', {
 }, (table) => {
     return {
         /**
-         * Enforce tenant-aware uniqueness by including tenantId in the unique index.
-         * This allows both global (tenantId NULL) and tenant-specific mappings to coexist.
-         * The combination ensures uniqueness per tenant or per global scope.
+         * Enforce tenant-aware uniqueness with partial indexes.
+         * PostgreSQL treats NULLs as not equal, so we need two separate indexes:
+         * - One for tenant-scoped rows (WHERE tenantId IS NOT NULL)
+         * - One for global rows (WHERE tenantId IS NULL)
          */
-        uniqueMappingIdx: uniqueIndex('canonical_mapping_unique_idx')
+        tenantMappingIdx: uniqueIndex('canonical_mapping_tenant_idx')
             .on(table.tenantId, table.appName, table.category, table.entity, table.viewMode, table.version)
+            .where(sql`${table.tenantId} IS NOT NULL`),
+        globalMappingIdx: uniqueIndex('canonical_mapping_global_idx')
+            .on(table.appName, table.category, table.entity, table.viewMode, table.version)
+            .where(sql`${table.tenantId} IS NULL`)
     };
 });

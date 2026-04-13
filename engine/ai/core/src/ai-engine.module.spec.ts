@@ -8,9 +8,13 @@ describe('AiEngineModule', () => {
       imports: [AiEngineModule],
     }).compile();
 
-    expect(moduleRef).toBeDefined();
+    try {
+      expect(moduleRef).toBeDefined();
 
-    // Verify the module compiled successfully with its imports
-    expect(AiEngineModule).toBeDefined();
+      // Verify the module compiled successfully with its imports
+      expect(AiEngineModule).toBeDefined();
+    } finally {
+      await moduleRef.close();
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { IsArray, ArrayMaxSize, IsString, IsOptional, IsNotEmpty, ValidateNested, IsUUID } from 'class-validator';
+import { IsArray, ArrayMaxSize, ArrayMinSize, IsString, IsOptional, IsNotEmpty, ValidateNested, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ChatMessageDto {
@@ -13,6 +13,9 @@ export class ChatMessageDto {
 
 export class ChatRequest {
   @IsArray()
+  @ArrayMinSize(1, {
+    message: 'At least one message is required.',
+  })
   @ArrayMaxSize(50, {
     message: 'Conversation size exceeded maximum allowed limit (50).',
   })

@@ -26,15 +26,21 @@ export class ChatPersistenceService {
             eq(aiConversations.tenantId, tenantId)
           )
         );
-        
-      if (existing.length > 0) return existing[0];
+
+      if (existing.length === 0) {
+        throw new Error(
+          `Conversation not found for id: ${conversationId} and tenant: ${tenantId}`
+        );
+      }
+
+      return existing[0];
     }
 
     const inserted = await this.db.insert(aiConversations).values({
       tenantId: tenantId,
       title: initialTitle || 'New Query',
     }).returning();
-    
+
     return inserted[0];
   }
 

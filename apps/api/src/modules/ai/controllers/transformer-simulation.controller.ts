@@ -11,7 +11,7 @@ import type { Request } from 'express';
 import { AuthGuard } from '@nexiom/auth';
 import { TransformerSimulationService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
-import { IsString, IsNotEmpty, IsIn, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsIn, IsOptional, IsObject, ValidateIf } from 'class-validator';
 
 // Using a basic class validator for nestjs pipeline
 class TransformerSimulationDto {
@@ -22,8 +22,9 @@ class TransformerSimulationDto {
   @IsIn(['hydrator', 'action'])
   toolType!: 'hydrator' | 'action';
 
-  @IsOptional()
+  @ValidateIf((o) => o.toolType === 'action')
   @IsString()
+  @IsNotEmpty({ message: 'actionName is required when toolType is "action"' })
   actionName?: string;
 
   @IsObject()
