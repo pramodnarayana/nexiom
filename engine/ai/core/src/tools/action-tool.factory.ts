@@ -82,9 +82,8 @@ export class ActionToolFactory {
               propsValue: sanitizedArgs,
             })) as unknown;
 
-            const result = optimizePayloadTokens(resultRaw) || resultRaw;
-
             // PER USER REQUEST: Withholding Action finalPayload
+            // Skip optimization since we're not using the result
             return { stopped_for_token_safety: true };
           } catch (e: unknown) {
             this.logger.error(`[${traceId}] Action tool execution failed`, (e as Error).stack);

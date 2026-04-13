@@ -104,6 +104,20 @@ Define how raw app fields map to canonical fields.
 }
 ```
 
+### Security Requirements
+
+**CRITICAL:** Computed field expressions MUST be evaluated using a restricted parser or DSL, NEVER via `eval()` or dynamic code execution.
+
+Implementation requirements:
+- Use a safe expression evaluator or sandboxed interpreter
+- Enforce an allowlist of permitted operators and functions (e.g., +, -, *, /, basic math functions only)
+- Disallow arbitrary code execution, function calls, or property access beyond the defined field names
+- Implement resource limits: expression evaluation timeouts, recursion depth limits, and complexity caps
+- Validate all field references in the expression against the available field set
+- Log all compute expression evaluations for audit purposes
+
+Example safe operators allowlist: `+`, `-`, `*`, `/`, `%`, `Math.abs`, `Math.min`, `Math.max`, `Math.round`
+
 ---
 
 # 3. Transformer Engine Requirements
@@ -241,9 +255,37 @@ Used by Nexiom team to:
 
 ## 5.3 NOT exposed to SMB users
 
-This UI is:
-- Internal
-- Possibly for power users later
+This UI is strictly **internal to Nexiom engineering and operations teams**.
+
+### Access Control & Governance
+
+**Current Status:** Internal tool only, not accessible to customers or SMB users.
+
+**Future Exposure Criteria:** If this UI is to be exposed to power users in the future, the following requirements must be met:
+
+1. **Target User Groups:**
+   - Enterprise customers with dedicated integration teams only
+   - Minimum contract tier and support level requirements
+   - Users must complete training and certification program
+
+2. **Required Roles & Permissions:**
+   - System Administrator role required
+   - Additional "Mapping Administrator" permission flag
+   - Multi-factor authentication (MFA) mandatory for access
+   - Session timeout limits and audit logging
+
+3. **RBAC Boundaries:**
+   - Users can only modify mappings scoped to their tenant
+   - Cannot access or view global/system mappings
+   - Cannot modify mappings for apps not connected to their tenant
+
+4. **Approval Workflow:**
+   - All mapping changes require peer review
+   - Automated validation against schema contracts
+   - Rollback capability for all changes
+   - Change notification to Nexiom operations team
+
+Until these criteria are implemented and validated, the UI remains permanently internal.
 
 ---
 
@@ -271,6 +313,61 @@ Examples:
 Use LLM once:
 - Suggest mappings
 - Store results
+
+### PII & Data Governance Controls
+
+**REQUIRED:** All AI-assisted mapping generation MUST implement the following data protection measures:
+
+#### 1. Data Minimization & Redaction
+- **Redact PII/sensitive data** from metadata before sending to LLM
+- Use pseudonymization for field names containing identifiable information
+- Send **schema-only inputs** (field names, types, relationships) without actual data values
+- Remove any sample data values before constructing prompts
+- Strip connection credentials, API keys, and tenant-specific identifiers
+
+Example redacted prompt input:
+```json
+{
+  "sourceFields": ["field_1", "field_2", "field_3"],
+  "targetSchema": ["canonicalField1", "canonicalField2"],
+  "fieldTypes": {"field_1": "string", "field_2": "number"}
+}
+```
+
+#### 2. Retention Limits & TTL
+- Store prompts and LLM responses for **maximum 90 days**
+- Implement automated deletion policy for prompt/response artifacts
+- Provide manual purge capability for immediate deletion on request
+- Log deletion events for compliance audit trail
+
+#### 3. Auditability & Provenance
+Store the following metadata for every AI-generated mapping:
+- Timestamp of generation
+- User ID who initiated the request
+- Prompt hash (SHA-256) for reproducibility verification
+- Model ID and version (e.g., "gpt-4-2024-01", "gemini-1.5-pro")
+- Mapping change records (before/after diff)
+- Approval status and reviewer ID
+
+Example audit log entry:
+```json
+{
+  "event": "ai_mapping_generated",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "userId": "user_abc123",
+  "promptHash": "sha256:a1b2c3...",
+  "modelId": "gpt-4-2024-01",
+  "mappingId": "mapping_xyz789",
+  "changes": {...},
+  "status": "pending_review"
+}
+```
+
+#### 4. Access Controls & Consent
+- Require explicit user consent before sending metadata to external LLM
+- Implement approval step for AI-generated mappings before production use
+- Log all AI mapping requests for security monitoring
+- Provide transparency report showing what data was sent to LLM
 
 ---
 
@@ -345,4 +442,3 @@ This system enables:
 
 Result:
 A powerful internal data abstraction layer that powers Nexiom's AI platform.
-

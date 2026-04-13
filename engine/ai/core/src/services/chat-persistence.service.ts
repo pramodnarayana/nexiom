@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { DATABASE_CONNECTION, aiConversations, aiMessages } from '@nexiom/database';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import type { DrizzleDb } from '@nexiom/database';
 
 @Injectable()
@@ -85,7 +85,7 @@ export class ChatPersistenceService {
   async listConversations(tenantId: string) {
     return this.db.select().from(aiConversations)
       .where(eq(aiConversations.tenantId, tenantId))
-      .orderBy(aiConversations.createdAt);
+      .orderBy(desc(aiConversations.createdAt));
   }
 
   /**

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, index, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, index, primaryKey, foreignKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { organization } from './identity.js';
 
@@ -35,6 +35,12 @@ export const aiMessages = pgTable('ai_messages', {
     return {
         // Enforce composite primary key for true multi-tenant partitioning
         pk: primaryKey({ columns: [table.tenantId, table.id] }),
+        // Composite foreign key to ensure messages reference valid conversations within same tenant
+        conversationFk: foreignKey({
+            columns: [table.tenantId, table.conversationId],
+            foreignColumns: [aiConversations.tenantId, aiConversations.id],
+            name: 'ai_messages_conversation_fk'
+        }).onDelete('cascade'),
         convIdx: index('ai_msg_conv_idx').on(table.conversationId),
         tenantIdx: index('ai_msg_tenant_idx').on(table.tenantId),
         timelineIdx: index('ai_msg_timeline_idx').on(table.conversationId, table.createdAt)

@@ -16,8 +16,9 @@ export async function customJobStreamFetcher(
   // 1. Submit the message safely to the background worker API Queue
   const queueResponse = await streamFetcher(apiUrl, {
     method: 'POST',
-    headers: { ...init?.headers },
+    headers: init?.headers,
     body: init?.body,
+    signal: init?.signal,
   });
 
   if (!queueResponse.ok) {
@@ -48,6 +49,7 @@ export async function customJobStreamFetcher(
     headers: {
       'Accept': 'text/event-stream',
     },
+    signal: init?.signal,
   });
 
   if (!sseResponse.ok) {

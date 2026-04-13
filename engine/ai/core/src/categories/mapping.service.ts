@@ -67,8 +67,20 @@ export class MappingService {
     }
 
     // --- TEMPORARY MOCK MAPPING FOR PHASE 1 TESTING ---
-    if (appName.includes('salesforce') && entity === 'rtms__Load__c') {
-      this.logger.debug({ appName, entity }, 'Injecting Temporary Mock TMS Mapping for Phase 1 testing');
+    // Only enabled in non-production environments and requires exact context match
+    const isNonProdMockEnabled = process.env.NODE_ENV !== 'production';
+
+    if (
+      isNonProdMockEnabled &&
+      appName === 'salesforce' &&
+      entity === 'rtms__Load__c' &&
+      category === 'TMS' &&
+      viewMode === 'summary'
+    ) {
+      this.logger.debug(
+        { appName, entity, category, viewMode, tenantId, version, mockEnabled: isNonProdMockEnabled },
+        'Injecting Temporary Mock TMS Mapping for Phase 1 testing'
+      );
       return {
         loadId: "rtms__Load__c.Id",
         number: "rtms__Load__c.Name",
@@ -91,7 +103,7 @@ export class MappingService {
     }
     // ----------------------------------------------------
 
-    this.logger.warn({ appName, category, entity, viewMode }, 'No canonical mapping configuration found.');
+    this.logger.warn({ appName, category, entity, viewMode, tenantId, version }, 'No canonical mapping configuration found.');
     return null;
   }
 }

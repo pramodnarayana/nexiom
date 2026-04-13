@@ -26,6 +26,10 @@ export class AiStreamController {
   @UseGuards(AuthGuard)
   streamJob(@Param('jobId') jobId: string): Observable<{ data: string }> {
     return new Observable((subscriberFn) => {
+      // Note: Job ownership validation should be added here in the future
+      // by fetching job metadata and comparing tenant/owner to the authenticated user
+      // before subscribing to the Redis channel.
+
       // ioredis mutating subscriber client - must be duplicated for thread safety
       const subscriber = this.redisClient.duplicate();
       const channel = `job:stream:${jobId}`;
@@ -47,7 +51,8 @@ export class AiStreamController {
           subscriberFn.next({ data: message });
 
           // Terminate gracefully when Vercel stream signals completion
-          if (message.includes('[DONE]')) {
+          // Use exact match to prevent false positives
+          if (message.trim() === '[DONE]') {
             this.logger.debug(`Job ${jobId} finished. Closing SSE stream.`);
             subscriber.unsubscribe(channel).catch(() => {});
             subscriber.quit().catch(() => {});

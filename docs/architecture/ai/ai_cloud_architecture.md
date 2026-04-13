@@ -30,7 +30,7 @@ Reduce repeated API calls, minimize latency, and lower token usage.
 
 ## Distributed Cache Design (AWS)
 
-Use **entity["software","Amazon ElastiCache","AWS managed Redis service"] (Redis)**
+Use **Amazon ElastiCache (AWS managed Redis service)**
 
 - Multi-AZ replication
 - Cluster mode enabled
@@ -90,9 +90,9 @@ Handle heavy workloads asynchronously.
 
 ## Recommended Technologies
 
-- **entity["software","Amazon SQS","AWS message queue service"]** (queue)
-- **entity["software","Amazon SNS","AWS pub-sub messaging"]** (fanout)
-- **entity["software","AWS Lambda","serverless compute"]** or workers
+- **Amazon SQS (AWS message queue service)** (queue)
+- **Amazon SNS (AWS pub/sub messaging)** (fanout)
+- **AWS Lambda (serverless compute)** or workers
 
 ---
 
@@ -168,13 +168,13 @@ transform(category, app, raw, version)
 
 ## Core Components
 
-- **entity["software","Amazon API Gateway","AWS API management"]** — entry point
-- **entity["software","AWS Lambda","serverless compute"]** — lightweight requests
-- **entity["software","Amazon ECS","container orchestration"]** — heavy workers
-- **entity["software","Amazon SQS","AWS message queue service"]** — async queue
-- **entity["software","Amazon ElastiCache","Redis service"]** — caching
-- **entity["software","Amazon DynamoDB","NoSQL database"]** — fast storage
-- **entity["software","Amazon S3","object storage"]** — large payload storage
+- **Amazon API Gateway (AWS API management)** — entry point
+- **AWS Lambda (serverless compute)** — lightweight requests
+- **Amazon ECS (container orchestration)** — heavy workers
+- **Amazon SQS (AWS message queue service)** — async queue
+- **Amazon ElastiCache (Redis service)** — caching
+- **Amazon DynamoDB (NoSQL database)** — fast storage
+- **Amazon S3 (object storage)** — large payload storage
 
 ---
 
@@ -241,4 +241,3 @@ This layer ensures:
 
 Result:
 A production-grade system capable of handling millions of AI-driven requests efficiently.
-

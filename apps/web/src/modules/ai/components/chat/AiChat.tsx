@@ -5,17 +5,15 @@ import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
 import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
-import { useParams } from 'react-router-dom';
 import { DefaultChatTransport } from 'ai';
-import { useConversationMessages } from '../../api/queries';
 import { customJobStreamFetcher } from '../../lib/chat-transport';
 
 export function AiChat() {
   const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
-  const { messages, status, sendMessage } = useChat({
+  const { messages, status, sendMessage, error } = useChat({
     transport: new DefaultChatTransport({
       api: `${apiBaseUrl}/ai/chat`,
-      fetch: streamFetcher as unknown as typeof fetch
+      fetch: customJobStreamFetcher as unknown as typeof fetch
     })
   });
 

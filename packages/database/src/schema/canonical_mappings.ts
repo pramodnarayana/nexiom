@@ -32,11 +32,12 @@ export const canonicalMappings = pgTable('canonical_mappings', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => {
     return {
-        /** Enforce unique constraints so there's only one master mapping per identity/version */
+        /**
+         * Enforce tenant-aware uniqueness by including tenantId in the unique index.
+         * This allows both global (tenantId NULL) and tenant-specific mappings to coexist.
+         * The combination ensures uniqueness per tenant or per global scope.
+         */
         uniqueMappingIdx: uniqueIndex('canonical_mapping_unique_idx')
-            .on(table.appName, table.category, table.entity, table.viewMode, table.version)
-            // Use IS NOT DISTINCT FROM or standard WHERE clauses for nullable combinations if needed
-            // For now, index globally but practically tenant overrides might need separate handling
-            // We'll trust application logic to resolve tenant-first vs global fallback.
+            .on(table.tenantId, table.appName, table.category, table.entity, table.viewMode, table.version)
     };
 });

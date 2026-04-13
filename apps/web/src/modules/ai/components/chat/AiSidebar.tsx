@@ -21,20 +21,23 @@ export function AiSidebar() {
       <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
         {isLoading ? (
           <div className="px-4 py-2 text-xs text-muted-foreground">Loading history...</div>
-        ) : conversations?.length === 0 ? (
+        ) : !conversations ? (
+          <div className="px-4 py-2 text-xs text-muted-foreground">Unable to load conversations. Please try again.</div>
+        ) : conversations.length === 0 ? (
           <div className="px-4 py-2 text-xs text-muted-foreground">No recent chats.</div>
         ) : (
-          conversations?.map((conv: { id: string; title: string }) => {
+          conversations.map((conv: { id: string; title: string }) => {
             const isActive = location.pathname === `/dashboard/ai/chat/${conv.id}`;
             return (
               <Link
                 key={conv.id}
                 to={`/dashboard/ai/chat/${conv.id}`}
                 className={`flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary font-medium' 
+                  isActive
+                    ? 'bg-primary/10 text-primary font-medium'
                     : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <MessageSquare className="w-4 h-4 shrink-0" />
                 <span className="truncate">{conv.title}</span>

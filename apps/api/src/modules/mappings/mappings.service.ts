@@ -3,6 +3,7 @@ import {
   NotFoundException,
   Inject,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DATABASE_CONNECTION, canonicalMappings } from '@nexiom/database';
@@ -106,6 +107,10 @@ export class MappingsService {
 
       return records[0];
     } catch (error: unknown) {
+      // Preserve HttpException subclasses (like NotFoundException)
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         { err: error, id, payload },
         'Failed to update Mapping configuration',

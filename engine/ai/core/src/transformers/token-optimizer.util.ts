@@ -4,7 +4,7 @@
  * Caches standard URL tracking artifacts and UUID stamps typically not useful for generative insights.
  * Hard caps arrays to top 2 records to prevent 1:N relations from dominating context windows.
  */
-export function optimizePayloadTokens(obj: unknown): unknown {
+export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unknown {
   if (obj === null || obj === undefined || obj === '') return undefined;
   if (typeof obj !== 'object') {
     // String Truncation fallback for root level scalars
@@ -14,12 +14,25 @@ export function optimizePayloadTokens(obj: unknown): unknown {
     return obj;
   }
 
+  // Initialize seen set on first call to detect cycles
+  if (!seen) {
+    seen = new WeakSet<object>();
+  }
+
+  // Cycle detection: if we've already seen this object, return undefined to prevent stack overflow
+  if (seen.has(obj)) {
+    return undefined;
+  }
+
+  // Mark this object as seen before recursing
+  seen.add(obj);
+
   if (Array.isArray(obj)) {
     // Hard cap exactly to 1 record to prevent token explosions on 1:N graph traversals
     // (Do NOT push string descriptors here, as mixed Object/String arrays instantly crash Gemini's JSON schema parser)
     const sliced = obj.slice(0, 1);
     const cleanedArray = sliced
-      .map((v) => optimizePayloadTokens(v))
+      .map((v) => optimizePayloadTokens(v, seen))
       .filter((v) => v !== undefined);
 
     if (cleanedArray.length === 0) return undefined;
@@ -46,7 +59,7 @@ export function optimizePayloadTokens(obj: unknown): unknown {
       continue;
     }
 
-    let val = optimizePayloadTokens((obj as Record<string, unknown>)[key]);
+    let val = optimizePayloadTokens((obj as Record<string, unknown>)[key], seen);
 
     // Truncate massively bloated string payloads
     if (typeof val === 'string' && val.length > 80) {

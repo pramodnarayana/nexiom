@@ -41,40 +41,52 @@ describe('MappingsController', () => {
 
   it('create() should map to service.create', async () => {
     const payload = new CreateMapping();
-    const spy = vi.spyOn(service, 'create').mockResolvedValue({} as any);
-    await controller.create(payload);
+    const expected = { id: '123', ...payload };
+    const spy = vi.spyOn(service, 'create').mockResolvedValue(expected as any);
+    const result = await controller.create(payload);
     expect(spy).toHaveBeenCalledWith(payload);
+    expect(result).toEqual(expected);
   });
 
   it('findAll() should map to service.findAll', async () => {
-    const spy = vi.spyOn(service, 'findAll').mockResolvedValue([] as any);
-    await controller.findAll();
+    const expected = [{ id: '1' }, { id: '2' }];
+    const spy = vi.spyOn(service, 'findAll').mockResolvedValue(expected as any);
+    const result = await controller.findAll();
     expect(spy).toHaveBeenCalled();
+    expect(result).toEqual(expected);
   });
 
   it('findOne() should map to service.findOne', async () => {
-    const spy = vi.spyOn(service, 'findOne').mockResolvedValue({} as any);
-    await controller.findOne('abc');
+    const expected = { id: 'abc', appName: 'test' };
+    const spy = vi.spyOn(service, 'findOne').mockResolvedValue(expected as any);
+    const result = await controller.findOne('abc');
     expect(spy).toHaveBeenCalledWith('abc');
+    expect(result).toEqual(expected);
   });
 
   it('updatePartial() should map to service.update', async () => {
     const payload = new UpdateMapping();
-    const spy = vi.spyOn(service, 'update').mockResolvedValue({} as any);
-    await controller.updatePartial('abc', payload);
+    const expected = { id: 'abc', ...payload };
+    const spy = vi.spyOn(service, 'update').mockResolvedValue(expected as any);
+    const result = await controller.updatePartial('abc', payload);
     expect(spy).toHaveBeenCalledWith('abc', payload);
+    expect(result).toEqual(expected);
   });
 
   it('update() should map to service.update', async () => {
     const payload = new UpdateMapping();
-    const spy = vi.spyOn(service, 'update').mockResolvedValue({} as any);
-    await controller.update('abc', payload);
+    const expected = { id: 'abc', ...payload };
+    const spy = vi.spyOn(service, 'update').mockResolvedValue(expected as any);
+    const result = await controller.update('abc', payload);
     expect(spy).toHaveBeenCalledWith('abc', payload);
+    expect(result).toEqual(expected);
   });
 
   it('remove() should map to service.remove', async () => {
-    const spy = vi.spyOn(service, 'remove').mockResolvedValue({} as any);
-    await controller.remove('abc');
+    const expected = { success: true };
+    const spy = vi.spyOn(service, 'remove').mockResolvedValue(expected as any);
+    const result = await controller.remove('abc');
     expect(spy).toHaveBeenCalledWith('abc');
+    expect(result).toEqual(expected);
   });
 });

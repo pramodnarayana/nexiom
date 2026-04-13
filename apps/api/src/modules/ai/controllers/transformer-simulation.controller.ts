@@ -5,17 +5,28 @@ import {
   UseGuards,
   Req,
   ValidationPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthGuard } from '@nexiom/auth';
 import { TransformerSimulationService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
+import { IsString, IsNotEmpty, IsIn, IsOptional, IsObject } from 'class-validator';
 
 // Using a basic class validator for nestjs pipeline
 class TransformerSimulationDto {
+  @IsString()
+  @IsNotEmpty()
   connectionId!: string;
+
+  @IsIn(['hydrator', 'action'])
   toolType!: 'hydrator' | 'action';
+
+  @IsOptional()
+  @IsString()
   actionName?: string;
+
+  @IsObject()
   payload!: Record<string, any>;
 }
 
@@ -49,12 +60,15 @@ export class TransformerSimulationController {
       traceId?: string;
     },
   ) {
-    const tenantId: string =
-      req.user?.organizationId ?? req.user?.tenantId ?? 'anonymous';
-
     // RBAC: Ensure the user is a system admin to run sandbox traces
     if (req.user?.systemAdmin !== true) {
-      // return { error: 'Forbidden. Sandbox API requires System Admin privileges.' };
+      throw new ForbiddenException('Forbidden. Sandbox API requires System Admin privileges.');
+    }
+
+    const tenantId: string | undefined = req.user?.organizationId ?? req.user?.tenantId;
+
+    if (!tenantId) {
+      throw new ForbiddenException('Valid tenant ID is required.');
     }
 
     this.logger.info(

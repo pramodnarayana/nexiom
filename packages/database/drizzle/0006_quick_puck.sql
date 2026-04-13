@@ -18,8 +18,11 @@ CREATE TABLE "ai_messages" (
 	CONSTRAINT "ai_messages_tenant_id_id_pk" PRIMARY KEY("tenant_id","id")
 );
 --> statement-breakpoint
+--> statement-breakpoint
+ALTER TABLE "ai_messages" ADD CONSTRAINT "ai_messages_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "ai_conversations"("tenant_id","id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
 CREATE INDEX "ai_conv_tenant_idx" ON "ai_conversations" USING btree ("tenant_id");--> statement-breakpoint
-CREATE INDEX "ai_conv_created_idx" ON "ai_conversations" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "ai_conv_tenant_created_idx" ON "ai_conversations" USING btree ("tenant_id","created_at");--> statement-breakpoint
 CREATE INDEX "ai_msg_conv_idx" ON "ai_messages" USING btree ("conversation_id");--> statement-breakpoint
 CREATE INDEX "ai_msg_tenant_idx" ON "ai_messages" USING btree ("tenant_id");--> statement-breakpoint
+CREATE INDEX "ai_msg_tenant_created_idx" ON "ai_messages" USING btree ("tenant_id","created_at");--> statement-breakpoint
 CREATE INDEX "ai_msg_timeline_idx" ON "ai_messages" USING btree ("conversation_id","created_at");

@@ -53,12 +53,12 @@ export class CopilotWorker implements OnModuleInit {
             "You are an expert copywriter. Summarize the user's intent into a 3-5 word clean title. Do not include quotes, periods, or extra text. Capitalize it like a Title.",
           prompt: firstMessage,
         })
-          .then((res) => {
+          .then(async (res) => {
             const newTitle = res.text.trim();
             this.logger.debug(
               `Generated title for ${data.conversationId}: ${newTitle}`,
             );
-            void this.chatPersistence.updateConversationTitle(
+            return this.chatPersistence.updateConversationTitle(
               data.tenantId,
               data.conversationId,
               newTitle,

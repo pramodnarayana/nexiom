@@ -93,22 +93,26 @@ type Job = {
 
 ## Step 1 — Client Request
 ```
-POST /api/query
+POST /api/v1/ai/chat
 ```
 
 Response:
 ```json
-{ "job_id": "abc123" }
+{ "success": true, "jobId": "abc123", "conversationId": "conv_456" }
 ```
+
+Note: The actual implementation uses `/api/v1/ai/chat` for job creation and `/api/v1/ai/jobs/{jobId}/stream` for SSE streaming.
 
 ---
 
 ## Step 2 — Subscribe to Updates
 
-WebSocket:
+SSE Endpoint:
 ```
-ws://.../jobs/{job_id}
+GET /api/v1/ai/jobs/{jobId}/stream
 ```
+
+Note: Uses Server-Sent Events (SSE) rather than WebSocket for streaming updates.
 
 ---
 
@@ -270,4 +274,3 @@ This architecture enables:
 
 Result:
 A responsive, enterprise-grade AI UX layer.
-

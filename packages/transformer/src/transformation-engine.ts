@@ -77,7 +77,12 @@ export class TransformationEngine {
       const rawVal = this.resolvePath(rawData, instruction.source);
       // Optional mapping dictionary to translate string constants directly
       if (instruction.transform && rawVal !== undefined) {
-         return instruction.transform[String(rawVal)] || rawVal;
+        const key = String(rawVal);
+        // Check for key existence to preserve falsy mapped values (false, 0, '')
+        if (Object.prototype.hasOwnProperty.call(instruction.transform, key)) {
+          return instruction.transform[key];
+        }
+        return rawVal;
       }
       return rawVal;
     }

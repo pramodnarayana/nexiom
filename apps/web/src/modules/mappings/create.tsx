@@ -8,10 +8,16 @@ export const MappingsCreate = () => {
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   const onFinish = (data: Record<string, unknown>) => {
+    // Normalize tenantId: convert empty string to null for global mappings
+    const values = { ...data };
+    if (values.tenantId === '') {
+      values.tenantId = null;
+    }
+
     mutate(
       {
         resource: 'admin/mappings',
-        values: data,
+        values,
       },
       {
         onSuccess: () => navigate('/admin/mappings'),
@@ -80,14 +86,33 @@ export const MappingsCreate = () => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Mapping Config (JSON)</label>
           <textarea
-            {...register('mappingConfig', { 
+            {...register('mappingConfig', {
                 required: true,
-                setValueAs: (v: string) => { try { return JSON.parse(v); } catch { return v; } }
+                validate: (v: string) => {
+                  try {
+                    JSON.parse(v);
+                    return true;
+                  } catch {
+                    return 'Invalid JSON';
+                  }
+                },
+                setValueAs: (v: string) => {
+                  try {
+                    return JSON.parse(v);
+                  } catch {
+                    return v;
+                  }
+                }
             })}
             rows={15}
             placeholder='{\n  "id": "rtms__Load__c.Id"\n}'
             className="w-full text-sm font-mono border rounded p-4 border-gray-300 focus:border-black focus:ring-black"
           />
+          {errors.mappingConfig && (
+            <span className="text-red-500 text-xs mt-1">
+              {errors.mappingConfig.message as string}
+            </span>
+          )}
         </div>
 
         <div className="flex justify-end gap-4">

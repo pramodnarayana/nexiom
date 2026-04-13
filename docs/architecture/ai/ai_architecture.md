@@ -378,13 +378,15 @@ Reduce repeated API calls and token usage.
 
 ## Cache Keys
 ```
-{category}:{entity}:{id}:{viewMode}
+{tenantId}:{category}:{entity}:{id}:{viewMode}
 ```
 
 Example:
 ```
-TMS:Load:215236:summary
+tenant_abc123:TMS:Load:215236:summary
 ```
+
+Note: All cache keys must include tenantId prefix to enforce tenant isolation.
 
 ## Cache Layers
 
@@ -477,4 +479,3 @@ This system provides:
 
 Result:
 A scalable, efficient, domain-aware, enterprise-grade AI platform.
-
