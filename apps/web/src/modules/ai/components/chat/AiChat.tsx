@@ -11,26 +11,11 @@ import { useConversationMessages } from '../../api/queries';
 import { customJobStreamFetcher } from '../../lib/chat-transport';
 
 export function AiChat() {
-  const { chatId } = useParams<{ chatId: string }>();
-  const { data: history } = useConversationMessages(chatId);
-
-  // Map backend history into Vercel AI SDK format
-  const initialMessages = history?.map(m => ({
-    id: m.id,
-    role: m.role,
-    content: m.content || '',
-    parts: [{ type: 'text', text: m.content || '' }]
-  })) as UIMessage[] || [];
-
-  const { messages, status, error, sendMessage } = useChat({
-    id: chatId || 'new', // Force hook recreation on new chat
-    messages: initialMessages,
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+  const { messages, status, sendMessage } = useChat({
     transport: new DefaultChatTransport({
-      api: `${import.meta.env.VITE_API_URL}/ai/chat`,
-      fetch: customJobStreamFetcher as unknown as typeof fetch,
-      body: {
-        conversationId: chatId
-      }
+      api: `${apiBaseUrl}/ai/chat`,
+      fetch: streamFetcher as unknown as typeof fetch
     })
   });
 
