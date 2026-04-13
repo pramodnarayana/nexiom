@@ -56,7 +56,7 @@ type Message = {
   conversation_id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  status: "pending" | "streaming" | "completed" | "failed";
+  status: "pending" | "completed" | "failed";
   created_at: string;
 };
 ```
@@ -206,7 +206,6 @@ navigator.clipboard.writeText(message.content);
 | State | Meaning |
 |------|--------|
 | pending | sent but not processed |
-| streaming | AI generating |
 | completed | final response |
 | failed | error |
 

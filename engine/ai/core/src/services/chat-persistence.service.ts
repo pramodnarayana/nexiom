@@ -105,6 +105,12 @@ export class ChatPersistenceService {
         )
       ).returning();
 
+    if (!updated[0]) {
+      throw new NotFoundException(
+        `Conversation not found for tenantId: ${tenantId}, conversationId: ${conversationId}`
+      );
+    }
+
     return updated[0];
   }
 }

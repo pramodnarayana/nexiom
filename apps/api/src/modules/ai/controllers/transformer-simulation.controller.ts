@@ -8,7 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { AuthGuard } from '@nexiom/auth';
+import { SystemAdminGuard } from '../../identity/auth/system-admin.guard.js';
 import { TransformerSimulationService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
 import { IsString, IsNotEmpty, IsIn, IsOptional, IsObject, ValidateIf } from 'class-validator';
@@ -32,7 +32,7 @@ class TransformerSimulationDto {
 }
 
 @Controller('ai/transformer')
-@UseGuards(AuthGuard) // Requires valid Nexiom active session
+@UseGuards(SystemAdminGuard) // Requires System Admin privileges
 export class TransformerSimulationController {
   constructor(
     private readonly simulationService: TransformerSimulationService,
@@ -61,11 +61,6 @@ export class TransformerSimulationController {
       traceId?: string;
     },
   ) {
-    // RBAC: Ensure the user is a system admin to run sandbox traces
-    if (req.user?.systemAdmin !== true) {
-      throw new ForbiddenException('Forbidden. Sandbox API requires System Admin privileges.');
-    }
-
     const tenantId: string | undefined = req.user?.organizationId ?? req.user?.tenantId;
 
     if (!tenantId) {

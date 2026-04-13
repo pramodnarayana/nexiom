@@ -29,18 +29,29 @@ export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unk
 
   // Type guards for built-in non-plain objects
   if (obj instanceof Date) {
+    seen.delete(obj);
     return obj.toISOString();
   }
   if (obj instanceof URL) {
+    seen.delete(obj);
     return obj.toString();
   }
   if (obj instanceof Map) {
-    return Array.from(obj.entries()).slice(0, 1);
+    const optimizedEntries = Array.from(obj.entries())
+      .slice(0, 1)
+      .map(([k, v]) => [optimizePayloadTokens(k, seen), optimizePayloadTokens(v, seen)]);
+    seen.delete(obj);
+    return optimizedEntries;
   }
   if (obj instanceof Set) {
-    return Array.from(obj).slice(0, 1);
+    const optimizedValues = Array.from(obj)
+      .slice(0, 1)
+      .map((v) => optimizePayloadTokens(v, seen));
+    seen.delete(obj);
+    return optimizedValues;
   }
   if (obj instanceof Error) {
+    seen.delete(obj);
     return { message: obj.message, stack: obj.stack };
   }
 

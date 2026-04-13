@@ -144,13 +144,21 @@ export class CopilotWorker implements OnModuleInit {
           `Stream fully consumed. Payload length: ${finalResponseBuilder.length}`,
         );
 
-        // Reconstruct human-readable response only for persistent storage
+        // Reconstruct human-readable response and step metadata for persistent storage
         let humanResponse = "";
+        const stepMetadata: any[] = [];
         const lines = finalResponseBuilder.split("\n");
         for (const line of lines) {
           if (line.trim().startsWith("0:")) {
             try {
               humanResponse += JSON.parse(line.trim().substring(2));
+            } catch {
+              // Ignore partial parsing errors
+            }
+          } else if (line.trim().startsWith("8:")) {
+            try {
+              const stepData = JSON.parse(line.trim().substring(2));
+              stepMetadata.push(stepData);
             } catch {
               // Ignore partial parsing errors
             }
@@ -163,6 +171,22 @@ export class CopilotWorker implements OnModuleInit {
             conversationId: data.conversationId,
             role: "assistant",
             content: humanResponse.trim(),
+            status: "completed",
+          });
+        }
+
+        // Persist step metadata alongside the final response if any steps were captured
+        if (stepMetadata.length > 0) {
+          this.logger.debug(
+            `Captured ${stepMetadata.length} step metadata entries for conversation ${data.conversationId}`,
+          );
+          // Store step metadata in the same persistence layer
+          // Note: This could be stored as a system message or in a dedicated step metadata table
+          await this.chatPersistence.appendMessage({
+            tenantId: data.tenantId,
+            conversationId: data.conversationId,
+            role: "system",
+            content: JSON.stringify({ steps: stepMetadata }),
             status: "completed",
           });
         }

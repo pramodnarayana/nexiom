@@ -66,9 +66,7 @@ export class MappingsService {
         { err: error, payload: safePayload },
         'Failed to create Mapping configuration',
       );
-      throw new BadRequestException(
-        'Failed to create Mapping: ' + (error as Error).message,
-      );
+      throw new BadRequestException('Failed to create Mapping');
     }
   }
 
@@ -108,9 +106,7 @@ export class MappingsService {
         { err: error, id, payload: safePayload },
         'Failed to update Mapping configuration',
       );
-      throw new BadRequestException(
-        'Failed to update Mapping: ' + (error as Error).message,
-      );
+      throw new BadRequestException('Failed to update Mapping');
     }
   }
 
