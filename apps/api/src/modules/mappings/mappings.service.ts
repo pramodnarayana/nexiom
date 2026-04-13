@@ -111,7 +111,7 @@ export class MappingsService {
   }
 
   async remove(id: string) {
-    const existing = await this.findOne(id);
+    await this.findOne(id);
 
     await this.db.delete(canonicalMappings).where(eq(canonicalMappings.id, id));
 

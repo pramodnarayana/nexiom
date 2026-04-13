@@ -16,7 +16,7 @@ const JobPayloadSchema = z.object({
     z.object({
       role: z.string(),
       content: z.string(),
-    })
+    }),
   ),
   model: z.string().optional(),
 });
@@ -47,14 +47,21 @@ export class CopilotWorker implements OnModuleInit {
 
       if (!validationResult.success) {
         const safeMetadata = {
-          jobId: typeof payload === 'object' && payload !== null && 'jobId' in payload ? payload.jobId : undefined,
+          jobId:
+            typeof payload === "object" &&
+            payload !== null &&
+            "jobId" in payload
+              ? payload.jobId
+              : undefined,
           validationError: validationResult.error,
         };
         this.logger.error(
           safeMetadata,
-          'Invalid job payload received - rejecting message',
+          "Invalid job payload received - rejecting message",
         );
-        throw new Error(`Invalid job payload: ${validationResult.error.message}`);
+        throw new Error(
+          `Invalid job payload: ${validationResult.error.message}`,
+        );
       }
 
       const data = validationResult.data;
@@ -107,14 +114,17 @@ export class CopilotWorker implements OnModuleInit {
         // Check for non-OK response
         if (!webResponse.ok) {
           const errorText = await webResponse.text();
-          await this.redis.publish(`job:stream:${data.jobId}`, `error: ${errorText}\n`);
+          await this.redis.publish(
+            `job:stream:${data.jobId}`,
+            `error: ${errorText}\n`,
+          );
           await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
           throw new Error(`Non-OK response from orchestrator: ${errorText}`);
         }
 
         // Read stream to exhaustion
         const reader = webResponse.body.getReader();
-        const decoder = new TextDecoder('utf-8', { fatal: false });
+        const decoder = new TextDecoder("utf-8", { fatal: false });
         let finalResponseBuilder = "";
 
         while (true) {
@@ -157,7 +167,10 @@ export class CopilotWorker implements OnModuleInit {
             }
           } else if (line.trim().startsWith("8:")) {
             try {
-              const stepData = JSON.parse(line.trim().substring(2));
+              const stepData = JSON.parse(line.trim().substring(2)) as Record<
+                string,
+                unknown
+              >;
               stepMetadata.push(stepData);
             } catch {
               // Ignore partial parsing errors
@@ -195,10 +208,14 @@ export class CopilotWorker implements OnModuleInit {
       }
     } catch (error) {
       // Publish failure marker to Redis before throwing
-      const jobId = typeof payload === 'object' && payload !== null && 'jobId' in payload
-        ? (payload as any).jobId
-        : 'unknown';
-      await this.redis.publish(`job:stream:${jobId}`, `error: ${(error as Error).message}\n`);
+      const jobId =
+        typeof payload === "object" && payload !== null && "jobId" in payload
+          ? String((payload as Record<string, unknown>).jobId)
+          : "unknown";
+      await this.redis.publish(
+        `job:stream:${jobId}`,
+        `error: ${(error as Error).message}\n`,
+      );
       await this.redis.publish(`job:stream:${jobId}`, `[DONE]\n`);
       this.logger.error("Failed to process Copilot Job", error);
       throw error; // Let SQS push it to DLQ after MaxReceiveCount

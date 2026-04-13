@@ -87,7 +87,7 @@ describe('AiStreamController', () => {
               expect(receivedData).toEqual([
                 { data: 'hello' },
                 { data: 'world' },
-                { data: '0:"[DONE]"\n' },
+                { data: '[DONE]' },
               ]);
               resolve();
             } catch (err) {
@@ -105,7 +105,7 @@ describe('AiStreamController', () => {
         // Emulate redis messages arriving
         onMessageCallback(channel, 'hello');
         onMessageCallback(channel, 'world');
-        onMessageCallback(channel, '0:"[DONE]"\n');
+        onMessageCallback(channel, '[DONE]');
       });
     });
 

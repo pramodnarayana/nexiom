@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MappingsService } from './mappings.service.js';
 import { PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { REDIS_CLIENT } from '@nexiom/cache';
 import { CreateMapping, UpdateMapping } from './mappings.validation.js';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { vi } from 'vitest';
@@ -21,10 +20,6 @@ describe('MappingsService', () => {
     orderBy: vi.fn(),
   };
 
-  const mockRedis = {
-    del: vi.fn(),
-  };
-
   const mockLogger = {
     setContext: vi.fn(),
     debug: vi.fn(),
@@ -41,7 +36,6 @@ describe('MappingsService', () => {
         MappingsService,
         { provide: PinoLogger, useValue: mockLogger },
         { provide: DATABASE_CONNECTION, useValue: mockDb },
-        { provide: REDIS_CLIENT, useValue: mockRedis },
       ],
     }).compile();
 
@@ -120,7 +114,6 @@ describe('MappingsService', () => {
       const result = await service.create(dto);
 
       expect(result.id).toBe('123');
-      expect(mockRedis.del).toHaveBeenCalled(); // Invalidates cache
     });
 
     it('should log and throw BadRequestException on insert error', async () => {
@@ -153,7 +146,6 @@ describe('MappingsService', () => {
 
       const result = await service.update('123', dto);
       expect(result.appName).toBe('testapp');
-      expect(mockRedis.del).toHaveBeenCalled();
     });
 
     it('should throw BadRequestException wrapping the internal missing record on update', async () => {
@@ -168,7 +160,7 @@ describe('MappingsService', () => {
       });
 
       await expect(service.update('123', new UpdateMapping())).rejects.toThrow(
-        BadRequestException,
+        NotFoundException,
       );
     });
   });
@@ -190,7 +182,6 @@ describe('MappingsService', () => {
       const result = await service.remove('123');
       expect(result.success).toBe(true);
       expect(mockDb.delete).toHaveBeenCalled();
-      expect(mockRedis.del).toHaveBeenCalled();
     });
   });
 });

@@ -11,7 +11,13 @@ import type { Request } from 'express';
 import { SystemAdminGuard } from '../../identity/auth/system-admin.guard.js';
 import { TransformerSimulationService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
-import { IsString, IsNotEmpty, IsIn, IsOptional, IsObject, ValidateIf } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsIn,
+  IsObject,
+  ValidateIf,
+} from 'class-validator';
 
 // Using a basic class validator for nestjs pipeline
 class TransformerSimulationDto {
@@ -22,7 +28,7 @@ class TransformerSimulationDto {
   @IsIn(['hydrator', 'action'])
   toolType!: 'hydrator' | 'action';
 
-  @ValidateIf((o) => o.toolType === 'action')
+  @ValidateIf((o: TransformerSimulationDto) => o.toolType === 'action')
   @IsString()
   @IsNotEmpty({ message: 'actionName is required when toolType is "action"' })
   actionName?: string;
@@ -61,7 +67,8 @@ export class TransformerSimulationController {
       traceId?: string;
     },
   ) {
-    const tenantId: string | undefined = req.user?.organizationId ?? req.user?.tenantId;
+    const tenantId: string | undefined =
+      req.user?.organizationId ?? req.user?.tenantId;
 
     if (!tenantId) {
       throw new ForbiddenException('Valid tenant ID is required.');
