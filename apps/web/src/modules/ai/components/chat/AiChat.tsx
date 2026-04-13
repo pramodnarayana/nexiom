@@ -5,15 +5,32 @@ import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
 import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
-import { streamFetcher } from '@/shared/lib/api-client';
-
+import { useParams } from 'react-router-dom';
 import { DefaultChatTransport } from 'ai';
+import { useConversationMessages } from '../../api/queries';
+import { customJobStreamFetcher } from '../../lib/chat-transport';
 
 export function AiChat() {
-  const { messages, status, sendMessage } = useChat({
+  const { chatId } = useParams<{ chatId: string }>();
+  const { data: history } = useConversationMessages(chatId);
+
+  // Map backend history into Vercel AI SDK format
+  const initialMessages = history?.map(m => ({
+    id: m.id,
+    role: m.role,
+    content: m.content || '',
+    parts: [{ type: 'text', text: m.content || '' }]
+  })) as UIMessage[] || [];
+
+  const { messages, status, error, sendMessage } = useChat({
+    id: chatId || 'new', // Force hook recreation on new chat
+    messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `${import.meta.env.VITE_API_URL}/ai/chat`,
-      fetch: streamFetcher as unknown as typeof fetch
+      fetch: customJobStreamFetcher as unknown as typeof fetch,
+      body: {
+        conversationId: chatId
+      }
     })
   });
 
@@ -34,13 +51,11 @@ export function AiChat() {
     }
 
     try {
-      if (sendMessage) {
-        sendMessage({
-          id: Date.now().toString(),
-          role: 'user',
-          parts: [{ type: 'text', text: input }]
-        } as UIMessage);
-      }
+      sendMessage({
+        id: Date.now().toString(),
+        role: 'user',
+        parts: [{ type: 'text', text: input }]
+      } as UIMessage);
     } catch (err) {
       console.error('Error while sending message:', err);
     }
@@ -186,7 +201,7 @@ export function AiChat() {
         })}
 
         {/* Synthetic Loading Indicator for simple text generation streams or silent tool executions */}
-        {isWaitingForResponse && (
+        {isWaitingForResponse && !error && (
           <div className="flex gap-4 justify-start animate-pulse">
             <Avatar className="w-8 h-8 shrink-0 mt-1">
               <AvatarFallback className="bg-primary/10 text-primary"><Bot size={16} /></AvatarFallback>
@@ -198,6 +213,21 @@ export function AiChat() {
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
               <span className="ml-2 text-muted-foreground text-xs font-medium">Fetching live data...</span>
+            </div>
+          </div>
+        )}
+
+        {/* User-friendly Provider Error Banner */}
+        {error && (
+          <div className="flex gap-4 justify-start animate-in fade-in slide-in-from-bottom-2">
+            <Avatar className="w-8 h-8 shrink-0 mt-1 ring-1 ring-border">
+              <AvatarFallback className="bg-muted text-muted-foreground"><Bot size={16} /></AvatarFallback>
+            </Avatar>
+            <div className="px-4 py-3 rounded-2xl text-sm bg-muted/40 border border-border text-foreground rounded-tl-sm max-w-[85%]">
+              <span className="font-semibold block mb-1">AI Provider Unavailable</span>
+              <span className="opacity-90 leading-snug">
+                The AI model is currently experiencing an unexpected outage or high demand limit. Please wait a moment and try submitting your request again.
+              </span>
             </div>
           </div>
         )}

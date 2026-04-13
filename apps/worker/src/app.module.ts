@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PipelineModule } from "./modules/pipeline/pipeline.module.js";
+import { AiWorkerModule } from "./modules/ai/ai.module.js";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PiecesModule } from "@nexiom/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
@@ -16,6 +17,7 @@ import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
       useFactory: createQueueModuleOptions,
     }),
     PipelineModule,
+    AiWorkerModule,
   ],
   controllers: [],
   providers: [],

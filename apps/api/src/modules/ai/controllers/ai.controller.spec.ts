@@ -1,19 +1,19 @@
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unused-vars */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthGuard } from '@nexiom/auth';
 import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiController } from './ai.controller.js';
-import { OrchestratorService } from '@nexiom/ai-engine';
+import { OrchestratorService, ChatPersistenceService } from '@nexiom/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
-import { Response } from 'express';
-import { PassThrough } from 'stream';
-import { Readable } from 'stream';
-import { pipeline } from 'stream/promises';
+import { QUEUE_SERVICE, QueueName } from '@nexiom/queue';
 
 describe('AiController - Enterprise Hardened', () => {
   let controller: AiController;
-  let orchestratorService: OrchestratorService;
+  let chatPersistenceMock: {
+    getOrCreateConversation: ReturnType<typeof vi.fn>;
+    appendMessage: ReturnType<typeof vi.fn>;
+  };
+  let queueServiceMock: { send: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     const mockLogger = {
@@ -24,12 +24,21 @@ describe('AiController - Enterprise Hardened', () => {
       setContext: vi.fn(),
     };
     const mockOrchestrator = { streamChat: vi.fn() };
+    chatPersistenceMock = {
+      getOrCreateConversation: vi.fn().mockResolvedValue({ id: 'conv-123' }),
+      appendMessage: vi.fn().mockResolvedValue({ id: 'msg-456' }),
+    };
+    queueServiceMock = {
+      send: vi.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiController],
       providers: [
         { provide: PinoLogger, useValue: mockLogger },
         { provide: OrchestratorService, useValue: mockOrchestrator },
+        { provide: ChatPersistenceService, useValue: chatPersistenceMock },
+        { provide: QUEUE_SERVICE, useValue: queueServiceMock },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -39,89 +48,51 @@ describe('AiController - Enterprise Hardened', () => {
       .compile();
 
     controller = module.get<AiController>(AiController);
-    orchestratorService = module.get<OrchestratorService>(OrchestratorService);
   });
 
-  it('should explicitly hook Node Stream into HTTP Response using Readable.fromWeb', async () => {
-    // Generate a mock standardized web stream (Vercel output shape)
-    const mockWebStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('Test Stream Chunk'));
-        controller.close();
-      },
-    });
-
-    const mockHeaders = new Headers();
-    mockHeaders.set('Content-Type', 'text/plain; charset=utf-8');
-    mockHeaders.set('X-Custom-Header', 'test-value');
-
-    vi.spyOn(orchestratorService, 'streamChat').mockResolvedValue({
-      status: 200,
-      headers: mockHeaders,
-      body: mockWebStream,
-    } as unknown as Awaited<ReturnType<typeof orchestratorService.streamChat>>);
-
-    // Mock Express Request and Response Pipeline
+  it('should offload chat request to async queue and return job metadata', async () => {
+    // Mock Express Request
     const mockReq = {
       user: { tenantId: 'org-123' },
       traceId: 'trace-456',
     } as unknown as Parameters<typeof controller.chat>[1];
 
-    // Use a real PassThrough stream to capture actual data
-    const passThrough = new PassThrough();
-    const chunks: Buffer[] = [];
+    const payload = {
+      messages: [{ role: 'user', content: 'Fetch logistics' }],
+      model: 'gemini-1.5-flash',
+    } as Parameters<typeof controller.chat>[0];
 
-    passThrough.on('data', (chunk: Buffer) => {
-      chunks.push(chunk);
+    const result = await controller.chat(payload, mockReq);
+
+    expect(chatPersistenceMock.getOrCreateConversation).toHaveBeenCalledWith(
+      'org-123',
+      undefined,
+      'Fetch logistics',
+    );
+    expect(chatPersistenceMock.appendMessage).toHaveBeenCalledWith({
+      tenantId: 'org-123',
+      conversationId: 'conv-123',
+      role: 'user',
+      content: 'Fetch logistics',
+      status: 'completed',
     });
 
-    const mockRes = {
-      setHeader: vi.fn(),
-      status: vi.fn().mockReturnThis(),
-      end: (cb?: () => void) => {
-        passThrough.end(cb);
-      },
-      write: (...args: Parameters<typeof passThrough.write>) =>
-        passThrough.write(...args),
-      on: (...args: Parameters<typeof passThrough.on>) =>
-        passThrough.on(...args),
-      once: (...args: Parameters<typeof passThrough.once>) =>
-        passThrough.once(...args),
-      emit: (...args: Parameters<typeof passThrough.emit>) =>
-        passThrough.emit(...args),
-      pipe: (...args: Parameters<typeof passThrough.pipe>) =>
-        passThrough.pipe(...args),
-      removeListener: (
-        ...args: Parameters<typeof passThrough.removeListener>
-      ) => passThrough.removeListener(...args),
-      off: (...args: Parameters<typeof passThrough.off>) =>
-        passThrough.off(...args),
-    } as unknown as Response;
+    expect(queueServiceMock.send).toHaveBeenCalledWith(
+      QueueName.AiCopilotQueue,
+      expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        jobId: expect.any(String),
+        traceId: 'trace-456',
+        tenantId: 'org-123',
+        conversationId: 'conv-123',
 
-    await controller.chat(
-      { messages: [] },
-      mockReq,
-      mockRes as unknown as Parameters<typeof controller.chat>[2],
+        messages: [{ role: 'user', content: 'Fetch logistics' }],
+        model: 'gemini-1.5-flash',
+      }),
     );
 
-    // Wait for stream completion triggered by the piped web stream
-    await new Promise<void>((resolve) => {
-      passThrough.on('finish', resolve);
-    });
-
-    expect(orchestratorService.streamChat).toHaveBeenCalled();
-    expect(mockRes.status).toHaveBeenCalledWith(200);
-    expect(mockRes.setHeader).toHaveBeenCalledWith(
-      'content-type',
-      'text/plain; charset=utf-8',
-    );
-    expect(mockRes.setHeader).toHaveBeenCalledWith(
-      'x-custom-header',
-      'test-value',
-    );
-
-    // Verify actual streamed data
-    const receivedData = Buffer.concat(chunks).toString('utf-8');
-    expect(receivedData).toBe('Test Stream Chunk');
+    expect(result.success).toBe(true);
+    expect(result.jobId).toBeDefined();
+    expect(result.conversationId).toBe('conv-123');
   });
 });
