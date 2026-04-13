@@ -48,16 +48,22 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          tenantId: payload.tenantId ?? null,
-          version: payload.version ?? 'v1',
+          tenantId: (payload.tenantId?.trim() || null) ?? null,
+          version: (payload.version?.trim() || 'v1') ?? 'v1',
           mappingConfig: payload.mappingConfig,
         })
         .returning();
 
       return records[0];
     } catch (error: unknown) {
+      const safePayload = {
+        appName: payload.appName,
+        category: payload.category,
+        entity: payload.entity,
+        viewMode: payload.viewMode,
+      };
       this.logger.error(
-        { err: error, payload },
+        { err: error, payload: safePayload },
         'Failed to create Mapping configuration',
       );
       throw new BadRequestException(
@@ -75,8 +81,8 @@ export class MappingsService {
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          tenantId: payload.tenantId,
-          version: payload.version,
+          tenantId: payload.tenantId?.trim() || null,
+          version: payload.version?.trim() || 'v1',
           mappingConfig: payload.mappingConfig,
         })
         .where(eq(canonicalMappings.id, id))
@@ -92,8 +98,14 @@ export class MappingsService {
       if (error instanceof HttpException) {
         throw error;
       }
+      const safePayload = {
+        appName: payload.appName,
+        category: payload.category,
+        entity: payload.entity,
+        viewMode: payload.viewMode,
+      };
       this.logger.error(
-        { err: error, id, payload },
+        { err: error, id, payload: safePayload },
         'Failed to update Mapping configuration',
       );
       throw new BadRequestException(

@@ -73,7 +73,8 @@ export class TransformerSimulationController {
     }
 
     this.logger.info(
-      `Executing Transformer Simulation for Connection: ${body.connectionId}`,
+      `Executing Transformer Simulation for Connection: [REDACTED]`,
+      { connectionId: body.connectionId },
     );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.simulationService.simulateExecution(

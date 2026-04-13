@@ -119,7 +119,7 @@ Server-sent events endpoint that streams AI response chunks as they are generate
 Request:
 ```json
 {
-  "conversation_id": "conv_123",
+  "conversationId": "conv_123",
   "content": "Give me load 215236"
 }
 ```
@@ -268,7 +268,7 @@ GET /messages?limit=20&cursor=...
 
 - All queries scoped by tenant_id
 - No cross-tenant access
-- Validate conversation ownership
+- Validate conversation ownership (Note: Streaming endpoint job ownership validation is pending - see apps/api/src/modules/ai/controllers/ai-stream.controller.ts line 29-31)
 
 ---
 

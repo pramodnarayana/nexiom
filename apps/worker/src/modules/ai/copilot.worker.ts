@@ -46,8 +46,12 @@ export class CopilotWorker implements OnModuleInit {
       const validationResult = JobPayloadSchema.safeParse(payload);
 
       if (!validationResult.success) {
+        const safeMetadata = {
+          jobId: typeof payload === 'object' && payload !== null && 'jobId' in payload ? payload.jobId : undefined,
+          validationError: validationResult.error,
+        };
         this.logger.error(
-          { payload, validationError: validationResult.error },
+          safeMetadata,
           'Invalid job payload received - rejecting message',
         );
         throw new Error(`Invalid job payload: ${validationResult.error.message}`);
@@ -100,8 +104,17 @@ export class CopilotWorker implements OnModuleInit {
       // This forces the Vercel AI SDK to iterate completely and fire all `onFinish` handlers,
       // saving tool invocations and final responses securely to the database.
       if (webResponse.body) {
+        // Check for non-OK response
+        if (!webResponse.ok) {
+          const errorText = await webResponse.text();
+          await this.redis.publish(`job:stream:${data.jobId}`, `error: ${errorText}\n`);
+          await this.redis.publish(`job:stream:${data.jobId}`, `[DONE]\n`);
+          throw new Error(`Non-OK response from orchestrator: ${errorText}`);
+        }
+
         // Read stream to exhaustion
         const reader = webResponse.body.getReader();
+        const decoder = new TextDecoder('utf-8', { fatal: false });
         let finalResponseBuilder = "";
 
         while (true) {
@@ -111,11 +124,17 @@ export class CopilotWorker implements OnModuleInit {
           // Process streams here for SSE broadcast (Step 4)
           // `value` is a Uint8Array containing Vercel Stream Parts.
           if (value) {
-            const decodedChunk = new TextDecoder().decode(value);
+            const decodedChunk = decoder.decode(value, { stream: true });
             finalResponseBuilder += decodedChunk;
             // Publish standard Vercel Stream Parts out to SSE bridge
             await this.redis.publish(`job:stream:${data.jobId}`, decodedChunk);
           }
+        }
+
+        // Flush any remaining bytes from the decoder
+        const finalChunk = decoder.decode();
+        if (finalChunk) {
+          finalResponseBuilder += finalChunk;
         }
 
         // Publish termination marker for SSE Client
@@ -151,6 +170,12 @@ export class CopilotWorker implements OnModuleInit {
         this.logger.log(`Successfully completed AI Job ${data.jobId}`);
       }
     } catch (error) {
+      // Publish failure marker to Redis before throwing
+      const jobId = typeof payload === 'object' && payload !== null && 'jobId' in payload
+        ? (payload as any).jobId
+        : 'unknown';
+      await this.redis.publish(`job:stream:${jobId}`, `error: ${(error as Error).message}\n`);
+      await this.redis.publish(`job:stream:${jobId}`, `[DONE]\n`);
       this.logger.error("Failed to process Copilot Job", error);
       throw error; // Let SQS push it to DLQ after MaxReceiveCount
     }

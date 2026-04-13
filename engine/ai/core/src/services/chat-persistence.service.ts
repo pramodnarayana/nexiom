@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, NotFoundException } from '@nestjs/common';
 import { DATABASE_CONNECTION, aiConversations, aiMessages } from '@nexiom/database';
 import { eq, and, desc } from 'drizzle-orm';
 import type { DrizzleDb } from '@nexiom/database';
@@ -28,9 +28,7 @@ export class ChatPersistenceService {
         );
 
       if (existing.length === 0) {
-        throw new Error(
-          `Conversation not found for id: ${conversationId} and tenant: ${tenantId}`
-        );
+        throw new NotFoundException('Conversation not found');
       }
 
       return existing[0];

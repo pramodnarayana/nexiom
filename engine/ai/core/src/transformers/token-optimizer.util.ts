@@ -2,7 +2,7 @@
  * Generatively prunes data structures, aggressively removing `null`, `undefined`,
  * or empty objects to drastically reduce LLM context token usage.
  * Caches standard URL tracking artifacts and UUID stamps typically not useful for generative insights.
- * Hard caps arrays to top 2 records to prevent 1:N relations from dominating context windows.
+ * Hard caps arrays to top 1 record to prevent 1:N relations from dominating context windows.
  */
 export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unknown {
   if (obj === null || obj === undefined || obj === '') return undefined;
@@ -26,6 +26,23 @@ export function optimizePayloadTokens(obj: unknown, seen?: WeakSet<object>): unk
 
   // Mark this object as seen before recursing
   seen.add(obj);
+
+  // Type guards for built-in non-plain objects
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  if (obj instanceof URL) {
+    return obj.toString();
+  }
+  if (obj instanceof Map) {
+    return Array.from(obj.entries()).slice(0, 1);
+  }
+  if (obj instanceof Set) {
+    return Array.from(obj).slice(0, 1);
+  }
+  if (obj instanceof Error) {
+    return { message: obj.message, stack: obj.stack };
+  }
 
   if (Array.isArray(obj)) {
     // Hard cap exactly to 1 record to prevent token explosions on 1:N graph traversals
