@@ -42,6 +42,8 @@
     "@nexiom/database": "workspace:*",
     "@nexiom/dbmanager": "workspace:*",
     "@nexiom/engine": "workspace:*",
+    "@nexiom/ai-engine": "workspace:*",
+    "ai": "^4.1.25",
     "@nexiom/identity": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "@nexiom/piece-quickbooks": "workspace:*",

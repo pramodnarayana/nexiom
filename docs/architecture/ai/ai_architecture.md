@@ -1,79 +1,481 @@
-# Architecture: Standalone AI Copilot (Real-time Agentic Proxy)
+# Nexiom AI Data Architecture
 
-This document defines the consolidated architecture for the Standalone AI Copilot. Unlike the background sync pipeline, this product operates as a real-time bridge to external applications, fetching live data directly from SaaS applications (Salesforce, QuickBooks, etc.) to provide "Zero-Stale" live answers via the Model Context Protocol (MCP).
+## Overview
+This document defines the architecture for building a scalable, token-efficient AI layer for Nexiom across multiple SaaS apps (Salesforce/Revenova, QuickBooks, etc.). The system enforces:
 
-## 1. Core Philosophy: The Proxy Model
+- Category-based abstraction (TMS, Accounting, CRM)
+- Generic transformation before LLM
+- Query planning to minimize data fetch
+- Strict token and payload control
 
-The Standalone Copilot is designed for customers who want immediate intelligence across their SaaS stack without setting up complex sync routes or physical data silos.
+---
 
-| Feature | Sync-Linked AI (Option 1) | Standalone Copilot (Option 2) |
-| --- | --- | --- |
-| **Data Source** | Internal PostgreSQL Replicas | External SaaS APIs (Live) |
-| **Latency** | Sub-millisecond (Database) | 1–3 Seconds (Network Proxy) |
-| **Accuracy** | Historical (Last Sync) | Real-time (Current State) |
-| **Dependency** | Requires active Sync Routes | Requires only Connection Auth |
-| **Future Capability**| Read-Only | Read & Write (Create Records) |
+# 1. Core Principles
 
-## 2. Backend Architecture: The Agentic Kernel
+## 1.1 Separation of Concerns
+- Connectors (fetch)
+- Category Transformers (shape)
+- Query Planner (decide)
+- LLM (reason)
 
-The backend acts as a Functional Proxy. It translates user intent into API calls using the Model Context Protocol (MCP) and the existing Connector Pieces. We utilize the **Vercel AI SDK** to manage tool execution flows rather than purely detached background worker loops.
+## 1.2 Never Send Raw Data to LLM
+Always transform to canonical schema.
 
-### A. The Orchestrator (NestJS)
+## 1.3 Category-Based Abstraction
+Domains:
+- TMS
+- Accounting
+- CRM / Marketing
 
-- **Intent Classifier**: Uses a high-speed LLM (e.g., Gemini 1.5 Flash) to identify the target app and object.
-- **MCP Server**: Dynamically exposes "Tools" to the LLM based on the user's active `app_connection` records, mapping universal piece triggers/actions into JSON schemas.
-- **Connector Proxy Service**: A specialized service that executes the `run()` function of an Activepieces Piece in "Live Mode," injecting credentials on-the-fly.
+---
 
-### B. Security & Identity Layer
+# 2. High-Level Architecture
 
-- **Auth Resolver**: The Copilot fetches encrypted OAuth tokens from the `public.app_connection` table.
-- **Token Guard**: Uses standard refresh-lock mechanisms to ensure the token is active before tool execution.
-- **Context Isolation**: Strict ABAC/RBAC validation ensures the LLM only "sees" and "calls" tools for apps the specific organization has authenticated.
+```
+User Query
+    ↓
+Query Planner
+    ↓
+Tool Selection
+    ↓
+Connector (App)
+    ↓
+Category Transformer
+    ↓
+Canonical Schema
+    ↓
+LLM
+```
 
-## 3. Frontend Architecture: Generative Business UI
+---
 
-The frontend transforms raw JSON responses from external APIs into structured, interactive business cards using modern React tools.
+# 3. Category-Based Transformation Layer
 
-### A. The Generative UI Layer
+## Purpose
+Convert app-specific data into minimal, standardized business objects.
 
-Instead of simple markdown, the Copilot uses **Dynamic Component Injection**:
-- **JSON Payload**: The backend returns a raw JSON stream from the source app via the Vercel AI SDK.
-- **Component Selection**: The UI identifies the `objectType` and mounts an interactive Business Card Template. 
-  - *Example 1*: `LoadCard` showing map, weight, carrier, and ETA.
-  - *Example 2*: `InvoiceCard` showing amount, due date, and "Paid/Unpaid" toggle.
-- **Skeleton States**: The UI automatically animates skeletons per-tool call while the backend proxies the live SaaS APIs.
+## Key Idea
+Different apps → Same category → Same schema
 
-### B. Actionable Intelligence (Future Plan)
+---
 
-Provides suggested subsequent actions inline:
-- *Data*: "Invoice is overdue."
-- *Action Chip*: `[ Create Reminder in Slack ]` or `[ Mark as Paid ]`.
+# 4. Canonical Schemas (Full Set)
 
-## 4. End-to-End Execution Flow (Real-time)
+## 4.1 TMS — Load
+```ts
+type TMS_Load = {
+  entity: "load";
+  id: string;
+  number: string;
+  status: string;
+  route: { origin: string; destination: string };
+  shipment?: { commodity?: string; weight?: number; units?: string };
+  stops?: { count: number };
+  financials?: {
+    customer_total?: number;
+    carrier_total?: number;
+    margin?: number;
+    invoice_status?: string;
+  };
+};
+```
 
-1. **User Query**: *"Where is Load #5501 right now and who is driving it?"*
-2. **Identify Intent**: Backend recognizes a query for Salesforce object `rtms__Load__c`.
-3. **Resolve Connection**: System locates the active Salesforce connection within the user's Vault.
-4. **Discovery (JIT)**: Backend queries the Salesforce Discovery adapter to validate field labels.
-5. **Execute Tool**: 
-   - LLM triggers: `get_source_record(object: "rtms__Load__c", filter: "Name=5501")`
-   - The Connector Proxy safely executes this against the live API.
-6. **Format & Stream**: 
-   - Salesforce returns live JSON.
-   - The Vercel AI SDK streams the text response combined with specialized JSON tool-call markers.
-   - The UI intercepts the payload and intelligently renders the `LoadCard`.
+## 4.2 TMS — Stop
+```ts
+type TMS_Stop = {
+  entity: "stop";
+  id: string;
+  sequence: number;
+  type: "pickup" | "delivery";
+  location: string;
+  date?: string;
+  status?: string;
+};
+```
 
-## 5. Technical Stack Summary
+## 4.3 Accounting — Invoice
+```ts
+type Accounting_Invoice = {
+  entity: "invoice";
+  id: string;
+  number: string;
+  status: string;
+  amounts: { total: number; paid?: number; balance?: number };
+  parties?: { customer?: string; vendor?: string };
+  dates?: { issue_date?: string; due_date?: string };
+};
+```
 
-- **LLM Interface**: Vercel AI SDK (Server-side & Client-side runtime hooks).
-- **Protocol**: Model Context Protocol (MCP) mapping LLM actions.
-- **Handshake**: FluxNex connections (OAuth/KMS Vault).
-- **Execution**: FluxNex PieceExecutor evaluating code dynamically.
-- **UI**: React + TailwindCSS + Lucide (Generative/Dynamic components).
+## 4.4 Accounting — Payment
+```ts
+type Accounting_Payment = {
+  entity: "payment";
+  id: string;
+  amount: number;
+  date: string;
+  method?: string;
+  linked_invoice?: string;
+};
+```
 
-## 6. Strategic Value as a Standalone Product
+## 4.5 CRM — Customer
+```ts
+type CRM_Customer = {
+  entity: "customer";
+  id: string;
+  name: string;
+  email?: string;
+  company?: string;
+};
+```
 
-Entering the market as a "Zero-Stale" AI Agent appeals to:
-- **Data Residency Fears**: Customers who refuse data warehousing replicas.
-- **Instant Actions**: Customers looking for direct "Create record" capabilities without pipeline setup.
-- **Unified Search**: Small teams needing unified command-line-style search capabilities over multiple disjointed apps.
+---
+
+# 5. Category Transformers
+
+Example: Salesforce → TMS Load
+
+```ts
+function mapSalesforceToTMS(raw: any): TMS_Load {
+  const l = raw.rtms__Load__c;
+  const rel = raw.relations || {};
+
+  return {
+    entity: "load",
+    id: l.Id,
+    number: l.Name,
+    status: l.rtms__Load_Status__c,
+    route: {
+      origin: l.rtms__Origin__c,
+      destination: l.rtms__Destination__c,
+    },
+    shipment: {
+      commodity: rel["rtms__LineItem__c|1:N"]?.records?.[0]?.rtms__Item_Description__c,
+      weight: l.rtms__Total_Weight__c,
+      units: l.rtms__Weight_Units__c,
+    },
+    stops: {
+      count: rel["rtms__Stop__c|1:N"]?.records?.length || 0,
+    },
+    financials: {
+      customer_total: l.rtms__Customer_Quote_Total__c,
+      carrier_total: l.rtms__Carrier_Invoice_Total__c,
+      margin: l.rtms__Margin_Quoted__c,
+      invoice_status: rel["rtms__CarrierInvoice__c|1:N"]?.records?.[0]?.rtms__Invoice_Status__c,
+    },
+  };
+}
+```
+
+---
+
+# 6. Transformer Registry
+
+```ts
+const categoryTransformers = {
+  TMS: { salesforce: mapSalesforceToTMS },
+  Accounting: { quickbooks: mapQuickbooksToAccounting },
+};
+```
+
+---
+
+# 7. Query Planner
+
+## Purpose
+Determine category, intent, tool, and view mode.
+
+## Example
+```ts
+function planTMS(query: string) {
+  const q = query.toLowerCase();
+  const id = q.match(/\b\d{5,}\b/)?.[0];
+
+  if (q.includes("invoice") || q.includes("margin")) {
+    return { intent: "financial", tool: "getLoadFinancials", params: { id } };
+  }
+
+  if (q.includes("stop") || q.includes("tracking")) {
+    return { intent: "execution", tool: "getLoadExecution", params: { id } };
+  }
+
+  return { intent: "summary", tool: "getLoadSummary", params: { id } };
+}
+```
+
+---
+
+# 8. Sequence Diagrams
+
+## 8.1 Standard Flow
+```
+User → Planner → Tool → Connector → Transformer → LLM → Response
+```
+
+## 8.2 Detailed Flow
+```
+User Query
+  ↓
+Query Planner (detect category + intent)
+  ↓
+Select Tool (minimal)
+  ↓
+Connector fetches raw data
+  ↓
+Category Transformer reduces + normalizes
+  ↓
+LLM receives small payload
+  ↓
+Response generated
+```
+
+---
+
+# 9. API Contract Layer
+
+## Purpose
+Expose consistent APIs to UI / clients.
+
+## Example API
+
+### GET Load Summary
+```
+GET /api/tms/load/{id}/summary
+```
+
+Response:
+```json
+{
+  "number": "215236",
+  "status": "Delivered",
+  "origin": "Salem",
+  "destination": "Iuka"
+}
+```
+
+### GET Financials
+```
+GET /api/tms/load/{id}/financials
+```
+
+---
+
+# 10. Cross-Category Reasoning Engine
+
+## Purpose
+Enable reasoning across domains.
+
+## Example
+Query:
+"Compare load margin vs invoice payment"
+
+## Flow
+```
+Planner → Detect multi-category (TMS + Accounting)
+  ↓
+Fetch TMS Load
+Fetch Accounting Invoice
+  ↓
+Transform both to canonical schemas
+  ↓
+Merge context
+  ↓
+LLM reasoning
+```
+
+## Output Example
+- Margin: $500
+- Invoice Paid: $300
+- Gap: $200
+
+---
+
+# 11. Error Handling & Fallback
+
+## 11.1 Tool Failure
+- Retry once
+- Return partial data if possible
+
+## 11.2 Payload Too Large
+```ts
+if (JSON.stringify(data).length > 2000) {
+  return { error: "Payload reduced" };
+}
+```
+
+## 11.3 Missing Data
+- Return available fields
+- Add "unknown" instead of failing
+
+## 11.4 LLM Failure
+- Fallback to direct formatted response
+
+---
+
+# 12. Token Optimization
+
+| Scenario | Before | After |
+|--------|--------|------|
+| Single load | 5000 tokens | 200 tokens |
+| Batch | 50K | 2K |
+
+---
+
+# 13. Observability
+
+```ts
+console.log({
+  raw_size: JSON.stringify(raw).length,
+  transformed_size: JSON.stringify(transformed).length,
+});
+```
+
+---
+
+# 14. Data Lineage Tracking
+
+## Purpose
+Provide full traceability from raw source data to final AI response.
+
+## Flow
+```
+Raw Data (Connector)
+  ↓
+Transformed Data (Category Transformer)
+  ↓
+LLM Input
+  ↓
+LLM Output
+```
+
+## Implementation
+
+```ts
+const lineage = {
+  trace_id: uuid(),
+  raw_size: JSON.stringify(raw).length,
+  transformed_size: JSON.stringify(transformed).length,
+  tool: plan.tool,
+  category: plan.category,
+  timestamp: new Date().toISOString(),
+};
+
+logLineage(lineage);
+```
+
+## Benefits
+- Debugging
+- Auditing
+- Cost tracking
+- Performance optimization
+
+---
+
+# 15. Caching Strategy
+
+## Purpose
+Reduce repeated API calls and token usage.
+
+## Cache Keys
+```
+{tenantId}:{category}:{entity}:{id}:{viewMode}
+```
+
+Example:
+```
+tenant_abc123:TMS:Load:215236:summary
+```
+
+Note: All cache keys must include tenantId prefix to enforce tenant isolation.
+
+## Cache Layers
+
+### 1. Raw Cache (Connector Level)
+- Cache raw API responses
+- TTL: short (e.g., 5–15 mins)
+
+### 2. Transformed Cache (Recommended)
+- Cache canonical output
+- TTL: medium (e.g., 15–60 mins)
+
+### 3. LLM Response Cache (Optional)
+- Cache final responses
+- Useful for repeated queries
+
+## Example
+```ts
+const cacheKey = `${category}:${entity}:${id}:${viewMode}`;
+
+if (cache.exists(cacheKey)) {
+  return cache.get(cacheKey);
+}
+
+const result = transform(...);
+cache.set(cacheKey, result);
+```
+
+---
+
+# 16. Multi-Tenant Isolation Design
+
+## Purpose
+Ensure strict data isolation across customers.
+
+## Key Principles
+
+### 1. Tenant-Aware Context
+Every request must include:
+```ts
+{
+  tenant_id: string;
+}
+```
+
+### 2. Isolation at All Layers
+
+#### Connector Layer
+- Separate credentials per tenant
+
+#### Cache Layer
+```
+{tenant_id}:{category}:{entity}:{id}:{viewMode}
+```
+
+#### Transformation Layer
+- No shared state
+
+#### LLM Context
+- Never mix tenant data
+
+---
+
+## Example
+```ts
+const cacheKey = `${tenantId}:${category}:${entity}:${id}:${viewMode}`;
+```
+
+---
+
+## Security Measures
+
+- Row-level isolation
+- Encrypted credentials
+- Per-tenant API limits
+- Audit logs per tenant
+
+---
+
+# 17. Final Summary
+
+This system provides:
+- Category-based abstraction
+- Generic transformation layer
+- Query planner
+- Cross-category reasoning
+- API contract layer
+- Data lineage tracking
+- Caching strategy
+- Multi-tenant isolation
+
+Result:
+A scalable, efficient, domain-aware, enterprise-grade AI platform.

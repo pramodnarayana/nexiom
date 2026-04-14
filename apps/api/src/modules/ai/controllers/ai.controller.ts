@@ -1,26 +1,35 @@
-import { Readable, pipeline } from 'node:stream';
-import type { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import type { Request } from 'express';
 import {
   Controller,
   Post,
+  Get,
+  Param,
   Body,
   UseGuards,
   UseInterceptors,
   Req,
-  Res,
   ValidationPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nexiom/auth';
 import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiTelemetryInterceptor } from '../interceptors/ai-telemetry.interceptor.js';
-import { OrchestratorService, ChatRequest } from '@nexiom/ai-engine';
-import type { UIMessage } from 'ai';
+import {
+  OrchestratorService,
+  ChatRequest,
+  ChatPersistenceService,
+} from '@nexiom/ai-engine';
+import { QueueName, QUEUE_SERVICE } from '@nexiom/queue';
+import type { IQueueService } from '@nexiom/queue';
 import { PinoLogger } from 'nestjs-pino';
+import { Inject } from '@nestjs/common';
 
 @Controller('ai')
 export class AiController {
   constructor(
     private readonly orchestrator: OrchestratorService,
+    private readonly chatPersistence: ChatPersistenceService,
+    @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AiController.name);
@@ -44,34 +53,94 @@ export class AiController {
       user?: { organizationId?: string; tenantId?: string };
       traceId?: string;
     },
-    @Res() res: Response,
   ) {
     const tenantId: string =
       req.user?.organizationId ?? req.user?.tenantId ?? 'anonymous';
     const traceId: string = req.traceId ?? 'unknown';
 
-    const webResponse = await this.orchestrator.streamChat(
-      body.messages as unknown as UIMessage[],
+    // Grab the last message to derive summary or extract content
+    const rawLatestMessage = body.messages[body.messages.length - 1] as unknown;
+    const latestMessage = rawLatestMessage as
+      | { role: string; content: string }
+      | undefined;
+
+    // Safely sync conversation initialization
+    const conversation = await this.chatPersistence.getOrCreateConversation(
       tenantId,
-      traceId,
+      body.conversationId,
+      latestMessage?.content?.substring(0, 50) || 'New AI Request',
     );
 
-    // Express Socket Bridging
-    res.status(webResponse.status || 200);
-    webResponse.headers?.forEach((value: string, key: string) => {
-      res.setHeader(key, value);
+    if (latestMessage && latestMessage.role === 'user') {
+      await this.chatPersistence.appendMessage({
+        tenantId,
+        conversationId: conversation.id,
+        role: 'user',
+        content: latestMessage.content,
+        status: 'completed',
+      });
+    }
+
+    const jobId = randomUUID();
+
+    // Send payload to the AI Copilot async pipeline
+    await this.queueService.send(QueueName.AiCopilotQueue, {
+      jobId,
+      traceId,
+      tenantId,
+      conversationId: conversation.id,
+      messages: body.messages,
+      model: body.model,
     });
 
-    if (webResponse.body) {
-      // Use native Node.js web stream mapping to guarantee flawless chunk flushing and backpressure
-      // @ts-expect-error Ignore type mismatch between Web stream and Node stream
-      pipeline(Readable.fromWeb(webResponse.body), res, (err) => {
-        if (err) {
-          this.logger.error('stream error', err);
-        }
-      });
-    } else {
-      res.end();
-    }
+    this.logger.info(`Offloaded chat request to queue. Job: ${jobId}`);
+
+    // Return the handle for the Realtime UX to subscribe via SSE
+    return {
+      success: true,
+      jobId,
+      conversationId: conversation.id,
+    };
+  }
+
+  /**
+   * GET /api/v1/ai/conversations
+   * Retrieves all historical conversations for the current tenant.
+   */
+  @Get('conversations')
+  @UseGuards(AuthGuard)
+  async listConversations(
+    @Req()
+    req: Request & {
+      user?: { organizationId?: string; tenantId?: string };
+    },
+  ) {
+    const tenantId: string =
+      req.user?.organizationId ?? req.user?.tenantId ?? 'anonymous';
+    const conversations =
+      await this.chatPersistence.listConversations(tenantId);
+    return { success: true, data: conversations };
+  }
+
+  /**
+   * GET /api/v1/ai/conversations/:id/messages
+   * Retrieves the full human-readable lineage of a specific conversation.
+   */
+  @Get('conversations/:id/messages')
+  @UseGuards(AuthGuard)
+  async getConversationMessages(
+    @Param('id') conversationId: string,
+    @Req()
+    req: Request & {
+      user?: { organizationId?: string; tenantId?: string };
+    },
+  ) {
+    const tenantId: string =
+      req.user?.organizationId ?? req.user?.tenantId ?? 'anonymous';
+    const messages = await this.chatPersistence.getLineage(
+      tenantId,
+      conversationId,
+    );
+    return { success: true, data: messages };
   }
 }

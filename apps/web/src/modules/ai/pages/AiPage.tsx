@@ -1,16 +1,12 @@
-import { AiChat } from '../components/chat/AiChat';
+import { Outlet } from 'react-router-dom';
+import { AiSidebar } from '../components/chat/AiSidebar';
 
 export function AiPage() {
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="mb-6">
-         <h1 className="text-2xl font-bold tracking-tight text-foreground">AI</h1>
-         <p className="text-muted-foreground mt-1">
-           Interact dynamically with your connected data in real-time.
-         </p>
-      </div>
-      <div className="flex-1 w-full max-w-5xl mx-auto min-h-0">
-        <AiChat />
+    <div className="flex h-[calc(100vh-4rem)] border rounded-xl overflow-hidden bg-background shadow-sm mt-4">
+      <AiSidebar />
+      <div className="flex flex-col flex-1 min-w-0 bg-muted/5 relative">
+        <Outlet />
       </div>
     </div>
   );

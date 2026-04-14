@@ -27,6 +27,13 @@ import { ExceptionCenterPage } from '../../modules/exceptions/pages/ExceptionCen
 import { PipelineTracePage } from '../../modules/trace/pages/PipelineTracePage';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { AiPage } from '../../modules/ai/pages/AiPage';
+import { AiChat } from '../../modules/ai/components/chat/AiChat';
+
+const AiChatContainer = () => (
+    <div className="flex-1 w-full max-w-5xl mx-auto min-h-0">
+        <AiChat />
+    </div>
+);
 
 export function TenantRoutes() {
     const navGroups = [
@@ -99,7 +106,10 @@ export function TenantRoutes() {
                             <Route path="workspaces/:id/stitches/:stitchId" element={<StitchDetailPage />} />
                             <Route path="workspaces/:id/stitches/:stitchId/traces" element={<PipelineTracePage />} />
                             <Route path="exceptions" element={<ExceptionCenterPage />} />
-                            <Route path="ai" element={<AiPage />} />
+                            <Route path="ai" element={<AiPage />}>
+                                <Route index element={<AiChatContainer />} />
+                                <Route path="chat/:chatId" element={<AiChatContainer />} />
+                            </Route>
                         </Route>
                     </Routes>
                 </Refine>
