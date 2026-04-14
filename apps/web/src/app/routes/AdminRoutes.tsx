@@ -3,6 +3,8 @@ import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { AppRoutes } from '@/shared/lib/auth/constants';
 import { AdminStitchesPage } from '../../modules/admin/AdminStitchesPage';
+import { MappingsList } from '../../modules/mappings/list';
+import { MappingsCreate } from '../../modules/mappings/create';
 
 import { dataProvider } from "../providers/data-provider";
 import { authProvider } from "../providers/auth-provider";
@@ -52,6 +54,16 @@ export function AdminRoutes() {
                             meta: {
                                 label: "Tenants",
                             }
+                        },
+                        {
+                            name: "mappings",
+                            list: "/admin/mappings",
+                            create: "/admin/mappings/create",
+                            edit: "/admin/mappings/edit/:id",
+                            meta: {
+                                label: "Canonical Mappings",
+                                canDelete: true
+                            }
                         }
                     ]}
                     options={{
@@ -68,6 +80,9 @@ export function AdminRoutes() {
                             <Route path="users/edit/:id" element={<UserEdit />} />
                             <Route path="tenants" element={<TenantListPage />} />
                             <Route path="tenants/:id" element={<TenantEdit />} />
+                            <Route path="mappings" element={<MappingsList />} />
+                            <Route path="mappings/create" element={<MappingsCreate />} />
+                            <Route path="mappings/edit/:id" element={<MappingsCreate />} />
                             <Route path="settings" element={<div>Settings Placeholder</div>} />
                             <Route path="stitches" element={<AdminStitchesPage />} />
                         </Route>

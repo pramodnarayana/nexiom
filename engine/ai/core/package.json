@@ -13,18 +13,23 @@
     }
   },
   "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.69",
     "@ai-sdk/google": "^3.0.58",
+    "@ai-sdk/openai": "^3.0.52",
     "@nestjs/common": "^11.0.1",
     "@nexiom/credentials": "workspace:*",
     "@nexiom/database": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "@nexiom/piece-registry": "workspace:*",
+    "@nexiom/cache": "workspace:*",
+    "@nexiom/transformer": "workspace:*",
     "ai": "^6.0.146",
     "nestjs-pino": "^4.3.0",
     "zod": "^3.25.76"

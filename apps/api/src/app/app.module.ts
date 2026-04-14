@@ -34,6 +34,7 @@ import { ObservabilityModule } from '../modules/observability/observability.modu
 import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
 import { AiModule } from '../modules/ai/ai.module.js';
+import { MappingsModule } from '../modules/mappings/mappings.module.js';
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { AiModule } from '../modules/ai/ai.module.js';
     TraceModule,
     ExceptionsModule,
     AiModule,
+    MappingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, ShutdownService],
