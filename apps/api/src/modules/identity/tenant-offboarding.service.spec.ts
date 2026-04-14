@@ -104,4 +104,37 @@ describe('TenantOffboardingService', () => {
       'Organization non-existent not found',
     );
   });
+
+  it('should handle tenant with multiple connections', async () => {
+    // First query: get connections for tenant - return multiple connections
+    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
+    // Second query: get registry for conn-1
+    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_schema_1' }]);
+    // Third query: get registry for conn-2
+    db.where.mockResolvedValueOnce([{ connectionId: 'conn-2', dataNamespace: 'ws_schema_2' }]);
+
+    await service.offboardTenant('test-tenant');
+
+    // Assert db.execute called for each namespace (schema drop)
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    // Assert transaction invoked once for logical deletion
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('should handle tenant with some connections missing registry entries', async () => {
+    // First query: get connections for tenant
+    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
+    // Second query: get registry for conn-1 - returns entry
+    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_schema_1' }]);
+    // Third query: get registry for conn-2 - returns empty (missing registry entry)
+    db.where.mockResolvedValueOnce([]);
+
+    // Should resolve without throwing
+    await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
+
+    // Assert db.execute called only for existing namespace (conn-1)
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    // Assert transaction still invoked for logical deletion
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
 });

@@ -14,6 +14,7 @@ export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
   private readonly endpoint: string | undefined;
   private readonly basicAuth: string | undefined;
+  private enabled = false;
 
   constructor(private readonly config: ConfigService) {
     const host = this.config.get<string>('OPENOBSERVE_HOST');
@@ -25,7 +26,19 @@ export class MetricsService {
 
     // E.g. https://api.openobserve.ai/api/default/pipeline_metrics/_json
     if (host) {
-      this.endpoint = `${host.replace(/\/$/, '')}/api/${org}/${stream}/_json`;
+      const candidateEndpoint = `${host.replace(/\/$/, '')}/api/${org}/${stream}/_json`;
+      try {
+        // Validate URL is well-formed before setting endpoint
+        new URL(candidateEndpoint);
+        this.endpoint = candidateEndpoint;
+      } catch (error) {
+        this.logger.error(
+          `Invalid OPENOBSERVE_HOST configuration: failed to parse URL "${candidateEndpoint}"`,
+          error,
+        );
+        this.enabled = false;
+        return;
+      }
     }
 
     const user = this.config.get<string>('OPENOBSERVE_USER');
@@ -33,6 +46,11 @@ export class MetricsService {
 
     if (user && pass) {
       this.basicAuth = Buffer.from(`${user}:${pass}`).toString('base64');
+    }
+
+    // Enable metrics only if both endpoint and auth are configured
+    if (this.endpoint && this.basicAuth) {
+      this.enabled = true;
     }
   }
 
@@ -65,10 +83,15 @@ export class MetricsService {
       _value: value,
     };
 
-    if (!this.endpoint || !this.basicAuth) {
+    if (!this.enabled) {
       if (this.config.get('NODE_ENV') !== 'production') {
         this.logger.debug(`[Metric] ${metricName}=${value}`, payload);
       }
+      return;
+    }
+
+    // TypeScript guard: this.enabled is only true when endpoint and basicAuth are set
+    if (!this.endpoint || !this.basicAuth) {
       return;
     }
 
