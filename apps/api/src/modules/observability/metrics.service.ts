@@ -48,6 +48,14 @@ export class MetricsService {
     value,
     tags,
   }: MetricPayload): void {
+    // Guard against non-finite numeric values
+    if (!Number.isFinite(value)) {
+      this.logger.error(
+        `Invalid metric value for ${metricName}: ${value} (non-finite). Skipping metric.`,
+      );
+      return;
+    }
+
     const payload = {
       ...tags,
       timestamp: new Date().toISOString(),
@@ -66,6 +74,9 @@ export class MetricsService {
 
     try {
       // Fire-and-forget to avoid blocking the pipeline
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
       fetch(this.endpoint, {
         method: 'POST',
         headers: {
@@ -73,12 +84,18 @@ export class MetricsService {
           Authorization: `Basic ${this.basicAuth}`,
         },
         body: JSON.stringify([payload]),
-      }).catch((err) => {
-        this.logger.error(
-          `OpenObserve Metric Delivery Failed for ${metricName}`,
-          err,
-        );
-      });
+        signal: controller.signal,
+      })
+        .then(() => {
+          clearTimeout(timeoutId);
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId);
+          this.logger.error(
+            `OpenObserve Metric Delivery Failed for ${metricName}`,
+            err,
+          );
+        });
     } catch (error) {
       this.logger.error(
         `OpenObserve Metric Delivery Initialization Failed`,

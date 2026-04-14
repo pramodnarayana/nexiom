@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, NotFoundException } from '@nestjs/common';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -6,7 +6,7 @@ import {
   appConnections,
   organization,
 } from '@nexiom/database';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, inArray } from 'drizzle-orm';
 
 @Injectable()
 export class TenantOffboardingService {
@@ -32,32 +32,44 @@ export class TenantOffboardingService {
       .from(appConnections)
       .where(eq(appConnections.tenantId, tenantId));
 
-    // Best-effort schema cleanup - idempotent and safe to retry
-    for (const currConnection of connections) {
-      const [registry] = await this.db
+    if (connections.length === 0) {
+      this.logger.debug(`No connections found for tenant ${tenantId}`);
+    } else {
+      // Fetch all relevant registry rows in one query to avoid N+1
+      const connectionIds = connections.map((c) => c.id);
+      const registries = await this.db
         .select()
         .from(connectionStorageRegistry)
-        .where(eq(connectionStorageRegistry.connectionId, currConnection.id))
-        .limit(1);
+        .where(inArray(connectionStorageRegistry.connectionId, connectionIds));
 
-      if (registry && registry.dataNamespace) {
-        this.logger.log(
-          `Safely dropping physical schema: ${registry.dataNamespace}`,
-        );
-        try {
-          // CASCADE guarantees all tables partitioned for this tenant are permanently annihilated.
-          // This runs outside the transaction below - DDL operations may not be fully transactional.
-          // DROP SCHEMA IF EXISTS is idempotent and safe to retry via reconciliation job.
-          await this.db.execute(
-            sql`DROP SCHEMA IF EXISTS ${sql.identifier(registry.dataNamespace)} CASCADE`,
+      // Build a map of connectionId → registry for O(1) lookup
+      const registryMap = new Map(
+        registries.map((r) => [r.connectionId, r])
+      );
+
+      // Best-effort schema cleanup - idempotent and safe to retry
+      for (const currConnection of connections) {
+        const registry = registryMap.get(currConnection.id);
+
+        if (registry && registry.dataNamespace) {
+          this.logger.log(
+            `Safely dropping physical schema: ${registry.dataNamespace}`,
           );
-        } catch (error) {
-          // Log full context for reconciliation/cleanup job
-          this.logger.error(
-            `Failed dropping schema ${registry.dataNamespace} for tenant ${tenantId}, connectionId ${currConnection.id}. Schema may require manual cleanup or retry.`,
-            error,
-          );
-          // Continue with logical deletion - orphaned schemas can be cleaned by reconciliation job
+          try {
+            // CASCADE guarantees all tables partitioned for this tenant are permanently annihilated.
+            // This runs outside the transaction below - DDL operations may not be fully transactional.
+            // DROP SCHEMA IF EXISTS is idempotent and safe to retry via reconciliation job.
+            await this.db.execute(
+              sql`DROP SCHEMA IF EXISTS ${sql.identifier(registry.dataNamespace)} CASCADE`,
+            );
+          } catch (error) {
+            // Log full context for reconciliation/cleanup job
+            this.logger.error(
+              `Failed dropping schema ${registry.dataNamespace} for tenant ${tenantId}, connectionId ${currConnection.id}. Schema may require manual cleanup or retry.`,
+              error,
+            );
+            // Continue with logical deletion - orphaned schemas can be cleaned by reconciliation job
+          }
         }
       }
     }
@@ -74,7 +86,7 @@ export class TenantOffboardingService {
         .limit(1);
 
       if (!existing) {
-        throw new InternalServerErrorException(
+        throw new NotFoundException(
           `Organization ${tenantId} not found - cannot offboard non-existent tenant`,
         );
       }

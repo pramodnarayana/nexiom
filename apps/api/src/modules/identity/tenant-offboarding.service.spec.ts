@@ -10,6 +10,7 @@ export type MockDb = {
   limit: Mock;
   execute: Mock;
   transaction: Mock;
+  delete?: Mock;
 };
 
 describe('TenantOffboardingService', () => {
@@ -23,8 +24,14 @@ describe('TenantOffboardingService', () => {
       where: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([]),
       execute: vi.fn().mockResolvedValue({}),
-      transaction: vi.fn((cb: (tx: { delete: Mock; where: Mock }) => void) =>
-        cb({ delete: vi.fn().mockReturnThis(), where: vi.fn() }),
+      transaction: vi.fn((cb: (tx: any) => void) =>
+        cb({
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([{ id: 'test-tenant' }]),
+          delete: vi.fn().mockReturnThis(),
+        }),
       ),
     };
 
@@ -66,7 +73,35 @@ describe('TenantOffboardingService', () => {
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
+    const loggerSpy = vi.spyOn(service['logger'], 'error');
+
     await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
     expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed dropping schema'),
+      expect.any(Error),
+    );
+
+    loggerSpy.mockRestore();
+  });
+
+  it('should throw when organization does not exist', async () => {
+    // First query: get connections for tenant (empty)
+    db.limit.mockResolvedValueOnce([]);
+
+    // Mock transaction to return empty array for organization check
+    db.transaction.mockImplementationOnce((cb: (tx: any) => void) =>
+      cb({
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
+        delete: vi.fn().mockReturnThis(),
+      }),
+    );
+
+    await expect(service.offboardTenant('non-existent')).rejects.toThrow(
+      'Organization non-existent not found',
+    );
   });
 });

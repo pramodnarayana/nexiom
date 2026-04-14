@@ -2,11 +2,11 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { SHARD_APPLICATION_PATH } from "@nexiom/engine";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class GitopsSyncWorker {
@@ -58,8 +58,18 @@ export class GitopsSyncWorker {
             // query string cache-buster `?update=timestamp`, Node natively evaluates
             // the new pulled JS without requiring a worker restart!
             const branchName = this.DEFAULT_BRANCH;
-            const { stdout } = await execAsync(
-              `git pull origin ${branchName} --ff-only`,
+
+            // Validate branch name to prevent command injection
+            if (!/^[a-zA-Z0-9/_\-\.]+$/.test(branchName)) {
+              this.logger.warn(
+                `Invalid branch name format: ${branchName}. Skipping sync for ${shard.name}.`,
+              );
+              continue;
+            }
+
+            const { stdout } = await execFileAsync(
+              'git',
+              ['pull', 'origin', branchName, '--ff-only'],
               { cwd: repoPath },
             );
 
