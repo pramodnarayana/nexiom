@@ -539,7 +539,10 @@ export class ConnectorsService {
           .values({
             connectionId: connection.id,
             dataNamespace: schemaName,
-            databaseHostId: 'primary-cluster',
+            databaseHostId:
+              (envType ?? 'PRODUCTION') === 'SANDBOX'
+                ? 'rds-standard'
+                : 'aurora-prod',
             regionContext: resolvedRegionContext,
           })
           .onConflictDoNothing({

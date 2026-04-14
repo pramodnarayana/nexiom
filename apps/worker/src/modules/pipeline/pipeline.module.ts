@@ -10,6 +10,7 @@ import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
 import { DeliveryOutboxWorker } from "./delivery-outbox.worker.js";
+import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 
 @Module({
   imports: [QueueModule, DbModule, StorageResolverModule, PiecesModule],
@@ -20,6 +21,7 @@ import { DeliveryOutboxWorker } from "./delivery-outbox.worker.js";
     DeliveryService,
     NormalizedOutboxWorker,
     DeliveryOutboxWorker,
+    GitopsSyncWorker,
   ],
   exports: [
     ReplicaService,
