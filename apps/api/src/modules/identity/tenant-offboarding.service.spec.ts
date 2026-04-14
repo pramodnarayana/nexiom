@@ -21,7 +21,7 @@ describe('TenantOffboardingService', () => {
     db = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
       limit: vi.fn().mockResolvedValue([]),
       execute: vi.fn().mockResolvedValue({}),
       transaction: vi.fn((cb: (tx: any) => void) =>
@@ -55,9 +55,9 @@ describe('TenantOffboardingService', () => {
 
   it('should perform hard deletion of schemas and logical cascade', async () => {
     // First query: get connections for tenant
-    db.limit.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
     // Second query: get registry for connection
-    db.limit.mockResolvedValueOnce([{ dataNamespace: 'ws_test_schema' }]);
+    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_test_schema' }]);
 
     await service.offboardTenant('test-tenant');
 
@@ -67,9 +67,9 @@ describe('TenantOffboardingService', () => {
 
   it('should handle schema drop errors gracefully without halting', async () => {
     // First query: get connections for tenant
-    db.limit.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
     // Second query: get registry for connection
-    db.limit.mockResolvedValueOnce([{ dataNamespace: 'ws_test_schema' }]);
+    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_test_schema' }]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
@@ -87,7 +87,7 @@ describe('TenantOffboardingService', () => {
 
   it('should throw when organization does not exist', async () => {
     // First query: get connections for tenant (empty)
-    db.limit.mockResolvedValueOnce([]);
+    db.where.mockResolvedValueOnce([]);
 
     // Mock transaction to return empty array for organization check
     db.transaction.mockImplementationOnce((cb: (tx: any) => void) =>

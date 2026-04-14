@@ -86,15 +86,28 @@ export class MetricsService {
         body: JSON.stringify([payload]),
         signal: controller.signal,
       })
-        .then(() => {
-          clearTimeout(timeoutId);
+        .then(async (response) => {
+          if (!response.ok) {
+            let responseBody = '';
+            try {
+              responseBody = await response.text();
+            } catch (parseErr) {
+              responseBody = '(unable to read response body)';
+            }
+            this.logger.error(
+              `OpenObserve Metric Delivery Failed for ${metricName}: HTTP ${response.status} ${response.statusText}`,
+              responseBody,
+            );
+          }
         })
         .catch((err) => {
-          clearTimeout(timeoutId);
           this.logger.error(
             `OpenObserve Metric Delivery Failed for ${metricName}`,
             err,
           );
+        })
+        .finally(() => {
+          clearTimeout(timeoutId);
         });
     } catch (error) {
       this.logger.error(

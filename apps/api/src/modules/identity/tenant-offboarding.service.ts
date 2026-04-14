@@ -16,12 +16,16 @@ export class TenantOffboardingService {
 
   /**
    * GDPR-compliant offboarding process for an entire tenant.
-   * Hard-drops all isolated infrastructure schemas, invalidates KMS blobs,
-   * and subsequently removes all references from the main multi-tenant tables.
+   * Hard-drops all isolated infrastructure schemas and subsequently removes
+   * all references from the main multi-tenant tables.
    *
    * Schema drops run outside the org-deletion transaction as a best-effort,
    * idempotent workflow. Drop failures are logged with full context for
    * reconciliation by a cleanup job.
+   *
+   * Note: KMS alias cleanup is delegated to a separate cleanup job and is not
+   * performed here. However, deletion of app_connection rows cryptographically
+   * renders encrypted vault values unusable.
    */
   async offboardTenant(tenantId: string): Promise<void> {
     this.logger.log(`Initiating full GDPR deletion for tenant: ${tenantId}`);

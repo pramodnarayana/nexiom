@@ -51,7 +51,7 @@ export class GitopsSyncWorker {
         // 3. Verify it is a valid git repository
         try {
           const isRepo = await fs.stat(path.join(repoPath, ".git"));
-          if (isRepo.isDirectory()) {
+          if (isRepo.isDirectory() || isRepo.isFile()) {
             this.logger.debug(`Synchronizing Shard: ${shard.name}`);
 
             // Execute git pull. Because the LogicResolver dynamic import appends a
@@ -70,7 +70,12 @@ export class GitopsSyncWorker {
             const { stdout } = await execFileAsync(
               'git',
               ['pull', 'origin', branchName, '--ff-only'],
-              { cwd: repoPath },
+              {
+                cwd: repoPath,
+                env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+                timeout: 60000, // 60 second timeout
+                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+              },
             );
 
             if (stdout.includes("Already up to date.")) {
