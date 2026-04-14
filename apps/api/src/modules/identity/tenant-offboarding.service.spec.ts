@@ -47,7 +47,9 @@ describe('TenantOffboardingService', () => {
   });
 
   it('should perform hard deletion of schemas and logical cascade', async () => {
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    // First query: get connections for tenant
+    db.limit.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    // Second query: get registry for connection
     db.limit.mockResolvedValueOnce([{ dataNamespace: 'ws_test_schema' }]);
 
     await service.offboardTenant('test-tenant');
@@ -57,7 +59,9 @@ describe('TenantOffboardingService', () => {
   });
 
   it('should handle schema drop errors gracefully without halting', async () => {
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    // First query: get connections for tenant
+    db.limit.mockResolvedValueOnce([{ id: 'conn-1' }]);
+    // Second query: get registry for connection
     db.limit.mockResolvedValueOnce([{ dataNamespace: 'ws_test_schema' }]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));

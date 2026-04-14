@@ -4,16 +4,15 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { SHARD_APPLICATION_PATH } from "@nexiom/engine";
 
 const execAsync = promisify(exec);
 
 @Injectable()
 export class GitopsSyncWorker {
   private readonly logger = new Logger(GitopsSyncWorker.name);
-  private readonly SHARD_BASE_PATH = path.resolve(
-    process.cwd(),
-    "../engine/sync/application",
-  );
+  private readonly SHARD_BASE_PATH = SHARD_APPLICATION_PATH;
+  private readonly DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || "main";
 
   /**
    * Runs every 5 minutes to synchronize tenant logic shards.
@@ -58,8 +57,9 @@ export class GitopsSyncWorker {
             // Execute git pull. Because the LogicResolver dynamic import appends a
             // query string cache-buster `?update=timestamp`, Node natively evaluates
             // the new pulled JS without requiring a worker restart!
+            const branchName = this.DEFAULT_BRANCH;
             const { stdout } = await execAsync(
-              "git pull origin main --ff-only",
+              `git pull origin ${branchName} --ff-only`,
               { cwd: repoPath },
             );
 
@@ -71,9 +71,10 @@ export class GitopsSyncWorker {
               );
             }
           }
-        } catch (_err) {
+        } catch (err) {
           this.logger.warn(
-            `Directory ${shard.name} is not a valid git repository. Skipping sync.`,
+            `Directory ${shard.name} is not a valid git repository or git operation failed. Skipping sync.`,
+            err instanceof Error ? err.message : String(err),
           );
         }
       }

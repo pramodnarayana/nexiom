@@ -18,6 +18,10 @@ export class TenantOffboardingService {
    * GDPR-compliant offboarding process for an entire tenant.
    * Hard-drops all isolated infrastructure schemas, invalidates KMS blobs,
    * and subsequently removes all references from the main multi-tenant tables.
+   *
+   * Schema drops run outside the org-deletion transaction as a best-effort,
+   * idempotent workflow. Drop failures are logged with full context for
+   * reconciliation by a cleanup job.
    */
   async offboardTenant(tenantId: string): Promise<void> {
     this.logger.log(`Initiating full GDPR deletion for tenant: ${tenantId}`);
@@ -28,6 +32,7 @@ export class TenantOffboardingService {
       .from(appConnections)
       .where(eq(appConnections.tenantId, tenantId));
 
+    // Best-effort schema cleanup - idempotent and safe to retry
     for (const currConnection of connections) {
       const [registry] = await this.db
         .select()
@@ -41,14 +46,18 @@ export class TenantOffboardingService {
         );
         try {
           // CASCADE guarantees all tables partitioned for this tenant are permanently annihilated.
+          // This runs outside the transaction below - DDL operations may not be fully transactional.
+          // DROP SCHEMA IF EXISTS is idempotent and safe to retry via reconciliation job.
           await this.db.execute(
             sql`DROP SCHEMA IF EXISTS ${sql.identifier(registry.dataNamespace)} CASCADE`,
           );
         } catch (error) {
+          // Log full context for reconciliation/cleanup job
           this.logger.error(
-            `Failed dropping schema ${registry.dataNamespace} for tenant ${tenantId}. Proceeding with logical deletion.`,
+            `Failed dropping schema ${registry.dataNamespace} for tenant ${tenantId}, connectionId ${currConnection.id}. Schema may require manual cleanup or retry.`,
             error,
           );
+          // Continue with logical deletion - orphaned schemas can be cleaned by reconciliation job
         }
       }
     }
@@ -57,6 +66,19 @@ export class TenantOffboardingService {
     // will recursively wipe out `appConnections`, `connectionStorageRegistry`,
     // `uiWorkspaces`, `integration_stitches`, `global_entity_map` and the `member` rows
     await this.db.transaction(async (tx) => {
+      // Verify organization exists before deletion
+      const [existing] = await tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.id, tenantId))
+        .limit(1);
+
+      if (!existing) {
+        throw new InternalServerErrorException(
+          `Organization ${tenantId} not found - cannot offboard non-existent tenant`,
+        );
+      }
+
       // Technically KMS alias keys should be wiped here via KMS Provider but
       // since the physical encrypted value blobs are stored in app_connection.value,
       // deleting the row cryptographically renders the vault unusable.

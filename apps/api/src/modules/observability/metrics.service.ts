@@ -49,12 +49,12 @@ export class MetricsService {
     tags,
   }: MetricPayload): void {
     const payload = {
+      ...tags,
       timestamp: new Date().toISOString(),
       tenantId,
       stitchId,
       _metric: metricName,
       _value: value,
-      ...tags,
     };
 
     if (!this.endpoint || !this.basicAuth) {
