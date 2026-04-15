@@ -14,6 +14,7 @@ export class GitopsSyncWorker {
     process.env.SHARD_APPLICATION_PATH ||
     path.resolve(process.cwd(), "../../engine/sync/application");
   private readonly DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || "main";
+  private isSyncRunning = false;
 
   /**
    * Runs every 5 minutes to synchronize tenant logic shards.
@@ -23,6 +24,15 @@ export class GitopsSyncWorker {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async syncShardRepositories() {
+    // Reentrancy guard to prevent overlapping sync runs
+    if (this.isSyncRunning) {
+      this.logger.warn(
+        "Skipping GitOps sync - previous run still in progress",
+      );
+      return;
+    }
+
+    this.isSyncRunning = true;
     this.logger.log("Starting GitOps Shard Synchronization...");
 
     try {
@@ -96,6 +106,8 @@ export class GitopsSyncWorker {
       }
     } catch (error) {
       this.logger.error("GitOps Shard Synchronization failed", error);
+    } finally {
+      this.isSyncRunning = false;
     }
   }
 }

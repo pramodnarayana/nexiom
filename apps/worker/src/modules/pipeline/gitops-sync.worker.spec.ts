@@ -115,29 +115,32 @@ describe("GitopsSyncWorker", () => {
   it("should skip shards with invalid branch names", async () => {
     // Override the environment branch strictly for this run
     const originalBranch = process.env.DEFAULT_BRANCH;
-    process.env.DEFAULT_BRANCH = "invalid&&branch;name";
 
-    const testModule: TestingModule = await Test.createTestingModule({
-      providers: [GitopsSyncWorker],
-    }).compile();
+    try {
+      process.env.DEFAULT_BRANCH = "invalid&&branch;name";
 
-    const testService = testModule.get<GitopsSyncWorker>(GitopsSyncWorker);
+      const testModule: TestingModule = await Test.createTestingModule({
+        providers: [GitopsSyncWorker],
+      }).compile();
 
-    vi.mocked(fs.readdir).mockResolvedValueOnce([
-      { name: "inject-shard", isDirectory: () => true } as unknown as Dirent<
-        Buffer<ArrayBuffer>
-      >,
-    ]);
-    vi.mocked(fs.stat).mockResolvedValueOnce({
-      isDirectory: () => true,
-    } as unknown as Stats);
+      const testService = testModule.get<GitopsSyncWorker>(GitopsSyncWorker);
 
-    await testService.syncShardRepositories();
+      vi.mocked(fs.readdir).mockResolvedValueOnce([
+        { name: "inject-shard", isDirectory: () => true } as unknown as Dirent<
+          Buffer<ArrayBuffer>
+        >,
+      ]);
+      vi.mocked(fs.stat).mockResolvedValueOnce({
+        isDirectory: () => true,
+      } as unknown as Stats);
 
-    // Execution shouldn't happen due to validation failure
-    expect(execFile).not.toHaveBeenCalled();
+      await testService.syncShardRepositories();
 
-    process.env.DEFAULT_BRANCH = originalBranch; // restore
+      // Execution shouldn't happen due to validation failure
+      expect(execFile).not.toHaveBeenCalled();
+    } finally {
+      process.env.DEFAULT_BRANCH = originalBranch; // restore
+    }
   });
 
   it("should gracefully continue if stat throws (e.g. no .git directory)", async () => {

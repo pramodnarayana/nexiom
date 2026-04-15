@@ -65,6 +65,13 @@ describe('TenantOffboardingService', () => {
 
     expect(db.execute).toHaveBeenCalled();
     expect(db.transaction).toHaveBeenCalledTimes(1);
+
+    // Assert that the SQL passed to db.execute contains DROP SCHEMA for the test schema
+    const executeCall = db.execute.mock.calls[0][0];
+    const sqlString = executeCall.sql || executeCall.toString();
+    expect(sqlString).toMatch(/DROP SCHEMA/i);
+    expect(sqlString).toMatch(/ws_test_schema/);
+    expect(sqlString).toMatch(/CASCADE/i);
   });
 
   it('should handle schema drop errors gracefully without halting', async () => {
