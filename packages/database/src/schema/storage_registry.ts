@@ -32,7 +32,7 @@ export const connectionStorageRegistry = pgTable(
         // The Physical RDS/Cluster ID — tells the DBManager and connection pool
         // which instance to target. Env-scoped: 'aurora-prod' | 'rds-standard'
         databaseHostId: varchar('database_host_id', { length: 255 })
-            .default('primary-cluster')
+            .default('aurora-prod')
             .notNull(),
 
         // Data sovereignty — ensures queries are routed to the right region cluster

@@ -9,3 +9,6 @@ export * from './storage-resolver/storage-resolver.service.js';
 
 export * from './evaluator.js';
 export * from './hydrator.js';
+
+export * from './sharding/logic-resolver.module.js';
+export * from './sharding/logic-resolver.service.js';

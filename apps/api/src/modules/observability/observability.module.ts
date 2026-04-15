@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
+import { MetricsService } from './metrics.service.js';
 
 /**
  * Allowable characters for an inbound x-request-id: alphanumeric, hyphens,
@@ -124,6 +125,7 @@ const SAFE_TRACE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
       },
     }),
   ],
-  exports: [LoggerModule],
+  providers: [MetricsService],
+  exports: [LoggerModule, MetricsService],
 })
 export class ObservabilityModule {}
