@@ -26,9 +26,7 @@ export class GitopsSyncWorker {
   async syncShardRepositories() {
     // Reentrancy guard to prevent overlapping sync runs
     if (this.isSyncRunning) {
-      this.logger.warn(
-        "Skipping GitOps sync - previous run still in progress",
-      );
+      this.logger.warn("Skipping GitOps sync - previous run still in progress");
       return;
     }
 

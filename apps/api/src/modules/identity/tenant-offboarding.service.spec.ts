@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TenantOffboardingService } from './tenant-offboarding.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { vi, type Mock } from 'vitest';
+import type { SQL } from 'drizzle-orm';
 
 export type MockDb = {
   select: Mock;
@@ -66,9 +67,18 @@ describe('TenantOffboardingService', () => {
     expect(db.execute).toHaveBeenCalled();
     expect(db.transaction).toHaveBeenCalledTimes(1);
 
-    // Assert that the SQL passed to db.execute contains DROP SCHEMA for the test schema
-    const executeCall = db.execute.mock.calls[0][0];
-    const sqlString = executeCall.sql || executeCall.toString();
+    // Assert that the SQL passed to db.execute contains DROP SCHEMA for the test schema.
+    // db.execute receives a Drizzle SQL object whose text lives in queryChunks:
+    //   StringChunk → .value: string[]   (raw SQL fragments)
+    //   Name        → .value: string     (sql.identifier result, i.e. the schema name)
+    const executeCall = db.execute.mock.calls[0][0] as unknown as SQL;
+    const sqlString = (
+      executeCall?.queryChunks as Array<{ value?: string | string[] }>
+    )
+      .flatMap((chunk) =>
+        Array.isArray(chunk.value) ? chunk.value : [chunk.value ?? ''],
+      )
+      .join('');
     expect(sqlString).toMatch(/DROP SCHEMA/i);
     expect(sqlString).toMatch(/ws_test_schema/);
     expect(sqlString).toMatch(/CASCADE/i);
