@@ -43,6 +43,7 @@
     "@nexiom/dbmanager": "workspace:*",
     "@nexiom/engine": "workspace:*",
     "@nexiom/ai-engine": "workspace:*",
+    "@ai-sdk/google": "^3.0.58",
     "ai": "^4.1.25",
     "@nexiom/identity": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",

@@ -12,4 +12,3 @@ export * from './hydrator.js';
 
 export * from './sharding/logic-resolver.module.js';
 export * from './sharding/logic-resolver.service.js';
-export * from './sharding/shard-config.constants.js';

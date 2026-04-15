@@ -510,6 +510,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@ai-sdk/google':
+        specifier: ^3.0.58
+        version: 3.0.58(zod@4.3.5)
       '@bufbuild/protobuf':
         specifier: ^2.10.2
         version: 2.10.2

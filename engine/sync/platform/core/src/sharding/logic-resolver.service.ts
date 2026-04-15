@@ -2,7 +2,7 @@ import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { SHARD_APPLICATION_PATH } from './shard-config.constants.js';
+const SHARD_APPLICATION_PATH = process.env.SHARD_APPLICATION_PATH || path.resolve(process.cwd(), '../../engine/sync/application');
 
 /**
  * Executes a dynamically synced first-party custom logic module.

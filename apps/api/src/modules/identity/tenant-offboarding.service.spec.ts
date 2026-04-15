@@ -57,7 +57,9 @@ describe('TenantOffboardingService', () => {
     // First query: get connections for tenant
     db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
     // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_test_schema' }]);
+    db.where.mockResolvedValueOnce([
+      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
+    ]);
 
     await service.offboardTenant('test-tenant');
 
@@ -69,7 +71,9 @@ describe('TenantOffboardingService', () => {
     // First query: get connections for tenant
     db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
     // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_test_schema' }]);
+    db.where.mockResolvedValueOnce([
+      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
+    ]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
@@ -108,10 +112,11 @@ describe('TenantOffboardingService', () => {
   it('should handle tenant with multiple connections', async () => {
     // First query: get connections for tenant - return multiple connections
     db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registry for conn-1
-    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_schema_1' }]);
-    // Third query: get registry for conn-2
-    db.where.mockResolvedValueOnce([{ connectionId: 'conn-2', dataNamespace: 'ws_schema_2' }]);
+    // Second query: get registries for all connections
+    db.where.mockResolvedValueOnce([
+      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
+      { connectionId: 'conn-2', dataNamespace: 'ws_schema_2' },
+    ]);
 
     await service.offboardTenant('test-tenant');
 
@@ -124,10 +129,10 @@ describe('TenantOffboardingService', () => {
   it('should handle tenant with some connections missing registry entries', async () => {
     // First query: get connections for tenant
     db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registry for conn-1 - returns entry
-    db.where.mockResolvedValueOnce([{ connectionId: 'conn-1', dataNamespace: 'ws_schema_1' }]);
-    // Third query: get registry for conn-2 - returns empty (missing registry entry)
-    db.where.mockResolvedValueOnce([]);
+    // Second query: get registries for all connections (only conn-1 has one)
+    db.where.mockResolvedValueOnce([
+      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
+    ]);
 
     // Should resolve without throwing
     await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();

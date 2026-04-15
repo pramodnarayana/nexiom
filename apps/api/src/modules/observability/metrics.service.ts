@@ -114,7 +114,7 @@ export class MetricsService {
             let responseBody = '';
             try {
               responseBody = await response.text();
-            } catch (parseErr) {
+            } catch (_parseErr) {
               responseBody = '(unable to read response body)';
             }
             this.logger.error(

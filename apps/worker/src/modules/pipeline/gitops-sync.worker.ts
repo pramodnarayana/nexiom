@@ -4,14 +4,15 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { SHARD_APPLICATION_PATH } from "@nexiom/engine";
 
 const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class GitopsSyncWorker {
   private readonly logger = new Logger(GitopsSyncWorker.name);
-  private readonly SHARD_BASE_PATH = SHARD_APPLICATION_PATH;
+  private readonly SHARD_BASE_PATH =
+    process.env.SHARD_APPLICATION_PATH ||
+    path.resolve(process.cwd(), "../../engine/sync/application");
   private readonly DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || "main";
 
   /**
@@ -60,7 +61,7 @@ export class GitopsSyncWorker {
             const branchName = this.DEFAULT_BRANCH;
 
             // Validate branch name to prevent command injection
-            if (!/^[a-zA-Z0-9/_\-\.]+$/.test(branchName)) {
+            if (!/^[a-zA-Z0-9/_\-.]+$/.test(branchName)) {
               this.logger.warn(
                 `Invalid branch name format: ${branchName}. Skipping sync for ${shard.name}.`,
               );
@@ -68,11 +69,11 @@ export class GitopsSyncWorker {
             }
 
             const { stdout } = await execFileAsync(
-              'git',
-              ['pull', 'origin', branchName, '--ff-only'],
+              "git",
+              ["pull", "origin", branchName, "--ff-only"],
               {
                 cwd: repoPath,
-                env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+                env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
                 timeout: 60000, // 60 second timeout
                 maxBuffer: 1024 * 1024 * 10, // 10MB buffer
               },

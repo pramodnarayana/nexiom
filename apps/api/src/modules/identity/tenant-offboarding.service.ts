@@ -47,9 +47,7 @@ export class TenantOffboardingService {
         .where(inArray(connectionStorageRegistry.connectionId, connectionIds));
 
       // Build a map of connectionId → registry for O(1) lookup
-      const registryMap = new Map(
-        registries.map((r) => [r.connectionId, r])
-      );
+      const registryMap = new Map(registries.map((r) => [r.connectionId, r]));
 
       // Best-effort schema cleanup - idempotent and safe to retry
       for (const currConnection of connections) {
