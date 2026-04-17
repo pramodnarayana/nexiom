@@ -13,6 +13,7 @@
     }
   },
   "scripts": {
+    "dev": "tsc --watch --preserveWatchOutput",
     "build": "tsc"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Pause, Pencil, Play, Save, X } from 'lucide-react';
 import isEqual from 'lodash.isequal';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -8,10 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/shared/c
 import { useToast } from '@/shared/hooks/use-toast';
 
 import { getStitch, updateStitch, type StitchResponse } from '../api/stitches.api';
+import { bulkUpsertAndDeleteFieldMappings } from '../api/field-mappings.api';
 import { SchedulePanel } from '../components/SchedulePanel';
 import { DependencyList } from '../components/DependencyList';
 import { StitchConfigPanel } from '../components/StitchConfigPanel';
-import { MappingSummary } from '../components/MappingSummary';
+import { type SyncConditionRule } from '../components/MappingCanvas';
+import {
+  MultiObjectMappingEditor,
+  type CanonicalMappingEntry,
+} from '../components/MultiObjectMappingEditor';
 
 
 export function StitchDetailPage() {
@@ -23,9 +28,28 @@ export function StitchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Inline name-edit state
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // Prevents onBlur from saving when the user clicks the Cancel (✕) button:
+  // mousedown on Cancel sets this flag before the input's blur event fires.
+  const cancellingRef = useRef(false);
+
+  // Status toggle state
+  const [togglingStatus, setTogglingStatus] = useState(false);
+
   // Configuration drafting state
   const [configDraft, setConfigDraft] = useState<Record<string, unknown> | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // Field-mapping draft state — one entry per source canonical.
+  // The first entry is always the primary object (stitch.sourceObject).
+  const [canonicalMappings, setCanonicalMappings] = useState<CanonicalMappingEntry[]>([]);
+  const [syncConditions, setSyncConditions] = useState<SyncConditionRule[]>([]);
+  const [savingMappings, setSavingMappings] = useState(false);
+  const [mappingsDirty, setMappingsDirty] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -37,7 +61,33 @@ export function StitchDetailPage() {
         const data = await getStitch(id);
         if (active) {
           setStitch(data);
+          setNameDraft(data.name);
           setConfigDraft(data.config || {});
+          // Build the canonical mapping list:
+          //   1. Primary entry always first (ensures the tab ordering is stable).
+          //   2. Any additional canonicals that were previously saved follow.
+          const primaryFm = data.fieldMappings?.find(
+            (fm) => fm.sourceCanonical === data.sourceObject,
+          );
+          const secondaryFms = (data.fieldMappings ?? []).filter(
+            (fm) => fm.sourceCanonical !== data.sourceObject,
+          );
+          setCanonicalMappings([
+            { sourceCanonical: data.sourceObject, mappingRules: primaryFm?.mappingRules ?? [] },
+            ...secondaryFms.map((fm) => ({
+              sourceCanonical: fm.sourceCanonical,
+              mappingRules: fm.mappingRules,
+            })),
+          ]);
+          setSyncConditions(
+            (data.syncCondition ?? []).map((c) => ({
+              field: c.field,
+              op: c.op,
+              value: String(c.value),
+              logic: (c.logic ?? 'AND') as 'AND' | 'OR',
+            }))
+          );
+          setMappingsDirty(false);
         }
       } catch (e: unknown) {
         if (active) {
@@ -50,6 +100,151 @@ export function StitchDetailPage() {
     void load();
     return () => { active = false; };
   }, [id]);
+
+  // ── Name editing ────────────────────────────────────────────────────────────
+
+  const startEditingName = () => {
+    if (!stitch) return;
+    cancellingRef.current = false;
+    setNameDraft(stitch.name);
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  };
+
+  const cancelEditingName = () => {
+    cancellingRef.current = false;
+    setEditingName(false);
+    setNameDraft(stitch?.name ?? '');
+  };
+
+  const handleNameSave = async () => {
+    if (savingName) return; // Re-entry guard: prevent double execution
+    if (cancellingRef.current) return; // Cancel button mousedown beat onBlur
+    if (!stitch) return;
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === stitch.name) { setEditingName(false); return; }
+    setSavingName(true);
+    try {
+      const updated = await updateStitch(stitch.id, { name: trimmed });
+      setStitch(updated);
+      setNameDraft(updated.name);
+      setEditingName(false);
+      toast({ title: 'Renamed', description: `Stitch renamed to "${updated.name}".` });
+    } catch (e) {
+      toast({
+        title: 'Rename failed',
+        description: e instanceof Error ? e.message : 'Could not rename stitch.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  // ── Status toggle ────────────────────────────────────────────────────────────
+
+  const handleStatusToggle = async () => {
+    if (!stitch) return;
+    const next = stitch.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    setTogglingStatus(true);
+    try {
+      const updated = await updateStitch(stitch.id, { status: next });
+      setStitch(updated);
+      toast({ title: next === 'ACTIVE' ? 'Stitch Resumed' : 'Stitch Paused' });
+    } catch (e) {
+      toast({
+        title: 'Status change failed',
+        description: e instanceof Error ? e.message : 'Could not update status.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTogglingStatus(false);
+    }
+  };
+
+  // ── Mapping save ─────────────────────────────────────────────────────────────
+
+  const handleMappingChange = useCallback(
+    (mappings: CanonicalMappingEntry[], conditions: SyncConditionRule[]) => {
+      setCanonicalMappings(mappings);
+      setSyncConditions(conditions);
+      setMappingsDirty(true);
+    },
+    [],
+  );
+
+  const handleMappingSave = async () => {
+    if (!stitch) return;
+    setSavingMappings(true);
+    try {
+      // ── Compute what needs to be written vs deleted ──────────────────────
+      //
+      // toUpsert: canonicals that currently have rules (new or changed)
+      // toDelete: canonicals that were previously saved in the DB but are now
+      //   either removed from the editor OR have had all their rules cleared.
+      //   We must delete them explicitly because the backend rejects empty-rule
+      //   upserts (min(1) validation on mappingRules).
+      const originalCanonicals = new Set(
+        (stitch.fieldMappings ?? []).map((fm) => fm.sourceCanonical),
+      );
+      const currentWithRules = new Set(
+        canonicalMappings
+          .filter((e) => e.mappingRules.length > 0)
+          .map((e) => e.sourceCanonical),
+      );
+      const toDelete = [...originalCanonicals].filter(
+        (c) => !currentWithRules.has(c),
+      );
+
+      const toUpsert = canonicalMappings
+        .filter((entry) => entry.mappingRules.length > 0)
+        .map((entry) => ({
+          sourceCanonical: entry.sourceCanonical,
+          mappingRules: entry.mappingRules,
+        }));
+
+      // Atomic operation: perform deletes and upserts in a single transaction
+      // This prevents data loss if upserts fail after deletes succeed
+      await bulkUpsertAndDeleteFieldMappings(stitch.id, {
+        toUpsert,
+        toDelete,
+      });
+
+      await updateStitch(stitch.id, { syncCondition: syncConditions });
+
+      // Refetch the stitch with fieldMappings included (updateStitch returns bare stitch)
+      const refetchedStitch = await getStitch(stitch.id);
+      setStitch(refetchedStitch);
+      setMappingsDirty(false);
+
+      const totalRules = canonicalMappings.reduce((sum, e) => sum + e.mappingRules.length, 0);
+      const activeObjects = canonicalMappings.filter((e) => e.mappingRules.length > 0).length;
+      toast({
+        title: 'Mappings Saved',
+        description: `${totalRules} rule${totalRules !== 1 ? 's' : ''} across ${activeObjects} object${activeObjects !== 1 ? 's' : ''} saved.${
+          toDelete.length > 0 ? ` ${toDelete.length} removed object${toDelete.length !== 1 ? 's' : ''} cleared.` : ''
+        }`,
+      });
+    } catch (e) {
+      // On error, refetch the stitch to reconcile UI state with the server.
+      try {
+        const freshStitch = await getStitch(stitch.id);
+        setStitch(freshStitch);
+      } catch (refetchErr) {
+        // If refetch also fails, log but don't block the error toast.
+        console.error('Failed to refetch stitch after save error:', refetchErr);
+      }
+      toast({
+        title: 'Save failed',
+        description: e instanceof Error ? e.message : 'Could not save mappings.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingMappings(false);
+    }
+  };
+
+  // ── Config save ──────────────────────────────────────────────────────────────
 
   const handleConfigSave = async () => {
     if (!stitch || !configDraft) return;
@@ -104,20 +299,113 @@ export function StitchDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{stitch.name}</h1>
+            {/* ── Inline name edit ── */}
+            <div className="flex items-center gap-2">
+              {editingName ? (
+                <>
+                  <input
+                    ref={nameInputRef}
+                    className="text-2xl font-semibold tracking-tight bg-transparent border-b-2 border-primary focus:outline-none w-64"
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void handleNameSave();
+                      if (e.key === 'Escape') cancelEditingName();
+                    }}
+                    onBlur={() => void handleNameSave()}
+                    disabled={savingName}
+                    autoFocus
+                  />
+                  {savingName
+                    ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    : (
+                      <>
+                        <button type="button" onClick={() => void handleNameSave()} className="text-primary hover:text-primary/80" aria-label="Save name"><Check className="h-4 w-4" /></button>
+                        <button
+                          type="button"
+                          onMouseDown={() => { cancellingRef.current = true; }}
+                          onClick={cancelEditingName}
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label="Cancel rename"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </>
+                    )
+                  }
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-semibold tracking-tight">{stitch.name}</h1>
+                  <button
+                    type="button"
+                    onClick={startEditingName}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Rename stitch"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </>
+              )}
               <Badge variant={stitch.status === 'ACTIVE' ? 'default' : 'secondary'}>{stitch.status}</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Syncing {stitch.sourceObject} to {stitch.targetObject}
+              Syncing {stitch.sourceObject} → {stitch.targetObject}
             </p>
           </div>
         </div>
+        {/* ── Status toggle ── */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleStatusToggle()}
+          disabled={togglingStatus || stitch.status === 'ARCHIVED'}
+          className="gap-2"
+        >
+          {togglingStatus
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : stitch.status === 'ACTIVE'
+              ? <Pause className="h-4 w-4" />
+              : <Play className="h-4 w-4" />
+          }
+          {stitch.status === 'ACTIVE' ? 'Pause' : 'Resume'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
         <div className="md:col-span-8 space-y-8">
-          <MappingSummary stitch={stitch} />
+          <Card className="border shadow-sm">
+            <CardHeader className="py-4 border-b bg-muted/20">
+              <CardTitle className="text-lg font-semibold flex items-center justify-between">
+                <span>Field Mappings</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {stitch && canonicalMappings.length > 0 && (
+                <MultiObjectMappingEditor
+                  key={stitch.id}
+                  srcConnectionId={stitch.srcConnectionId}
+                  destConnectionId={stitch.destConnectionId}
+                  primaryObject={stitch.sourceObject}
+                  targetObject={stitch.targetObject}
+                  initialMappings={canonicalMappings}
+                  initialConditions={syncConditions}
+                  onChange={handleMappingChange}
+                />
+              )}
+            </CardContent>
+            <CardFooter className="bg-muted/10 border-t py-4">
+              <div className="flex items-center gap-3 w-full justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Changes take effect on the next sync execution.
+                </span>
+                <Button onClick={() => void handleMappingSave()} disabled={!mappingsDirty || savingMappings}>
+                  {savingMappings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Save Mappings
+                </Button>
+              </div>
+            </CardFooter>
+          </Card>
           
           <Card className="border shadow-sm">
             <CardHeader className="py-4 border-b bg-muted/20">

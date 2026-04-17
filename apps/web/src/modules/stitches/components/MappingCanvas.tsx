@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useReducer, useRef } from 'react';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Plus, RotateCcw, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import {
@@ -54,6 +54,28 @@ export interface MappingCanvasProps {
   destConnectionId: string;
   targetObject: string;
   /**
+   * Pre-populate mapping rows from saved data (edit flow).
+   *
+   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
+   * initialRules will be ignored. Callers must remount (key) the MappingCanvas
+   * component to reset internal state.
+   */
+  initialRules?: MappingRule[];
+  /**
+   * Pre-populate sync-condition rows from saved data (edit flow).
+   *
+   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
+   * initialConditions will be ignored. Callers must remount (key) the
+   * MappingCanvas component to reset internal state.
+   */
+  initialConditions?: SyncConditionRule[];
+  /**
+   * When true, the Sync Conditions section is hidden entirely.
+   * Use this for secondary source-object tabs where conditions are owned
+   * by the primary canonical and should not be duplicated.
+   */
+  hideConditions?: boolean;
+  /**
    * Called whenever the user edits mapping rows or sync conditions.
    * Should be stable (memoized with useCallback in the parent) to avoid
    * unnecessary work; the component internally stabilises the reference via a
@@ -98,15 +120,13 @@ type ComponentAction =
   | { type: 'FETCH_ERROR'; error: string }
   | { type: 'CANVAS'; update: (prev: CanvasState) => CanvasState };
 
-const INITIAL_STATE: ComponentState = {
-  fields: { src: [], dest: [], loading: true, error: null },
-  canvas: { mappingRows: [newMappingRow()], conditionRows: [] },
-};
 
 function reducer(state: ComponentState, action: ComponentAction): ComponentState {
   switch (action.type) {
     case 'FETCH_START':
-      return { fields: { src: [], dest: [], loading: true, error: null }, canvas: { mappingRows: [newMappingRow()], conditionRows: [] } };
+      // Reset field lists only — preserve canvas rows so seeded initial values
+      // from the edit flow survive connection/object changes initiated externally.
+      return { ...state, fields: { src: [], dest: [], loading: true, error: null } };
     case 'FETCH_SUCCESS':
       return { ...state, fields: { src: action.src, dest: action.dest, loading: false, error: null } };
     case 'FETCH_ERROR':
@@ -123,17 +143,40 @@ export function MappingCanvas({
   sourceObject,
   destConnectionId,
   targetObject,
+  initialRules,
+  initialConditions,
+  hideConditions = false,
   onChange,
 }: Readonly<MappingCanvasProps>) {
-  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  // Seed canvas from saved data when provided (edit flow).
+  // We compute the initial state once so the reducer starts pre-populated.
+  const computedInitial = useMemo<ComponentState>(() => {
+    const mappingRows: MappingRow[] = initialRules && initialRules.length > 0
+      ? initialRules.map((r) => ({ _id: crypto.randomUUID(), src: r.src, dest: r.dest, transform: r.transform }))
+      : [newMappingRow()];
+    const conditionRows: ConditionRow[] = initialConditions && initialConditions.length > 0
+      ? initialConditions.map((c) => ({ _id: crypto.randomUUID(), field: c.field, op: c.op, value: String(c.value), logic: c.logic }))
+      : [];
+    return {
+      fields: { src: [], dest: [], loading: true, error: null },
+      canvas: { mappingRows, conditionRows },
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — seed is applied only on first mount
+
+  const [state, dispatch] = useReducer(reducer, computedInitial);
   const { fields, canvas } = state;
 
-  useEffect(() => {
+  // ── Field fetch (initial + manual refresh) ───────────────────────────────
+
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const doFetch = useCallback((forceRefresh: boolean) => {
     dispatch({ type: 'FETCH_START' });
     let cancelled = false;
     Promise.all([
-      listFields(srcConnectionId, sourceObject),
-      listFields(destConnectionId, targetObject),
+      listFields(srcConnectionId, sourceObject, forceRefresh),
+      listFields(destConnectionId, targetObject, forceRefresh),
     ])
       .then(([src, dest]) => {
         if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', src, dest });
@@ -145,6 +188,16 @@ export function MappingCanvas({
       });
     return () => { cancelled = true; };
   }, [srcConnectionId, sourceObject, destConnectionId, targetObject]);
+
+  useEffect(() => {
+    return doFetch(refreshToken > 0);
+  // refreshToken being in deps means re-running with forceRefresh=true when user clicks refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srcConnectionId, sourceObject, destConnectionId, targetObject, refreshToken]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshToken((t) => t + 1);
+  }, []);
 
   // Stabilise onChange so the canvas-sync effect below does not re-run every
   // time the parent re-creates its callback.  The ref is always kept current so
@@ -251,7 +304,16 @@ export function MappingCanvas({
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Destination — {targetObject}
           </p>
-          <span />
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={fields.loading}
+            title="Refresh field list from connector"
+            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            aria-label="Refresh fields"
+          >
+            <RotateCcw className={`h-3 w-3 ${fields.loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         <div className="space-y-2">
@@ -319,7 +381,7 @@ export function MappingCanvas({
       </div>
 
       {/* ── Sync Conditions ───────────────────────────────────────────────── */}
-      <div>
+      {!hideConditions && <div>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
           Sync Conditions
         </p>
@@ -408,7 +470,7 @@ export function MappingCanvas({
           <Plus className="mr-1 h-3 w-3" />
           Add Condition
         </Button>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesAdminController } from './stitches-admin.controller.js';
+import { StitchesMetadataController } from './stitches-metadata.controller.js';
 import { FieldMappingsController } from './field-mappings.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { MetadataModule } from '@nexiom/piece-registry';
@@ -21,6 +22,7 @@ import { MetadataModule } from '@nexiom/piece-registry';
   controllers: [
     StitchesController,
     StitchesAdminController,
+    StitchesMetadataController,
     FieldMappingsController,
   ],
   providers: [
