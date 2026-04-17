@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AppRoutes } from '@/shared/lib/auth/constants';
-import { ArrowLeft, GitMerge, Loader2, Plus, Trash2, Activity } from 'lucide-react';
+import { ArrowLeft, GitMerge, Loader2, Pencil, Plus, Trash2, Activity } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import {
@@ -219,6 +219,16 @@ export function StitchesPage() {
                 >
                   <Activity className="mr-2 h-3 w-3" />
                   Traces
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => { navigate(`${AppRoutes.TENANT.WORKSPACES}/${workspaceId ?? ''}/stitches/${stitch.id}`); }}
+                  aria-label="Edit stitch"
+                >
+                  <Pencil className="mr-2 h-3 w-3" />
+                  Edit
                 </Button>
                 <Button
                   variant="ghost"

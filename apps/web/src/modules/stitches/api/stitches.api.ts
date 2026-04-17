@@ -61,6 +61,12 @@ export interface CreateStitchPayload {
 export interface UpdateStitchPayload {
   name?: string;
   status?: StitchStatus;
+  syncCondition?: Array<{
+    field: string;
+    op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
+    value: string | number | boolean;
+    logic?: 'AND' | 'OR';
+  }>;
   config?: Record<string, unknown>;
 }
 

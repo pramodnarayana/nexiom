@@ -36,9 +36,18 @@ export async function listObjects(
 export async function listFields(
   connectionId: string,
   objectName: string,
+  refresh = false,
 ): Promise<FieldDescriptor[]> {
+  const params: Record<string, string | number | boolean> = {};
+  if (refresh) {
+    params['refresh'] = true;
+    // Timestamp defeats browser ETag/304 cache — without it the browser
+    // sends If-None-Match and the server returns 304 (old data).
+    params['_t'] = Date.now();
+  }
   const res = await apiClient.get<FieldDescriptor[]>(
     `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/fields`,
+    { params: Object.keys(params).length ? params : undefined },
   );
   return res.data;
 }

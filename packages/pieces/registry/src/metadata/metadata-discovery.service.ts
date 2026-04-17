@@ -226,43 +226,52 @@ export class MetadataDiscoveryService implements OnModuleInit {
     orgId: string,
     connectionId: string,
     objectName: string,
+    forceRefresh = false,
   ): Promise<FieldDescriptor[]> {
     const connection = await this.resolveConnection(orgId, connectionId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:fields:${connectionId}:${objectName}`;
-    const cached = await this.redis.get(redisKey);
-    if (cached) {
-      return JSON.parse(cached) as FieldDescriptor[];
+
+    if (forceRefresh) {
+      // Bust Redis so neither this request nor the DB-cache read below serves stale data.
+      await this.redis.del(redisKey);
+    } else {
+      const cached = await this.redis.get(redisKey);
+      if (cached) {
+        return JSON.parse(cached) as FieldDescriptor[];
+      }
     }
 
-    // ── 2. DB cache ──────────────────────────────────────────────────────────
-    const [dbRow] = await this.db
-      .select()
-      .from(connectorObjectProfiles)
-      .where(
-        and(
-          eq(connectorObjectProfiles.connectionId, connectionId),
-          eq(connectorObjectProfiles.objectName, objectName),
-        ),
-      )
-      .limit(1);
+    // ── 2. DB cache (skipped on forceRefresh) ────────────────────────────────
+    if (!forceRefresh) {
+      const [dbRow] = await this.db
+        .select()
+        .from(connectorObjectProfiles)
+        .where(
+          and(
+            eq(connectorObjectProfiles.connectionId, connectionId),
+            eq(connectorObjectProfiles.objectName, objectName),
+          ),
+        )
+        .limit(1);
 
-    if (
-      dbRow?.updatedAt &&
-      Date.now() - new Date(dbRow.updatedAt).getTime() < TTL_MS
-    ) {
-      const profile = dbRow.profile as CombinedProfile | null;
-      // fields === undefined means describeFields has never run for this object;
-      // fields === [] is a valid cache hit (connector returned no fields).
-      if (profile?.fields !== undefined) {
-        await this.redis.set(
-          redisKey,
-          JSON.stringify(profile.fields),
-          'EX',
-          TTL_SECONDS,
-        );
-        return profile.fields;
+      if (
+        dbRow?.updatedAt &&
+        Date.now() - new Date(dbRow.updatedAt).getTime() < TTL_MS
+      ) {
+        const profile = dbRow.profile as CombinedProfile | null;
+        // fields === undefined means describeFields has never run for this object;
+        // fields === [] is a valid cache hit (connector returned no fields).
+        if (profile?.fields !== undefined) {
+          await this.redis.set(
+            redisKey,
+            JSON.stringify(profile.fields),
+            'EX',
+            TTL_SECONDS,
+          );
+          return profile.fields;
+        }
       }
     }
 
@@ -273,6 +282,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
       objectName,
       credentials,
     );
+
+    // DEBUG — remove after confirming fields are correct
+    this.logger.log(
+      `[describeFields] ${connection.appName}:${objectName} → ${fields.length} fields: ` +
+      fields.slice(0, 8).map((f) => f.name).join(', ') +
+      (fields.length > 8 ? ` … (+${fields.length - 8} more)` : ''),
+    );
+
 
     await this.redis.set(redisKey, JSON.stringify(fields), 'EX', TTL_SECONDS);
 

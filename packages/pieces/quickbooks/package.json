@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "dev": "tsc -p tsconfig.lib.json --watch --preserveWatchOutput",
     "build": "tsc -p tsconfig.lib.json",
     "clean": "rm -rf dist",
     "test": "vitest run"

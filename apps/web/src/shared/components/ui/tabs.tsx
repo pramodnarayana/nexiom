@@ -9,22 +9,33 @@ const TabsContext = React.createContext<{
 } | null>(null)
 
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
-    defaultValue: string
+    /** Uncontrolled: initial active tab. Ignored when `value` is provided. */
+    defaultValue?: string
+    /** Controlled: externally managed active tab. */
+    value?: string
     onValueChange?: (value: string) => void
 }
 
 const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
-    ({ className, defaultValue, onValueChange, children, ...props }, ref) => {
-        const [activeTab, setActiveTabState] = React.useState(defaultValue)
+    ({ className, defaultValue, value: controlledValue, onValueChange, children, ...props }, ref) => {
+        // Internal state used only in uncontrolled mode.
+        const [internalTab, setInternalTab] = React.useState(defaultValue ?? '')
         const uniqueId = React.useId()
 
-        const setActiveTab = React.useCallback((value: string) => {
-            setActiveTabState(value)
-            onValueChange?.(value)
-        }, [onValueChange])
+        // When `value` is supplied externally the component is controlled;
+        // internal state is ignored and never updated.
+        const activeTab = controlledValue !== undefined ? controlledValue : internalTab
 
-        const getTabId = React.useCallback((value: string) => `${uniqueId}-tab-${value}`, [uniqueId])
-        const getPanelId = React.useCallback((value: string) => `${uniqueId}-tabpanel-${value}`, [uniqueId])
+        const setActiveTab = React.useCallback((newValue: string) => {
+            if (controlledValue === undefined) {
+                // Uncontrolled — update internal state.
+                setInternalTab(newValue)
+            }
+            onValueChange?.(newValue)
+        }, [controlledValue, onValueChange])
+
+        const getTabId = React.useCallback((v: string) => `${uniqueId}-tab-${v}`, [uniqueId])
+        const getPanelId = React.useCallback((v: string) => `${uniqueId}-tabpanel-${v}`, [uniqueId])
 
         const contextValue = React.useMemo(() => ({
             activeTab,

@@ -30,3 +30,17 @@ export async function upsertFieldMapping(
   );
   return res.data;
 }
+
+/**
+ * Permanently deletes all mapping rules for the given canonical on a stitch.
+ * Called when the user removes a source-object tab or saves with all rules cleared.
+ * Throws if the canonical has no saved DB record (caller should guard for this).
+ */
+export async function deleteFieldMapping(
+  stitchId: string,
+  sourceCanonical: string,
+): Promise<void> {
+  await apiClient.delete(
+    `/stitches/${stitchId}/mappings/${encodeURIComponent(sourceCanonical)}`,
+  );
+}

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseUUIDPipe,
@@ -88,5 +89,54 @@ export class FieldMappingsController {
       .returning();
 
     return result;
+  }
+
+  /**
+   * DELETE /stitches/:stitchId/mappings/:sourceCanonical
+   *
+   * Permanently removes all mapping rules for the given canonical on this
+   * stitch. Called when the user removes a source-object tab or clears all
+   * rules and saves. Returns 204 No Content on success.
+   */
+  @Delete(':sourceCanonical')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('stitches', 'manage')
+  async remove(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('sourceCanonical') sourceCanonical: string,
+  ) {
+    await this.performDelete(requireOrgId(auth), stitchId, sourceCanonical);
+  }
+
+  private async performDelete(
+    orgId: string,
+    stitchId: string,
+    sourceCanonical: string,
+  ) {
+    // Ownership check — never trust the caller's stitchId alone.
+    const stitch = await this.db.query.integrationStitches.findFirst({
+      where: and(
+        eq(integrationStitches.id, stitchId),
+        eq(integrationStitches.orgId, orgId),
+      ),
+    });
+    if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
+
+    const deleted = await this.db
+      .delete(fieldMappings)
+      .where(
+        and(
+          eq(fieldMappings.stitchId, stitchId),
+          eq(fieldMappings.sourceCanonical, sourceCanonical),
+        ),
+      )
+      .returning({ id: fieldMappings.id });
+
+    if (deleted.length === 0) {
+      throw new NotFoundException(
+        `No field mapping found for canonical "${sourceCanonical}" on stitch ${stitchId}.`,
+      );
+    }
   }
 }
