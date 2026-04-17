@@ -118,6 +118,7 @@ export function StitchDetailPage() {
   };
 
   const handleNameSave = async () => {
+    if (savingName) return; // Re-entry guard: prevent double execution
     if (cancellingRef.current) return; // Cancel button mousedown beat onBlur
     if (!stitch) return;
     const trimmed = nameDraft.trim();

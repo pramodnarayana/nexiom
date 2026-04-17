@@ -130,8 +130,7 @@ export class FieldMappingsController {
           eq(fieldMappings.stitchId, stitchId),
           eq(fieldMappings.sourceCanonical, sourceCanonical),
         ),
-      )
-      .returning({ id: fieldMappings.id });
+      );
 
     // Idempotent: return 204 regardless of whether rows were deleted.
     // deleted.length === 0 is a no-op, not an error.
