@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/shared/c
 import { useToast } from '@/shared/hooks/use-toast';
 
 import { getStitch, updateStitch, type StitchResponse } from '../api/stitches.api';
-import { upsertFieldMapping, deleteFieldMapping } from '../api/field-mappings.api';
+import { bulkUpsertAndDeleteFieldMappings } from '../api/field-mappings.api';
 import { SchedulePanel } from '../components/SchedulePanel';
 import { DependencyList } from '../components/DependencyList';
 import { StitchConfigPanel } from '../components/StitchConfigPanel';
@@ -196,23 +196,19 @@ export function StitchDetailPage() {
         (c) => !currentWithRules.has(c),
       );
 
-      // Safe ordering to prevent partial updates on failure:
-      // 1. Delete orphaned canonicals first
-      // 2. Upsert current canonicals
-      // 3. Update sync conditions
-      // If any step fails, we refetch to reconcile UI state.
-      await Promise.all(toDelete.map((canonical) => deleteFieldMapping(stitch.id, canonical)));
+      const toUpsert = canonicalMappings
+        .filter((entry) => entry.mappingRules.length > 0)
+        .map((entry) => ({
+          sourceCanonical: entry.sourceCanonical,
+          mappingRules: entry.mappingRules,
+        }));
 
-      await Promise.all(
-        canonicalMappings
-          .filter((entry) => entry.mappingRules.length > 0)
-          .map((entry) =>
-            upsertFieldMapping(stitch.id, {
-              sourceCanonical: entry.sourceCanonical,
-              mappingRules: entry.mappingRules,
-            }),
-          ),
-      );
+      // Atomic operation: perform deletes and upserts in a single transaction
+      // This prevents data loss if upserts fail after deletes succeed
+      await bulkUpsertAndDeleteFieldMappings(stitch.id, {
+        toUpsert,
+        toDelete,
+      });
 
       await updateStitch(stitch.id, { syncCondition: syncConditions });
 

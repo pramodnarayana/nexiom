@@ -16,3 +16,12 @@ export const UpsertFieldMappingSchema = z.object({
 export class UpsertFieldMappingBody extends createZodDto(
   UpsertFieldMappingSchema,
 ) {}
+
+export const BulkUpsertAndDeleteSchema = z.object({
+  toUpsert: z.array(UpsertFieldMappingSchema).max(50),
+  toDelete: z.array(z.string().trim().min(1).max(100)).max(50),
+});
+
+export class BulkUpsertAndDeleteBody extends createZodDto(
+  BulkUpsertAndDeleteSchema,
+) {}

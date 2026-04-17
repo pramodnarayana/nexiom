@@ -26,7 +26,7 @@ import {
   fieldMappings,
   integrationStitches,
 } from '@nexiom/database';
-import { UpsertFieldMappingBody } from './field-mappings.validation.js';
+import { UpsertFieldMappingBody, BulkUpsertAndDeleteBody } from './field-mappings.validation.js';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
 
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -134,5 +134,72 @@ export class FieldMappingsController {
 
     // Idempotent: return 204 regardless of whether rows were deleted.
     // deleted.length === 0 is a no-op, not an error.
+  }
+
+  /**
+   * POST /stitches/:stitchId/mappings/bulk
+   *
+   * Atomically performs both upserts and deletes in a single transaction.
+   * This prevents data loss from partial failures when deletes succeed but
+   * upserts fail.
+   *
+   * Returns array of upserted field mappings on success.
+   */
+  @Post('bulk')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('stitches', 'manage')
+  async bulkUpsertAndDelete(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Body() body: BulkUpsertAndDeleteBody,
+  ) {
+    const orgId = requireOrgId(auth);
+
+    // Verify stitch belongs to org
+    const stitch = await this.db.query.integrationStitches.findFirst({
+      where: and(
+        eq(integrationStitches.id, stitchId),
+        eq(integrationStitches.orgId, orgId),
+      ),
+    });
+    if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
+
+    // Perform deletes and upserts in a transaction
+    return await this.db.transaction(async (tx) => {
+      // Delete orphaned canonicals
+      for (const canonical of body.toDelete) {
+        await tx
+          .delete(fieldMappings)
+          .where(
+            and(
+              eq(fieldMappings.stitchId, stitchId),
+              eq(fieldMappings.sourceCanonical, canonical),
+            ),
+          );
+      }
+
+      // Upsert all mappings
+      const results = [];
+      for (const mapping of body.toUpsert) {
+        const [result] = await tx
+          .insert(fieldMappings)
+          .values({
+            stitchId,
+            sourceCanonical: mapping.sourceCanonical,
+            mappingRules: mapping.mappingRules,
+          })
+          .onConflictDoUpdate({
+            target: [fieldMappings.stitchId, fieldMappings.sourceCanonical],
+            set: {
+              mappingRules: mapping.mappingRules,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+        results.push(result);
+      }
+
+      return results;
+    });
   }
 }

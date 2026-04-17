@@ -44,3 +44,28 @@ export async function deleteFieldMapping(
     `/stitches/${stitchId}/mappings/${encodeURIComponent(sourceCanonical)}`,
   );
 }
+
+export interface BulkUpsertAndDeletePayload {
+  toUpsert: UpsertFieldMappingPayload[];
+  toDelete: string[];
+}
+
+/**
+ * Atomically performs both upserts and deletes in a single transaction.
+ * This prevents data loss from partial failures when deletes succeed but
+ * upserts fail.
+ *
+ * @param stitchId - The stitch ID
+ * @param payload - Object containing arrays of mappings to upsert and canonicals to delete
+ * @returns Array of upserted field mappings
+ */
+export async function bulkUpsertAndDeleteFieldMappings(
+  stitchId: string,
+  payload: BulkUpsertAndDeletePayload,
+): Promise<FieldMappingResponse[]> {
+  const res = await apiClient.post<FieldMappingResponse[]>(
+    `/stitches/${stitchId}/mappings/bulk`,
+    payload,
+  );
+  return res.data;
+}
