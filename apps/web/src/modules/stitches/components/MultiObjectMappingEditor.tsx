@@ -84,6 +84,10 @@ export function MultiObjectMappingEditor({
   const conditionsRef = useRef(conditions);
   useEffect(() => { conditionsRef.current = conditions; }, [conditions]);
 
+  // mappingsRef lets us access the current mappings value immediately after setState
+  const mappingsRef = useRef(mappings);
+  useEffect(() => { mappingsRef.current = mappings; }, [mappings]);
+
   // ── Object picker helpers ────────────────────────────────────────────────────
 
   const existingCanonicals = useMemo(
@@ -125,9 +129,12 @@ export function MultiObjectMappingEditor({
     const entry: CanonicalMappingEntry = { sourceCanonical: objectName, mappingRules: [] };
     setMappings((prev) => {
       const next = [...prev, entry];
-      onChangeRef.current(next, conditionsRef.current);
       return next;
     });
+    // After state update, read from the closure (entry is the new value we're adding)
+    const next = [...mappingsRef.current, entry];
+    mappingsRef.current = next;
+    onChangeRef.current(next, conditionsRef.current);
     setActiveTab(objectName);
     setShowObjectPicker(false);
   };
@@ -136,9 +143,12 @@ export function MultiObjectMappingEditor({
     if (canonical === primaryObject) return; // primary is immutable
     setMappings((prev) => {
       const next = prev.filter((m) => m.sourceCanonical !== canonical);
-      onChangeRef.current(next, conditionsRef.current);
       return next;
     });
+    // Compute next value outside the updater
+    const next = mappingsRef.current.filter((m) => m.sourceCanonical !== canonical);
+    mappingsRef.current = next;
+    onChangeRef.current(next, conditionsRef.current);
     // Use functional setter so we never read stale activeTab from the closure.
     setActiveTab((prev) => (prev === canonical ? primaryObject : prev));
   };
@@ -167,9 +177,14 @@ export function MultiObjectMappingEditor({
           const next = prev.map((m) =>
             m.sourceCanonical === canonical ? { ...m, mappingRules: rules } : m,
           );
-          onChangeRef.current(next, nextConditions);
           return next;
         });
+        // Compute next mappings outside the updater
+        const next = mappingsRef.current.map((m) =>
+          m.sourceCanonical === canonical ? { ...m, mappingRules: rules } : m,
+        );
+        mappingsRef.current = next;
+        onChangeRef.current(next, nextConditions);
       },
     [], // no deps — all mutable values accessed via refs or functional setState
   );

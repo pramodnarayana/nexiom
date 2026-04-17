@@ -179,9 +179,6 @@ export function MappingCanvas({
       listFields(destConnectionId, targetObject, forceRefresh),
     ])
       .then(([src, dest]) => {
-        // DEBUG — remove after verifying fields are correct
-        console.log('[MappingCanvas] src fields:', src.length, src.map((f) => f.name));
-        console.log('[MappingCanvas] dest fields:', dest.length, dest.map((f) => f.name));
         if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', src, dest });
       })
       .catch((e: unknown) => {

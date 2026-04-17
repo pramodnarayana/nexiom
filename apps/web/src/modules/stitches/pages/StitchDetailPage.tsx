@@ -213,10 +213,11 @@ export function StitchDetailPage() {
           ),
       );
 
-      const updatedStitch = await updateStitch(stitch.id, { syncCondition: syncConditions });
+      await updateStitch(stitch.id, { syncCondition: syncConditions });
 
-      // Refresh local state with the returned stitch to prevent stale canonicals.
-      setStitch(updatedStitch);
+      // Refetch the stitch with fieldMappings included (updateStitch returns bare stitch)
+      const refetchedStitch = await getStitch(stitch.id);
+      setStitch(refetchedStitch);
       setMappingsDirty(false);
 
       const totalRules = canonicalMappings.reduce((sum, e) => sum + e.mappingRules.length, 0);
