@@ -5,6 +5,10 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  BadRequestException,
+  PipeTransform,
+  Injectable,
+  ArgumentMetadata,
 } from '@nestjs/common';
 import {
   AuthGuard,
@@ -15,6 +19,27 @@ import {
 } from '@nexiom/auth';
 import { MetadataDiscoveryService } from '@nexiom/piece-registry';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
+
+/**
+ * Pipe that validates objectName path parameters to prevent cache poisoning
+ * and malformed connector calls. Enforces a whitelist pattern: alphanumeric,
+ * underscore, dot, and hyphen characters only, with a maximum length of 256.
+ */
+@Injectable()
+class ValidateObjectNamePipe implements PipeTransform<string, string> {
+  transform(value: string, metadata: ArgumentMetadata): string {
+    if (!value || typeof value !== 'string') {
+      throw new BadRequestException('Object name is required.');
+    }
+    // Whitelist: alphanumeric, underscore, dot, hyphen; max 256 chars.
+    if (!/^[A-Za-z0-9_.-]{1,256}$/.test(value)) {
+      throw new BadRequestException(
+        'Invalid object name. Only alphanumeric characters, underscores, dots, and hyphens are allowed (max 256 characters).',
+      );
+    }
+    return value;
+  }
+}
 
 /**
  * Exposes MetadataDiscoveryService over HTTP so the stitch-creation wizard
@@ -65,13 +90,13 @@ export class StitchesMetadataController {
   listFields(
     @AuthContext() auth: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
-    @Param('objectName') objectName: string,
+    @Param('objectName', ValidateObjectNamePipe) objectName: string,
     @Query('refresh') refresh?: string,
   ) {
     return this.metadataDiscovery.describeFields(
       requireOrgId(auth),
       connectionId,
-      objectName, // NestJS already URL-decodes path params
+      objectName, // Validated by ValidateObjectNamePipe
       refresh === 'true',
     );
   }
@@ -86,12 +111,12 @@ export class StitchesMetadataController {
   listRelatedObjects(
     @AuthContext() auth: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
-    @Param('objectName') objectName: string,
+    @Param('objectName', ValidateObjectNamePipe) objectName: string,
   ) {
     return this.metadataDiscovery.describeRelatedObjects(
       requireOrgId(auth),
       connectionId,
-      objectName, // NestJS already URL-decodes path params
+      objectName, // Validated by ValidateObjectNamePipe
     );
   }
 

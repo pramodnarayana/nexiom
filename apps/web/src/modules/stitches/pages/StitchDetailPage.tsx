@@ -195,10 +195,15 @@ export function StitchDetailPage() {
         (c) => !currentWithRules.has(c),
       );
 
-      // Fan-out: all writes are independent — run in a single Promise.all.
-      await Promise.all([
-        // Upsert every canonical that still has rules.
-        ...canonicalMappings
+      // Safe ordering to prevent partial updates on failure:
+      // 1. Delete orphaned canonicals first
+      // 2. Upsert current canonicals
+      // 3. Update sync conditions
+      // If any step fails, we refetch to reconcile UI state.
+      await Promise.all(toDelete.map((canonical) => deleteFieldMapping(stitch.id, canonical)));
+
+      await Promise.all(
+        canonicalMappings
           .filter((entry) => entry.mappingRules.length > 0)
           .map((entry) =>
             upsertFieldMapping(stitch.id, {
@@ -206,13 +211,14 @@ export function StitchDetailPage() {
               mappingRules: entry.mappingRules,
             }),
           ),
-        // Delete canonicals that were removed or fully cleared.
-        ...toDelete.map((canonical) => deleteFieldMapping(stitch.id, canonical)),
-        // Persist sync conditions on the primary object.
-        updateStitch(stitch.id, { syncCondition: syncConditions }),
-      ]);
+      );
 
+      const updatedStitch = await updateStitch(stitch.id, { syncCondition: syncConditions });
+
+      // Refresh local state with the returned stitch to prevent stale canonicals.
+      setStitch(updatedStitch);
       setMappingsDirty(false);
+
       const totalRules = canonicalMappings.reduce((sum, e) => sum + e.mappingRules.length, 0);
       const activeObjects = canonicalMappings.filter((e) => e.mappingRules.length > 0).length;
       toast({
@@ -222,6 +228,14 @@ export function StitchDetailPage() {
         }`,
       });
     } catch (e) {
+      // On error, refetch the stitch to reconcile UI state with the server.
+      try {
+        const freshStitch = await getStitch(stitch.id);
+        setStitch(freshStitch);
+      } catch (refetchErr) {
+        // If refetch also fails, log but don't block the error toast.
+        console.error('Failed to refetch stitch after save error:', refetchErr);
+      }
       toast({
         title: 'Save failed',
         description: e instanceof Error ? e.message : 'Could not save mappings.',

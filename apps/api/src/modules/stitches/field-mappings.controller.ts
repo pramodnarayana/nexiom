@@ -133,10 +133,7 @@ export class FieldMappingsController {
       )
       .returning({ id: fieldMappings.id });
 
-    if (deleted.length === 0) {
-      throw new NotFoundException(
-        `No field mapping found for canonical "${sourceCanonical}" on stitch ${stitchId}.`,
-      );
-    }
+    // Idempotent: return 204 regardless of whether rows were deleted.
+    // deleted.length === 0 is a no-op, not an error.
   }
 }

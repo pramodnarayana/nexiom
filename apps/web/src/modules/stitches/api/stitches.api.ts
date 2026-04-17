@@ -3,6 +3,9 @@ import type { FieldMappingResponse } from './field-mappings.api';
 
 export type StitchStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 
+/** Shared type for sync condition values across all payload/response shapes. */
+export type SyncConditionValue = string | number | boolean;
+
 export interface StitchResponse {
   id: string;
   orgId: string;
@@ -15,7 +18,7 @@ export interface StitchResponse {
   syncCondition: Array<{
     field: string;
     op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
-    value: string | number | boolean;
+    value: SyncConditionValue;
     logic?: 'AND' | 'OR';
   }>;
   status: StitchStatus;
@@ -37,11 +40,11 @@ export interface CreateStitchPayload {
   sourceObject: string;
   /** Vendor object name on the destination connection (e.g. "Customer"). NOT NULL in DB. */
   targetObject: string;
-  /** Optional filter conditions applied at sync time. Values are always sent as strings; the backend coerces to the appropriate type. */
+  /** Optional filter conditions applied at sync time. */
   syncCondition?: Array<{
     field: string;
     op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
-    value: string;
+    value: SyncConditionValue;
     logic?: 'AND' | 'OR';
   }>;
   /**
@@ -64,7 +67,7 @@ export interface UpdateStitchPayload {
   syncCondition?: Array<{
     field: string;
     op: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
-    value: string | number | boolean;
+    value: SyncConditionValue;
     logic?: 'AND' | 'OR';
   }>;
   config?: Record<string, unknown>;

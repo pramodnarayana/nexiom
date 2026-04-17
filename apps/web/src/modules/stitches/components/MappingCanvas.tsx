@@ -53,9 +53,21 @@ export interface MappingCanvasProps {
   sourceObject: string;
   destConnectionId: string;
   targetObject: string;
-  /** Pre-populate mapping rows from saved data (edit flow). */
+  /**
+   * Pre-populate mapping rows from saved data (edit flow).
+   *
+   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
+   * initialRules will be ignored. Callers must remount (key) the MappingCanvas
+   * component to reset internal state.
+   */
   initialRules?: MappingRule[];
-  /** Pre-populate sync-condition rows from saved data (edit flow). */
+  /**
+   * Pre-populate sync-condition rows from saved data (edit flow).
+   *
+   * IMPORTANT: This prop is read ONLY ONCE on mount. Subsequent changes to
+   * initialConditions will be ignored. Callers must remount (key) the
+   * MappingCanvas component to reset internal state.
+   */
   initialConditions?: SyncConditionRule[];
   /**
    * When true, the Sync Conditions section is hidden entirely.

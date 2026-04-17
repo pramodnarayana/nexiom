@@ -46,7 +46,6 @@ const QB_FIELDS: Record<string, FieldDescriptor[]> = {
     { name: 'FamilyName', label: 'Last Name', type: 'string', filterable: true, sortable: true, nillable: true },
     { name: 'CompanyName', label: 'Company Name', type: 'string', filterable: true, sortable: true, nillable: true },
     { name: 'PrimaryEmailAddr', label: 'Email', type: 'string', filterable: true, sortable: false, nillable: true },
-    { name: 'PrimaryPhone', label: 'Phone', type: 'string', filterable: false, sortable: false, nillable: true },
     // BillAddr sub-fields
     { name: 'BillAddr.Line1', label: 'Billing Address Line 1', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'BillAddr.Line2', label: 'Billing Address Line 2', type: 'string', filterable: false, sortable: false, nillable: true },
@@ -61,7 +60,7 @@ const QB_FIELDS: Record<string, FieldDescriptor[]> = {
     { name: 'ShipAddr.CountrySubDivisionCode', label: 'Shipping State / Province', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'ShipAddr.PostalCode', label: 'Shipping Postal Code', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'ShipAddr.Country', label: 'Shipping Country', type: 'string', filterable: false, sortable: false, nillable: true },
-    // Phone / Fax
+    // Phone / Fax (removed top-level 'PrimaryPhone' that conflicts with 'PrimaryPhone.FreeFormNumber')
     { name: 'PrimaryPhone.FreeFormNumber', label: 'Phone Number', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'Fax.FreeFormNumber', label: 'Fax Number', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'Balance', label: 'Balance', type: 'currency', filterable: true, sortable: true, nillable: true },
@@ -83,11 +82,13 @@ const QB_FIELDS: Record<string, FieldDescriptor[]> = {
     { name: 'BillAddr.CountrySubDivisionCode', label: 'Billing State / Province', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'BillAddr.PostalCode', label: 'Billing Postal Code', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'BillAddr.Country', label: 'Billing Country', type: 'string', filterable: false, sortable: false, nillable: true },
-    // ShipAddr sub-fields
+    // ShipAddr sub-fields (added missing Line2 and Country)
     { name: 'ShipAddr.Line1', label: 'Shipping Address Line 1', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'ShipAddr.Line2', label: 'Shipping Address Line 2', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'ShipAddr.City', label: 'Shipping City', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'ShipAddr.CountrySubDivisionCode', label: 'Shipping State / Province', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'ShipAddr.PostalCode', label: 'Shipping Postal Code', type: 'string', filterable: false, sortable: false, nillable: true },
+    { name: 'ShipAddr.Country', label: 'Shipping Country', type: 'string', filterable: false, sortable: false, nillable: true },
     // Phone / Fax
     { name: 'PrimaryPhone.FreeFormNumber', label: 'Phone Number', type: 'string', filterable: false, sortable: false, nillable: true },
     { name: 'Fax.FreeFormNumber', label: 'Fax Number', type: 'string', filterable: false, sortable: false, nillable: true },

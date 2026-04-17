@@ -33,9 +33,15 @@ export interface MultiObjectMappingEditorProps {
   /**
    * Initial mapping entries — one per source canonical.
    * The first entry MUST be for primaryObject; upstream sorts it that way.
+   *
+   * IMPORTANT: Read-only on mount — consumers must key this component to reset.
    */
   initialMappings: CanonicalMappingEntry[];
-  /** Sync conditions always belong to the primary canonical. */
+  /**
+   * Sync conditions always belong to the primary canonical.
+   *
+   * IMPORTANT: Read-only on mount — consumers must key this component to reset.
+   */
   initialConditions: SyncConditionRule[];
   /**
    * Fired whenever ANY canonical's rules or the sync conditions change.
@@ -64,6 +70,7 @@ export function MultiObjectMappingEditor({
   // Object-picker state
   const [showObjectPicker, setShowObjectPicker] = useState(false);
   const [availableObjects, setAvailableObjects] = useState<ObjectDescriptor[]>([]);
+  const [availableObjectsTimestamp, setAvailableObjectsTimestamp] = useState<number>(0);
   const [loadingObjects, setLoadingObjects] = useState(false);
   const [objectError, setObjectError] = useState<string | null>(null);
 
@@ -92,17 +99,20 @@ export function MultiObjectMappingEditor({
     [availableObjects, existingCanonicals],
   );
 
-  const handleLoadObjects = async () => {
+  const handleLoadObjects = async (forceRefresh = false) => {
     setObjectError(null);
-    // Re-use the cached list if already fetched.
-    if (availableObjects.length > 0) {
+    // Re-use the cached list if already fetched and not stale (< 300 seconds).
+    const now = Date.now();
+    const isStale = now - availableObjectsTimestamp > 300_000;
+    if (availableObjects.length > 0 && !forceRefresh && !isStale) {
       setShowObjectPicker(true);
       return;
     }
     setLoadingObjects(true);
     try {
-      const objects = await listObjects(srcConnectionId);
+      const objects = await listObjects(srcConnectionId, { refresh: forceRefresh || isStale });
       setAvailableObjects(objects);
+      setAvailableObjectsTimestamp(now);
       setShowObjectPicker(true);
     } catch (e) {
       setObjectError(e instanceof Error ? e.message : 'Failed to load objects.');

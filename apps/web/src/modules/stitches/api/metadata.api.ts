@@ -22,13 +22,29 @@ export interface FieldDescriptor {
   referenceTo?: string[];
 }
 
+/**
+ * Helper to build request config for metadata endpoints with cache-busting.
+ * When refresh is true, adds Cache-Control: no-cache header and refresh=true param.
+ */
+function buildRefreshConfig(refresh: boolean): {
+  params?: Record<string, boolean>;
+  headers?: Record<string, string>;
+} {
+  if (!refresh) return {};
+  return {
+    params: { refresh: true },
+    headers: { 'Cache-Control': 'no-cache' },
+  };
+}
+
 export async function listObjects(
   connectionId: string,
   options?: { refresh?: boolean },
 ): Promise<ObjectDescriptor[]> {
+  const config = buildRefreshConfig(options?.refresh ?? false);
   const res = await apiClient.get<ObjectDescriptor[]>(
     `/stitches/metadata/${connectionId}/objects`,
-    { params: options?.refresh ? { refresh: true } : undefined },
+    config,
   );
   return res.data;
 }
@@ -38,16 +54,10 @@ export async function listFields(
   objectName: string,
   refresh = false,
 ): Promise<FieldDescriptor[]> {
-  const params: Record<string, string | number | boolean> = {};
-  if (refresh) {
-    params['refresh'] = true;
-    // Timestamp defeats browser ETag/304 cache — without it the browser
-    // sends If-None-Match and the server returns 304 (old data).
-    params['_t'] = Date.now();
-  }
+  const config = buildRefreshConfig(refresh);
   const res = await apiClient.get<FieldDescriptor[]>(
     `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/fields`,
-    { params: Object.keys(params).length ? params : undefined },
+    config,
   );
   return res.data;
 }

@@ -283,8 +283,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
       credentials,
     );
 
-    // DEBUG — remove after confirming fields are correct
-    this.logger.log(
+    this.logger.debug(
       `[describeFields] ${connection.appName}:${objectName} → ${fields.length} fields: ` +
       fields.slice(0, 8).map((f) => f.name).join(', ') +
       (fields.length > 8 ? ` … (+${fields.length - 8} more)` : ''),
