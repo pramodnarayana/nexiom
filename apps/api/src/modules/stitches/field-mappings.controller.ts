@@ -26,7 +26,10 @@ import {
   fieldMappings,
   integrationStitches,
 } from '@nexiom/database';
-import { UpsertFieldMappingBody, BulkUpsertAndDeleteBody } from './field-mappings.validation.js';
+import {
+  UpsertFieldMappingBody,
+  BulkUpsertAndDeleteBody,
+} from './field-mappings.validation.js';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
 
 @UseGuards(AuthGuard, PermissionsGuard)

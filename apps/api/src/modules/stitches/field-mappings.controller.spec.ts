@@ -8,6 +8,7 @@ import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
 import {
   UpsertFieldMappingSchema,
   UpsertFieldMappingBody,
+  BulkUpsertAndDeleteBody,
 } from './field-mappings.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
@@ -23,17 +24,34 @@ function buildMockDb() {
   const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insert = vi.fn().mockReturnValue({ values });
 
+  const where = vi.fn().mockReturnValue({ returning });
+  const dbDelete = vi.fn().mockReturnValue({ where });
+
+  const transaction = vi
+    .fn()
+    .mockImplementation((cb: (arg: unknown) => unknown) =>
+      cb({
+        insert,
+        delete: dbDelete,
+      } as any),
+    );
+
   return {
     findFirstStitch,
     insert,
     values,
     onConflictDoUpdate,
     returning,
+    delete: dbDelete,
+    where,
+    transaction,
     db: {
       query: {
         integrationStitches: { findFirst: findFirstStitch },
       },
       insert,
+      delete: dbDelete,
+      transaction,
     },
   };
 }
@@ -141,6 +159,62 @@ describe('FieldMappingsController', () => {
     });
 
     expect(mocks.returning).toHaveBeenCalled();
+  });
+  // ── remove (DELETE) ────────────────────────────────────────────────────────
+
+  it('remove — deletes field mappings for sourceCanonical', async () => {
+    mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
+
+    await controller.remove(makeAuth(), STITCH_ID, 'TMS_INVOICE');
+
+    expect(mocks.findFirstStitch).toHaveBeenCalledOnce();
+    expect(mocks.delete).toHaveBeenCalledOnce();
+    expect(mocks.where).toHaveBeenCalledOnce();
+  });
+
+  it('remove — throws NotFoundException when stitch not found', async () => {
+    mocks.findFirstStitch.mockResolvedValue(null);
+
+    await expect(
+      controller.remove(makeAuth(), STITCH_ID, 'TMS_INVOICE'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
+
+  // ── bulkUpsertAndDelete (POST bulk) ───────────────────────────────────────
+
+  it('bulkUpsertAndDelete — executes ops in transaction', async () => {
+    mocks.findFirstStitch.mockResolvedValue(STITCH_ROW);
+    mocks.returning.mockResolvedValue([{ id: 'upserted-id' }]);
+
+    const body: BulkUpsertAndDeleteBody = {
+      toDelete: ['TMS_INVOICE'],
+      toUpsert: [{ sourceCanonical: 'TMS_BILL', mappingRules: [] }],
+    };
+
+    const result = await controller.bulkUpsertAndDelete(
+      makeAuth(),
+      STITCH_ID,
+      body,
+    );
+
+    expect(result).toEqual([{ id: 'upserted-id' }]);
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.delete).toHaveBeenCalledOnce();
+    expect(mocks.insert).toHaveBeenCalledOnce();
+  });
+
+  it('bulkUpsertAndDelete — throws NotFoundException if stitch missing', async () => {
+    mocks.findFirstStitch.mockResolvedValue(null);
+
+    const body: BulkUpsertAndDeleteBody = { toDelete: [], toUpsert: [] };
+
+    await expect(
+      controller.bulkUpsertAndDelete(makeAuth(), STITCH_ID, body),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
 
