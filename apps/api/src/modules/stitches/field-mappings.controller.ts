@@ -123,7 +123,7 @@ export class FieldMappingsController {
     });
     if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found.`);
 
-    const deleted = await this.db
+    await this.db
       .delete(fieldMappings)
       .where(
         and(

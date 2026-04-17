@@ -8,7 +8,6 @@ import {
   BadRequestException,
   PipeTransform,
   Injectable,
-  ArgumentMetadata,
 } from '@nestjs/common';
 import {
   AuthGuard,
@@ -27,7 +26,7 @@ import { requireOrgId } from '../workspaces/workspace.utils.js';
  */
 @Injectable()
 class ValidateObjectNamePipe implements PipeTransform<string, string> {
-  transform(value: string, metadata: ArgumentMetadata): string {
+  transform(value: string): string {
     if (!value || typeof value !== 'string') {
       throw new BadRequestException('Object name is required.');
     }
