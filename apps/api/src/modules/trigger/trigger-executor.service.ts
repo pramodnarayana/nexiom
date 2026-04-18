@@ -376,12 +376,14 @@ export class TriggerExecutorService {
       extReqId: string;
     },
   ): Promise<boolean> {
+    // Validate schema name BEFORE creating any schema-derived handles
+    assertValidSchemaName(schemaName);
+
     let didInsert = false;
     const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
 
     // Strict transactional domain: guarantees L1 payload AND L1 outbox are written together
     await this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
@@ -402,7 +404,8 @@ export class TriggerExecutorService {
         await tx.insert(inboundOutbox).values({
           traceId: result[0].traceId,
           connectionId: row.connectionId,
-        });
+        })
+        .onConflictDoNothing({ target: [inboundOutbox.traceId, inboundOutbox.connectionId] });
         didInsert = true;
       }
     });
@@ -420,6 +423,7 @@ export class TriggerExecutorService {
       appName: params.appName,
       triggerName: params.triggerName,
       workspaceId: params.workspaceId,
+      connectionId: params.connectionId,
       objectType: params.objectType,
       propsValue: params.propsValue,
       auth: params.auth, // required for credential reconstruction on retry

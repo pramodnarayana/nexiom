@@ -79,10 +79,6 @@ export class DataExplorerService {
     const { inboundGateway } = buildTenantSchema(schemaName);
 
     return this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
       const [rows, countResult] = await Promise.all([
         tx
           .select()
@@ -123,10 +119,6 @@ export class DataExplorerService {
     const { replicaEntity } = buildTenantSchema(schemaName);
 
     return this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
       const [rows, countResult] = await Promise.all([
         tx
           .select()
@@ -151,6 +143,10 @@ export class DataExplorerService {
 
   // ── L3: Normalized Entity ──────────────────────────────────────────────────
 
+  // NOTE: L3 normalized_entity is tenant-global (schema-scoped) and does not
+  // have a direct connectionId column. It references replicaId which links back
+  // to L2. This endpoint intentionally returns rows from all source connections
+  // within the tenant schema. To filter by connection, join through replicaEntity.
   async listNormalized(
     orgId: string,
     stitchId: string,
@@ -167,10 +163,6 @@ export class DataExplorerService {
     const { normalizedEntity } = buildTenantSchema(schemaName);
 
     return this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
       const [rows, countResult] = await Promise.all([
         tx
           .select()
@@ -241,10 +233,6 @@ export class DataExplorerService {
     const { outboundGateway } = buildTenantSchema(schemaName);
 
     return this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-      );
       const [rows, countResult] = await Promise.all([
         tx
           .select()

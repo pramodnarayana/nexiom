@@ -6,18 +6,21 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
   UseGuards,
-  Inject,
   BadRequestException,
   DefaultValuePipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { DataExplorerService } from './data-explorer.service.js';
+
+const ALLOWED_TABS = ['inbound', 'replica', 'normalized', 'entity-map', 'outbound'] as const;
+type TabName = typeof ALLOWED_TABS[number];
 
 @Controller('stitches/:stitchId/explorer')
 @UseGuards(AuthGuard)
 export class DataExplorerController {
   constructor(
-    @Inject(DataExplorerService) private readonly explorer: DataExplorerService,
+    private readonly explorer: DataExplorerService,
   ) {}
 
   private requireOrg(ctx: RequestAuthContext): string {
@@ -27,88 +30,28 @@ export class DataExplorerController {
     return orgId;
   }
 
-  @Get('inbound')
-  listInbound(
+  @Get(':tab')
+  listByTab(
     @AuthContext() ctx: RequestAuthContext,
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('tab') tab: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('workspaceId') workspaceId?: string,
+    @Query('workspaceId', new ParseUUIDPipe({ optional: true })) workspaceId?: string,
   ) {
-    return this.explorer.listInbound(
-      this.requireOrg(ctx),
-      stitchId,
-      page,
-      limit,
-      workspaceId,
-    );
-  }
+    if (!ALLOWED_TABS.includes(tab as TabName)) {
+      throw new NotFoundException(`Tab "${tab}" not found`);
+    }
 
-  @Get('replica')
-  listReplica(
-    @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('workspaceId') workspaceId?: string,
-  ) {
-    return this.explorer.listReplica(
-      this.requireOrg(ctx),
-      stitchId,
-      page,
-      limit,
-      workspaceId,
-    );
-  }
+    const orgId = this.requireOrg(ctx);
+    const dispatchMap: Record<TabName, () => Promise<unknown>> = {
+      'inbound': () => this.explorer.listInbound(orgId, stitchId, page, limit, workspaceId),
+      'replica': () => this.explorer.listReplica(orgId, stitchId, page, limit, workspaceId),
+      'normalized': () => this.explorer.listNormalized(orgId, stitchId, page, limit, workspaceId),
+      'entity-map': () => this.explorer.listEntityMap(orgId, stitchId, page, limit, workspaceId),
+      'outbound': () => this.explorer.listOutbound(orgId, stitchId, page, limit, workspaceId),
+    };
 
-  @Get('normalized')
-  listNormalized(
-    @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('workspaceId') workspaceId?: string,
-  ) {
-    return this.explorer.listNormalized(
-      this.requireOrg(ctx),
-      stitchId,
-      page,
-      limit,
-      workspaceId,
-    );
-  }
-
-  @Get('entity-map')
-  listEntityMap(
-    @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('workspaceId') workspaceId?: string,
-  ) {
-    return this.explorer.listEntityMap(
-      this.requireOrg(ctx),
-      stitchId,
-      page,
-      limit,
-      workspaceId,
-    );
-  }
-
-  @Get('outbound')
-  listOutbound(
-    @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-    @Query('workspaceId') workspaceId?: string,
-  ) {
-    return this.explorer.listOutbound(
-      this.requireOrg(ctx),
-      stitchId,
-      page,
-      limit,
-      workspaceId,
-    );
+    return dispatchMap[tab as TabName]();
   }
 }

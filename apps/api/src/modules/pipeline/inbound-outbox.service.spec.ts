@@ -70,6 +70,13 @@ describe('InboundOutboxService', () => {
     await service.processOutbox();
     // It should have failed and called db.update to set status: 'RETRY'
     expect(db.update).toHaveBeenCalled();
+    const updateCall = db.update.mock.calls.find((call) => call.length > 0);
+    expect(updateCall).toBeDefined();
+    const setCall = db.update().set.mock.calls.find((call) =>
+      call[0] && typeof call[0] === 'object' && 'status' in call[0]
+    );
+    expect(setCall).toBeDefined();
+    expect(setCall![0]).toMatchObject({ status: 'RETRY' });
   });
 
   it('processOutboxRow should permanently fail on max attempts', async () => {
@@ -89,16 +96,30 @@ describe('InboundOutboxService', () => {
     });
 
     await service.processOutbox();
-    // It should have called db.update to set status: 'FAIL'
+    // It should have called db.update to set status: 'FAIL' and not called queueService.send for the row with attempts: 6
     expect(db.update).toHaveBeenCalled();
+    const setCall = db.update().set.mock.calls.find((call) =>
+      call[0] && typeof call[0] === 'object' && 'status' in call[0]
+    );
+    expect(setCall).toBeDefined();
+    expect(setCall![0]).toMatchObject({ status: 'FAIL' });
+    // queueService.send should have been called during the claim phase but rejected, not called again for the failed row
+    expect(queueService.send).toHaveBeenCalledWith(expect.anything(), {
+      traceId: 't1',
+      connectionId: 'c1',
+    });
   });
 
   it('should handle rejecting drainWorkspace gracefully', async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, 'error');
     db.transaction.mockRejectedValueOnce(new Error('db down'));
     // Since mock resolves 2 workspaces ws_1 and ws_2, first throws, second succeeds
     await service.processOutbox();
     // processOutbox handles rejection internally and logs it.
-    // Test passes if it does not throw unhandled exception
-    expect(true).toBe(true);
+    // Verify that the error was logged
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    expect(loggerErrorSpy.mock.calls.some((call) =>
+      call[0]?.includes('drainWorkspaceOutbox failed')
+    )).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import {
   Inbox, Database, Layers, Network, Send,
@@ -38,21 +38,41 @@ function StatusBadge({ status }: { readonly status: string }) {
 
 // ─── JSON cell ────────────────────────────────────────────────────────────────
 
+function safeStringify(obj: unknown): { pretty: string; compact: string } {
+  const seen = new Set<unknown>();
+  try {
+    const replacer = (_key: string, val: unknown) => {
+      if (val !== null && typeof val === 'object') {
+        if (seen.has(val)) return '[Circular]';
+        seen.add(val);
+      }
+      return val;
+    };
+    const pretty = JSON.stringify(obj, replacer, 2);
+    const compact = JSON.stringify(obj, replacer);
+    return { pretty, compact };
+  } catch {
+    return { pretty: '[Unserializable]', compact: '[Unserializable]' };
+  }
+}
+
 function JsonCell({ value }: { readonly value: unknown }) {
   const [expanded, setExpanded] = useState(false);
+  const serialized = useMemo(() => safeStringify(value), [value]);
+
   if (value === null || value === undefined) return <span className="text-muted-foreground italic text-xs">—</span>;
-  const str = JSON.stringify(value, null, 2);
-  const preview = JSON.stringify(value).slice(0, 60);
+
+  const preview = serialized.compact.slice(0, 60);
   return (
     <div>
       {expanded ? (
         <div className="relative">
-          <pre className="text-[10px] font-mono bg-muted/30 rounded p-2 max-h-48 overflow-auto whitespace-pre-wrap break-all">{str}</pre>
+          <pre className="text-[10px] font-mono bg-muted/30 rounded p-2 max-h-48 overflow-auto whitespace-pre-wrap break-all">{serialized.pretty}</pre>
           <button type="button" onClick={() => setExpanded(false)} className="absolute top-1 right-1 text-[10px] text-muted-foreground hover:text-foreground px-1">collapse</button>
         </div>
       ) : (
         <button type="button" onClick={() => setExpanded(true)} className="text-[10px] font-mono text-muted-foreground hover:text-foreground text-left truncate max-w-[180px]">
-          {preview}{preview.length < JSON.stringify(value).length ? '…' : ''}
+          {preview}{preview.length < serialized.compact.length ? '…' : ''}
         </button>
       )}
     </div>
@@ -67,7 +87,16 @@ function DataTable<T extends Record<string, unknown>>({ rows }: { readonly rows:
   if (rows.length === 0) return (
     <div className="text-center py-16 text-muted-foreground text-sm">No records found.</div>
   );
-  const columns = Object.keys(rows[0]);
+
+  // Compute full column union across all rows to avoid dropping columns that only appear in later rows
+  const columnSet = new Set<string>();
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      columnSet.add(key);
+    }
+  }
+  const columns = Array.from(columnSet);
+
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-sm border-collapse">
@@ -201,18 +230,42 @@ function StitchSelector({ workspaceId, value, onChange }: {
 }) {
   const [stitches, setStitches] = useState<StitchOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await listStitches(workspaceId);
         setStitches((res ?? []).map((s: StitchResponse) => ({ id: s.id, name: s.name })));
-      } catch { /* ignore */ } finally { setLoading(false); }
+        setError(null);
+      } catch (err) {
+        console.error('Failed to load stitches:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load stitches');
+        setStitches([]);
+      } finally {
+        setLoading(false);
+      }
     }
     void load();
   }, [workspaceId]);
 
   if (loading) return <Skeleton className="h-9 w-[200px] rounded-lg" />;
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-destructive">
+        <AlertCircle className="h-4 w-4" />
+        <span>{error}</span>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); setError(null); }}
+          className="text-xs underline hover:no-underline"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <select

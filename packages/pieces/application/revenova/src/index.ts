@@ -6,3 +6,6 @@ export function initializeRevenovaApplicationRegistry() {
     registerReplicaExtractor('salesforce', 'revenova', upsertRevenovaObject);
     registerNormalizer('salesforce', 'revenova', upsertTMSObject);
 }
+
+// Invoke at module load time to ensure handlers are registered before lookups
+initializeRevenovaApplicationRegistry();

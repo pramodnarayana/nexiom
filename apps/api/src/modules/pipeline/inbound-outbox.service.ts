@@ -18,6 +18,8 @@ const MAX_ATTEMPTS = 6;
 export class InboundOutboxService {
   private readonly logger = new Logger(InboundOutboxService.name);
 
+  private isProcessingOutbox = false;
+
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly queueService: QueueService,
@@ -25,38 +27,52 @@ export class InboundOutboxService {
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
-    // 1. Fetch all unique schema names (workspaces)
-    const workspaces = await this.db
-      .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
-      .from(connectionStorageRegistry)
-      .where(
-        notInArray(connectionStorageRegistry.schemaPlan, [
-          SchemaPlan.NAMESPACE_ONLY,
-        ]),
-      )
-      .groupBy(connectionStorageRegistry.dataNamespace);
+    if (this.isProcessingOutbox) {
+      this.logger.debug('processOutbox already running, skipping this invocation');
+      return;
+    }
 
-    const results = await Promise.allSettled(
-      workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
-    );
+    this.isProcessingOutbox = true;
+    try {
+      // 1. Fetch all unique schema names (workspaces)
+      const workspaces = await this.db
+        .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
+        .from(connectionStorageRegistry)
+        .where(
+          notInArray(connectionStorageRegistry.schemaPlan, [
+            SchemaPlan.NAMESPACE_ONLY,
+          ]),
+        )
+        .groupBy(connectionStorageRegistry.dataNamespace);
 
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        this.logger.error(
-          `[${workspaces[index].dataNamespace}] drainWorkspaceOutbox failed: ${
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason)
-          }`,
-        );
-      }
-    });
+      const results = await Promise.allSettled(
+        workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
+      );
+
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          this.logger.error(
+            `[${workspaces[index].dataNamespace}] drainWorkspaceOutbox failed: ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`,
+          );
+        }
+      });
+    } finally {
+      this.isProcessingOutbox = false;
+    }
   }
 
   private async drainWorkspaceOutbox(schemaName: string): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
 
     // Atomically claim rows
+    // TODO: The current logic increments attempts at claim time, which counts
+    // claim attempts rather than actual delivery failures. Consider adding a
+    // separate claim_attempts column in a future schema migration, and only
+    // increment attempts in processOutboxRow when a real delivery fails.
     const claimed = await this.db.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -89,10 +105,21 @@ export class InboundOutboxService {
       `[${schemaName}] Claimed ${claimed.length} inbound outbox rows`,
     );
 
-    // Process claimed rows
-    await Promise.allSettled(
-      claimed.map((row) => this.processOutboxRow(schemaName, row)),
-    );
+    // Process claimed rows with concurrency limit to avoid overwhelming the queue
+    const CONCURRENCY_LIMIT = 10;
+    const processWithLimit = async (rows: typeof claimed) => {
+      const results: PromiseSettledResult<void>[] = [];
+      for (let i = 0; i < rows.length; i += CONCURRENCY_LIMIT) {
+        const chunk = rows.slice(i, i + CONCURRENCY_LIMIT);
+        const chunkResults = await Promise.allSettled(
+          chunk.map((row) => this.processOutboxRow(schemaName, row)),
+        );
+        results.push(...chunkResults);
+      }
+      return results;
+    };
+
+    await processWithLimit(claimed);
   }
 
   private async processOutboxRow(

@@ -4,10 +4,23 @@ import { Pool } from 'pg';
 async function run() {
   console.log('🔄 Starting End-to-End Ingestion Trace Test...');
 
+  // Production safety guard
+  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--yes')) {
+    console.error('❌ This script modifies database state and cannot run in production without explicit confirmation.');
+    console.error('   To proceed anyway, pass --yes flag: npm run test:e2e-ingestion -- --yes');
+    process.exit(1);
+  }
+
+  const databaseUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/nexiom_local';
+  console.log(`⚠️  Target Database: ${databaseUrl}`);
+
+  if (!process.argv.includes('--yes')) {
+    console.log('⚠️  This script will UPDATE app_connection metadata and send test webhooks.');
+    console.log('   Pass --yes to skip this warning.');
+  }
+
   const pool = new Pool({
-    connectionString:
-      process.env.DATABASE_URL ||
-      'postgres://postgres:postgres@localhost:5432/nexiom_local',
+    connectionString: databaseUrl,
   });
 
   try {
@@ -75,30 +88,52 @@ async function run() {
       '✅ Webhook ingested successfully (L1 Complete)! Row stored in inbound_gateway and inbound_outbox.',
     );
     console.log(
-      '⏳ Waiting 5 seconds for InboundOutboxService to sweep and ReplicaService (L2) + NormalizerService (L3) to process...',
+      '⏳ Polling for pipeline completion (L2/L3)...',
     );
 
-    await new Promise((r) => setTimeout(r, 5000));
-
     // Let's check the database schema
-    // We need to resolve schema name. Nexiom uses lowercase connection ID without hyphens
+    // TODO: Use canonical StorageResolverService from @nexiom/database instead of
+    // hardcoding schema derivation. Import assertValidSchemaName and call it before queries.
+    // For now, using manual derivation matching the current convention:
     const schemaName =
       'ws_' + conn.workspace_id.replace(/-/g, '').toLowerCase();
 
     console.log(`🔍 Inspecting Tenant Schema: ${schemaName}`);
 
-    const resultL2 = await pool.query(
-      `SELECT * FROM ${schemaName}.replica_entity ORDER BY updated_at DESC LIMIT 1`,
-    );
+    // Poll for pipeline completion instead of fixed sleep
+    const POLL_INTERVAL_MS = 500;
+    const TIMEOUT_MS = 30000;
+    const startTime = Date.now();
+
+    let resultL2;
+    let resultL3;
+
+    while (Date.now() - startTime < TIMEOUT_MS) {
+      resultL2 = await pool.query(
+        `SELECT * FROM ${schemaName}.replica_entity ORDER BY updated_at DESC LIMIT 1`,
+      );
+      resultL3 = await pool.query(
+        `SELECT * FROM ${schemaName}.normalized_entity ORDER BY updated_at DESC LIMIT 1`,
+      );
+
+      if (resultL2.rows.length > 0 && resultL3.rows.length > 0) {
+        console.log(`✅ Pipeline completed in ${Date.now() - startTime}ms`);
+        break;
+      }
+
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    }
+
+    if (Date.now() - startTime >= TIMEOUT_MS) {
+      throw new Error('❌ Timeout: Pipeline did not complete within 30 seconds');
+    }
+
     if (resultL2.rows.length > 0) {
       console.log('✅ Found Replica (L2):', resultL2.rows[0].data);
     } else {
       console.log('❌ No Replica (L2) found.');
     }
 
-    const resultL3 = await pool.query(
-      `SELECT * FROM ${schemaName}.normalized_entity ORDER BY updated_at DESC LIMIT 1`,
-    );
     if (resultL3.rows.length > 0) {
       console.log(
         `✅ Found Normalized Entity (L3) [Type: ${resultL3.rows[0].canonical_type}]:`,

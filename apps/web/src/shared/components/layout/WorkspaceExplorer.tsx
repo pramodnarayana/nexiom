@@ -115,6 +115,8 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                 {(() => {
                                     const stitchesHref = `${wsHref}/stitches`;
                                     const isStitchesActive = location.pathname === stitchesHref || location.pathname.startsWith(`${stitchesHref}/`);
+                                    const traceHref = `${wsHref}/trace`;
+                                    const isTraceActive = location.pathname === traceHref || location.pathname.startsWith(`${traceHref}/`);
                                     return (
                                         <>
                                             <Link
@@ -130,11 +132,11 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                                 Stitches
                                             </Link>
                                             <Link
-                                                to={`${wsHref}/trace`}
-                                                aria-current={location.pathname.startsWith(`${wsHref}/trace`) ? 'page' : undefined}
+                                                to={traceHref}
+                                                aria-current={isTraceActive ? 'page' : undefined}
                                                 className={cn(
                                                     'block text-xs py-1 px-2 rounded',
-                                                    location.pathname.startsWith(`${wsHref}/trace`)
+                                                    isTraceActive
                                                         ? 'text-primary bg-primary/10 font-medium'
                                                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                                                 )}

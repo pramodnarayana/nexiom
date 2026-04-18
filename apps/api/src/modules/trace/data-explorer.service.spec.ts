@@ -94,7 +94,6 @@ describe('DataExplorerService', () => {
           offset: vi.fn().mockResolvedValue([{ id: 'inbound_1' }]), // rows mock
         };
         // Quick override for the count array
-        const originalSelect = tx.select;
         tx.select = vi.fn().mockImplementation((args) => {
           if (args && args.count) {
             return {

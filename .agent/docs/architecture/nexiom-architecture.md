@@ -17,7 +17,7 @@
 8. [Frontend — MappingCanvas & Field Refresh](#8-frontend--mappingcanvas--field-refresh)
 9. [Dev Workflow — Package Watch Mode](#9-dev-workflow--package-watch-mode)
 10. [Revenova Integration — End-to-End Example](#10-revenova-integration--end-to-end-example)
-11. [Custom Mapping — Configuration vs GitOps Sharding](#11-custom-mapping--configuration-vs-gitops-sharding)
+11. [Custom Mapping — The Security & Scale Boundary](#11-custom-mapping--the-security--scale-boundary)
 
 ---
 

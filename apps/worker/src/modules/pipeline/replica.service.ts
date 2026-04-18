@@ -115,10 +115,9 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
-        const resolvedEntityType = extracted
-          ? extracted.entityType
-          : inbound.objectType || "DEFAULT";
-        const resolvedData = extracted ? extracted.data : inbound.payload;
+        // extracted is always populated (either by extractor or fallback above)
+        const resolvedEntityType = extracted!.entityType;
+        const resolvedData = extracted!.data;
 
         // Upsert into replica_entity
         await tx

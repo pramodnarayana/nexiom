@@ -38,7 +38,7 @@ describe('DataExplorerController', () => {
   const mockNoOrgCtx = {} as RequestAuthContext;
 
   it('should throw BadRequestException if org is missing', async () => {
-    expect(() => controller.listInbound(mockNoOrgCtx, 's1', 1, 10)).toThrow(
+    await expect(controller.listInbound(mockNoOrgCtx, 's1', 1, 10)).rejects.toThrow(
       BadRequestException,
     );
   });
