@@ -1,0 +1,9 @@
+{
+  "name": "@nexiom/application-revenova",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@nexiom/piece-framework": "workspace:*"
+  }
+}

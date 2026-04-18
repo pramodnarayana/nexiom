@@ -21,6 +21,7 @@ import {
   sanitizeError,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
+import { getNormalizer } from "@nexiom/piece-framework";
 
 @Injectable()
 export class NormalizationService implements OnModuleInit, OnModuleDestroy {
@@ -84,7 +85,10 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       // to get the appName needed for piece resolution. Never use raw sql`` here
       // — appConnections provides compile-time safety and prevents SQL injection.
       const connRows = await this.db
-        .select({ appName: appConnections.appName })
+        .select({
+          appName: appConnections.appName,
+          metadata: appConnections.metadata,
+        })
         .from(appConnections)
         .where(eq(appConnections.id, connectionId))
         .limit(1);
@@ -95,6 +99,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         );
       }
       const connectionAppName = connRows[0].appName;
+      const metadata = connRows[0].metadata as Record<string, unknown> | null;
+      const appProfile = (metadata?.appProfile as string) || "default";
 
       const piece = this.pieceRegistry.getPiece(connectionAppName);
       if (!piece) {
@@ -121,10 +127,19 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         let canonicalType = "RAW";
         let canonicalData = replica.data;
 
-        // ── Normalize via piece ───────────────────────────────────────────────
-        // piece.normalize returns null when the piece does not define a canonical
-        // mapping (most pieces). In that case we store data as-is with type 'RAW'.
-        if (piece.normalize) {
+        // ── Normalize via Registry or Piece ─────────────────────────────────
+        const customNormalizer = getNormalizer(connectionAppName, appProfile);
+
+        if (customNormalizer) {
+          const normalized = customNormalizer({
+            entityType: replica.entityType,
+            data: replica.data as Record<string, unknown>,
+          });
+          if (normalized) {
+            canonicalType = normalized.canonicalType;
+            canonicalData = normalized.data;
+          }
+        } else if (piece.normalize) {
           const normalized = await piece.normalize(
             replica.entityType,
             replica.data as Record<string, unknown>,

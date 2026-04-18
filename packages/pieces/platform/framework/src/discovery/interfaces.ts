@@ -1,4 +1,5 @@
-import type { TriggerStore, FieldDescriptor } from '@nexiom/piece-framework';
+import type { TriggerStore } from '../trigger.js';
+import type { FieldDescriptor } from '../piece.js';
 import type { ObjectHint } from './optimization-registry.js';
 
 

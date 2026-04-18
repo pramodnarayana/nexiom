@@ -11,6 +11,7 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import type { DatabaseManager } from '@nexiom/dbmanager';
+import { StorageResolverModule, StorageResolverService } from '@nexiom/engine';
 
 /**
  * Wires all trigger-related services.
@@ -19,14 +20,23 @@ import type { DatabaseManager } from '@nexiom/dbmanager';
  * ScheduleModule is registered globally in AppModule via ScheduleModule.forRoot().
  */
 @Module({
-  imports: [DbModule],
+  imports: [DbModule, StorageResolverModule],
   controllers: [WebhooksController],
   providers: [
     {
       provide: TriggerExecutorService,
-      useFactory: (db: DrizzleDb, redis: Redis, dbManager: DatabaseManager) =>
-        new TriggerExecutorService(db, redis, dbManager),
-      inject: [DATABASE_CONNECTION, REDIS_CLIENT, DB_MANAGER],
+      useFactory: (
+        db: DrizzleDb,
+        redis: Redis,
+        dbManager: DatabaseManager,
+        storageResolver: StorageResolverService,
+      ) => new TriggerExecutorService(db, redis, dbManager, storageResolver),
+      inject: [
+        DATABASE_CONNECTION,
+        REDIS_CLIENT,
+        DB_MANAGER,
+        StorageResolverService,
+      ],
     },
     {
       provide: PollerService,

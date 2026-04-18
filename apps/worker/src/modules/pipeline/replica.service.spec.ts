@@ -6,6 +6,19 @@ import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("@nexiom/piece-framework", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@nexiom/piece-framework")>();
+  return {
+    ...actual,
+    getReplicaExtractor: vi.fn().mockImplementation((appName: string) => {
+      if (appName === "test_extraction_fail") {
+        return () => null; // Simulate extraction returning null
+      }
+      return undefined;
+    }),
+  };
+});
 describe("ReplicaService", () => {
   let service: ReplicaService;
   let queueService: any;
@@ -15,6 +28,14 @@ describe("ReplicaService", () => {
   beforeEach(async () => {
     queueService = { consume: vi.fn(), send: vi.fn() };
     db = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi
+        .fn()
+        .mockResolvedValue([
+          { appName: "salesforce", metadata: { appProfile: "revenova" } },
+        ]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {
           execute: vi.fn(),
@@ -137,6 +158,63 @@ describe("ReplicaService", () => {
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
     ).rejects.toThrow("Inbound record for traceId 123 not found");
+  });
+
+  it("should throw if connection not found in appConnections", async () => {
+    db.limit.mockResolvedValueOnce([]); // no appName returned
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "foo",
+            extReqId: "bar",
+            id: "1",
+            payload: {},
+          },
+        ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("Connection 456 not found in appConnections!");
+  });
+
+  it("should throw if replica extraction fails due to payload shape mismatch", async () => {
+    // Return a piece appName that demands extraction and has a mock returning null
+    db.limit.mockResolvedValueOnce([{ appName: "test_extraction_fail" }]);
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "foo",
+            extReqId: "bar",
+            id: "1",
+            payload: { junk: "data" }, // Missing the root envelope to fail extraction
+          },
+        ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("Replica extraction failed for traceId 123");
   });
 
   it("should throw if inbound record is missing extReqId", async () => {

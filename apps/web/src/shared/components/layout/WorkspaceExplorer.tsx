@@ -116,18 +116,32 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                     const stitchesHref = `${wsHref}/stitches`;
                                     const isStitchesActive = location.pathname === stitchesHref || location.pathname.startsWith(`${stitchesHref}/`);
                                     return (
-                                        <Link
-                                            to={stitchesHref}
-                                            aria-current={isStitchesActive ? 'page' : undefined}
-                                            className={cn(
-                                                'block text-xs py-1 px-2 rounded',
-                                                isStitchesActive
-                                                    ? 'text-primary bg-primary/10 font-medium'
-                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                                            )}
-                                        >
-                                            Stitches
-                                        </Link>
+                                        <>
+                                            <Link
+                                                to={stitchesHref}
+                                                aria-current={isStitchesActive ? 'page' : undefined}
+                                                className={cn(
+                                                    'block text-xs py-1 px-2 rounded',
+                                                    isStitchesActive
+                                                        ? 'text-primary bg-primary/10 font-medium'
+                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                                )}
+                                            >
+                                                Stitches
+                                            </Link>
+                                            <Link
+                                                to={`${wsHref}/trace`}
+                                                aria-current={location.pathname.startsWith(`${wsHref}/trace`) ? 'page' : undefined}
+                                                className={cn(
+                                                    'block text-xs py-1 px-2 rounded',
+                                                    location.pathname.startsWith(`${wsHref}/trace`)
+                                                        ? 'text-primary bg-primary/10 font-medium'
+                                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                                )}
+                                            >
+                                                Trace
+                                            </Link>
+                                        </>
                                     );
                                 })()}
                             </div>

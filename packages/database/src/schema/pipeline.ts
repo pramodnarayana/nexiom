@@ -215,6 +215,28 @@ export function buildTenantSchema(schemaName: string) {
     ]);
 
     /**
+     * INBOUND OUTBOX
+     *
+     * Transactional outbox pattern used to safely decouple the L1 database
+     * commit from the external queue handoff (L1 -> L2) to guarantee delivery.
+     */
+    const inboundOutbox = schema.table('inbound_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        traceId: uuid('trace_id').notNull(),
+        connectionId: uuid('connection_id').notNull(),
+        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        attempts: integer('attempts').notNull().default(0),
+        lastError: varchar('last_error', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    }, (table) => [
+        index('idx_inbound_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
+        uniqueIndex('idx_inbound_outbox_trace').on(table.traceId, table.connectionId),
+    ]);
+
+    /**
      * REPLICA OUTBOX
      *
      * Transactional outbox pattern used to safely decouple the L1/L2 database
@@ -284,6 +306,7 @@ export function buildTenantSchema(schemaName: string) {
 
     return {
         inboundGateway,
+        inboundOutbox,
         replicaEntity,
         normalizedEntity,
         outboundGateway,
