@@ -99,7 +99,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           typeof metadata?.appProfile === "string" &&
           metadata.appProfile.trim() !== ""
             ? metadata.appProfile
-            : undefined;
+            : "default";
 
         if (!appName) {
           throw new Error(

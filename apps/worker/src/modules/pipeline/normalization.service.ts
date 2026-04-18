@@ -106,7 +106,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         typeof metadata?.appProfile === "string" &&
         metadata.appProfile.trim() !== ""
           ? metadata.appProfile
-          : undefined;
+          : "default";
 
       const piece = this.pieceRegistry.getPiece(connectionAppName);
       if (!piece) {

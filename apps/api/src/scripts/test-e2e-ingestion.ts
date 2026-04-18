@@ -5,13 +5,22 @@ async function run() {
   console.log('🔄 Starting End-to-End Ingestion Trace Test...');
 
   // Production safety guard
-  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--yes')) {
-    console.error('❌ This script modifies database state and cannot run in production without explicit confirmation.');
-    console.error('   To proceed anyway, pass --yes flag: npm run test:e2e-ingestion -- --yes');
+  if (
+    process.env.NODE_ENV === 'production' &&
+    !process.argv.includes('--yes')
+  ) {
+    console.error(
+      '❌ This script modifies database state and cannot run in production without explicit confirmation.',
+    );
+    console.error(
+      '   To proceed anyway, pass --yes flag: npm run test:e2e-ingestion -- --yes',
+    );
     process.exit(1);
   }
 
-  const databaseUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/nexiom_local';
+  const databaseUrl =
+    process.env.DATABASE_URL ||
+    'postgres://postgres:postgres@localhost:5432/nexiom_local';
 
   // Sanitize DATABASE_URL for logging
   let sanitizedUrl = databaseUrl;
@@ -27,7 +36,9 @@ async function run() {
   console.log(`⚠️  Target Database: ${sanitizedUrl}`);
 
   if (!process.argv.includes('--yes')) {
-    console.log('⚠️  This script will UPDATE app_connection metadata and send test webhooks.');
+    console.log(
+      '⚠️  This script will UPDATE app_connection metadata and send test webhooks.',
+    );
     console.log('   Pass --yes to skip this warning.');
   }
 
@@ -81,7 +92,9 @@ async function run() {
       },
     };
 
-    console.log(`🚀 Sending mock webhook payload (L1) with testRunId=${testRunId}...`);
+    console.log(
+      `🚀 Sending mock webhook payload (L1) with testRunId=${testRunId}...`,
+    );
     const webhookUrl = `http://localhost:3000/v1/webhooks/${conn.id}`;
 
     const response = await fetch(webhookUrl, {
@@ -104,9 +117,7 @@ async function run() {
     console.log(
       '✅ Webhook ingested successfully (L1 Complete)! Row stored in inbound_gateway and inbound_outbox.',
     );
-    console.log(
-      '⏳ Polling for pipeline completion (L2/L3)...',
-    );
+    console.log('⏳ Polling for pipeline completion (L2/L3)...');
 
     // Let's check the database schema
     // TODO: Use canonical StorageResolverService from @nexiom/database instead of
@@ -148,13 +159,13 @@ async function run() {
       process.exit(1);
     }
 
-    if (resultL2.rows.length > 0) {
+    if (resultL2 && resultL2.rows.length > 0) {
       console.log('✅ Found Replica (L2):', resultL2.rows[0].data);
     } else {
       console.log('❌ No Replica (L2) found.');
     }
 
-    if (resultL3.rows.length > 0) {
+    if (resultL3 && resultL3.rows.length > 0) {
       console.log(
         `✅ Found Normalized Entity (L3) [Type: ${resultL3.rows[0].canonical_type}]:`,
         resultL3.rows[0].data,

@@ -401,11 +401,15 @@ export class TriggerExecutorService {
         .returning({ traceId: inboundGateway.traceId });
 
       if (result.length > 0) {
-        await tx.insert(inboundOutbox).values({
-          traceId: result[0].traceId,
-          connectionId: row.connectionId,
-        })
-        .onConflictDoNothing({ target: [inboundOutbox.traceId, inboundOutbox.connectionId] });
+        await tx
+          .insert(inboundOutbox)
+          .values({
+            traceId: result[0].traceId,
+            connectionId: row.connectionId,
+          })
+          .onConflictDoNothing({
+            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+          });
         didInsert = true;
       }
     });

@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { notInArray, eq, sql } from 'drizzle-orm';
+import { notInArray, sql } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import {
   DATABASE_CONNECTION,
@@ -28,7 +28,9 @@ export class InboundOutboxService {
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
     if (this.isProcessingOutbox) {
-      this.logger.debug('processOutbox already running, skipping this invocation');
+      this.logger.debug(
+        'processOutbox already running, skipping this invocation',
+      );
       return;
     }
 
@@ -84,7 +86,6 @@ export class InboundOutboxService {
           status: 'PROCESSING',
           attempts: sql`${inboundOutbox.attempts} + 1`,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
-          claimAttemptId: sql`gen_random_uuid()`,
         })
         .where(
           sql`${inboundOutbox.id} IN (
@@ -153,7 +154,6 @@ export class InboundOutboxService {
       traceId: string;
       connectionId: string;
       attempts: number;
-      claimAttemptId?: string;
     },
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
@@ -170,7 +170,7 @@ export class InboundOutboxService {
         .update(inboundOutbox)
         .set({ status: 'SUCCESS' })
         .where(
-          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
         );
 
       this.logger.debug(
@@ -184,7 +184,7 @@ export class InboundOutboxService {
           .update(inboundOutbox)
           .set({ status: 'FAIL' })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
           );
         this.logger.error(
           `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
@@ -197,7 +197,7 @@ export class InboundOutboxService {
           .update(inboundOutbox)
           .set({ status: 'RETRY', nextRetryAt })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
           );
         this.logger.warn(
           `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,

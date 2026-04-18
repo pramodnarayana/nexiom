@@ -38,16 +38,16 @@ describe('DataExplorerController', () => {
   const mockNoOrgCtx = {} as RequestAuthContext;
 
   it('should throw BadRequestException if org is missing', async () => {
-    await expect(controller.listByTab(mockNoOrgCtx, 's1', 'inbound', 1, 10)).rejects.toThrow(
-      BadRequestException,
-    );
+    expect(() =>
+      controller.listByTab(mockNoOrgCtx, 's1', 'inbound', 1, 10),
+    ).toThrow(BadRequestException);
   });
 
   it('listByTab(inbound) should delegate to service.listInbound', async () => {
     service.listInbound.mockResolvedValue('res');
-    expect(await controller.listByTab(mockCtx, 's1', 'inbound', 1, 10, 'ws1')).toBe(
-      'res',
-    );
+    expect(
+      await controller.listByTab(mockCtx, 's1', 'inbound', 1, 10, 'ws1'),
+    ).toBe('res');
     expect(service.listInbound).toHaveBeenCalledWith(
       'org_1',
       's1',
@@ -59,9 +59,9 @@ describe('DataExplorerController', () => {
 
   it('listByTab(replica) should delegate to service.listReplica', async () => {
     service.listReplica.mockResolvedValue('res');
-    expect(await controller.listByTab(mockCtx, 's1', 'replica', 1, 10, 'ws1')).toBe(
-      'res',
-    );
+    expect(
+      await controller.listByTab(mockCtx, 's1', 'replica', 1, 10, 'ws1'),
+    ).toBe('res');
     expect(service.listReplica).toHaveBeenCalledWith(
       'org_1',
       's1',
@@ -73,9 +73,9 @@ describe('DataExplorerController', () => {
 
   it('listByTab(normalized) should delegate to service.listNormalized', async () => {
     service.listNormalized.mockResolvedValue('res');
-    expect(await controller.listByTab(mockCtx, 's1', 'normalized', 1, 10, 'ws1')).toBe(
-      'res',
-    );
+    expect(
+      await controller.listByTab(mockCtx, 's1', 'normalized', 1, 10, 'ws1'),
+    ).toBe('res');
     expect(service.listNormalized).toHaveBeenCalledWith(
       'org_1',
       's1',
@@ -87,9 +87,9 @@ describe('DataExplorerController', () => {
 
   it('listByTab(entity-map) should delegate to service.listEntityMap', async () => {
     service.listEntityMap.mockResolvedValue('res');
-    expect(await controller.listByTab(mockCtx, 's1', 'entity-map', 1, 10, 'ws1')).toBe(
-      'res',
-    );
+    expect(
+      await controller.listByTab(mockCtx, 's1', 'entity-map', 1, 10, 'ws1'),
+    ).toBe('res');
     expect(service.listEntityMap).toHaveBeenCalledWith(
       'org_1',
       's1',
@@ -101,9 +101,9 @@ describe('DataExplorerController', () => {
 
   it('listByTab(outbound) should delegate to service.listOutbound', async () => {
     service.listOutbound.mockResolvedValue('res');
-    expect(await controller.listByTab(mockCtx, 's1', 'outbound', 1, 10, 'ws1')).toBe(
-      'res',
-    );
+    expect(
+      await controller.listByTab(mockCtx, 's1', 'outbound', 1, 10, 'ws1'),
+    ).toBe('res');
     expect(service.listOutbound).toHaveBeenCalledWith(
       'org_1',
       's1',
