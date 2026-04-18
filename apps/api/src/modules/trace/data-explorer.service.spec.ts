@@ -13,6 +13,37 @@ describe('DataExplorerService', () => {
   let storageResolver: any;
   let logger: any;
 
+  // Helper to mock db.select() for paginated queries
+  const mockPageSelect = (rows: any[], count: number, hasWhere: boolean) => {
+    let callCount = 0;
+    db.select = vi.fn().mockImplementation((args?: any) => {
+      callCount++;
+      const isCountQuery = args && args.count !== undefined;
+      if (isCountQuery) {
+        // Count query path
+        const chain = {
+          from: vi.fn().mockReturnThis(),
+        };
+        if (hasWhere) {
+          (chain as any).where = vi.fn().mockResolvedValue([{ count }]);
+          return chain;
+        } else {
+          (chain as any).from = vi.fn().mockResolvedValue([{ count }]);
+          return chain;
+        }
+      } else {
+        // Data query path
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          offset: vi.fn().mockResolvedValue(rows),
+        };
+      }
+    });
+  };
+
   beforeEach(async () => {
     logger = { setContext: vi.fn(), log: vi.fn(), error: vi.fn() };
 
@@ -83,27 +114,7 @@ describe('DataExplorerService', () => {
         srcConnectionId: 'c1',
         destConnectionId: 'c2',
       });
-      db.transaction.mockImplementationOnce(async (cb: any) => {
-        const tx = {
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockResolvedValue([{ id: 'inbound_1' }]), // rows mock
-        };
-        // Quick override for the count array
-        tx.select = vi.fn().mockImplementation((args) => {
-          if (args && args.count) {
-            return {
-              from: () => ({ where: () => Promise.resolve([{ count: 1 }]) }),
-            };
-          }
-          return tx;
-        });
-        return cb(tx);
-      });
+      mockPageSelect([{ id: 'inbound_1' }], 1, true);
 
       const res = await service.listInbound('org_1', 'stitch_1', 1, 50, 'ws_1');
       expect(res.data).toEqual([{ id: 'inbound_1' }]);
@@ -119,27 +130,7 @@ describe('DataExplorerService', () => {
         srcConnectionId: 'c1',
         destConnectionId: 'c2',
       });
-      db.transaction.mockImplementationOnce(async (cb: any) => {
-        const tx = {
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockResolvedValue([{ id: 'replica_1' }]), // rows mock
-        };
-        const originalSelect = tx.select;
-        tx.select = vi.fn().mockImplementation((args) => {
-          if (args && args.count) {
-            return {
-              from: () => ({ where: () => Promise.resolve([{ count: 2 }]) }),
-            };
-          }
-          return tx;
-        });
-        return cb(tx);
-      });
+      mockPageSelect([{ id: 'replica_1' }], 2, true);
 
       const res = await service.listReplica('org_1', 'stitch_1', 1, 50, 'ws_1');
       expect(res.data).toEqual([{ id: 'replica_1' }]);
@@ -154,25 +145,7 @@ describe('DataExplorerService', () => {
         srcConnectionId: 'c1',
         destConnectionId: 'c2',
       });
-      db.transaction.mockImplementationOnce(async (cb: any) => {
-        const tx = {
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockResolvedValue([{ id: 'norm_1' }]), // rows mock
-        };
-        const originalSelect = tx.select;
-        tx.select = vi.fn().mockImplementation((args) => {
-          if (args && args.count) {
-            return { from: () => Promise.resolve([{ count: 3 }]) };
-          }
-          return tx;
-        });
-        return cb(tx);
-      });
+      mockPageSelect([{ id: 'norm_1' }], 3, false);
 
       const res = await service.listNormalized(
         'org_1',
@@ -225,27 +198,7 @@ describe('DataExplorerService', () => {
         srcConnectionId: 'c1',
         destConnectionId: 'c2',
       });
-      db.transaction.mockImplementationOnce(async (cb: any) => {
-        const tx = {
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockResolvedValue([{ id: 'outbound_1' }]), // rows mock
-        };
-        const originalSelect = tx.select;
-        tx.select = vi.fn().mockImplementation((args) => {
-          if (args && args.count) {
-            return {
-              from: () => ({ where: () => Promise.resolve([{ count: 5 }]) }),
-            };
-          }
-          return tx;
-        });
-        return cb(tx);
-      });
+      mockPageSelect([{ id: 'outbound_1' }], 5, true);
 
       const res = await service.listOutbound('org_1', 'stitch_1', 1, 50); // no workspaceId
       expect(res.data).toEqual([{ id: 'outbound_1' }]);

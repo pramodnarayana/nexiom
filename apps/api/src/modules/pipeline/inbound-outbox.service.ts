@@ -89,12 +89,16 @@ export class InboundOutboxService {
         })
         .where(
           sql`${inboundOutbox.id} IN (
-            SELECT id FROM ${sql.identifier(schemaName)}.inbound_outbox
+            SELECT id, attempts FROM ${sql.identifier(schemaName)}.inbound_outbox
             WHERE status = 'PENDING'
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
             ORDER BY next_retry_at ASC
             LIMIT ${BATCH_SIZE}
+            FOR UPDATE SKIP LOCKED
+          ) AND ${inboundOutbox.attempts} = (
+            SELECT attempts FROM ${sql.identifier(schemaName)}.inbound_outbox subq
+            WHERE subq.id = ${inboundOutbox.id}
             FOR UPDATE SKIP LOCKED
           )`,
         )
@@ -164,9 +168,9 @@ export class InboundOutboxService {
       // Mark success - only if we still own this claim
       await this.db
         .update(inboundOutbox)
-        .set({ status: 'SUCCESS' })
+        .set({ status: 'SUCCESS', lastError: null })
         .where(
-          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
+          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
         );
 
       this.logger.debug(
@@ -178,9 +182,9 @@ export class InboundOutboxService {
       if (row.attempts >= MAX_ATTEMPTS) {
         await this.db
           .update(inboundOutbox)
-          .set({ status: 'FAIL' })
+          .set({ status: 'FAIL', lastError: errorMessage })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
           );
         this.logger.error(
           `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
@@ -191,9 +195,9 @@ export class InboundOutboxService {
 
         await this.db
           .update(inboundOutbox)
-          .set({ status: 'RETRY', nextRetryAt })
+          .set({ status: 'RETRY', nextRetryAt, lastError: errorMessage })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
           );
         this.logger.warn(
           `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,

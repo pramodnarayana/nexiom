@@ -102,11 +102,12 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       const metadata = connRows[0].metadata as Record<string, unknown> | null;
 
       // Runtime validation of appProfile
+      const trimmedAppProfile =
+        typeof metadata?.appProfile === "string"
+          ? metadata.appProfile.trim()
+          : "";
       const appProfile =
-        typeof metadata?.appProfile === "string" &&
-        metadata.appProfile.trim() !== ""
-          ? metadata.appProfile
-          : "default";
+        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
 
       const piece = this.pieceRegistry.getPiece(connectionAppName);
       if (!piece) {
