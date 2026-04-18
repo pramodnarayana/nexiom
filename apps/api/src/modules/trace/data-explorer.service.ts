@@ -87,27 +87,25 @@ export class DataExplorerService {
     assertValidSchemaName(schemaName);
     const { inboundGateway } = buildTenantSchema(schemaName);
 
-    return this.db.transaction(async (tx) => {
-      const [rows, countResult] = await Promise.all([
-        tx
-          .select()
-          .from(inboundGateway)
-          .where(eq(inboundGateway.connectionId, stitch.srcConnectionId))
-          .orderBy(desc(inboundGateway.createdAt))
-          .limit(safeLimit)
-          .offset(offset),
-        tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(inboundGateway)
-          .where(eq(inboundGateway.connectionId, stitch.srcConnectionId)),
-      ]);
-      return {
-        data: rows,
-        total: countResult[0]?.count ?? 0,
-        page: safePage,
-        limit: safeLimit,
-      } satisfies ExplorerPage<(typeof rows)[number]>;
-    });
+    const [rows, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(inboundGateway)
+        .where(eq(inboundGateway.connectionId, stitch.srcConnectionId))
+        .orderBy(desc(inboundGateway.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(inboundGateway)
+        .where(eq(inboundGateway.connectionId, stitch.srcConnectionId)),
+    ]);
+    return {
+      data: rows,
+      total: countResult[0]?.count ?? 0,
+      page: safePage,
+      limit: safeLimit,
+    } satisfies ExplorerPage<(typeof rows)[number]>;
   }
 
   // ── L2: Replica Entity ─────────────────────────────────────────────────────
@@ -127,27 +125,25 @@ export class DataExplorerService {
     assertValidSchemaName(schemaName);
     const { replicaEntity } = buildTenantSchema(schemaName);
 
-    return this.db.transaction(async (tx) => {
-      const [rows, countResult] = await Promise.all([
-        tx
-          .select()
-          .from(replicaEntity)
-          .where(eq(replicaEntity.connectionId, stitch.srcConnectionId))
-          .orderBy(desc(replicaEntity.updatedAt))
-          .limit(safeLimit)
-          .offset(offset),
-        tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(replicaEntity)
-          .where(eq(replicaEntity.connectionId, stitch.srcConnectionId)),
-      ]);
-      return {
-        data: rows,
-        total: countResult[0]?.count ?? 0,
-        page: safePage,
-        limit: safeLimit,
-      } satisfies ExplorerPage<(typeof rows)[number]>;
-    });
+    const [rows, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(replicaEntity)
+        .where(eq(replicaEntity.connectionId, stitch.srcConnectionId))
+        .orderBy(desc(replicaEntity.updatedAt))
+        .limit(safeLimit)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(replicaEntity)
+        .where(eq(replicaEntity.connectionId, stitch.srcConnectionId)),
+    ]);
+    return {
+      data: rows,
+      total: countResult[0]?.count ?? 0,
+      page: safePage,
+      limit: safeLimit,
+    } satisfies ExplorerPage<(typeof rows)[number]>;
   }
 
   // ── L3: Normalized Entity ──────────────────────────────────────────────────
@@ -171,23 +167,21 @@ export class DataExplorerService {
     assertValidSchemaName(schemaName);
     const { normalizedEntity } = buildTenantSchema(schemaName);
 
-    return this.db.transaction(async (tx) => {
-      const [rows, countResult] = await Promise.all([
-        tx
-          .select()
-          .from(normalizedEntity)
-          .orderBy(desc(normalizedEntity.createdAt))
-          .limit(safeLimit)
-          .offset(offset),
-        tx.select({ count: sql<number>`count(*)::int` }).from(normalizedEntity),
-      ]);
-      return {
-        data: rows,
-        total: countResult[0]?.count ?? 0,
-        page: safePage,
-        limit: safeLimit,
-      } satisfies ExplorerPage<(typeof rows)[number]>;
-    });
+    const [rows, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(normalizedEntity)
+        .orderBy(desc(normalizedEntity.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      this.db.select({ count: sql<number>`count(*)::int` }).from(normalizedEntity),
+    ]);
+    return {
+      data: rows,
+      total: countResult[0]?.count ?? 0,
+      page: safePage,
+      limit: safeLimit,
+    } satisfies ExplorerPage<(typeof rows)[number]>;
   }
 
   // ── GEM: Global Entity Map ─────────────────────────────────────────────────
@@ -241,26 +235,24 @@ export class DataExplorerService {
     assertValidSchemaName(schemaName);
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    return this.db.transaction(async (tx) => {
-      const [rows, countResult] = await Promise.all([
-        tx
-          .select()
-          .from(outboundGateway)
-          .where(eq(outboundGateway.routeId, stitchId))
-          .orderBy(desc(outboundGateway.createdAt))
-          .limit(safeLimit)
-          .offset(offset),
-        tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(outboundGateway)
-          .where(eq(outboundGateway.routeId, stitchId)),
-      ]);
-      return {
-        data: rows,
-        total: countResult[0]?.count ?? 0,
-        page: safePage,
-        limit: safeLimit,
-      } satisfies ExplorerPage<(typeof rows)[number]>;
-    });
+    const [rows, countResult] = await Promise.all([
+      this.db
+        .select()
+        .from(outboundGateway)
+        .where(eq(outboundGateway.routeId, stitchId))
+        .orderBy(desc(outboundGateway.createdAt))
+        .limit(safeLimit)
+        .offset(offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboundGateway)
+        .where(eq(outboundGateway.routeId, stitchId)),
+    ]);
+    return {
+      data: rows,
+      total: countResult[0]?.count ?? 0,
+      page: safePage,
+      limit: safeLimit,
+    } satisfies ExplorerPage<(typeof rows)[number]>;
   }
 }

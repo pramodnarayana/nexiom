@@ -54,6 +54,34 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       const { inboundGateway, replicaEntity, replicaOutbox, syncLog } =
         buildTenantSchema(schemaName);
 
+      // Fetch application metadata
+      const connRows = await this.db
+        .select({
+          appName: appConnections.appName,
+          metadata: appConnections.metadata,
+        })
+        .from(appConnections)
+        .where(eq(appConnections.id, connectionId))
+        .limit(1);
+
+      const appName = connRows[0]?.appName;
+      const metadata = connRows[0]?.metadata as
+        | Record<string, unknown>
+        | undefined;
+
+      // Runtime validation of appProfile
+      const appProfile =
+        typeof metadata?.appProfile === "string" &&
+        metadata.appProfile.trim() !== ""
+          ? metadata.appProfile
+          : "default";
+
+      if (!appName) {
+        throw new Error(
+          `Connection ${connectionId} not found in appConnections!`,
+        );
+      }
+
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
@@ -78,34 +106,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           );
         }
         const sourceId = inbound.extReqId;
-
-        // Fetch application metadata
-        const connRows = await this.db
-          .select({
-            appName: appConnections.appName,
-            metadata: appConnections.metadata,
-          })
-          .from(appConnections)
-          .where(eq(appConnections.id, connectionId))
-          .limit(1);
-
-        const appName = connRows[0]?.appName;
-        const metadata = connRows[0]?.metadata as
-          | Record<string, unknown>
-          | undefined;
-
-        // Runtime validation of appProfile
-        const appProfile =
-          typeof metadata?.appProfile === "string" &&
-          metadata.appProfile.trim() !== ""
-            ? metadata.appProfile
-            : "default";
-
-        if (!appName) {
-          throw new Error(
-            `Connection ${connectionId} not found in appConnections!`,
-          );
-        }
 
         const extractor = getReplicaExtractor(appName, appProfile);
         const extracted = extractor

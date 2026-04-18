@@ -140,10 +140,6 @@ export class InboundOutboxService {
           }`,
         );
       });
-
-      throw new Error(
-        `[${schemaName}] ${rejections.length} out of ${claimed.length} outbox rows failed to process`,
-      );
     }
   }
 

@@ -138,11 +138,11 @@ async function run() {
 
     while (Date.now() - startTime < TIMEOUT_MS) {
       resultL2 = await pool.query(
-        `SELECT * FROM ${schemaName}.replica_entity WHERE created_at >= $1 AND (data->>'__testRunId' = $2 OR data->>'Id' = '0015Y00002bcdefGHI') ORDER BY updated_at DESC LIMIT 1`,
+        `SELECT * FROM ${schemaName}.replica_entity WHERE updated_at >= $1 AND (data->>'__testRunId' = $2 OR data->>'Id' = '0015Y00002bcdefGHI') ORDER BY updated_at DESC LIMIT 1`,
         [runStart, testRunId],
       );
       resultL3 = await pool.query(
-        `SELECT * FROM ${schemaName}.normalized_entity WHERE created_at >= $1 ORDER BY updated_at DESC LIMIT 1`,
+        `SELECT * FROM ${schemaName}.normalized_entity WHERE updated_at >= $1 ORDER BY updated_at DESC LIMIT 1`,
         [runStart],
       );
 
