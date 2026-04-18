@@ -88,17 +88,13 @@ export class InboundOutboxService {
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
         .where(
-          sql`${inboundOutbox.id} IN (
+          sql`(${inboundOutbox.id}, ${inboundOutbox.attempts}) IN (
             SELECT id, attempts FROM ${sql.identifier(schemaName)}.inbound_outbox
             WHERE status = 'PENDING'
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
             ORDER BY next_retry_at ASC
             LIMIT ${BATCH_SIZE}
-            FOR UPDATE SKIP LOCKED
-          ) AND ${inboundOutbox.attempts} = (
-            SELECT attempts FROM ${sql.identifier(schemaName)}.inbound_outbox subq
-            WHERE subq.id = ${inboundOutbox.id}
             FOR UPDATE SKIP LOCKED
           )`,
         )
