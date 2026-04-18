@@ -12,7 +12,19 @@ async function run() {
   }
 
   const databaseUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/nexiom_local';
-  console.log(`⚠️  Target Database: ${databaseUrl}`);
+
+  // Sanitize DATABASE_URL for logging
+  let sanitizedUrl = databaseUrl;
+  try {
+    const url = new URL(databaseUrl);
+    if (url.username) url.username = 'REDACTED';
+    if (url.password) url.password = 'REDACTED';
+    sanitizedUrl = url.toString();
+  } catch {
+    // If parsing fails, just redact the entire URL
+    sanitizedUrl = '[REDACTED]';
+  }
+  console.log(`⚠️  Target Database: ${sanitizedUrl}`);
 
   if (!process.argv.includes('--yes')) {
     console.log('⚠️  This script will UPDATE app_connection metadata and send test webhooks.');
@@ -55,16 +67,21 @@ async function run() {
       console.log('✅ Metadata updated.');
     }
 
+    // Generate a unique test run marker
+    const testRunId = `test-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const runStart = new Date();
+
     const payload = {
       Account: {
         Id: '0015Y00002bcdefGHI',
         Name: 'E2E Test Trucking LLC',
         Type: 'Carrier',
         CurrencyIsoCode: 'USD',
+        __testRunId: testRunId, // Unique marker for this test run
       },
     };
 
-    console.log('🚀 Sending mock webhook payload (L1)...');
+    console.log(`🚀 Sending mock webhook payload (L1) with testRunId=${testRunId}...`);
     const webhookUrl = `http://localhost:3000/v1/webhooks/${conn.id}`;
 
     const response = await fetch(webhookUrl, {
@@ -81,7 +98,7 @@ async function run() {
         response.status,
         await response.text(),
       );
-      return;
+      process.exit(1);
     }
 
     console.log(
@@ -110,10 +127,12 @@ async function run() {
 
     while (Date.now() - startTime < TIMEOUT_MS) {
       resultL2 = await pool.query(
-        `SELECT * FROM ${schemaName}.replica_entity ORDER BY updated_at DESC LIMIT 1`,
+        `SELECT * FROM ${schemaName}.replica_entity WHERE created_at >= $1 AND (data->>'__testRunId' = $2 OR data->>'Id' = '0015Y00002bcdefGHI') ORDER BY updated_at DESC LIMIT 1`,
+        [runStart, testRunId],
       );
       resultL3 = await pool.query(
-        `SELECT * FROM ${schemaName}.normalized_entity ORDER BY updated_at DESC LIMIT 1`,
+        `SELECT * FROM ${schemaName}.normalized_entity WHERE created_at >= $1 ORDER BY updated_at DESC LIMIT 1`,
+        [runStart],
       );
 
       if (resultL2.rows.length > 0 && resultL3.rows.length > 0) {
@@ -125,7 +144,8 @@ async function run() {
     }
 
     if (Date.now() - startTime >= TIMEOUT_MS) {
-      throw new Error('❌ Timeout: Pipeline did not complete within 30 seconds');
+      console.error('❌ Timeout: Pipeline did not complete within 30 seconds');
+      process.exit(1);
     }
 
     if (resultL2.rows.length > 0) {
@@ -143,7 +163,8 @@ async function run() {
       console.log('❌ No Normalized Entity (L3) found.');
     }
   } catch (err) {
-    console.error('Fatal Error:', err);
+    console.error('❌ Fatal Error:', err);
+    process.exit(1);
   } finally {
     await pool.end();
   }

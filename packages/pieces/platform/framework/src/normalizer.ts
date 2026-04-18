@@ -22,7 +22,8 @@ export function registerReplicaExtractor(appName: string, appProfile: string, fn
     appMap.set(appProfile, fn);
 }
 
-export function getReplicaExtractor(appName: string, appProfile: string): ReplicaExtractorFn | undefined {
+export function getReplicaExtractor(appName: string, appProfile: string | undefined): ReplicaExtractorFn | undefined {
+    if (!appProfile) return undefined;
     return extractorRegistry.get(appName)?.get(appProfile);
 }
 
@@ -41,6 +42,7 @@ export function registerNormalizer(appName: string, appProfile: string, fn: Norm
     appMap.set(appProfile, fn);
 }
 
-export function getNormalizer(appName: string, appProfile: string): NormalizerFn | undefined {
+export function getNormalizer(appName: string, appProfile: string | undefined): NormalizerFn | undefined {
+    if (!appProfile) return undefined;
     return normalizerRegistry.get(appName)?.get(appProfile);
 }

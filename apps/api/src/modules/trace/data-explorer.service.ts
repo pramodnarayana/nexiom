@@ -55,8 +55,17 @@ export class DataExplorerService {
   }
 
   private safePagination(page: number, limit: number) {
-    const safePage = Math.max(1, page);
-    const safeLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
+    // Coerce to numeric and guard against NaN/Infinity
+    const numPage = Number(page);
+    const numLimit = Number(limit);
+
+    const safePage = Number.isFinite(numPage)
+      ? Math.max(1, Math.trunc(numPage))
+      : 1;
+    const safeLimit = Number.isFinite(numLimit)
+      ? Math.min(Math.max(1, Math.trunc(numLimit)), MAX_LIMIT)
+      : MAX_LIMIT;
+
     const offset = (safePage - 1) * safeLimit;
     return { safePage, safeLimit, offset };
   }

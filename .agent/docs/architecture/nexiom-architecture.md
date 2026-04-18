@@ -25,7 +25,7 @@
 
 Every record that enters Nexiom flows through 6 layers. Each layer has a single responsibility and writes to the next via a transactional outbox.
 
-```
+```text
 Webhook / Poll
       │
       ▼
@@ -61,7 +61,7 @@ L6  Response & retry       Vendor API response stored, retry on failure
 
 All pipeline tables (L1–L6) live in **isolated per-connection Postgres schemas**, not in the shared `public` schema.
 
-```
+```text
 public schema:
   app_connection              ← connection registry
   integration_stitch          ← stitch configuration
@@ -71,6 +71,7 @@ public schema:
 
 ws_sf_abc123 schema:          ← provisioned for Salesforce connection "abc123"
   inbound_gateway
+  inbound_outbox
   replica_entity
   normalized_entity
   outbound_gateway
@@ -96,12 +97,12 @@ ws_qb_xyz456 schema:          ← provisioned for QB connection "xyz456"
 
 Both tables: same shape (one row per entity, discriminated by type). **Never merged at storage level.** Cross-object joins happen at L4 in-memory only.
 
-```
+```text
 replica_entity row:                  normalized_entity row:
   entity_type = 'Account'              canonical_type = 'TMS_CARRIER'
   data = {                             data = {
-    BillingStreet: "123 Main",           billing_street: "123 Main",
-    TMS_Type__c: "Carrier",              billing_city: "Hartford",
+    BillingStreet: "123 Main",           `billing_street`: "123 Main",
+    TMS_Type__c: "Carrier",              `billing_city`: "Hartford",
     Phone: "860-893-4389"                phone: "860-893-4389",
   }                                    }
 ```
@@ -111,11 +112,11 @@ replica_entity row:                  normalized_entity row:
 ```typescript
 TMS_CARRIER = {
   name: string,
-  billing_street: string,
-  billing_city: string,
-  billing_state: string,
-  billing_postal_code: string,
-  billing_country: string,
+  `billing_street`: string,
+  `billing_city`: string,
+  `billing_state`: string,
+  `billing_postal_code`: string,
+  `billing_country`: string,
   phone: string,
   email: string,
   tax_id: string,
@@ -124,11 +125,11 @@ TMS_CARRIER = {
 
 TMS_CUSTOMER = {
   name: string,
-  billing_street: string,
-  billing_city: string,
-  billing_state: string,
-  billing_postal_code: string,
-  billing_country: string,
+  `billing_street`: string,
+  `billing_city`: string,
+  `billing_state`: string,
+  `billing_postal_code`: string,
+  `billing_country`: string,
   phone: string,
   email: string,
   credit_limit: number,
@@ -141,15 +142,15 @@ TMS_TRANSPORTATION_PROFILE = {
   remit_to_account_id: string,    // Remit_To__c → links to ANOTHER TMS_CARRIER row
   // NOTE: remit billing address is NOT stored here.
   // At L4, the TMS_CARRIER row for remit_to_account_id is looked up and its
-  // billing_* fields are mapped to QB BillAddr.
+  // `billing_*` fields are mapped to QB BillAddr.
 }
 ```
 
 ### Accounting canonical types
 
 ```typescript
-ACCT_VENDOR   = { name, billing_*, phone, email, tax_id }
-ACCT_CUSTOMER = { name, billing_*, phone, email, credit_limit }
+ACCT_VENDOR   = { name, `billing_*`, phone, email, tax_id }
+ACCT_CUSTOMER = { name, `billing_*`, phone, email, credit_limit }
 ACCT_INVOICE  = { invoice_number, amount, due_date, customer_id }
 ACCT_BILL     = { bill_number, amount, due_date, vendor_id }
 ```
@@ -160,7 +161,7 @@ When the fan-out engine processes a TMS_CARRIER record for a QB Vendor stitch:
 
 1. Read `TMS_CARRIER` → DisplayName, Phone, Email
 2. Query `TMS_TRANSPORTATION_PROFILE` where `carrier_account_id = carrier.source_id` → mc_number → QB GivenName
-3. Query `TMS_CARRIER` where `source_id = tp.remit_to_account_id` → billing_* → QB BillAddr.*
+3. Query `TMS_CARRIER` where `source_id = tp.remit_to_account_id` → `billing_*` → QB `BillAddr.*`
 
 **No Salesforce API calls at L4.** All data is already stored from when those records were ingested.
 
@@ -179,7 +180,7 @@ When the fan-out engine processes a TMS_CARRIER record for a QB Vendor stitch:
 
 ### Directory structure
 
-```
+```text
 packages/pieces/
 ├── platform/                    ← RESTRICTED — core IP, internal only
 │   ├── framework/               ← Piece, NormalizerResult, FieldDescriptor interfaces
@@ -216,7 +217,7 @@ engine/sync/
 
 For apps that own their API (not Salesforce-based):
 
-```
+```text
 packages/pieces/platform/mcleod/    ← auth, API client (no normalizers)
 packages/pieces/application/mcleod/ ← normalizers (no auth code)
 ```
@@ -225,7 +226,7 @@ Two packages, same app name. No exceptions to the principle — platform is alwa
 
 ### Dependency rule
 
-```
+```text
 application  →  platform  (OK: reads NormalizerResult interface from framework)
 platform    →  application  (NEVER: zero business logic in platform code)
 ```
@@ -237,8 +238,8 @@ platform    →  application  (NEVER: zero business logic in platform code)
 ### Key design decisions
 
 1. **One function per object type** — no if-chains. Each object has its own normalizer file.
-2. **Registry keyed by (appProfile, objectType)** — NOT (platform, objectType). Two companies can use Salesforce with different data models.
-3. **`appProfile` comes from `app_connection.metadata.app_profile`** — set when the customer registers their connection (e.g. `"revenova"`).
+2. **Registry keyed by (appName, appProfile)** — NOT (platform, objectType). Two companies can use Salesforce with different data models.
+3. **`appProfile` comes from `app_connection.metadata?.appProfile`** — set when the customer registers their connection (e.g. `"revenova"`).
 
 ### Registration
 
@@ -246,16 +247,16 @@ platform    →  application  (NEVER: zero business logic in platform code)
 // packages/pieces/application/revenova/src/normalizers/index.ts
 import { registerNormalizer } from '@nexiom/piece-framework';
 
-registerNormalizer('revenova', 'Account',                    normalizeAccount);
-registerNormalizer('revenova', 'TransportationProfile__c',   normalizeTransportationProfile);
-registerNormalizer('revenova', 'VendorInvoice__c',           normalizeVendorInvoice);
-registerNormalizer('revenova', 'Invoice__c',                 normalizeCustomerInvoice);
+registerNormalizer('salesforce', 'revenova', 'Account',                    normalizeAccount);
+registerNormalizer('salesforce', 'revenova', 'TransportationProfile__c',   normalizeTransportationProfile);
+registerNormalizer('salesforce', 'revenova', 'VendorInvoice__c',           normalizeVendorInvoice);
+registerNormalizer('salesforce', 'revenova', 'Invoice__c',                 normalizeCustomerInvoice);
 ```
 
 ### Worker call (no if-chains)
 
 ```typescript
-const normalizer = getNormalizer(appProfile, objectType);
+const normalizer = getNormalizer(appName, appProfile, objectType);
 const result = normalizer?.(rawData) ?? null;
 // null → Shipper/Consignee, or unrecognised object type → skip L3
 ```
@@ -272,11 +273,11 @@ export function normalizeAccount(raw: Record<string, unknown>): NormalizedResult
       canonicalType: 'TMS_CARRIER',
       data: {
         name:                raw['Name'],
-        billing_street:      raw['BillingStreet'],
-        billing_city:        raw['BillingCity'],
-        billing_state:       raw['BillingState'],
-        billing_postal_code: raw['BillingPostalCode'],
-        billing_country:     raw['BillingCountry'],
+        `billing_street`:      raw['BillingStreet'],
+        `billing_city`:        raw['BillingCity'],
+        `billing_state`:       raw['BillingState'],
+        `billing_postal_code`: raw['BillingPostalCode'],
+        `billing_country`:     raw['BillingCountry'],
         phone:               raw['Phone'],
         email:               raw['PersonEmail'],
         tax_id:              raw['TaxId__c'],
@@ -301,7 +302,7 @@ export function normalizeAccount(raw: Record<string, unknown>): NormalizedResult
 A single QB Vendor record requires fields from three Salesforce objects:
 - `Account` → DisplayName, Phone, Email
 - `TransportationProfile__c` → GivenName (MC Number)
-- `Account` (Remit To) → BillAddr.*
+- `Account` (Remit To) → `BillAddr.*`
 
 ### Solution
 
@@ -309,7 +310,7 @@ Each stitch supports **multiple source canonicals**, each with their own mapping
 
 ### Frontend (MultiObjectMappingEditor)
 
-```
+```text
 Stitch A: Account → QB Vendor
 │
 ├── [Tab: TMS_CARRIER]  (primary — has sync conditions)
@@ -320,7 +321,7 @@ Stitch A: Account → QB Vendor
 │
 └── [Tab: TMS_TRANSPORTATION_PROFILE]  (secondary — no sync conditions)
     ├── mc_number → GivenName
-    └── [remit_to resolved at L4] → BillAddr.*
+    └── [remit_to resolved at L4] → `BillAddr.*`
 ```
 
 Secondary tabs have `hideConditions=true`. Sync conditions only apply to the primary canonical.
@@ -353,7 +354,7 @@ Carrier AND Factoring accounts both sync to QB Vendor:
 
 ### Logic model
 
-```
+```text
 - logic = 'AND' (or omitted): condition is AND-chained within the current group
 - logic = 'OR': ends current group, starts a new OR-group
 - Stitch fires if ANY group evaluates to true
@@ -361,7 +362,7 @@ Carrier AND Factoring accounts both sync to QB Vendor:
 
 ### Examples
 
-```
+```json
 [{ field:'TMS_Type__c', op:'eq', value:'Carrier', logic:'AND' },
  { field:'TMS_Type__c', op:'eq', value:'Factoring', logic:'OR' }]
 → (TMS_Type=Carrier) OR (TMS_Type=Factoring) ✓
@@ -387,7 +388,7 @@ On mount, `MappingCanvas` calls `listFields()` for both source and destination c
 
 ### Cache layers (backend)
 
-```
+```text
 Browser → Redis (5 min TTL) → Postgres (5 min TTL) → Live connector API
 ```
 
@@ -480,17 +481,17 @@ All piece packages expose a `dev` script running `tsc --watch`. `dev:light` runs
 | Source canonical field | → | QB Vendor field |
 |---|---|---|
 | mc_number | | GivenName |
-| _(resolved TMS_CARRIER.billing_street from remit_to_account_id)_ | | BillAddr.Line1 |
-| _(resolved TMS_CARRIER.billing_city)_ | | BillAddr.City |
-| _(resolved TMS_CARRIER.billing_state)_ | | BillAddr.CountrySubDivisionCode |
-| _(resolved TMS_CARRIER.billing_postal_code)_ | | BillAddr.PostalCode |
+| _(resolved TMS_CARRIER.`billing_street` from remit_to_account_id)_ | | `BillAddr.Line1` |
+| _(resolved TMS_CARRIER.`billing_city`)_ | | `BillAddr.City` |
+| _(resolved TMS_CARRIER.`billing_state`)_ | | `BillAddr.CountrySubDivisionCode` |
+| _(resolved TMS_CARRIER.`billing_postal_code`)_ | | `BillAddr.PostalCode` |
 
 ### Single carrier — full data flow
 
-```
+```text
 1. Salesforce webhook → Account (id=GYn1, TMS_Type=Carrier)
 2. L2: replica_entity { entity_type='Account', source_id='GYn1', data={raw} }
-3. L3: normalized_entity { canonical_type='TMS_CARRIER', data={name, billing_*} }
+3. L3: normalized_entity { canonical_type='TMS_CARRIER', data={name, `billing_*`} }
 
 4. Salesforce webhook → TransportationProfile__c (id=AbCd)
 5. L2: replica_entity { entity_type='TransportationProfile__c', data={raw} }
@@ -502,12 +503,12 @@ All piece packages expose a `dev` script running `tsc --watch`. `dev:light` runs
    }
 
 7. Salesforce webhook → Account (id=GYn2, the Remit To account)
-8. L2/L3: normalized as TMS_CARRIER { billing_street:'235 Saybrooke', billing_city:'Hartford' }
+8. L2/L3: normalized as TMS_CARRIER { `billing_street`:'235 Saybrooke', `billing_city`:'Hartford' }
 
 9. Stitch A fan-out fires for GYn1:
    - TMS_CARRIER (GYn1) → DisplayName='CN Joan Trucking', Phone='860-893-4389'
    - TMS_TRANSPORTATION_PROFILE → GivenName='MC-847291'
-   - TMS_CARRIER (GYn2) → BillAddr.Line1='235 Saybrooke', City='Hartford'
+   - TMS_CARRIER (GYn2) → `BillAddr.Line1`='235 Saybrooke', City='Hartford'
    - Evaluates sync condition: TMS_Type=Carrier → group 1 passes → stitch fires
 
 10. QB POST /vendor → Vendor created with all fields correctly set

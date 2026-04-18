@@ -13,7 +13,25 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
     // 1. Dig through Salesforce outbound message envelope if present
     let rawObj: Record<string, unknown>;
     const envelope = payload as SalesforceEnvelope;
-    if (envelope.notification?.sobject) {
+
+    // Runtime validation of envelope structure
+    if (envelope.notification !== undefined && envelope.notification !== null) {
+        // Envelope is present, validate it's an object
+        if (typeof envelope.notification !== 'object') {
+            // Malformed envelope: notification exists but is not an object
+            return null;
+        }
+
+        // Validate sobject is present and is an object
+        if (
+            envelope.notification.sobject === undefined ||
+            envelope.notification.sobject === null ||
+            typeof envelope.notification.sobject !== 'object'
+        ) {
+            // Malformed envelope: sobject missing or invalid
+            return null;
+        }
+
         rawObj = envelope.notification.sobject;
     } else {
         rawObj = payload as Record<string, unknown>;

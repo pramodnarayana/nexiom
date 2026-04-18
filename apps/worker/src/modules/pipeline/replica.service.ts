@@ -93,7 +93,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         const metadata = connRows[0]?.metadata as
           | Record<string, unknown>
           | undefined;
-        const appProfile = (metadata?.appProfile as string) || "default";
+
+        // Runtime validation of appProfile
+        const appProfile =
+          typeof metadata?.appProfile === "string" &&
+          metadata.appProfile.trim() !== ""
+            ? metadata.appProfile
+            : undefined;
 
         if (!appName) {
           throw new Error(

@@ -39,17 +39,21 @@ function StatusBadge({ status }: { readonly status: string }) {
 // ─── JSON cell ────────────────────────────────────────────────────────────────
 
 function safeStringify(obj: unknown): { pretty: string; compact: string } {
-  const seen = new Set<unknown>();
   try {
-    const replacer = (_key: string, val: unknown) => {
-      if (val !== null && typeof val === 'object') {
-        if (seen.has(val)) return '[Circular]';
-        seen.add(val);
-      }
-      return val;
+    // Create a fresh replacer with its own Set for each stringify pass
+    const makeReplacer = () => {
+      const seen = new Set<unknown>();
+      return (_key: string, val: unknown) => {
+        if (val !== null && typeof val === 'object') {
+          if (seen.has(val)) return '[Circular]';
+          seen.add(val);
+        }
+        return val;
+      };
     };
-    const pretty = JSON.stringify(obj, replacer, 2);
-    const compact = JSON.stringify(obj, replacer);
+
+    const pretty = JSON.stringify(obj, makeReplacer(), 2);
+    const compact = JSON.stringify(obj, makeReplacer());
     return { pretty, compact };
   } catch {
     return { pretty: '[Unserializable]', compact: '[Unserializable]' };
@@ -232,22 +236,24 @@ function StitchSelector({ workspaceId, value, onChange }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await listStitches(workspaceId);
-        setStitches((res ?? []).map((s: StitchResponse) => ({ id: s.id, name: s.name })));
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load stitches:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load stitches');
-        setStitches([]);
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listStitches(workspaceId);
+      setStitches((res ?? []).map((s: StitchResponse) => ({ id: s.id, name: s.name })));
+    } catch (err) {
+      console.error('Failed to load stitches:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load stitches');
+      setStitches([]);
+    } finally {
+      setLoading(false);
     }
-    void load();
   }, [workspaceId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (loading) return <Skeleton className="h-9 w-[200px] rounded-lg" />;
 
@@ -258,7 +264,7 @@ function StitchSelector({ workspaceId, value, onChange }: {
         <span>{error}</span>
         <button
           type="button"
-          onClick={() => { setLoading(true); setError(null); }}
+          onClick={() => void load()}
           className="text-xs underline hover:no-underline"
         >
           Retry

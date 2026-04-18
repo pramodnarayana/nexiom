@@ -84,11 +84,12 @@ export class InboundOutboxService {
           status: 'PROCESSING',
           attempts: sql`${inboundOutbox.attempts} + 1`,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
+          claimAttemptId: sql`gen_random_uuid()`,
         })
         .where(
           sql`${inboundOutbox.id} IN (
             SELECT id FROM ${sql.identifier(schemaName)}.inbound_outbox
-            WHERE status = 'PENDING' 
+            WHERE status = 'PENDING'
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
             ORDER BY next_retry_at ASC
@@ -119,7 +120,30 @@ export class InboundOutboxService {
       return results;
     };
 
-    await processWithLimit(claimed);
+    const results = await processWithLimit(claimed);
+
+    // Log and handle any rejections (unexpected failures not already caught in processOutboxRow)
+    const rejections = results
+      .map((r, idx) => ({ result: r, row: claimed[idx] }))
+      .filter(({ result }) => result.status === 'rejected');
+
+    if (rejections.length > 0) {
+      rejections.forEach(({ result, row }) => {
+        this.logger.error(
+          `[${schemaName}] Unexpected processOutboxRow failure for traceId=${row.traceId}, id=${row.id}: ${
+            result.status === 'rejected'
+              ? result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+              : 'unknown'
+          }`,
+        );
+      });
+
+      throw new Error(
+        `[${schemaName}] ${rejections.length} out of ${claimed.length} outbox rows failed to process`,
+      );
+    }
   }
 
   private async processOutboxRow(
@@ -129,6 +153,7 @@ export class InboundOutboxService {
       traceId: string;
       connectionId: string;
       attempts: number;
+      claimAttemptId?: string;
     },
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
@@ -140,25 +165,29 @@ export class InboundOutboxService {
         connectionId: row.connectionId,
       });
 
-      // Mark success
+      // Mark success - only if we still own this claim
       await this.db
         .update(inboundOutbox)
         .set({ status: 'SUCCESS' })
-        .where(eq(inboundOutbox.id, row.id));
+        .where(
+          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+        );
 
       this.logger.debug(
         `[${schemaName}] Delivered L1->L2 trace=${row.traceId}`,
       );
     } catch (err) {
-      const lastError = err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
 
       if (row.attempts >= MAX_ATTEMPTS) {
         await this.db
           .update(inboundOutbox)
-          .set({ status: 'FAIL', lastError })
-          .where(eq(inboundOutbox.id, row.id));
+          .set({ status: 'FAIL' })
+          .where(
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+          );
         this.logger.error(
-          `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${lastError}`,
+          `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
         );
       } else {
         const delayMs = Math.pow(2, row.attempts) * 1_000;
@@ -166,10 +195,12 @@ export class InboundOutboxService {
 
         await this.db
           .update(inboundOutbox)
-          .set({ status: 'RETRY', lastError, nextRetryAt })
-          .where(eq(inboundOutbox.id, row.id));
+          .set({ status: 'RETRY', nextRetryAt })
+          .where(
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.claimAttemptId} = ${row.claimAttemptId} AND ${inboundOutbox.status} = 'PROCESSING'`,
+          );
         this.logger.warn(
-          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${lastError}`,
+          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,
         );
       }
     }
