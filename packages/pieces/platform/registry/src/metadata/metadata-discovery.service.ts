@@ -320,14 +320,19 @@ export class MetadataDiscoveryService implements OnModuleInit {
     orgId: string,
     connectionId: string,
     objectName: string,
+    forceRefresh = false,
   ): Promise<RelatedObjectDescriptor[]> {
     const connection = await this.resolveConnection(orgId, connectionId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:related:${connectionId}:${objectName}`;
-    const cached = await this.redis.get(redisKey);
-    if (cached) {
-      return JSON.parse(cached) as RelatedObjectDescriptor[];
+    if (forceRefresh) {
+      await this.redis.del(redisKey);
+    } else {
+      const cached = await this.redis.get(redisKey);
+      if (cached) {
+        return JSON.parse(cached) as RelatedObjectDescriptor[];
+      }
     }
 
     // ── 2. Live fetch (piece) ───────────────────────────────
@@ -341,6 +346,24 @@ export class MetadataDiscoveryService implements OnModuleInit {
     let related: RelatedObjectDescriptor[] = [];
     try {
       related = await piece.describeRelatedObjects(credentials, objectName);
+      
+      // Hydrate object labels using the cached describeObjects registry to avoid
+      // individual piece connectors having to perform N+1 queries.
+      try {
+        const objects = await this.describeObjects(orgId, connectionId);
+        const objectMap = new Map(objects.map(o => [o.name, o.label]));
+        for (const r of related) {
+          const rAny = r as any;
+          if (!rAny.objectLabel && objectMap.has(r.objectName)) {
+            rAny.objectLabel = objectMap.get(r.objectName);
+          }
+        }
+      } catch (labelErr) {
+        this.logger.warn(
+          `Failed to hydrate object labels for related objects of ${objectName}: ${String(labelErr)}`,
+        );
+      }
+
       await this.redis.set(
         redisKey,
         JSON.stringify(related),

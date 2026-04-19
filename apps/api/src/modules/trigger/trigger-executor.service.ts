@@ -4,11 +4,14 @@ import type { DrizzleDb } from '@nexiom/database';
 import {
   DATABASE_CONNECTION,
   connectionStorageRegistry,
+  buildTenantSchema,
+  assertValidSchemaName,
 } from '@nexiom/database';
-import { eq } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { StorageResolverService } from '@nexiom/engine';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';
 import { RedisBackedTriggerStore } from './redis-trigger-store.js';
@@ -38,6 +41,7 @@ export interface TriggerRunParams {
   auth: unknown;
   propsValue: Record<string, unknown>;
   workspaceId: string;
+  connectionId: string;
 }
 
 export interface WebhookRunParams extends TriggerRunParams {
@@ -67,6 +71,7 @@ export class TriggerExecutorService {
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
+    private readonly storageResolver: StorageResolverService,
   ) {}
 
   // ─── Polling ────────────────────────────────────────────────────────────
@@ -263,6 +268,10 @@ export class TriggerExecutorService {
       return;
     }
 
+    const schemaName = await this.storageResolver.resolveSchemaName(
+      params.connectionId,
+    );
+
     let inserted = 0;
     let currentIndex = 0;
     const store = this.buildStore(params);
@@ -275,12 +284,11 @@ export class TriggerExecutorService {
       );
 
       try {
-        const didInsert = await this.insertGatewayRow({
-          appName: params.appName,
-          triggerName: params.triggerName,
+        const didInsert = await this.insertGatewayRow(schemaName, {
+          connectionId: params.connectionId,
           objectType: params.objectType,
           payload: record,
-          sourceEventId,
+          extReqId: sourceEventId,
         });
 
         if (didInsert) {
@@ -359,31 +367,54 @@ export class TriggerExecutorService {
 
   // ─── Gateway row insert ──────────────────────────────────────────────────
 
-  private async insertGatewayRow(row: {
-    appName: string;
-    triggerName: string;
-    objectType: string | undefined;
-    payload: unknown;
-    sourceEventId: string;
-  }): Promise<boolean> {
-    const result = await this.db.$client.query<{ id: string }>(
-      `INSERT INTO inbound_gateway
-                    (source_event_id, trigger_name, app_name, object_type, payload)
-                 VALUES ($1, $2, $3, $4, $5)
-                 ON CONFLICT (source_event_id) DO NOTHING
-                 RETURNING id`,
-      [
-        row.sourceEventId,
-        row.triggerName,
-        row.appName,
-        row.objectType ?? null,
-        JSON.stringify(row.payload),
-      ],
-    );
-    // rowCount === 0 means a duplicate (ON CONFLICT DO NOTHING) — not an error.
-    // Any real DB failure propagates as a thrown exception to the caller, which
-    // will route the entire batch to the DLQ via pushToDlq.
-    return (result.rowCount ?? 0) > 0;
+  private async insertGatewayRow(
+    schemaName: string,
+    row: {
+      connectionId: string;
+      objectType: string | undefined;
+      payload: unknown;
+      extReqId: string;
+    },
+  ): Promise<boolean> {
+    // Validate schema name BEFORE creating any schema-derived handles
+    assertValidSchemaName(schemaName);
+
+    let didInsert = false;
+    const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
+
+    // Strict transactional domain: guarantees L1 payload AND L1 outbox are written together
+    await this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+
+      const result = await tx
+        .insert(inboundGateway)
+        .values({
+          traceId: randomUUID(),
+          connectionId: row.connectionId,
+          extReqId: row.extReqId,
+          objectType: row.objectType ?? null,
+          payload: row.payload,
+        })
+        .onConflictDoNothing({ target: inboundGateway.extReqId })
+        .returning({ traceId: inboundGateway.traceId });
+
+      if (result.length > 0) {
+        await tx
+          .insert(inboundOutbox)
+          .values({
+            traceId: result[0].traceId,
+            connectionId: row.connectionId,
+          })
+          .onConflictDoNothing({
+            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+          });
+        didInsert = true;
+      }
+    });
+
+    return didInsert;
   }
 
   // ─── DLQ ─────────────────────────────────────────────────────────────────
@@ -396,6 +427,7 @@ export class TriggerExecutorService {
       appName: params.appName,
       triggerName: params.triggerName,
       workspaceId: params.workspaceId,
+      connectionId: params.connectionId,
       objectType: params.objectType,
       propsValue: params.propsValue,
       auth: params.auth, // required for credential reconstruction on retry

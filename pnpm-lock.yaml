@@ -95,16 +95,16 @@ importers:
         version: link:../../packages/identity
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../packages/pieces/framework
+        version: link:../../packages/pieces/platform/framework
       '@nexiom/piece-quickbooks':
         specifier: workspace:*
-        version: link:../../packages/pieces/quickbooks
+        version: link:../../packages/pieces/platform/quickbooks
       '@nexiom/piece-registry':
         specifier: workspace:*
-        version: link:../../packages/pieces/registry
+        version: link:../../packages/pieces/platform/registry
       '@nexiom/piece-salesforce':
         specifier: workspace:*
-        version: link:../../packages/pieces/salesforce
+        version: link:../../packages/pieces/platform/salesforce
       '@nexiom/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -557,16 +557,16 @@ importers:
         version: link:../../packages/identity
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../packages/pieces/framework
+        version: link:../../packages/pieces/platform/framework
       '@nexiom/piece-quickbooks':
         specifier: workspace:*
-        version: link:../../packages/pieces/quickbooks
+        version: link:../../packages/pieces/platform/quickbooks
       '@nexiom/piece-registry':
         specifier: workspace:*
-        version: link:../../packages/pieces/registry
+        version: link:../../packages/pieces/platform/registry
       '@nexiom/piece-salesforce':
         specifier: workspace:*
-        version: link:../../packages/pieces/salesforce
+        version: link:../../packages/pieces/platform/salesforce
       '@nexiom/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -753,10 +753,10 @@ importers:
         version: link:../../../packages/database
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../../packages/pieces/framework
+        version: link:../../../packages/pieces/platform/framework
       '@nexiom/piece-registry':
         specifier: workspace:*
-        version: link:../../../packages/pieces/registry
+        version: link:../../../packages/pieces/platform/registry
       '@nexiom/transformer':
         specifier: workspace:*
         version: link:../../../packages/transformer
@@ -815,7 +815,7 @@ importers:
         version: link:../../../../packages/database
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../../../../packages/pieces/framework
+        version: link:../../../../packages/pieces/platform/framework
       ai:
         specifier: ^6.0.146
         version: 6.0.146(zod@4.3.5)
@@ -923,7 +923,7 @@ importers:
         version: link:../database
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../pieces/framework
+        version: link:../pieces/platform/framework
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(kysely@0.28.9)(pg@8.16.3)
@@ -1147,7 +1147,7 @@ importers:
         version: 11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nexiom/piece-framework':
         specifier: workspace:*
-        version: link:../pieces/framework
+        version: link:../pieces/platform/framework
       zod:
         specifier: ^4.3.5
         version: 4.3.5
@@ -1156,7 +1156,13 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
-  packages/pieces/framework:
+  packages/pieces/application/revenova:
+    dependencies:
+      '@nexiom/piece-framework':
+        specifier: workspace:*
+        version: link:../../platform/framework
+
+  packages/pieces/platform/framework:
     devDependencies:
       '@types/node':
         specifier: ^25.5.0
@@ -1171,11 +1177,11 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/pieces/quickbooks:
+  packages/pieces/platform/quickbooks:
     dependencies:
       '@nexiom/credentials':
         specifier: workspace:*
-        version: link:../../credentials
+        version: link:../../../credentials
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../framework
@@ -1187,7 +1193,7 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.5.0)(happy-dom@20.1.0)(jiti@2.6.1)(jsdom@27.4.0(@noble/hashes@2.0.1))(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.5.0)(typescript@5.9.3))(sass-embedded@1.97.3)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/pieces/registry:
+  packages/pieces/platform/registry:
     dependencies:
       '@nestjs/common':
         specifier: ^11.0.1
@@ -1197,13 +1203,13 @@ importers:
         version: 4.0.2(@nestjs/common@11.1.11(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@nexiom/cache':
         specifier: workspace:*
-        version: link:../../cache
+        version: link:../../../cache
       '@nexiom/credentials':
         specifier: workspace:*
-        version: link:../../credentials
+        version: link:../../../credentials
       '@nexiom/database':
         specifier: workspace:*
-        version: link:../../database
+        version: link:../../../database
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../framework
@@ -1215,11 +1221,11 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
-  packages/pieces/salesforce:
+  packages/pieces/platform/salesforce:
     dependencies:
       '@nexiom/credentials':
         specifier: workspace:*
-        version: link:../../credentials
+        version: link:../../../credentials
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../framework

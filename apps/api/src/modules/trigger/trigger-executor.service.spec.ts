@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { TriggerStrategy } from '@nexiom/piece-framework';
@@ -7,11 +8,24 @@ function makeMockDb() {
   const where = vi.fn().mockResolvedValue([]);
   const set = vi.fn().mockReturnValue({ where });
   const update = vi.fn().mockReturnValue({ set });
+  const returning = vi.fn().mockResolvedValue([{ id: '1' }]);
+  const onConflictDoNothing = vi.fn().mockReturnValue({ returning });
+  const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+  const insert = vi.fn().mockReturnValue({ values });
+
+  const tx = {
+    execute: vi.fn(),
+    update,
+    insert,
+  };
+
   return {
     $client: {
       query: vi.fn(),
     },
     update,
+    insert,
+    transaction: vi.fn().mockImplementation(async (cb) => cb(tx)),
   };
 }
 
@@ -39,6 +53,8 @@ function makeMockTrigger(overrides?: Partial<Trigger>): Trigger {
   };
 }
 
+const TEST_CONNECTION_ID = 'conn_test';
+
 describe('TriggerExecutorService', () => {
   let db: ReturnType<typeof makeMockDb>;
   let redis: ReturnType<typeof makeMockRedis>;
@@ -53,6 +69,9 @@ describe('TriggerExecutorService', () => {
       {
         applyPlan: vi.fn(),
       } as unknown as import('@nexiom/dbmanager').DatabaseManager,
+      {
+        resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
+      } as unknown as import('@nexiom/engine').StorageResolverService,
     );
   });
 
@@ -69,6 +88,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
       });
 
       expect(runSpy).not.toHaveBeenCalled();
@@ -89,6 +109,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
       });
 
       // Lock is released via Lua eval (atomic check-and-delete)
@@ -110,11 +131,12 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
         headers: {},
         rawBody: Buffer.from('{}'),
       });
 
-      expect(db.$client.query).toHaveBeenCalled();
+      expect(db.insert).toHaveBeenCalled();
     });
 
     it('should call verifySignature if present', async () => {
@@ -131,6 +153,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
         headers: { 'x-hub-signature': 'sha256=abc' },
         rawBody: Buffer.from('{}'),
         secret: 'my_secret',
@@ -154,6 +177,7 @@ describe('TriggerExecutorService', () => {
           auth: {},
           propsValue: {},
           workspaceId: 'ws_1',
+          connectionId: TEST_CONNECTION_ID,
           headers: { 'x-hub-signature': 'sha256=bad' },
           rawBody: Buffer.from('{}'),
           secret: 'wrong_secret',
@@ -161,7 +185,7 @@ describe('TriggerExecutorService', () => {
       ).rejects.toThrow('Invalid signature');
 
       // No DB write or cursor update should occur
-      expect(db.$client.query).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
       expect(redis.hset).not.toHaveBeenCalled();
     });
   });
@@ -179,6 +203,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
       });
 
       expect(onEnable).toHaveBeenCalled();
@@ -197,6 +222,7 @@ describe('TriggerExecutorService', () => {
           auth: {},
           propsValue: {},
           workspaceId: 'ws_1',
+          connectionId: TEST_CONNECTION_ID,
         }),
       ).resolves.not.toThrow();
     });
@@ -220,6 +246,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
+        connectionId: TEST_CONNECTION_ID,
       });
 
       expect(redis.lpush).toHaveBeenCalledWith(

@@ -10,10 +10,12 @@ import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
+  appConnections,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { getReplicaExtractor } from "@nexiom/piece-framework";
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
@@ -52,6 +54,35 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       const { inboundGateway, replicaEntity, replicaOutbox, syncLog } =
         buildTenantSchema(schemaName);
 
+      // Fetch application metadata
+      const connRows = await this.db
+        .select({
+          appName: appConnections.appName,
+          metadata: appConnections.metadata,
+        })
+        .from(appConnections)
+        .where(eq(appConnections.id, connectionId))
+        .limit(1);
+
+      const appName = connRows[0]?.appName;
+      const metadata = connRows[0]?.metadata as
+        | Record<string, unknown>
+        | undefined;
+
+      // Runtime validation of appProfile
+      const trimmedAppProfile =
+        typeof metadata?.appProfile === "string"
+          ? metadata.appProfile.trim()
+          : "";
+      const appProfile =
+        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
+
+      if (!appName) {
+        throw new Error(
+          `Connection ${connectionId} not found in appConnections!`,
+        );
+      }
+
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
@@ -70,13 +101,30 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           throw new Error(`Inbound record for traceId ${traceId} not found`);
         }
 
-        const entityType = inbound.objectType || "DEFAULT";
         if (!inbound.extReqId) {
           throw new Error(
             `Inbound record for traceId ${traceId} is missing extReqId. A stable external identity is required for idempotency.`,
           );
         }
         const sourceId = inbound.extReqId;
+
+        const extractor = getReplicaExtractor(appName, appProfile);
+        const extracted = extractor
+          ? extractor(inbound.payload)
+          : {
+              entityType: inbound.objectType || "DEFAULT",
+              data: inbound.payload as Record<string, unknown>,
+            };
+
+        if (extractor && !extracted) {
+          throw new Error(
+            `Replica extraction failed for traceId ${traceId}: Payload did not match the expected structural envelope shape.`,
+          );
+        }
+
+        // extracted is always populated (either by extractor or fallback above)
+        const resolvedEntityType = extracted!.entityType;
+        const resolvedData = extracted!.data;
 
         // Upsert into replica_entity
         await tx
@@ -85,9 +133,9 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             traceId, // Current trace ID resolving the replica
             connectionId,
             srcReqTraceId: inbound.traceId, // The L1 message trace
-            entityType,
+            entityType: resolvedEntityType,
             sourceId,
-            data: inbound.payload as any,
+            data: resolvedData as any,
             version: 1,
           })
           .onConflictDoUpdate({
@@ -97,7 +145,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
               replicaEntity.sourceId,
             ],
             set: {
-              data: inbound.payload as any,
+              data: resolvedData as any,
               traceId, // Update traceId to the latest run
               version: sql`${replicaEntity.version} + 1`,
               updatedAt: sql`NOW()`,

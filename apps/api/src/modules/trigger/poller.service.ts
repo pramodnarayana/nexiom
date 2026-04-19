@@ -7,6 +7,7 @@ import { PieceRegistryService } from '@nexiom/piece-registry';
 
 interface ActiveConnection {
   workspace_id: string;
+  connection_id: string;
   app_name: string;
   trigger_name: string;
   object_type: string | null;
@@ -127,6 +128,7 @@ export class PollerService {
       auth: conn.auth,
       propsValue: conn.props_value,
       workspaceId: conn.workspace_id,
+      connectionId: conn.connection_id,
     });
 
     if (!executed) {
@@ -165,6 +167,7 @@ export class PollerService {
 
     const result = await this.db.$client.query<ActiveConnection>(
       `SELECT
+                ac.id as connection_id,
                 ac.workspace_id,
                 ac.app_name,
                 ac.trigger_name,

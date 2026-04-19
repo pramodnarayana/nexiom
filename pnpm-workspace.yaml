@@ -4,4 +4,5 @@ packages:
   - 'engine/sync/platform/*'
   - 'engine/sync/application/*'
   - 'engine/ai/*'
-  - 'packages/pieces/*'
+  - 'packages/pieces/platform/*'
+  - 'packages/pieces/application/*'

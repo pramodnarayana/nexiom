@@ -137,7 +137,7 @@ async function describeRelatedObjects(
 
     interface SfDescribeResponse {
         childRelationships: Array<{ childSObject: string; field: string; relationshipName: string | null }>;
-        fields: Array<{ type: string; referenceTo?: string[]; name: string }>;
+        fields: Array<{ type: string; referenceTo?: string[]; name: string; label: string }>;
     }
 
     // Any 404s here will naturally reject. Valid API names are guaranteed by Orchestrator resolution.
@@ -149,7 +149,12 @@ async function describeRelatedObjects(
     for (const f of data.fields) {
         if (f.type === 'reference' && f.referenceTo?.length) {
             for (const ref of f.referenceTo) {
-                related.push({ objectName: ref, relationshipType: '1:1', relationField: f.name });
+                related.push({ 
+                    objectName: ref, 
+                    relationshipType: '1:1', 
+                    relationField: f.name,
+                    relationLabel: f.label
+                });
             }
         }
     }

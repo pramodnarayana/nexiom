@@ -83,6 +83,7 @@ export class WebhooksController {
         auth: conn.auth,
         propsValue: conn.props_value,
         workspaceId: conn.workspace_id,
+        connectionId,
         headers,
         rawBody,
         secret: conn.webhook_secret ?? undefined,

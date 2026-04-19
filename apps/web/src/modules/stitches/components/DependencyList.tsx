@@ -37,17 +37,19 @@ export function DependencyList({ connectionId, objectName, selected = [], onSele
   }, [connectionId, objectName]);
 
   const filteredObjects = useMemo(() => {
-    if (!searchQuery.trim()) return relatedObjects;
+    // Exclude 1:N reverse child relationships to prevent UI confusion for users
+    const parentRelationsOnly = relatedObjects.filter(o => o.relationshipType === '1:1');
+    if (!searchQuery.trim()) return parentRelationsOnly;
     const lower = searchQuery.toLowerCase();
-    return relatedObjects.filter(o => o.objectName.toLowerCase().includes(lower));
+    return parentRelationsOnly.filter(o => o.objectName.toLowerCase().includes(lower));
   }, [relatedObjects, searchQuery]);
 
-  const handleToggle = (name: string) => {
+  const handleToggle = (uniqueIdent: string, fallbackName: string) => {
     if (!onSelectionChange) return;
-    if (selected.includes(name)) {
-      onSelectionChange(selected.filter((n) => n !== name));
+    if (selected.includes(uniqueIdent) || selected.includes(fallbackName)) {
+      onSelectionChange(selected.filter((n) => n !== uniqueIdent && n !== fallbackName));
     } else {
-      onSelectionChange([...selected, name]);
+      onSelectionChange([...selected, uniqueIdent]);
     }
   };
 
@@ -108,24 +110,27 @@ export function DependencyList({ connectionId, objectName, selected = [], onSele
             </div>
           ) : (
             filteredObjects.map((mod) => {
-              const key = mod.objectName + mod.relationField;
-              const isChecked = selected.includes(mod.objectName);
+              const uniqueIdent = `${mod.objectName}::${mod.relationField}`;
+              // Fallback to mod.objectName for backwards compatibility with older stored configs
+              const isChecked = selected.includes(uniqueIdent) || selected.includes(mod.objectName);
               return (
                 <div 
-                    key={key} 
+                    key={uniqueIdent} 
                     className="flex items-center gap-3 p-3 px-4 hover:bg-muted/10 transition-colors cursor-pointer"
-                    onClick={() => handleToggle(mod.objectName)}
+                    onClick={() => handleToggle(uniqueIdent, mod.objectName)}
                 >
                   <input 
                     type="checkbox" 
                     className="h-4 w-4 shrink-0 rounded border-gray-300 text-primary cursor-pointer accent-primary" 
                     checked={isChecked}
-                    onChange={() => handleToggle(mod.objectName)} 
+                    onChange={() => handleToggle(uniqueIdent, mod.objectName)} 
                   />
                   <div className="flex flex-col gap-0.5 flex-1">
-                    <span className="text-sm font-medium">{mod.objectName}</span>
+                    <span className="text-sm font-medium">
+                      {mod.relationLabel || mod.objectLabel || mod.objectName}
+                    </span>
                     <span className="text-xs text-muted-foreground font-mono">
-                      via {mod.relationField}
+                      {mod.relationField}
                     </span>
                   </div>
                   <Badge variant="outline" className="text-xs font-mono bg-muted/20 shrink-0">

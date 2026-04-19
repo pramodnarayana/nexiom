@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import {
   TriggerExecutorService,
-  type WebhookRunParams,
   type TriggerRunParams,
 } from './trigger-executor.service.js';
 import { PieceRegistryService } from '@nexiom/piece-registry';
@@ -27,6 +26,7 @@ interface DlqJob {
   appName: string;
   triggerName: string;
   workspaceId: string;
+  connectionId: string;
   objectType?: string;
   propsValue: Record<string, unknown>;
   auth: unknown;
@@ -232,7 +232,7 @@ export class DlqProcessorService {
       return;
     }
 
-    const params: TriggerRunParams | WebhookRunParams = {
+    const params: TriggerRunParams = {
       trigger,
       appName: job.appName,
       triggerName: job.triggerName,
@@ -240,7 +240,7 @@ export class DlqProcessorService {
       auth: job.auth,
       propsValue: job.propsValue,
       workspaceId: job.workspaceId,
-      ...(job.payload !== undefined && { payload: job.payload }),
+      connectionId: job.connectionId,
     };
 
     try {
@@ -316,6 +316,7 @@ export class DlqProcessorService {
         appName: job.appName,
         triggerName: job.triggerName,
         workspaceId: job.workspaceId,
+        connectionId: job.connectionId,
         objectType: job.objectType,
         propsValue: job.propsValue,
         auth: job.auth,
