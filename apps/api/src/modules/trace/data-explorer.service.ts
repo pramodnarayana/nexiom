@@ -174,7 +174,9 @@ export class DataExplorerService {
         .orderBy(desc(normalizedEntity.createdAt))
         .limit(safeLimit)
         .offset(offset),
-      this.db.select({ count: sql<number>`count(*)::int` }).from(normalizedEntity),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(normalizedEntity),
     ]);
     return {
       data: rows,

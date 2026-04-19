@@ -64,16 +64,21 @@ export async function listFields(
 
 export interface RelatedObjectDescriptor {
   objectName: string;
+  objectLabel?: string;
   relationshipType: '1:1' | '1:N';
   relationField: string;
+  relationLabel?: string;
 }
 
 export async function listRelatedObjects(
   connectionId: string,
   objectName: string,
+  options?: { refresh?: boolean },
 ): Promise<RelatedObjectDescriptor[]> {
+  const config = buildRefreshConfig(options?.refresh ?? false);
   const res = await apiClient.get<RelatedObjectDescriptor[]>(
     `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/related`,
+    config,
   );
   return res.data;
 }

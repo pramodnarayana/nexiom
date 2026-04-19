@@ -229,6 +229,7 @@ describe('StitchesMetadataController', () => {
         ORG_ID,
         CONNECTION_ID,
         OBJECT_NAME,
+        false,
       );
     });
 

@@ -167,8 +167,10 @@ export interface ConfigOption {
 /** Describes a SaaS object related to a source object via 1:1 or 1:N relations. */
 export interface RelatedObjectDescriptor {
     objectName: string;
+    objectLabel?: string;
     relationshipType: '1:1' | '1:N';
     relationField: string;
+    relationLabel?: string;
 }
 
 /**

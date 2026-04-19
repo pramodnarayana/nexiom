@@ -111,11 +111,13 @@ export class StitchesMetadataController {
     @AuthContext() auth: RequestAuthContext,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Param('objectName', ValidateObjectNamePipe) objectName: string,
+    @Query('refresh') refresh?: string,
   ) {
     return this.metadataDiscovery.describeRelatedObjects(
       requireOrgId(auth),
       connectionId,
       objectName, // Validated by ValidateObjectNamePipe
+      refresh === 'true',
     );
   }
 
