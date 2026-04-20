@@ -5,6 +5,8 @@ import {
   UseGuards,
   HttpCode,
   Logger,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { CdcRelayGuard } from './cdc-relay.guard.js';
@@ -19,6 +21,7 @@ export class CdcRelayController {
 
   @Post('relay')
   @HttpCode(202)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async relay(@Body() event: DebeziumUnwrappedEvent): Promise<void> {
     const { __table, __op, trace_id, connection_id, schema_name } = event;
 

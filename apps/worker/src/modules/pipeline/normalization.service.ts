@@ -71,12 +71,26 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const passedSchemaName = msg.schemaName as string | undefined;
+      let schemaName: string;
+
       if (passedSchemaName) {
+        // Validate syntax
         assertValidSchemaName(passedSchemaName);
+
+        // Verify ownership: passedSchemaName must belong to this connectionId
+        const expectedSchemaName =
+          await this.storageResolver.resolveSchemaName(connectionId);
+
+        if (passedSchemaName !== expectedSchemaName) {
+          throw new Error(
+            `Schema ownership mismatch: passedSchemaName="${passedSchemaName}" does not belong to connectionId="${connectionId}" (expected="${expectedSchemaName}")`,
+          );
+        }
+
+        schemaName = passedSchemaName;
+      } else {
+        schemaName = await this.storageResolver.resolveSchemaName(connectionId);
       }
-      const schemaName =
-        passedSchemaName ??
-        (await this.storageResolver.resolveSchemaName(connectionId));
       const {
         inboundGateway,
         replicaEntity,

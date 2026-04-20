@@ -151,6 +151,7 @@ export class TriggerExecutorService {
   async runOnEnable(params: TriggerRunParams): Promise<void> {
     const context = this.buildContext(params);
     let wroteRegistryRow = false;
+    let registeredPublication = false;
     try {
       // 1. Ensure all pipeline tables are provisioned lazily
       await this.dbManager.applyPlan(
@@ -158,21 +159,10 @@ export class TriggerExecutorService {
         SchemaPlan.OUTBOUND_ACTIVE,
       );
 
-      // 2. Invoke the trigger enablement logic (e.g. subscribe to webhook).
-      // The registry row is written AFTER this succeeds so that delivery
-      // workers never see OUTBOUND_ACTIVE for a workspace whose onEnable
-      // threw (e.g. webhook subscription failed).
-      await params.trigger.onEnable?.(context);
-
-      // 3. Persist the provisioned schemaPlan only once onEnable has succeeded.
-      await this.db
-        .update(connectionStorageRegistry)
-        .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-        .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
-      wroteRegistryRow = true;
-
-      // 4. Register the tenant's outbox tables with Debezium CDC publication.
+      // 2. Register the tenant's outbox tables with Debezium CDC publication.
       // We wrap the ALTER PUBLICATION safe DO block to ignore duplicate additions.
+      // This must happen BEFORE onEnable so that publication failures don't leave
+      // external subscriptions (e.g., webhooks) active without CDC relay.
       const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
         params.connectionId,
       );
@@ -189,6 +179,20 @@ export class TriggerExecutorService {
           END;
         END $$;
       `);
+      registeredPublication = true;
+
+      // 3. Invoke the trigger enablement logic (e.g. subscribe to webhook).
+      // The registry row is written AFTER this succeeds so that delivery
+      // workers never see OUTBOUND_ACTIVE for a workspace whose onEnable
+      // threw (e.g. webhook subscription failed).
+      await params.trigger.onEnable?.(context);
+
+      // 4. Persist the provisioned schemaPlan only once onEnable has succeeded.
+      await this.db
+        .update(connectionStorageRegistry)
+        .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+        .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
+      wroteRegistryRow = true;
 
       this.logger.log('onEnable completed', {
         appName: params.appName,
@@ -196,9 +200,11 @@ export class TriggerExecutorService {
         workspaceId: params.workspaceId,
       });
     } catch (err) {
-      // Only revert the registry row if the write actually happened.
-      // If applyPlan or onEnable threw before reaching the UPDATE, the row
-      // was never changed and reverting would be a spurious write.
+      // Revert changes in reverse order of application
+
+      // 1. Only revert the registry row if the write actually happened.
+      // If applyPlan or publication or onEnable threw before reaching the UPDATE,
+      // the row was never changed and reverting would be a spurious write.
       if (wroteRegistryRow) {
         try {
           await this.db
@@ -220,6 +226,42 @@ export class TriggerExecutorService {
           );
         }
       }
+
+      // 2. Attempt to remove the publication registration if it was successful.
+      // This prevents CDC events from flowing for a trigger whose onEnable failed.
+      if (registeredPublication) {
+        try {
+          const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
+            params.connectionId,
+          );
+          assertValidSchemaName(resolvedSchemaName);
+          await this.db.execute(sql`
+            DO $$
+            BEGIN
+              BEGIN
+                ALTER PUBLICATION nexiom_cdc
+                  DROP TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
+                             ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox;
+              EXCEPTION WHEN undefined_object THEN
+                -- Ignore gracefully if the table is not in the publication
+              END;
+            END $$;
+          `);
+        } catch (pubRevertErr) {
+          this.logger.error(
+            'Failed to revert publication registration after onEnable failure',
+            {
+              workspaceId: params.workspaceId,
+              connectionId: params.connectionId,
+              error:
+                pubRevertErr instanceof Error
+                  ? pubRevertErr.message
+                  : String(pubRevertErr),
+            },
+          );
+        }
+      }
+
       this.logger.error('onEnable failed', {
         appName: params.appName,
         triggerName: params.triggerName,

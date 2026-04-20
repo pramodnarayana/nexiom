@@ -23,6 +23,22 @@ export const handler: KinesisStreamHandler = async (event) => {
       continue;
     }
 
+    // Validate required fields before enqueuing to prevent poison messages
+    if (
+      typeof trace_id !== 'string' ||
+      trace_id.trim() === '' ||
+      typeof connection_id !== 'string' ||
+      connection_id.trim() === '' ||
+      typeof schema_name !== 'string' ||
+      schema_name.trim() === ''
+    ) {
+      const error = new Error(
+        `Invalid CDC payload: missing or non-string required fields (table=${String(__table)}, trace_id=${String(trace_id)}, connection_id=${String(connection_id)}, schema_name=${String(schema_name)})`,
+      );
+      console.error(error.message, { payload });
+      throw error;
+    }
+
     const queueUrl =
       __table === 'inbound_outbox'
         ? process.env.INBOUND_QUEUE_URL!

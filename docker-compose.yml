@@ -122,11 +122,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      api:
+        condition: service_started
+    profiles: ["app"]
     networks:
       - nexiom-network
     restart: on-failure
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/q/health || exit 1"]
+      test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/8080) >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

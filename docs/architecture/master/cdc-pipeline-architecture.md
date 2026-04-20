@@ -309,20 +309,53 @@ NormalizationService Worker
 ### docker-compose.yml Changes
 
 ```yaml
+  # --- Debezium CDC Relay ---
   debezium:
-    image: debezium/server:2.7      # Debezium SERVER (standalone) — no Kafka required
+    image: quay.io/debezium/server:2.7.4.Final
+    platform: linux/amd64
+    env_file:
+      - .env
     volumes:
-      - ./infra/debezium/application.properties:/debezium/conf/application.properties
+      - ./infra/debezium/application.properties:/debezium/conf/application.properties:ro
     depends_on:
-      - postgres
-      - api                          # Wait for CdcRelayController to be available
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    profiles: ["app"]
+    networks:
+      - nexiom-network
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "(echo > /dev/tcp/localhost/8080) >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # localstack already exists — add apigateway to SERVICES only for prod parity testing
+  # --- LocalStack (SQS + KMS) ---
+  # SQS queues are auto-created on startup via the init script.
+  # Endpoint: http://localhost:4566 — matches INFRA_MODE=local in QueueService / AwsKmsAdapter.
   localstack:
-    image: localstack/localstack:3.0
+    image: localstack/localstack:3.8
     environment:
-      SERVICES: sqs                  # SQS only needed locally (no API Gateway needed)
+      SERVICES: sqs,kms
+      DEBUG: "0"
+      DEFAULT_REGION: us-east-1
+      LOCALSTACK_HOST: localstack
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name delivery-queue --region us-east-1 && awslocal kms list-aliases --region us-east-1 | grep alias/nexiom-local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - nexiom-network
 ```
 
 ### Debezium Server Configuration (Local)
@@ -396,7 +429,7 @@ docker-compose up -d
 pnpm dev:light
 
 # 3. Verify Debezium is healthy and connected to WAL
-curl http://localhost:8084/q/health   # Debezium Server health endpoint
+docker compose exec debezium curl -s http://localhost:8080/q/health   # Debezium Server health endpoint
 
 # 4. Verify LocalStack SQS queues exist
 aws --endpoint-url=http://localhost:4566 sqs list-queues
