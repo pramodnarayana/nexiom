@@ -1,7 +1,7 @@
 import type { NormalizedRecord } from './canonical/index.js';
 
 export type ReplicaExtractorFn = (payload: unknown) => { entityType: string; data: Record<string, unknown> } | null;
-export type NormalizerFn = (replica: { entityType: string; data: Record<string, unknown> }) => NormalizedRecord | null;
+export type NormalizerFn = (replica: { entityType: string; data: Record<string, unknown> }) => NormalizedRecord | null | Promise<NormalizedRecord | null>;
 
 // Use nested Map structure to avoid key collisions when inputs contain ":"
 const extractorRegistry = new Map<string, Map<string, ReplicaExtractorFn>>();

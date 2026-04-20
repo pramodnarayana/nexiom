@@ -231,9 +231,8 @@ export class TriggerExecutorService {
       // This prevents CDC events from flowing for a trigger whose onEnable failed.
       if (registeredPublication) {
         try {
-          const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
-            params.connectionId,
-          );
+          const resolvedSchemaName =
+            await this.storageResolver.resolveSchemaName(params.connectionId);
           assertValidSchemaName(resolvedSchemaName);
           await this.db.execute(sql`
             DO $$

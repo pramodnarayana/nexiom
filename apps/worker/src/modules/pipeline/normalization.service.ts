@@ -157,7 +157,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         const customNormalizer = getNormalizer(connectionAppName, appProfile);
 
         if (customNormalizer) {
-          const normalized = customNormalizer({
+          const normalized = await customNormalizer({
             entityType: replica.entityType,
             data: replica.data as Record<string, unknown>,
           });
