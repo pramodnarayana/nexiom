@@ -173,13 +173,17 @@ export class TriggerExecutorService {
 
       // 4. Register the tenant's outbox tables with Debezium CDC publication.
       // We wrap the ALTER PUBLICATION safe DO block to ignore duplicate additions.
+      const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
+        params.connectionId,
+      );
+      assertValidSchemaName(resolvedSchemaName);
       await this.db.execute(sql`
         DO $$
         BEGIN
           BEGIN
             ALTER PUBLICATION nexiom_cdc
-              ADD TABLE ${sql.raw('"' + params.workspaceId + '"')}.inbound_outbox,
-                        ${sql.raw('"' + params.workspaceId + '"')}.replica_outbox;
+              ADD TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
+                        ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox;
           EXCEPTION WHEN duplicate_object THEN
             -- Ignore gracefully if the table is already in the publication
           END;

@@ -71,6 +71,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const passedSchemaName = msg.schemaName as string | undefined;
+      if (passedSchemaName) {
+        assertValidSchemaName(passedSchemaName);
+      }
       const schemaName =
         passedSchemaName ??
         (await this.storageResolver.resolveSchemaName(connectionId));

@@ -28,7 +28,7 @@ describe('CdcRelayController', () => {
     await controller.relay({
       __op: 'c',
       __table: 'inbound_outbox',
-      __schema: 'ws_sf_123',
+      __schema: 'debezium_metadata_schema',
       schema_name: 'ws_sf_123',
       trace_id: 'trace-1',
       connection_id: 'conn-1',
@@ -45,7 +45,7 @@ describe('CdcRelayController', () => {
     await controller.relay({
       __op: 'c',
       __table: 'replica_outbox',
-      __schema: 'ws_qb_456',
+      __schema: 'debezium_metadata_schema',
       schema_name: 'ws_qb_456',
       trace_id: 'trace-2',
       connection_id: 'conn-2',

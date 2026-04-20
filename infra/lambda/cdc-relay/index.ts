@@ -11,7 +11,17 @@ export const handler: KinesisStreamHandler = async (event) => {
     const payload = JSON.parse(
       Buffer.from(record.kinesis.data, 'base64').toString('utf-8'),
     );
-    const { __table, trace_id, connection_id, __schema } = payload;
+    const { __table, __op, trace_id, connection_id, schema_name } = payload;
+
+    // Only enqueue insert events; updates/deletes are not needed for outbox pattern
+    if (__op !== 'c') {
+      continue;
+    }
+
+    // Only route outbox tables; ignore other tables
+    if (__table !== 'inbound_outbox' && __table !== 'replica_outbox') {
+      continue;
+    }
 
     const queueUrl =
       __table === 'inbound_outbox'
@@ -28,7 +38,7 @@ export const handler: KinesisStreamHandler = async (event) => {
         MessageBody: JSON.stringify({
           traceId: trace_id,
           connectionId: connection_id,
-          schemaName: __schema,
+          schemaName: schema_name,
         }),
       }),
     );

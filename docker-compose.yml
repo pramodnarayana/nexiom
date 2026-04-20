@@ -115,6 +115,8 @@ services:
   debezium:
     image: quay.io/debezium/server:2.7.4.Final
     platform: linux/amd64
+    env_file:
+      - .env
     volumes:
       - ./infra/debezium/application.properties:/debezium/conf/application.properties:ro
     depends_on:

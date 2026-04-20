@@ -258,8 +258,8 @@ Partition key: connectionId
 | Property | Value |
 |---|---|
 | **Config change** | `wal_level = logical` (one line in `postgresql.conf`) |
-| **Replication slot** | `nexiom_cdc` — persists WAL position across Debezium restarts |
-| **Publication** | `CREATE PUBLICATION nexiom_cdc FOR TABLE inbound_outbox, replica_outbox` |
+| **Replication slot** | `nexiom_slot` — persists WAL position across Debezium restarts |
+| **Publication** | `CREATE PUBLICATION nexiom_slot FOR TABLE inbound_outbox, replica_outbox` |
 | **Slot retention** | WAL retained until slot consumer acknowledges — prevents data loss on Debezium downtime |
 | **Risk** | If Debezium is down for extended periods with no WAL consumer, disk fills with retained WAL. Set `max_slot_wal_keep_size` to bound this. |
 
@@ -290,8 +290,8 @@ Developer Laptop
 INSERT inbound_outbox
        ↓  [WAL, ~1ms]
 Debezium Server (Docker)
-       ↓  HTTP POST to NestJS (localhost:3000/internal/cdc-relay)
-CdcRelayController (NestJS)
+       ↓  HTTP POST to NestJS (localhost:3000/internal/cdc/relay)
+CdcRelayController (NestJS — single endpoint, table-based routing)
        ↓  SQS SendMessage
 LocalStack SQS InboundQueue
        ↓
@@ -338,14 +338,14 @@ debezium.source.database.user=nexiom
 debezium.source.database.password=nexiom
 debezium.source.database.dbname=nexiom
 debezium.source.plugin.name=pgoutput
-debezium.source.publication.name=nexiom_cdc
+debezium.source.publication.name=nexiom_slot
 debezium.source.slot.name=nexiom_slot
 debezium.source.table.include.list=*.inbound_outbox,*.replica_outbox
 debezium.source.snapshot.mode=never
 
 # Sink: HTTP → NestJS CdcRelayController (local dev)
 debezium.sink.type=http
-debezium.sink.http.url=http://api:3000/internal/cdc-relay
+debezium.sink.http.url=http://api:3000/internal/cdc/relay
 debezium.sink.http.timeout.ms=5000
 debezium.sink.http.retry.count=5
 debezium.sink.http.retry.delay.ms=1000
@@ -366,26 +366,23 @@ wal_level = logical   # changed from 'replica' (default)
 
 ```sql
 -- Run once on DB init (add to migration scripts):
-CREATE PUBLICATION nexiom_cdc FOR TABLES IN SCHEMA public;
--- Tenant schemas are added dynamically: ALTER PUBLICATION nexiom_cdc ADD TABLE ws_sf_abc.inbound_outbox;
+CREATE PUBLICATION nexiom_slot FOR TABLES IN SCHEMA public;
+-- Tenant schemas are added dynamically: ALTER PUBLICATION nexiom_slot ADD TABLE ws_sf_abc.inbound_outbox;
 ```
 
 ### New NestJS Component: CdcRelayController
 
 ```typescript
 // apps/api/src/modules/pipeline/cdc-relay.controller.ts
-// Protected by InternalGuard (DEBEZIUM_SECRET env var)
+// Protected by CdcRelayGuard (DEBEZIUM_SECRET env var)
 // Local dev only — in production, API Gateway handles this job
 
-@Post('inbound')
-async relayInbound(@Body() event: DebeziumEvent) {
-  // Extract traceId + connectionId from the unwrapped Debezium payload
-  // SQS.sendMessage({ QueueUrl: INBOUND_QUEUE, MessageBody: JSON.stringify(event.after) })
-}
-
-@Post('replica')
-async relayReplica(@Body() event: DebeziumEvent) {
-  // Same for replica_outbox events → ReplicaQueue
+@Post('relay')
+async relay(@Body() event: DebeziumUnwrappedEvent) {
+  // Single endpoint — routes based on event.__table
+  // if __table === 'inbound_outbox' → InboundQueue
+  // if __table === 'replica_outbox' → ReplicaQueue
+  // Uses schema_name from the outbox row (not Debezium __schema metadata)
 }
 ```
 
@@ -477,8 +474,8 @@ Postgres `PUBLICATION` does not support wildcards across dynamic schemas. When a
 ```typescript
 // Called by TriggerExecutorService.runOnEnable() after schema provisioning
 await db.execute(sql`
-  ALTER PUBLICATION nexiom_cdc ADD TABLE ${tenantSchema}.inbound_outbox;
-  ALTER PUBLICATION nexiom_cdc ADD TABLE ${tenantSchema}.replica_outbox;
+  ALTER PUBLICATION nexiom_slot ADD TABLE ${tenantSchema}.inbound_outbox;
+  ALTER PUBLICATION nexiom_slot ADD TABLE ${tenantSchema}.replica_outbox;
 `);
 ```
 
