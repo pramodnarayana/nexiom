@@ -53,9 +53,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       if (passedSchemaName) {
         assertValidSchemaName(passedSchemaName);
       }
-      const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
-        connectionId,
-      );
+      const resolvedSchemaName =
+        await this.storageResolver.resolveSchemaName(connectionId);
       const schemaName = passedSchemaName ?? resolvedSchemaName;
       if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
         this.logger.error(

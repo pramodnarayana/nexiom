@@ -1163,6 +1163,10 @@ importers:
         version: link:../../platform/framework
 
   packages/pieces/platform/framework:
+    dependencies:
+      jsonata:
+        specifier: ^2.1.0
+        version: 2.1.0
     devDependencies:
       '@types/node':
         specifier: ^25.5.0
