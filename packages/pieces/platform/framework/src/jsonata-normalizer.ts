@@ -41,8 +41,14 @@ export function createJsonataNormalizer(mappingDictionary: JsonataMappingDiction
 
     // 3. FAST EVALUATION
     const evalResult = await expression.evaluate(replica.data);
-    if (!evalResult || typeof evalResult !== 'object' || Array.isArray(evalResult)) {
-      throw new Error(`JSONata normalization failed: expected a plain object but got ${Array.isArray(evalResult) ? 'Array' : typeof evalResult}`);
+    if (evalResult === null) {
+      throw new Error(`JSONata normalization failed: expected a plain object but got null for entityType ${replica.entityType}`);
+    }
+    if (evalResult === undefined) {
+      throw new Error(`JSONata normalization failed: expected a plain object but got undefined for entityType ${replica.entityType}`);
+    }
+    if (typeof evalResult !== 'object' || Array.isArray(evalResult)) {
+      throw new Error(`JSONata normalization failed: expected a plain object but got ${Array.isArray(evalResult) ? 'Array' : typeof evalResult} for entityType ${replica.entityType}`);
     }
     const canonicalFields = Object.assign({}, evalResult);
 

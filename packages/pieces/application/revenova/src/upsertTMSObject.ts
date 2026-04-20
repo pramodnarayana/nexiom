@@ -1,4 +1,5 @@
-import { createJsonataNormalizer, JsonataMappingDictionary } from '@nexiom/piece-framework';
+import { createJsonataNormalizer } from '@nexiom/piece-framework';
+import type { JsonataMappingDictionary } from '@nexiom/piece-framework';
 
 const metadataDictionary: JsonataMappingDictionary = {
     'sf_Account': {
