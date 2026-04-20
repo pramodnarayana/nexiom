@@ -23,6 +23,7 @@ function makeMockDb() {
     $client: {
       query: vi.fn(),
     },
+    execute: vi.fn().mockResolvedValue({}),
     update,
     insert,
     transaction: vi.fn().mockImplementation(async (cb) => cb(tx)),

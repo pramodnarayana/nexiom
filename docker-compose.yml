@@ -21,13 +21,19 @@ services:
   # --- Database ---
   postgres:
     image: postgres:15-alpine
+    command: >
+      postgres
+        -c wal_level=logical
+        -c max_replication_slots=5
+        -c max_wal_senders=5
     environment:
       <<: *db-vars
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/create-windmill-db.sh:/docker-entrypoint-initdb.d/create-windmill-db.sh:ro
+      - ./scripts/create-windmill-db.sh:/docker-entrypoint-initdb.d/01-create-windmill-db.sh:ro
+      - ./scripts/init-postgres-cdc.sh:/docker-entrypoint-initdb.d/02-init-postgres-cdc.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-nexiom_local}"]
       interval: 5s
@@ -104,6 +110,25 @@ services:
       - "4000:4000"
     networks:
       - nexiom-network
+
+  # --- Debezium CDC Relay ---
+  debezium:
+    image: quay.io/debezium/server:2.7.4.Final
+    platform: linux/amd64
+    volumes:
+      - ./infra/debezium/application.properties:/debezium/conf/application.properties:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexiom-network
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/q/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # --- Cache/Queue ---
   redis:

@@ -1,0 +1,5 @@
+DROP INDEX "canonical_mapping_unique_idx";--> statement-breakpoint
+ALTER TABLE "connection_storage_registry" ALTER COLUMN "database_host_id" SET DEFAULT 'aurora-prod';--> statement-breakpoint
+ALTER TABLE "ai_messages" ADD CONSTRAINT "ai_messages_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "public"."ai_conversations"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "canonical_mapping_tenant_idx" ON "canonical_mappings" USING btree ("tenant_id","app_name","category","entity","view_mode","version") WHERE "canonical_mappings"."tenant_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "canonical_mapping_global_idx" ON "canonical_mappings" USING btree ("app_name","category","entity","view_mode","version") WHERE "canonical_mappings"."tenant_id" IS NULL;

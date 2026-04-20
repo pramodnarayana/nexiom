@@ -70,8 +70,10 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
     );
 
     try {
+      const passedSchemaName = msg.schemaName as string | undefined;
       const schemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+        passedSchemaName ??
+        (await this.storageResolver.resolveSchemaName(connectionId));
       const {
         inboundGateway,
         replicaEntity,
