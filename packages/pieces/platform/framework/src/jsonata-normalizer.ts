@@ -50,15 +50,25 @@ export function createJsonataNormalizer(mappingDictionary: JsonataMappingDiction
     if (typeof evalResult !== 'object' || Array.isArray(evalResult)) {
       throw new Error(`JSONata normalization failed: expected a plain object but got ${Array.isArray(evalResult) ? 'Array' : typeof evalResult} for entityType ${replica.entityType}`);
     }
-    const canonicalFields = Object.assign({}, evalResult);
 
-    // sourceId should be null when neither Id nor id exists, so distinct vendor
-    // records without Id/id don't collapse into a single 'unknown' entry
-    const sourceId = replica.data.Id ?? replica.data.id ?? null;
+    // Safe copy: filter out dangerous keys to prevent prototype pollution
+    const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype']);
+    const canonicalFields = Object.create(null);
+    for (const key of Object.keys(evalResult)) {
+      if (!unsafeKeys.has(key)) {
+        canonicalFields[key] = evalResult[key];
+      }
+    }
+
+    // sourceId should be undefined when neither Id nor id exists or when they contain
+    // only whitespace, so distinct vendor records without valid IDs don't collapse
+    const rawSourceId = replica.data.Id ?? replica.data.id ?? null;
+    const trimmedSourceId = rawSourceId !== null ? String(rawSourceId).trim() : '';
+    const sourceId = trimmedSourceId !== '' ? trimmedSourceId : undefined;
 
     return {
       canonicalType: meta.type,
-      sourceId: sourceId !== null ? String(sourceId) : undefined,
+      sourceId,
       data: canonicalFields as Record<string, unknown>,
     };
   };
