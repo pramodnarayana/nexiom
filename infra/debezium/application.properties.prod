@@ -1,0 +1,36 @@
+# ── Source: Postgres WAL ──────────────────────────────────────────────────────
+debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector
+debezium.source.database.hostname=${POSTGRES_HOST}
+debezium.source.database.port=5432
+debezium.source.database.user=${POSTGRES_USER}
+debezium.source.database.password=${POSTGRES_PASSWORD}
+debezium.source.database.dbname=${POSTGRES_DB}
+debezium.source.plugin.name=pgoutput
+debezium.source.publication.name=nexiom_cdc
+debezium.source.slot.name=nexiom_slot
+
+# Watch ONLY the outbox tables — not the heavy business payload tables
+debezium.source.table.include.list=.*\\.inbound_outbox,.*\\.replica_outbox
+
+# Never snapshot — outbox only captures new INSERTs going forward
+debezium.source.snapshot.mode=never
+
+# ── Sink: AWS API Gateway (HTTP) ──────────────────────────────────────────────
+debezium.sink.type=http
+# This URL is provisioned via Terraform/CDK for the API Gateway endpoint
+debezium.sink.http.url=${API_GATEWAY_URL}
+debezium.sink.http.timeout.ms=10000
+debezium.sink.http.retry.count=10
+debezium.sink.http.retry.delay.ms=500
+
+# ── Transform: Unwrap envelope, emit only new row + table/schema metadata ────
+debezium.transforms=unwrap
+debezium.transforms.unwrap.type=io.debezium.transforms.ExtractNewRecordState
+debezium.transforms.unwrap.drop.tombstones=true
+debezium.transforms.unwrap.add.fields=table,schema,op
+
+# ── Offset storage (S3 for production — survives ECS restarts) ───────────────
+debezium.source.offset.storage=io.debezium.storage.s3.offset.S3OffsetBackingStore
+debezium.source.offset.storage.s3.bucket.name=${S3_OFFSET_BUCKET}
+debezium.source.offset.storage.s3.region=${AWS_REGION}
+debezium.source.offset.flush.interval.ms=5000

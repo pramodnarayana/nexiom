@@ -49,8 +49,29 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     );
 
     try {
-      const schemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+      const passedSchemaName = msg.schemaName as string | undefined;
+      if (passedSchemaName) {
+        assertValidSchemaName(passedSchemaName);
+      }
+      const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
+        connectionId,
+      );
+      const schemaName = passedSchemaName ?? resolvedSchemaName;
+      if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
+        this.logger.error(
+          {
+            event: "l2.schema_mismatch",
+            traceId,
+            connectionId,
+            passedSchemaName,
+            resolvedSchemaName,
+          },
+          "Schema name mismatch detected — misrouted CDC event",
+        );
+        throw new Error(
+          `Schema mismatch: msg.schemaName=${passedSchemaName} but resolved=${resolvedSchemaName}`,
+        );
+      }
       const { inboundGateway, replicaEntity, replicaOutbox, syncLog } =
         buildTenantSchema(schemaName);
 
@@ -168,12 +189,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           durationMs,
         });
 
-        // Atomically write the outbox entry — the ReplicaOutboxService sweeper
-        // (in apps/api) will deliver this to ReplicaQueue with retries.
-        // traceId is the consumer deduplication key; if a duplicate is delivered
-        // the L3 ON CONFLICT DO NOTHING on replicaId makes it idempotent.
-        // onConflictDoNothing guards against InboundQueue message redelivery
-        // producing a second outbox row for the same (traceId, connectionId).
+        // Atomically write the outbox entry — Debezium CDC watches this table
+        // and triggers the relay to ReplicaQueue (via CdcRelayController locally
+        // or API Gateway in production). traceId is the consumer deduplication
+        // key; if a duplicate is delivered the L3 ON CONFLICT DO NOTHING on
+        // replicaId makes it idempotent. onConflictDoNothing guards against
+        // InboundQueue message redelivery producing a second outbox row for
+        // the same (traceId, connectionId).
         await tx
           .insert(replicaOutbox)
           .values({
