@@ -135,7 +135,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         );
       }
 
-      await this.db.transaction(async (tx) => {
+      const replica = await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -146,35 +146,43 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           .from(replicaEntity)
           .where(sql`${replicaEntity.traceId} = ${traceId}`)
           .limit(1);
-        const replica = replicaRows[0];
-        if (!replica)
+        const rep = replicaRows[0];
+        if (!rep)
           throw new Error(`Replica record for traceId ${traceId} not found`);
+        return rep;
+      });
 
-        let canonicalType = "RAW";
-        let canonicalData = replica.data;
+      let canonicalType = "RAW";
+      let canonicalData = replica.data;
 
-        // ── Normalize via Registry or Piece ─────────────────────────────────
-        const customNormalizer = getNormalizer(connectionAppName, appProfile);
+      // ── Normalize via Registry or Piece ─────────────────────────────────
+      const customNormalizer = getNormalizer(connectionAppName, appProfile);
 
-        if (customNormalizer) {
-          const normalized = await customNormalizer({
-            entityType: replica.entityType,
-            data: replica.data as Record<string, unknown>,
-          });
-          if (normalized) {
-            canonicalType = normalized.canonicalType;
-            canonicalData = normalized.data;
-          }
-        } else if (piece.normalize) {
-          const normalized = await piece.normalize(
-            replica.entityType,
-            replica.data as Record<string, unknown>,
-          );
-          if (normalized) {
-            canonicalType = normalized.canonicalType;
-            canonicalData = normalized.data;
-          }
+      if (customNormalizer) {
+        const normalized = await customNormalizer({
+          entityType: replica.entityType,
+          data: replica.data as Record<string, unknown>,
+        });
+        if (normalized) {
+          canonicalType = normalized.canonicalType;
+          canonicalData = normalized.data;
         }
+      } else if (piece.normalize) {
+        const normalized = await piece.normalize(
+          replica.entityType,
+          replica.data as Record<string, unknown>,
+        );
+        if (normalized) {
+          canonicalType = normalized.canonicalType;
+          canonicalData = normalized.data;
+        }
+      }
+
+      await this.db.transaction(async (tx) => {
+        assertValidSchemaName(schemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
 
         // ── Idempotent insert of normalizedEntity ─────────────────────────────
         // ON CONFLICT DO NOTHING on replicaId prevents duplicate rows when the

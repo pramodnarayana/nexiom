@@ -18,9 +18,11 @@ A purely programmatic mapping strategy (1-to-1 key mapping in TypeScript) fails 
 [JSONata](https://jsonata.org/) is a lightweight query and transformation language for JSON data. By replacing hardcoded TypeScript property mapping with JSONata evaluation, we gain full iPaaS-level transformation capabilities.
 
 ### Example Transformation
+
 Notice how complex concatenation and conditional logic is natively supported as a single flat string.
 
 **From Raw Input:**
+
 ```json
 {
   "rtms__Pickup_Date__c": "2026-04-20T10:00:00Z",
@@ -30,6 +32,7 @@ Notice how complex concatenation and conditional logic is natively supported as 
 ```
 
 **JSONata Expression:**
+
 ```jsonata
 {
   "pickupDate": $substring(rtms__Pickup_Date__c, 0, 10),

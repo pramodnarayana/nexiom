@@ -4,7 +4,6 @@
   "private": true,
   "main": "src/index.ts",
   "dependencies": {
-    "@nexiom/piece-framework": "workspace:*",
-    "jsonata": "^2.1.0"
+    "@nexiom/piece-framework": "workspace:*"
   }
 }
