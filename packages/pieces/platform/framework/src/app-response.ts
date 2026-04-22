@@ -11,12 +11,31 @@ export function registerAppWebhookResponse(fn: AppWebhookResponseFn) {
 }
 
 /**
+ * Resets the app response registry. Used for testing to avoid cross-test state leakage.
+ */
+export function resetAppResponseRegistry() {
+    appResponseRegistry.length = 0;
+}
+
+/**
  * Executes all registered app webhook response handlers and returns the first match.
+ * Wraps each handler in try/catch to prevent a single failing handler from breaking
+ * the entire chain. Logs errors and continues to the next handler.
  */
 export function executeAppWebhookResponses(body: unknown, headers: Record<string, string>): { body: string; contentType: string; status: number } | null {
-    for (const fn of appResponseRegistry) {
-        const result = fn(body, headers);
-        if (result) return result;
+    for (let i = 0; i < appResponseRegistry.length; i++) {
+        const fn = appResponseRegistry[i];
+        try {
+            const result = fn(body, headers);
+            if (result) return result;
+        } catch (error) {
+            console.error(
+                `[executeAppWebhookResponses] Handler ${i} threw an error:`,
+                error instanceof Error ? error.message : String(error),
+                error
+            );
+            // Continue to next handler instead of bubbling up
+        }
     }
     return null;
 }

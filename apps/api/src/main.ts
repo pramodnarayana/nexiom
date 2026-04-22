@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import '@nexiom/application-revenova';
-import * as express from 'express';
+import express from 'express';
 import { Logger } from 'nestjs-pino';
 import { NestFactory } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
@@ -40,7 +40,13 @@ async function bootstrap() {
   app.setGlobalPrefix(globalPrefix, { exclude: ['webhooks', 'webhooks/(.*)'] });
 
   // Add fallback parser for raw payloads to support XML/plain webhooks
-  app.use('/webhooks', express.text({ type: '*/*', limit: '50mb' }));
+  app.use('/webhooks', express.text({
+    type: '*/*',
+    limit: '50mb',
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf;
+    }
+  }));
 
   const port = process.env.PORT || 3000;
 

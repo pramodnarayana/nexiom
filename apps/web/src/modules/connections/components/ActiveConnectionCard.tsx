@@ -152,9 +152,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
 
     const webhookUrl = useMemo(() => {
         if (typeof window === 'undefined') return '';
-        const apiUrl = import.meta.env.VITE_API_URL || window.location.origin;
-        const host = apiUrl.replace(/\/api\/?$/, '');
-        return `${host}/webhooks/${connection.id}`;
+        // Use explicit webhook base URL if provided, otherwise derive from VITE_API_URL
+        const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL ||
+                           (import.meta.env.VITE_API_URL ?
+                            import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') :
+                            window.location.origin);
+        return `${webhookBase}/webhooks/${connection.id}`;
     }, [connection.id]);
 
     return (
@@ -227,17 +230,34 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
                 <p className="text-xs text-muted-foreground mt-0.5">{provider?.displayName || connection.appName}</p>
                 
                 <div className="px-4 mt-3">
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         className="w-full text-[11px] h-7 bg-secondary/50 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                             e.stopPropagation();
-                            navigator.clipboard.writeText(webhookUrl);
-                            toast({ 
-                                title: "Webhook Copied", 
-                                description: "URL is ready to be pasted into the vendor platform." 
-                            });
+                            if (!navigator.clipboard) {
+                                toast({
+                                    title: "Copy Failed",
+                                    description: "Clipboard API is not available in this browser.",
+                                    variant: "destructive"
+                                });
+                                return;
+                            }
+                            try {
+                                await navigator.clipboard.writeText(webhookUrl);
+                                toast({
+                                    title: "Webhook Copied",
+                                    description: "URL is ready to be pasted into the vendor platform."
+                                });
+                            } catch (err) {
+                                console.error('Failed to copy webhook URL:', err);
+                                toast({
+                                    title: "Copy Failed",
+                                    description: "Could not copy to clipboard. Please copy manually.",
+                                    variant: "destructive"
+                                });
+                            }
                         }}
                     >
                         Copy Webhook URL

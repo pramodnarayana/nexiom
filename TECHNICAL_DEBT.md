@@ -43,7 +43,7 @@ This document tracks known technical debt items that should be addressed in futu
 
 - **Update Publication**: Modify `trigger-executor.service.ts` to dynamically include `normalized_outbox` alongside `inbound_outbox` and `replica_outbox` in the `ALTER PUBLICATION nexiom_cdc ADD TABLE...` script.
 - **Relay Controller**: Add an `else if (__table === 'normalized_outbox')` routing branch in `apps/api/src/modules/pipeline/cdc-relay.controller.ts` to push those CDC payloads to the L4 FanOut SQS Queue.
-- **Cleanup**: Delete the legacy cron-polling `NormalizedOutboxService` entirely.
+- **Cleanup**: Delete the legacy cron-polling `NormalizedOutboxWorker` entirely.
 
 ---
 
@@ -213,6 +213,40 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 - Generate and store a secure random token (e.g., `sk_8a49c2b1x9`) for each `app_connection` record.
 - Update the webhook controller route to act as a hybrid: `POST /webhooks/:orgSlug/:connectionSlug/:secretToken`.
 - Validate the URL secret mathematically against the database upon ingest. This achieves both a branded, customer-friendly URL and Zapier-style cryptographic un-guessability simultaneously.
+
+**Migration Strategy & Rollout Plan**:
+
+1. **Dual-Mode Routing (Transition Window)**:
+   - Support both legacy `POST /webhooks/:connectionId` and new `POST /webhooks/:orgSlug/:connectionSlug/:secretToken` routes simultaneously during a 90-day deprecation window.
+   - Update `webhooks.controller.ts` to handle both route patterns and resolve them to the same internal handler.
+   - Add deprecation warning headers (e.g., `X-Deprecation-Warning: "Legacy endpoint; migrate to /webhooks/:orgSlug/:connectionSlug/:secretToken by YYYY-MM-DD"`) to legacy route responses.
+
+2. **Backfill Secret Tokens**:
+   - Create a database migration to add a `webhook_secret` column to `app_connection` table.
+   - Backfill existing connections with cryptographically secure random tokens (e.g., using `crypto.randomBytes(16).toString('hex')`).
+   - Ensure the migration is idempotent and preserves existing tokens if re-run.
+
+3. **Token Rotation & Revocation**:
+   - Implement an API endpoint (e.g., `POST /api/connections/:id/rotate-webhook-secret`) to allow customers to regenerate their webhook secret.
+   - Store token generation timestamp to support automatic expiry policies if needed in the future.
+   - Add audit logging for all token rotation events.
+
+4. **Rate Limiting Updates**:
+   - Update `tenant-rate-limit.guard.ts` to apply rate limiting consistently across both legacy and new routes.
+   - Ensure rate limit keys are normalized to the connection ID regardless of which route format is used.
+
+5. **Customer Communication Plan**:
+   - **T-90 days**: Announce new Capability URL feature in release notes and documentation; send email to all customers with migration guide.
+   - **T-60 days**: Add in-app banners for users still using legacy webhook URLs, with one-click "Copy New URL" button.
+   - **T-30 days**: Send reminder emails with deprecation timeline and support contact.
+   - **T-7 days**: Final warning email highlighting exact sunset date.
+   - **T-0 days**: Disable legacy route; return HTTP 410 Gone with migration instructions in response body.
+
+6. **Rollback Safety**:
+   - Keep legacy route code in place but feature-flagged for 30 days post-sunset to allow emergency rollback if needed.
+   - Monitor error rates and customer support tickets closely during transition period.
+
+**Estimated Timeline**: 90-day deprecation window with implementation effort of 2 days for dual-mode routing + 1 day for migration tooling.
 
 
 ### 1. Kubernetes Grace Period vs Hardcoded Drain Timeout

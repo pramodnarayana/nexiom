@@ -20,7 +20,6 @@ import { StorageResolverModule, StorageResolverService } from '@nexiom/engine';
  */
 @Module({
   imports: [DbModule, StorageResolverModule],
-  controllers: [],
   providers: [
     {
       provide: TriggerExecutorService,
