@@ -810,6 +810,40 @@ export class DatabaseManager {
   }
 
   /**
+   * Upgrades a connection's physical schema to GATEWAY_ACTIVE,
+   * creating the inbound_gateway (L1) table so webhook payloads can be ingested.
+   *
+   * Used for local development and testing when a stitch has not yet been
+   * activated through the normal UI flow.
+   *
+   * @param schemaName - The physical schema name (e.g. 'ws_salesforce_98b64cffa1b61b2c')
+   */
+  async provisionGateway(schemaName: string): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log(`🔧 Applying GATEWAY_ACTIVE to schema: ${schemaName}...\n`);
+
+    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const dbSchema = await import('./schema.js');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      const schemaMgr = new SqlDatabaseManager(
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
+      await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+      console.log(`  ✓ Schema "${schemaName}" upgraded to GATEWAY_ACTIVE`);
+      console.log(
+        '  ✓ inbound_gateway table is now ready for webhook ingestion',
+      );
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
    * Debug RBAC permissions for a role
    */
   async debugPermissions(roleName: string): Promise<void> {

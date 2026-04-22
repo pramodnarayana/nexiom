@@ -6,7 +6,6 @@ import { PieceRegistryService } from '@nexiom/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
-import { WebhooksController } from './webhooks.controller.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
@@ -21,7 +20,7 @@ import { StorageResolverModule, StorageResolverService } from '@nexiom/engine';
  */
 @Module({
   imports: [DbModule, StorageResolverModule],
-  controllers: [WebhooksController],
+  controllers: [],
   providers: [
     {
       provide: TriggerExecutorService,

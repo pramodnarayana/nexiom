@@ -22,6 +22,7 @@ const COMMANDS = [
   'fresh',
   'reset',
   'provision:local',
+  'provision:gateway',
   'check-user',
   'check-role',
   'seed:abac',
@@ -64,6 +65,18 @@ async function main() {
       case 'provision:local':
         await manager.provisionLocal();
         break;
+      case 'provision:gateway': {
+        const schemaName = process.argv[3];
+        if (!schemaName) {
+          console.error('Usage: provision:gateway <schemaName>');
+          console.error(
+            '  Example: provision:gateway ws_salesforce_98b64cffa1b61b2c',
+          );
+          process.exit(1);
+        }
+        await manager.provisionGateway(schemaName);
+        break;
+      }
       case 'check-user': {
         const identifier = process.argv[3];
         if (!identifier) {

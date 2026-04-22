@@ -28,19 +28,22 @@ This document tracks known technical debt items that should be addressed in futu
 ### 2. Hardened L3 & L4 Pipeline Outbox Refactoring
 
 **Location**: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`  
-**Added**: 2026-03-29  
+**Added**: 2026-03-29 (Updated: 2026-04-20)  
 **Impact**: Reliability, Data Integrity, Architecture  
 **Effort**: Medium (2-3 days)
 
 **Current State**:
 
-- L3 (\`NormalizationService\`) and L4 (\`FanOutService\`) both combine database transactions directly with external queue publishing (\`this.queueService.send\`), violating the Single Responsibility Principle and exposing the pipeline to two-phase commit vulnerabilities.
-- If L3 or L4 crashes immediately after queuing the next message, the downstream worker proceeds, but the local success audits (e.g. \`syncLog\`, \`inbound_gateway\` updates) roll back in Postgres, leading to duplicate processing limits.
+- L1->L2 and L2->L3 boundaries have been successfully migrated to the Debezium CDC pipeline (`inbound_outbox` and `replica_outbox` trigger SQS directly).
+- However, the L3 (`NormalizationService`) -> L4 (`FanOutService`) boundary is incomplete regarding event-driven routing.
+- While `normalized_outbox` has been created and is actively written to transactionally by L3, it is **not registered in the Debezium publication** during trigger enablement, and the `CdcRelayController` does not listen for inserts to this table.
+- As a result, the L3->L4 handoff still relies on a legacy cron-polling service (`NormalizedOutboxService`), which wastes database CPU and prevents true real-time elasticity.
 
 **Recommended Solution**:
 
-- **L3 (Normalization):** Create a new \`normalized_outbox\` Drizzle schema, insert into it atomically within the primary L3 transaction, and introduce a \`NormalizedOutboxService\` to relay those records to L4.
-- **L4 (FanOut):** Remove direct queue sending. Configure \`FanOutService\` to transactionally insert outbound events directly into the preexisting \`delivery_outbox\` schema. Ensure the relay worker correctly routes these events downstream to L5 \`DeliveryQueue\`.
+- **Update Publication**: Modify `trigger-executor.service.ts` to dynamically include `normalized_outbox` alongside `inbound_outbox` and `replica_outbox` in the `ALTER PUBLICATION nexiom_cdc ADD TABLE...` script.
+- **Relay Controller**: Add an `else if (__table === 'normalized_outbox')` routing branch in `apps/api/src/modules/pipeline/cdc-relay.controller.ts` to push those CDC payloads to the L4 FanOut SQS Queue.
+- **Cleanup**: Delete the legacy cron-polling `NormalizedOutboxService` entirely.
 
 ---
 
@@ -193,6 +196,24 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 ---
 
 ## Medium Priority
+
+### 1. Capability URL Webhook Routing (Slug + Secret Token)
+
+**Location**: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/guards/tenant-rate-limit.guard.ts`
+**Added**: 2026-04-21
+**Impact**: Customer Experience, API Security
+**Effort**: Medium (2 days)
+
+**Current State**:
+- Webhooks currently use the raw internal UUID of the connection (`POST /webhooks/:connectionId`), making them secure against brute-forcing but unpolished for enterprise customers.
+- We cannot safely switch to a purely human-readable composite slug (e.g., `POST /webhooks/:orgSlug/:connectionSlug`) without a cryptographic signature requirement. Otherwise, malicious actors (or internal tenant misconfigurations) could trivially guess paths and forge cross-tenant data.
+
+**Recommended Solution**:
+- Implement the "Capability URL" pattern.
+- Generate and store a secure random token (e.g., `sk_8a49c2b1x9`) for each `app_connection` record.
+- Update the webhook controller route to act as a hybrid: `POST /webhooks/:orgSlug/:connectionSlug/:secretToken`.
+- Validate the URL secret mathematically against the database upon ingest. This achieves both a branded, customer-friendly URL and Zapier-style cryptographic un-guessability simultaneously.
+
 
 ### 1. Kubernetes Grace Period vs Hardcoded Drain Timeout
 

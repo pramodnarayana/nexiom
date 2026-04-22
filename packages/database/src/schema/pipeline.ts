@@ -79,7 +79,7 @@ export function buildTenantSchema(schemaName: string) {
      *
      * Captures every raw transmission exactly as received (webhook or poll).
      * Immutable after write — the permanent "source evidence" record.
-     * GIN index on payload enables sub-100ms JSONB field searches.
+     * GIN index on request enables sub-100ms JSONB field searches.
      */
     const inboundGateway = schema.table('inbound_gateway', {
         id: uuid('id').defaultRandom().primaryKey(),
@@ -87,7 +87,8 @@ export function buildTenantSchema(schemaName: string) {
         connectionId: uuid('connection_id').notNull(),
         // Object type detected at ingestion for early-stage routing
         objectType: varchar('object_type', { length: 100 }),
-        payload: jsonb('payload').notNull(),
+        request: jsonb('request').notNull(),
+        response: jsonb('response'),
         headers: jsonb('headers'),
         // Vendor batch/event ID — used for idempotency
         extReqId: varchar('ext_req_id', { length: 255 }),
@@ -97,7 +98,7 @@ export function buildTenantSchema(schemaName: string) {
         uniqueIndex('idx_l1_ext_id').on(table.connectionId, table.extReqId),
         index('idx_l1_object_type').on(table.objectType),
         index('idx_l1_status').on(table.status),
-        index('idx_l1_payload_gin').using('gin', table.payload),
+        index('idx_l1_request_gin').using('gin', table.request),
     ]);
 
     /**

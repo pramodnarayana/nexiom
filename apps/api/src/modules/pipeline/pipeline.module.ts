@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ReplicaService } from './replica.service.js';
+
 import { CdcRelayController } from './cdc-relay.controller.js';
 import { CdcRelayGuard } from './cdc-relay.guard.js';
 import { QueueModule } from '@nexiom/queue';
@@ -9,7 +9,7 @@ import { ObservabilityModule } from '../observability/observability.module.js';
 
 @Module({
   imports: [DbModule, StorageResolverModule, ObservabilityModule, QueueModule],
-  providers: [ReplicaService, CdcRelayGuard],
+  providers: [CdcRelayGuard],
   controllers: [CdcRelayController],
 })
 export class PipelineModule {}

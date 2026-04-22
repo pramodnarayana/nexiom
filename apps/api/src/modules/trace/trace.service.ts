@@ -52,7 +52,8 @@ export interface FullTrace {
     id: string;
     connectionId: string;
     objectType: string | null;
-    payload: unknown;
+    request: unknown;
+    response: unknown;
     headers: unknown;
     extReqId: string | null;
     status: string;
@@ -406,7 +407,8 @@ export class TraceService {
             id: l1.id,
             connectionId: l1.connectionId,
             objectType: l1.objectType,
-            payload: l1.payload,
+            request: l1.request,
+            response: l1.response,
             headers: l1.headers,
             extReqId: l1.extReqId,
             status: l1.status,

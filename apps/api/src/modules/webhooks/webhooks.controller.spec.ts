@@ -89,6 +89,8 @@ describe('WebhooksController', () => {
         '00000000-0000-0000-0000-000000000001',
         { foo: 'bar' },
         {},
+        {} as any,
+        {} as any,
       ),
     ).resolves.toBeUndefined();
 
@@ -108,6 +110,8 @@ describe('WebhooksController', () => {
         '00000000-0000-0000-0000-000000000001',
         { foo: 'bar' },
         {},
+        {} as any,
+        {} as any,
       ),
     ).resolves.toBeUndefined();
   });
@@ -124,6 +128,8 @@ describe('WebhooksController', () => {
         '00000000-0000-0000-0000-000000000001',
         { foo: 'bar' },
         {},
+        {} as any,
+        {} as any,
       ),
     ).rejects.toThrow('unique_violation');
   });
@@ -140,6 +146,8 @@ describe('WebhooksController', () => {
         '00000000-0000-0000-0000-000000000001',
         { foo: 'bar' },
         {},
+        {} as any,
+        {} as any,
       ),
     ).rejects.toThrow('connection refused');
 
@@ -162,6 +170,8 @@ describe('WebhooksController', () => {
       '00000000-0000-0000-0000-000000000001',
       { data: 1 },
       { 'x-webhook-id': 'sf-event-123' },
+      {} as any,
+      {} as any,
     );
 
     expect(capturedValues).toBeDefined();
@@ -181,6 +191,8 @@ describe('WebhooksController', () => {
       '00000000-0000-0000-0000-000000000001',
       { data: 1 },
       { 'content-type': 'application/json' },
+      {} as any,
+      {} as any,
     );
 
     expect(capturedValues).toBeDefined();
@@ -206,6 +218,8 @@ describe('WebhooksController', () => {
         'x-request-id': 'req-123',
         cookie: 'session=abc',
       },
+      {} as any,
+      {} as any,
     );
 
     const stored = capturedValues?.['headers'] as
@@ -233,6 +247,8 @@ describe('WebhooksController', () => {
       '00000000-0000-0000-0000-000000000001',
       { data: 1 },
       { 'x-event-id': 'qb-event-456' },
+      {} as any,
+      {} as any,
     );
 
     expect(capturedValues).toBeDefined();
@@ -244,6 +260,8 @@ describe('WebhooksController', () => {
       '00000000-0000-0000-0000-000000000001',
       { foo: 'bar' },
       {},
+      {} as any,
+      {} as any,
     );
 
     expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
@@ -261,6 +279,8 @@ describe('WebhooksController', () => {
         '00000000-0000-0000-0000-000000000001',
         { foo: 'bar' },
         {},
+        {} as any,
+        {} as any,
       ),
     ).rejects.toThrow('SQS down');
 

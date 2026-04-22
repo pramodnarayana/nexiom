@@ -15,3 +15,4 @@ export {
     HttpRequest,
     HttpResponse,
 } from './http-client.js';
+export * from './app-response.js';

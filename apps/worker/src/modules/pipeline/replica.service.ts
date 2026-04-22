@@ -130,10 +130,10 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
         const extractor = getReplicaExtractor(appName, appProfile);
         const extracted = extractor
-          ? extractor(inbound.payload)
+          ? extractor(inbound.request)
           : {
               entityType: inbound.objectType || "DEFAULT",
-              data: inbound.payload as Record<string, unknown>,
+              data: inbound.request as Record<string, unknown>,
             };
 
         if (extractor && !extracted) {
