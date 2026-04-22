@@ -41,7 +41,11 @@ async function bootstrap() {
 
   // Add fallback parser for raw payloads to support XML/plain webhooks
   app.use('/webhooks', express.text({
-    type: '*/*',
+    type: (req) => {
+      const contentType = req.headers['content-type'] || '';
+      // Skip JSON content types - let NestJS's JSON parser handle them
+      return !(contentType.includes('application/json') || contentType.includes('+json'));
+    },
     limit: '50mb',
     verify: (req, _res, buf) => {
       (req as any).rawBody = buf;

@@ -225,6 +225,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
    - Create a database migration to add a `webhook_secret` column to `app_connection` table.
    - Backfill existing connections with cryptographically secure random tokens (e.g., using `crypto.randomBytes(16).toString('hex')`).
    - Ensure the migration is idempotent and preserves existing tokens if re-run.
+   - **Storage & Validation Security**: The `webhook_secret` column is stored in plaintext (since these are capability URLs requiring direct comparison for authentication, not user credentials). Implement rate-limiting for failed token validations (max 10 failed attempts per `orgSlug/connectionSlug` pair per minute with exponential backoff or temporary lockout). Mandate logging of all failed webhook validation attempts including IP address and timestamp for security audit trails.
 
 3. **Token Rotation & Revocation**:
    - Implement an API endpoint (e.g., `POST /api/connections/:id/rotate-webhook-secret`) to allow customers to regenerate their webhook secret.

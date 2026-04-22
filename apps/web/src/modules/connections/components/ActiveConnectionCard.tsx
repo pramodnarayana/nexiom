@@ -153,10 +153,12 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
     const webhookUrl = useMemo(() => {
         if (typeof window === 'undefined') return '';
         // Use explicit webhook base URL if provided, otherwise derive from VITE_API_URL
-        const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL ||
-                           (import.meta.env.VITE_API_URL ?
-                            import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') :
-                            window.location.origin);
+        let webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL ||
+                          (import.meta.env.VITE_API_URL ?
+                           import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') :
+                           window.location.origin);
+        // Strip trailing slashes to prevent double-slash when appending /webhooks path
+        webhookBase = webhookBase.replace(/\/+$/, '');
         return `${webhookBase}/webhooks/${connection.id}`;
     }, [connection.id]);
 
