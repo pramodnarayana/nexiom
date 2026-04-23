@@ -537,6 +537,9 @@ importers:
       '@nexiom/ai-engine':
         specifier: workspace:*
         version: link:../../engine/ai/core
+      '@nexiom/application-revenova':
+        specifier: workspace:*
+        version: link:../../packages/pieces/application/revenova
       '@nexiom/auth':
         specifier: workspace:*
         version: link:../../packages/auth

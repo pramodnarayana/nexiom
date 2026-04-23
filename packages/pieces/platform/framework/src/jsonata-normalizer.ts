@@ -51,25 +51,20 @@ export function createJsonataNormalizer(mappingDictionary: JsonataMappingDiction
       throw new Error(`JSONata normalization failed: expected a plain object but got ${Array.isArray(evalResult) ? 'Array' : typeof evalResult} for entityType ${replica.entityType}`);
     }
 
-    // Safe copy: filter out dangerous keys to prevent prototype pollution
+    // Safe copy: filter out dangerous keys to prevent prototype pollution.
+    // Use a regular object literal (not Object.create(null)) so Drizzle's
+    // is() function can walk the prototype chain without throwing.
     const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype']);
-    const canonicalFields = Object.create(null);
+    const canonicalFields: Record<string, unknown> = {};
     for (const key of Object.keys(evalResult)) {
       if (!unsafeKeys.has(key)) {
-        canonicalFields[key] = evalResult[key];
+        canonicalFields[key] = (evalResult as Record<string, unknown>)[key];
       }
     }
 
-    // sourceId should be undefined when neither Id nor id exists or when they contain
-    // only whitespace, so distinct vendor records without valid IDs don't collapse
-    const rawSourceId = replica.data.Id ?? replica.data.id ?? null;
-    const trimmedSourceId = rawSourceId !== null ? String(rawSourceId).trim() : '';
-    const sourceId = trimmedSourceId !== '' ? trimmedSourceId : undefined;
-
     return {
       canonicalType: meta.type,
-      sourceId,
-      data: canonicalFields as Record<string, unknown>,
+      data: canonicalFields,
     };
   };
 }

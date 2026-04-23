@@ -115,16 +115,15 @@ export function buildTenantSchema(schemaName: string) {
         id: uuid('id').defaultRandom().primaryKey(),
         connectionId: uuid('connection_id').notNull(),
         traceId: uuid('trace_id').notNull(),
-        srcReqTraceId: uuid('src_req_trace_id').notNull(),
-        sourceId: varchar('source_id', { length: 255 }).notNull(),
+        entityId: varchar('entity_id', { length: 255 }).notNull(),
         entityType: varchar('entity_type', { length: 100 }).notNull(),
         data: jsonb('data').notNull(),
         version: integer('version').notNull().default(1),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     }, (table) => [
-        uniqueIndex('idx_l2_unique_entity').on(table.connectionId, table.entityType, table.sourceId),
+        uniqueIndex('idx_l2_unique_entity').on(table.connectionId, table.entityType, table.entityId),
         index('idx_l2_trace').on(table.traceId),
-        index('idx_l2_src_req').on(table.srcReqTraceId),
         index('idx_l2_data_gin').using('gin', table.data),
     ]);
 

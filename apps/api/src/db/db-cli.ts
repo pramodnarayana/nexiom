@@ -23,6 +23,8 @@ const COMMANDS = [
   'reset',
   'provision:local',
   'provision:gateway',
+  'provision:outbound',
+  'migrate:schemas',
   'check-user',
   'check-role',
   'seed:abac',
@@ -69,14 +71,23 @@ async function main() {
         const schemaName = process.argv[3];
         if (!schemaName) {
           console.error('Usage: provision:gateway <schemaName>');
-          console.error(
-            '  Example: provision:gateway ws_salesforce_98b64cffa1b61b2c',
-          );
           process.exit(1);
         }
         await manager.provisionGateway(schemaName);
         break;
       }
+      case 'provision:outbound': {
+        const schemaName = process.argv[3];
+        if (!schemaName) {
+          console.error('Usage: provision:outbound <schemaName>');
+          process.exit(1);
+        }
+        await manager.provisionOutbound(schemaName);
+        break;
+      }
+      case 'migrate:schemas':
+        await manager.migrateAllSchemas();
+        break;
       case 'check-user': {
         const identifier = process.argv[3];
         if (!identifier) {

@@ -184,18 +184,38 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
-        // ── Idempotent insert of normalizedEntity ─────────────────────────────
-        // ON CONFLICT DO NOTHING on replicaId prevents duplicate rows when the
-        // ReplicaQueue message is redelivered (at-least-once delivery).
+        // ── Idempotent upsert of normalizedEntity ────────────────────────────
+        // ON CONFLICT DO UPDATE on replicaId overwrites data/canonicalType with
+        // the latest version whenever the same entity is re-ingested.
+        //
+        // safeData guard: JSON round-trip ensures a plain-prototype object is
+        // passed to Drizzle, avoiding null-prototype crashes in Drizzle's is().
+        const safeData = JSON.parse(
+          JSON.stringify(
+            canonicalData != null && typeof canonicalData === "object"
+              ? canonicalData
+              : {},
+          ),
+        ) as Record<string, unknown>;
+
+        // onConflictDoUpdate always returns the row, so insertRes is always non-empty.
         const insertRes = await tx
           .insert(normalizedEntity)
           .values({
             traceId,
             replicaId: replica.id,
             canonicalType,
-            data: canonicalData as Record<string, unknown>,
+            data: safeData,
           })
-          .onConflictDoNothing({ target: normalizedEntity.replicaId })
+          .onConflictDoUpdate({
+            target: normalizedEntity.replicaId,
+            set: {
+              // Always overwrite with the latest normalised payload
+              traceId,
+              canonicalType,
+              data: safeData,
+            },
+          })
           .returning({ id: normalizedEntity.id });
 
         if (insertRes.length > 0) {

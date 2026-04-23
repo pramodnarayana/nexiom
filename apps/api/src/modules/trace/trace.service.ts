@@ -61,7 +61,7 @@ export interface FullTrace {
   } | null;
   replicaEntity: {
     id: string;
-    sourceId: string;
+    entityId: string;
     entityType: string;
     data: unknown;
     version: number;
@@ -418,7 +418,7 @@ export class TraceService {
       replicaEntity: l2
         ? {
             id: l2.id,
-            sourceId: l2.sourceId,
+            entityId: l2.entityId,
             entityType: l2.entityType,
             data: l2.data,
             version: l2.version,

@@ -5,16 +5,23 @@ const metadataDictionary: JsonataMappingDictionary = {
     'sf_Account': {
         type: 'TMS_CARRIER',
         mappingExpr: `{
-            "displayName": name_,
-            "currency": CurrencyIsoCode,
-            "status": Status__c
+            "displayName": name,
+            "city": billingcity,
+            "state": billingstate,
+            "country": billingcountry,
+            "postalCode": billingpostalcode,
+            "street": billingstreet,
+            "tmsType": rtms__tms_type__c,
+            "isCarrier": akatia__carrier__c,
+            "isBroker": akatia__broker__c,
+            "isVendor": akatia__vendor__c
         }`
     },
     'rtms__Load__c': {
         type: 'TMS_LOAD',
         mappingExpr: `{
-            "displayName": name_,
-            "pickupDate": rtms__Pickup_Date__c
+            "displayName": name,
+            "pickupDate": rtms__pickup_date__c
         }`
     }
 };

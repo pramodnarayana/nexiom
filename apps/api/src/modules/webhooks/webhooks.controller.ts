@@ -94,7 +94,7 @@ export class WebhooksController {
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { inboundGateway } = buildTenantSchema(schemaName);
+      const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
       const inboundGatewayId = randomUUID();
       const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
@@ -149,6 +149,17 @@ export class WebhooksController {
           headers: filteredHeaders,
           extReqId,
         });
+
+        await tx
+          .insert(inboundOutbox)
+          .values({
+            traceId: inboundGatewayId,
+            connectionId,
+            status: 'PENDING',
+          })
+          .onConflictDoNothing({
+            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+          });
       });
       // Await queue delivery to ensure durability.
       // Enqueue failures do NOT abort the 202 response; instead we mark the

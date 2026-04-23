@@ -119,11 +119,11 @@ services:
       - .env
     volumes:
       - ./infra/debezium/application.properties:/debezium/conf/application.properties:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
-      api:
-        condition: service_started
     profiles: ["app"]
     networks:
       - nexiom-network

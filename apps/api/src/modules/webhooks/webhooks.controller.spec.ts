@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
@@ -20,7 +21,14 @@ const loggerMock = {
 function makeDbMock() {
   const insertMock = vi
     .fn()
-    .mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
+    // First call → inboundGateway: plain insert, just needs to be awaitable
+    .mockReturnValueOnce({ values: vi.fn().mockResolvedValue(undefined) })
+    // Subsequent calls → inboundOutbox: needs onConflictDoNothing chain
+    .mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
   const executeMock = vi.fn().mockResolvedValue(undefined);
 
   // Return a fluent builder that mirrors Drizzle's tx.update(...).set(...).where(...) chain.
@@ -95,7 +103,8 @@ describe('WebhooksController', () => {
     ).resolves.toBeUndefined();
 
     expect(db.transaction).toHaveBeenCalledOnce();
-    expect(db._tx.insert).toHaveBeenCalledOnce();
+    // Controller inserts into two tables: inboundGateway + inboundOutbox
+    expect(db._tx.insert).toHaveBeenCalledTimes(2);
   });
 
   it('returns 202 (does not throw) when DB throws 23505 on a known idempotency constraint', async () => {
@@ -159,12 +168,21 @@ describe('WebhooksController', () => {
 
   it('uses x-webhook-id header as extReqId when present', async () => {
     let capturedValues: Record<string, unknown> | undefined;
-    db._tx.insert.mockReturnValue({
-      values: vi.fn((v: Record<string, unknown>) => {
-        capturedValues = v;
-        return Promise.resolve();
-      }),
-    });
+    db._tx.insert.mockReset(); // clear makeDbMock() queue before per-test overrides
+    db._tx.insert
+      // First call → inboundGateway: capture the inserted values
+      .mockReturnValueOnce({
+        values: vi.fn((v: Record<string, unknown>) => {
+          capturedValues = v;
+          return Promise.resolve(undefined);
+        }),
+      })
+      // Second call → inboundOutbox: onConflictDoNothing chain
+      .mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
 
     await controller.ingest(
       '00000000-0000-0000-0000-000000000001',
@@ -180,12 +198,19 @@ describe('WebhooksController', () => {
 
   it('sets extReqId to undefined when neither x-webhook-id nor x-event-id is present', async () => {
     let capturedValues: Record<string, unknown> | undefined;
-    db._tx.insert.mockReturnValue({
-      values: vi.fn((v: Record<string, unknown>) => {
-        capturedValues = v;
-        return Promise.resolve();
-      }),
-    });
+    db._tx.insert.mockReset();
+    db._tx.insert
+      .mockReturnValueOnce({
+        values: vi.fn((v: Record<string, unknown>) => {
+          capturedValues = v;
+          return Promise.resolve(undefined);
+        }),
+      })
+      .mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
 
     await controller.ingest(
       '00000000-0000-0000-0000-000000000001',
@@ -201,12 +226,19 @@ describe('WebhooksController', () => {
 
   it('only persists allowlisted headers (strips sensitive headers)', async () => {
     let capturedValues: Record<string, unknown> | undefined;
-    db._tx.insert.mockReturnValue({
-      values: vi.fn((v: Record<string, unknown>) => {
-        capturedValues = v;
-        return Promise.resolve();
-      }),
-    });
+    db._tx.insert.mockReset();
+    db._tx.insert
+      .mockReturnValueOnce({
+        values: vi.fn((v: Record<string, unknown>) => {
+          capturedValues = v;
+          return Promise.resolve(undefined);
+        }),
+      })
+      .mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
 
     await controller.ingest(
       '00000000-0000-0000-0000-000000000001',
@@ -236,12 +268,19 @@ describe('WebhooksController', () => {
 
   it('uses x-event-id header as extReqId when x-webhook-id is absent', async () => {
     let capturedValues: Record<string, unknown> | undefined;
-    db._tx.insert.mockReturnValue({
-      values: vi.fn((v: Record<string, unknown>) => {
-        capturedValues = v;
-        return Promise.resolve();
-      }),
-    });
+    db._tx.insert.mockReset();
+    db._tx.insert
+      .mockReturnValueOnce({
+        values: vi.fn((v: Record<string, unknown>) => {
+          capturedValues = v;
+          return Promise.resolve(undefined);
+        }),
+      })
+      .mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
 
     await controller.ingest(
       '00000000-0000-0000-0000-000000000001',

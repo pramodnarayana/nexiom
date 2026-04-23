@@ -18,6 +18,7 @@
 		"check:env": "{ [ -e .env ] || { echo '\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\n'; exit 1; }; }",
 		"infra:reset": "pnpm check:env && docker compose down -v && pnpm setup:local",
 		"infra:light:reset": "pnpm check:env && docker compose down -v && pnpm setup:light",
+		"setup:infra": "pnpm check:env && DEBEZIUM_SINK_URL=http://host.docker.internal:3000/internal/cdc/relay docker compose up -d postgres redis localstack mock_gateway pgbouncer mailpit debezium --wait && pnpm db:migrate && pnpm db:seed",
 		"setup:local": "pnpm check:env && docker compose --profile app up -d --wait && pnpm db:migrate && pnpm db:seed",
 		"setup:light": "pnpm check:env && docker compose up -d postgres redis mock_gateway --wait && pnpm db:migrate && pnpm db:seed"
 	},

@@ -844,6 +844,81 @@ export class DatabaseManager {
   }
 
   /**
+   * Upgrades a connection's physical schema to OUTBOUND_ACTIVE natively
+   */
+  async provisionOutbound(schemaName: string): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log(`🔧 Applying OUTBOUND_ACTIVE to schema: ${schemaName}...\n`);
+
+    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const dbSchema = await import('./schema.js');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      const schemaMgr = new SqlDatabaseManager(
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
+      await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+      console.log(`  ✓ Schema "${schemaName}" upgraded to OUTBOUND_ACTIVE`);
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
+   * Discovers all tenant schemas (ws_*) and re-runs provisionReplicaTables
+   * on each one, executing idempotent ALTER TABLE migration blocks.
+   * Safe to run on a live database — all changes are guarded by IF EXISTS / IF NOT EXISTS.
+   */
+  async migrateAllSchemas(): Promise<void> {
+    console.log('🔧 Migrating replica tables across all tenant schemas...\n');
+
+    const { SqlDatabaseManager, SchemaPlan } =
+      await import('@nexiom/dbmanager');
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const dbSchema = await import('./schema.js');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      const schemaMgr = new SqlDatabaseManager(
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
+
+      const result = await client.query<{ schema_name: string }>(`
+        SELECT schema_name
+        FROM information_schema.schemata
+        WHERE schema_name LIKE 'ws_%'
+        ORDER BY schema_name;
+      `);
+
+      if (result.rows.length === 0) {
+        console.log('  ℹ️  No tenant schemas found.');
+        return;
+      }
+
+      for (const { schema_name } of result.rows) {
+        try {
+          await schemaMgr.applyPlan(schema_name, SchemaPlan.REPLICA_ACTIVE);
+          console.log(`  ✓ ${schema_name}`);
+        } catch (err) {
+          console.error(
+            `  ✗ ${schema_name}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
+
+      console.log('\n✅ All tenant schemas migrated.');
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
    * Debug RBAC permissions for a role
    */
   async debugPermissions(roleName: string): Promise<void> {
