@@ -219,13 +219,13 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 1. **Dual-Mode Routing (Transition Window)**:
    - Support both legacy `POST /webhooks/:connectionId` and new `POST /webhooks/:orgSlug/:connectionSlug/:secretToken` routes simultaneously during a 90-day deprecation window.
    - Update `webhooks.controller.ts` to handle both route patterns and resolve them to the same internal handler.
-   - Add deprecation warning headers (e.g., `X-Deprecation-Warning: "Legacy endpoint; migrate to /webhooks/:orgSlug/:connectionSlug/:secretToken by YYYY-MM-DD"`) to legacy route responses.
+   - Add deprecation warning headers (e.g., `X-Deprecation-Warning: "Legacy endpoint; migrate to /webhooks/:orgSlug/:connectionSlug/:secretToken by <sunset-date>"`) to legacy route responses, where `<sunset-date>` is computed from a central config value (e.g., `config.WEBHOOK_LEGACY_SUNSET_DATE` or `getSunsetDate()`) and formatted as YYYY-MM-DD.
 
 2. **Backfill Secret Tokens**:
-   - Create a database migration to add a `webhook_secret` column to `app_connection` table.
-   - Backfill existing connections with cryptographically secure random tokens (e.g., using `crypto.randomBytes(16).toString('hex')`).
-   - Ensure the migration is idempotent and preserves existing tokens if re-run.
-   - **Storage & Validation Security**: The `webhook_secret` column is stored in plaintext (since these are capability URLs requiring direct comparison for authentication, not user credentials). Implement rate-limiting for failed token validations (max 10 failed attempts per `orgSlug/connectionSlug` pair per minute with exponential backoff or temporary lockout). Mandate logging of all failed webhook validation attempts including IP address and timestamp for security audit trails.
+   - Create a database migration to add a `webhook_secret_hash` column to `app_connection` table.
+   - Backfill existing connections with cryptographically secure random tokens (e.g., using `crypto.randomBytes(16).toString('hex')`), storing the derived secure hash (e.g., HMAC-SHA256 or salted SHA-256) in `webhook_secret_hash`.
+   - Ensure the migration is idempotent and preserves existing hashes if re-run.
+   - **Storage & Validation Security**: Store only the derived secure hash (HMAC-SHA256 or salted SHA-256) of the webhook secret in the `webhook_secret_hash` column, never plaintext. Update any resolution/validation code (e.g., `resolveWebhookSecret`, `validateWebhookToken`, or equivalent lookup by `orgSlug/connectionSlug`) to compute the same HMAC/hash from the presented token and perform a constant-time comparison (e.g., using `crypto.timingSafeEqual`). Implement rate-limiting for failed token validations (max 10 failed attempts per `orgSlug/connectionSlug` pair per minute with exponential backoff or temporary lockout). Mandate logging of all failed webhook validation attempts including IP address and timestamp for security audit trails.
 
 3. **Token Rotation & Revocation**:
    - Implement an API endpoint (e.g., `POST /api/connections/:id/rotate-webhook-secret`) to allow customers to regenerate their webhook secret.

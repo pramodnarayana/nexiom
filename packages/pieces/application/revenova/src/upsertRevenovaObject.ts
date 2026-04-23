@@ -31,7 +31,7 @@ function parseSalesforceSoapXml(xml: string): {
     data: Record<string, string>;
 } | null {
     // 1. Detect multiple <Notification> blocks — reject to prevent silent overwrites
-    const notificationMatches = xml.match(/<[^:>]*:?Notification[^>]*>/gi);
+    const notificationMatches = xml.match(/<[^:>]*:?Notification(?:\s|>|\/)/gi);
     if (notificationMatches && notificationMatches.length > 1) {
         // Multi-notification payload detected
         return null;
@@ -80,13 +80,13 @@ function parseSalesforceSoapXml(xml: string): {
  */
 function decodeXmlEntities(str: string): string {
     return str
-        .replace(/&amp;/g, '&')
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+        .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&apos;/g, "'")
-        .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-        .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+        .replace(/&amp;/g, '&');
 }
 
 

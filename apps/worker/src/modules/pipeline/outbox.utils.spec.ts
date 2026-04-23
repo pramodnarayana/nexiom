@@ -14,23 +14,21 @@ describe("processInChunks", () => {
     expect(values).toEqual([2, 4, 6, 8, 10]);
   });
 
-  it("should throw if concurrency is zero", async () => {
-    await expect(
-      processInChunks([1], 0, (n) => Promise.resolve(n)),
-    ).rejects.toThrow("concurrency must be a positive integer");
-  });
-
-  it("should throw if concurrency is negative", async () => {
-    await expect(
-      processInChunks([1], -1, (n) => Promise.resolve(n)),
-    ).rejects.toThrow("concurrency must be a positive integer");
-  });
-
-  it("should throw if concurrency is not an integer", async () => {
-    await expect(
-      processInChunks([1], 1.5, (n) => Promise.resolve(n)),
-    ).rejects.toThrow("concurrency must be a positive integer");
-  });
+  it.each([
+    [0, "zero"],
+    [-1, "negative"],
+    [1.5, "non-integer"],
+    [NaN, "NaN"],
+    [Infinity, "Infinity"],
+    [-0.5, "negative non-integer"],
+  ])(
+    "should throw if concurrency is %s (%s)",
+    async (invalidConcurrency) => {
+      await expect(
+        processInChunks([1], invalidConcurrency, (n) => Promise.resolve(n)),
+      ).rejects.toThrow("concurrency must be a positive integer");
+    },
+  );
 
   it("should respect concurrency limit and process in chunks", async () => {
     const started: number[] = [];
@@ -46,19 +44,19 @@ describe("processInChunks", () => {
     const resultPromise = processInChunks([1, 2, 3, 4, 5], 2, taskFn);
 
     // Wait for initial chunk to start
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await Promise.resolve();
     expect(started).toEqual([1, 2]);
 
     // Resolve first chunk
     resolvers[0]();
     resolvers[1]();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await Promise.resolve();
     expect(started).toEqual([1, 2, 3, 4]);
 
     // Resolve second chunk
     resolvers[2]();
     resolvers[3]();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await Promise.resolve();
     expect(started).toEqual([1, 2, 3, 4, 5]);
 
     // Resolve last task

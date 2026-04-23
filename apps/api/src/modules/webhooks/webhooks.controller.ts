@@ -281,7 +281,7 @@ export class WebhooksController {
 
               // If the existing record has no response and we can generate one, persist it
               const customResponse = executeAppWebhookResponses(body, headers);
-              if (customResponse && existingRecord && existingRecord.response === null) {
+              if (customResponse && existingRecord && (existingRecord as { traceId: string; response: unknown | null }).response === null) {
                 await this.db.transaction(async (tx) => {
                   assertValidSchemaName(schemaName);
                   await tx.execute(
