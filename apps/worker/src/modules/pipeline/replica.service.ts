@@ -121,52 +121,72 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           throw new Error(`Inbound record for traceId ${traceId} not found`);
         }
 
-        if (!inbound.extReqId) {
-          throw new Error(
-            `Inbound record for traceId ${traceId} is missing extReqId. A stable external identity is required for idempotency.`,
-          );
-        }
-        const sourceId = inbound.extReqId;
-
         const extractor = getReplicaExtractor(appName, appProfile);
-        const extracted = extractor
-          ? extractor(inbound.payload)
-          : {
-              entityType: inbound.objectType || "DEFAULT",
-              data: inbound.payload as Record<string, unknown>,
-            };
 
-        if (extractor && !extracted) {
+        // If the connection has an explicit appProfile (e.g. "revenova") but no
+        // extractor is registered for it, this is a hard misconfiguration — fail
+        // loudly rather than silently emitting raw data, which would be invisible
+        // until someone notices the replica table looks wrong.
+        if (!extractor && appProfile !== "default") {
           throw new Error(
-            `Replica extraction failed for traceId ${traceId}: Payload did not match the expected structural envelope shape.`,
+            `No ReplicaExtractor registered for appName="${appName}" appProfile="${appProfile}". ` +
+              `Ensure the application package (e.g. @nexiom/application-${appProfile}) is imported in the worker entry point.`,
           );
         }
 
-        // extracted is always populated (either by extractor or fallback above)
-        const resolvedEntityType = extracted!.entityType;
-        const resolvedData = extracted!.data;
+        // If no extractor is available (appProfile=default), fail early with a clear error
+        if (!extractor) {
+          throw new Error(
+            `No ReplicaExtractor available for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
+              `Cannot derive stable entityId from raw payload. ` +
+              `Set a valid appProfile on the connection or register a default extractor.`,
+          );
+        }
 
-        // Upsert into replica_entity
+        const extracted = extractor(inbound.request);
+
+        if (!extracted) {
+          throw new Error(
+            `Replica extraction failed for traceId ${traceId}: extractor returned null. ` +
+              `Likely the payload is missing the required entity ID (e.g. sf:id).`,
+          );
+        }
+
+        // Every entity written to replica_entity must carry a stable business ID.
+        // A UUID traceId is NOT a valid entityId — it changes with every delivery.
+        const resolvedEntityId = extracted.entityId;
+        if (!resolvedEntityId) {
+          throw new Error(
+            `Cannot determine entityId for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
+              `Extractor returned null/undefined entityId. Ensure the payload contains a stable business identifier.`,
+          );
+        }
+
+        const resolvedEntityType = extracted.entityType;
+        const resolvedData = extracted.data;
+
+        // Upsert into replica_entity keyed on (connectionId, entityType, extEntityId).
+        // extEntityId is the vendor's stable business ID (e.g. Salesforce Account ID).
+        // Multiple webhook deliveries for the same entity converge into one row via ON CONFLICT.
         await tx
           .insert(replicaEntity)
           .values({
-            traceId, // Current trace ID resolving the replica
+            traceId,
             connectionId,
-            srcReqTraceId: inbound.traceId, // The L1 message trace
             entityType: resolvedEntityType,
-            sourceId,
-            data: resolvedData as any,
+            entityId: resolvedEntityId,
+            data: resolvedData,
             version: 1,
           })
           .onConflictDoUpdate({
             target: [
               replicaEntity.connectionId,
               replicaEntity.entityType,
-              replicaEntity.sourceId,
+              replicaEntity.entityId,
             ],
             set: {
-              data: resolvedData as any,
-              traceId, // Update traceId to the latest run
+              data: resolvedData,
+              traceId,
               version: sql`${replicaEntity.version} + 1`,
               updatedAt: sql`NOW()`,
             },
@@ -206,6 +226,21 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             target: [replicaOutbox.traceId, replicaOutbox.connectionId],
           });
       });
+
+      // Best-effort enqueue to L3 bypassing CDC pooling delays and
+      // fragile Debezium Docker setups in local dev. Safe due to L3 idempotency.
+      await this.queueService
+        .send(QueueName.ReplicaQueue, { traceId, connectionId })
+        .catch((err: unknown) => {
+          this.logger.warn(
+            {
+              event: "l2.enqueue_failed",
+              traceId,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            "Failed to best-effort enqueue ReplicaQueue event — relying on CDC",
+          );
+        });
 
       this.logger.log(
         { event: "l2.completed", traceId, durationMs: Date.now() - start },

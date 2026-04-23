@@ -123,9 +123,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         normalizedData = normRows[0].data as Record<string, unknown>;
         canonicalType = normRows[0].canonicalType ?? "RAW";
 
-        // Fetch sourceId from replicaEntity for GEM threading
+        // Fetch entityId from replicaEntity for GEM threading
         const replicaRows = await tx
-          .select({ sourceId: replicaEntity.sourceId })
+          .select({ entityId: replicaEntity.entityId })
           .from(replicaEntity)
           .where(sql`${replicaEntity.traceId} = ${traceId}`)
           .limit(1);
@@ -134,7 +134,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             `Replica record not found for GEM threading (traceId=${traceId})`,
           );
         }
-        srcVendorId = replicaRows[0].sourceId ?? undefined;
+        srcVendorId = replicaRows[0].entityId ?? undefined;
       });
 
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──

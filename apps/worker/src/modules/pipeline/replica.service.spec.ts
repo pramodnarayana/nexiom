@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from "@nestjs/testing";
 import { ReplicaService } from "./replica.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
@@ -11,12 +11,25 @@ vi.mock("@nexiom/piece-framework", async (importOriginal) => {
     await importOriginal<typeof import("@nexiom/piece-framework")>();
   return {
     ...actual,
-    getReplicaExtractor: vi.fn().mockImplementation((appName: string) => {
-      if (appName === "test_extraction_fail") {
-        return () => null; // Simulate extraction returning null
-      }
-      return undefined;
-    }),
+    getReplicaExtractor: vi
+      .fn()
+      .mockImplementation((appName: string, appProfile: string) => {
+        if (appName === "test_extraction_fail") {
+          return () => null; // Extractor returns null → no entityId found
+        }
+        if (appName === "test_empty_entityid") {
+          return () => ({ entityType: "DEFAULT", entityId: "", data: {} });
+        }
+        if (appName === "salesforce" && appProfile === "revenova") {
+          // Happy-path extractor: returns a stable entityId from the request
+          return (payload: Record<string, unknown>) => ({
+            entityType: (payload?.objectType as string) || "sf_Account",
+            entityId: (payload?.extReqId as string) || "mock-entity-id",
+            data: payload ?? {},
+          });
+        }
+        return undefined;
+      }),
   };
 });
 describe("ReplicaService", () => {
@@ -26,7 +39,10 @@ describe("ReplicaService", () => {
   let storageResolver: any;
 
   beforeEach(async () => {
-    queueService = { consume: vi.fn(), send: vi.fn() };
+    queueService = {
+      consume: vi.fn(),
+      send: vi.fn().mockResolvedValue(undefined),
+    };
     db = {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
@@ -48,7 +64,7 @@ describe("ReplicaService", () => {
               objectType: "foo",
               extReqId: "bar",
               id: "1",
-              payload: {},
+              request: {},
             },
           ]),
           insert: vi.fn().mockReturnThis(),
@@ -93,7 +109,7 @@ describe("ReplicaService", () => {
         }),
       }));
       const tx = {
-        execute: vi.fn(),
+        execute: vi.fn().mockResolvedValue(undefined),
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
@@ -103,7 +119,7 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
-            payload: {},
+            request: {},
           },
         ]),
         insert: mockInsert,
@@ -118,8 +134,11 @@ describe("ReplicaService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
 
-    // Message must NOT be sent directly — the outbox sweeper owns delivery
-    expect(queueService.send).not.toHaveBeenCalled();
+    // Best-effort enqueue to L3 bypasses CDC pooling delay — verify it fired
+    expect(queueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
+      traceId: "123",
+      connectionId: "456",
+    });
     // The main transaction must have run
     expect(db.transaction).toHaveBeenCalledTimes(1);
     // The replicaOutbox insert must have been called with PENDING status
@@ -174,7 +193,7 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
-            payload: {},
+            request: {},
           },
         ]),
         insert: vi.fn().mockReturnThis(),
@@ -203,7 +222,7 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
-            payload: { junk: "data" }, // Missing the root envelope to fail extraction
+            request: { junk: "data" }, // Missing the root envelope to fail extraction
           },
         ]),
         insert: vi.fn().mockReturnThis(),
@@ -217,31 +236,16 @@ describe("ReplicaService", () => {
     ).rejects.toThrow("Replica extraction failed for traceId 123");
   });
 
-  it("should throw if inbound record is missing extReqId", async () => {
-    db.transaction.mockImplementationOnce(async (cb: any) =>
-      cb({
-        execute: vi.fn(),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([
-          {
-            traceId: "123",
-            objectType: "foo",
-            extReqId: null,
-            id: "1",
-            payload: {},
-          },
-        ]),
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-      }),
-    );
+  it("should throw if extractor returns null (no stable entityId found)", async () => {
+    // Override connection to use an appName that always fails extraction
+    db.limit.mockResolvedValueOnce([
+      { appName: "test_extraction_fail", metadata: { appProfile: "default" } },
+    ]);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
-    ).rejects.toThrow("missing extReqId");
+    ).rejects.toThrow("extractor returned null");
   });
 
   it("should log nested error when error-handler transaction also fails", async () => {
@@ -260,6 +264,78 @@ describe("ReplicaService", () => {
     const output = loggerSpy.mock.calls.flat().map(String).join(" ");
     expect(output).toMatch(/Failed to write L2 error state/);
     loggerSpy.mockRestore();
+  });
+
+  it("should swallow best-effort ReplicaQueue enqueue failure and resolve normally", async () => {
+    // Simulate queue unavailability AFTER the transaction succeeds.
+    // The .catch() in the service must swallow it — the transaction is already committed.
+    queueService.send.mockRejectedValueOnce(new Error("queue unavailable"));
+    db.transaction.mockImplementationOnce(async (cb: any) => {
+      const mockInsert = vi.fn().mockImplementation(() => ({
+        values: vi.fn().mockImplementation(() => ({
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: "1" }]),
+          }),
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+          then: (onfulfilled?: any) =>
+            Promise.resolve(undefined as any).then(onfulfilled),
+        })),
+      }));
+      return cb({
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "foo",
+            extReqId: "bar",
+            id: "1",
+            request: {},
+          },
+        ]),
+        insert: mockInsert,
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      });
+    });
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("should throw if extractor returns an entity with empty entityId", async () => {
+    // Use a dedicated mock appName that returns a blank entityId
+    db.limit.mockResolvedValueOnce([
+      { appName: "test_empty_entityid", metadata: { appProfile: "default" } },
+    ]);
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "sf_Account",
+            extReqId: "",
+            id: "1",
+            request: {},
+          },
+        ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("Cannot determine entityId");
   });
 
   it("should destroy module", () => {

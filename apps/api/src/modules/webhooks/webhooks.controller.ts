@@ -9,7 +9,12 @@ import {
   ParseUUIDPipe,
   UseGuards,
   Inject,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { executeAppWebhookResponses } from '@nexiom/piece-framework';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -81,13 +86,18 @@ export class WebhooksController {
     @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Body() body: unknown,
     @Headers() headers: Record<string, string>,
-  ): Promise<void> {
+    @Req() req: RawBodyRequest<Request>,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<unknown> {
     const start = Date.now();
+
+    // Declare appResponseBody at function scope so it's accessible in catch block
+    let appResponseBody: unknown;
 
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { inboundGateway } = buildTenantSchema(schemaName);
+      const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
       const inboundGatewayId = randomUUID();
       const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
@@ -102,6 +112,36 @@ export class WebhooksController {
         ),
       );
 
+      // Normalise the inbound payload:
+      //   - JSON body → stored as-is (parsed object or array)
+      //   - Non-JSON (XML, form-data, text) → wrapped so the raw bytes are
+      //     never lost; the normalizer can detect contentType and parse downstream.
+      //   - Missing body → empty object sentinel (prevents NOT NULL violation)
+      const contentType = headers['content-type'] ?? '';
+
+      let normalizedPayload: Record<string, unknown>;
+
+      if (typeof body === 'string') {
+        normalizedPayload =
+          body.trim().length > 0 ? { raw: body, contentType } : {};
+        appResponseBody = normalizedPayload;
+      } else if (body != null && typeof body === 'object') {
+        // Accept both objects and arrays as parsed payloads
+        if (Array.isArray(body)) {
+          normalizedPayload = { items: body };
+          appResponseBody = normalizedPayload;
+        } else {
+          normalizedPayload = body as Record<string, unknown>;
+          appResponseBody = body;
+        }
+      } else if (req.rawBody && req.rawBody.length > 0) {
+        normalizedPayload = { raw: req.rawBody.toString('utf-8'), contentType };
+        appResponseBody = normalizedPayload;
+      } else {
+        normalizedPayload = {};
+        appResponseBody = {};
+      }
+
       await this.db.transaction(async (tx) => {
         // assertValidSchemaName is already called inside buildTenantSchema above,
         // but we call it again here as an explicit defence-in-depth guard directly
@@ -114,10 +154,21 @@ export class WebhooksController {
         await tx.insert(inboundGateway).values({
           traceId: inboundGatewayId,
           connectionId,
-          payload: body as Record<string, unknown>,
+          request: normalizedPayload,
           headers: filteredHeaders,
           extReqId,
         });
+
+        await tx
+          .insert(inboundOutbox)
+          .values({
+            traceId: inboundGatewayId,
+            connectionId,
+            status: 'PENDING',
+          })
+          .onConflictDoNothing({
+            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+          });
       });
       // Await queue delivery to ensure durability.
       // Enqueue failures do NOT abort the 202 response; instead we mark the
@@ -141,6 +192,44 @@ export class WebhooksController {
       const durationMs = Date.now() - start;
       this.logger.assign({ durationMs });
       this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
+
+      const customResponse = executeAppWebhookResponses(
+        appResponseBody,
+        headers,
+      );
+      if (customResponse) {
+        this.logger.debug(
+          {
+            event: 'l1.app_response',
+            contentType: customResponse.contentType,
+            status: customResponse.status,
+          },
+          'Returning app-defined synchronous response',
+        );
+        // Persist the response so support teams can see what was sent back.
+        await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          await tx
+            .update(inboundGateway)
+            .set({
+              response: {
+                status: customResponse.status,
+                contentType: customResponse.contentType,
+                body: customResponse.body,
+              },
+            })
+            .where(sql`${inboundGateway.traceId} = ${inboundGatewayId}`);
+        });
+        res
+          .status(customResponse.status)
+          .set('Content-Type', customResponse.contentType)
+          .send(customResponse.body);
+        return;
+      }
+      return;
     } catch (err: unknown) {
       // Only swallow 23505 errors that come from known idempotency constraints.
       // Any other unique violation (e.g. a bug in downstream schema) must surface.
@@ -158,6 +247,11 @@ export class WebhooksController {
 
           if (extReqId) {
             let existingTraceIdOutside: string | null = null;
+            let existingRecord: {
+              traceId: string;
+              response: unknown;
+            } | null = null;
+
             await this.db.transaction(async (tx) => {
               assertValidSchemaName(schemaName);
               await tx.execute(
@@ -165,7 +259,10 @@ export class WebhooksController {
               );
 
               const rows = await tx
-                .select({ traceId: inboundGateway.traceId })
+                .select({
+                  traceId: inboundGateway.traceId,
+                  response: inboundGateway.response,
+                })
                 .from(inboundGateway)
                 .where(
                   sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.connectionId} = ${connectionId}`,
@@ -174,6 +271,7 @@ export class WebhooksController {
 
               if (rows.length > 0) {
                 existingTraceIdOutside = rows[0].traceId;
+                existingRecord = rows[0];
               }
             });
 
@@ -194,6 +292,41 @@ export class WebhooksController {
                   );
                   throw err;
                 });
+
+              // If the existing record has no response and we can generate one, persist it
+              const customResponse = executeAppWebhookResponses(
+                appResponseBody,
+                headers,
+              );
+              if (
+                customResponse &&
+                existingRecord &&
+                (
+                  existingRecord as {
+                    traceId: string;
+                    response: unknown;
+                  }
+                ).response === null
+              ) {
+                await this.db.transaction(async (tx) => {
+                  assertValidSchemaName(schemaName);
+                  await tx.execute(
+                    sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+                  );
+                  await tx
+                    .update(inboundGateway)
+                    .set({
+                      response: {
+                        status: customResponse.status,
+                        contentType: customResponse.contentType,
+                        body: customResponse.body,
+                      },
+                    })
+                    .where(
+                      sql`${inboundGateway.traceId} = ${existingTraceIdOutside}`,
+                    );
+                });
+              }
             }
           }
         } catch (error_: unknown) {
@@ -203,6 +336,25 @@ export class WebhooksController {
           );
         }
 
+        const customResponse = executeAppWebhookResponses(
+          appResponseBody,
+          headers,
+        );
+        if (customResponse) {
+          this.logger.debug(
+            {
+              event: 'l1.app_response',
+              contentType: customResponse.contentType,
+              status: customResponse.status,
+            },
+            'Returning app-defined synchronous response (idempotency path)',
+          );
+          res
+            .status(customResponse.status)
+            .set('Content-Type', customResponse.contentType)
+            .send(customResponse.body);
+          return;
+        }
         return;
       }
       this.logger.error(

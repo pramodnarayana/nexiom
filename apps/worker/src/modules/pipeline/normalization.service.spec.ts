@@ -25,17 +25,22 @@ describe("NormalizationService", () => {
       limit: vi.fn().mockResolvedValue([{ appName: "test_app" }]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         // Build a chainable insert that supports:
-        //   insert(t).values({}).onConflictDoNothing({}).returning({})  → [{ id }]
+        //   insert(t).values({}).onConflictDoUpdate({}).returning({})  → [{ id }]
         //   insert(t).values({})                                        → resolves
         const makeInsertChain = (
           returnVal: any[] = [{ id: "new_normalized_1" }],
         ) => ({
           values: vi.fn().mockReturnValue({
-            onConflictDoNothing: vi.fn().mockReturnValue({
-              // directly awaitable (for normalizedOutbox insert that has no .returning())
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              // directly awaitable (for inserts with no .returning())
               then: (onfulfilled?: ((value: any) => any) | null) =>
                 Promise.resolve(undefined as any).then(onfulfilled),
               // also supports .returning() for chains that need it
+              returning: vi.fn().mockResolvedValue(returnVal),
+            }),
+            onConflictDoNothing: vi.fn().mockReturnValue({
+              then: (onfulfilled?: ((value: any) => any) | null) =>
+                Promise.resolve(undefined as any).then(onfulfilled),
               returning: vi.fn().mockResolvedValue(returnVal),
             }),
             returning: vi.fn().mockResolvedValue(returnVal),
@@ -155,9 +160,12 @@ describe("NormalizationService", () => {
           .mockResolvedValue([
             { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
           ]),
-        // Returns [] from .returning() → simulates conflict (record already exists)
+        // Returns row from .returning() on onConflictDoUpdate
         insert: vi.fn().mockReturnValue({
           values: vi.fn().mockReturnValue({
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "existing_1" }]),
+            }),
             onConflictDoNothing: vi.fn().mockReturnValue({
               returning: vi.fn().mockResolvedValue([]),
             }),

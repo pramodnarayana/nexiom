@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import '@nexiom/application-revenova';
+import express from 'express';
 import { Logger } from 'nestjs-pino';
 import { NestFactory } from '@nestjs/core';
 import { ZodValidationPipe } from 'nestjs-zod';
@@ -31,7 +33,32 @@ async function bootstrap() {
   });
   app.useLogger(app.get(Logger));
   const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
+  // Webhooks must NOT carry the /api prefix — vendor systems (Salesforce,
+  // QuickBooks, etc.) POST directly to the URL we give them and cannot
+  // dynamically inject path segments. Excluding 'webhooks' here keeps the
+  // ingest surface at POST /webhooks/:connectionId for every vendor.
+  app.setGlobalPrefix(globalPrefix, { exclude: ['webhooks', 'webhooks/(.*)'] });
+
+  // Add fallback parser for raw payloads to support XML/plain webhooks
+  app.use(
+    '/webhooks',
+    express.text({
+      type: (req) => {
+        const contentType = req.headers['content-type'] || '';
+        // Skip JSON content types - let NestJS's JSON parser handle them
+        return !(
+          contentType.includes('application/json') ||
+          contentType.includes('+json')
+        );
+      },
+      limit: '50mb',
+      verify: (req, _res, buf) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (req as any).rawBody = buf;
+      },
+    }),
+  );
+
   const port = process.env.PORT || 3000;
 
   // Validate DTOs

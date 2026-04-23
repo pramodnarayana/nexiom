@@ -29,7 +29,8 @@ export interface FullTrace {
     id: string;
     connectionId: string;
     objectType: string | null;
-    payload: unknown;
+    request: unknown;
+    response: unknown;
     headers: unknown;
     extReqId: string | null;
     status: string;

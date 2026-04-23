@@ -28,19 +28,22 @@ This document tracks known technical debt items that should be addressed in futu
 ### 2. Hardened L3 & L4 Pipeline Outbox Refactoring
 
 **Location**: `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`  
-**Added**: 2026-03-29  
+**Added**: 2026-03-29 (Updated: 2026-04-20)  
 **Impact**: Reliability, Data Integrity, Architecture  
 **Effort**: Medium (2-3 days)
 
 **Current State**:
 
-- L3 (\`NormalizationService\`) and L4 (\`FanOutService\`) both combine database transactions directly with external queue publishing (\`this.queueService.send\`), violating the Single Responsibility Principle and exposing the pipeline to two-phase commit vulnerabilities.
-- If L3 or L4 crashes immediately after queuing the next message, the downstream worker proceeds, but the local success audits (e.g. \`syncLog\`, \`inbound_gateway\` updates) roll back in Postgres, leading to duplicate processing limits.
+- L1->L2 and L2->L3 boundaries have been successfully migrated to the Debezium CDC pipeline (`inbound_outbox` and `replica_outbox` trigger SQS directly).
+- However, the L3 (`NormalizationService`) -> L4 (`FanOutService`) boundary is incomplete regarding event-driven routing.
+- While `normalized_outbox` has been created and is actively written to transactionally by L3, it is **not registered in the Debezium publication** during trigger enablement, and the `CdcRelayController` does not listen for inserts to this table.
+- As a result, the L3->L4 handoff still relies on a legacy cron-polling service (`NormalizedOutboxService`), which wastes database CPU and prevents true real-time elasticity.
 
 **Recommended Solution**:
 
-- **L3 (Normalization):** Create a new \`normalized_outbox\` Drizzle schema, insert into it atomically within the primary L3 transaction, and introduce a \`NormalizedOutboxService\` to relay those records to L4.
-- **L4 (FanOut):** Remove direct queue sending. Configure \`FanOutService\` to transactionally insert outbound events directly into the preexisting \`delivery_outbox\` schema. Ensure the relay worker correctly routes these events downstream to L5 \`DeliveryQueue\`.
+- **Update Publication**: Modify `trigger-executor.service.ts` to dynamically include `normalized_outbox` alongside `inbound_outbox` and `replica_outbox` in the `ALTER PUBLICATION nexiom_cdc ADD TABLE...` script.
+- **Relay Controller**: Add an `else if (__table === 'normalized_outbox')` routing branch in `apps/api/src/modules/pipeline/cdc-relay.controller.ts` to push those CDC payloads to the L4 FanOut SQS Queue.
+- **Cleanup**: Delete the legacy cron-polling `NormalizedOutboxWorker` entirely.
 
 ---
 
@@ -193,6 +196,59 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 ---
 
 ## Medium Priority
+
+### 1. Capability URL Webhook Routing (Slug + Secret Token)
+
+**Location**: `apps/api/src/modules/webhooks/webhooks.controller.ts`, `apps/api/src/guards/tenant-rate-limit.guard.ts`
+**Added**: 2026-04-21
+**Impact**: Customer Experience, API Security
+**Effort**: Medium (2 days)
+
+**Current State**:
+- Webhooks currently use the raw internal UUID of the connection (`POST /webhooks/:connectionId`), making them secure against brute-forcing but unpolished for enterprise customers.
+- We cannot safely switch to a purely human-readable composite slug (e.g., `POST /webhooks/:orgSlug/:connectionSlug`) without a cryptographic signature requirement. Otherwise, malicious actors (or internal tenant misconfigurations) could trivially guess paths and forge cross-tenant data.
+
+**Recommended Solution**:
+- Implement the "Capability URL" pattern.
+- Generate and store a secure random token (e.g., `sk_8a49c2b1x9`) for each `app_connection` record.
+- Update the webhook controller route to act as a hybrid: `POST /webhooks/:orgSlug/:connectionSlug/:secretToken`.
+- Validate the URL secret mathematically against the database upon ingest. This achieves both a branded, customer-friendly URL and Zapier-style cryptographic un-guessability simultaneously.
+
+**Migration Strategy & Rollout Plan**:
+
+1. **Dual-Mode Routing (Transition Window)**:
+   - Support both legacy `POST /webhooks/:connectionId` and new `POST /webhooks/:orgSlug/:connectionSlug/:secretToken` routes simultaneously during a 90-day deprecation window.
+   - Update `webhooks.controller.ts` to handle both route patterns and resolve them to the same internal handler.
+   - Add deprecation warning headers (e.g., `X-Deprecation-Warning: "Legacy endpoint; migrate to /webhooks/:orgSlug/:connectionSlug/:secretToken by <sunset-date>"`) to legacy route responses, where `<sunset-date>` is computed from a central config value (e.g., `config.WEBHOOK_LEGACY_SUNSET_DATE` or `getSunsetDate()`) and formatted as YYYY-MM-DD.
+
+2. **Backfill Secret Tokens**:
+   - Create a database migration to add a `webhook_secret_hash` column to `app_connection` table.
+   - Backfill existing connections with cryptographically secure random tokens (e.g., using `crypto.randomBytes(16).toString('hex')`), storing the derived secure hash (e.g., HMAC-SHA256 or salted SHA-256) in `webhook_secret_hash`.
+   - Ensure the migration is idempotent and preserves existing hashes if re-run.
+   - **Storage & Validation Security**: Store only the derived secure hash (HMAC-SHA256 or salted SHA-256) of the webhook secret in the `webhook_secret_hash` column, never plaintext. Update any resolution/validation code (e.g., `resolveWebhookSecret`, `validateWebhookToken`, or equivalent lookup by `orgSlug/connectionSlug`) to compute the same HMAC/hash from the presented token and perform a constant-time comparison (e.g., using `crypto.timingSafeEqual`). Implement rate-limiting for failed token validations (max 10 failed attempts per `orgSlug/connectionSlug` pair per minute with exponential backoff or temporary lockout). Mandate logging of all failed webhook validation attempts including IP address and timestamp for security audit trails.
+
+3. **Token Rotation & Revocation**:
+   - Implement an API endpoint (e.g., `POST /api/connections/:id/rotate-webhook-secret`) to allow customers to regenerate their webhook secret.
+   - Store token generation timestamp to support automatic expiry policies if needed in the future.
+   - Add audit logging for all token rotation events.
+
+4. **Rate-Limiting Updates**:
+   - Update `tenant-rate-limit.guard.ts` to apply rate limiting consistently across both legacy and new routes.
+   - Ensure rate limit keys are normalized to the connection ID regardless of which route format is used.
+
+5. **Customer Communication Plan**:
+   - **T-90 days**: Announce new Capability URL feature in release notes and documentation; send email to all customers with migration guide.
+   - **T-60 days**: Add in-app banners for users still using legacy webhook URLs, with one-click "Copy New URL" button.
+   - **T-30 days**: Send reminder emails with deprecation timeline and support contact.
+   - **T-7 days**: Final warning email highlighting exact sunset date.
+   - **T-0 days**: Disable legacy route; return HTTP 410 Gone with migration instructions in response body.
+
+6. **Rollback Safety**:
+   - Keep legacy route code in place but feature-flagged for 30 days post-sunset to allow emergency rollback if needed.
+   - Monitor error rates and customer support tickets closely during transition period.
+
+**Estimated Timeline**: 90-day deprecation window with implementation effort of 2 days for dual-mode routing + 1 day for migration tooling.
+
 
 ### 1. Kubernetes Grace Period vs Hardcoded Drain Timeout
 

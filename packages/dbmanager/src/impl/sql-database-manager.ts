@@ -55,66 +55,143 @@ export class SqlDatabaseManager implements DatabaseManager {
         // OUTBOUND_ACTIVE — all tables provisioned
     }
 
+    /**
+     * Re-runs provisionReplicaTables on an existing schema.
+     * All DDL inside is idempotent (CREATE IF NOT EXISTS + DO $$ BEGIN guards)
+     * so this is safe to call on a live tenant schema to apply column renames,
+     * additions, or dropped columns without losing data.
+     */
+    async migrateReplicaTables(schemaName: string): Promise<void> {
+        this.validateSchemaName(schemaName);
+        await this.provisionReplicaTables(schemaName);
+    }
+
     private async provisionGatewayTables(schemaName: string): Promise<void> {
-        // We execute these independently so that they are idempotent.
-        // If they error, the whole task fails, preventing partial corruption.
+        // ── LAYER 1 — INBOUND GATEWAY ────────────────────────────────────────
+        // Must match pipeline.ts buildTenantSchema > inboundGateway exactly.
+        // Uses TEXT + CHECK instead of public.pipeline_status_enum so that
+        // tenant schemas have no cross-schema type dependency.
         await this.db.$client.query(`
-        CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_gateway (
-            id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            source_event_id  TEXT        NOT NULL,
-            trigger_name     TEXT        NOT NULL,
-            app_name         TEXT        NOT NULL,
-            object_type      TEXT,
-            payload          JSONB       NOT NULL,
-            status           TEXT        NOT NULL DEFAULT 'pending',
-            trace_id         UUID        NOT NULL DEFAULT gen_random_uuid(),
-            created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_gateway (
+                id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                trace_id      UUID         NOT NULL UNIQUE,
+                connection_id UUID         NOT NULL,
+                object_type   VARCHAR(100),
+                request       JSONB        NOT NULL,
+                response      JSONB,
+                headers       JSONB,
+                ext_req_id    VARCHAR(255),
+                status        TEXT         NOT NULL DEFAULT 'RECEIVED'
+                              CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED',
+                                                'NORMALIZED','SKIPPED','PENDING',
+                                                'SUCCESS','FAIL','RETRY','DISMISSED')),
+                created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+            );
+        `);
 
-            CONSTRAINT uq_inbound_source_event UNIQUE (source_event_id)
-        );
-    `);
+        // Idempotently rename payload → request for pre-existing schemas.
+        await this.db.$client.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = '${schemaName}'
+                       AND table_name   = 'inbound_gateway'
+                       AND column_name  = 'payload'
+                ) THEN
+                    ALTER TABLE "${schemaName}".inbound_gateway RENAME COLUMN payload TO request;
+                END IF;
+            END $$;
+        `);
+
+        // Idempotently add response column for pre-existing schemas.
+        await this.db.$client.query(`
+            ALTER TABLE "${schemaName}".inbound_gateway
+                ADD COLUMN IF NOT EXISTS response JSONB;
+        `);
+
+        // Idempotency: unique (connection_id, ext_req_id) prevents duplicate
+        // vendor events from being ingested twice.
+        await this.db.$client.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_l1_ext_id
+                ON "${schemaName}".inbound_gateway (connection_id, ext_req_id)
+                WHERE ext_req_id IS NOT NULL;
+        `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_inbound_gateway_status
-            ON "${schemaName}".inbound_gateway (status);
-    `);
+            CREATE INDEX IF NOT EXISTS idx_l1_object_type
+                ON "${schemaName}".inbound_gateway (object_type)
+                WHERE object_type IS NOT NULL;
+        `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_inbound_gateway_object_type
-            ON "${schemaName}".inbound_gateway (object_type)
-            WHERE object_type IS NOT NULL;
-    `);
+            CREATE INDEX IF NOT EXISTS idx_l1_status
+                ON "${schemaName}".inbound_gateway (status);
+        `);
+
+        // Drop old payload GIN index if present, create new request GIN index.
+        await this.db.$client.query(`
+            DROP INDEX IF EXISTS "${schemaName}".idx_l1_payload_gin;
+        `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_inbound_gateway_created_at
-            ON "${schemaName}".inbound_gateway (created_at DESC);
-    `);
+            CREATE INDEX IF NOT EXISTS idx_l1_request_gin
+                ON "${schemaName}".inbound_gateway USING gin (request);
+        `);
+
+        // ── INBOUND OUTBOX — L1 → L2 transactional outbox ───────────────────
+        // Must match pipeline.ts buildTenantSchema > inboundOutbox exactly.
+        // Written atomically with inbound_gateway in the same transaction so
+        // a process crash between DB commit and SQS publish cannot lose events.
+        await this.db.$client.query(`
+            CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_outbox (
+                id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                trace_id      UUID         NOT NULL,
+                connection_id UUID         NOT NULL,
+                schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
+                status        TEXT         NOT NULL DEFAULT 'PENDING'
+                              CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+                attempts      INTEGER      NOT NULL DEFAULT 0,
+                last_error    VARCHAR(500),
+                next_retry_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+            );
+        `);
+
+        await this.db.$client.query(`
+            CREATE INDEX IF NOT EXISTS idx_inbound_outbox_claim
+                ON "${schemaName}".inbound_outbox (status, next_retry_at ASC)
+                WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
+        `);
+
+        await this.db.$client.query(`
+            DO $$ BEGIN
+                ALTER TABLE "${schemaName}".inbound_outbox
+                    ADD CONSTRAINT idx_inbound_outbox_trace UNIQUE (trace_id, connection_id);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+                      WHEN duplicate_object THEN NULL;
+            END $$;
+        `);
     }
 
     private async provisionReplicaTables(schemaName: string): Promise<void> {
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
-            id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            connection_id    UUID        NOT NULL,
-            trace_id         UUID        NOT NULL,
-            src_req_trace_id UUID        NOT NULL,
-            source_id        VARCHAR(255) NOT NULL,
-            entity_type      VARCHAR(100) NOT NULL,
-            data             JSONB       NOT NULL,
-            version          INTEGER     NOT NULL DEFAULT 1,
-            updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_l2_entity UNIQUE (connection_id, entity_type, source_id)
+            id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            connection_id UUID         NOT NULL,
+            trace_id      UUID         NOT NULL,
+            entity_id     VARCHAR(255) NOT NULL,
+            entity_type   VARCHAR(100) NOT NULL,
+            data          JSONB        NOT NULL,
+            version       INTEGER      NOT NULL DEFAULT 1,
+            created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_l2_entity UNIQUE (connection_id, entity_type, entity_id)
         );
     `);
 
         await this.db.$client.query(`
         CREATE INDEX IF NOT EXISTS idx_l2_trace
             ON "${schemaName}".replica_entity (trace_id);
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_l2_src_req
-            ON "${schemaName}".replica_entity (src_req_trace_id);
     `);
 
         await this.db.$client.query(`
@@ -131,6 +208,37 @@ export class SqlDatabaseManager implements DatabaseManager {
             updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_cursor UNIQUE (connection_id, entity_type)
         );
+    `);
+
+        // ── REPLICA OUTBOX — L2 → L3 transactional outbox ───────────────────
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
+            id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id      UUID         NOT NULL,
+            connection_id UUID         NOT NULL,
+            schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
+            status        TEXT         NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+            attempts      INTEGER      NOT NULL DEFAULT 0,
+            last_error    VARCHAR(500),
+            next_retry_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
+            ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
+            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
+    `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".replica_outbox
+                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
+        EXCEPTION WHEN duplicate_table THEN NULL;
+                  WHEN duplicate_object THEN NULL;
+        END $$;
     `);
     }
 
@@ -313,49 +421,6 @@ export class SqlDatabaseManager implements DatabaseManager {
         CREATE INDEX IF NOT EXISTS idx_log_trace_layer
             ON "${schemaName}".sync_log (trace_id, layer);
     `);
-
-        await this.db.$client.query(`
-        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
-            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            trace_id      UUID        NOT NULL,
-            connection_id UUID        NOT NULL,
-            status        TEXT        NOT NULL DEFAULT 'PENDING'
-                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
-            attempts      INTEGER     NOT NULL DEFAULT 0,
-            last_error    VARCHAR(500),
-            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
-            ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
-            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
-    `);
-
-        await this.db.$client.query(`
-        DO $$ BEGIN
-            -- Deduplicate: keep the earliest row per (trace_id, connection_id)
-            -- before adding the unique constraint so existing schemas don't fail.
-            DELETE FROM "${schemaName}".replica_outbox ro
-            WHERE ro.id NOT IN (
-                SELECT DISTINCT ON (trace_id, connection_id) id
-                FROM "${schemaName}".replica_outbox
-                ORDER BY trace_id, connection_id, created_at ASC
-            );
-        EXCEPTION WHEN SQLSTATE '42P01' THEN NULL; -- table doesn't exist yet: safe to skip
-        END $$;
-        `);
-
-        await this.db.$client.query(`
-        DO $$ BEGIN
-            ALTER TABLE "${schemaName}".replica_outbox
-                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
-        EXCEPTION WHEN duplicate_table THEN NULL;
-                  WHEN duplicate_object THEN NULL;
-        END $$;
-        `);
 
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.

@@ -40,7 +40,7 @@ import { MappingsModule } from '../modules/mappings/mappings.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      ignoreEnvFile: true,
+      envFilePath: ['.env.local', '.env', '../../.env'],
     }),
     // ObservabilityModule must be first so pino is active before all other modules
     // bootstrap and emit their own startup logs.

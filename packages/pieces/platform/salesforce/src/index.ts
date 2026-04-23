@@ -338,10 +338,6 @@ export const salesforce = createPiece({
         const data = await sfFetch<QueryRes>(url, accessToken);
         return data.records || [];
     },
-    webhook: {
-        secretKeyEnv: 'SALESFORCE_WEBHOOK_SECRET',
-        signatureHeader: 'X-Salesforce-Signature',
-        signatureEncoding: 'base64',
-    },
 });
+
 export { salesforceAuth } from './lib/auth.js';

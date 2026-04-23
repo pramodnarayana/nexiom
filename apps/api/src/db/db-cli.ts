@@ -22,6 +22,9 @@ const COMMANDS = [
   'fresh',
   'reset',
   'provision:local',
+  'provision:gateway',
+  'provision:outbound',
+  'migrate:schemas',
   'check-user',
   'check-role',
   'seed:abac',
@@ -63,6 +66,27 @@ async function main() {
         break;
       case 'provision:local':
         await manager.provisionLocal();
+        break;
+      case 'provision:gateway': {
+        const schemaName = process.argv[3];
+        if (!schemaName) {
+          console.error('Usage: provision:gateway <schemaName>');
+          process.exit(1);
+        }
+        await manager.provisionGateway(schemaName);
+        break;
+      }
+      case 'provision:outbound': {
+        const schemaName = process.argv[3];
+        if (!schemaName) {
+          console.error('Usage: provision:outbound <schemaName>');
+          process.exit(1);
+        }
+        await manager.provisionOutbound(schemaName);
+        break;
+      }
+      case 'migrate:schemas':
+        await manager.migrateAllSchemas();
         break;
       case 'check-user': {
         const identifier = process.argv[3];

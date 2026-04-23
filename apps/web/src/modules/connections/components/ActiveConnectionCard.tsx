@@ -150,6 +150,18 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
         }
     };
 
+    const webhookUrl = useMemo(() => {
+        if (typeof window === 'undefined') return '';
+        // Use explicit webhook base URL if provided, otherwise derive from VITE_API_URL
+        let webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL ||
+                          (import.meta.env.VITE_API_URL ?
+                           import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') :
+                           window.location.origin);
+        // Strip trailing slashes to prevent double-slash when appending /webhooks path
+        webhookBase = webhookBase.replace(/\/+$/, '');
+        return `${webhookBase}/webhooks/${connection.id}`;
+    }, [connection.id]);
+
     return (
         <div className="group relative flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5">
             {/* Context Menu — top-right corner */}
@@ -212,10 +224,47 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
                 })()}
             </div>
 
+
+
             {/* Name + category */}
-            <div className="w-full">
+            <div className="w-full pb-2">
                 <p className="font-semibold text-sm text-foreground truncate px-4" title={connection.displayName}>{connection.displayName}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{provider?.displayName || connection.appName}</p>
+                
+                <div className="px-4 mt-3">
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full text-[11px] h-7 bg-secondary/50 hover:bg-secondary border border-border/50 text-muted-foreground hover:text-foreground transition-all"
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!navigator.clipboard) {
+                                toast({
+                                    title: "Copy Failed",
+                                    description: "Clipboard API is not available in this browser.",
+                                    variant: "destructive"
+                                });
+                                return;
+                            }
+                            try {
+                                await navigator.clipboard.writeText(webhookUrl);
+                                toast({
+                                    title: "Webhook Copied",
+                                    description: "URL is ready to be pasted into the vendor platform."
+                                });
+                            } catch (err) {
+                                console.error('Failed to copy webhook URL:', err);
+                                toast({
+                                    title: "Copy Failed",
+                                    description: "Could not copy to clipboard. Please copy manually.",
+                                    variant: "destructive"
+                                });
+                            }
+                        }}
+                    >
+                        Copy Webhook URL
+                    </Button>
+                </div>
             </div>
 
             <Dialog open={manageOpen} onOpenChange={setManageOpen}>

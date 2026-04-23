@@ -655,6 +655,29 @@ export class DatabaseManager {
   }
 
   /**
+   * Helper to initialize SqlDatabaseManager with correct schema, db, and client.
+   * Ensures client.end() in a finally block.
+   */
+  private async withSchemaMgr<T>(
+    cb: (mgr: import('@nexiom/dbmanager').SqlDatabaseManager) => Promise<T>,
+  ): Promise<T> {
+    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const dbSchema = await import('./schema.js');
+    const client = await this.getPgClient();
+
+    try {
+      const db = drizzle(client, { schema: dbSchema });
+      const schemaMgr = new SqlDatabaseManager(
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
+      return await cb(schemaMgr);
+    } finally {
+      await client.end();
+    }
+  }
+
+  /**
    * Provision local dev fixture:
    *   1. Upserts one Salesforce + one QuickBooks connection under the system tenant.
    *   2. Creates `ws_{connectionId}` schemas (GATEWAY_ACTIVE plan) for each.
@@ -706,21 +729,16 @@ export class DatabaseManager {
       );
     }
 
-    const { drizzle } = await import('drizzle-orm/node-postgres');
-    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
     const { SchemaPlan } = await import('@nexiom/dbmanager');
     const dbSchema = await import('./schema.js');
-    const client = await this.getPgClient();
 
-    try {
-      const db = drizzle(client, { schema: dbSchema });
-      // SqlDatabaseManager only calls db.$client.query() — the schema generic mismatch
-      // between the local schema and @nexiom/database's schema is safe to cast here.
-      const schemaMgr = new SqlDatabaseManager(
-        db as unknown as import('@nexiom/database').DrizzleDb,
-      );
+    await this.withSchemaMgr(async (schemaMgr) => {
+      const { drizzle } = await import('drizzle-orm/node-postgres');
+      const client = await this.getPgClient();
+      try {
+        const db = drizzle(client, { schema: dbSchema });
 
-      const fixtures = [
+        const fixtures = [
         {
           id: '00000000-0000-0000-0000-000000000001',
           appName: 'salesforce',
@@ -804,9 +822,107 @@ export class DatabaseManager {
           '   and update app_connection.value with the resulting ciphertext.\n' +
           '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
       );
-    } finally {
-      await client.end();
-    }
+      } finally {
+        await client.end();
+      }
+    });
+  }
+
+  /**
+   * Upgrades a connection's physical schema to GATEWAY_ACTIVE,
+   * creating the inbound_gateway (L1) table so webhook payloads can be ingested.
+   *
+   * Used for local development and testing when a stitch has not yet been
+   * activated through the normal UI flow.
+   *
+   * @param schemaName - The physical schema name (e.g. 'ws_salesforce_98b64cffa1b61b2c')
+   */
+  async provisionGateway(schemaName: string): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log(`🔧 Applying GATEWAY_ACTIVE to schema: ${schemaName}...\n`);
+
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+
+    await this.withSchemaMgr(async (schemaMgr) => {
+      await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+      console.log(`  ✓ Schema "${schemaName}" upgraded to GATEWAY_ACTIVE`);
+      console.log(
+        '  ✓ inbound_gateway table is now ready for webhook ingestion',
+      );
+    });
+  }
+
+  /**
+   * Upgrades a connection's physical schema to OUTBOUND_ACTIVE natively
+   */
+  async provisionOutbound(schemaName: string): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log(`🔧 Applying OUTBOUND_ACTIVE to schema: ${schemaName}...\n`);
+
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+
+    await this.withSchemaMgr(async (schemaMgr) => {
+      await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+      console.log(`  ✓ Schema "${schemaName}" upgraded to OUTBOUND_ACTIVE`);
+    });
+  }
+
+  /**
+   * Discovers all tenant schemas (ws_*) and re-runs migrateReplicaTables
+   * on each one, executing idempotent ALTER TABLE migration blocks.
+   * Safe to run on a live database — all changes are guarded by IF EXISTS / IF NOT EXISTS.
+   */
+  async migrateAllSchemas(): Promise<void> {
+    console.log('🔧 Migrating replica tables across all tenant schemas...\n');
+
+    await this.withSchemaMgr(async (schemaMgr) => {
+      const client = await this.getPgClient();
+      try {
+        const result = await client.query<{ schema_name: string }>(`
+          SELECT schema_name
+          FROM information_schema.schemata
+          WHERE schema_name LIKE 'ws_%'
+          ORDER BY schema_name;
+        `);
+
+        if (result.rows.length === 0) {
+          console.log('  ℹ️  No tenant schemas found.');
+          return;
+        }
+
+        const failures: Array<{ schema: string; error: string }> = [];
+
+        for (const { schema_name } of result.rows) {
+          try {
+            await schemaMgr.migrateReplicaTables(schema_name);
+            console.log(`  ✓ ${schema_name}`);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            console.error(`  ✗ ${schema_name}:`, errorMsg);
+            failures.push({ schema: schema_name, error: errorMsg });
+          }
+        }
+
+        if (failures.length > 0) {
+          console.log(
+            `\n⚠️  Migration completed with ${failures.length} failure(s) out of ${result.rows.length} schema(s).`,
+          );
+          console.log('Failed schemas:');
+          for (const { schema, error } of failures) {
+            console.log(`  - ${schema}: ${error}`);
+          }
+          throw new Error(
+            `Migration failed for ${failures.length} schema(s). See logs above for details.`,
+          );
+        }
+
+        console.log(
+          `\n✅ All ${result.rows.length} tenant schema(s) migrated successfully.`,
+        );
+      } finally {
+        await client.end();
+      }
+    });
   }
 
   /**

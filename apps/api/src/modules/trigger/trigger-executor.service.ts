@@ -455,7 +455,7 @@ export class TriggerExecutorService {
           connectionId: row.connectionId,
           extReqId: row.extReqId,
           objectType: row.objectType ?? null,
-          payload: row.payload,
+          request: row.payload,
         })
         .onConflictDoNothing({ target: inboundGateway.extReqId })
         .returning({ traceId: inboundGateway.traceId });

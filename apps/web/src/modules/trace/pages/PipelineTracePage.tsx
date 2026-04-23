@@ -124,7 +124,10 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <JsonViewer title="L1 Inbound (Raw)" data={details.inboundGateway?.payload} />
+          <JsonViewer title="L1 Inbound Request (Raw)" data={details.inboundGateway?.request} />
+          {details.inboundGateway?.response != null && (
+            <JsonViewer title="L1 App Response (Sync)" data={details.inboundGateway?.response} />
+          )}
           <JsonViewer title="L2 Replica Data" data={details.replicaEntity?.data} />
           <JsonViewer title="L3 Normalized Canonical" data={details.normalizedEntity?.data} />
           <JsonViewer title="L4/L5 Outbound Request" data={details.outboundGateway?.reqPayload} />

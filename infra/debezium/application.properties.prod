@@ -23,6 +23,9 @@ debezium.sink.http.timeout.ms=10000
 debezium.sink.http.retry.count=10
 debezium.sink.http.retry.delay.ms=500
 
+debezium.format.value=json
+debezium.format.key=json
+
 # ── Transform: Unwrap envelope, emit only new row + table/schema metadata ────
 debezium.transforms=unwrap
 debezium.transforms.unwrap.type=io.debezium.transforms.ExtractNewRecordState
