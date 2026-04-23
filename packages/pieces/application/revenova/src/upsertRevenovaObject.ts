@@ -80,8 +80,20 @@ function parseSalesforceSoapXml(xml: string): {
  */
 function decodeXmlEntities(str: string): string {
     return str
-        .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-        .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+        .replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => {
+            const codePoint = parseInt(hex, 16);
+            if (codePoint >= 0 && codePoint <= 0x10FFFF) {
+                return String.fromCodePoint(codePoint);
+            }
+            return '\uFFFD'; // Unicode replacement character for invalid code points
+        })
+        .replace(/&#(\d+);/g, (match, dec) => {
+            const codePoint = parseInt(dec, 10);
+            if (codePoint >= 0 && codePoint <= 0x10FFFF) {
+                return String.fromCodePoint(codePoint);
+            }
+            return '\uFFFD'; // Unicode replacement character for invalid code points
+        })
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
@@ -158,11 +170,16 @@ export const upsertRevenovaObject: ReplicaExtractorFn = (payload) => {
 
 
     // Extract the stable entity ID — required for idempotent upsert keying.
-    const entityId = (r_obj['id'] ?? r_obj['Id']) as string | undefined;
-    if (!entityId) {
+    const idValue = r_obj['id'] ?? r_obj['Id'];
+
+    // Validate that the ID is a non-empty string
+    if (typeof idValue !== 'string' || idValue.trim().length === 0) {
         // Without a stable entity ID we cannot safely upsert — fail loudly.
         return null;
     }
+
+    const entityId = idValue;
+
     // Remove from the data blob — it lives as a dedicated column, not inside JSON.
     delete r_obj['id'];
     delete r_obj['Id'];

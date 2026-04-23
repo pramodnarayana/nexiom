@@ -91,6 +91,9 @@ export class WebhooksController {
   ): Promise<unknown> {
     const start = Date.now();
 
+    // Declare appResponseBody at function scope so it's accessible in catch block
+    let appResponseBody: unknown;
+
     try {
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
@@ -121,17 +124,22 @@ export class WebhooksController {
       if (typeof body === 'string') {
         normalizedPayload =
           body.trim().length > 0 ? { raw: body, contentType } : {};
+        appResponseBody = normalizedPayload;
       } else if (body != null && typeof body === 'object') {
         // Accept both objects and arrays as parsed payloads
         if (Array.isArray(body)) {
           normalizedPayload = { items: body };
+          appResponseBody = normalizedPayload;
         } else {
           normalizedPayload = body as Record<string, unknown>;
+          appResponseBody = body;
         }
       } else if (req.rawBody && req.rawBody.length > 0) {
         normalizedPayload = { raw: req.rawBody.toString('utf-8'), contentType };
+        appResponseBody = normalizedPayload;
       } else {
         normalizedPayload = {};
+        appResponseBody = {};
       }
 
       await this.db.transaction(async (tx) => {
@@ -185,7 +193,7 @@ export class WebhooksController {
       this.logger.assign({ durationMs });
       this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
 
-      const customResponse = executeAppWebhookResponses(body, headers);
+      const customResponse = executeAppWebhookResponses(appResponseBody, headers);
       if (customResponse) {
         this.logger.debug(
           {
@@ -280,7 +288,7 @@ export class WebhooksController {
                 });
 
               // If the existing record has no response and we can generate one, persist it
-              const customResponse = executeAppWebhookResponses(body, headers);
+              const customResponse = executeAppWebhookResponses(appResponseBody, headers);
               if (customResponse && existingRecord && (existingRecord as { traceId: string; response: unknown | null }).response === null) {
                 await this.db.transaction(async (tx) => {
                   assertValidSchemaName(schemaName);
@@ -308,7 +316,7 @@ export class WebhooksController {
           );
         }
 
-        const customResponse = executeAppWebhookResponses(body, headers);
+        const customResponse = executeAppWebhookResponses(appResponseBody, headers);
         if (customResponse) {
           this.logger.debug(
             {
