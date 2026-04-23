@@ -31,4 +31,41 @@ describe("processInChunks", () => {
       processInChunks([1], 1.5, (n) => Promise.resolve(n)),
     ).rejects.toThrow("concurrency must be a positive integer");
   });
+
+  it("should respect concurrency limit and process in chunks", async () => {
+    const started: number[] = [];
+    const resolvers: Array<() => void> = [];
+
+    const taskFn = (n: number): Promise<number> => {
+      return new Promise<number>((resolve) => {
+        started.push(n);
+        resolvers.push(() => resolve(n * 2));
+      });
+    };
+
+    const resultPromise = processInChunks([1, 2, 3, 4, 5], 2, taskFn);
+
+    // Wait for initial chunk to start
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toEqual([1, 2]);
+
+    // Resolve first chunk
+    resolvers[0]();
+    resolvers[1]();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toEqual([1, 2, 3, 4]);
+
+    // Resolve second chunk
+    resolvers[2]();
+    resolvers[3]();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(started).toEqual([1, 2, 3, 4, 5]);
+
+    // Resolve last task
+    resolvers[4]();
+
+    const results = await resultPromise;
+    expect(results).toHaveLength(5);
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+  });
 });

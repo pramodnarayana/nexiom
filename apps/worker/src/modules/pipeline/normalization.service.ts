@@ -190,13 +190,22 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         //
         // safeData guard: JSON round-trip ensures a plain-prototype object is
         // passed to Drizzle, avoiding null-prototype crashes in Drizzle's is().
-        const safeData = JSON.parse(
-          JSON.stringify(
-            canonicalData != null && typeof canonicalData === "object"
-              ? canonicalData
-              : {},
-          ),
-        ) as Record<string, unknown>;
+        let safeData: Record<string, unknown>;
+        try {
+          safeData = JSON.parse(
+            JSON.stringify(
+              canonicalData != null && typeof canonicalData === "object"
+                ? canonicalData
+                : {},
+            ),
+          ) as Record<string, unknown>;
+        } catch (serializationErr) {
+          throw new Error(
+            `Normalization failed for traceId ${traceId}: canonicalData is not JSON-serializable. ` +
+            `Error: ${serializationErr instanceof Error ? serializationErr.message : String(serializationErr)}`,
+            { cause: serializationErr },
+          );
+        }
 
         // onConflictDoUpdate always returns the row, so insertRes is always non-empty.
         const insertRes = await tx
@@ -211,7 +220,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             target: normalizedEntity.replicaId,
             set: {
               // Always overwrite with the latest normalised payload
-              traceId,
+              // traceId is immutable after first insert (removed from update set)
               canonicalType,
               data: safeData,
             },

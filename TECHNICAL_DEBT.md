@@ -232,7 +232,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
    - Store token generation timestamp to support automatic expiry policies if needed in the future.
    - Add audit logging for all token rotation events.
 
-4. **Rate Limiting Updates**:
+4. **Rate-Limiting Updates**:
    - Update `tenant-rate-limit.guard.ts` to apply rate limiting consistently across both legacy and new routes.
    - Ensure rate limit keys are normalized to the connection ID regardless of which route format is used.
 

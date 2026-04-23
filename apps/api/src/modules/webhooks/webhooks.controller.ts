@@ -110,7 +110,7 @@ export class WebhooksController {
       );
 
       // Normalise the inbound payload:
-      //   - JSON body → stored as-is (parsed object)
+      //   - JSON body → stored as-is (parsed object or array)
       //   - Non-JSON (XML, form-data, text) → wrapped so the raw bytes are
       //     never lost; the normalizer can detect contentType and parse downstream.
       //   - Missing body → empty object sentinel (prevents NOT NULL violation)
@@ -121,12 +121,13 @@ export class WebhooksController {
       if (typeof body === 'string') {
         normalizedPayload =
           body.trim().length > 0 ? { raw: body, contentType } : {};
-      } else if (
-        body != null &&
-        typeof body === 'object' &&
-        Object.keys(body).length > 0
-      ) {
-        normalizedPayload = body as Record<string, unknown>;
+      } else if (body != null && typeof body === 'object') {
+        // Accept both objects and arrays as parsed payloads
+        if (Array.isArray(body)) {
+          normalizedPayload = { items: body };
+        } else {
+          normalizedPayload = body as Record<string, unknown>;
+        }
       } else if (req.rawBody && req.rawBody.length > 0) {
         normalizedPayload = { raw: req.rawBody.toString('utf-8'), contentType };
       } else {
@@ -235,6 +236,8 @@ export class WebhooksController {
 
           if (extReqId) {
             let existingTraceIdOutside: string | null = null;
+            let existingRecord: { traceId: string; response: unknown | null } | null = null;
+
             await this.db.transaction(async (tx) => {
               assertValidSchemaName(schemaName);
               await tx.execute(
@@ -242,7 +245,10 @@ export class WebhooksController {
               );
 
               const rows = await tx
-                .select({ traceId: inboundGateway.traceId })
+                .select({
+                  traceId: inboundGateway.traceId,
+                  response: inboundGateway.response,
+                })
                 .from(inboundGateway)
                 .where(
                   sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.connectionId} = ${connectionId}`,
@@ -251,6 +257,7 @@ export class WebhooksController {
 
               if (rows.length > 0) {
                 existingTraceIdOutside = rows[0].traceId;
+                existingRecord = rows[0];
               }
             });
 
@@ -271,6 +278,27 @@ export class WebhooksController {
                   );
                   throw err;
                 });
+
+              // If the existing record has no response and we can generate one, persist it
+              const customResponse = executeAppWebhookResponses(body, headers);
+              if (customResponse && existingRecord && existingRecord.response === null) {
+                await this.db.transaction(async (tx) => {
+                  assertValidSchemaName(schemaName);
+                  await tx.execute(
+                    sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+                  );
+                  await tx
+                    .update(inboundGateway)
+                    .set({
+                      response: {
+                        status: customResponse.status,
+                        contentType: customResponse.contentType,
+                        body: customResponse.body,
+                      },
+                    })
+                    .where(sql`${inboundGateway.traceId} = ${existingTraceIdOutside}`);
+                });
+              }
             }
           }
         } catch (error_: unknown) {

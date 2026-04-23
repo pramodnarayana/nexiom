@@ -422,49 +422,6 @@ export class SqlDatabaseManager implements DatabaseManager {
             ON "${schemaName}".sync_log (trace_id, layer);
     `);
 
-        await this.db.$client.query(`
-        CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
-            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            trace_id      UUID        NOT NULL,
-            connection_id UUID        NOT NULL,
-            status        TEXT        NOT NULL DEFAULT 'PENDING'
-                          CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
-            attempts      INTEGER     NOT NULL DEFAULT 0,
-            last_error    VARCHAR(500),
-            next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
-            ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
-            WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
-    `);
-
-        await this.db.$client.query(`
-        DO $$ BEGIN
-            -- Deduplicate: keep the earliest row per (trace_id, connection_id)
-            -- before adding the unique constraint so existing schemas don't fail.
-            DELETE FROM "${schemaName}".replica_outbox ro
-            WHERE ro.id NOT IN (
-                SELECT DISTINCT ON (trace_id, connection_id) id
-                FROM "${schemaName}".replica_outbox
-                ORDER BY trace_id, connection_id, created_at ASC
-            );
-        EXCEPTION WHEN SQLSTATE '42P01' THEN NULL; -- table doesn't exist yet: safe to skip
-        END $$;
-        `);
-
-        await this.db.$client.query(`
-        DO $$ BEGIN
-            ALTER TABLE "${schemaName}".replica_outbox
-                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
-        EXCEPTION WHEN duplicate_table THEN NULL;
-                  WHEN duplicate_object THEN NULL;
-        END $$;
-        `);
-
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.
          *

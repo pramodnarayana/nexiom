@@ -134,15 +134,18 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
-        const extracted = extractor
-          ? extractor(inbound.request)
-          : {
-              entityType: inbound.objectType || "DEFAULT",
-              entityId: undefined,
-              data: inbound.request as Record<string, unknown>,
-            };
+        // If no extractor is available (appProfile=default), fail early with a clear error
+        if (!extractor) {
+          throw new Error(
+            `No ReplicaExtractor available for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
+              `Cannot derive stable entityId from raw payload. ` +
+              `Set a valid appProfile on the connection or register a default extractor.`,
+          );
+        }
 
-        if (extractor && !extracted) {
+        const extracted = extractor(inbound.request);
+
+        if (!extracted) {
           throw new Error(
             `Replica extraction failed for traceId ${traceId}: extractor returned null. ` +
               `Likely the payload is missing the required entity ID (e.g. sf:id).`,
@@ -151,16 +154,16 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
         // Every entity written to replica_entity must carry a stable business ID.
         // A UUID traceId is NOT a valid entityId — it changes with every delivery.
-        const resolvedEntityId = extracted!.entityId;
+        const resolvedEntityId = extracted.entityId;
         if (!resolvedEntityId) {
           throw new Error(
             `Cannot determine entityId for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
-              `Set appProfile on the connection and ensure its extractor returns a stable entityId.`,
+              `Extractor returned null/undefined entityId. Ensure the payload contains a stable business identifier.`,
           );
         }
 
-        const resolvedEntityType = extracted!.entityType;
-        const resolvedData = extracted!.data;
+        const resolvedEntityType = extracted.entityType;
+        const resolvedData = extracted.data;
 
         // Upsert into replica_entity keyed on (connectionId, entityType, extEntityId).
         // extEntityId is the vendor's stable business ID (e.g. Salesforce Account ID).

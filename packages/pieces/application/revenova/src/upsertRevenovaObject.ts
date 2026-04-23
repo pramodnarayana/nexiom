@@ -22,45 +22,71 @@ const SOAP_STRUCTURAL_TAGS = new Set([
  *
  * Returns entityId (sf:Id) and doctype (xsi:type) as first-class values
  * so they are stored as dedicated columns, not buried in the JSON blob.
+ *
+ * Rejects multi-notification payloads to prevent overwrite bugs.
  */
 function parseSalesforceSoapXml(xml: string): {
     doctype: string;
     entityId: string;
     data: Record<string, string>;
 } | null {
-    // 1. Derive entity type: xsi:type="sf:Account" → "sf_Account"
-    const typeMatch = /xsi:type="([^"]+)"/.exec(xml);
-    let doctype = 'DEFAULT';
-    if (typeMatch) {
-        const raw = typeMatch[1];
-        const typeName = raw.startsWith('sf:') ? raw.substring(3) : raw;
-        doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+    // 1. Detect multiple <Notification> blocks — reject to prevent silent overwrites
+    const notificationMatches = xml.match(/<[^:>]*:?Notification[^>]*>/gi);
+    if (notificationMatches && notificationMatches.length > 1) {
+        // Multi-notification payload detected
+        return null;
     }
 
-    // 2. Extract every leaf text element from the notification payload.
-    //    Keys are always lowercased for predictable downstream mapping:
-    //    <sf:Id>001…</sf:Id>  → { id: '001…' }
-    //    <sf:Name>Acme</sf:Name> → { name: 'Acme' }
-    //    <rtms__Status__c>Active</rtms__Status__c> → { rtms__status__c: 'Active' }
+    // 2. Extract the single <sObject> block (or <Notification>/sObject subtree)
+    const sObjectMatch = /<sObject[^>]*xsi:type="([^"]+)"[^>]*>([\s\S]*?)<\/sObject>/i.exec(xml);
+    if (!sObjectMatch) {
+        return null;
+    }
+
+    const rawType = sObjectMatch[1];
+    const sObjectXml = sObjectMatch[2];
+
+    // 3. Derive entity type: xsi:type="sf:Account" → "sf_Account"
+    const typeName = rawType.startsWith('sf:') ? rawType.substring(3) : rawType;
+    const doctype = typeName.startsWith('rtms__') ? typeName : `sf_${typeName}`;
+
+    // 4. Extract leaf elements scoped to this sObject subtree
     const data: Record<string, string> = {};
     const pattern = /<([a-zA-Z_][a-zA-Z0-9_:]*?)>([^<]+)<\/\1>/g;
     let m: RegExpExecArray | null;
-    while ((m = pattern.exec(xml)) !== null) {
+    while ((m = pattern.exec(sObjectXml)) !== null) {
         const rawKey = m[1];
         const value = m[2].trim();
         if (!value) continue;
         // Strip sf: namespace prefix then lowercase the whole key
         const key = (rawKey.startsWith('sf:') ? rawKey.substring(3) : rawKey).toLowerCase();
         if (!SOAP_STRUCTURAL_TAGS.has(key)) {
-            data[key] = value;
+            // Decode XML entities
+            const decoded = decodeXmlEntities(value);
+            data[key] = decoded;
         }
     }
 
-    // 3. Salesforce always includes the sObject record Id as <sf:Id> → 'id' after lowercase.
+    // 5. Salesforce always includes the sObject record Id as <sf:Id> → 'id' after lowercase
     const entityId = data['id'];
     if (!entityId) return null;
 
     return { doctype, entityId, data };
+}
+
+/**
+ * Decodes XML entities and character references.
+ * Handles: &amp; &lt; &gt; &quot; &apos; &#xHH; &#DD;
+ */
+function decodeXmlEntities(str: string): string {
+    return str
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
 }
 
 
