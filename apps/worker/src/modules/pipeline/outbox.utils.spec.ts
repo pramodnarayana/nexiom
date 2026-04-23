@@ -21,14 +21,11 @@ describe("processInChunks", () => {
     [NaN, "NaN"],
     [Infinity, "Infinity"],
     [-0.5, "negative non-integer"],
-  ])(
-    "should throw if concurrency is %s (%s)",
-    async (invalidConcurrency) => {
-      await expect(
-        processInChunks([1], invalidConcurrency, (n) => Promise.resolve(n)),
-      ).rejects.toThrow("concurrency must be a positive integer");
-    },
-  );
+  ])("should throw if concurrency is %s (%s)", async (invalidConcurrency) => {
+    await expect(
+      processInChunks([1], invalidConcurrency, (n) => Promise.resolve(n)),
+    ).rejects.toThrow("concurrency must be a positive integer");
+  });
 
   it("should respect concurrency limit and process in chunks", async () => {
     const started: number[] = [];
@@ -43,19 +40,23 @@ describe("processInChunks", () => {
 
     const resultPromise = processInChunks([1, 2, 3, 4, 5], 2, taskFn);
 
-    // Wait for initial chunk to start
+    // Wait for initial chunk to start (1 tick: processInChunks starts)
     await Promise.resolve();
     expect(started).toEqual([1, 2]);
 
-    // Resolve first chunk
+    // Resolve first chunk — needs 2 ticks:
+    //   tick 1: individual promise handlers run → allSettled resolves
+    //   tick 2: processInChunks resumes and starts chunk 2
     resolvers[0]();
     resolvers[1]();
+    await Promise.resolve();
     await Promise.resolve();
     expect(started).toEqual([1, 2, 3, 4]);
 
     // Resolve second chunk
     resolvers[2]();
     resolvers[3]();
+    await Promise.resolve();
     await Promise.resolve();
     expect(started).toEqual([1, 2, 3, 4, 5]);
 

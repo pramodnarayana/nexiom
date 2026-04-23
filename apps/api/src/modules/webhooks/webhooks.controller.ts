@@ -193,7 +193,10 @@ export class WebhooksController {
       this.logger.assign({ durationMs });
       this.logger.debug({ event: 'l1.ingested' }, 'L1 ingested');
 
-      const customResponse = executeAppWebhookResponses(appResponseBody, headers);
+      const customResponse = executeAppWebhookResponses(
+        appResponseBody,
+        headers,
+      );
       if (customResponse) {
         this.logger.debug(
           {
@@ -244,7 +247,10 @@ export class WebhooksController {
 
           if (extReqId) {
             let existingTraceIdOutside: string | null = null;
-            let existingRecord: { traceId: string; response: unknown | null } | null = null;
+            let existingRecord: {
+              traceId: string;
+              response: unknown;
+            } | null = null;
 
             await this.db.transaction(async (tx) => {
               assertValidSchemaName(schemaName);
@@ -288,8 +294,20 @@ export class WebhooksController {
                 });
 
               // If the existing record has no response and we can generate one, persist it
-              const customResponse = executeAppWebhookResponses(appResponseBody, headers);
-              if (customResponse && existingRecord && (existingRecord as { traceId: string; response: unknown | null }).response === null) {
+              const customResponse = executeAppWebhookResponses(
+                appResponseBody,
+                headers,
+              );
+              if (
+                customResponse &&
+                existingRecord &&
+                (
+                  existingRecord as {
+                    traceId: string;
+                    response: unknown;
+                  }
+                ).response === null
+              ) {
                 await this.db.transaction(async (tx) => {
                   assertValidSchemaName(schemaName);
                   await tx.execute(
@@ -304,7 +322,9 @@ export class WebhooksController {
                         body: customResponse.body,
                       },
                     })
-                    .where(sql`${inboundGateway.traceId} = ${existingTraceIdOutside}`);
+                    .where(
+                      sql`${inboundGateway.traceId} = ${existingTraceIdOutside}`,
+                    );
                 });
               }
             }
@@ -316,7 +336,10 @@ export class WebhooksController {
           );
         }
 
-        const customResponse = executeAppWebhookResponses(appResponseBody, headers);
+        const customResponse = executeAppWebhookResponses(
+          appResponseBody,
+          headers,
+        );
         if (customResponse) {
           this.logger.debug(
             {
