@@ -5,8 +5,27 @@ import { createHash } from 'node:crypto';
 
 const SAFE_SCHEMA_NAME_RE = /^ws_[a-z0-9_]+$/;
 
+interface Logger {
+    debug(msg: string, ...args: unknown[]): void;
+    info?(msg: string, ...args: unknown[]): void;
+    error?(msg: string, ...args: unknown[]): void;
+}
+
 export class SqlDatabaseManager implements DatabaseManager {
-    constructor(private readonly db: DrizzleDb) { }
+    private readonly logger: Logger;
+
+    constructor(
+        private readonly db: DrizzleDb,
+        logger?: Logger,
+    ) {
+        this.logger = logger ?? {
+            debug: (msg: string, ...args: unknown[]) => {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.debug(`[SqlDatabaseManager] ${msg}`, ...args);
+                }
+            }
+        };
+    }
 
     private validateSchemaName(name: string): void {
         if (!SAFE_SCHEMA_NAME_RE.test(name)) {
@@ -47,6 +66,13 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.provisionNormalizeTables(schemaName);
 
         if (plan === SchemaPlan.NORMALIZE_ACTIVE) {
+            return;
+        }
+
+        // 4.5. Ensure Canonical Tables exist
+        await this.provisionCanonicalTables(schemaName);
+
+        if (plan === SchemaPlan.CANONICAL_ACTIVE) {
             return;
         }
 
@@ -307,6 +333,34 @@ export class SqlDatabaseManager implements DatabaseManager {
                   WHEN duplicate_object THEN NULL;
         END $$;
         `);
+    }
+
+    /**
+     * Placeholder for canonical table provisioning.
+     *
+     * This method only reserves canonical slots in the schema plan hierarchy.
+     * It does NOT provision domain-specific tables. Callers must invoke
+     * getDomainProvisioner(appName) separately to provision actual domain DDL
+     * (e.g., @nexiom/domain-tms creates tms_carrier, tms_tp, etc.).
+     *
+     * applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
+     * is registered — domain tables are provisioned via the activation flow.
+     */
+    private async provisionCanonicalTables(schemaName: string): Promise<void> {
+        this.logger.debug(
+            `provisionCanonicalTables(${schemaName}): no-op placeholder; ` +
+            `domain provisioners must be invoked separately via getDomainProvisioner(appName)`
+        );
+        // ── CANONICAL TABLES — Typed per-entity tables with FK relationships ──
+        // Applications register domain provisioners that create their own
+        // typed canonical tables (e.g., @nexiom/domain-tms creates tms_carrier,
+        // tms_tp, etc.). The platform provides a placeholder stub here so that
+        // applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
+        // is registered. Application-specific tables are provisioned via
+        // getDomainProvisioner(appName) and called by the activation flow.
+        //
+        // This method intentionally left minimal — domain-specific DDL lives
+        // in application packages, not in the platform dbmanager.
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {

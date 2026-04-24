@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsUUID,
   Matches,
+  MaxLength,
 } from 'class-validator';
 
 import { VALID_PROVIDER_NAME_REGEX } from './constants.js';
@@ -40,4 +41,14 @@ export class ExchangeOAuthCode {
   @IsString()
   @IsUUID('4', { message: 'connectionId must be a valid UUID v4' })
   connectionId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  @Matches(/^[a-z0-9][a-z0-9-]*$/, {
+    message:
+      'appProfile must contain only lowercase letters, numbers, and hyphens, and start with a letter or number',
+  })
+  appProfile?: string;
 }

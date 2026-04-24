@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   Inject,
@@ -20,15 +19,16 @@ import type { DrizzleDb } from "@nexiom/database";
 import {
   StorageResolverService,
   evaluateConditions,
-  hydratePayload,
   Condition,
 } from "@nexiom/engine";
+import type { Rule } from "@nexiom/engine";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
 import {
   sanitizeError,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
+import { TargetBuilderService } from "./target-builder.service.js";
 
 @Injectable()
 export class FanOutService implements OnModuleInit, OnModuleDestroy {
@@ -38,6 +38,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    private readonly targetBuilder: TargetBuilderService,
   ) {}
 
   onModuleInit() {
@@ -142,6 +143,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
+          metadata: appConnections.metadata,
         })
         .from(appConnections)
         .where(eq(appConnections.id, connectionId))
@@ -154,6 +156,18 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       }
       const srcAppName = srcConnRows[0].appName;
       const srcTenantId = srcConnRows[0].tenantId;
+      const metadata = srcConnRows[0].metadata as Record<
+        string,
+        unknown
+      > | null;
+
+      // Runtime validation of appProfile (matches NormalizationService)
+      const trimmedAppProfile =
+        typeof metadata?.appProfile === "string"
+          ? metadata.appProfile.trim()
+          : "";
+      const appProfile =
+        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
 
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
@@ -164,6 +178,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           traceId,
           connectionId,
           srcAppName,
+          appProfile,
           srcTenantId,
           srcVendorId,
           canonicalType,
@@ -215,6 +230,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     traceId: string,
     connectionId: string,
     srcAppName: string,
+    appProfile: string,
     srcTenantId: string,
     srcVendorId: string | undefined,
     canonicalType: string,
@@ -251,13 +267,26 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         )
         .limit(1);
 
-      let hydratedPayload: Record<string, unknown> = normalizedData;
-      if (mappings.length > 0) {
-        hydratedPayload = hydratePayload(
-          mappings[0].mappingRules as import("@nexiom/engine").Rule[],
-          normalizedData,
-        );
-      }
+      // ── Build outbound payload ────────────────────────────────────────────
+      // TargetBuilderService calls the app-registered AppTargetBuilderFn hook
+      // (e.g. tmsTargetBuilder) which does the SQL JOIN enrichment across
+      // typed per-entity tables, then applies the field mapping rules.
+      const mappingRules =
+        mappings.length > 0 ? (mappings[0].mappingRules as Rule[]) : [];
+
+      // Delegate to TargetBuilderService — it calls the app-registered hook
+      // (e.g. tmsTargetBuilder) to assemble the enriched context from typed
+      // per-entity tables, then applies the field mapping rules.
+      // appProfile is threaded from processMessage context (read from connection.metadata)
+      const hydratedPayload = await this.targetBuilder.buildPayload(
+        schemaName,
+        srcAppName,
+        appProfile,
+        canonicalType,
+        srcVendorId,
+        normalizedData,
+        mappingRules,
+      );
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);

@@ -871,6 +871,21 @@ export class ConnectorsController {
 
     const resolvedEnvType = deriveEnvType(decodedState.vendorParams);
 
+    // Read appProfile from request (or vendor params), defaulting to 'default' when absent.
+    // This allows Salesforce OAuth flows to set appProfile dynamically rather than forcing 'revenova'.
+    let rawAppProfile = 'default';
+    if (typeof body.appProfile === 'string' && body.appProfile.trim() !== '') {
+      rawAppProfile = body.appProfile.trim();
+    } else if (
+      typeof decodedState.vendorParams?.appProfile === 'string' &&
+      decodedState.vendorParams.appProfile.trim() !== ''
+    ) {
+      rawAppProfile = decodedState.vendorParams.appProfile.trim();
+    }
+    const metadata: Record<string, unknown> = {
+      appProfile: rawAppProfile,
+    };
+
     await this.persistConnection(
       tenantId,
       body.providerName,
@@ -880,6 +895,7 @@ export class ConnectorsController {
       expiresAt,
       body.connectionId,
       resolvedEnvType,
+      metadata,
     );
 
     // Mark as fully processed to prevent StrictMode duplicates from failing.
@@ -1010,6 +1026,7 @@ export class ConnectorsController {
     expiresAt: Date,
     connectionId?: string,
     envType?: 'PRODUCTION' | 'SANDBOX',
+    metadata?: Record<string, unknown>,
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
@@ -1021,7 +1038,7 @@ export class ConnectorsController {
         authType: 'OAUTH2',
         value: encryptedValue,
         expiresAt,
-        metadata: {},
+        metadata: metadata ?? {},
         envType,
       });
     } catch (error) {

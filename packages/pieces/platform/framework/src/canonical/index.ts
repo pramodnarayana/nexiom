@@ -1,11 +1,20 @@
 /**
- * The canonical type discriminator for Nexiom's normalized entity model.
- * Add new types as integrations expand.
+ * Discriminator for Nexiom's normalized entity model.
+ * Used as the routing key in the normalization pipeline:
+ *   NormalizationService → typed tms_* / crm_* / accounting_* tables
+ *
+ * Naming: "NormalizedEntityType" — consistent with NormalizationService,
+ * normalized_entity table, and NormalizedRecord throughout the platform.
  */
-export type CanonicalType =
+export type NormalizedEntityType =
   | 'TMS_LOAD'
   | 'TMS_INVOICE'
   | 'TMS_CARRIER'
+  | 'TMS_VENDOR'
+  | 'TMS_CUSTOMER'
+  | 'TMS_FACTORING'
+  | 'TMS_ADDRESS'
+  | 'TMS_TP'
   | 'TMS_LOCATION'
   | 'CRM_CONTACT'
   | 'CRM_ACCOUNT'
@@ -13,9 +22,13 @@ export type CanonicalType =
   | 'ACCOUNTING_INVOICE'
   | 'ACCOUNTING_PAYMENT';
 
-/** Output of piece.normalize() — a record in Nexiom's canonical model. */
+/** @deprecated Use NormalizedEntityType instead */
+export type CanonicalType = NormalizedEntityType;
+
+/** Output of the NormalizerFn — a record in Nexiom's normalized entity model. */
 export interface NormalizedRecord {
-  canonicalType: CanonicalType;
+  /** Discriminates the entity — aligns with tms_*, crm_*, accounting_* table routing. */
+  canonicalType: NormalizedEntityType;
   data: Record<string, unknown>;
   sourceId?: string;
   normalizedAt?: string;
@@ -30,10 +43,7 @@ export interface VendorResponse {
   /**
    * Optional piece-layer retry opt-in.
    * Set to `true` to signal DeliveryService that this response should be
-   * retried (e.g. rate-limited, temporary unavailability) without the piece
-   * needing to throw a RetryableException. Defaults to false when absent.
-   * Use RetryableException for thrown errors; use this field for returned
-   * non-2xx responses that are safe to retry.
+   * retried without the piece needing to throw a RetryableException.
    */
   retry?: boolean;
 }

@@ -461,7 +461,7 @@ describe('ConnectorsController', () => {
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
-        metadata: {},
+        metadata: { appProfile: 'default' }, // controller always injects appProfile
         // No environment vendorParam in mock → deriveEnvType defaults to PRODUCTION
         envType: 'PRODUCTION',
       });

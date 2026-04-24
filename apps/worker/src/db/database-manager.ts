@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCipheriv, randomBytes } from "node:crypto";
 import { Client } from "pg";
-import { sql } from "drizzle-orm";
+import { sql, eq, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./schema.js";
 
@@ -271,7 +271,6 @@ export class DatabaseManager {
 
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const schema = await import("./schema.js");
-    const { eq } = await import("drizzle-orm");
     const { seedSystemRbac } =
       await import("@nexiom/identity/utils/rbac-seeding");
     const {
@@ -789,8 +788,6 @@ export class DatabaseManager {
     console.log(`🔍 Debugging permissions for role: ${roleName}...`);
 
     await this.withDrizzle(async (db, schema) => {
-      const { eq } = await import("drizzle-orm");
-
       const role = await db.query.role.findFirst({
         where: eq(schema.role.name, roleName),
       });
@@ -829,8 +826,6 @@ export class DatabaseManager {
     console.log(`🔍 Checking permissions for user: ${identifier}...`);
 
     await this.withDrizzle(async (db, schema) => {
-      const { eq, or } = await import("drizzle-orm");
-
       // Find user by ID or Email
       const user = await db.query.user.findFirst({
         where: or(

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
+import { TargetBuilderService } from "./target-builder.service.js";
 import { QueueService } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
@@ -99,6 +100,36 @@ describe("FanOutService", () => {
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        {
+          provide: TargetBuilderService,
+          useValue: {
+            // Returns normalizedData enriched with mapped fields if rules are passed
+            buildPayload: vi
+              .fn()
+              .mockImplementation(
+                (
+                  _schema: unknown,
+                  _app: unknown,
+                  _profile: unknown,
+                  _type: unknown,
+                  _id: unknown,
+                  normalizedData: unknown,
+                  rules: unknown,
+                ) => {
+                  const data = normalizedData as Record<string, unknown>;
+                  const ruleArray = rules as Array<{
+                    src: string;
+                    dest: string;
+                  }>;
+                  // If rules are provided, inject a hydrated field to verify mapping was applied
+                  if (ruleArray && ruleArray.length > 0) {
+                    return Promise.resolve({ ...data, _hydrated: true });
+                  }
+                  return Promise.resolve(data);
+                },
+              ),
+          },
+        },
       ],
     }).compile();
 
