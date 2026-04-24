@@ -152,6 +152,30 @@ describe("TargetBuilderService", () => {
     );
   });
 
+  it("falls back gracefully when app builder throws a non-Error value", async () => {
+    const warnSpy = vi.spyOn(service["logger"], "warn");
+    vi.mocked(appHooks.getTargetBuilder).mockReturnValue(
+      // Throw a plain string — exercises the `err` (non-Error) branch on line 81
+      vi.fn().mockRejectedValue("raw string error"),
+    );
+
+    const result = await service.buildPayload(
+      SCHEMA,
+      APP,
+      PROFILE,
+      TYPE,
+      ENTITY_ID,
+      NORMALIZED_DATA,
+      [],
+    );
+
+    expect(result).toEqual(NORMALIZED_DATA);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "target_builder.hook_failed" }),
+      expect.any(String),
+    );
+  });
+
   it("skips app builder call when srcEntityId is undefined", async () => {
     const builderFn = vi.fn().mockResolvedValue({ tp: {} });
     vi.mocked(appHooks.getTargetBuilder).mockReturnValue(builderFn);

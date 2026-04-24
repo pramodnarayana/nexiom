@@ -117,7 +117,10 @@ describe("FanOutService", () => {
                   rules: unknown,
                 ) => {
                   const data = normalizedData as Record<string, unknown>;
-                  const ruleArray = rules as Array<{ src: string; dest: string }>;
+                  const ruleArray = rules as Array<{
+                    src: string;
+                    dest: string;
+                  }>;
                   // If rules are provided, inject a hydrated field to verify mapping was applied
                   if (ruleArray && ruleArray.length > 0) {
                     return Promise.resolve({ ...data, _hydrated: true });

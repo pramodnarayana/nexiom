@@ -156,7 +156,10 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       }
       const srcAppName = srcConnRows[0].appName;
       const srcTenantId = srcConnRows[0].tenantId;
-      const metadata = srcConnRows[0].metadata as Record<string, unknown> | null;
+      const metadata = srcConnRows[0].metadata as Record<
+        string,
+        unknown
+      > | null;
 
       // Runtime validation of appProfile (matches NormalizationService)
       const trimmedAppProfile =
