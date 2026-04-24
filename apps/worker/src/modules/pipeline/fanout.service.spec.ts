@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
+import { TargetBuilderService } from "./target-builder.service.js";
 import { QueueService } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
@@ -99,6 +100,24 @@ describe("FanOutService", () => {
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        {
+          provide: TargetBuilderService,
+          useValue: {
+            // Returns normalizedData as-is — enrichment logic is tested separately
+            buildPayload: vi
+              .fn()
+              .mockImplementation(
+                (
+                  _schema: unknown,
+                  _app: unknown,
+                  _profile: unknown,
+                  _type: unknown,
+                  _id: unknown,
+                  normalizedData: unknown,
+                ) => Promise.resolve(normalizedData),
+              ),
+          },
+        },
       ],
     }).compile();
 

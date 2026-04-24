@@ -1,0 +1,13 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [{ "path": "./tsconfig.lib.json" }],
+  "compilerOptions": {
+    "module": "nodenext",
+    "forceConsistentCasingInFileNames": true,
+    "strict": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}

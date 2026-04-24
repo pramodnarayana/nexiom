@@ -6,9 +6,11 @@ export interface QuickbooksRef {
 export interface QuickbooksAddress {
     Id?: string;
     Line1?: string;
+    Line2?: string;
     City?: string;
     CountrySubDivisionCode?: string;
     PostalCode?: string;
+    Country?: string;
     Lat?: string;
     Long?: string;
 }

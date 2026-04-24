@@ -739,89 +739,89 @@ export class DatabaseManager {
         const db = drizzle(client, { schema: dbSchema });
 
         const fixtures = [
-        {
-          id: '00000000-0000-0000-0000-000000000001',
-          appName: 'salesforce',
-          externalId: 'dev-salesforce',
-          displayName: 'Dev Salesforce',
-          credentials: {
-            clientId: 'dev-sf-client-id',
-            clientSecret: 'dev-sf-client-secret',
-            accessToken: 'dev-sf-access-token',
-            refreshToken: 'dev-sf-refresh-token',
-            data: { instance_url: 'https://test.salesforce.com' },
-          },
-        },
-        {
-          id: '00000000-0000-0000-0000-000000000002',
-          appName: 'quickbooks',
-          externalId: 'dev-quickbooks',
-          displayName: 'Dev QuickBooks',
-          credentials: {
-            clientId: 'dev-qb-client-id',
-            clientSecret: 'dev-qb-client-secret',
-            accessToken: 'dev-qb-access-token',
-            refreshToken: 'dev-qb-refresh-token',
-            data: { realmId: 'dev-realm-id' },
-          },
-        },
-      ] as const;
-
-      for (const fixture of fixtures) {
-        const encryptedValue = this.encryptFixture(
-          JSON.stringify(fixture.credentials),
-          encryptionKey,
-        );
-
-        const [inserted] = await db
-          .insert(dbSchema.appConnections)
-          .values({
-            id: fixture.id,
-            tenantId: systemTenantId,
-            appName: fixture.appName,
-            externalId: fixture.externalId,
-            displayName: fixture.displayName,
-            authType: 'OAUTH2',
-            value: encryptedValue,
-            status: 'ACTIVE',
-          })
-          .onConflictDoUpdate({
-            target: [
-              dbSchema.appConnections.tenantId,
-              dbSchema.appConnections.externalId,
-            ],
-            set: {
-              value: encryptedValue,
-              displayName: fixture.displayName,
-              appName: fixture.appName,
-              authType: 'OAUTH2',
-              status: 'ACTIVE',
+          {
+            id: '00000000-0000-0000-0000-000000000001',
+            appName: 'salesforce',
+            externalId: 'dev-salesforce',
+            displayName: 'Dev Salesforce',
+            credentials: {
+              clientId: 'dev-sf-client-id',
+              clientSecret: 'dev-sf-client-secret',
+              accessToken: 'dev-sf-access-token',
+              refreshToken: 'dev-sf-refresh-token',
+              data: { instance_url: 'https://test.salesforce.com' },
             },
-          })
-          .returning();
+          },
+          {
+            id: '00000000-0000-0000-0000-000000000002',
+            appName: 'quickbooks',
+            externalId: 'dev-quickbooks',
+            displayName: 'Dev QuickBooks',
+            credentials: {
+              clientId: 'dev-qb-client-id',
+              clientSecret: 'dev-qb-client-secret',
+              accessToken: 'dev-qb-access-token',
+              refreshToken: 'dev-qb-refresh-token',
+              data: { realmId: 'dev-realm-id' },
+            },
+          },
+        ] as const;
 
-        if (!inserted) {
-          throw new Error(
-            `Upsert returned no row for externalId=${fixture.externalId}`,
+        for (const fixture of fixtures) {
+          const encryptedValue = this.encryptFixture(
+            JSON.stringify(fixture.credentials),
+            encryptionKey,
+          );
+
+          const [inserted] = await db
+            .insert(dbSchema.appConnections)
+            .values({
+              id: fixture.id,
+              tenantId: systemTenantId,
+              appName: fixture.appName,
+              externalId: fixture.externalId,
+              displayName: fixture.displayName,
+              authType: 'OAUTH2',
+              value: encryptedValue,
+              status: 'ACTIVE',
+            })
+            .onConflictDoUpdate({
+              target: [
+                dbSchema.appConnections.tenantId,
+                dbSchema.appConnections.externalId,
+              ],
+              set: {
+                value: encryptedValue,
+                displayName: fixture.displayName,
+                appName: fixture.appName,
+                authType: 'OAUTH2',
+                status: 'ACTIVE',
+              },
+            })
+            .returning();
+
+          if (!inserted) {
+            throw new Error(
+              `Upsert returned no row for externalId=${fixture.externalId}`,
+            );
+          }
+
+          const resolved = inserted;
+
+          const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
+          await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+
+          console.log(
+            `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
           );
         }
 
-        const resolved = inserted;
-
-        const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
-        await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
-
+        console.log('\n✅ Local dev fixtures provisioned.');
         console.log(
-          `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
+          '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
+            '   and update app_connection.value with the resulting ciphertext.\n' +
+            '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
         );
-      }
-
-      console.log('\n✅ Local dev fixtures provisioned.');
-      console.log(
-        '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
-          '   and update app_connection.value with the resulting ciphertext.\n' +
-          '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
-      );
       } finally {
         await client.end();
       }

@@ -21,7 +21,7 @@ import {
   sanitizeError,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
-import { getNormalizer } from "@nexiom/piece-framework";
+import { getNormalizer, getNormalizedWriter } from "@nexiom/piece-framework";
 
 @Injectable()
 export class NormalizationService implements OnModuleInit, OnModuleDestroy {
@@ -202,7 +202,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         } catch (serializationErr) {
           throw new Error(
             `Normalization failed for traceId ${traceId}: canonicalData is not JSON-serializable. ` +
-            `Error: ${serializationErr instanceof Error ? serializationErr.message : String(serializationErr)}`,
+              `Error: ${serializationErr instanceof Error ? serializationErr.message : String(serializationErr)}`,
             { cause: serializationErr },
           );
         }
@@ -228,6 +228,42 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           .returning({ id: normalizedEntity.id });
 
         if (insertRes.length > 0) {
+          // ── Step 3.5: Application canonical write hook ─────────────────────
+          // Call the app-registered writer to persist into typed per-entity
+          // tables (e.g., tms_carrier, tms_tp). The platform knows nothing
+          // about these tables — the application owns the schema.
+          const appNormalizedWriter = getNormalizedWriter(
+            connectionAppName,
+            appProfile,
+          );
+          if (appNormalizedWriter) {
+            try {
+              await appNormalizedWriter(
+                tx,
+                this.db,
+                schemaName,
+                replica.id,
+                replica.entityId,
+                traceId,
+                canonicalType,
+                safeData,
+              );
+            } catch (hookErr) {
+              // Log but do not fail the pipeline — the generic normalized_entity
+              // write already succeeded. App table write failure is observable
+              // via logs and can be replayed.
+              this.logger.warn(
+                {
+                  event: "l3.normalized_writer_hook_failed",
+                  traceId,
+                  normalizedEntityType: canonicalType,
+                  err: sanitizeError(hookErr),
+                },
+                "App normalized writer hook failed — typed table write skipped",
+              );
+            }
+          }
+
           // ── Transactional outbox for L3→L4 handoff ──────────────────────────
           // The unique constraint idx_normalized_outbox_trace on (traceId, connectionId)
           // ensures the outbox row is not duplicated on replay.

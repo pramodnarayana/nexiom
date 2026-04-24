@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/application-revenova",
+  "name": "@nexiom/domain-tms",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -18,8 +18,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nexiom/piece-framework": "workspace:*",
     "@nexiom/database": "workspace:*",
-    "@nexiom/domain-tms": "workspace:*"
+    "@nexiom/piece-framework": "workspace:*",
+    "drizzle-orm": "^0.45.1"
   }
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   Inject,
@@ -20,15 +19,16 @@ import type { DrizzleDb } from "@nexiom/database";
 import {
   StorageResolverService,
   evaluateConditions,
-  hydratePayload,
   Condition,
 } from "@nexiom/engine";
+import type { Rule } from "@nexiom/engine";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
 import {
   sanitizeError,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
+import { TargetBuilderService } from "./target-builder.service.js";
 
 @Injectable()
 export class FanOutService implements OnModuleInit, OnModuleDestroy {
@@ -38,6 +38,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    private readonly targetBuilder: TargetBuilderService,
   ) {}
 
   onModuleInit() {
@@ -251,13 +252,27 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         )
         .limit(1);
 
-      let hydratedPayload: Record<string, unknown> = normalizedData;
-      if (mappings.length > 0) {
-        hydratedPayload = hydratePayload(
-          mappings[0].mappingRules as import("@nexiom/engine").Rule[],
-          normalizedData,
-        );
-      }
+      // ── Build outbound payload ────────────────────────────────────────────
+      // TargetBuilderService calls the app-registered AppTargetBuilderFn hook
+      // (e.g. tmsTargetBuilder) which does the SQL JOIN enrichment across
+      // typed per-entity tables, then applies the field mapping rules.
+      const mappingRules =
+        mappings.length > 0 ? (mappings[0].mappingRules as Rule[]) : [];
+
+      // Delegate to TargetBuilderService — it calls the app-registered hook
+      // (e.g. tmsTargetBuilder) to assemble the enriched context from typed
+      // per-entity tables, then applies the field mapping rules.
+      // appProfile drives which registered hook to invoke (matches NormalizationService).
+      const appProfile = "default"; // TODO: read from connection.metadata.appProfile
+      const hydratedPayload = await this.targetBuilder.buildPayload(
+        schemaName,
+        srcAppName,
+        appProfile,
+        canonicalType,
+        srcVendorId,
+        normalizedData,
+        mappingRules,
+      );
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);

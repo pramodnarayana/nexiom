@@ -25,6 +25,14 @@ export enum SchemaPlan {
     NORMALIZE_ACTIVE = 'NORMALIZE_ACTIVE',
 
     /**
+     * Per-entity typed canonical tables (canonical_account, canonical_tp).
+     * Provisioned when a TMS→QuickBooks stitch is configured.
+     * These replace the generic normalized_entity JSONB blob with typed
+     * columns and native FK relationships for SQL JOIN enrichment.
+     */
+    CANONICAL_ACTIVE = 'CANONICAL_ACTIVE',
+
+    /**
      * The L5/L6 Outbound tables (outbound_gateway, sync_log)
      * Provisioned when delivery is activated for a connection.
      */

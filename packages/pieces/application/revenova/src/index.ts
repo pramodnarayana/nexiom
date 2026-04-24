@@ -1,6 +1,8 @@
-import { registerReplicaExtractor, registerNormalizer, registerAppWebhookResponse } from '@nexiom/piece-framework';
+import { registerReplicaExtractor, registerNormalizer, registerAppWebhookResponse, registerNormalizedWriter, registerTargetBuilder, registerDomainProvisioner } from '@nexiom/piece-framework';
 import { upsertRevenovaObject } from './upsertRevenovaObject.js';
-import { upsertTMSObject } from './upsertTMSObject.js';
+import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
+import { tmsNormalizedWriter, tmsTargetBuilder, provisionTmsTables } from '@nexiom/domain-tms';
+import type { DrizzleDb } from '@nexiom/database';
 
 const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -12,7 +14,12 @@ const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas
 
 export function initializeRevenovaApplicationRegistry() {
     registerReplicaExtractor('salesforce', 'revenova', upsertRevenovaObject);
-    registerNormalizer('salesforce', 'revenova', upsertTMSObject);
+    registerNormalizer('salesforce', 'revenova', normalizeRevenovaToTms);
+    registerNormalizedWriter('salesforce', 'revenova', tmsNormalizedWriter);
+    registerTargetBuilder('salesforce', 'revenova', tmsTargetBuilder);
+    registerDomainProvisioner('salesforce', (db, schemaName) =>
+        provisionTmsTables(db as DrizzleDb, schemaName)
+    );
 
     registerAppWebhookResponse((body) => {
         if (
