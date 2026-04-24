@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import type { AppNormalizedWriterFn } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
 import { buildTmsSchema } from './schema/tms-schema.js';
+import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
 
 // ---------------------------------------------------------------------------
 // TMS Normalized Writer Hook — @nexiom/domain-tms
@@ -70,15 +71,10 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     normalizedEntityType,
     data,
 ) => {
-    // Validate schemaName against SQL injection (must not start with a digit)
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schemaName)) {
-        throw new Error(
-            `Invalid schemaName "${schemaName}" — must contain only letters, digits, and underscores, and not start with a digit`
-        );
-    }
+    // Validate schemaName against SQL injection and Postgres limits
+    validateTmsIdentifier(schemaName);
 
     const txTyped = tx as DrizzleTransaction;
-    await txTyped.execute(sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`);
 
     const { tmsCarrier, tmsVendor, tmsCustomer, tmsFactoring, tmsAddress, tmsTp } =
         buildTmsSchema(schemaName);

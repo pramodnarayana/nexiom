@@ -48,7 +48,7 @@ export function buildTmsSchema(schemaName: string) {
         replicaId: uuid('replica_id').notNull(),
         sfId:      varchar('sf_id', { length: 255 }).notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-        updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     };
 
     const address = {

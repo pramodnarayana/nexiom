@@ -873,10 +873,15 @@ export class ConnectorsController {
 
     // Read appProfile from request (or vendor params), defaulting to 'default' when absent.
     // This allows Salesforce OAuth flows to set appProfile dynamically rather than forcing 'revenova'.
-    const rawAppProfile =
-      typeof body.appProfile === 'string' && body.appProfile.trim() !== ''
-        ? body.appProfile.trim()
-        : decodedState.vendorParams?.appProfile ?? 'default';
+    let rawAppProfile = 'default';
+    if (typeof body.appProfile === 'string' && body.appProfile.trim() !== '') {
+      rawAppProfile = body.appProfile.trim();
+    } else if (
+      typeof decodedState.vendorParams?.appProfile === 'string' &&
+      decodedState.vendorParams.appProfile.trim() !== ''
+    ) {
+      rawAppProfile = decodedState.vendorParams.appProfile.trim();
+    }
     const metadata: Record<string, unknown> = {
       appProfile: rawAppProfile,
     };

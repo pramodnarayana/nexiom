@@ -11,18 +11,30 @@ import type { NormalizerFn, NormalizedEntityType } from '@nexiom/piece-framework
 /**
  * Maps the Salesforce rtms__tms_type__c picklist value to a NormalizedEntityType.
  * Returns null for unrecognized values so the caller can skip normalization.
+ * Also extracts pickup/delivery flags for TMS_ADDRESS routing.
  */
-function resolveAccountCanonicalType(rawTmsType: unknown): NormalizedEntityType | null {
+function resolveAccountCanonicalType(rawTmsType: unknown): {
+    canonicalType: NormalizedEntityType | null;
+    isPickup?: boolean;
+    isDelivery?: boolean;
+} {
     const t = typeof rawTmsType === 'string' ? rawTmsType.toLowerCase() : '';
-    if (t.includes('customer'))                           return 'TMS_CUSTOMER';
-    if (t.includes('factor'))                             return 'TMS_FACTORING';
-    if (t.includes('shipper') || t.includes('consignee')) return 'TMS_ADDRESS';
-    if (t.includes('vendor'))                             return 'TMS_VENDOR';
-    if (t.includes('carrier'))                            return 'TMS_CARRIER';
+    if (t.includes('customer'))   return { canonicalType: 'TMS_CUSTOMER' };
+    if (t.includes('factor'))     return { canonicalType: 'TMS_FACTORING' };
+    if (t.includes('vendor'))     return { canonicalType: 'TMS_VENDOR' };
+    if (t.includes('carrier'))    return { canonicalType: 'TMS_CARRIER' };
+
+    if (t.includes('shipper') || t.includes('consignee')) {
+        return {
+            canonicalType: 'TMS_ADDRESS',
+            isPickup: t.includes('shipper'),
+            isDelivery: t.includes('consignee'),
+        };
+    }
 
     // Unrecognized picklist value — log and return null to prevent invalid discriminator
     console.warn(`[normalizeRevenovaToTms] Unrecognized rtms__tms_type__c value: "${String(rawTmsType)}" — skipping normalization`);
-    return null;
+    return { canonicalType: null };
 }
 
 /**
@@ -44,7 +56,8 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
     // ── Salesforce Account ──────────────────────────────────────────────────
     if (entityType === 'sf_Account') {
         // First determine if this Account is routable to TMS, before validating fields
-        const canonicalType = resolveAccountCanonicalType(data['rtms__tms_type__c']);
+        const resolution = resolveAccountCanonicalType(data['rtms__tms_type__c']);
+        const { canonicalType, isPickup, isDelivery } = resolution;
 
         // Short-circuit if the type is unrecognized — skip normalization for non-TMS accounts
         if (canonicalType === null) {
@@ -63,28 +76,40 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
             );
         }
 
+        const normalizedData: Record<string, unknown> = {
+            displayName:       data['name'],
+            tmsType:           data['rtms__tms_type__c'],
+            // TP SF ID — FK link to tms_tp table
+            tpSfId:            data['rtms__transportation_profile__c'],
+            // Billing address → ShipAddr on QB Vendor
+            billingStreet:     data['billingstreet'],
+            billingCity:       data['billingcity'],
+            billingState:      data['billingstate'],
+            billingPostalCode: data['billingpostalcode'],
+            billingCountry:    data['billingcountry'],
+            // Contact
+            phone:             data['phone'],
+            fax:               data['fax'],
+            email:             data['email'],
+            // Type flags
+            isCarrier:         data['akatia__carrier__c'],
+            isVendor:          data['akatia__vendor__c'],
+            isBroker:          data['akatia__broker__c'],
+        };
+
+        // Add pickup/delivery flags for TMS_ADDRESS routing
+        if (canonicalType === 'TMS_ADDRESS') {
+            if (isPickup !== undefined) {
+                normalizedData.isPickup = isPickup;
+            }
+            if (isDelivery !== undefined) {
+                normalizedData.isDelivery = isDelivery;
+            }
+        }
+
         return {
             canonicalType,
-            data: {
-                displayName:       data['name'],
-                tmsType:           data['rtms__tms_type__c'],
-                // TP SF ID — FK link to tms_tp table
-                tpSfId:            data['rtms__transportation_profile__c'],
-                // Billing address → ShipAddr on QB Vendor
-                billingStreet:     data['billingstreet'],
-                billingCity:       data['billingcity'],
-                billingState:      data['billingstate'],
-                billingPostalCode: data['billingpostalcode'],
-                billingCountry:    data['billingcountry'],
-                // Contact
-                phone:             data['phone'],
-                fax:               data['fax'],
-                email:             data['email'],
-                // Type flags
-                isCarrier:         data['akatia__carrier__c'],
-                isVendor:          data['akatia__vendor__c'],
-                isBroker:          data['akatia__broker__c'],
-            },
+            data: normalizedData,
         };
     }
 

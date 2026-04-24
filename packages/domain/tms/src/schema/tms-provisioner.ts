@@ -1,5 +1,6 @@
 import type { DrizzleDb } from '@nexiom/database';
 import { sql } from 'drizzle-orm';
+import { validateTmsIdentifier } from './tms-identifier-validator.js';
 
 /**
  * provisionTmsTables(db, schemaName)
@@ -9,18 +10,8 @@ import { sql } from 'drizzle-orm';
  * first activated for a tenant schema.
  */
 export async function provisionTmsTables(db: DrizzleDb, schemaName: string): Promise<void> {
-    // Validate schemaName against SQL injection
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schemaName)) {
-        throw new Error(
-            `Invalid schemaName "${schemaName}" — must contain only letters, digits, and underscores, and not start with a digit`
-        );
-    }
-    // Enforce Postgres' 63-byte NAMEDATALEN-1 identifier length limit
-    if (Buffer.byteLength(schemaName, 'utf8') > 63) {
-        throw new Error(
-            `Invalid schemaName "${schemaName}" — exceeds Postgres' 63-byte identifier length limit (actual: ${Buffer.byteLength(schemaName, 'utf8')} bytes)`
-        );
-    }
+    // Validate schemaName against SQL injection and Postgres limits
+    validateTmsIdentifier(schemaName);
 
     // Reusable trigger function to refresh updated_at on UPDATE
     const TRIGGER_FUNCTION = `

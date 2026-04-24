@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import { Client } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import * as schema from './schema.js';
 
 /**
@@ -809,7 +809,11 @@ export class DatabaseManager {
                 appName: fixture.appName,
                 authType: 'OAUTH2',
                 metadata: fixture.metadata,
-                status: 'INACTIVE',
+                status: sql`CASE
+                  WHEN ${dbSchema.appConnections.status} IN ('ACTIVE', 'REVOKED')
+                  THEN ${dbSchema.appConnections.status}
+                  ELSE 'INACTIVE'
+                END`,
               },
             })
             .returning();
