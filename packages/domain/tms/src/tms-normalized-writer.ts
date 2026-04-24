@@ -17,6 +17,49 @@ import { buildTmsSchema } from './schema/tms-schema.js';
 
 type DrizzleTransaction = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
 
+// Helper to convert unknown values to nullable strings
+const str = (v: unknown) => {
+    if (typeof v === 'string') return v;
+    if (typeof v === 'boolean' || typeof v === 'number') return String(v);
+    return null;
+};
+
+// Common fields present in all TMS entities
+function commonFields(data: Record<string, unknown>) {
+    return {
+        displayName: str(data['displayName']),
+        tmsType: str(data['tmsType']),
+        billingStreet: str(data['billingStreet']),
+        billingCity: str(data['billingCity']),
+        billingState: str(data['billingState']),
+        billingPostalCode: str(data['billingPostalCode']),
+        billingCountry: str(data['billingCountry']),
+        phone: str(data['phone']),
+        fax: str(data['fax']),
+        email: str(data['email']),
+    };
+}
+
+// Generic upsert helper for TMS entities
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function upsert(
+    tx: DrizzleTransaction,
+    table: any,
+    base: { traceId: string; replicaId: string; sfId: string },
+    extras: Record<string, unknown>
+) {
+    const values = { ...base, ...extras };
+    const updateSet = { traceId: base.traceId, replicaId: base.replicaId, updatedAt: new Date(), ...extras };
+
+    await tx
+        .insert(table as never)
+        .values(values as never)
+        .onConflictDoUpdate({
+            target: table.sfId as never,
+            set: updateSet as never,
+        });
+}
+
 export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     tx,
     _db,
@@ -42,136 +85,70 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
 
     const base = { traceId, replicaId, sfId: entityId };
 
-    const str = (v: unknown) => {
-        if (typeof v === 'string') return v;
-        if (typeof v === 'boolean' || typeof v === 'number') return String(v);
-        return null;
-    };
-
     if (normalizedEntityType === 'TMS_CARRIER') {
-        await txTyped.insert(tmsCarrier).values({
-            ...base,
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            tpSfId: str(data['tpSfId']), isCarrier: str(data['isCarrier']), isBroker: str(data['isBroker']),
-        }).onConflictDoUpdate({ target: tmsCarrier.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            tpSfId: str(data['tpSfId']), isCarrier: str(data['isCarrier']), isBroker: str(data['isBroker']),
-        }}); return;
+        await upsert(txTyped, tmsCarrier, base, {
+            ...commonFields(data),
+            tpSfId: str(data['tpSfId']),
+            isCarrier: str(data['isCarrier']),
+            isBroker: str(data['isBroker']),
+        });
+        return;
     }
 
     if (normalizedEntityType === 'TMS_VENDOR') {
-        await txTyped.insert(tmsVendor).values({
-            ...base,
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            tpSfId: str(data['tpSfId']), isVendor: str(data['isVendor']),
-        }).onConflictDoUpdate({ target: tmsVendor.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            tpSfId: str(data['tpSfId']), isVendor: str(data['isVendor']),
-        }}); return;
+        await upsert(txTyped, tmsVendor, base, {
+            ...commonFields(data),
+            tpSfId: str(data['tpSfId']),
+            isVendor: str(data['isVendor']),
+        });
+        return;
     }
 
     if (normalizedEntityType === 'TMS_CUSTOMER') {
-        await txTyped.insert(tmsCustomer).values({
-            ...base,
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            creditLimit: str(data['creditLimit']), paymentTerms: str(data['paymentTerms']),
-        }).onConflictDoUpdate({ target: tmsCustomer.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            creditLimit: str(data['creditLimit']), paymentTerms: str(data['paymentTerms']),
-        }}); return;
+        await upsert(txTyped, tmsCustomer, base, {
+            ...commonFields(data),
+            creditLimit: str(data['creditLimit']),
+            paymentTerms: str(data['paymentTerms']),
+        });
+        return;
     }
 
     if (normalizedEntityType === 'TMS_FACTORING') {
-        await txTyped.insert(tmsFactoring).values({
-            ...base,
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-        }).onConflictDoUpdate({ target: tmsFactoring.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-        }}); return;
+        await upsert(txTyped, tmsFactoring, base, {
+            ...commonFields(data),
+        });
+        return;
     }
 
     if (normalizedEntityType === 'TMS_ADDRESS') {
-        await txTyped.insert(tmsAddress).values({
-            ...base,
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            isPickup: str(data['isPickup']), isDelivery: str(data['isDelivery']),
-        }).onConflictDoUpdate({ target: tmsAddress.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            displayName: str(data['displayName']), tmsType: str(data['tmsType']),
-            billingStreet: str(data['billingStreet']), billingCity: str(data['billingCity']),
-            billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
-            billingCountry: str(data['billingCountry']), phone: str(data['phone']),
-            fax: str(data['fax']), email: str(data['email']),
-            isPickup: str(data['isPickup']), isDelivery: str(data['isDelivery']),
-        }}); return;
+        await upsert(txTyped, tmsAddress, base, {
+            ...commonFields(data),
+            isPickup: str(data['isPickup']),
+            isDelivery: str(data['isDelivery']),
+        });
+        return;
     }
 
     if (normalizedEntityType === 'TMS_TP') {
-        await txTyped.insert(tmsTp).values({
-            ...base,
-            mcNumber: str(data['mcNumber']), scac: str(data['scac']),
-            federalTaxId: str(data['federalTaxId']), usdot: str(data['usdot']),
-            remitToSfId: str(data['remitToSfId']), remitToOption: str(data['remitToOption']),
-            carrierOperation: str(data['carrierOperation']), agreementStatus: str(data['agreementStatus']),
+        await upsert(txTyped, tmsTp, base, {
+            mcNumber: str(data['mcNumber']),
+            scac: str(data['scac']),
+            federalTaxId: str(data['federalTaxId']),
+            usdot: str(data['usdot']),
+            remitToSfId: str(data['remitToSfId']),
+            remitToOption: str(data['remitToOption']),
+            carrierOperation: str(data['carrierOperation']),
+            agreementStatus: str(data['agreementStatus']),
             carrierReviewStatus: str(data['carrierReviewStatus']),
-        }).onConflictDoUpdate({ target: tmsTp.sfId, set: {
-            traceId, replicaId, updatedAt: new Date(),
-            mcNumber: str(data['mcNumber']), scac: str(data['scac']),
-            federalTaxId: str(data['federalTaxId']), usdot: str(data['usdot']),
-            remitToSfId: str(data['remitToSfId']), remitToOption: str(data['remitToOption']),
-            carrierOperation: str(data['carrierOperation']), agreementStatus: str(data['agreementStatus']),
-            carrierReviewStatus: str(data['carrierReviewStatus']),
-        }}); return;
+        });
+        return;
     }
 
     // Known canonical types that are not yet implemented
     if (normalizedEntityType === 'TMS_LOAD' || normalizedEntityType === 'TMS_INVOICE') {
-        const warnMsg = `TMS normalized writer: type ${normalizedEntityType} is recognized but not yet implemented`;
-        if (process.env.NODE_ENV === 'test') {
-            throw new Error(warnMsg);
-        }
-        console.warn(warnMsg, { traceId, normalizedEntityType });
-        return;
+        const warnMsg = `TMS normalized writer: type ${normalizedEntityType} is recognized but not yet implemented (traceId=${traceId})`;
+        // Always throw here — let normalization.service.ts's try/catch convert to warnings
+        throw new Error(warnMsg);
     }
 
     // Unknown type — normalized_entity already has it, skip typed write

@@ -10,9 +10,9 @@ import type { NormalizerFn, NormalizedEntityType } from '@nexiom/piece-framework
 
 /**
  * Maps the Salesforce rtms__tms_type__c picklist value to a NormalizedEntityType.
- * Logs a warning and returns TMS_UNKNOWN for unrecognized values.
+ * Returns null for unrecognized values so the caller can skip normalization.
  */
-function resolveAccountCanonicalType(rawTmsType: unknown): NormalizedEntityType {
+function resolveAccountCanonicalType(rawTmsType: unknown): NormalizedEntityType | null {
     const t = typeof rawTmsType === 'string' ? rawTmsType.toLowerCase() : '';
     if (t.includes('customer'))                           return 'TMS_CUSTOMER';
     if (t.includes('factor'))                             return 'TMS_FACTORING';
@@ -20,9 +20,9 @@ function resolveAccountCanonicalType(rawTmsType: unknown): NormalizedEntityType 
     if (t.includes('vendor'))                             return 'TMS_VENDOR';
     if (t.includes('carrier'))                            return 'TMS_CARRIER';
 
-    // Unrecognized picklist value — log and return TMS_UNKNOWN instead of silently defaulting to TMS_CARRIER
-    console.warn(`[normalizeRevenovaToTms] Unrecognized rtms__tms_type__c value: "${String(rawTmsType)}" — returning TMS_UNKNOWN`);
-    return 'TMS_UNKNOWN' as NormalizedEntityType;
+    // Unrecognized picklist value — log and return null to prevent invalid discriminator
+    console.warn(`[normalizeRevenovaToTms] Unrecognized rtms__tms_type__c value: "${String(rawTmsType)}" — skipping normalization`);
+    return null;
 }
 
 /**
@@ -56,6 +56,11 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
         }
 
         const canonicalType = resolveAccountCanonicalType(data['rtms__tms_type__c']);
+
+        // Short-circuit if the type is unrecognized to avoid injecting invalid discriminator
+        if (canonicalType === null) {
+            return null;
+        }
 
         return {
             canonicalType,

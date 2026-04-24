@@ -6,6 +6,14 @@ import { createHash } from 'node:crypto';
 const SAFE_SCHEMA_NAME_RE = /^ws_[a-z0-9_]+$/;
 
 export class SqlDatabaseManager implements DatabaseManager {
+    private readonly logger = {
+        debug: (msg: string, ...args: unknown[]) => {
+            if (process.env.NODE_ENV !== 'production') {
+                console.debug(`[SqlDatabaseManager] ${msg}`, ...args);
+            }
+        }
+    };
+
     constructor(private readonly db: DrizzleDb) { }
 
     private validateSchemaName(name: string): void {
@@ -316,7 +324,22 @@ export class SqlDatabaseManager implements DatabaseManager {
         `);
     }
 
+    /**
+     * Placeholder for canonical table provisioning.
+     *
+     * This method only reserves canonical slots in the schema plan hierarchy.
+     * It does NOT provision domain-specific tables. Callers must invoke
+     * getDomainProvisioner(appName) separately to provision actual domain DDL
+     * (e.g., @nexiom/domain-tms creates tms_carrier, tms_tp, etc.).
+     *
+     * applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
+     * is registered — domain tables are provisioned via the activation flow.
+     */
     private async provisionCanonicalTables(schemaName: string): Promise<void> {
+        this.logger.debug(
+            `provisionCanonicalTables(${schemaName}): no-op placeholder; ` +
+            `domain provisioners must be invoked separately via getDomainProvisioner(appName)`
+        );
         // ── CANONICAL TABLES — Typed per-entity tables with FK relationships ──
         // Applications register domain provisioners that create their own
         // typed canonical tables (e.g., @nexiom/domain-tms creates tms_carrier,

@@ -745,6 +745,7 @@ export class DatabaseManager {
             appName: 'salesforce',
             externalId: 'dev-salesforce',
             displayName: 'Dev Salesforce',
+            metadata: { appProfile: 'revenova' },
             credentials: {
               clientId: 'dev-sf-client-id',
               clientSecret: 'dev-sf-client-secret',
@@ -758,6 +759,7 @@ export class DatabaseManager {
             appName: 'quickbooks',
             externalId: 'dev-quickbooks',
             displayName: 'Dev QuickBooks',
+            metadata: {},
             credentials: {
               clientId: 'dev-qb-client-id',
               clientSecret: 'dev-qb-client-secret',
@@ -784,6 +786,7 @@ export class DatabaseManager {
               displayName: fixture.displayName,
               authType: 'OAUTH2',
               value: encryptedValue,
+              metadata: fixture.metadata,
               status: 'INACTIVE',
             })
             .onConflictDoUpdate({
@@ -796,6 +799,7 @@ export class DatabaseManager {
                 displayName: fixture.displayName,
                 appName: fixture.appName,
                 authType: 'OAUTH2',
+                metadata: fixture.metadata,
                 status: 'INACTIVE',
               },
             })

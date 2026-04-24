@@ -871,6 +871,12 @@ export class ConnectorsController {
 
     const resolvedEnvType = deriveEnvType(decodedState.vendorParams);
 
+    // Set appProfile metadata for Salesforce connections to route to Revenova domain hooks
+    const metadata: Record<string, unknown> =
+      body.providerName === 'salesforce'
+        ? { appProfile: 'revenova' }
+        : {};
+
     await this.persistConnection(
       tenantId,
       body.providerName,
@@ -880,6 +886,7 @@ export class ConnectorsController {
       expiresAt,
       body.connectionId,
       resolvedEnvType,
+      metadata,
     );
 
     // Mark as fully processed to prevent StrictMode duplicates from failing.
@@ -1010,6 +1017,7 @@ export class ConnectorsController {
     expiresAt: Date,
     connectionId?: string,
     envType?: 'PRODUCTION' | 'SANDBOX',
+    metadata?: Record<string, unknown>,
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
@@ -1021,7 +1029,7 @@ export class ConnectorsController {
         authType: 'OAUTH2',
         value: encryptedValue,
         expiresAt,
-        metadata: {},
+        metadata: metadata ?? {},
         envType,
       });
     } catch (error) {
