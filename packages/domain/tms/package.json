@@ -21,5 +21,8 @@
     "@nexiom/database": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
   }
 }

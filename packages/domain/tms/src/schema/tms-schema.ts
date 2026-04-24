@@ -2,9 +2,9 @@ import {
     pgSchema,
     uuid,
     varchar,
-    boolean,
     timestamp,
     index,
+    uniqueIndex,
     text,
 } from 'drizzle-orm/pg-core';
 
@@ -68,7 +68,7 @@ export function buildTmsSchema(schemaName: string) {
         isCarrier: text('is_carrier'),
         isBroker:  text('is_broker'),
     }, (t) => [
-        index('idx_tms_carrier_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_carrier_sf_id').on(t.sfId),
         index('idx_tms_carrier_tp').on(t.tpSfId),
         index('idx_tms_carrier_trace').on(t.traceId),
     ]);
@@ -83,7 +83,7 @@ export function buildTmsSchema(schemaName: string) {
         tpSfId:   varchar('tp_sf_id', { length: 255 }),
         isVendor: text('is_vendor'),
     }, (t) => [
-        index('idx_tms_vendor_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_vendor_sf_id').on(t.sfId),
         index('idx_tms_vendor_tp').on(t.tpSfId),
         index('idx_tms_vendor_trace').on(t.traceId),
     ]);
@@ -98,7 +98,7 @@ export function buildTmsSchema(schemaName: string) {
         creditLimit:  varchar('credit_limit', { length: 50 }),
         paymentTerms: varchar('payment_terms', { length: 100 }),
     }, (t) => [
-        index('idx_tms_customer_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_customer_sf_id').on(t.sfId),
         index('idx_tms_customer_trace').on(t.traceId),
     ]);
 
@@ -110,7 +110,7 @@ export function buildTmsSchema(schemaName: string) {
         ...address,
         ...contact,
     }, (t) => [
-        index('idx_tms_factoring_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_factoring_sf_id').on(t.sfId),
         index('idx_tms_factoring_trace').on(t.traceId),
     ]);
 
@@ -121,10 +121,10 @@ export function buildTmsSchema(schemaName: string) {
         tmsType:     varchar('tms_type', { length: 100 }),
         ...address,
         ...contact,
-        isPickup:   boolean('is_pickup'),
-        isDelivery: boolean('is_delivery'),
+        isPickup:   text('is_pickup'),
+        isDelivery: text('is_delivery'),
     }, (t) => [
-        index('idx_tms_address_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_address_sf_id').on(t.sfId),
         index('idx_tms_address_trace').on(t.traceId),
     ]);
 
@@ -141,7 +141,7 @@ export function buildTmsSchema(schemaName: string) {
         agreementStatus:     varchar('agreement_status', { length: 100 }),
         carrierReviewStatus: varchar('carrier_review_status', { length: 100 }),
     }, (t) => [
-        index('idx_tms_tp_sf_id').on(t.sfId),
+        uniqueIndex('idx_tms_tp_sf_id').on(t.sfId),
         index('idx_tms_tp_remit_to').on(t.remitToSfId),
         index('idx_tms_tp_trace').on(t.traceId),
     ]);

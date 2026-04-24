@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createCipheriv, randomBytes } from 'node:crypto';
 import { Client } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { eq } from 'drizzle-orm';
 import * as schema from './schema.js';
 
 /**
@@ -783,7 +784,7 @@ export class DatabaseManager {
               displayName: fixture.displayName,
               authType: 'OAUTH2',
               value: encryptedValue,
-              status: 'ACTIVE',
+              status: 'INACTIVE',
             })
             .onConflictDoUpdate({
               target: [
@@ -795,7 +796,7 @@ export class DatabaseManager {
                 displayName: fixture.displayName,
                 appName: fixture.appName,
                 authType: 'OAUTH2',
-                status: 'ACTIVE',
+                status: 'INACTIVE',
               },
             })
             .returning();
@@ -810,6 +811,12 @@ export class DatabaseManager {
 
           const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
           await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+
+          // After successful schema provisioning, mark connection ACTIVE
+          await db
+            .update(dbSchema.appConnections)
+            .set({ status: 'ACTIVE' })
+            .where(eq(dbSchema.appConnections.id, resolved.id));
 
           console.log(
             `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,

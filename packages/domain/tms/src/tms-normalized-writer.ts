@@ -27,15 +27,26 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     normalizedEntityType,
     data,
 ) => {
+    // Validate schemaName against SQL injection
+    if (!/^[a-zA-Z0-9_]+$/.test(schemaName)) {
+        throw new Error(
+            `Invalid schemaName "${schemaName}" — must contain only letters, digits, and underscores`
+        );
+    }
+
     const txTyped = tx as DrizzleTransaction;
-    await txTyped.execute(sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`);
+    await txTyped.execute(sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`);
 
     const { tmsCarrier, tmsVendor, tmsCustomer, tmsFactoring, tmsAddress, tmsTp } =
         buildTmsSchema(schemaName);
 
     const base = { traceId, replicaId, sfId: entityId };
 
-    const str = (v: unknown) => (typeof v === 'string' ? v : null);
+    const str = (v: unknown) => {
+        if (typeof v === 'string') return v;
+        if (typeof v === 'boolean' || typeof v === 'number') return String(v);
+        return null;
+    };
 
     if (normalizedEntityType === 'TMS_CARRIER') {
         await txTyped.insert(tmsCarrier).values({
@@ -123,6 +134,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
             billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
             billingCountry: str(data['billingCountry']), phone: str(data['phone']),
             fax: str(data['fax']), email: str(data['email']),
+            isPickup: str(data['isPickup']), isDelivery: str(data['isDelivery']),
         }).onConflictDoUpdate({ target: tmsAddress.sfId, set: {
             traceId, replicaId, updatedAt: new Date(),
             displayName: str(data['displayName']), tmsType: str(data['tmsType']),
@@ -130,6 +142,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
             billingState: str(data['billingState']), billingPostalCode: str(data['billingPostalCode']),
             billingCountry: str(data['billingCountry']), phone: str(data['phone']),
             fax: str(data['fax']), email: str(data['email']),
+            isPickup: str(data['isPickup']), isDelivery: str(data['isDelivery']),
         }}); return;
     }
 
@@ -150,5 +163,16 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
             carrierReviewStatus: str(data['carrierReviewStatus']),
         }}); return;
     }
+
+    // Known canonical types that are not yet implemented
+    if (normalizedEntityType === 'TMS_LOAD' || normalizedEntityType === 'TMS_INVOICE') {
+        const warnMsg = `TMS normalized writer: type ${normalizedEntityType} is recognized but not yet implemented`;
+        if (process.env.NODE_ENV === 'test') {
+            throw new Error(warnMsg);
+        }
+        console.warn(warnMsg, { traceId, normalizedEntityType });
+        return;
+    }
+
     // Unknown type — normalized_entity already has it, skip typed write
 };

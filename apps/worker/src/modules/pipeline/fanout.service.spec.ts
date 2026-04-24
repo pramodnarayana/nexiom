@@ -103,7 +103,7 @@ describe("FanOutService", () => {
         {
           provide: TargetBuilderService,
           useValue: {
-            // Returns normalizedData as-is — enrichment logic is tested separately
+            // Returns normalizedData enriched with mapped fields if rules are passed
             buildPayload: vi
               .fn()
               .mockImplementation(
@@ -114,7 +114,16 @@ describe("FanOutService", () => {
                   _type: unknown,
                   _id: unknown,
                   normalizedData: unknown,
-                ) => Promise.resolve(normalizedData),
+                  rules: unknown,
+                ) => {
+                  const data = normalizedData as Record<string, unknown>;
+                  const ruleArray = rules as Array<{ src: string; dest: string }>;
+                  // If rules are provided, inject a hydrated field to verify mapping was applied
+                  if (ruleArray && ruleArray.length > 0) {
+                    return Promise.resolve({ ...data, _hydrated: true });
+                  }
+                  return Promise.resolve(data);
+                },
               ),
           },
         },

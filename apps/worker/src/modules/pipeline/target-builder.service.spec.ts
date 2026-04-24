@@ -129,6 +129,7 @@ describe("TargetBuilderService", () => {
   });
 
   it("falls back to normalizedData and logs warning when app builder throws", async () => {
+    const warnSpy = vi.spyOn(service["logger"], "warn");
     vi.mocked(appHooks.getTargetBuilder).mockReturnValue(
       vi.fn().mockRejectedValue(new Error("DB join failed")),
     );
@@ -145,6 +146,10 @@ describe("TargetBuilderService", () => {
     );
 
     expect(result).toEqual(NORMALIZED_DATA);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "target_builder.hook_failed" }),
+      expect.any(String),
+    );
   });
 
   it("skips app builder call when srcEntityId is undefined", async () => {
@@ -165,6 +170,7 @@ describe("TargetBuilderService", () => {
   });
 
   it("returns enrichedContext unchanged when rules array is empty", async () => {
+    const { hydratePayload } = await import("@nexiom/engine");
     vi.mocked(appHooks.getTargetBuilder).mockReturnValue(
       vi.fn().mockResolvedValue({ extra: "x" }),
     );
@@ -181,5 +187,6 @@ describe("TargetBuilderService", () => {
 
     // No rules → return merged context directly (hydratePayload not called)
     expect(result).toMatchObject({ ...NORMALIZED_DATA, extra: "x" });
+    expect(vi.mocked(hydratePayload)).not.toHaveBeenCalled();
   });
 });

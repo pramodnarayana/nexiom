@@ -143,6 +143,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
+          metadata: appConnections.metadata,
         })
         .from(appConnections)
         .where(eq(appConnections.id, connectionId))
@@ -155,6 +156,15 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       }
       const srcAppName = srcConnRows[0].appName;
       const srcTenantId = srcConnRows[0].tenantId;
+      const metadata = srcConnRows[0].metadata as Record<string, unknown> | null;
+
+      // Runtime validation of appProfile (matches NormalizationService)
+      const trimmedAppProfile =
+        typeof metadata?.appProfile === "string"
+          ? metadata.appProfile.trim()
+          : "";
+      const appProfile =
+        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
 
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
@@ -165,6 +175,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           traceId,
           connectionId,
           srcAppName,
+          appProfile,
           srcTenantId,
           srcVendorId,
           canonicalType,
@@ -216,6 +227,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     traceId: string,
     connectionId: string,
     srcAppName: string,
+    appProfile: string,
     srcTenantId: string,
     srcVendorId: string | undefined,
     canonicalType: string,
@@ -262,8 +274,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // Delegate to TargetBuilderService — it calls the app-registered hook
       // (e.g. tmsTargetBuilder) to assemble the enriched context from typed
       // per-entity tables, then applies the field mapping rules.
-      // appProfile drives which registered hook to invoke (matches NormalizationService).
-      const appProfile = "default"; // TODO: read from connection.metadata.appProfile
+      // appProfile is threaded from processMessage context (read from connection.metadata)
       const hydratedPayload = await this.targetBuilder.buildPayload(
         schemaName,
         srcAppName,

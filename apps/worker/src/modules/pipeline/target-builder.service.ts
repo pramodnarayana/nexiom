@@ -75,17 +75,32 @@ export class TargetBuilderService {
           );
         }
       } catch (err) {
+        const errPayload =
+          err instanceof Error
+            ? { message: err.message, stack: err.stack }
+            : err;
         this.logger.warn(
           {
             event: "target_builder.hook_failed",
             appName,
             normalizedEntityType,
             srcEntityId,
-            err,
+            err: errPayload,
           },
           "App target builder hook failed — falling back to normalizedData",
         );
       }
+    } else if (appBuilder && !srcEntityId) {
+      this.logger.debug(
+        {
+          event: "target_builder.missing_src_entity_id",
+          appName,
+          normalizedEntityType,
+          appProfile,
+          srcEntityId,
+        },
+        "App builder registered but srcEntityId is undefined — skipping enrichment",
+      );
     } else if (!appBuilder) {
       this.logger.debug(
         { event: "target_builder.no_hook", appName, appProfile },

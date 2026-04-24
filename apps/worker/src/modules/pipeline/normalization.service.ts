@@ -238,15 +238,18 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           );
           if (appNormalizedWriter) {
             try {
-              await appNormalizedWriter(
-                tx,
-                this.db,
-                schemaName,
-                replica.id,
-                replica.entityId,
-                traceId,
-                canonicalType,
-                safeData,
+              // Wrap in nested savepoint so hook failures roll back only the savepoint
+              await tx.transaction((sp) =>
+                appNormalizedWriter(
+                  sp,
+                  this.db,
+                  schemaName,
+                  replica.id,
+                  replica.entityId,
+                  traceId,
+                  canonicalType,
+                  safeData,
+                ),
               );
             } catch (hookErr) {
               // Log but do not fail the pipeline — the generic normalized_entity

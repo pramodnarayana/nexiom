@@ -38,6 +38,11 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     const account = accountRows[0];
 
     // ── 2. Transportation Profile ─────────────────────────────────────────────
+    // Sequential SELECTs are used here instead of a single LEFT JOIN query because:
+    // 1. Conditional branching: remit-to lookup tries tms_carrier first, then
+    //    tms_factoring if not found — easier to express with separate queries.
+    // 2. The indexed sf_id lookups are fast (indexed unique columns).
+    // 3. Typical case has 0-2 round-trips per carrier (most have no tp or remit-to).
     let tp: Record<string, unknown> | null = null;
     let remitTo: Record<string, unknown> | null = null;
 

@@ -1,5 +1,4 @@
-import type { NormalizerFn } from '@nexiom/piece-framework';
-import type { CanonicalType } from '@nexiom/piece-framework';
+import type { NormalizerFn, NormalizedEntityType } from '@nexiom/piece-framework';
 
 // ---------------------------------------------------------------------------
 // Revenova → TMS canonical normalizer
@@ -10,17 +9,20 @@ import type { CanonicalType } from '@nexiom/piece-framework';
 // ---------------------------------------------------------------------------
 
 /**
- * Maps the Salesforce rtms__tms_type__c picklist value to a CanonicalType.
- * Falls back to TMS_CARRIER when unrecognised.
+ * Maps the Salesforce rtms__tms_type__c picklist value to a NormalizedEntityType.
+ * Logs a warning and returns TMS_UNKNOWN for unrecognized values.
  */
-function resolveAccountCanonicalType(rawTmsType: unknown): CanonicalType {
+function resolveAccountCanonicalType(rawTmsType: unknown): NormalizedEntityType {
     const t = typeof rawTmsType === 'string' ? rawTmsType.toLowerCase() : '';
     if (t.includes('customer'))                           return 'TMS_CUSTOMER';
     if (t.includes('factor'))                             return 'TMS_FACTORING';
     if (t.includes('shipper') || t.includes('consignee')) return 'TMS_ADDRESS';
     if (t.includes('vendor'))                             return 'TMS_VENDOR';
-    // Carrier is the default (also handles 'Carrier/Vendor' compound)
-    return 'TMS_CARRIER';
+    if (t.includes('carrier'))                            return 'TMS_CARRIER';
+
+    // Unrecognized picklist value — log and return TMS_UNKNOWN instead of silently defaulting to TMS_CARRIER
+    console.warn(`[normalizeRevenovaToTms] Unrecognized rtms__tms_type__c value: "${String(rawTmsType)}" — returning TMS_UNKNOWN`);
+    return 'TMS_UNKNOWN' as NormalizedEntityType;
 }
 
 /**
@@ -41,6 +43,18 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
 
     // ── Salesforce Account ──────────────────────────────────────────────────
     if (entityType === 'sf_Account') {
+        // Validate that required lowercased keys are present
+        if (!data['name'] || typeof data['name'] !== 'string') {
+            throw new Error(
+                `normalizeRevenovaToTms: sf_Account is missing required lowercased key "name" (entityType=${entityType})`
+            );
+        }
+        if (!data['billingstreet'] && !data['billingcity'] && !data['billingstate']) {
+            throw new Error(
+                `normalizeRevenovaToTms: sf_Account is missing address keys (entityType=${entityType}, expected at least one of: billingstreet, billingcity, billingstate)`
+            );
+        }
+
         const canonicalType = resolveAccountCanonicalType(data['rtms__tms_type__c']);
 
         return {
@@ -71,7 +85,7 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
     // ── Transportation Profile ──────────────────────────────────────────────
     if (entityType === 'rtms__TransportationProfile__c') {
         return {
-            canonicalType: 'TMS_TP' as CanonicalType,
+            canonicalType: 'TMS_TP',
             data: {
                 mcNumber:            data['rtms__mc_number__c'],
                 scac:                data['rtms__scac__c'],
@@ -90,7 +104,7 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
     // ── Load ─────────────────────────────────────────────────────────────────
     if (entityType === 'rtms__Load__c') {
         return {
-            canonicalType: 'TMS_LOAD' as CanonicalType,
+            canonicalType: 'TMS_LOAD',
             data: {
                 displayName: data['name'],
                 pickupDate:  data['rtms__pickup_date__c'],

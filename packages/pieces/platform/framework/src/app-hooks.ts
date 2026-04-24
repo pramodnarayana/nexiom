@@ -44,10 +44,6 @@ export type AppTargetBuilderFn = (
 // Registries
 // ---------------------------------------------------------------------------
 
-const normalizedWriterRegistry = new Map<string, Map<string, AppNormalizedWriterFn>>();
-const targetBuilderRegistry    = new Map<string, Map<string, AppTargetBuilderFn>>();
-const domainProvisionerRegistry = new Map<string, AppDomainProvisionerFn>();
-
 /**
  * Called once per tenant schema when a stitch for this appName is first activated.
  * The application domain package (e.g. @nexiom/domain-tms) creates its typed
@@ -60,6 +56,10 @@ export type AppDomainProvisionerFn = (
     schemaName: string,
 ) => Promise<void>;
 
+const normalizedWriterRegistry = new Map<string, Map<string, AppNormalizedWriterFn>>();
+const targetBuilderRegistry    = new Map<string, Map<string, AppTargetBuilderFn>>();
+const domainProvisionerRegistry = new Map<string, AppDomainProvisionerFn>();
+
 /**
  * Registers an application-layer normalized writer.
  * Called from the connector piece's index.ts at module load time.
@@ -68,7 +68,11 @@ export function registerNormalizedWriter(appName: string, appProfile: string, fn
     if (!normalizedWriterRegistry.has(appName)) normalizedWriterRegistry.set(appName, new Map());
     const appMap = normalizedWriterRegistry.get(appName)!;
     if (appMap.has(appProfile)) {
-        console.warn(`[registerNormalizedWriter] Overwriting writer for ${appName}:${appProfile}`);
+        const msg = `Duplicate registration for NormalizedWriter: ${appName}:${appProfile}`;
+        if (process.env.NODE_ENV !== 'production') {
+            throw new Error(msg);
+        }
+        console.warn(`[registerNormalizedWriter] ${msg}`);
     }
     appMap.set(appProfile, fn);
 }
@@ -86,7 +90,11 @@ export function registerTargetBuilder(appName: string, appProfile: string, fn: A
     if (!targetBuilderRegistry.has(appName)) targetBuilderRegistry.set(appName, new Map());
     const appMap = targetBuilderRegistry.get(appName)!;
     if (appMap.has(appProfile)) {
-        console.warn(`[registerTargetBuilder] Overwriting target builder for ${appName}:${appProfile}`);
+        const msg = `Duplicate registration for TargetBuilder: ${appName}:${appProfile}`;
+        if (process.env.NODE_ENV !== 'production') {
+            throw new Error(msg);
+        }
+        console.warn(`[registerTargetBuilder] ${msg}`);
     }
     appMap.set(appProfile, fn);
 }
@@ -106,11 +114,25 @@ export function getTargetBuilder(appName: string, appProfile: string | undefined
  */
 export function registerDomainProvisioner(appName: string, fn: AppDomainProvisionerFn): void {
     if (domainProvisionerRegistry.has(appName)) {
-        console.warn(`[registerDomainProvisioner] Overwriting provisioner for ${appName}`);
+        const msg = `Duplicate registration for DomainProvisioner: ${appName}`;
+        if (process.env.NODE_ENV !== 'production') {
+            throw new Error(msg);
+        }
+        console.warn(`[registerDomainProvisioner] ${msg}`);
     }
     domainProvisionerRegistry.set(appName, fn);
 }
 
 export function getDomainProvisioner(appName: string): AppDomainProvisionerFn | undefined {
     return domainProvisionerRegistry.get(appName);
+}
+
+/**
+ * INTERNAL TEST HELPER — Clears all app hook registries.
+ * This function is exported for test isolation only. Do not call in production code.
+ */
+export function __resetAppHookRegistries(): void {
+    normalizedWriterRegistry.clear();
+    targetBuilderRegistry.clear();
+    domainProvisionerRegistry.clear();
 }

@@ -26,7 +26,7 @@ export enum SchemaPlan {
 
     /**
      * Per-entity typed canonical tables (canonical_account, canonical_tp).
-     * Provisioned when a TMS→QuickBooks stitch is configured.
+     * Provisioned when typed canonical tables are required by the application.
      * These replace the generic normalized_entity JSONB blob with typed
      * columns and native FK relationships for SQL JOIN enrichment.
      */

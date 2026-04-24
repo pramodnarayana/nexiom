@@ -50,6 +50,13 @@ export class SqlDatabaseManager implements DatabaseManager {
             return;
         }
 
+        // 4.5. Ensure Canonical Tables exist
+        await this.provisionCanonicalTables(schemaName);
+
+        if (plan === SchemaPlan.CANONICAL_ACTIVE) {
+            return;
+        }
+
         // 5. Ensure Outbound Tables exist
         await this.provisionOutboundTables(schemaName);
         // OUTBOUND_ACTIVE — all tables provisioned
@@ -307,6 +314,19 @@ export class SqlDatabaseManager implements DatabaseManager {
                   WHEN duplicate_object THEN NULL;
         END $$;
         `);
+    }
+
+    private async provisionCanonicalTables(schemaName: string): Promise<void> {
+        // ── CANONICAL TABLES — Typed per-entity tables with FK relationships ──
+        // Applications register domain provisioners that create their own
+        // typed canonical tables (e.g., @nexiom/domain-tms creates tms_carrier,
+        // tms_tp, etc.). The platform provides a placeholder stub here so that
+        // applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
+        // is registered. Application-specific tables are provisioned via
+        // getDomainProvisioner(appName) and called by the activation flow.
+        //
+        // This method intentionally left minimal — domain-specific DDL lives
+        // in application packages, not in the platform dbmanager.
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {
