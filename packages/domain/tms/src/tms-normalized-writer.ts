@@ -70,10 +70,10 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     normalizedEntityType,
     data,
 ) => {
-    // Validate schemaName against SQL injection
-    if (!/^[a-zA-Z0-9_]+$/.test(schemaName)) {
+    // Validate schemaName against SQL injection (must not start with a digit)
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schemaName)) {
         throw new Error(
-            `Invalid schemaName "${schemaName}" — must contain only letters, digits, and underscores`
+            `Invalid schemaName "${schemaName}" — must contain only letters, digits, and underscores, and not start with a digit`
         );
     }
 

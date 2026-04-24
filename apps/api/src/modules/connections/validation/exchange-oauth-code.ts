@@ -40,4 +40,8 @@ export class ExchangeOAuthCode {
   @IsString()
   @IsUUID('4', { message: 'connectionId must be a valid UUID v4' })
   connectionId?: string;
+
+  @IsOptional()
+  @IsString()
+  appProfile?: string;
 }

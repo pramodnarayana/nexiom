@@ -636,6 +636,15 @@ export class DatabaseManager {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Derives metadata object based on appName.
+   * For Salesforce connections, sets appProfile to 'revenova' to route to Revenova domain hooks.
+   * For all other apps, returns empty metadata (default profile).
+   */
+  private deriveMetadata(appName: string): Record<string, unknown> {
+    return appName === 'salesforce' ? { appProfile: 'revenova' } : {};
+  }
+
+  /**
    * Encrypts a string using AES-256-GCM — same algorithm as LocalCryptoAdapter.
    * Wire format: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
    */
@@ -745,7 +754,7 @@ export class DatabaseManager {
             appName: 'salesforce',
             externalId: 'dev-salesforce',
             displayName: 'Dev Salesforce',
-            metadata: { appProfile: 'revenova' },
+            metadata: this.deriveMetadata('salesforce'),
             credentials: {
               clientId: 'dev-sf-client-id',
               clientSecret: 'dev-sf-client-secret',
@@ -759,7 +768,7 @@ export class DatabaseManager {
             appName: 'quickbooks',
             externalId: 'dev-quickbooks',
             displayName: 'Dev QuickBooks',
-            metadata: {},
+            metadata: this.deriveMetadata('quickbooks'),
             credentials: {
               clientId: 'dev-qb-client-id',
               clientSecret: 'dev-qb-client-secret',

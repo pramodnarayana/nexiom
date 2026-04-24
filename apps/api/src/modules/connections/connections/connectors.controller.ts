@@ -871,11 +871,15 @@ export class ConnectorsController {
 
     const resolvedEnvType = deriveEnvType(decodedState.vendorParams);
 
-    // Set appProfile metadata for Salesforce connections to route to Revenova domain hooks
-    const metadata: Record<string, unknown> =
-      body.providerName === 'salesforce'
-        ? { appProfile: 'revenova' }
-        : {};
+    // Read appProfile from request (or vendor params), defaulting to 'default' when absent.
+    // This allows Salesforce OAuth flows to set appProfile dynamically rather than forcing 'revenova'.
+    const rawAppProfile =
+      typeof body.appProfile === 'string' && body.appProfile.trim() !== ''
+        ? body.appProfile.trim()
+        : decodedState.vendorParams?.appProfile ?? 'default';
+    const metadata: Record<string, unknown> = {
+      appProfile: rawAppProfile,
+    };
 
     await this.persistConnection(
       tenantId,

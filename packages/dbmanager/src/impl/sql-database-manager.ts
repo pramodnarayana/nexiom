@@ -5,16 +5,27 @@ import { createHash } from 'node:crypto';
 
 const SAFE_SCHEMA_NAME_RE = /^ws_[a-z0-9_]+$/;
 
-export class SqlDatabaseManager implements DatabaseManager {
-    private readonly logger = {
-        debug: (msg: string, ...args: unknown[]) => {
-            if (process.env.NODE_ENV !== 'production') {
-                console.debug(`[SqlDatabaseManager] ${msg}`, ...args);
-            }
-        }
-    };
+interface Logger {
+    debug(msg: string, ...args: unknown[]): void;
+    info?(msg: string, ...args: unknown[]): void;
+    error?(msg: string, ...args: unknown[]): void;
+}
 
-    constructor(private readonly db: DrizzleDb) { }
+export class SqlDatabaseManager implements DatabaseManager {
+    private readonly logger: Logger;
+
+    constructor(
+        private readonly db: DrizzleDb,
+        logger?: Logger,
+    ) {
+        this.logger = logger ?? {
+            debug: (msg: string, ...args: unknown[]) => {
+                if (process.env.NODE_ENV !== 'production') {
+                    console.debug(`[SqlDatabaseManager] ${msg}`, ...args);
+                }
+            }
+        };
+    }
 
     private validateSchemaName(name: string): void {
         if (!SAFE_SCHEMA_NAME_RE.test(name)) {

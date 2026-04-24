@@ -43,23 +43,24 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
 
     // ── Salesforce Account ──────────────────────────────────────────────────
     if (entityType === 'sf_Account') {
-        // Validate that required lowercased keys are present
+        // First determine if this Account is routable to TMS, before validating fields
+        const canonicalType = resolveAccountCanonicalType(data['rtms__tms_type__c']);
+
+        // Short-circuit if the type is unrecognized — skip normalization for non-TMS accounts
+        if (canonicalType === null) {
+            return null;
+        }
+
+        // Validate TMS-routed accounts have required fields, logging warnings for partial data
         if (!data['name'] || typeof data['name'] !== 'string') {
-            throw new Error(
-                `normalizeRevenovaToTms: sf_Account is missing required lowercased key "name" (entityType=${entityType})`
+            console.warn(
+                `normalizeRevenovaToTms: sf_Account is missing required "name" field (entityType=${entityType}, canonicalType=${canonicalType})`
             );
         }
         if (!data['billingstreet'] && !data['billingcity'] && !data['billingstate']) {
-            throw new Error(
-                `normalizeRevenovaToTms: sf_Account is missing address keys (entityType=${entityType}, expected at least one of: billingstreet, billingcity, billingstate)`
+            console.warn(
+                `normalizeRevenovaToTms: sf_Account is missing address keys (entityType=${entityType}, canonicalType=${canonicalType}, expected at least one of: billingstreet, billingcity, billingstate)`
             );
-        }
-
-        const canonicalType = resolveAccountCanonicalType(data['rtms__tms_type__c']);
-
-        // Short-circuit if the type is unrecognized to avoid injecting invalid discriminator
-        if (canonicalType === null) {
-            return null;
         }
 
         return {
@@ -107,14 +108,13 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
     }
 
     // ── Load ─────────────────────────────────────────────────────────────────
+    // TMS_LOAD writer support does not yet exist — skip emitting normalized records
+    // until tmsNormalizedWriter implements the TMS_LOAD branch.
     if (entityType === 'rtms__Load__c') {
-        return {
-            canonicalType: 'TMS_LOAD',
-            data: {
-                displayName: data['name'],
-                pickupDate:  data['rtms__pickup_date__c'],
-            },
-        };
+        console.warn(
+            `normalizeRevenovaToTms: rtms__Load__c is recognized but TMS_LOAD writer support is not yet implemented — skipping normalization`
+        );
+        return null;
     }
 
     return null;
