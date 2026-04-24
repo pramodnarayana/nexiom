@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import type { AppNormalizedWriterFn } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
 import { buildTmsSchema } from './schema/tms-schema.js';

@@ -19,10 +19,11 @@ function resolveAccountCanonicalType(rawTmsType: unknown): {
     isDelivery?: boolean;
 } {
     const t = typeof rawTmsType === 'string' ? rawTmsType.toLowerCase() : '';
-    if (t.includes('customer'))   return { canonicalType: 'TMS_CUSTOMER' };
+    // Check more specific tokens first to prevent shadowing by generic tokens
     if (t.includes('factor'))     return { canonicalType: 'TMS_FACTORING' };
-    if (t.includes('vendor'))     return { canonicalType: 'TMS_VENDOR' };
     if (t.includes('carrier'))    return { canonicalType: 'TMS_CARRIER' };
+    if (t.includes('customer'))   return { canonicalType: 'TMS_CUSTOMER' };
+    if (t.includes('vendor'))     return { canonicalType: 'TMS_VENDOR' };
 
     if (t.includes('shipper') || t.includes('consignee')) {
         return {
@@ -64,8 +65,16 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
             return null;
         }
 
-        // Validate TMS-routed accounts have required fields, logging warnings for partial data
+        // Validate TMS-routed accounts have required fields
         if (!data['name'] || typeof data['name'] !== 'string') {
+            if (canonicalType !== 'TMS_ADDRESS') {
+                // For non-ADDRESS entities, missing name is a critical error — drop the record
+                console.warn(
+                    `normalizeRevenovaToTms: sf_Account is missing required "name" field (entityType=${entityType}, canonicalType=${canonicalType}) — dropping record`
+                );
+                return null;
+            }
+            // For TMS_ADDRESS, warn but continue processing
             console.warn(
                 `normalizeRevenovaToTms: sf_Account is missing required "name" field (entityType=${entityType}, canonicalType=${canonicalType})`
             );
