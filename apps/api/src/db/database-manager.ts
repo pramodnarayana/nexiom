@@ -846,12 +846,11 @@ export class DatabaseManager {
               dataNamespace: schemaName,
               databaseHostId: 'aurora-prod',
               regionContext: 'local',
-              schemaPlan: 'OUTBOUND_ACTIVE',
             });
           } else {
             await db
               .update(dbSchema.connectionStorageRegistry)
-              .set({ schemaPlan: 'OUTBOUND_ACTIVE', dataNamespace: schemaName })
+              .set({ dataNamespace: schemaName })
               .where(
                 eq(
                   dbSchema.connectionStorageRegistry.connectionId,
@@ -861,6 +860,14 @@ export class DatabaseManager {
           }
 
           await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+
+          // Update schemaPlan to OUTBOUND_ACTIVE after successful provisioning
+          await db
+            .update(dbSchema.connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+            .where(
+              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
+            );
 
           // After successful schema provisioning, mark connection ACTIVE
           await db
@@ -1132,6 +1139,7 @@ export class DatabaseManager {
           stitchId: stitchId,
           sourceCanonical: 'TMS_CARRIER',
           mappingRules: carrierMappingRules,
+          destCanonical: 'Vendor',
         })
         .onConflictDoUpdate({
           target: [
@@ -1140,6 +1148,7 @@ export class DatabaseManager {
           ],
           set: {
             mappingRules: carrierMappingRules,
+            destCanonical: 'Vendor',
           },
         });
 

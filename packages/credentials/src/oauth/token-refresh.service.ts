@@ -88,7 +88,7 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
         },
       };
     } catch (error: unknown) {
-      throw new Error(`Failed to retrieve credentials for tenantId=${tenantId} appName=${appName}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to retrieve credentials for tenantId=${tenantId} appName=${appName} externalId=${externalId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

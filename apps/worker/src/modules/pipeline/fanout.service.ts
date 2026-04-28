@@ -149,6 +149,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             connectionId,
             srcVendorId,
             activeSyncLocks,
+            traceId,
           );
         }
         return;
@@ -280,6 +281,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             connectionId,
             srcVendorId,
             activeSyncLocks,
+            traceId,
           );
         }
         return;
@@ -321,6 +323,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             connectionId,
             srcVendorId,
             activeSyncLocks,
+            traceId,
           );
         }
         return;
@@ -565,6 +568,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     connectionId: string,
     entityId: string,
     activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
+    traceId: string,
   ): Promise<void> {
     await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
@@ -574,7 +578,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       await tx
         .delete(activeSyncLocks)
         .where(
-          sql`${activeSyncLocks.connectionId} = ${connectionId} AND ${activeSyncLocks.entityId} = ${entityId}`,
+          sql`${activeSyncLocks.connectionId} = ${connectionId} AND ${activeSyncLocks.entityId} = ${entityId} AND ${activeSyncLocks.lockedByTraceId} = ${traceId}`,
         );
     });
   }
