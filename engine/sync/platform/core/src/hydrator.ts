@@ -70,7 +70,7 @@ export function hydratePayload(
   markUnmapped: boolean = false
 ): any {
   rules = rules || [];
-  const payload: any = Object.create(null);
+  const payload: any = {};
   for (const rule of rules) {
     const val = getNestedValue(data, rule.src);
     if (val !== undefined) {

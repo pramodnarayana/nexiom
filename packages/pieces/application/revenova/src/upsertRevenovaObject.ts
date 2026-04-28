@@ -31,7 +31,8 @@ function parseSalesforceSoapXml(xml: string): {
     data: Record<string, string>;
 } | null {
     // 1. Detect multiple <Notification> blocks — reject to prevent silent overwrites
-    const notificationMatches = xml.match(/<[^:>]*:?Notification(?:\s|>|\/)/gi);
+    // Use a strict open-tag regex so we don't accidentally count closing </Notification> tags
+    const notificationMatches = xml.match(/<(?:[a-zA-Z0-9_]+:)?Notification(?:\s|>|\/)/gi);
     if (notificationMatches && notificationMatches.length > 1) {
         // Multi-notification payload detected
         return null;

@@ -28,6 +28,7 @@ const COMMANDS = [
   'check-user',
   'check-role',
   'seed:abac',
+  'seed:mapping',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -108,6 +109,9 @@ async function main() {
       }
       case 'seed:abac':
         await manager.seedAbac();
+        break;
+      case 'seed:mapping':
+        await manager.seedMapping();
         break;
     }
   } catch (error) {

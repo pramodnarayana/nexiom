@@ -10,6 +10,11 @@ import { UpdateScheduleBody } from './update-schedule.validation.js';
 const STITCH_ID = 'stitch-uuid-1';
 
 const mockService = {
+  create: vi.fn(),
+  list: vi.fn(),
+  findOne: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
   updateSchedule: vi.fn(),
 };
 
@@ -29,6 +34,43 @@ describe('StitchesController — schedule endpoints', () => {
 
     controller = module.get(StitchesController);
     vi.clearAllMocks();
+  });
+
+  it('create — delegates to service', async () => {
+    const body: any = { name: 'Test Stitch' };
+    mockService.create.mockResolvedValue({ id: STITCH_ID });
+    const result = await controller.create(makeAuth(), body);
+    expect(result).toEqual({ id: STITCH_ID });
+    expect(mockService.create).toHaveBeenCalledWith(ORG_ID, body);
+  });
+
+  it('list — delegates to service', async () => {
+    mockService.list.mockResolvedValue([]);
+    const result = await controller.list(makeAuth(), 'workspace-1', 'true');
+    expect(result).toEqual([]);
+    expect(mockService.list).toHaveBeenCalledWith(ORG_ID, 'workspace-1', true);
+  });
+
+  it('findOne — delegates to service', async () => {
+    mockService.findOne.mockResolvedValue({ id: STITCH_ID });
+    const result = await controller.findOne(makeAuth(), STITCH_ID);
+    expect(result).toEqual({ id: STITCH_ID });
+    expect(mockService.findOne).toHaveBeenCalledWith(ORG_ID, STITCH_ID);
+  });
+
+  it('update — delegates to service', async () => {
+    const body: any = { name: 'Updated Stitch' };
+    mockService.update.mockResolvedValue({ id: STITCH_ID });
+    const result = await controller.update(makeAuth(), STITCH_ID, body);
+    expect(result).toEqual({ id: STITCH_ID });
+    expect(mockService.update).toHaveBeenCalledWith(ORG_ID, STITCH_ID, body);
+  });
+
+  it('remove — delegates to service', async () => {
+    mockService.remove.mockResolvedValue(undefined);
+    const result = await controller.remove(makeAuth(), STITCH_ID);
+    expect(result).toBeUndefined();
+    expect(mockService.remove).toHaveBeenCalledWith(ORG_ID, STITCH_ID);
   });
 
   it('updateSchedule — delegates to service with orgId', async () => {

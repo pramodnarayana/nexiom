@@ -10,7 +10,7 @@ import { REDIS_CLIENT } from '@nexiom/cache';
 import type { Redis } from '@nexiom/cache';
 import { OAuthCallbackController } from './connections/callback.controller.js';
 import { ConnectorsController } from './connections/connectors.controller.js';
-import { DefaultOAuthRefreshClient } from './connections/token-refresh.service.js';
+import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
 import { PiecesModule } from '@nexiom/piece-registry';
@@ -51,7 +51,7 @@ import { type DrizzleDb } from '@nexiom/database';
     ConnectorsService,
     OauthStateService,
     { provide: EncryptionService, useClass: AesEncryptionService },
-    { provide: OAuthRefreshClient, useClass: DefaultOAuthRefreshClient },
+    { provide: OAuthRefreshClient, useClass: RegistryOAuthRefreshClient },
   ],
   exports: [TokenManagerService],
 })

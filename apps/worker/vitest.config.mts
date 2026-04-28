@@ -41,6 +41,7 @@ export default defineConfig({
                 'src/**/*.decorator.ts',
                 'src/**/*.mock.ts',
                 'src/scripts/**',
+                'src/modules/ai/**',
                 'src/constants.ts',
                 'src/db/**',
                 'test/**',

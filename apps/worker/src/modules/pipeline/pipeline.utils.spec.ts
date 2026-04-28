@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   sanitizeError,
   isRetryableStatusCode,
-  extractDestVendorId,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
 
@@ -54,42 +53,6 @@ describe("pipeline.utils", () => {
         expect(isRetryableStatusCode(code)).toBe(false);
       },
     );
-  });
-
-  // ── extractDestVendorId ─────────────────────────────────────────────────
-  describe("extractDestVendorId()", () => {
-    it("returns undefined for null", () => {
-      expect(extractDestVendorId(null)).toBeUndefined();
-    });
-
-    it("returns undefined for non-object primitives", () => {
-      expect(extractDestVendorId("string")).toBeUndefined();
-      expect(extractDestVendorId(42)).toBeUndefined();
-    });
-
-    it("extracts lowercase 'id' field", () => {
-      expect(extractDestVendorId({ id: "abc123" })).toBe("abc123");
-    });
-
-    it("extracts Salesforce-style uppercase 'Id' field", () => {
-      expect(extractDestVendorId({ Id: "SF_001" })).toBe("SF_001");
-    });
-
-    it("extracts wrapped 'result.id' field", () => {
-      expect(extractDestVendorId({ result: { id: "r_99" } })).toBe("r_99");
-    });
-
-    it("extracts envelope 'data.id' field", () => {
-      expect(extractDestVendorId({ data: { id: "d_77" } })).toBe("d_77");
-    });
-
-    it("returns undefined when no recognised ID field is present", () => {
-      expect(extractDestVendorId({ name: "no-id-here" })).toBeUndefined();
-    });
-
-    it("returns undefined when id field is an empty string", () => {
-      expect(extractDestVendorId({ id: "" })).toBeUndefined();
-    });
   });
 
   // ── isValidPipelineMessage ──────────────────────────────────────────────

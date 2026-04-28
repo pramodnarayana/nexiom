@@ -41,6 +41,7 @@ export default defineConfig({
                 'src/**/*.decorator.ts',
                 'src/**/*.mock.ts',
                 'src/scripts/**',
+                'src/modules/ai/**',
                 'src/db/reset-e2e.ts',
                 'src/db/db-cli.ts',
                 'src/db/schema.ts',

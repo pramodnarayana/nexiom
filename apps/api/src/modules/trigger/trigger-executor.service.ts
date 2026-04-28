@@ -173,7 +173,9 @@ export class TriggerExecutorService {
           BEGIN
             ALTER PUBLICATION nexiom_cdc
               ADD TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
-                        ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox;
+                        ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
+                        ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,
+                        ${sql.raw('"' + resolvedSchemaName + '"')}.delivery_outbox;
           EXCEPTION WHEN duplicate_object THEN
             -- Ignore gracefully if the table is already in the publication
           END;
@@ -240,7 +242,9 @@ export class TriggerExecutorService {
               BEGIN
                 ALTER PUBLICATION nexiom_cdc
                   DROP TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
-                             ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox;
+                             ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
+                             ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,
+                             ${sql.raw('"' + resolvedSchemaName + '"')}.delivery_outbox;
               EXCEPTION WHEN undefined_object THEN
                 -- Ignore gracefully if the table is not in the publication
               END;

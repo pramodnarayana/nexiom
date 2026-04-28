@@ -45,7 +45,7 @@ function commonFields(data: Record<string, unknown>) {
 async function upsert(
     tx: DrizzleTransaction,
     table: any,
-    base: { traceId: string; replicaId: string; sfId: string },
+    base: { traceId: string; replicaId: string; sourceId: string },
     extras: Record<string, unknown>
 ) {
     const values = { ...base, ...extras };
@@ -55,7 +55,7 @@ async function upsert(
         .insert(table as never)
         .values(values as never)
         .onConflictDoUpdate({
-            target: table.sfId as never,
+            target: table.sourceId as never,
             set: updateSet as never,
         });
 }
@@ -78,12 +78,13 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     const { tmsCarrier, tmsVendor, tmsCustomer, tmsFactoring, tmsAddress, tmsTp } =
         buildTmsSchema(schemaName);
 
-    const base = { traceId, replicaId, sfId: entityId };
+    const base = { traceId, replicaId, sourceId: entityId };
 
     if (normalizedEntityType === 'TMS_CARRIER') {
         await upsert(txTyped, tmsCarrier, base, {
             ...commonFields(data),
-            tpSfId: str(data['tpSfId']),
+            tpSourceId: str(data['tpSourceId']),
+            remitToSourceId: str(data['remitToSourceId']),
             isCarrier: str(data['isCarrier']),
             isBroker: str(data['isBroker']),
         });
@@ -93,7 +94,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     if (normalizedEntityType === 'TMS_VENDOR') {
         await upsert(txTyped, tmsVendor, base, {
             ...commonFields(data),
-            tpSfId: str(data['tpSfId']),
+            tpSourceId: str(data['tpSourceId']),
             isVendor: str(data['isVendor']),
         });
         return;
@@ -130,7 +131,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
             scac: str(data['scac']),
             federalTaxId: str(data['federalTaxId']),
             usdot: str(data['usdot']),
-            remitToSfId: str(data['remitToSfId']),
+            remitToSourceId: str(data['remitToSourceId']),
             remitToOption: str(data['remitToOption']),
             carrierOperation: str(data['carrierOperation']),
             agreementStatus: str(data['agreementStatus']),

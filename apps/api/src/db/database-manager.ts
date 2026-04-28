@@ -672,6 +672,7 @@ export class DatabaseManager {
     cb: (mgr: import('@nexiom/dbmanager').SqlDatabaseManager) => Promise<T>,
   ): Promise<T> {
     const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { getDomainProvisioner } = await import('@nexiom/piece-framework');
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const dbSchema = await import('./schema.js');
     const client = await this.getPgClient();
@@ -680,6 +681,8 @@ export class DatabaseManager {
       const db = drizzle(client, { schema: dbSchema });
       const schemaMgr = new SqlDatabaseManager(
         db as unknown as import('@nexiom/database').DrizzleDb,
+        undefined,
+        getDomainProvisioner,
       );
       return await cb(schemaMgr);
     } finally {
@@ -827,7 +830,44 @@ export class DatabaseManager {
           const resolved = inserted;
 
           const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
-          await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+
+          // Seed the connection_storage_registry so applyPlan can resolve appName
+          const existReg = await db
+            .select()
+            .from(dbSchema.connectionStorageRegistry)
+            .where(
+              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
+            )
+            .limit(1);
+
+          if (!existReg[0]) {
+            await db.insert(dbSchema.connectionStorageRegistry).values({
+              connectionId: resolved.id,
+              dataNamespace: schemaName,
+              databaseHostId: 'aurora-prod',
+              regionContext: 'local',
+            });
+          } else {
+            await db
+              .update(dbSchema.connectionStorageRegistry)
+              .set({ dataNamespace: schemaName })
+              .where(
+                eq(
+                  dbSchema.connectionStorageRegistry.connectionId,
+                  resolved.id,
+                ),
+              );
+          }
+
+          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+
+          // Update schemaPlan to OUTBOUND_ACTIVE after successful provisioning
+          await db
+            .update(dbSchema.connectionStorageRegistry)
+            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+            .where(
+              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
+            );
 
           // After successful schema provisioning, mark connection ACTIVE
           await db
@@ -892,12 +932,17 @@ export class DatabaseManager {
   }
 
   /**
-   * Discovers all tenant schemas (ws_*) and re-runs migrateReplicaTables
-   * on each one, executing idempotent ALTER TABLE migration blocks.
+   * Discovers all tenant schemas (ws_*) and migrates them to OUTBOUND_ACTIVE state.
+   * Reapplies all provisioner layers to ensure existing tenants receive:
+   * - active_sync_locks table
+   * - schema_name columns on outbox tables
+   * - sync_log partial indexes
    * Safe to run on a live database — all changes are guarded by IF EXISTS / IF NOT EXISTS.
    */
   async migrateAllSchemas(): Promise<void> {
-    console.log('🔧 Migrating replica tables across all tenant schemas...\n');
+    console.log(
+      '🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...\n',
+    );
 
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
@@ -918,7 +963,7 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateReplicaTables(schema_name);
+            await schemaMgr.migrateToOutboundActive(schema_name);
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
@@ -986,6 +1031,137 @@ export class DatabaseManager {
         const has = permIds.includes(c);
         console.log(`    ${has ? '✅' : '❌'} ${c}`);
       }
+    });
+  }
+
+  /**
+   * Seeds the local dev mapping for TMS_CARRIER -> QuickBooks Vendor
+   */
+  async seedMapping(): Promise<void> {
+    this.assertSafeEnvironment();
+    console.log(
+      '🌱 Seeding local field mapping (TMS_CARRIER -> QuickBooks Vendor)...',
+    );
+
+    await this.withDrizzle(async (db, schema) => {
+      const { eq, and } = await import('drizzle-orm');
+
+      // Look up the deterministic fixtures created by provisionLocal()
+      const salesforceConn = await db
+        .select()
+        .from(schema.appConnections)
+        .where(
+          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000001'),
+        )
+        .limit(1);
+      const qbConn = await db
+        .select()
+        .from(schema.appConnections)
+        .where(
+          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000002'),
+        )
+        .limit(1);
+
+      if (!salesforceConn[0] || !qbConn[0]) {
+        throw new Error(
+          'No local connections found. Run pnpm db:provision:local first.',
+        );
+      }
+
+      // Check if a workspace exists
+      // Note: This uses an unfiltered query which may pick any existing workspace.
+      // For deterministic behavior, ensure a seeded workspace exists via db:seed.
+      const workspaces = await db.select().from(schema.uiWorkspaces).limit(1);
+      if (workspaces.length === 0) {
+        throw new Error('No workspace found. Run pnpm db:seed first.');
+      }
+
+      // Check for existing stitch
+      const stitches = await db
+        .select()
+        .from(schema.integrationStitches)
+        .where(
+          and(
+            eq(
+              schema.integrationStitches.srcConnectionId,
+              salesforceConn[0].id,
+            ),
+            eq(schema.integrationStitches.destConnectionId, qbConn[0].id),
+          ),
+        )
+        .limit(1);
+
+      let stitchId;
+      if (stitches.length === 0) {
+        const [newStitch] = await db
+          .insert(schema.integrationStitches)
+          .values({
+            name: 'Revenova to QuickBooks Local Sync',
+            orgId: workspaces[0].orgId,
+            workspaceId: workspaces[0].id,
+            srcConnectionId: salesforceConn[0].id,
+            destConnectionId: qbConn[0].id,
+            sourceObject: 'Account',
+            targetObject: 'Vendor',
+          })
+          .returning();
+        stitchId = newStitch.id;
+        console.log(`  ✓ Created new integration stitch: ${stitchId}`);
+      } else {
+        stitchId = stitches[0].id;
+        console.log(`  ✓ Found existing integration stitch: ${stitchId}`);
+      }
+
+      // Extract mapping rules into a constant to avoid duplication
+      const carrierMappingRules = [
+        { srcPath: 'displayName', destPath: 'DisplayName' },
+        { srcPath: 'displayName', destPath: 'CompanyName' },
+        { srcPath: 'tp.mcNumber', destPath: 'GivenName' },
+        { srcPath: 'remitTo.billingStreet', destPath: 'BillAddr.Line1' },
+        { srcPath: 'remitTo.billingCity', destPath: 'BillAddr.City' },
+        {
+          srcPath: 'remitTo.billingState',
+          destPath: 'BillAddr.CountrySubDivisionCode',
+        },
+        {
+          srcPath: 'remitTo.billingPostalCode',
+          destPath: 'BillAddr.PostalCode',
+        },
+        { srcPath: 'remitTo.billingCountry', destPath: 'BillAddr.Country' },
+        { srcPath: 'billingStreet', destPath: 'ShipAddr.Line1' },
+        { srcPath: 'billingCity', destPath: 'ShipAddr.City' },
+        {
+          srcPath: 'billingState',
+          destPath: 'ShipAddr.CountrySubDivisionCode',
+        },
+        { srcPath: 'billingPostalCode', destPath: 'ShipAddr.PostalCode' },
+        { srcPath: 'billingCountry', destPath: 'ShipAddr.Country' },
+        { srcPath: 'phone', destPath: 'PrimaryPhone.FreeFormNumber' },
+        { srcPath: 'fax', destPath: 'Fax.FreeFormNumber' },
+      ];
+
+      // Insert or Update the field mapping rule
+      await db
+        .insert(schema.fieldMappings)
+        .values({
+          stitchId: stitchId,
+          sourceCanonical: 'TMS_CARRIER',
+          mappingRules: carrierMappingRules,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.fieldMappings.stitchId,
+            schema.fieldMappings.sourceCanonical,
+          ],
+          set: {
+            mappingRules: carrierMappingRules,
+          },
+        });
+
+      console.log(
+        '  ✓ Inserted dynamic JSON field mapping into field_mapping table!',
+      );
+      console.log('✅ Local Pipeline Mapping Seeded.');
     });
   }
 

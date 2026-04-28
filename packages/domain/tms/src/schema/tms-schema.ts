@@ -46,7 +46,7 @@ export function buildTmsSchema(schemaName: string) {
         id:        uuid('id').defaultRandom().primaryKey(),
         traceId:   uuid('trace_id').notNull(),
         replicaId: uuid('replica_id').notNull(),
-        sfId:      varchar('sf_id', { length: 255 }).notNull(),
+        sourceId:  varchar('source_id', { length: 255 }).notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     };
@@ -72,12 +72,13 @@ export function buildTmsSchema(schemaName: string) {
         tmsType:     varchar('tms_type', { length: 100 }),
         ...address,
         ...contact,
-        tpSfId:    varchar('tp_sf_id', { length: 255 }),
+        tpSourceId:    varchar('tp_source_id', { length: 255 }),
+        remitToSourceId: varchar('remit_to_source_id', { length: 255 }),
         isCarrier: text('is_carrier'),
         isBroker:  text('is_broker'),
     }, (t) => [
-        uniqueIndex('uq_tms_carrier_sf_id').on(t.sfId),
-        index('idx_tms_carrier_tp').on(t.tpSfId).where(sql`${t.tpSfId} IS NOT NULL`),
+        uniqueIndex('uq_tms_carrier_source_id').on(t.sourceId),
+        index('idx_tms_carrier_tp').on(t.tpSourceId).where(sql`${t.tpSourceId} IS NOT NULL`),
         index('idx_tms_carrier_trace').on(t.traceId),
     ]);
 
@@ -88,11 +89,11 @@ export function buildTmsSchema(schemaName: string) {
         tmsType:     varchar('tms_type', { length: 100 }),
         ...address,
         ...contact,
-        tpSfId:   varchar('tp_sf_id', { length: 255 }),
+        tpSourceId:   varchar('tp_source_id', { length: 255 }),
         isVendor: text('is_vendor'),
     }, (t) => [
-        uniqueIndex('uq_tms_vendor_sf_id').on(t.sfId),
-        index('idx_tms_vendor_tp').on(t.tpSfId).where(sql`${t.tpSfId} IS NOT NULL`),
+        uniqueIndex('uq_tms_vendor_source_id').on(t.sourceId),
+        index('idx_tms_vendor_tp').on(t.tpSourceId).where(sql`${t.tpSourceId} IS NOT NULL`),
         index('idx_tms_vendor_trace').on(t.traceId),
     ]);
 
@@ -106,7 +107,7 @@ export function buildTmsSchema(schemaName: string) {
         creditLimit:  varchar('credit_limit', { length: 50 }),
         paymentTerms: varchar('payment_terms', { length: 100 }),
     }, (t) => [
-        uniqueIndex('uq_tms_customer_sf_id').on(t.sfId),
+        uniqueIndex('uq_tms_customer_source_id').on(t.sourceId),
         index('idx_tms_customer_trace').on(t.traceId),
     ]);
 
@@ -118,7 +119,7 @@ export function buildTmsSchema(schemaName: string) {
         ...address,
         ...contact,
     }, (t) => [
-        uniqueIndex('uq_tms_factoring_sf_id').on(t.sfId),
+        uniqueIndex('uq_tms_factoring_source_id').on(t.sourceId),
         index('idx_tms_factoring_trace').on(t.traceId),
     ]);
 
@@ -132,7 +133,7 @@ export function buildTmsSchema(schemaName: string) {
         isPickup:   text('is_pickup'),
         isDelivery: text('is_delivery'),
     }, (t) => [
-        uniqueIndex('uq_tms_address_sf_id').on(t.sfId),
+        uniqueIndex('uq_tms_address_source_id').on(t.sourceId),
         index('idx_tms_address_trace').on(t.traceId),
     ]);
 
@@ -143,14 +144,14 @@ export function buildTmsSchema(schemaName: string) {
         scac:                varchar('scac', { length: 20 }),
         federalTaxId:        varchar('federal_tax_id', { length: 50 }),
         usdot:               varchar('usdot', { length: 50 }),
-        remitToSfId:         varchar('remit_to_sf_id', { length: 255 }),
+        remitToSourceId:     varchar('remit_to_source_id', { length: 255 }),
         remitToOption:       varchar('remit_to_option', { length: 100 }),
         carrierOperation:    varchar('carrier_operation', { length: 100 }),
         agreementStatus:     varchar('agreement_status', { length: 100 }),
         carrierReviewStatus: varchar('carrier_review_status', { length: 100 }),
     }, (t) => [
-        uniqueIndex('uq_tms_tp_sf_id').on(t.sfId),
-        index('idx_tms_tp_remit_to').on(t.remitToSfId).where(sql`${t.remitToSfId} IS NOT NULL`),
+        uniqueIndex('uq_tms_tp_source_id').on(t.sourceId),
+        index('idx_tms_tp_remit_to').on(t.remitToSourceId).where(sql`${t.remitToSourceId} IS NOT NULL`),
         index('idx_tms_tp_trace').on(t.traceId),
     ]);
 

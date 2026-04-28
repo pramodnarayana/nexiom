@@ -7,7 +7,7 @@ import { buildTmsSchema } from './schema/tms-schema.js';
 // TMS Target Builder Hook — @nexiom/domain-tms
 //
 // Shared by ALL TMS source connectors.
-// Executes three SQL lookups on indexed sf_id columns:
+// Executes SQL lookups on indexed source_id columns:
 //   tms_carrier (or tms_vendor) → tms_tp → remit-to tms_carrier | tms_factoring
 //
 // Returns a flat enrichment context for field mapping Rule[] src paths.
@@ -31,26 +31,21 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     const accountRows = await dbTyped
         .select()
         .from(table)
-        .where(sql`${table.sfId} = ${srcEntityId}`)
+        .where(sql`${table.sourceId} = ${srcEntityId}`)
         .limit(1);
 
     if (!accountRows[0]) return {};
     const account = accountRows[0];
 
     // ── 2. Transportation Profile ─────────────────────────────────────────────
-    // Sequential SELECTs are used here instead of a single LEFT JOIN query because:
-    // 1. Conditional branching: remit-to lookup tries tms_carrier first, then
-    //    tms_factoring if not found — easier to express with separate queries.
-    // 2. The indexed sf_id lookups are fast (indexed unique columns).
-    // 3. Typical case has 0-2 round-trips per carrier (most have no tp or remit-to).
     let tp: Record<string, unknown> | null = null;
     let remitTo: Record<string, unknown> | null = null;
 
-    if (account.tpSfId) {
+    if (account.tpSourceId) {
         const tpRows = await dbTyped
             .select()
             .from(tmsTp)
-            .where(sql`${tmsTp.sfId} = ${account.tpSfId}`)
+            .where(sql`${tmsTp.sourceId} = ${account.tpSourceId}`)
             .limit(1);
 
         if (tpRows[0]) {
@@ -61,29 +56,34 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
                 carrierOperation: r.carrierOperation, agreementStatus: r.agreementStatus,
                 carrierReviewStatus: r.carrierReviewStatus,
             };
+            
+            // To be resolved below
+            (account as any)._tpRemitToSourceId = r.remitToSourceId;
+        }
+    }
 
-            // ── 3. Remit-To Account ───────────────────────────────────────────
-            if (r.remitToSfId) {
-                const selfRemit = await dbTyped.select().from(tmsCarrier)
-                    .where(sql`${tmsCarrier.sfId} = ${r.remitToSfId}`).limit(1);
+    // ── 3. Remit-To Account (COALESCE: account first, then tp) ────────────────
+    const finalRemitToSourceId = (account as any).remitToSourceId || (account as any)._tpRemitToSourceId;
 
-                if (selfRemit[0]) {
-                    const ra = selfRemit[0];
-                    remitTo = { displayName: ra.displayName, street: ra.billingStreet,
-                        city: ra.billingCity, state: ra.billingState,
-                        postalCode: ra.billingPostalCode, country: ra.billingCountry,
-                        phone: ra.phone, fax: ra.fax };
-                } else {
-                    const factoringRemit = await dbTyped.select().from(tmsFactoring)
-                        .where(sql`${tmsFactoring.sfId} = ${r.remitToSfId}`).limit(1);
-                    if (factoringRemit[0]) {
-                        const ra = factoringRemit[0];
-                        remitTo = { displayName: ra.displayName, street: ra.billingStreet,
-                            city: ra.billingCity, state: ra.billingState,
-                            postalCode: ra.billingPostalCode, country: ra.billingCountry,
-                            phone: ra.phone, fax: ra.fax };
-                    }
-                }
+    if (finalRemitToSourceId) {
+        const selfRemit = await dbTyped.select().from(tmsCarrier)
+            .where(sql`${tmsCarrier.sourceId} = ${finalRemitToSourceId}`).limit(1);
+
+        if (selfRemit[0]) {
+            const ra = selfRemit[0];
+            remitTo = { displayName: ra.displayName, street: ra.billingStreet,
+                city: ra.billingCity, state: ra.billingState,
+                postalCode: ra.billingPostalCode, country: ra.billingCountry,
+                phone: ra.phone, fax: ra.fax };
+        } else {
+            const factoringRemit = await dbTyped.select().from(tmsFactoring)
+                .where(sql`${tmsFactoring.sourceId} = ${finalRemitToSourceId}`).limit(1);
+            if (factoringRemit[0]) {
+                const ra = factoringRemit[0];
+                remitTo = { displayName: ra.displayName, street: ra.billingStreet,
+                    city: ra.billingCity, state: ra.billingState,
+                    postalCode: ra.billingPostalCode, country: ra.billingCountry,
+                    phone: ra.phone, fax: ra.fax };
             }
         }
     }
