@@ -14,6 +14,7 @@ import {
   integrationStitches,
   fieldMappings,
   appConnections,
+  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -69,7 +70,11 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     const connectionId = msg.connectionId as string;
     const start = Date.now();
 
-    this.logger.debug(
+    this.logger.log(
+      `[DEBUG] L4 FanOut received message from NormalizedQueue (traceId: ${traceId})`,
+    );
+
+    this.logger.log(
       { event: "l4.started", traceId, connectionId, layer: "L4" },
       "L4 fan-out started",
     );
@@ -267,12 +272,25 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         )
         .limit(1);
 
+      if (mappings.length === 0) {
+        this.logger.log(
+          {
+            event: "l4.skip_no_mapping",
+            traceId,
+            routeId: stitch.id,
+            layer: "L4",
+            canonicalType,
+          },
+          `[DEBUG] No field mapping rules configured for canonicalType=${canonicalType}, skipping stitch route`,
+        );
+        return;
+      }
+
       // ── Build outbound payload ────────────────────────────────────────────
       // TargetBuilderService calls the app-registered AppTargetBuilderFn hook
       // (e.g. tmsTargetBuilder) which does the SQL JOIN enrichment across
       // typed per-entity tables, then applies the field mapping rules.
-      const mappingRules =
-        mappings.length > 0 ? (mappings[0].mappingRules as Rule[]) : [];
+      const mappingRules = mappings[0].mappingRules as Rule[];
 
       // Delegate to TargetBuilderService — it calls the app-registered hook
       // (e.g. tmsTargetBuilder) to assemble the enriched context from typed
@@ -287,6 +305,66 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         normalizedData,
         mappingRules,
       );
+
+      // ── Lookup GEM destEntityId for Updates ────────────────────────────────
+      if (srcVendorId) {
+        const gemMappings = await this.db
+          .select()
+          .from(globalEntityMap)
+          .where(
+            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
+          )
+          .limit(1);
+
+        if (gemMappings.length > 0) {
+          const destEntityId = gemMappings[0].destEntityId;
+
+          // ── Build _sync context envelope ──────────────────────────────────
+          // Injected as a single structured block rather than individual keys
+          // to keep the pipeline-to-piece contract clean and vendor-agnostic.
+          // The Piece reads _sync.dest.id and _sync.dest.state internally.
+          const syncCtx: { dest: { id: string; state?: unknown } } = {
+            dest: { id: destEntityId },
+          };
+
+          try {
+            const targetSchemaName =
+              await this.storageResolver.resolveSchemaName(
+                stitch.destConnectionId,
+              );
+            const { replicaEntity: targetReplicaEntity } =
+              buildTenantSchema(targetSchemaName);
+            const targetReplica = await this.db
+              .select()
+              .from(targetReplicaEntity)
+              .where(
+                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
+              )
+              .limit(1);
+
+            if (targetReplica.length > 0) {
+              syncCtx.dest.state = targetReplica[0].data;
+            }
+          } catch (err) {
+            this.logger.warn(
+              { err: sanitizeError(err), traceId, routeId: stitch.id },
+              "Failed to load target replica state for _sync context — omitting dest.state",
+            );
+          }
+
+          hydratedPayload["_sync"] = syncCtx;
+          this.logger.debug(
+            {
+              event: "l4.gem_lookup",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
+              destEntityId,
+            },
+            "Found existing destination entity mapping (update route)",
+          );
+        }
+      }
 
       await this.db.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
@@ -382,16 +460,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             status: "SUCCESS",
             durationMs: Date.now() - start,
           })
-          .onConflictDoNothing({
-            // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
-            target: [
-              syncLog.traceId,
-              syncLog.routeId,
-              syncLog.layer,
-              syncLog.status,
-            ],
-            where: sql`${syncLog.routeId} IS NOT NULL`,
-          });
+          .onConflictDoNothing();
       });
     } catch (err) {
       this.logger.error(
@@ -442,16 +511,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           status,
           durationMs,
         })
-        .onConflictDoNothing({
-          // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
-          target: [
-            syncLog.traceId,
-            syncLog.routeId,
-            syncLog.layer,
-            syncLog.status,
-          ],
-          where: sql`${syncLog.routeId} IS NOT NULL`,
-        });
+        .onConflictDoNothing();
     });
   }
 }

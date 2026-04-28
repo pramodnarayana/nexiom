@@ -21,17 +21,34 @@ export function initializeRevenovaApplicationRegistry() {
         provisionTmsTables(db as DrizzleDb, schemaName)
     );
 
-    registerAppWebhookResponse((body) => {
-        if (
-            typeof body === 'string' &&
-            body.includes('soap.sforce.com/2005/09/outbound')
+    registerAppWebhookResponse((body, headers) => {
+        // Fast-fail: Salesforce Outbound Messages are always XML
+        if (!headers['content-type']?.includes('text/xml') && !headers['content-type']?.includes('application/xml')) {
+            return null;
+        }
+
+        // Safely extract raw string from the normalized L1 payload wrapper
+        let rawString = '';
+        if (typeof body === 'string') {
+            rawString = body;
+        } else if (
+            body &&
+            typeof body === 'object' &&
+            'raw' in body &&
+            typeof (body as Record<string, unknown>).raw === 'string'
         ) {
+            rawString = (body as Record<string, unknown>).raw as string;
+        }
+
+        // Look for the unique XML namespace indicating a Salesforce Outbound Message
+        if (rawString.includes('soap.sforce.com/2005/09/outbound')) {
             return {
                 status: 200,
                 contentType: 'text/xml',
                 body: SALESFORCE_OUTBOUND_ACK,
             };
         }
+        
         return null;
     });
 }

@@ -80,6 +80,39 @@ describe('CdcRelayController', () => {
     expect(mockQueueService.send).not.toHaveBeenCalled();
   });
 
+  it('routes normalized_outbox inserts to NormalizedQueue', async () => {
+    await controller.relay({
+      __op: 'c',
+      __table: 'normalized_outbox',
+      __schema: 'debezium_metadata_schema',
+      schema_name: 'ws_normalized_123',
+      trace_id: 'trace-6',
+      connection_id: 'conn-6',
+    });
+
+    expect(mockQueueService.send).toHaveBeenCalledWith(
+      QueueName.NormalizedQueue,
+      {
+        traceId: 'trace-6',
+        connectionId: 'conn-6',
+        schemaName: 'ws_normalized_123',
+      },
+    );
+  });
+
+  it('ignores delivery_outbox inserts and logs a debug message', async () => {
+    await controller.relay({
+      __op: 'c',
+      __table: 'delivery_outbox',
+      __schema: 'debezium_metadata_schema',
+      schema_name: 'ws_delivery_123',
+      trace_id: 'trace-7',
+      connection_id: 'conn-7',
+    });
+
+    expect(mockQueueService.send).not.toHaveBeenCalled();
+  });
+
   it('ignores unknown tables', async () => {
     await controller.relay({
       __op: 'c',

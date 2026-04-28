@@ -102,6 +102,24 @@ export function buildTenantSchema(schemaName: string) {
     ]);
 
     /**
+     * PIPELINE RACE CONDITION LOCKS
+     *
+     * Prevents an UPDATE event from being processed while a CREATE event
+     * for the same entity is still inflight (preventing duplicate writes
+     * or missing ID injection).
+     */
+    const activeSyncLocks = schema.table('active_sync_locks', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        connectionId: uuid('connection_id').notNull(),
+        entityId: varchar('entity_id', { length: 255 }).notNull(),
+        lockedByTraceId: uuid('locked_by_trace_id').notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    }, (table) => [
+        uniqueIndex('idx_sync_lock_unique').on(table.connectionId, table.entityId),
+    ]);
+
+    /**
      * LAYER 2 — UNIVERSAL REPLICA
      *
      * Parsed, structured state store. Batches from L1 are split into
@@ -270,6 +288,7 @@ export function buildTenantSchema(schemaName: string) {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
+        schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
@@ -294,6 +313,7 @@ export function buildTenantSchema(schemaName: string) {
         routeId: uuid('route_id').notNull(),
         outboundGatewayId: uuid('outbound_gateway_id').notNull(),
         payload: jsonb('payload').notNull(),
+        schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
@@ -307,6 +327,7 @@ export function buildTenantSchema(schemaName: string) {
     ]);
 
     return {
+        activeSyncLocks,
         inboundGateway,
         inboundOutbox,
         replicaEntity,

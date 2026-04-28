@@ -1,0 +1,31 @@
+import { Injectable, Inject } from '@nestjs/common';
+import { BaseOAuthRefreshClient, EncryptionService } from '@nexiom/credentials';
+import { PropertyType } from '@nexiom/piece-framework';
+import { DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
+import { PieceRegistryService } from '@nexiom/piece-registry';
+
+@Injectable()
+export class RegistryOAuthRefreshClient extends BaseOAuthRefreshClient {
+  constructor(
+    private readonly pieceRegistry: PieceRegistryService,
+    @Inject(DATABASE_CONNECTION) db: DrizzleDb,
+    crypto: EncryptionService,
+  ) {
+    super(db, crypto);
+  }
+
+  protected getTokenUrl(appName: string): string {
+    const piece = this.pieceRegistry.getPiece(appName);
+    if (!piece) {
+      throw new Error(`Piece not found for refresh: ${appName}`);
+    }
+
+    if (piece.auth?.type !== PropertyType.OAUTH2 || !piece.auth.tokenUrl) {
+      throw new Error(
+        `Piece ${appName} does not support OAuth refresh or lacks a token url`,
+      );
+    }
+
+    return piece.auth.tokenUrl;
+  }
+}

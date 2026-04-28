@@ -14,7 +14,7 @@ import {
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { getReplicaExtractor } from "@nexiom/piece-framework";
 
 @Injectable()
@@ -71,8 +71,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           `Schema mismatch: msg.schemaName=${passedSchemaName} but resolved=${resolvedSchemaName}`,
         );
       }
-      const { inboundGateway, replicaEntity, replicaOutbox, syncLog } =
-        buildTenantSchema(schemaName);
+      const {
+        inboundGateway,
+        replicaEntity,
+        replicaOutbox,
+        syncLog,
+        activeSyncLocks,
+      } = buildTenantSchema(schemaName);
 
       // Fetch application metadata
       const connRows = await this.db
@@ -121,6 +126,14 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           throw new Error(`Inbound record for traceId ${traceId} not found`);
         }
 
+        if (inbound.status !== "RECEIVED" && inbound.status !== "PENDING") {
+          this.logger.debug(
+            { traceId, status: inbound.status },
+            "L2 already processed this trace (idempotent redelivery). Skipping.",
+          );
+          return;
+        }
+
         const extractor = getReplicaExtractor(appName, appProfile);
 
         // If the connection has an explicit appProfile (e.g. "revenova") but no
@@ -165,6 +178,41 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         const resolvedEntityType = extracted.entityType;
         const resolvedData = extracted.data;
 
+        // ── ACQUIRE ENTITY LOCK ───────────────────────────────────────────────
+        // Prevents an UPDATE event from starting while a CREATE event is still
+        // in-flight (L2 -> L6), ensuring the UPDATE has access to the GEM mapping.
+        try {
+          // Self-healing: clear any stale locks that have expired (e.g. from permanently crashed workers)
+          await tx
+            .delete(activeSyncLocks)
+            .where(
+              and(
+                eq(activeSyncLocks.connectionId, connectionId),
+                eq(activeSyncLocks.entityId, resolvedEntityId),
+                sql`${activeSyncLocks.expiresAt} < NOW()`,
+              ),
+            );
+
+          await tx.insert(activeSyncLocks).values({
+            connectionId,
+            entityId: resolvedEntityId,
+            lockedByTraceId: traceId,
+            expiresAt: sql`NOW() + INTERVAL '10 minutes'`,
+          });
+        } catch (err: unknown) {
+          if (
+            err instanceof Error &&
+            (err.message.includes("unique constraint") ||
+              err.message.includes("duplicate key"))
+          ) {
+            throw new Error(
+              `Entity ${resolvedEntityId} is currently locked by an in-flight sync. ` +
+                `Delaying processing to maintain FIFO order.`,
+            );
+          }
+          throw err;
+        }
+
         // Upsert into replica_entity keyed on (connectionId, entityType, extEntityId).
         // extEntityId is the vendor's stable business ID (e.g. Salesforce Account ID).
         // Multiple webhook deliveries for the same entity converge into one row via ON CONFLICT.
@@ -201,12 +249,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
         // Insert sync_log
         const durationMs = Date.now() - start;
-        await tx.insert(syncLog).values({
-          traceId,
-          layer: "L2",
-          status: "SUCCESS",
-          durationMs,
-        });
+        await tx
+          .insert(syncLog)
+          .values({
+            traceId,
+            layer: "L2",
+            status: "SUCCESS",
+            durationMs,
+          })
+          .onConflictDoNothing();
 
         // Atomically write the outbox entry — Debezium CDC watches this table
         // and triggers the relay to ReplicaQueue (via CdcRelayController locally
@@ -266,12 +317,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
 
-          await tx.insert(syncLog).values({
-            traceId,
-            layer: "L2",
-            status: "FAIL",
-            durationMs: Date.now() - start,
-          });
+          await tx
+            .insert(syncLog)
+            .values({
+              traceId,
+              layer: "L2",
+              status: "FAIL",
+              durationMs: Date.now() - start,
+            })
+            .onConflictDoNothing();
 
           await tx
             .update(inboundGateway)

@@ -220,7 +220,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             target: normalizedEntity.replicaId,
             set: {
               // Always overwrite with the latest normalised payload
-              // traceId is immutable after first insert (removed from update set)
+              // traceId MUST be updated so L4 FanOut can find it by the current traceId
+              traceId,
               canonicalType,
               data: safeData,
             },

@@ -43,7 +43,7 @@ function setNestedValue(obj: any, path: string, value: any): void {
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
     if (current[part] === undefined || current[part] === null) {
-      current[part] = Object.create(null);
+      current[part] = {};
     } else if (typeof current[part] !== 'object' || Array.isArray(current[part])) {
       throw new TypeError(
         `setNestedValue: intermediate key "${part}" in path "${path}" already holds a ` +
@@ -70,7 +70,7 @@ export function hydratePayload(
   markUnmapped: boolean = false
 ): any {
   rules = rules || [];
-  const payload: any = Object.create(null);
+  const payload: any = {};
   for (const rule of rules) {
     const val = getNestedValue(data, rule.src);
     if (val !== undefined) {

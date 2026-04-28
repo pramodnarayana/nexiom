@@ -88,8 +88,8 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
         const normalizedData: Record<string, unknown> = {
             displayName:       data['name'],
             tmsType:           data['rtms__tms_type__c'],
-            // TP SF ID — FK link to tms_tp table
-            tpSfId:            data['rtms__transportation_profile__c'],
+            // TP Source ID — FK link to tms_tp table
+            tpSourceId:        data['rtms__transportation_profile__c'],
             // Billing address → ShipAddr on QB Vendor
             billingStreet:     data['billingstreet'],
             billingCity:       data['billingcity'],
@@ -131,8 +131,8 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
                 scac:                data['rtms__scac__c'],
                 federalTaxId:        data['rtms__federal_tax_id__c'],
                 usdot:               data['rtms__usdot_number__c'],
-                // Remit-To Account SF ID — FK to tms_carrier or tms_factoring
-                remitToSfId:         data['rtms__carrier_remit_to__c'],
+                // Remit-To Account Source ID — FK to tms_carrier or tms_factoring
+                remitToSourceId:     data['rtms__carrier_remit_to__c'],
                 remitToOption:       data['rtms__remit_to_option__c'],
                 carrierOperation:    data['rtms__carrier_operation__c'],
                 agreementStatus:     data['rtms__agreement_status__c'],

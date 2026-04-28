@@ -24,7 +24,6 @@ import { RetryableException } from "@nexiom/piece-framework";
 import {
   sanitizeError,
   isValidPipelineMessage,
-  extractDestVendorId,
 } from "../../shared/pipeline.utils.js";
 
 /** Maximum number of executeAction attempts before permanently failing. */
@@ -165,6 +164,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           targetConnectionId,
           undefined, // targetAppName
           undefined, // targetTenantId
+          undefined, // targetObject
           currentAttemptCount, // expectedAttemptCount
           currentStatus, // expectedStatus
         );
@@ -256,6 +256,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
       // ── Call piece.executeAction ──────────────────────────────────────────
       let resPayload: Record<string, unknown> | null = null;
+      let respEntityId: string | undefined = undefined;
       let statusCode = 500;
       let finalStatus: "SUCCESS" | "FAIL" | "RETRY" = "FAIL";
 
@@ -266,6 +267,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           credentials as unknown as Record<string, unknown>,
         );
         resPayload = resp.body;
+        respEntityId = resp.entityId;
         statusCode = resp.statusCode ?? 200;
 
         if (statusCode >= 200 && statusCode < 300) {
@@ -337,8 +339,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       }
 
       // ── TX-3 (L6): Write result, GEM upsert, sync_log ────────────────────
-      const destVendorId =
-        finalStatus === "SUCCESS" ? extractDestVendorId(resPayload) : undefined;
+      // `entityId` is explicitly surfaced by each Piece in VendorResponse
+      // instead of being guessed from the raw body by the pipeline core.
+      const destVendorId = finalStatus === "SUCCESS" ? respEntityId : undefined;
 
       await this.writeL6Result(
         srcSchemaName,
@@ -358,6 +361,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetConnectionId,
         targetAppName,
         targetTenantId,
+        targetObject,
         currentAttemptCount + 1, // expectedAttemptCount
         "PROCESSING", // expectedStatus
       );
@@ -407,6 +411,19 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           // Swallow rollback errors — original error is rethrown below.
         }
       }
+      this.logger.error(
+        {
+          event: "l5.error",
+          traceId,
+          routeId,
+          connectionId,
+          outboundGatewayId,
+          layer: "L5",
+          err: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        },
+        "DeliveryService encountered an unexpected error",
+      );
       throw err;
     }
   }
@@ -434,10 +451,12 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     targetConnectionId: string,
     targetAppName?: string,
     targetTenantId?: string,
+    targetObject?: string,
     expectedAttemptCount?: number,
     expectedStatus?: string,
   ): Promise<void> {
-    const { outboundGateway, syncLog } = buildTenantSchema(srcSchemaName);
+    const { outboundGateway, syncLog, activeSyncLocks } =
+      buildTenantSchema(srcSchemaName);
 
     await this.db.transaction(async (tx) => {
       assertValidSchemaName(srcSchemaName);
@@ -506,6 +525,40 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               lastSyncedAt: sql`NOW()`,
             },
           });
+
+        // ── Target Replica Write-Back (Synthetic Webhook) ──────────────────
+        // Keep the target connection's replica cache instantly up-to-date
+        // to avoid expensive API GET calls for SyncTokens during future updates.
+        if (resPayload && targetObject) {
+          const targetSchemaName =
+            await this.storageResolver.resolveSchemaName(targetConnectionId);
+          const { replicaEntity: targetReplicaEntity } =
+            buildTenantSchema(targetSchemaName);
+
+          await tx
+            .insert(targetReplicaEntity)
+            .values({
+              traceId,
+              connectionId: targetConnectionId,
+              entityType: targetObject,
+              entityId: destVendorId,
+              data: resPayload,
+              version: 1,
+            })
+            .onConflictDoUpdate({
+              target: [
+                targetReplicaEntity.connectionId,
+                targetReplicaEntity.entityType,
+                targetReplicaEntity.entityId,
+              ],
+              set: {
+                data: resPayload,
+                traceId,
+                version: sql`${targetReplicaEntity.version} + 1`,
+                updatedAt: sql`NOW()`,
+              },
+            });
+        }
       }
 
       // Sync log audit row — idempotent on (traceId, routeId, layer, status)
@@ -528,6 +581,23 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           ],
           where: sql`${syncLog.routeId} IS NOT NULL`,
         });
+
+      // ── Release Entity Lock ───────────────────────────────────────────────
+      // If there are no more active routes for this traceId, we can safely
+      // release the lock so the next CDC event for this entity can begin.
+      const remainingPending = await tx
+        .select({ id: outboundGateway.id })
+        .from(outboundGateway)
+        .where(
+          sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} IN ('PENDING', 'PROCESSING', 'RETRY') AND ${outboundGateway.id} != ${outboundGatewayId}`,
+        )
+        .limit(1);
+
+      if (remainingPending.length === 0) {
+        await tx
+          .delete(activeSyncLocks)
+          .where(sql`${activeSyncLocks.lockedByTraceId} = ${traceId}`);
+      }
     });
   }
 }

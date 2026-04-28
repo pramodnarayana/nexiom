@@ -17,6 +17,7 @@ export class SqlDatabaseManager implements DatabaseManager {
     constructor(
         private readonly db: DrizzleDb,
         logger?: Logger,
+        private readonly domainProvisionerResolver?: (appName: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
     ) {
         this.logger = logger ?? {
             debug: (msg: string, ...args: unknown[]) => {
@@ -197,6 +198,19 @@ export class SqlDatabaseManager implements DatabaseManager {
                       WHEN duplicate_object THEN NULL;
             END $$;
         `);
+
+        // ── ACTIVE SYNC LOCKS — L1 → L6 concurrency control ─────────────────
+        await this.db.$client.query(`
+            CREATE TABLE IF NOT EXISTS "${schemaName}".active_sync_locks (
+                id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                connection_id      UUID         NOT NULL,
+                entity_id          VARCHAR(255) NOT NULL,
+                locked_by_trace_id UUID         NOT NULL,
+                expires_at         TIMESTAMPTZ  NOT NULL,
+                created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                CONSTRAINT uq_sync_lock UNIQUE (connection_id, entity_id)
+            );
+        `);
     }
 
     private async provisionReplicaTables(schemaName: string): Promise<void> {
@@ -310,6 +324,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
             trace_id      UUID        NOT NULL,
             connection_id UUID        NOT NULL,
+            schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
@@ -317,6 +332,13 @@ export class SqlDatabaseManager implements DatabaseManager {
             next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+    `);
+
+        await this.db.$client.query(`
+        DO $$ BEGIN
+            ALTER TABLE "${schemaName}".normalized_outbox ADD COLUMN IF NOT EXISTS schema_name VARCHAR(128) NOT NULL DEFAULT current_schema();
+        EXCEPTION WHEN duplicate_column THEN NULL;
+        END $$;
     `);
 
         await this.db.$client.query(`
@@ -335,32 +357,35 @@ export class SqlDatabaseManager implements DatabaseManager {
         `);
     }
 
-    /**
-     * Placeholder for canonical table provisioning.
-     *
-     * This method only reserves canonical slots in the schema plan hierarchy.
-     * It does NOT provision domain-specific tables. Callers must invoke
-     * getDomainProvisioner(appName) separately to provision actual domain DDL
-     * (e.g., @nexiom/domain-tms creates tms_carrier, tms_tp, etc.).
-     *
-     * applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
-     * is registered — domain tables are provisioned via the activation flow.
-     */
     private async provisionCanonicalTables(schemaName: string): Promise<void> {
-        this.logger.debug(
-            `provisionCanonicalTables(${schemaName}): no-op placeholder; ` +
-            `domain provisioners must be invoked separately via getDomainProvisioner(appName)`
-        );
-        // ── CANONICAL TABLES — Typed per-entity tables with FK relationships ──
-        // Applications register domain provisioners that create their own
-        // typed canonical tables (e.g., @nexiom/domain-tms creates tms_carrier,
-        // tms_tp, etc.). The platform provides a placeholder stub here so that
-        // applyPlan(CANONICAL_ACTIVE) succeeds even when no domain provisioner
-        // is registered. Application-specific tables are provisioned via
-        // getDomainProvisioner(appName) and called by the activation flow.
-        //
-        // This method intentionally left minimal — domain-specific DDL lives
-        // in application packages, not in the platform dbmanager.
+        try {
+            // Find appName from connection_storage_registry
+            const res = await this.db.$client.query(`
+                SELECT ac.app_name 
+                FROM public.connection_storage_registry csr
+                JOIN public.app_connection ac ON ac.id = csr.connection_id
+                WHERE csr.data_namespace = $1
+            `, [schemaName]);
+            
+            const appName = res.rows[0]?.app_name as string | undefined;
+            
+            if (appName && this.domainProvisionerResolver) {
+                const provisioner = this.domainProvisionerResolver(appName);
+                if (provisioner) {
+                    this.logger.debug(`Applying domain provisioner for appName=${appName} in schema=${schemaName}`);
+                    await provisioner(this.db, schemaName);
+                    return;
+                } else {
+                    this.logger.debug(`No domain provisioner found for appName=${appName} in schema=${schemaName}`);
+                }
+            } else if (!this.domainProvisionerResolver) {
+                this.logger.debug(`No domainProvisionerResolver provided to SqlDatabaseManager`);
+            }
+        } catch (error) {
+            this.logger.error?.(`Failed to invoke domain provisioner for schema ${schemaName}: ${error instanceof Error ? error.message : String(error)}`);
+            // We swallow this error because the platform pipeline shouldn't hard-fail
+            // if a specific app's canonical provisioning logic fails. It will just remain un-provisioned.
+        }
     }
 
     private async provisionOutboundTables(schemaName: string): Promise<void> {
@@ -444,21 +469,21 @@ export class SqlDatabaseManager implements DatabaseManager {
             layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
             status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY','DISMISSED')),
             duration_ms INTEGER,
-            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_sync_log_trace_layer_status UNIQUE (trace_id, layer, status)
+            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
     `);
 
-        // Idempotently add the unique constraint to pre-existing schemas that
-        // were provisioned before this constraint was introduced.
+        // Create the modern routed/unrouted partial unique indexes
         await this.db.$client.query(`
-        DO $$ BEGIN
-            ALTER TABLE "${schemaName}".sync_log
-                ADD CONSTRAINT uq_sync_log_trace_layer_status
-                UNIQUE (trace_id, layer, status);
-        EXCEPTION WHEN duplicate_table THEN NULL;
-                 WHEN duplicate_object THEN NULL;
-        END $$;
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_routed
+            ON "${schemaName}".sync_log (trace_id, route_id, layer, status)
+            WHERE route_id IS NOT NULL;
+    `);
+
+        await this.db.$client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_unrouted
+            ON "${schemaName}".sync_log (trace_id, layer, status)
+            WHERE route_id IS NULL;
     `);
 
         await this.db.$client.query(`
@@ -493,6 +518,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             route_id      UUID        NOT NULL,
             outbound_gateway_id UUID  NOT NULL,
             payload       JSONB       NOT NULL,
+            schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
@@ -515,6 +541,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS trace_id             UUID;
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
             ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS outbound_gateway_id  UUID;
+            ALTER TABLE "${schemaName}".delivery_outbox ADD COLUMN IF NOT EXISTS schema_name          VARCHAR(128) DEFAULT current_schema();
 
             -- Step 3: copy attempt_count into attempts ONLY if attempt_count still exists.
             -- Tables created fresh from the current schema already have 'attempts' and never
@@ -552,6 +579,7 @@ export class SqlDatabaseManager implements DatabaseManager {
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN outbound_gateway_id SET NOT NULL;
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN attempts            SET NOT NULL;
             ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN next_retry_at       SET NOT NULL;
+            ALTER TABLE "${schemaName}".delivery_outbox ALTER COLUMN schema_name         SET NOT NULL;
         EXCEPTION WHEN duplicate_column THEN NULL;
         END $$;
         `);

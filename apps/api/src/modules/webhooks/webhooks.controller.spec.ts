@@ -330,4 +330,80 @@ describe('WebhooksController', () => {
       );
     });
   });
+
+  it('normalizes string payloads into raw wrappers', async () => {
+    let capturedValues: Record<string, unknown> | undefined;
+    db._tx.insert.mockReset();
+    db._tx.insert
+      .mockReturnValueOnce({
+        values: vi.fn((v: Record<string, unknown>) => {
+          capturedValues = v;
+          return Promise.resolve(undefined);
+        }),
+      })
+      .mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      '<xml>data</xml>',
+      { 'content-type': 'application/xml' },
+      {} as any,
+      {} as any,
+    );
+
+    expect(capturedValues).toBeDefined();
+    expect(capturedValues?.['request']).toEqual({
+      raw: '<xml>data</xml>',
+      contentType: 'application/xml',
+    });
+  });
+
+  it('looks up existing trace and re-enqueues on idempotency collision', async () => {
+    const pgError = Object.assign(new Error('unique_violation'), {
+      code: '23505',
+      constraint: 'idx_l1_ext_id',
+    });
+    // First transaction (insert) throws unique_violation
+    // Second transaction (lookup) returns an existing record
+    db.transaction
+      .mockRejectedValueOnce(pgError)
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          execute: vi.fn().mockResolvedValue(undefined),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { traceId: 'existing-trace-id', response: null },
+            ]),
+        };
+        await cb(mockTx);
+      });
+
+    await expect(
+      controller.ingest(
+        '00000000-0000-0000-0000-000000000001',
+        { foo: 'bar' },
+        { 'x-webhook-id': 'sf-event-123' },
+        {} as any,
+        {
+          status: vi.fn().mockReturnThis(),
+          set: vi.fn().mockReturnThis(),
+          send: vi.fn(),
+        } as any,
+      ),
+    ).resolves.toBeUndefined();
+
+    // Verify it attempted to re-enqueue
+    expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
+      traceId: 'existing-trace-id',
+      connectionId: '00000000-0000-0000-0000-000000000001',
+    });
+  });
 });

@@ -41,6 +41,13 @@ export interface VendorResponse {
   /** Parsed response body. */
   body: Record<string, unknown>;
   /**
+   * The vendor-assigned ID of the created or updated entity.
+   * Each Piece is responsible for extracting this from the raw response body
+   * and surfacing it here. DeliveryService reads this field for GEM writes.
+   * This keeps ID extraction logic inside the Piece, not in the pipeline core.
+   */
+  entityId?: string;
+  /**
    * Optional piece-layer retry opt-in.
    * Set to `true` to signal DeliveryService that this response should be
    * retried without the piece needing to throw a RetryableException.

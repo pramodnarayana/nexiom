@@ -12,6 +12,7 @@ export * from './crypto/encryption.service.js';
 
 // Token management (OAuth refresh, credential storage)
 export * from './oauth/token-manager.service.js';
+export * from './oauth/token-refresh.service.js';
 
 
 

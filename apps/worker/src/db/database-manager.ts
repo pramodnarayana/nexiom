@@ -684,10 +684,13 @@ export class DatabaseManager {
 
     try {
       const db = drizzle(client, { schema: dbSchema });
+      const { getDomainProvisioner } = await import("@nexiom/piece-framework");
       // SqlDatabaseManager only calls db.$client.query() — the schema generic mismatch
       // between the local schema and @nexiom/database's schema is safe to cast here.
       const schemaMgr = new SqlDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
+        undefined,
+        getDomainProvisioner,
       );
 
       const fixtures = [
@@ -756,6 +759,32 @@ export class DatabaseManager {
           }
 
           const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
+
+          // Also seed the connection_storage_registry so applyPlan can resolve appName
+          const existReg = await tx
+            .select()
+            .from(dbSchema.connectionStorageRegistry)
+            .where(
+              sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
+            )
+            .limit(1);
+
+          if (!existReg[0]) {
+            await tx.insert(dbSchema.connectionStorageRegistry).values({
+              connectionId: fixture.id,
+              dataNamespace: schemaName,
+              databaseHostId: "aurora-prod",
+              regionContext: "local",
+              schemaPlan: "OUTBOUND_ACTIVE",
+            });
+          } else {
+            await tx
+              .update(dbSchema.connectionStorageRegistry)
+              .set({ schemaPlan: "OUTBOUND_ACTIVE" })
+              .where(
+                sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
+              );
+          }
           // SchemaPlan.OUTBOUND_ACTIVE creates all full pipeline stages
           await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
 

@@ -125,6 +125,15 @@ export class WebhooksController {
         normalizedPayload =
           body.trim().length > 0 ? { raw: body, contentType } : {};
         appResponseBody = normalizedPayload;
+      } else if (
+        !contentType.includes('json') &&
+        req.rawBody &&
+        req.rawBody.length > 0
+      ) {
+        // For XML or other non-JSON types, prioritize rawBody.
+        // NestJS defaults unparsed bodies to {}, which would otherwise incorrectly evaluate as a parsed JSON object.
+        normalizedPayload = { raw: req.rawBody.toString('utf-8'), contentType };
+        appResponseBody = normalizedPayload;
       } else if (body != null && typeof body === 'object') {
         // Accept both objects and arrays as parsed payloads
         if (Array.isArray(body)) {

@@ -1,4 +1,4 @@
-import { DefaultOAuthRefreshClient } from './token-refresh.service.js';
+import { RegistryOAuthRefreshClient } from './registry-token-refresh.service.js';
 import { EncryptionService, OAuthRefreshError } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
@@ -27,8 +27,8 @@ const MOCK_OAUTH2_PIECE = {
   },
 } as unknown as Piece;
 
-describe('DefaultOAuthRefreshClient', () => {
-  let client: DefaultOAuthRefreshClient;
+describe('RegistryOAuthRefreshClient', () => {
+  let client: RegistryOAuthRefreshClient;
   let mockPieceRegistry: Mocked<Partial<PieceRegistryService>>;
   let mockEncryptionService: { encrypt: Mock; decrypt: Mock };
   let mockDb: {
@@ -65,7 +65,7 @@ describe('DefaultOAuthRefreshClient', () => {
       limit: vi.fn().mockResolvedValue([{ value: encryptedValueBlob }]),
     };
 
-    client = new DefaultOAuthRefreshClient(
+    client = new RegistryOAuthRefreshClient(
       mockPieceRegistry as PieceRegistryService,
       mockDb as unknown as import('@nexiom/database').DrizzleDb,
       mockEncryptionService as unknown as EncryptionService,

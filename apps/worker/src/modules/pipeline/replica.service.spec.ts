@@ -64,6 +64,7 @@ describe("ReplicaService", () => {
               objectType: "foo",
               extReqId: "bar",
               id: "1",
+              status: "RECEIVED",
               request: {},
             },
           ]),
@@ -73,6 +74,7 @@ describe("ReplicaService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "1" }]),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
+          delete: vi.fn().mockReturnThis(),
         };
         return cb(tx);
       }),
@@ -119,12 +121,14 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
+            status: "RECEIVED",
             request: {},
           },
         ]),
         insert: mockInsert,
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       };
       return cb(tx);
     });
@@ -170,6 +174,7 @@ describe("ReplicaService", () => {
         limit: vi.fn().mockResolvedValue([]), // mock inbound not found
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
@@ -193,11 +198,13 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
+            status: "RECEIVED",
             request: {},
           },
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
@@ -222,11 +229,13 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
+            status: "RECEIVED",
             request: { junk: "data" }, // Missing the root envelope to fail extraction
           },
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
@@ -292,12 +301,14 @@ describe("ReplicaService", () => {
             objectType: "foo",
             extReqId: "bar",
             id: "1",
+            status: "RECEIVED",
             request: {},
           },
         ]),
         insert: mockInsert,
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       });
     });
     service.onModuleInit();
@@ -324,11 +335,13 @@ describe("ReplicaService", () => {
             objectType: "sf_Account",
             extReqId: "",
             id: "1",
+            status: "RECEIVED",
             request: {},
           },
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
@@ -340,5 +353,108 @@ describe("ReplicaService", () => {
 
   it("should destroy module", () => {
     expect(() => service.onModuleDestroy()).not.toThrow();
+  });
+
+  it("should skip processing if inbound record status is not RECEIVED or PENDING", async () => {
+    const mockExecute = vi.fn();
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: mockExecute,
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "sf_Account",
+            extReqId: "mock-id",
+            id: "1",
+            status: "COMPLETED", // Not RECEIVED or PENDING
+            request: {},
+          },
+        ]),
+        delete: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await handler({ traceId: "123", connectionId: "456" });
+    // Extractor/insert should not be called (mockExecute only called for SET search_path)
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(queueService.send).toHaveBeenCalled();
+  });
+
+  it("should throw a FIFO error if activeSyncLocks insert fails due to unique constraint", async () => {
+    const mockInsert = vi.fn().mockImplementation(() => {
+      return {
+        values: vi.fn().mockImplementation(() => {
+          throw new Error("duplicate key value violates unique constraint");
+        }),
+      };
+    });
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "sf_Account",
+            extReqId: "mock-id",
+            id: "1",
+            status: "RECEIVED",
+            request: {},
+          },
+        ]),
+        delete: vi.fn().mockReturnThis(),
+        insert: mockInsert,
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("currently locked by an in-flight sync");
+  });
+
+  it("should rethrow generic errors during activeSyncLocks insert", async () => {
+    const mockInsert = vi.fn().mockImplementation(() => {
+      return {
+        values: vi.fn().mockImplementation(() => {
+          throw new Error("Generic database error");
+        }),
+      };
+    });
+    db.transaction.mockImplementationOnce(async (cb: any) =>
+      cb({
+        execute: vi.fn().mockResolvedValue(undefined),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            objectType: "sf_Account",
+            extReqId: "mock-id",
+            id: "1",
+            status: "RECEIVED",
+            request: {},
+          },
+        ]),
+        delete: vi.fn().mockReturnThis(),
+        insert: mockInsert,
+        values: vi.fn().mockReturnThis(),
+      }),
+    );
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).rejects.toThrow("Generic database error");
   });
 });
