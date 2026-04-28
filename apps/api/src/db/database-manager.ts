@@ -1069,6 +1069,8 @@ export class DatabaseManager {
       }
 
       // Check if a workspace exists
+      // Note: This uses an unfiltered query which may pick any existing workspace.
+      // For deterministic behavior, ensure a seeded workspace exists via db:seed.
       const workspaces = await db.select().from(schema.uiWorkspaces).limit(1);
       if (workspaces.length === 0) {
         throw new Error('No workspace found. Run pnpm db:seed first.');

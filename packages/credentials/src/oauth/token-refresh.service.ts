@@ -27,9 +27,8 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     externalId: string,
     refreshToken: string,
   ): Promise<Record<string, unknown>> {
-    this.validateInputs(tenantId, appName, externalId, refreshToken);
-
     try {
+      this.validateInputs(tenantId, appName, externalId, refreshToken);
       const tokenUrl = await this.getTokenUrl(appName);
       const { clientId, clientSecret, vendorParams } = await this.getCredentials(tenantId, appName, externalId);
       const resolvedTokenUrl = resolveOAuth2Url(tokenUrl, vendorParams);
@@ -54,6 +53,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       return parsed as Record<string, unknown>;
     } catch (error) {
       if (error instanceof OAuthRefreshError) throw error;
+      if (error instanceof TypeError) {
+        throw new OAuthRefreshError(`Invalid refresh input: ${error.message}`, 400);
+      }
       this.logger.error(`[TokenRefresh] Unexpected error for ${appName} on tenant ${tenantId}:`, error);
       throw new OAuthRefreshError(`Unexpected error during token refresh for ${appName}: ${error instanceof Error ? error.message : String(error)}`, 500);
     }

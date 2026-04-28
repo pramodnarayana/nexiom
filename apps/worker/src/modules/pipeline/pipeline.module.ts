@@ -69,5 +69,6 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
   ],
 })
 export class PipelineModule {
+  // Intentionally injected to force eager instantiation of DeliveryService
   constructor(private readonly deliveryService: DeliveryService) {}
 }
