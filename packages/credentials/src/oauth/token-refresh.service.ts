@@ -47,7 +47,11 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       if (!response.ok) {
         throw new OAuthRefreshError(`OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(), response.status);
       }
-      return (await response.json()) as Record<string, unknown>;
+      const parsed = await response.json();
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new OAuthRefreshError(`OAuth token response must be a non-null object, received: ${Array.isArray(parsed) ? 'array' : typeof parsed}`, 500);
+      }
+      return parsed as Record<string, unknown>;
     } catch (error) {
       if (error instanceof OAuthRefreshError) throw error;
       this.logger.error(`[TokenRefresh] Unexpected error for ${appName} on tenant ${tenantId}:`, error);
