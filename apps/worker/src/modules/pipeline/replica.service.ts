@@ -210,7 +210,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
               `Entity ${resolvedEntityId} is currently locked by an in-flight sync. ` +
                 `Delaying processing to maintain FIFO order.`,
             );
-            (lockContentionError as any).isLockContention = true;
+            Object.assign(lockContentionError, { isLockContention: true });
             throw lockContentionError;
           }
           throw err;
@@ -302,7 +302,10 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       );
     } catch (err) {
       // Check if this is a lock contention error — if so, treat as retry/defer
-      const isLockContention = err && typeof err === 'object' && (err as any).isLockContention === true;
+      const isLockContention =
+        err instanceof Error &&
+        "isLockContention" in err &&
+        (err as Record<string, unknown>).isLockContention === true;
 
       if (isLockContention) {
         this.logger.log(

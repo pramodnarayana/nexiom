@@ -940,7 +940,9 @@ export class DatabaseManager {
    * Safe to run on a live database — all changes are guarded by IF EXISTS / IF NOT EXISTS.
    */
   async migrateAllSchemas(): Promise<void> {
-    console.log('🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...\n');
+    console.log(
+      '🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...\n',
+    );
 
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
@@ -1048,12 +1050,16 @@ export class DatabaseManager {
       const salesforceConn = await db
         .select()
         .from(schema.appConnections)
-        .where(eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000001'))
+        .where(
+          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000001'),
+        )
         .limit(1);
       const qbConn = await db
         .select()
         .from(schema.appConnections)
-        .where(eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000002'))
+        .where(
+          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000002'),
+        )
         .limit(1);
 
       if (!salesforceConn[0] || !qbConn[0]) {
@@ -1139,7 +1145,6 @@ export class DatabaseManager {
           stitchId: stitchId,
           sourceCanonical: 'TMS_CARRIER',
           mappingRules: carrierMappingRules,
-          destCanonical: 'Vendor',
         })
         .onConflictDoUpdate({
           target: [
@@ -1148,7 +1153,6 @@ export class DatabaseManager {
           ],
           set: {
             mappingRules: carrierMappingRules,
-            destCanonical: 'Vendor',
           },
         });
 

@@ -420,8 +420,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           connectionId,
           outboundGatewayId,
           layer: "L5",
-          err: sanitized.message,
-          stack: sanitized.stack,
+          err: sanitized,
+          stack: err instanceof Error ? err.stack : undefined,
         },
         "DeliveryService encountered an unexpected error",
       );

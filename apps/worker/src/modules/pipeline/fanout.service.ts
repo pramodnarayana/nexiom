@@ -381,7 +381,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               .select()
               .from(targetReplicaEntity)
               .where(
-                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityType} = ${stitch.destEntityType} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
+                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityType} = ${stitch.targetObject} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
               )
               .limit(1);
 

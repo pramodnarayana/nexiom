@@ -10,7 +10,9 @@ import {
 } from "@nexiom/credentials";
 import { RegistryOAuthRefreshClient } from "./registry-token-refresh.service.js";
 import { DATABASE_CONNECTION } from "@nexiom/database";
+import type { DrizzleDb } from "@nexiom/database";
 import { PiecesModule } from "@nexiom/piece-registry";
+import type { Redis } from "ioredis";
 
 import { ReplicaService } from "./replica.service.js";
 import { NormalizationService } from "./normalization.service.js";
@@ -42,7 +44,12 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
     },
     {
       provide: TokenManagerService,
-      useFactory: (db, redis, crypto, refreshClient) => {
+      useFactory: (
+        db: DrizzleDb,
+        redis: Redis,
+        crypto: EncryptionService,
+        refreshClient: OAuthRefreshClient,
+      ) => {
         return new TokenManagerService(db, redis, crypto, refreshClient);
       },
       inject: [
