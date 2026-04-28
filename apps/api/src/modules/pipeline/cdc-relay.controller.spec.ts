@@ -100,7 +100,7 @@ describe('CdcRelayController', () => {
     );
   });
 
-  it('ignores delivery_outbox inserts and logs a debug message', async () => {
+  it('ignores delivery_outbox inserts', async () => {
     await controller.relay({
       __op: 'c',
       __table: 'delivery_outbox',

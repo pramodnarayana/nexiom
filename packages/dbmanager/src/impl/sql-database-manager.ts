@@ -383,8 +383,8 @@ export class SqlDatabaseManager implements DatabaseManager {
             }
         } catch (error) {
             this.logger.error?.(`Failed to invoke domain provisioner for schema ${schemaName}: ${error instanceof Error ? error.message : String(error)}`);
-            // We swallow this error because the platform pipeline shouldn't hard-fail
-            // if a specific app's canonical provisioning logic fails. It will just remain un-provisioned.
+            // Re-throw the error so the caller can stop the state transition
+            throw error;
         }
     }
 
@@ -471,6 +471,26 @@ export class SqlDatabaseManager implements DatabaseManager {
             duration_ms INTEGER,
             timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+    `);
+
+        // Drop legacy unique constraint before creating partial indexes
+        await this.db.$client.query(`
+        DO $$
+        DECLARE
+            constraint_name TEXT;
+        BEGIN
+            -- Find any unique constraint on sync_log (excluding the new partial indexes)
+            SELECT conname INTO constraint_name
+            FROM pg_constraint
+            WHERE conrelid = '"${schemaName}".sync_log'::regclass
+              AND contype = 'u'
+              AND conname NOT IN ('uq_sync_log_routed', 'uq_sync_log_unrouted')
+            LIMIT 1;
+
+            IF constraint_name IS NOT NULL THEN
+                EXECUTE 'ALTER TABLE "${schemaName}".sync_log DROP CONSTRAINT IF EXISTS ' || quote_ident(constraint_name);
+            END IF;
+        END $$;
     `);
 
         // Create the modern routed/unrouted partial unique indexes

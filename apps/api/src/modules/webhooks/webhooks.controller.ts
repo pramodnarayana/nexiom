@@ -126,7 +126,7 @@ export class WebhooksController {
           body.trim().length > 0 ? { raw: body, contentType } : {};
         appResponseBody = normalizedPayload;
       } else if (
-        !contentType.includes('json') &&
+        !contentType.toLowerCase().includes('json') &&
         req.rawBody &&
         req.rawBody.length > 0
       ) {

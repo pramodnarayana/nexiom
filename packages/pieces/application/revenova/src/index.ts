@@ -22,8 +22,11 @@ export function initializeRevenovaApplicationRegistry() {
     );
 
     registerAppWebhookResponse((body, headers) => {
+        // Normalize content-type to lowercase for case-insensitive comparison
+        const contentType = (headers['content-type'] || (typeof body === 'object' && body && 'contentType' in body ? String(body.contentType) : '')).toLowerCase();
+
         // Fast-fail: Salesforce Outbound Messages are always XML
-        if (!headers['content-type']?.includes('text/xml') && !headers['content-type']?.includes('application/xml')) {
+        if (!contentType.includes('text/xml') && !contentType.includes('application/xml')) {
             return null;
         }
 

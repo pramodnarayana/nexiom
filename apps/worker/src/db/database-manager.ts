@@ -780,7 +780,7 @@ export class DatabaseManager {
           } else {
             await tx
               .update(dbSchema.connectionStorageRegistry)
-              .set({ schemaPlan: "OUTBOUND_ACTIVE" })
+              .set({ schemaPlan: "OUTBOUND_ACTIVE", dataNamespace: schemaName })
               .where(
                 sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
               );

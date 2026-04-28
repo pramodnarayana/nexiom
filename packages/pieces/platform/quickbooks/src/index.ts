@@ -381,8 +381,6 @@ export const quickbooks = createPiece({
       url = `${credentials['base_url'] as string}/v3/company/${encodeURIComponent(realmId)}`;
     }
     url = `${url}/${objectType.toLowerCase()}`;
-    
-    console.log(`\n\n=== QUICKBOOKS API DEBUG ===\nTarget URL: ${url}\nRealmID: ${realmId}\nEnvironment: ${env}\nUseSandbox: ${useSandbox}\n============================\n\n`);
 
     // Reads the sync context injected by the pipeline (L4 FanOut).
     // `_sync.dest.id`    — the known destination entity ID from the GEM table.
@@ -436,6 +434,13 @@ export const quickbooks = createPiece({
         const freshToken = await fetchCurrentEntity();
         if (freshToken) {
           reqPayload = { ...payload, Id: destId, SyncToken: freshToken };
+        } else {
+          // No sync token available — cannot proceed with update
+          throw new Error(
+            `Cannot update QuickBooks ${objectType} with Id=${destId}: ` +
+            `SyncToken is unavailable (not cached and GET request failed/returned nothing). ` +
+            `This entity may have been deleted or the destId may be stale.`
+          );
         }
       }
     }

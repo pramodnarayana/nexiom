@@ -205,10 +205,13 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             (err.message.includes("unique constraint") ||
               err.message.includes("duplicate key"))
           ) {
-            throw new Error(
+            // Lock contention — treat as a deferral (retry later), NOT a terminal FAIL
+            const lockContentionError = new Error(
               `Entity ${resolvedEntityId} is currently locked by an in-flight sync. ` +
                 `Delaying processing to maintain FIFO order.`,
             );
+            (lockContentionError as any).isLockContention = true;
+            throw lockContentionError;
           }
           throw err;
         }
@@ -298,6 +301,22 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         "L2 replication completed",
       );
     } catch (err) {
+      // Check if this is a lock contention error — if so, treat as retry/defer
+      const isLockContention = err && typeof err === 'object' && (err as any).isLockContention === true;
+
+      if (isLockContention) {
+        this.logger.log(
+          {
+            event: "l2.lock_contention",
+            traceId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "L2 lock contention detected — deferring to maintain FIFO order",
+        );
+        // Do NOT mark as FAIL; let the message remain PENDING for retry
+        throw err;
+      }
+
       this.logger.error(
         {
           event: "l2.error",

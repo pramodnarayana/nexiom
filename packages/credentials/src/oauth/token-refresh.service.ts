@@ -28,10 +28,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     refreshToken: string,
   ): Promise<Record<string, unknown>> {
     this.validateInputs(tenantId, appName, externalId, refreshToken);
-    
-    const tokenUrl = await this.getTokenUrl(appName);
 
     try {
+      const tokenUrl = await this.getTokenUrl(appName);
       const { clientId, clientSecret, vendorParams } = await this.getCredentials(tenantId, appName, externalId);
       const resolvedTokenUrl = resolveOAuth2Url(tokenUrl, vendorParams);
       const response = await fetch(resolvedTokenUrl, {

@@ -1034,16 +1034,16 @@ export class DatabaseManager {
     await this.withDrizzle(async (db, schema) => {
       const { eq, and } = await import('drizzle-orm');
 
-      // Check if connections exist
+      // Look up the deterministic fixtures created by provisionLocal()
       const salesforceConn = await db
         .select()
         .from(schema.appConnections)
-        .where(eq(schema.appConnections.appName, 'salesforce'))
+        .where(eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000001'))
         .limit(1);
       const qbConn = await db
         .select()
         .from(schema.appConnections)
-        .where(eq(schema.appConnections.appName, 'quickbooks'))
+        .where(eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000002'))
         .limit(1);
 
       if (!salesforceConn[0] || !qbConn[0]) {
@@ -1094,38 +1094,41 @@ export class DatabaseManager {
         console.log(`  ✓ Found existing integration stitch: ${stitchId}`);
       }
 
+      // Extract mapping rules into a constant to avoid duplication
+      const carrierMappingRules = [
+        { srcPath: 'displayName', destPath: 'DisplayName' },
+        { srcPath: 'displayName', destPath: 'CompanyName' },
+        { srcPath: 'tp.mcNumber', destPath: 'GivenName' },
+        { srcPath: 'remitTo.billingStreet', destPath: 'BillAddr.Line1' },
+        { srcPath: 'remitTo.billingCity', destPath: 'BillAddr.City' },
+        {
+          srcPath: 'remitTo.billingState',
+          destPath: 'BillAddr.CountrySubDivisionCode',
+        },
+        {
+          srcPath: 'remitTo.billingPostalCode',
+          destPath: 'BillAddr.PostalCode',
+        },
+        { srcPath: 'remitTo.billingCountry', destPath: 'BillAddr.Country' },
+        { srcPath: 'billingStreet', destPath: 'ShipAddr.Line1' },
+        { srcPath: 'billingCity', destPath: 'ShipAddr.City' },
+        {
+          srcPath: 'billingState',
+          destPath: 'ShipAddr.CountrySubDivisionCode',
+        },
+        { srcPath: 'billingPostalCode', destPath: 'ShipAddr.PostalCode' },
+        { srcPath: 'billingCountry', destPath: 'ShipAddr.Country' },
+        { srcPath: 'phone', destPath: 'PrimaryPhone.FreeFormNumber' },
+        { srcPath: 'fax', destPath: 'Fax.FreeFormNumber' },
+      ];
+
       // Insert or Update the field mapping rule
       await db
         .insert(schema.fieldMappings)
         .values({
           stitchId: stitchId,
           sourceCanonical: 'TMS_CARRIER',
-          mappingRules: [
-            { srcPath: 'displayName', destPath: 'DisplayName' },
-            { srcPath: 'displayName', destPath: 'CompanyName' },
-            { srcPath: 'tp.mcNumber', destPath: 'GivenName' },
-            { srcPath: 'remitTo.billingStreet', destPath: 'BillAddr.Line1' },
-            { srcPath: 'remitTo.billingCity', destPath: 'BillAddr.City' },
-            {
-              srcPath: 'remitTo.billingState',
-              destPath: 'BillAddr.CountrySubDivisionCode',
-            },
-            {
-              srcPath: 'remitTo.billingPostalCode',
-              destPath: 'BillAddr.PostalCode',
-            },
-            { srcPath: 'remitTo.billingCountry', destPath: 'BillAddr.Country' },
-            { srcPath: 'billingStreet', destPath: 'ShipAddr.Line1' },
-            { srcPath: 'billingCity', destPath: 'ShipAddr.City' },
-            {
-              srcPath: 'billingState',
-              destPath: 'ShipAddr.CountrySubDivisionCode',
-            },
-            { srcPath: 'billingPostalCode', destPath: 'ShipAddr.PostalCode' },
-            { srcPath: 'billingCountry', destPath: 'ShipAddr.Country' },
-            { srcPath: 'phone', destPath: 'PrimaryPhone.FreeFormNumber' },
-            { srcPath: 'fax', destPath: 'Fax.FreeFormNumber' },
-          ],
+          mappingRules: carrierMappingRules,
         })
         .onConflictDoUpdate({
           target: [
@@ -1133,35 +1136,7 @@ export class DatabaseManager {
             schema.fieldMappings.sourceCanonical,
           ],
           set: {
-            mappingRules: [
-              { srcPath: 'displayName', destPath: 'DisplayName' },
-              { srcPath: 'displayName', destPath: 'CompanyName' },
-              { srcPath: 'tp.mcNumber', destPath: 'GivenName' },
-              { srcPath: 'remitTo.billingStreet', destPath: 'BillAddr.Line1' },
-              { srcPath: 'remitTo.billingCity', destPath: 'BillAddr.City' },
-              {
-                srcPath: 'remitTo.billingState',
-                destPath: 'BillAddr.CountrySubDivisionCode',
-              },
-              {
-                srcPath: 'remitTo.billingPostalCode',
-                destPath: 'BillAddr.PostalCode',
-              },
-              {
-                srcPath: 'remitTo.billingCountry',
-                destPath: 'BillAddr.Country',
-              },
-              { srcPath: 'billingStreet', destPath: 'ShipAddr.Line1' },
-              { srcPath: 'billingCity', destPath: 'ShipAddr.City' },
-              {
-                srcPath: 'billingState',
-                destPath: 'ShipAddr.CountrySubDivisionCode',
-              },
-              { srcPath: 'billingPostalCode', destPath: 'ShipAddr.PostalCode' },
-              { srcPath: 'billingCountry', destPath: 'ShipAddr.Country' },
-              { srcPath: 'phone', destPath: 'PrimaryPhone.FreeFormNumber' },
-              { srcPath: 'fax', destPath: 'Fax.FreeFormNumber' },
-            ],
+            mappingRules: carrierMappingRules,
           },
         });
 

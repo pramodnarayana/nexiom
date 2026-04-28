@@ -411,6 +411,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           // Swallow rollback errors — original error is rethrown below.
         }
       }
+      const sanitized = sanitizeError(err);
       this.logger.error(
         {
           event: "l5.error",
@@ -419,8 +420,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           connectionId,
           outboundGatewayId,
           layer: "L5",
-          err: err instanceof Error ? err.message : String(err),
-          stack: err instanceof Error ? err.stack : undefined,
+          err: sanitized.message,
+          stack: sanitized.stack,
         },
         "DeliveryService encountered an unexpected error",
       );
@@ -589,7 +590,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         .select({ id: outboundGateway.id })
         .from(outboundGateway)
         .where(
-          sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} IN ('PENDING', 'PROCESSING', 'RETRY') AND ${outboundGateway.id} != ${outboundGatewayId}`,
+          sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} IN ('PENDING', 'PROCESSING', 'RETRY')`,
         )
         .limit(1);
 

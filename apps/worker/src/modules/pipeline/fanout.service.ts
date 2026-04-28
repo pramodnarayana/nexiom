@@ -283,6 +283,15 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           },
           `[DEBUG] No field mapping rules configured for canonicalType=${canonicalType}, skipping stitch route`,
         );
+        await this.writeSyncLog(
+          schemaName,
+          traceId,
+          stitch.id,
+          "L4",
+          "SKIPPED",
+          Date.now() - start,
+          syncLog,
+        );
         return;
       }
 
@@ -338,7 +347,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               .select()
               .from(targetReplicaEntity)
               .where(
-                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
+                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityType} = ${stitch.destEntityType} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
               )
               .limit(1);
 

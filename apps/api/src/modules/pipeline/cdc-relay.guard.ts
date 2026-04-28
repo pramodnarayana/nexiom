@@ -13,7 +13,6 @@ export class CdcRelayGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<{
       headers: Record<string, string | undefined>;
-      query: Record<string, string | undefined>;
     }>();
     const expectedSecret = this.config.get<string>('DEBEZIUM_SECRET');
 
@@ -23,12 +22,10 @@ export class CdcRelayGuard implements CanActivate {
 
     const authHeader = req.headers.authorization;
     const customHeader = req.headers['x-debezium-auth'];
-    const queryToken = req.query?.token;
 
     if (
       authHeader !== `Bearer ${expectedSecret}` &&
-      customHeader !== expectedSecret &&
-      queryToken !== expectedSecret
+      customHeader !== expectedSecret
     ) {
       throw new UnauthorizedException('Invalid CDC relay authorization');
     }

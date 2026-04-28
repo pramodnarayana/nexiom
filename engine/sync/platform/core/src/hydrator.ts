@@ -43,7 +43,7 @@ function setNestedValue(obj: any, path: string, value: any): void {
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
     if (current[part] === undefined || current[part] === null) {
-      current[part] = {};
+      current[part] = Object.create(null);
     } else if (typeof current[part] !== 'object' || Array.isArray(current[part])) {
       throw new TypeError(
         `setNestedValue: intermediate key "${part}" in path "${path}" already holds a ` +
