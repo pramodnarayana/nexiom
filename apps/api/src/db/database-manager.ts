@@ -851,7 +851,7 @@ export class DatabaseManager {
           } else {
             await db
               .update(dbSchema.connectionStorageRegistry)
-              .set({ schemaPlan: 'OUTBOUND_ACTIVE' })
+              .set({ schemaPlan: 'OUTBOUND_ACTIVE', dataNamespace: schemaName })
               .where(
                 eq(
                   dbSchema.connectionStorageRegistry.connectionId,
@@ -925,12 +925,15 @@ export class DatabaseManager {
   }
 
   /**
-   * Discovers all tenant schemas (ws_*) and re-runs migrateReplicaTables
-   * on each one, executing idempotent ALTER TABLE migration blocks.
+   * Discovers all tenant schemas (ws_*) and migrates them to OUTBOUND_ACTIVE state.
+   * Reapplies all provisioner layers to ensure existing tenants receive:
+   * - active_sync_locks table
+   * - schema_name columns on outbox tables
+   * - sync_log partial indexes
    * Safe to run on a live database — all changes are guarded by IF EXISTS / IF NOT EXISTS.
    */
   async migrateAllSchemas(): Promise<void> {
-    console.log('🔧 Migrating replica tables across all tenant schemas...\n');
+    console.log('🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...\n');
 
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
@@ -951,7 +954,7 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateReplicaTables(schema_name);
+            await schemaMgr.migrateToOutboundActive(schema_name);
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);

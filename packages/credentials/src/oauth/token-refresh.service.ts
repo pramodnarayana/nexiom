@@ -71,15 +71,20 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       const rawEncryptedValue: string = connection.value;
       const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);
       const valueBlob = JSON.parse(decryptedValue);
+      if (typeof valueBlob !== 'object' || valueBlob === null || Array.isArray(valueBlob)) {
+        throw new Error('Invalid credential payload: expected a non-null plain object');
+      }
       if (typeof valueBlob.clientId !== 'string' || !valueBlob.clientId.trim() || typeof valueBlob.clientSecret !== 'string' || !valueBlob.clientSecret.trim()) {
         throw new Error('Decrypted credentials missing valid clientId or clientSecret');
       }
+      const vendorParamsSpread = typeof valueBlob.vendorParams === 'object' && valueBlob.vendorParams !== null && !Array.isArray(valueBlob.vendorParams) ? valueBlob.vendorParams : {};
+      const environmentEntry = 'environment' in valueBlob && valueBlob.environment ? { environment: String(valueBlob.environment) } : {};
       return {
         clientId: valueBlob.clientId,
         clientSecret: valueBlob.clientSecret,
         vendorParams: {
-          ...(valueBlob.vendorParams ?? {}),
-          ...('environment' in valueBlob && valueBlob.environment ? { environment: String(valueBlob.environment) } : {}),
+          ...vendorParamsSpread,
+          ...environmentEntry,
         },
       };
     } catch (error: unknown) {

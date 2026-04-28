@@ -93,6 +93,24 @@ export class SqlDatabaseManager implements DatabaseManager {
         await this.provisionReplicaTables(schemaName);
     }
 
+    /**
+     * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
+     * Reapplies all provisioner layers (Gateway, Replica, Normalize, Canonical, Outbound)
+     * to ensure existing tenants receive newly provisioned objects:
+     * - active_sync_locks table (from provisionGatewayTables)
+     * - schema_name columns on outbox tables (from provision*Tables)
+     * - sync_log partial indexes (from provisionOutboundTables)
+     * All DDL is idempotent so this is safe to run on live schemas.
+     */
+    async migrateToOutboundActive(schemaName: string): Promise<void> {
+        this.validateSchemaName(schemaName);
+        await this.provisionGatewayTables(schemaName);
+        await this.provisionReplicaTables(schemaName);
+        await this.provisionNormalizeTables(schemaName);
+        await this.provisionCanonicalTables(schemaName);
+        await this.provisionOutboundTables(schemaName);
+    }
+
     private async provisionGatewayTables(schemaName: string): Promise<void> {
         // ── LAYER 1 — INBOUND GATEWAY ────────────────────────────────────────
         // Must match pipeline.ts buildTenantSchema > inboundGateway exactly.

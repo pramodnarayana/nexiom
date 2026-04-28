@@ -80,22 +80,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     );
 
     try {
-      // ── Find active stitches for this source connection ───────────────────
-      const stitches = await this.db
-        .select()
-        .from(integrationStitches)
-        .where(
-          sql`${integrationStitches.srcConnectionId} = ${connectionId} AND ${integrationStitches.status} = 'ACTIVE'`,
-        );
-
-      if (stitches.length === 0) {
-        this.logger.debug(
-          { event: "l4.no_routes", traceId, connectionId, layer: "L4" },
-          "No active stitches found for source connection",
-        );
-        return;
-      }
-
+      // ── Resolve schema first to get entityId for potential lock cleanup ────
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
       const {
@@ -104,6 +89,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         outboundGateway,
         deliveryOutbox,
         syncLog,
+        activeSyncLocks,
       } = buildTenantSchema(schemaName);
 
       // ── Read normalized data + sourceId (for GEM) in one transaction ──────
@@ -142,6 +128,31 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         }
         srcVendorId = replicaRows[0].entityId ?? undefined;
       });
+
+      // ── Find active stitches for this source connection ───────────────────
+      const stitches = await this.db
+        .select()
+        .from(integrationStitches)
+        .where(
+          sql`${integrationStitches.srcConnectionId} = ${connectionId} AND ${integrationStitches.status} = 'ACTIVE'`,
+        );
+
+      if (stitches.length === 0) {
+        this.logger.debug(
+          { event: "l4.no_routes", traceId, connectionId, layer: "L4" },
+          "No active stitches found for source connection",
+        );
+        // Release lock acquired in L2 — no outbound work will occur
+        if (srcVendorId) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+          );
+        }
+        return;
+      }
 
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
       const srcConnRows = await this.db
@@ -193,6 +204,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           outboundGateway,
           deliveryOutbox,
           syncLog,
+          activeSyncLocks,
         ),
       );
 
@@ -245,6 +257,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     outboundGateway: ReturnType<typeof buildTenantSchema>["outboundGateway"],
     deliveryOutbox: ReturnType<typeof buildTenantSchema>["deliveryOutbox"],
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
+    activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
   ): Promise<void> {
     try {
       const conditions = stitch.syncCondition as Condition[];
@@ -260,6 +273,15 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           Date.now() - start,
           syncLog,
         );
+        // Release lock — no outbound work will occur for this entity
+        if (srcVendorId) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+          );
+        }
         return;
       }
 
@@ -292,6 +314,15 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           Date.now() - start,
           syncLog,
         );
+        // Release lock — no outbound work will occur for this entity
+        if (srcVendorId) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+          );
+        }
         return;
       }
 
@@ -521,6 +552,30 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           durationMs,
         })
         .onConflictDoNothing();
+    });
+  }
+
+  /**
+   * Release sync lock acquired in L2.
+   * Called when L4 determines no outbound work will occur (no routes, failed conditions, etc.)
+   * to prevent lock from remaining until TTL expiry.
+   */
+  private async releaseSyncLock(
+    schemaName: string,
+    connectionId: string,
+    entityId: string,
+    activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      assertValidSchemaName(schemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+      await tx
+        .delete(activeSyncLocks)
+        .where(
+          sql`${activeSyncLocks.connectionId} = ${connectionId} AND ${activeSyncLocks.entityId} = ${entityId}`,
+        );
     });
   }
 }
