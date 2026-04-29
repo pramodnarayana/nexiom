@@ -149,6 +149,14 @@ export class TenantDatabaseManager implements DatabaseManager {
      * Closes all cached tenant connections for graceful shutdown.
      */
     async closeAll(): Promise<void> {
+        // First, await any in-progress getTenantDb promises to ensure they complete
+        const inProgressPromises = Array.from(this.inProgress.values());
+        if (inProgressPromises.length > 0) {
+            this.logger.debug(`Awaiting ${inProgressPromises.length} in-progress tenant connection creations`);
+            await Promise.allSettled(inProgressPromises);
+        }
+
+        // Now close all cached connections (including any newly created by the in-progress promises)
         const tenantIds = Array.from(this.dbCache.keys());
         this.logger.debug(`Closing ${tenantIds.length} cached tenant connections`);
 
@@ -157,6 +165,7 @@ export class TenantDatabaseManager implements DatabaseManager {
         );
 
         this.dbCache.clear();
+        this.inProgress.clear();
         this.logger.debug('All tenant connections closed');
     }
 }

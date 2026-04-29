@@ -264,7 +264,7 @@ export class DatabaseManager {
         systemTenantId,
       };
 
-      await seedSystemRbac(db, config, console);
+      await seedSystemRbac(db as any, config, console);
 
       // 3. Seed Marketplace Pieces dynamically from monorepo (Enterprise-Grade)
       const { v4: uuidv4Marketplace } = await import('uuid');

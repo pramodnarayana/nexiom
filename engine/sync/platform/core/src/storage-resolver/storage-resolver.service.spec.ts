@@ -41,8 +41,7 @@ describe('StorageResolverService', () => {
       const longInput = 'a'.repeat(100);
       const result = await service.resolveSchemaName(longInput);
       // "ws_" is 3 chars, so max sanitized length is 60
-      expect(result.length).toBeLessThanOrEqual(63);
-      expect(result.startsWith('ws_')).toBe(true);
+      expect(result).toBe('ws_' + 'a'.repeat(60));
     });
 
     it('should handle mixed-case with special characters and ensure normalization', async () => {

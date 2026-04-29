@@ -684,6 +684,9 @@ export class DatabaseManager {
     const { SchemaPlan } = await import("@nexiom/dbmanager");
     const client = await this.getPgClient();
 
+    // Track all tenant Pools created by dbFactory so we can close them after provisioning
+    const tenantPools: Array<import("pg").Pool> = [];
+
     try {
       const db = drizzle(client, { schema });
       const { getDomainProvisioner } = await import("@nexiom/piece-framework");
@@ -697,6 +700,7 @@ export class DatabaseManager {
             idleTimeoutMillis: 30_000,
             connectionTimeoutMillis: 5_000,
           });
+          tenantPools.push(pool);
           return drizzle(pool, {
             schema,
           }) as unknown as import("@nexiom/database").DrizzleDb;
@@ -842,6 +846,10 @@ export class DatabaseManager {
           "   Do NOT edit the value column manually — it holds AES-GCM ciphertext.",
       );
     } finally {
+      // Close all tenant Pools created during provisioning
+      for (const pool of tenantPools) {
+        await pool.end();
+      }
       await client.end();
     }
   }

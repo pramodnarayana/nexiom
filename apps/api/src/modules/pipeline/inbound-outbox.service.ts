@@ -90,7 +90,7 @@ export class InboundOutboxService {
     // increment attempts in processOutboxRow when a real delivery fails.
     const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.identifier([schemaName])}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
 
       return tx
