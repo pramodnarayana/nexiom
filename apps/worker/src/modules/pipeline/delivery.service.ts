@@ -261,6 +261,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             string,
             unknown
           > | null;
+          // Extract entityId from resPayload
           const destVendorId =
             typeof resPayload?.["entityId"] === "string"
               ? resPayload["entityId"]
