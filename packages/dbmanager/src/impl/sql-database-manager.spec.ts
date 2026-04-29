@@ -95,7 +95,7 @@ describe('SqlDatabaseManager', () => {
             // outbound_gateway (1) + uq patch DO $$ (1) + 3 DROP/ADD constraint DO blocks (3) + 3 indexes
             // + sync_log (1) + uq patch DO $$ (1) + 3 indexes
             // + replica_outbox (1) + DELETE dedup (1) + idx_replica_outbox_claim index (1) + uq patch DO $$ (1)
-            // + delivery_outbox (1) + multi-step migration DO $$ (1) + uq patch DO $$ (1) + partial index (1) = 21
+            // + outbound_outbox (1) + multi-step migration DO $$ (1) + uq patch DO $$ (1) + partial index (1) = 21
             outbound: 21,
             total: 45
         };
@@ -112,7 +112,7 @@ describe('SqlDatabaseManager', () => {
         expect(allSql).toContain('outbound_gateway');
         expect(allSql).toContain('sync_log');
         expect(allSql).toContain('replica_outbox');
-        expect(allSql).toContain('delivery_outbox');
+        expect(allSql).toContain('outbound_outbox');
         expect(allSql).toContain('attempts');
     });
 });

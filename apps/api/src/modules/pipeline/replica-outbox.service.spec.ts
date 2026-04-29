@@ -5,26 +5,24 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+
 describe('ReplicaOutboxService', () => {
   let service: ReplicaOutboxService;
-  let db: any;
+  let globalDb: any;
+  let tenantDb: any;
+  let dbManager: any;
   let queueService: any;
 
   beforeEach(async () => {
     queueService = { send: vi.fn() };
 
-    db = {
+    tenantDb = {
       select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      groupBy: vi
-        .fn()
-        .mockResolvedValue([
-          { dataNamespace: 'ws_1' },
-          { dataNamespace: 'ws_2' },
-        ]),
+      from: vi.fn().mockResolvedValue([{ id: 'conn_1', appName: 'test-app' }]),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
       returning: vi.fn().mockResolvedValue([]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {
@@ -42,11 +40,21 @@ describe('ReplicaOutboxService', () => {
       }),
     };
 
+    globalDb = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockResolvedValue([{ tenantId: 'tenant-1' }]),
+    };
+
+    dbManager = {
+      getTenantDb: vi.fn().mockResolvedValue(tenantDb),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReplicaOutboxService,
-        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: DATABASE_CONNECTION, useValue: globalDb },
         { provide: QueueService, useValue: queueService },
+        { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
 
@@ -61,7 +69,7 @@ describe('ReplicaOutboxService', () => {
       traceId: 't1',
       connectionId: 'c1',
     });
-    expect(db.update).toHaveBeenCalled();
+    expect(tenantDb.update).toHaveBeenCalled();
   });
 
   it('processOutboxRow should retry on failure', async () => {
@@ -69,12 +77,12 @@ describe('ReplicaOutboxService', () => {
     // processOutbox internally triggers processOutboxRow via drainWorkspaceOutbox
     await service.processOutbox();
     // It should have failed and called db.update to set status: 'RETRY'
-    expect(db.update).toHaveBeenCalled();
+    expect(tenantDb.update).toHaveBeenCalled();
   });
 
   it('processOutboxRow should permanently fail on max attempts', async () => {
     queueService.send.mockRejectedValue(new Error('Queue down'));
-    db.transaction.mockImplementationOnce(async (cb: any) => {
+    tenantDb.transaction.mockImplementationOnce(async (cb: any) => {
       return cb({
         execute: vi.fn(),
         update: vi.fn().mockReturnThis(),
@@ -90,11 +98,11 @@ describe('ReplicaOutboxService', () => {
 
     await service.processOutbox();
     // It should have called db.update to set status: 'FAIL'
-    expect(db.update).toHaveBeenCalled();
+    expect(tenantDb.update).toHaveBeenCalled();
   });
 
   it('should handle rejecting drainWorkspace gracefully', async () => {
-    db.transaction.mockRejectedValueOnce(new Error('db down'));
+    tenantDb.transaction.mockRejectedValueOnce(new Error('db down'));
     // Since mock resolves 2 workspaces ws_1 and ws_2, first throws, second succeeds
     await service.processOutbox();
     // processOutbox handles rejection internally and logs it.

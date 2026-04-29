@@ -87,7 +87,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         normalizedEntity,
         replicaEntity,
         outboundGateway,
-        deliveryOutbox,
+        outboundOutbox,
         syncLog,
         activeSyncLocks,
       } = buildTenantSchema(schemaName);
@@ -203,7 +203,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           stitch,
           start,
           outboundGateway,
-          deliveryOutbox,
+          outboundOutbox,
           syncLog,
           activeSyncLocks,
         ),
@@ -256,7 +256,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     stitch: typeof integrationStitches.$inferSelect,
     start: number,
     outboundGateway: ReturnType<typeof buildTenantSchema>["outboundGateway"],
-    deliveryOutbox: ReturnType<typeof buildTenantSchema>["deliveryOutbox"],
+    outboundOutbox: ReturnType<typeof buildTenantSchema>["outboundOutbox"],
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
     activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
   ): Promise<void> {
@@ -437,9 +437,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        // ── Write outbound_gateway BEFORE deliveryOutbox (crash-safety) ──────
+        // ── Write outbound_gateway BEFORE outboundOutbox (crash-safety) ──────
         // If the process crashes between these two writes, the next outbox
-        // worker sweep will re-insert the deliveryOutbox row — the
+        // worker sweep will re-insert the outboundOutbox row — the
         // onConflictDoUpdate on outbound_gateway is idempotent.
         const [outbound] = await tx
           .insert(outboundGateway)
@@ -466,7 +466,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         // srcVendorId and canonicalType are threaded here so DeliveryService
         // can write the Global Entity Map without an extra JOIN.
         await tx
-          .insert(deliveryOutbox)
+          .insert(outboundOutbox)
           .values({
             traceId,
             routeId: stitch.id,
@@ -487,9 +487,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           })
           .onConflictDoNothing({
             target: [
-              deliveryOutbox.traceId,
-              deliveryOutbox.routeId,
-              deliveryOutbox.outboundGatewayId,
+              outboundOutbox.traceId,
+              outboundOutbox.routeId,
+              outboundOutbox.outboundGatewayId,
             ],
           });
 

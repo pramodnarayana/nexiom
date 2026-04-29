@@ -264,7 +264,10 @@ export class DatabaseManager {
         systemTenantId,
       };
 
-      await seedSystemRbac(db, config, console);
+      // Create a separate DB instance with identity schema for seedSystemRbac
+      const identitySchema = await import('@nexiom/identity/schema');
+      const identityDb = drizzle(client, { schema: identitySchema });
+      await seedSystemRbac(identityDb, config, console);
 
       // 3. Seed Marketplace Pieces dynamically from monorepo (Enterprise-Grade)
       const { v4: uuidv4Marketplace } = await import('uuid');
@@ -669,19 +672,39 @@ export class DatabaseManager {
    * Ensures client.end() in a finally block.
    */
   private async withSchemaMgr<T>(
-    cb: (mgr: import('@nexiom/dbmanager').SqlDatabaseManager) => Promise<T>,
+    cb: (mgr: import('@nexiom/dbmanager').TenantDatabaseManager) => Promise<T>,
   ): Promise<T> {
-    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
     const { getDomainProvisioner } = await import('@nexiom/piece-framework');
     const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { Pool } = await import('pg');
     const dbSchema = await import('./schema.js');
     const client = await this.getPgClient();
 
     try {
       const db = drizzle(client, { schema: dbSchema });
-      const schemaMgr = new SqlDatabaseManager(
+      const { dbUrl } = await this.resolvePgModule();
+      const schemaMgr = new TenantDatabaseManager(
         db as unknown as import('@nexiom/database').DrizzleDb,
-        undefined,
+        (hostIdentifier: string) => {
+          // Rehydrate credentials from DATABASE_URL
+          // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
+          const parsedEnv = new URL(dbUrl);
+          const parsedHost = new URL(hostIdentifier);
+
+          // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+
+          const pool = new Pool({
+            connectionString: fullDsn,
+            max: 20,
+            idleTimeoutMillis: 30_000,
+            connectionTimeoutMillis: 5_000,
+          });
+          return drizzle(pool, {
+            schema: dbSchema,
+          }) as unknown as import('@nexiom/database').DrizzleDb;
+        },
         getDomainProvisioner,
       );
       return await cb(schemaMgr);
@@ -829,45 +852,64 @@ export class DatabaseManager {
 
           const resolved = inserted;
 
-          const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
+          const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+          const schemaName = getWorkspaceSchemaName(
+            resolved.id,
+            resolved.appName,
+          );
 
-          // Seed the connection_storage_registry so applyPlan can resolve appName
+          // Seed the tenant_storage_registry to map the tenant to its physical database.
+          // In a real environment, this is created when the tenant signs up.
+          // For local dev, we just map it to the current database name.
+          let dbName = 'nexiom_local';
+          if (process.env.DATABASE_URL) {
+            try {
+              const parsedUrl = new URL(process.env.DATABASE_URL);
+              const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, '');
+              if (pathname) {
+                const segments = pathname.split('/');
+                dbName = segments[segments.length - 1] || dbName;
+              }
+              // If pathname is empty, keep the default dbName instead of using parsedUrl.host
+            } catch {
+              // Fallback to safe default for invalid/Unix-socket-style URLs
+              dbName = 'nexiom_local';
+            }
+          }
           const existReg = await db
             .select()
-            .from(dbSchema.connectionStorageRegistry)
-            .where(
-              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
-            )
+            .from(dbSchema.tenantStorageRegistry)
+            .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId))
             .limit(1);
 
           if (!existReg[0]) {
-            await db.insert(dbSchema.connectionStorageRegistry).values({
-              connectionId: resolved.id,
-              dataNamespace: schemaName,
-              databaseHostId: 'aurora-prod',
+            // Sanitize DATABASE_URL to remove credentials and pathname
+            let sanitizedHostUrl: string;
+            try {
+              const parsedUrl = new URL(
+                process.env.DATABASE_URL ||
+                  'postgresql://localhost:5432/nexiom_local',
+              );
+              // Build safe URL with protocol + hostname + optional port, no credentials or pathname
+              sanitizedHostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+            } catch {
+              // Fallback to safe default if parsing fails
+              sanitizedHostUrl = 'postgresql://localhost:5432';
+            }
+
+            await db.insert(dbSchema.tenantStorageRegistry).values({
+              tenantId: systemTenantId,
+              databaseName: dbName,
+              databaseHostUrl: sanitizedHostUrl,
               regionContext: 'local',
             });
-          } else {
-            await db
-              .update(dbSchema.connectionStorageRegistry)
-              .set({ dataNamespace: schemaName })
-              .where(
-                eq(
-                  dbSchema.connectionStorageRegistry.connectionId,
-                  resolved.id,
-                ),
-              );
           }
 
-          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
-
-          // Update schemaPlan to OUTBOUND_ACTIVE after successful provisioning
-          await db
-            .update(dbSchema.connectionStorageRegistry)
-            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-            .where(
-              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
-            );
+          await schemaMgr.applyPlan(
+            systemTenantId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+          );
 
           // After successful schema provisioning, mark connection ACTIVE
           await db
@@ -908,7 +950,13 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+      const systemTenantId = process.env.SYSTEM_TENANT_ID;
+      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      await schemaMgr.applyPlan(
+        systemTenantId,
+        schemaName,
+        SchemaPlan.GATEWAY_ACTIVE,
+      );
       console.log(`  ✓ Schema "${schemaName}" upgraded to GATEWAY_ACTIVE`);
       console.log(
         '  ✓ inbound_gateway table is now ready for webhook ingestion',
@@ -926,7 +974,13 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+      const systemTenantId = process.env.SYSTEM_TENANT_ID;
+      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      await schemaMgr.applyPlan(
+        systemTenantId,
+        schemaName,
+        SchemaPlan.OUTBOUND_ACTIVE,
+      );
       console.log(`  ✓ Schema "${schemaName}" upgraded to OUTBOUND_ACTIVE`);
     });
   }
@@ -947,6 +1001,8 @@ export class DatabaseManager {
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
       try {
+        const systemTenantId = process.env.SYSTEM_TENANT_ID;
+        if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
         const result = await client.query<{ schema_name: string }>(`
           SELECT schema_name
           FROM information_schema.schemata
@@ -963,7 +1019,10 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateToOutboundActive(schema_name);
+            await schemaMgr.migrateToOutboundActive(
+              systemTenantId,
+              schema_name,
+            );
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);

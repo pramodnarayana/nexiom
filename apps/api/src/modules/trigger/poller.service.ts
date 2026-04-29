@@ -7,6 +7,7 @@ import { PieceRegistryService } from '@nexiom/piece-registry';
 
 interface ActiveConnection {
   workspace_id: string;
+  tenant_id: string;
   connection_id: string;
   app_name: string;
   trigger_name: string;
@@ -127,6 +128,7 @@ export class PollerService {
       objectType: conn.object_type ?? undefined,
       auth: conn.auth,
       propsValue: conn.props_value,
+      tenantId: conn.tenant_id,
       workspaceId: conn.workspace_id,
       connectionId: conn.connection_id,
     });
@@ -169,6 +171,7 @@ export class PollerService {
       `SELECT
                 ac.id as connection_id,
                 ac.workspace_id,
+                ac.tenant_id,
                 ac.app_name,
                 ac.trigger_name,
                 ac.object_type,

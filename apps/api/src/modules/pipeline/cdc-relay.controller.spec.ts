@@ -100,10 +100,10 @@ describe('CdcRelayController', () => {
     );
   });
 
-  it('ignores delivery_outbox inserts', async () => {
+  it('ignores outbound_outbox inserts', async () => {
     await controller.relay({
       __op: 'c',
-      __table: 'delivery_outbox',
+      __table: 'outbound_outbox',
       __schema: 'debezium_metadata_schema',
       schema_name: 'ws_delivery_123',
       trace_id: 'trace-7',

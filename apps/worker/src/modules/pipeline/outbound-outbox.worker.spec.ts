@@ -1,16 +1,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
-import { DeliveryOutboxWorker } from "./delivery-outbox.worker.js";
+import { OutboundOutboxWorker } from "./outbound-outbox.worker.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
+import { DB_MANAGER } from "../dbmanager/dbmanager.module.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const MAX_ATTEMPTS = 6; // mirrors the constant in the worker
 
-describe("DeliveryOutboxWorker", () => {
-  let worker: DeliveryOutboxWorker;
+describe("OutboundOutboxWorker", () => {
+  let worker: OutboundOutboxWorker;
   let queueService: any;
-  let db: any;
+  let globalDb: any;
+  let tenantDb: any;
+  let dbManager: any;
 
   // Helper: builds a mock db where transaction claims `rows`
   function buildDb(rows: any[]) {
@@ -44,17 +47,34 @@ describe("DeliveryOutboxWorker", () => {
 
   beforeEach(async () => {
     queueService = { send: vi.fn() };
-    db = buildDb([{ id: "out_1", payload: { routeId: "123" }, attempts: 1 }]);
+    tenantDb = buildDb([
+      { id: "out_1", payload: { routeId: "123" }, attempts: 1 },
+    ]);
+
+    globalDb = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockResolvedValue([{ tenantId: "tenant_1" }]),
+    };
+
+    dbManager = {
+      getTenantDb: vi.fn().mockResolvedValue(tenantDb),
+    };
+
+    tenantDb.select = vi.fn().mockReturnThis();
+    tenantDb.from = vi
+      .fn()
+      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        DeliveryOutboxWorker,
+        OutboundOutboxWorker,
         { provide: QueueService, useValue: queueService },
-        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: DATABASE_CONNECTION, useValue: globalDb },
+        { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
 
-    worker = module.get<DeliveryOutboxWorker>(DeliveryOutboxWorker);
+    worker = module.get<OutboundOutboxWorker>(OutboundOutboxWorker);
   });
 
   it("should claim and process pending outbox rows successfully", async () => {
@@ -67,8 +87,8 @@ describe("DeliveryOutboxWorker", () => {
     });
 
     // Status must transition to SUCCESS
-    expect(db.update).toHaveBeenCalled();
-    const setCalls = db.update.mock.results.flatMap(
+    expect(tenantDb.update).toHaveBeenCalled();
+    const setCalls = tenantDb.update.mock.results.flatMap(
       (r: any) => r.value?.set?.mock?.calls ?? [],
     );
     expect(setCalls.some((args: any[]) => args[0]?.status === "SUCCESS")).toBe(
@@ -81,10 +101,10 @@ describe("DeliveryOutboxWorker", () => {
     const beforeMs = Date.now();
     await worker.processOutbox();
 
-    expect(db.update).toHaveBeenCalled();
+    expect(tenantDb.update).toHaveBeenCalled();
 
     // Collect all args passed to .set() across every update() call chain
-    const setCalls = db.update.mock.results.flatMap(
+    const setCalls = tenantDb.update.mock.results.flatMap(
       (r: any) => r.value?.set?.mock?.calls ?? [],
     );
 
@@ -104,20 +124,27 @@ describe("DeliveryOutboxWorker", () => {
 
   it("should transition to FAIL when attempts >= MAX_ATTEMPTS", async () => {
     queueService.send.mockRejectedValueOnce(new Error("Perm failure"));
-    db = buildDb([{ id: "out_2", payload: {}, attempts: MAX_ATTEMPTS }]);
+    tenantDb = buildDb([{ id: "out_2", payload: {}, attempts: MAX_ATTEMPTS }]);
+    tenantDb.select = vi.fn().mockReturnThis();
+    tenantDb.from = vi
+      .fn()
+      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
+    dbManager.getTenantDb.mockResolvedValue(tenantDb);
+
     const module = await Test.createTestingModule({
       providers: [
-        DeliveryOutboxWorker,
+        OutboundOutboxWorker,
         { provide: QueueService, useValue: queueService },
-        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: DATABASE_CONNECTION, useValue: globalDb },
+        { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
-    worker = module.get<DeliveryOutboxWorker>(DeliveryOutboxWorker);
+    worker = module.get<OutboundOutboxWorker>(OutboundOutboxWorker);
 
     await worker.processOutbox();
 
-    expect(db.update).toHaveBeenCalled();
-    const setCalls = db.update.mock.results.flatMap(
+    expect(tenantDb.update).toHaveBeenCalled();
+    const setCalls = tenantDb.update.mock.results.flatMap(
       (r: any) => r.value?.set?.mock?.calls ?? [],
     );
     const failArg = setCalls.find((args: any[]) => args[0]?.status === "FAIL");
@@ -127,7 +154,7 @@ describe("DeliveryOutboxWorker", () => {
   });
 
   it("should do nothing if no rows are claimed", async () => {
-    db.transaction.mockImplementation(async (cb: any) => {
+    tenantDb.transaction.mockImplementation(async (cb: any) => {
       const tx = {
         execute: vi.fn(),
         update: vi.fn().mockReturnThis(),
@@ -142,7 +169,50 @@ describe("DeliveryOutboxWorker", () => {
   });
 
   it("should handle transaction exceptions securely without throwing", async () => {
-    db.transaction.mockRejectedValue(new Error("Fatal Error"));
+    tenantDb.transaction.mockRejectedValue(new Error("Fatal Error"));
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should do nothing if no tenants are returned", async () => {
+    globalDb.from.mockResolvedValueOnce([]);
+    await worker.processOutbox();
+    expect(dbManager.getTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("should handle global DB query errors securely without throwing", async () => {
+    globalDb.from.mockRejectedValueOnce(new Error("Global DB error"));
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should handle TenantDatabaseManager connection errors securely without throwing", async () => {
+    dbManager.getTenantDb.mockRejectedValueOnce(new Error("Connection error"));
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should handle schema query errors securely without throwing", async () => {
+    tenantDb.from.mockRejectedValueOnce(new Error("Schema query error"));
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should log critical failure if processOutboxRow rejects", async () => {
+    vi.spyOn(worker as any, "processOutboxRow").mockRejectedValueOnce(
+      new Error("processOutboxRow failed"),
+    );
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should log error if database update fails when marking FAIL/RETRY", async () => {
+    queueService.send.mockRejectedValueOnce(new Error("Network failure"));
+    tenantDb.update.mockImplementationOnce(() => {
+      throw new Error("DB update failed during retry");
+    });
+    await expect(worker.processOutbox()).resolves.toBeUndefined();
+  });
+
+  it("should log error if database update fails when marking SUCCESS", async () => {
+    tenantDb.update.mockImplementationOnce(() => {
+      throw new Error("DB update failed during success");
+    });
     await expect(worker.processOutbox()).resolves.toBeUndefined();
   });
 });

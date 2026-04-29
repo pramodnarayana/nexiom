@@ -2,11 +2,11 @@ import { Injectable, Logger, Inject, NotFoundException } from '@nestjs/common';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
-  connectionStorageRegistry,
   appConnections,
   organization,
 } from '@nexiom/database';
-import { eq, sql, inArray } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
 
 @Injectable()
 export class TenantOffboardingService {
@@ -32,52 +32,42 @@ export class TenantOffboardingService {
 
     // 1. Identify all database schema namespaces associated with the tenant
     const connections = await this.db
-      .select({ id: appConnections.id })
+      .select({ id: appConnections.id, appName: appConnections.appName })
       .from(appConnections)
       .where(eq(appConnections.tenantId, tenantId));
 
     if (connections.length === 0) {
       this.logger.debug(`No connections found for tenant ${tenantId}`);
     } else {
-      // Fetch all relevant registry rows in one query to avoid N+1
-      const connectionIds = connections.map((c) => c.id);
-      const registries = await this.db
-        .select()
-        .from(connectionStorageRegistry)
-        .where(inArray(connectionStorageRegistry.connectionId, connectionIds));
-
-      // Build a map of connectionId → registry for O(1) lookup
-      const registryMap = new Map(registries.map((r) => [r.connectionId, r]));
-
       // Best-effort schema cleanup - idempotent and safe to retry
       for (const currConnection of connections) {
-        const registry = registryMap.get(currConnection.id);
+        // Compute the deterministic schema name using the shared helper
+        const dataNamespace = getWorkspaceSchemaName(
+          currConnection.id,
+          currConnection.appName,
+        );
 
-        if (registry && registry.dataNamespace) {
-          this.logger.log(
-            `Safely dropping physical schema: ${registry.dataNamespace}`,
+        this.logger.log(`Safely dropping physical schema: ${dataNamespace}`);
+        try {
+          // CASCADE guarantees all tables partitioned for this tenant are permanently annihilated.
+          // This runs outside the transaction below - DDL operations may not be fully transactional.
+          // DROP SCHEMA IF EXISTS is idempotent and safe to retry via reconciliation job.
+          await this.db.execute(
+            sql`DROP SCHEMA IF EXISTS ${sql.identifier(dataNamespace)} CASCADE`,
           );
-          try {
-            // CASCADE guarantees all tables partitioned for this tenant are permanently annihilated.
-            // This runs outside the transaction below - DDL operations may not be fully transactional.
-            // DROP SCHEMA IF EXISTS is idempotent and safe to retry via reconciliation job.
-            await this.db.execute(
-              sql`DROP SCHEMA IF EXISTS ${sql.identifier(registry.dataNamespace)} CASCADE`,
-            );
-          } catch (error) {
-            // Log full context for reconciliation/cleanup job
-            this.logger.error(
-              `Failed dropping schema ${registry.dataNamespace} for tenant ${tenantId}, connectionId ${currConnection.id}. Schema may require manual cleanup or retry.`,
-              error,
-            );
-            // Continue with logical deletion - orphaned schemas can be cleaned by reconciliation job
-          }
+        } catch (error) {
+          // Log full context for reconciliation/cleanup job
+          this.logger.error(
+            `Failed dropping schema ${dataNamespace} for tenant ${tenantId}, connectionId ${currConnection.id}. Schema may require manual cleanup or retry.`,
+            error,
+          );
+          // Continue with logical deletion - orphaned schemas can be cleaned by reconciliation job
         }
       }
     }
 
     // 2. Erase the top-level organization data - Drizzle's ON DELETE CASCADE
-    // will recursively wipe out `appConnections`, `connectionStorageRegistry`,
+    // will recursively wipe out `appConnections`,
     // `uiWorkspaces`, `integration_stitches`, `global_entity_map` and the `member` rows
     await this.db.transaction(async (tx) => {
       // Verify organization exists before deletion

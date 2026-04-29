@@ -18,6 +18,7 @@ import { TriggerExecutorService } from './trigger-executor.service.js';
 
 interface ConnectionRow {
   workspace_id: string;
+  tenant_id: string;
   app_name: string;
   trigger_name: string;
   object_type: string | null;
@@ -82,6 +83,7 @@ export class WebhooksController {
         objectType: conn.object_type ?? undefined,
         auth: conn.auth,
         propsValue: conn.props_value,
+        tenantId: conn.tenant_id,
         workspaceId: conn.workspace_id,
         connectionId,
         headers,
@@ -109,6 +111,7 @@ export class WebhooksController {
     const result = await this.db.$client.query<ConnectionRow>(
       `SELECT
                 ac.workspace_id,
+                ac.tenant_id,
                 ac.app_name,
                 ac.trigger_name,
                 ac.object_type,

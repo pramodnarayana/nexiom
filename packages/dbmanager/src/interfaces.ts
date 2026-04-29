@@ -1,3 +1,5 @@
+import type { DrizzleDb } from '@nexiom/database';
+
 export enum SchemaPlan {
     /**
      * Only the empty PostgreSQL schema namespace (e.g., "ws_abc123")
@@ -46,8 +48,18 @@ export enum SchemaPlan {
  */
 export interface DatabaseManager {
     /**
+     * Resolves a physical DrizzleDb connection for a specific tenant ID.
+     */
+    getTenantDb(tenantId: string): Promise<DrizzleDb>;
+
+    /**
      * Idempotently bring the schema up to the desired plan level.
      * If the schema already exceeds the plan, it does nothing.
      */
-    applyPlan(schemaName: string, plan: SchemaPlan): Promise<void>;
+    applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan): Promise<void>;
+
+    /**
+     * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
+     */
+    migrateToOutboundActive?(tenantId: string, schemaName: string): Promise<void>;
 }

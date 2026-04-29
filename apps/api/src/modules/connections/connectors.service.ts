@@ -17,17 +17,15 @@ import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,
   AppConnectionStatus,
-  connectionStorageRegistry,
   globalEntityMap,
   DATABASE_CONNECTION,
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, or, sql } from 'drizzle-orm';
-import { SchemaPlan } from '@nexiom/dbmanager';
+import { SchemaPlan, getWorkspaceSchemaName } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 import { PieceRegistryService } from '@nexiom/piece-registry';
-import * as crypto from 'node:crypto';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
 /**
@@ -319,8 +317,6 @@ export class ConnectorsService {
       );
     }
 
-    const resolvedRegionContext = finalRegionContext || 'unknown';
-
     try {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
         // 1. Check if we're doing an explicit update via connectionId
@@ -516,49 +512,18 @@ export class ConnectorsService {
           throw new Error('Failed to retrieve connection ID after insert');
         }
 
-        // 2. Provision the Infrastructure Router (Storage Registry)
-        const hashedSuffix = crypto
-          .createHash('sha256')
-          .update(connection.id)
-          .digest('hex')
-          .substring(0, 16);
-        const sanitizedProvider = providerName.replaceAll(/[^a-z0-9]/g, '');
-        const finalProviderToken = sanitizedProvider || 'unknown';
-        const safeToken = finalProviderToken.substring(0, 40);
-        const schemaName = `ws_${safeToken}_${hashedSuffix}`;
-
-        const existingRegistry = await tx
-          .select({ connectionId: connectionStorageRegistry.connectionId })
-          .from(connectionStorageRegistry)
-          .where(eq(connectionStorageRegistry.connectionId, connection.id))
-          .limit(1);
-        const createdRegistry = existingRegistry.length === 0;
-
-        await tx
-          .insert(connectionStorageRegistry)
-          .values({
-            connectionId: connection.id,
-            dataNamespace: schemaName,
-            databaseHostId:
-              (envType ?? 'PRODUCTION') === 'SANDBOX'
-                ? 'rds-standard'
-                : 'aurora-prod',
-            regionContext: resolvedRegionContext,
-          })
-          .onConflictDoNothing({
-            target: connectionStorageRegistry.connectionId,
-          });
+        // 2. Compute the deterministic schema name for the Tenant Database
+        const schemaName = getWorkspaceSchemaName(connection.id, providerName);
 
         return {
           schemaName,
           connectionId: connection.id,
           createdAppConnection: true,
-          createdRegistry,
         };
       });
 
       if (!workspaceProvisionInfo.schemaName) {
-        // If schemaName is empty, it means this was an explicit update and no new registry was created.
+        // If schemaName is empty, it means this was an explicit update
         return;
       }
       try {
@@ -567,6 +532,7 @@ export class ConnectorsService {
         // provisioned incrementally when a stitch/sync route is activated —
         // not during the OAuth handshake.
         await this.dbManager.applyPlan(
+          tenantId,
           workspaceProvisionInfo.schemaName,
           SchemaPlan.NAMESPACE_ONLY,
         );
@@ -575,18 +541,11 @@ export class ConnectorsService {
         await this.db.transaction(async (tx) => {
           await tx
             .update(appConnections)
-            .set({ status: AppConnectionStatus.ACTIVE })
+            .set({
+              status: AppConnectionStatus.ACTIVE,
+              schemaPlan: SchemaPlan.NAMESPACE_ONLY,
+            })
             .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
-
-          await tx
-            .update(connectionStorageRegistry)
-            .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
-            .where(
-              eq(
-                connectionStorageRegistry.connectionId,
-                workspaceProvisionInfo.connectionId,
-              ),
-            );
         });
       } catch (applyError) {
         this.logger.error(
@@ -595,9 +554,6 @@ export class ConnectorsService {
         );
         try {
           await this.db.transaction(async (tx) => {
-            if (workspaceProvisionInfo.createdRegistry) {
-              // Intentionally keeping the registry to allow reprovisioning
-            }
             if (workspaceProvisionInfo.createdAppConnection) {
               await tx
                 .update(appConnections)

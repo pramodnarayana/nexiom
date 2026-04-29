@@ -1,15 +1,13 @@
-import { Module, Global } from '@nestjs/common';
-import { TenantDatabaseManager } from '@nexiom/dbmanager';
-import { Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import * as schema from '../../db/schema.js';
-import { DbModule } from '../../db/db.module.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { Module, Global } from "@nestjs/common";
+import { TenantDatabaseManager } from "@nexiom/dbmanager";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "../../db/schema.js";
+import { DbModule } from "../../db/db.module.js";
+import { DATABASE_CONNECTION } from "@nexiom/database";
+import type { DrizzleDb } from "@nexiom/database";
 
-import { getDomainProvisioner } from '@nexiom/piece-framework';
-
-export const DB_MANAGER = 'DATABASE_MANAGER';
+export const DB_MANAGER = "DATABASE_MANAGER";
 
 @Global()
 @Module({
@@ -29,7 +27,6 @@ export const DB_MANAGER = 'DATABASE_MANAGER';
             });
             return drizzle(pool, { schema }) as unknown as DrizzleDb;
           },
-          getDomainProvisioner,
         );
       },
       inject: [DATABASE_CONNECTION],

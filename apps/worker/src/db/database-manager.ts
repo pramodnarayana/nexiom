@@ -309,7 +309,10 @@ export class DatabaseManager {
         systemTenantId,
       };
 
-      await seedSystemRbac(db, config, console);
+      // Create a separate DB instance with identity schema for seedSystemRbac
+      const identitySchema = await import("@nexiom/identity/schema");
+      const identityDb = drizzle(client, { schema: identitySchema });
+      await seedSystemRbac(identityDb, config, console);
 
       // 3. Seed Bootstrap Owner (User Request)
       const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
@@ -677,19 +680,39 @@ export class DatabaseManager {
     }
 
     const { drizzle } = await import("drizzle-orm/node-postgres");
-    const { SqlDatabaseManager } = await import("@nexiom/dbmanager");
+    const { TenantDatabaseManager } = await import("@nexiom/dbmanager");
     const { SchemaPlan } = await import("@nexiom/dbmanager");
-    const dbSchema = await import("./schema.js");
     const client = await this.getPgClient();
 
+    // Track all tenant Pools created by dbFactory so we can close them after provisioning
+    const tenantPools: Array<import("pg").Pool> = [];
+
     try {
-      const db = drizzle(client, { schema: dbSchema });
+      const db = drizzle(client, { schema });
       const { getDomainProvisioner } = await import("@nexiom/piece-framework");
-      // SqlDatabaseManager only calls db.$client.query() — the schema generic mismatch
-      // between the local schema and @nexiom/database's schema is safe to cast here.
-      const schemaMgr = new SqlDatabaseManager(
+      const { Pool } = await import("pg");
+      const schemaMgr = new TenantDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
-        undefined,
+        (hostIdentifier: string) => {
+          // Rehydrate credentials from DATABASE_URL
+          // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
+          const parsedEnv = new URL(dbUrl);
+          const parsedHost = new URL(hostIdentifier);
+
+          // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+
+          const pool = new Pool({
+            connectionString: fullDsn,
+            max: 20,
+            idleTimeoutMillis: 30_000,
+            connectionTimeoutMillis: 5_000,
+          });
+          tenantPools.push(pool);
+          return drizzle(pool, {
+            schema,
+          }) as unknown as import("@nexiom/database").DrizzleDb;
+        },
         getDomainProvisioner,
       );
 
@@ -732,16 +755,19 @@ export class DatabaseManager {
           `  ℹ️  Provisioning connection ${fixture.appName} (preserving secrets if exists)`,
         );
 
+        const { getWorkspaceSchemaName } = await import("@nexiom/dbmanager");
+        const schemaName = getWorkspaceSchemaName(fixture.id, fixture.appName);
+
         await db.transaction(async (tx) => {
           const existRes = await tx
             .select()
-            .from(dbSchema.appConnections)
-            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`)
+            .from(schema.appConnections)
+            .where(sql`${schema.appConnections.id} = ${fixture.id}`)
             .limit(1);
           const existing = existRes[0];
 
           if (!existing) {
-            await tx.insert(dbSchema.appConnections).values({
+            await tx.insert(schema.appConnections).values({
               id: fixture.id,
               tenantId: systemTenantId,
               appName: fixture.appName,
@@ -753,50 +779,71 @@ export class DatabaseManager {
             });
           } else {
             await tx
-              .update(dbSchema.appConnections)
+              .update(schema.appConnections)
               .set({ status: "INACTIVE" })
-              .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
+              .where(sql`${schema.appConnections.id} = ${fixture.id}`);
           }
 
-          const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
+          // Seed the tenant_storage_registry to map the tenant to its physical database.
+          // In a real environment, this is created when the tenant signs up.
+          // For local dev, we derive a sanitized host identifier (protocol-qualified) and avoid persisting credentials.
+          let dbName = "nexiom_local";
+          let hostIdentifier = "postgresql://localhost:5432";
+          if (process.env.DATABASE_URL) {
+            try {
+              const parsedUrl = new URL(process.env.DATABASE_URL);
+              const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, "");
+              if (pathname) {
+                const segments = pathname.split("/");
+                dbName = segments[segments.length - 1] || dbName;
+              }
+              // If pathname is empty, keep the default dbName instead of using parsedUrl.host
+              // Build full protocol-qualified URL with host and port, no credentials or pathname
+              hostIdentifier = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ":" + parsedUrl.port : ""}`;
+            } catch {
+              // Fallback to safe default for invalid/Unix-socket-style URLs
+              dbName = "nexiom_local";
+              hostIdentifier = "postgresql://localhost:5432";
+            }
+          }
 
-          // Also seed the connection_storage_registry so applyPlan can resolve appName
           const existReg = await tx
             .select()
-            .from(dbSchema.connectionStorageRegistry)
+            .from(schema.tenantStorageRegistry)
             .where(
-              sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
+              sql`${schema.tenantStorageRegistry.tenantId} = ${systemTenantId}`,
             )
             .limit(1);
 
           if (!existReg[0]) {
-            await tx.insert(dbSchema.connectionStorageRegistry).values({
-              connectionId: fixture.id,
-              dataNamespace: schemaName,
-              databaseHostId: "aurora-prod",
+            // Insert registry entry first
+            await tx.insert(schema.tenantStorageRegistry).values({
+              tenantId: systemTenantId,
+              databaseName: dbName,
+              databaseHostUrl: hostIdentifier,
               regionContext: "local",
-              schemaPlan: "OUTBOUND_ACTIVE",
             });
-          } else {
-            await tx
-              .update(dbSchema.connectionStorageRegistry)
-              .set({ schemaPlan: "OUTBOUND_ACTIVE", dataNamespace: schemaName })
-              .where(
-                sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
-              );
           }
-          // SchemaPlan.OUTBOUND_ACTIVE creates all full pipeline stages
-          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
-
-          await tx
-            .update(dbSchema.appConnections)
-            .set({ status: "ACTIVE" })
-            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
-
-          console.log(
-            `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
-          );
         });
+
+        // Now apply schema plan outside the committed transaction
+        await schemaMgr.applyPlan(
+          systemTenantId,
+          schemaName,
+          SchemaPlan.OUTBOUND_ACTIVE,
+        );
+
+        // Update connection to ACTIVE status in a new transaction
+        await db.transaction(async (tx2) => {
+          await tx2
+            .update(schema.appConnections)
+            .set({ status: "ACTIVE" })
+            .where(sql`${schema.appConnections.id} = ${fixture.id}`);
+        });
+
+        console.log(
+          `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
+        );
       }
 
       console.log("\n✅ Local dev fixtures provisioned.");
@@ -806,6 +853,20 @@ export class DatabaseManager {
           "   Do NOT edit the value column manually — it holds AES-GCM ciphertext.",
       );
     } finally {
+      // Close all tenant Pools created during provisioning (best-effort)
+      const poolCloseResults = await Promise.allSettled(
+        tenantPools.map((pool) => pool.end()),
+      );
+
+      // Log any pool closure failures but continue
+      poolCloseResults.forEach((result, idx) => {
+        if (result.status === "rejected") {
+          console.error(
+            `  ⚠️  Failed to close tenant pool ${idx}: ${result.reason}`,
+          );
+        }
+      });
+
       await client.end();
     }
   }

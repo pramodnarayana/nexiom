@@ -10,8 +10,8 @@ debezium.source.publication.name=nexiom_cdc
 debezium.source.slot.name=nexiom_slot
 
 # Watch ONLY the outbox tables — not the heavy business payload tables
-# Pattern: any schema, tables named inbound_outbox, replica_outbox, normalized_outbox, or delivery_outbox
-debezium.source.table.include.list=.*\\.inbound_outbox,.*\\.replica_outbox,.*\\.normalized_outbox,.*\\.delivery_outbox
+# Pattern: any schema, tables named inbound_outbox, replica_outbox, normalized_outbox, or outbound_outbox
+debezium.source.table.include.list=.*\\.inbound_outbox,.*\\.replica_outbox,.*\\.normalized_outbox,.*\\.outbound_outbox
 
 # Never snapshot — outbox only captures new INSERTs going forward
 debezium.source.snapshot.mode=never

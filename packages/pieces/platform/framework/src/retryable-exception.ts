@@ -4,7 +4,7 @@
  *
  * DeliveryService catches this to transition outbound_gateway status → 'RETRY'
  * instead of 'FAIL', preserving the delivery outbox row for re-attempt with
- * exponential backoff via DeliveryOutboxWorker.
+ * exponential backoff via OutboundOutboxWorker.
  *
  * Non-retryable failures (400 bad payload, 401 auth, 404 not found) should
  * NOT use this — they should propagate as plain errors so the row is marked

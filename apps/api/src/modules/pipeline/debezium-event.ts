@@ -16,13 +16,13 @@ export class DebeziumUnwrappedEvent {
     'inbound_outbox',
     'replica_outbox',
     'normalized_outbox',
-    'delivery_outbox',
+    'outbound_outbox',
   ])
   __table!:
     | 'inbound_outbox'
     | 'replica_outbox'
     | 'normalized_outbox'
-    | 'delivery_outbox';
+    | 'outbound_outbox';
 
   @IsString()
   __schema!: string;

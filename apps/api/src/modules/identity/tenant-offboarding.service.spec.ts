@@ -56,11 +56,7 @@ describe('TenantOffboardingService', () => {
 
   it('should perform hard deletion of schemas and logical cascade', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
-    // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
-    ]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
 
     await service.offboardTenant('test-tenant');
 
@@ -80,17 +76,13 @@ describe('TenantOffboardingService', () => {
       )
       .join('');
     expect(sqlString).toMatch(/DROP SCHEMA/i);
-    expect(sqlString).toMatch(/ws_test_schema/);
+    expect(sqlString).toMatch(/ws_testapp_/);
     expect(sqlString).toMatch(/CASCADE/i);
   });
 
   it('should handle schema drop errors gracefully without halting', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
-    // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
-    ]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
@@ -128,11 +120,9 @@ describe('TenantOffboardingService', () => {
 
   it('should handle tenant with multiple connections', async () => {
     // First query: get connections for tenant - return multiple connections
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registries for all connections
     db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
-      { connectionId: 'conn-2', dataNamespace: 'ws_schema_2' },
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'app2' },
     ]);
 
     await service.offboardTenant('test-tenant');
@@ -143,20 +133,59 @@ describe('TenantOffboardingService', () => {
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('should handle tenant with some connections missing registry entries', async () => {
+  it('should deterministically drop schemas for all returned connections', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registries for all connections (only conn-1 has one)
     db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'app2' },
     ]);
 
     // Should resolve without throwing
     await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
 
-    // Assert db.execute called only for existing namespace (conn-1)
-    expect(db.execute).toHaveBeenCalledTimes(1);
+    // Assert db.execute called for both connections since schema names are deterministic
+    expect(db.execute).toHaveBeenCalledTimes(2);
     // Assert transaction still invoked for logical deletion
     expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('should normalize mixed-case provider names when building schema names', async () => {
+    // First query: get connections for tenant - include a mixed-case appName
+    db.where.mockResolvedValueOnce([
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'SalesForce-API' },
+    ]);
+
+    // Should resolve without throwing
+    await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
+
+    // Assert db.execute called for both connections (including the normalized schema for SalesForce-API)
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    // Assert transaction still invoked for logical deletion
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+
+    // Import the schema helper to compute the expected normalized schema name
+    const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+    const expectedSchemaName = getWorkspaceSchemaName(
+      'conn-2',
+      'SalesForce-API',
+    );
+
+    // Assert that at least one db.execute call contains the normalized schema prefix for SalesForce-API
+    const executeCall = db.execute.mock.calls.find((call) => {
+      const sqlObj = call[0] as unknown as SQL;
+      const sqlString = (
+        sqlObj?.queryChunks as Array<{ value?: string | string[] }>
+      )
+        .flatMap((chunk) =>
+          Array.isArray(chunk.value) ? chunk.value : [chunk.value ?? ''],
+        )
+        .join('');
+      return sqlString.includes(
+        expectedSchemaName.split('_').slice(0, 2).join('_'),
+      );
+    });
+
+    expect(executeCall).toBeDefined();
   });
 });

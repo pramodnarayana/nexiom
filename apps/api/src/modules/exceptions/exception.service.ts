@@ -315,7 +315,7 @@ export class ExceptionService {
       );
     }
 
-    const { outboundGateway, deliveryOutbox } = buildTenantSchema(schemaName);
+    const { outboundGateway, outboundOutbox } = buildTenantSchema(schemaName);
 
     let outboxId: string = '';
 
@@ -346,7 +346,7 @@ export class ExceptionService {
       // same exception twice, the second insert is silently skipped and the
       // existing outbox row (already PENDING or PROCESSING) drives delivery.
       const inserted = await tx
-        .insert(deliveryOutbox)
+        .insert(outboundOutbox)
         .values({
           traceId: outboundGatewayRow.traceId,
           routeId: outboundGatewayRow.routeId,
@@ -362,24 +362,24 @@ export class ExceptionService {
         })
         .onConflictDoNothing({
           target: [
-            deliveryOutbox.traceId,
-            deliveryOutbox.routeId,
-            deliveryOutbox.outboundGatewayId,
+            outboundOutbox.traceId,
+            outboundOutbox.routeId,
+            outboundOutbox.outboundGatewayId,
           ],
         })
-        .returning({ id: deliveryOutbox.id });
+        .returning({ id: outboundOutbox.id });
 
       if (inserted.length > 0) {
         outboxId = inserted[0].id;
       } else {
         // Row already exists — fetch its id so the send loop can still mark it SUCCESS.
         const existing = await tx
-          .select({ id: deliveryOutbox.id })
-          .from(deliveryOutbox)
+          .select({ id: outboundOutbox.id })
+          .from(outboundOutbox)
           .where(
-            sql`${deliveryOutbox.traceId} = ${outboundGatewayRow.traceId}
-            AND ${deliveryOutbox.routeId} = ${outboundGatewayRow.routeId}
-            AND ${deliveryOutbox.outboundGatewayId} = ${outboundGatewayId}`,
+            sql`${outboundOutbox.traceId} = ${outboundGatewayRow.traceId}
+            AND ${outboundOutbox.routeId} = ${outboundGatewayRow.routeId}
+            AND ${outboundOutbox.outboundGatewayId} = ${outboundGatewayId}`,
           )
           .limit(1);
         if (existing.length > 0) outboxId = existing[0].id;
@@ -387,7 +387,7 @@ export class ExceptionService {
     });
 
     // Atomic claim: UPDATE status='PROCESSING' WHERE id=outboxId AND status='PENDING'
-    // RETURNING payload. This races safely with DeliveryOutboxWorker — exactly one
+    // RETURNING payload. This races safely with OutboundOutboxWorker — exactly one
     // claimant wins and publishes; the other skips.  If the row is already
     // PROCESSING/SUCCESS (worker got there first) we return queued:true idempotently.
     //
@@ -406,20 +406,20 @@ export class ExceptionService {
           // Also push nextRetryAt 1 minute forward so the worker cannot immediately
           // re-claim the row while this operator publish is in-flight.
           return tx
-            .update(deliveryOutbox)
+            .update(outboundOutbox)
             .set({
               status: 'PROCESSING',
               nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
             } as never)
             .where(
               and(
-                eq(deliveryOutbox.id, outboxId),
-                sql`${deliveryOutbox.status} = 'PENDING'`,
+                eq(outboundOutbox.id, outboxId),
+                sql`${outboundOutbox.status} = 'PENDING'`,
               ),
             )
             .returning({
-              id: deliveryOutbox.id,
-              payload: deliveryOutbox.payload,
+              id: outboundOutbox.id,
+              payload: outboundOutbox.payload,
             });
         })
       : [];
@@ -447,12 +447,12 @@ export class ExceptionService {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
           await tx
-            .update(deliveryOutbox)
+            .update(outboundOutbox)
             .set({
               status: 'RETRY',
               nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
             } as never)
-            .where(eq(deliveryOutbox.id, outboxId));
+            .where(eq(outboundOutbox.id, outboxId));
         });
         throw sendErr;
       }
@@ -463,9 +463,9 @@ export class ExceptionService {
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
         await tx
-          .update(deliveryOutbox)
+          .update(outboundOutbox)
           .set({ status: 'SUCCESS' } as never)
-          .where(eq(deliveryOutbox.id, outboxId));
+          .where(eq(outboundOutbox.id, outboxId));
       });
     }
 

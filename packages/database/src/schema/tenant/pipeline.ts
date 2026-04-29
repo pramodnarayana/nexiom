@@ -36,8 +36,8 @@ export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [
 export const OutboundGatewayStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY', 'DISMISSED'] as const;
 export type OutboundGatewayStatus = (typeof OutboundGatewayStatus)[number];
 
-export const DeliveryOutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;
-export type DeliveryOutboxStatus = (typeof DeliveryOutboxStatus)[number];
+export const OutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;
+export type OutboxStatus = (typeof OutboxStatus)[number];
 
 // ---------------------------------------------------------------------------
 // Tenant Schema Builder
@@ -243,7 +243,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -266,7 +266,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -289,7 +289,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -307,23 +307,23 @@ export function buildTenantSchema(schemaName: string) {
      * Transactional outbox used to safely decouple L4 Fan-Out execution
      * from external queue handoff (L4 -> L5). Holds the queue message payload.
      */
-    const deliveryOutbox = schema.table('delivery_outbox', {
+    const outboundOutbox = schema.table('outbound_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
         routeId: uuid('route_id').notNull(),
         outboundGatewayId: uuid('outbound_gateway_id').notNull(),
         payload: jsonb('payload').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<DeliveryOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
-        index('idx_delivery_outbox_claim')
+        index('idx_outbound_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
-        uniqueIndex('idx_delivery_unique_dispatch').on(table.traceId, table.routeId, table.outboundGatewayId),
+        uniqueIndex('idx_outbound_unique_dispatch').on(table.traceId, table.routeId, table.outboundGatewayId),
     ]);
 
     return {
@@ -337,7 +337,7 @@ export function buildTenantSchema(schemaName: string) {
         syncCursor,
         replicaOutbox,
         normalizedOutbox,
-        deliveryOutbox,
+        outboundOutbox,
     };
 }
 

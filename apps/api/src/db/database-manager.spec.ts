@@ -5,44 +5,50 @@ import { DatabaseManager } from './database-manager.js';
 import { execSync } from 'node:child_process';
 
 // Hoisted mocks for dynamic imports
-const { drizzleMocks, rbacMocks, constantMocks, fsMocks } = vi.hoisted(() => ({
-  drizzleMocks: {
-    update: vi.fn(),
-    insert: vi.fn(),
-    transaction: vi.fn(),
-    query: {
-      organization: {
-        findFirst: vi.fn(),
-      },
-      user: {
-        findFirst: vi.fn(),
-      },
-      role: {
-        findFirst: vi.fn(),
-      },
-      member: {
-        findMany: vi.fn(),
-      },
-      rolePermission: {
-        findMany: vi.fn(),
+const { drizzleMocks, rbacMocks, constantMocks, fsMocks, dbManagerMocks } =
+  vi.hoisted(() => ({
+    drizzleMocks: {
+      select: vi.fn(),
+      update: vi.fn(),
+      insert: vi.fn(),
+      transaction: vi.fn(),
+      query: {
+        organization: {
+          findFirst: vi.fn(),
+        },
+        user: {
+          findFirst: vi.fn(),
+        },
+        role: {
+          findFirst: vi.fn(),
+        },
+        member: {
+          findMany: vi.fn(),
+        },
+        rolePermission: {
+          findMany: vi.fn(),
+        },
       },
     },
-  },
-  rbacMocks: {
-    seedSystemRbac: vi.fn(),
-  },
-  constantMocks: {
-    getRequiredOwnerRoleId: vi.fn(() => 'owner-role'),
-    getRequiredAdminRoleId: vi.fn(() => 'admin-role'),
-    getRequiredMemberRoleId: vi.fn(() => 'member-role'),
-    getRequiredSystemTenantId: vi.fn(() => 'system-tenant'),
-  },
-  fsMocks: {
-    readdir: vi.fn().mockResolvedValue(['dummy-piece']),
-    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
-    readFile: vi.fn().mockResolvedValue('{"name": "@test/piece-dummy"}'),
-  },
-}));
+    rbacMocks: {
+      seedSystemRbac: vi.fn(),
+    },
+    constantMocks: {
+      getRequiredOwnerRoleId: vi.fn(() => 'owner-role'),
+      getRequiredAdminRoleId: vi.fn(() => 'admin-role'),
+      getRequiredMemberRoleId: vi.fn(() => 'member-role'),
+      getRequiredSystemTenantId: vi.fn(() => 'system-tenant'),
+    },
+    fsMocks: {
+      readdir: vi.fn().mockResolvedValue(['dummy-piece']),
+      stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+      readFile: vi.fn().mockResolvedValue('{"name": "@test/piece-dummy"}'),
+    },
+    dbManagerMocks: {
+      applyPlan: vi.fn().mockResolvedValue(undefined),
+      migrateToOutboundActive: vi.fn().mockResolvedValue(undefined),
+    },
+  }));
 
 // Mock dependencies
 vi.mock('node:child_process');
@@ -57,6 +63,7 @@ vi.mock('pg', () => {
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
+    select: drizzleMocks.select,
     update: drizzleMocks.update,
     insert: drizzleMocks.insert,
     transaction: drizzleMocks.transaction,
@@ -71,6 +78,18 @@ vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
 vi.mock('../constants.js', () => constantMocks);
 
 vi.mock('node:fs/promises', () => fsMocks);
+
+vi.mock('@nexiom/dbmanager', () => ({
+  TenantDatabaseManager: vi.fn(() => ({
+    applyPlan: dbManagerMocks.applyPlan,
+    migrateToOutboundActive: dbManagerMocks.migrateToOutboundActive,
+  })),
+  SchemaPlan: {
+    NAMESPACE_ONLY: 'NAMESPACE_ONLY',
+    GATEWAY_ACTIVE: 'GATEWAY_ACTIVE',
+    OUTBOUND_ACTIVE: 'OUTBOUND_ACTIVE',
+  },
+}));
 
 describe('DatabaseManager', () => {
   let manager: DatabaseManager;
@@ -118,6 +137,20 @@ describe('DatabaseManager', () => {
       return chain;
     };
     drizzleMocks.update.mockImplementation(makeUpdateChain);
+
+    const makeSelectChain = () => {
+      const limitMock = vi.fn().mockResolvedValue([]);
+      const chain = {
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            limit: limitMock,
+          }),
+          limit: limitMock,
+        }),
+      };
+      return chain;
+    };
+    drizzleMocks.select.mockImplementation(makeSelectChain);
 
     drizzleMocks.transaction.mockImplementation(
       async (cb: (tx: typeof drizzleMocks) => Promise<unknown>) =>

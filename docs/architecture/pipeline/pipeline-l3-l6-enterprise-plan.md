@@ -11,7 +11,7 @@ Branch: `feat/pipeline-l3-l4-l5-l6`
 | `RetryableException` | ❌ Does not exist anywhere. Must create. |
 | `sanitizeError` | 📍 Exists only in `apps/api/src/modules/scheduler/outbox-worker.service.ts` as a module-private function. Must extract to shared location. |
 | PinoLogger in worker | ❌ No PinoLogger usage in `apps/worker` — all services use NestJS `Logger`. Worker has no `nestjs-pino` setup. Keep `Logger` for now, add TODO comments — full PinoLogger migration belongs in a separate observability task. |
-| GEM `srcVendorId` flow | `replica_entity.sourceId` exists but is NOT in any queue message. Must thread through `deliveryOutbox.payload` from FanOutService. |
+| GEM `srcVendorId` flow | `replica_entity.sourceId` exists but is NOT in any queue message. Must thread through `outboundOutbox.payload` from FanOutService. |
 | `piece.normalize` interface | ✅ Already defined in `piece.ts` with full JSDoc. Salesforce + QuickBooks stubs needed. |
 | Poison pill / ack contract | The `QueueService.consume` callback: if handler throws, SQS re-delivers after visibility timeout. This is the intended contract — no explicit nack needed. Document it. |
 
@@ -214,9 +214,9 @@ Add three new test cases:
 
 6. **`normalizedData` typed as `Record<string, unknown>`** — remove the `any` and the `eslint-disable` for this.
 
-7. **Thread `srcVendorId` through `deliveryOutbox.payload`**:
+7. **Thread `srcVendorId` through `outboundOutbox.payload`**:
    - When reading `normalizedEntity`, also read `replicaEntity.sourceId` via JOIN or secondary query
-   - Add `srcVendorId: replicaEntity.sourceId` to `deliveryOutbox.payload`
+   - Add `srcVendorId: replicaEntity.sourceId` to `outboundOutbox.payload`
    - Add `srcConnectionId: connectionId` and `destConnectionId: stitch.destConnectionId` to payload (needed by L6 for GEM write)
 
    Full delivery outbox payload shape:
@@ -240,7 +240,7 @@ Add three new test cases:
 - Replace brittle `toHaveBeenCalledTimes(4)` tx-count assertion with behavioral assertions (e.g. `syncLog insert was called with status: 'FAIL'`)
 - Add: **`writeSyncLog` is idempotent** — `onConflictDoNothing` called on syncLog insert
 - Add: **invalid message returns early without throwing**
-- Add: **`srcVendorId` is present in deliveryOutbox payload**
+- Add: **`srcVendorId` is present in outboundOutbox payload**
 
 ---
 
@@ -391,7 +391,7 @@ pnpm lint
 | `piece.normalize` returns null | L3 | `canonicalType: 'RAW'`, record stored |
 | `piece.normalize` throws | L3 | FAIL sync_log, error rethrown |
 | Sync condition mismatch | L4 | SKIPPED sync_log (idempotent) |
-| Crash after outboundGateway insert, before deliveryOutbox | L4 | Re-run is idempotent (onConflictDoUpdate) |
+| Crash after outboundGateway insert, before outboundOutbox | L4 | Re-run is idempotent (onConflictDoUpdate) |
 | `RetryableException` from piece | L5 | `RETRY` on outbound_gateway |
 | 429 status code | L5 | `RETRY` on outbound_gateway |
 | 422 status code | L5 | `FAIL` on outbound_gateway |

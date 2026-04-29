@@ -1,1 +1,1 @@
-export * from "@nexiom/database/dist/schema/identity";
+export * from "@nexiom/database";

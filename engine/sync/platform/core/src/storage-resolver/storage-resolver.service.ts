@@ -1,35 +1,39 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
-import {
-  DATABASE_CONNECTION,
-  connectionStorageRegistry,
-} from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { eq, type InferSelectModel } from 'drizzle-orm';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-export type HostContext = InferSelectModel<typeof connectionStorageRegistry>;
+export type HostContext = {
+  databaseHostUrl: string;
+  regionContext: string;
+};
 
 @Injectable()
 export class StorageResolverService {
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor() {}
 
   /**
    * Resolves the physical PostgreSQL schema name for a connection.
    * Used by Ingestion and Replica workers for 'SET search_path'.
    */
   async resolveSchemaName(connectionId: string): Promise<string> {
-    const registryEntry = await this.db
-      .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
-      .from(connectionStorageRegistry)
-      .where(eq(connectionStorageRegistry.connectionId, connectionId))
-      .limit(1);
+    // In Tenant-per-Database, the schema name is purely deterministic
+    // Normalize to lowercase and replace any non-alphanumeric/underscore with '_'
+    let sanitized = connectionId.toLowerCase().replaceAll(/[^a-z0-9_]/g, '_');
 
-    if (registryEntry.length === 0) {
-      throw new NotFoundException(
-        `Infrastructure Error: Connection ${connectionId} has no physical storage schema assigned.`,
-      );
+    // Ensure the first character is a letter or underscore (prefix '_' if starts with digit)
+    if (sanitized.length > 0 && /^[0-9]/.test(sanitized)) {
+      sanitized = '_' + sanitized;
     }
 
-    return registryEntry[0].dataNamespace;
+    // Truncate so that the final 'ws_' prefixed string doesn't exceed 63 bytes
+    if (sanitized.length > 60) {
+      sanitized = sanitized.substring(0, 60);
+    }
+
+    // Ensure non-empty
+    if (!sanitized) {
+      throw new Error(`Cannot derive valid schema name from connectionId: ${connectionId}`);
+    }
+
+    return `ws_${sanitized}`;
   }
 
   /**
@@ -37,18 +41,9 @@ export class StorageResolverService {
    * Critical for multi-region routing and residency compliance.
    */
   async getHostContext(connectionId: string): Promise<HostContext> {
-    const registryEntry = await this.db
-      .select()
-      .from(connectionStorageRegistry)
-      .where(eq(connectionStorageRegistry.connectionId, connectionId))
-      .limit(1);
-
-    if (registryEntry.length === 0) {
-      throw new NotFoundException(
-        `No infrastructure registry found for connection: ${connectionId}`,
-      );
-    }
-
-    return registryEntry[0];
+    throw new Error(
+      `getHostContext not yet implemented for tenant-per-database architecture (connectionId: ${connectionId}). ` +
+      `Requires resolving tenantId and querying TenantStorageRegistry.`
+    );
   }
 }

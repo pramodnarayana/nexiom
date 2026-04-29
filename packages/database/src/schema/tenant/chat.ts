@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, index, primaryKey, foreignKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { organization } from './identity.js';
+import { organization } from '../global/identity.js';
 
 /**
  * Storage for ChatGPT-style conversational grouping.

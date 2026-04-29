@@ -1,8 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  DATABASE_CONNECTION,
-  connectionStorageRegistry,
-} from '@nexiom/database';
 import { NotFoundException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { StorageResolverService } from '../index.js';
@@ -10,70 +6,68 @@ import { StorageResolverService } from '../index.js';
 describe('StorageResolverService', () => {
   let service: StorageResolverService;
 
-  const mockDb = {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn(),
-  };
-
   beforeEach(async () => {
     vi.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        StorageResolverService,
-        {
-          provide: DATABASE_CONNECTION,
-          useValue: mockDb,
-        },
-      ],
+      providers: [StorageResolverService],
     }).compile();
 
     service = module.get<StorageResolverService>(StorageResolverService);
   });
 
   describe('resolveSchemaName', () => {
-    it('should return the schemaName for a valid connectionId', async () => {
-      mockDb.limit.mockResolvedValue([{ dataNamespace: 'ws_salesforce_123' }]);
-
+    it('should return the deterministic schemaName for a valid connectionId', async () => {
       const result = await service.resolveSchemaName('conn-123');
-      expect(result).toBe('ws_salesforce_123');
-      expect(mockDb.select).toHaveBeenCalled();
-      expect(mockDb.from).toHaveBeenCalledWith(connectionStorageRegistry);
+      expect(result).toBe('ws_conn_123');
     });
 
-    it('should throw NotFoundException if connection has no workspace mapped', async () => {
-      mockDb.limit.mockResolvedValue([]);
+    it('should lowercase uppercase inputs', async () => {
+      const result = await service.resolveSchemaName('CONN-ABC');
+      expect(result).toBe('ws_conn_abc');
+    });
 
-      await expect(service.resolveSchemaName('conn-unknown')).rejects.toThrow(
-        NotFoundException,
+    it('should replace invalid characters with underscores', async () => {
+      const result = await service.resolveSchemaName('conn@123#test!');
+      expect(result).toBe('ws_conn_123_test_');
+    });
+
+    it('should prefix with underscore if input starts with a digit', async () => {
+      const result = await service.resolveSchemaName('123-conn');
+      expect(result).toBe('ws__123_conn');
+    });
+
+    it('should truncate inputs longer than 63 characters', async () => {
+      const longInput = 'a'.repeat(100);
+      const result = await service.resolveSchemaName(longInput);
+      // "ws_" is 3 chars, so max sanitized length is 60
+      expect(result).toBe('ws_' + 'a'.repeat(60));
+    });
+
+    it('should handle mixed-case with special characters and ensure normalization', async () => {
+      const result = await service.resolveSchemaName('SalesForce-API');
+      expect(result).toBe('ws_salesforce_api');
+    });
+
+    it('should handle input that becomes empty after sanitization by throwing', async () => {
+      await expect(service.resolveSchemaName('')).rejects.toThrow(
+        /Cannot derive valid schema name/,
       );
+    });
+
+    it('should preserve underscores in the input', async () => {
+      const result = await service.resolveSchemaName('conn_test_123');
+      expect(result).toBe('ws_conn_test_123');
     });
   });
 
   describe('getHostContext', () => {
-    it('should return the full host and region mapping', async () => {
-      const mockEntry = {
-        connectionId: 'conn-123',
-        dataNamespace: 'ws_salesforce_123',
-        schemaPlan: 'NAMESPACE_ONLY',
-        databaseHostId: 'aurora-prod',
-        regionContext: 'eu-central-1',
-        createdAt: new Date('2024-01-01T00:00:00Z'),
-        updatedAt: new Date('2024-01-01T00:00:00Z'),
-      };
-      mockDb.limit.mockResolvedValue([mockEntry]);
-
-      const result = await service.getHostContext('conn-123');
-      expect(result).toEqual(mockEntry);
-    });
-
-    it('should throw NotFoundException if connection has no tracking row', async () => {
-      mockDb.limit.mockResolvedValue([]);
-
-      await expect(service.getHostContext('conn-unknown')).rejects.toThrow(
-        NotFoundException,
+    it('should throw when tenant-per-database logic is not yet implemented', async () => {
+      await expect(service.getHostContext('conn-123')).rejects.toThrow(
+        /getHostContext not yet implemented/
+      );
+      await expect(service.getHostContext('conn-123')).rejects.toThrow(
+        /conn-123/
       );
     });
   });

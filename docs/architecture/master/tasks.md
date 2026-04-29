@@ -467,8 +467,8 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 - [x] Queries `integration_stitch` for active stitches on `src_connection_id`
 - [x] Evaluates `syncCondition` rules in-memory via `evaluateConditions()` from `@nexiom/engine`
 - [x] Per matching stitch: hydrate payload via `field_mapping` rules with `hydratePayload()`
-- [x] **Writes `outbound_gateway` (PENDING) BEFORE `delivery_outbox`** — crash-safe ordering with `onConflictDoUpdate` for idempotency
-- [x] `delivery_outbox.payload` includes: `srcVendorId`, `canonicalType`, `srcAppName`, `srcTenantId` — all fields needed by DeliveryService (L5) to write the Global Entity Map without extra joins
+- [x] **Writes `outbound_gateway` (PENDING) BEFORE `outbound_outbox`** — crash-safe ordering with `onConflictDoUpdate` for idempotency
+- [x] `outbound_outbox.payload` includes: `srcVendorId`, `canonicalType`, `srcAppName`, `srcTenantId` — all fields needed by DeliveryService (L5) to write the Global Entity Map without extra joins
 - [x] Fan-out uses `processInChunks(stitches, 5, ...)` — caps concurrency at 5 to prevent event-loop blockage on high-cardinality fan-outs
 - [x] `processSingleStitch()` private method for clean separation
 - [x] `writeSyncLog()` helper — `onConflictDoNothing` on `(traceId, routeId, layer, status)`
@@ -500,7 +500,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 - [x] `UPDATE outbound_gateway SET resPayload, statusCode, status` (SUCCESS / FAIL / RETRY)
 - [x] **Global Entity Map upsert** on SUCCESS with both `srcVendorId` and `destVendorId`: `INSERT INTO global_entity_map ... ON CONFLICT DO UPDATE SET destEntityId, lastSyncedAt=NOW()` — idempotent on re-delivery
 - [x] `destVendorId` extracted from vendor response body via `extractDestVendorId()` (checks `id`, `Id`, `result.id`, `data.id`)
-- [x] `srcVendorId` threaded from `replica_entity.sourceId` via L4 `deliveryOutbox.payload` — no cross-schema join at L5/L6
+- [x] `srcVendorId` threaded from `replica_entity.sourceId` via L4 `outboundOutbox.payload` — no cross-schema join at L5/L6
 - [x] GEM populated with `sourceAppId=connectionId`, `destAppId=targetConnectionId` (real FK UUIDs, not placeholders)
 - [x] `orgId` fields populated from `tenantId` retrieved from typed `appConnections` query
 - [x] GEM write skipped gracefully when `srcVendorId` or `destVendorId` is absent (partial sync still succeeds)
@@ -692,7 +692,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 ### T051 · api: Delivery Outbox Pattern
 
-- [x] Add `delivery_outbox` Drizzle schema mappings and PostgreSQL CHECK constraint enums.
+- [x] Add `outbound_outbox` Drizzle schema mappings and PostgreSQL CHECK constraint enums.
 - [x] Refactor `ConnectorsService` to use PROVISIONING before database completion.
 - [x] Implement robust `ReplicaOutboxService` atomic locks guaranteeing L2 -> L3 transport logic.
 - [x] Strip untyped `durationMs` hacks and substitute row-level skip locks and `replica_outbox` commits in L2 worker.
@@ -702,9 +702,9 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 - [x] `normalized_outbox` Drizzle schema in `packages/database/src/schema/pipeline.ts` with unique index on `(traceId, connectionId)`
 - [x] `NormalizationService` (L3): atomic transactional outbox — inserts `normalized_entity` then `normalized_outbox` in single TX; `onConflictDoNothing` on both for idempotency
-- [x] `FanOutService` (L4): reads from `normalized_outbox` queue and writes to `delivery_outbox` — crash-safe ordering (outbound_gateway BEFORE delivery_outbox)
+- [x] `FanOutService` (L4): reads from `normalized_outbox` queue and writes to `outbound_outbox` — crash-safe ordering (outbound_gateway BEFORE outbound_outbox)
 - [x] `NormalizedOutboxWorker` — `FOR UPDATE SKIP LOCKED` batch claim, exponential backoff, `MAX_ATTEMPTS` guard; publishes to `Normalized_Queue` and transitions rows `PENDING → PROCESSING → COMPLETED`
-- [x] `DeliveryOutboxWorker` — same pattern for L4→L5 handoff via `Delivery_Queue`
+- [x] `OutboundOutboxWorker` — same pattern for L4→L5 handoff via `Delivery_Queue`
 - [x] All sync_log inserts use `onConflictDoNothing` on `(traceId, layer, status)` unique constraint `uq_sync_log_trace_layer_status`
 - [x] `sanitizeError()` used throughout for credential-safe error persistence
 - Files: `packages/database/src/schema/pipeline.ts`, `apps/worker/src/modules/pipeline/normalization.service.ts`, `apps/worker/src/modules/pipeline/fanout.service.ts`, `apps/worker/src/modules/pipeline/normalized-outbox.worker.ts`, `apps/worker/src/modules/pipeline/delivery-outbox.worker.ts`
