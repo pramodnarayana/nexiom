@@ -693,9 +693,17 @@ export class DatabaseManager {
       const { Pool } = await import("pg");
       const schemaMgr = new TenantDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
-        (connectionString: string) => {
+        (hostIdentifier: string) => {
+          // Rehydrate credentials from DATABASE_URL
+          // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
+          const parsedEnv = new URL(dbUrl);
+          const parsedHost = new URL(hostIdentifier);
+
+          // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+
           const pool = new Pool({
-            connectionString,
+            connectionString: fullDsn,
             max: 20,
             idleTimeoutMillis: 30_000,
             connectionTimeoutMillis: 5_000,
@@ -787,10 +795,9 @@ export class DatabaseManager {
               const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, "");
               if (pathname) {
                 const segments = pathname.split("/");
-                dbName = segments[segments.length - 1] || parsedUrl.host || dbName;
-              } else {
-                dbName = parsedUrl.host || dbName;
+                dbName = segments[segments.length - 1] || dbName;
               }
+              // If pathname is empty, keep the default dbName instead of using parsedUrl.host
               // Build full protocol-qualified URL with host and port, no credentials or pathname
               hostIdentifier = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ":" + parsedUrl.port : ""}`;
             } catch {
@@ -846,10 +853,20 @@ export class DatabaseManager {
           "   Do NOT edit the value column manually — it holds AES-GCM ciphertext.",
       );
     } finally {
-      // Close all tenant Pools created during provisioning
-      for (const pool of tenantPools) {
-        await pool.end();
-      }
+      // Close all tenant Pools created during provisioning (best-effort)
+      const poolCloseResults = await Promise.allSettled(
+        tenantPools.map((pool) => pool.end())
+      );
+
+      // Log any pool closure failures but continue
+      poolCloseResults.forEach((result, idx) => {
+        if (result.status === "rejected") {
+          console.error(
+            `  ⚠️  Failed to close tenant pool ${idx}: ${result.reason}`
+          );
+        }
+      });
+
       await client.end();
     }
   }

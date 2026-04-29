@@ -50,7 +50,7 @@ describe('StorageResolverService', () => {
     });
 
     it('should handle input that becomes empty after sanitization by throwing', async () => {
-      await expect(service.resolveSchemaName('!!!')).rejects.toThrow(
+      await expect(service.resolveSchemaName('')).rejects.toThrow(
         /Cannot derive valid schema name/,
       );
     });

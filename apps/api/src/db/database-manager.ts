@@ -264,7 +264,10 @@ export class DatabaseManager {
         systemTenantId,
       };
 
-      await seedSystemRbac(db as any, config, console);
+      // Create a separate DB instance with identity schema for seedSystemRbac
+      const identitySchema = await import('@nexiom/identity/schema');
+      const identityDb = drizzle(client, { schema: identitySchema });
+      await seedSystemRbac(identityDb, config, console);
 
       // 3. Seed Marketplace Pieces dynamically from monorepo (Enterprise-Grade)
       const { v4: uuidv4Marketplace } = await import('uuid');
@@ -680,11 +683,20 @@ export class DatabaseManager {
 
     try {
       const db = drizzle(client, { schema: dbSchema });
+      const { dbUrl } = await this.resolvePgModule();
       const schemaMgr = new TenantDatabaseManager(
         db as unknown as import('@nexiom/database').DrizzleDb,
-        (connectionString: string) => {
+        (hostIdentifier: string) => {
+          // Rehydrate credentials from DATABASE_URL
+          // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
+          const parsedEnv = new URL(dbUrl);
+          const parsedHost = new URL(hostIdentifier);
+
+          // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+
           const pool = new Pool({
-            connectionString,
+            connectionString: fullDsn,
             max: 20,
             idleTimeoutMillis: 30_000,
             connectionTimeoutMillis: 5_000,
@@ -856,10 +868,9 @@ export class DatabaseManager {
               const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, '');
               if (pathname) {
                 const segments = pathname.split('/');
-                dbName = segments[segments.length - 1] || parsedUrl.host || dbName;
-              } else {
-                dbName = parsedUrl.host || dbName;
+                dbName = segments[segments.length - 1] || dbName;
               }
+              // If pathname is empty, keep the default dbName instead of using parsedUrl.host
             } catch {
               // Fallback to safe default for invalid/Unix-socket-style URLs
               dbName = 'nexiom_local';
