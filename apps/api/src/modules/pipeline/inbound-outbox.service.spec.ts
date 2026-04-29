@@ -19,10 +19,10 @@ describe('InboundOutboxService', () => {
 
     tenantDb = {
       select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockResolvedValue([{ id: 'conn_1', appName: 'test-app' }]),
+      from: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([{ id: 'conn_1', appName: 'test-app' }]),
       returning: vi.fn().mockResolvedValue([]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {

@@ -58,7 +58,8 @@ describe("NormalizedOutboxWorker", () => {
     };
 
     tenantDb.select = vi.fn().mockReturnThis();
-    tenantDb.from = vi
+    tenantDb.from = vi.fn().mockReturnThis();
+    tenantDb.where = vi
       .fn()
       .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
 
@@ -128,7 +129,8 @@ describe("NormalizedOutboxWorker", () => {
       },
     ]);
     tenantDb.select = vi.fn().mockReturnThis();
-    tenantDb.from = vi
+    tenantDb.from = vi.fn().mockReturnThis();
+    tenantDb.where = vi
       .fn()
       .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
     dbManager.getTenantDb.mockResolvedValue(tenantDb);

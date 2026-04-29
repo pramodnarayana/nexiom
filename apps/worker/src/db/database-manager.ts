@@ -855,14 +855,14 @@ export class DatabaseManager {
     } finally {
       // Close all tenant Pools created during provisioning (best-effort)
       const poolCloseResults = await Promise.allSettled(
-        tenantPools.map((pool) => pool.end())
+        tenantPools.map((pool) => pool.end()),
       );
 
       // Log any pool closure failures but continue
       poolCloseResults.forEach((result, idx) => {
         if (result.status === "rejected") {
           console.error(
-            `  ⚠️  Failed to close tenant pool ${idx}: ${result.reason}`
+            `  ⚠️  Failed to close tenant pool ${idx}: ${result.reason}`,
           );
         }
       });

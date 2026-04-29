@@ -41,7 +41,9 @@ export class InboundOutboxService {
         const chunkResults = await Promise.allSettled(
           chunk.map(async (tenant) => {
             try {
-              const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+              const tenantDb = await this.dbManager.getTenantDb(
+                tenant.tenantId,
+              );
               const { eq } = await import('drizzle-orm');
               const connections = await tenantDb
                 .select()

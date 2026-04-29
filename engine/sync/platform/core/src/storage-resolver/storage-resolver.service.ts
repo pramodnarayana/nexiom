@@ -23,9 +23,9 @@ export class StorageResolverService {
       sanitized = '_' + sanitized;
     }
 
-    // Truncate to Postgres max identifier length (63 bytes)
-    if (sanitized.length > 63) {
-      sanitized = sanitized.substring(0, 63);
+    // Truncate so that the final 'ws_' prefixed string doesn't exceed 63 bytes
+    if (sanitized.length > 60) {
+      sanitized = sanitized.substring(0, 60);
     }
 
     // Ensure non-empty

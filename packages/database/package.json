@@ -11,19 +11,19 @@
       "default": "./dist/index.js"
     },
     "./schema/identity": {
-      "types": "./dist/schema/identity.d.ts",
-      "import": "./dist/schema/identity.js",
-      "default": "./dist/schema/identity.js"
+      "types": "./dist/schema/global/identity.d.ts",
+      "import": "./dist/schema/global/identity.js",
+      "default": "./dist/schema/global/identity.js"
     },
     "./schema/tenant": {
-      "types": "./dist/schema/tenant.d.ts",
-      "import": "./dist/schema/tenant.js",
-      "default": "./dist/schema/tenant.js"
+      "types": "./dist/schema/tenant/tenant.d.ts",
+      "import": "./dist/schema/tenant/tenant.js",
+      "default": "./dist/schema/tenant/tenant.js"
     },
     "./dist/schema/identity": {
-      "types": "./dist/schema/identity.d.ts",
-      "import": "./dist/schema/identity.js",
-      "default": "./dist/schema/identity.js"
+      "types": "./dist/schema/global/identity.d.ts",
+      "import": "./dist/schema/global/identity.js",
+      "default": "./dist/schema/global/identity.js"
     }
   },
   "scripts": {

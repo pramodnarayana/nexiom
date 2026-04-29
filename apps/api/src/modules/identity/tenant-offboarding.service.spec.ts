@@ -181,7 +181,9 @@ describe('TenantOffboardingService', () => {
           Array.isArray(chunk.value) ? chunk.value : [chunk.value ?? ''],
         )
         .join('');
-      return sqlString.includes(expectedSchemaName.split('_').slice(0, 2).join('_'));
+      return sqlString.includes(
+        expectedSchemaName.split('_').slice(0, 2).join('_'),
+      );
     });
 
     expect(executeCall).toBeDefined();
