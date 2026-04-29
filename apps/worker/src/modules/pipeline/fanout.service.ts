@@ -427,20 +427,69 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
+        // ── Persist pending delivery record before publishing ─────────────────
+        // Create outbound_gateway record in destination schema BEFORE sending to
+        // DeliveryQueue to ensure delivery can be retried even if send() fails.
+        const destSchemaName = await this.storageResolver.resolveSchemaName(
+          stitch.destConnectionId,
+        );
+        assertValidSchemaName(destSchemaName);
+
+        const { outboundGateway: destOutboundGateway } =
+          buildTenantSchema(destSchemaName);
+
+        // Execute in nested transaction on destination schema
+        await this.db.transaction(async (destTx) => {
+          await destTx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          );
+          await destTx
+            .insert(destOutboundGateway)
+            .values({
+              traceId,
+              routeId: stitch.id,
+              reqPayload: hydratedPayload,
+              status: "PENDING",
+              attemptCount: 0,
+            })
+            .onConflictDoNothing({
+              target: [
+                destOutboundGateway.traceId,
+                destOutboundGateway.routeId,
+              ],
+            });
+        });
+
         // ── Publish directly to Delivery Queue (Decoupled Message Routing) ──
         // Instead of writing to the Source Schema's outbox, L4 pushes directly
         // to the Delivery queue. L5 will own the destination state.
-        await this.queueService.send(QueueName.DeliveryQueue, {
-          traceId,
-          srcConnectionId: connectionId,
-          destConnectionId: stitch.destConnectionId,
-          routeId: stitch.id,
-          srcVendorId: srcVendorId ?? null,
-          canonicalType,
-          srcAppName,
-          srcTenantId,
-          hydratedPayload,
-        });
+        // Now safe to send — if this fails, outbound_gateway exists for retry.
+        try {
+          await this.queueService.send(QueueName.DeliveryQueue, {
+            traceId,
+            srcConnectionId: connectionId,
+            destConnectionId: stitch.destConnectionId,
+            routeId: stitch.id,
+            srcVendorId: srcVendorId ?? null,
+            canonicalType,
+            srcAppName,
+            srcTenantId,
+            hydratedPayload,
+          });
+        } catch (sendErr) {
+          this.logger.error(
+            {
+              event: "l4.queue_send_failed",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
+              err: sanitizeError(sendErr),
+            },
+            "Failed to publish to DeliveryQueue — outbound_gateway persisted, will retry",
+          );
+          // Rethrow to mark L4/FAIL and trigger retry of normalized message
+          throw sendErr;
+        }
 
         // ── SUCCESS sync_log — idempotent (uq_sync_log_trace_layer_status) ──
         await tx
