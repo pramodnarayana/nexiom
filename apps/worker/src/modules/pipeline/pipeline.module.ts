@@ -21,7 +21,6 @@ import { TargetBuilderService } from "./target-builder.service.js";
 import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
-import { OutboundOutboxWorker } from "./outbound-outbox.worker.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 
 @Module({
@@ -39,7 +38,6 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
     FanOutService,
     DeliveryService,
     NormalizedOutboxWorker,
-    OutboundOutboxWorker,
     GitopsSyncWorker,
     {
       provide: EncryptionService,

@@ -301,30 +301,7 @@ export function buildTenantSchema(schemaName: string) {
         uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.connectionId),
     ]);
 
-    /**
-     * DELIVERY OUTBOX
-     *
-     * Transactional outbox used to safely decouple L4 Fan-Out execution
-     * from external queue handoff (L4 -> L5). Holds the queue message payload.
-     */
-    const outboundOutbox = schema.table('outbound_outbox', {
-        id: uuid('id').defaultRandom().primaryKey(),
-        traceId: uuid('trace_id').notNull(),
-        routeId: uuid('route_id').notNull(),
-        outboundGatewayId: uuid('outbound_gateway_id').notNull(),
-        payload: jsonb('payload').notNull(),
-        schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
-        attempts: integer('attempts').notNull().default(0),
-        lastError: varchar('last_error', { length: 500 }),
-        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
-        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-    }, (table) => [
-        index('idx_outbound_outbox_claim')
-            .on(table.status, table.nextRetryAt)
-            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
-        uniqueIndex('idx_outbound_unique_dispatch').on(table.traceId, table.routeId, table.outboundGatewayId),
-    ]);
+
 
     return {
         activeSyncLocks,
@@ -337,7 +314,6 @@ export function buildTenantSchema(schemaName: string) {
         syncCursor,
         replicaOutbox,
         normalizedOutbox,
-        outboundOutbox,
     };
 }
 

@@ -2,7 +2,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
-import { QueueService } from "@nexiom/queue";
+import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -166,6 +166,14 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.objectContaining({
+        traceId: "123",
+        srcConnectionId: "456",
+        routeId: "stitch_1",
+      }),
+    );
     expect(mockTxInsert).toHaveBeenCalled();
   });
 
@@ -297,6 +305,14 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.objectContaining({
+        traceId: "123",
+        routeId: "stitch_1",
+        hydratedPayload: expect.objectContaining({ _hydrated: true }),
+      }),
+    );
     expect(mockTxInsert).toHaveBeenCalled();
   });
 

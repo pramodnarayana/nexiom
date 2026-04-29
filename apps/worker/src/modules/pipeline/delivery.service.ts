@@ -56,11 +56,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     if (
       !isValidPipelineMessage(msg, [
         "traceId",
-        "connectionId",
-        "targetConnectionId",
+        "srcConnectionId",
+        "destConnectionId",
         "routeId",
-        "outboundGatewayId",
-      ])
+      ]) ||
+      !msg.hydratedPayload
     ) {
       this.logger.warn(
         {
@@ -74,10 +74,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     }
 
     const traceId = msg.traceId as string;
-    const connectionId = msg.connectionId as string;
-    const targetConnectionId = msg.targetConnectionId as string;
+    const connectionId = msg.srcConnectionId as string;
+    const targetConnectionId = msg.destConnectionId as string;
     const routeId = msg.routeId as string;
-    const outboundGatewayId = msg.outboundGatewayId as string;
+    const hydratedPayload = msg.hydratedPayload as Record<string, unknown>;
+
     // GEM fields threaded from L4 FanOutService
     const srcVendorId =
       typeof msg.srcVendorId === "string" ? msg.srcVendorId : undefined;
@@ -100,40 +101,60 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       },
       "L5 Delivery started",
     );
+
     let claimed = false;
+    let outboundGatewayId = "";
+
     try {
+      const destSchemaName =
+        await this.storageResolver.resolveSchemaName(targetConnectionId);
       const srcSchemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { outboundGateway } = buildTenantSchema(srcSchemaName);
 
-      // ── TX-1: Read reqPayload and current attemptCount from outbound_gateway ─
-      let reqPayload: Record<string, unknown> = {};
+      const { outboundGateway } = buildTenantSchema(destSchemaName);
+
+      // ── TX-1: Insert PENDING or fetch existing outbound_gateway ─
       let currentAttemptCount = 0;
       let currentStatus = "";
       await this.db.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
+        assertValidSchemaName(destSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
         );
+
+        await tx
+          .insert(outboundGateway)
+          .values({
+            traceId,
+            routeId,
+            reqPayload: hydratedPayload,
+            status: "PENDING",
+            attemptCount: 0,
+          })
+          .onConflictDoNothing({
+            target: [outboundGateway.traceId, outboundGateway.routeId],
+          })
+          .returning({ id: outboundGateway.id });
+
         const ob = await tx
           .select({
-            reqPayload: outboundGateway.reqPayload,
+            id: outboundGateway.id,
             attemptCount: outboundGateway.attemptCount,
             status: outboundGateway.status,
           })
           .from(outboundGateway)
-          .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
+          .where(
+            sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.routeId} = ${routeId}`,
+          )
           .limit(1);
+
         if (!ob.length) throw new Error("Outbound gateway record not found");
-        reqPayload = ob[0].reqPayload as Record<string, unknown>;
+        outboundGatewayId = ob[0].id;
         currentAttemptCount = ob[0].attemptCount ?? 0;
         currentStatus = ob[0].status;
       });
 
       // ── MAX_ATTEMPTS guard ────────────────────────────────────────────────
-      // The delivery outbox worker increments attempts before handing to this
-      // service. If the count already meets or exceeds the cap, permanently fail
-      // without calling the piece to avoid hammering a vendor API unnecessarily.
       if (currentAttemptCount >= MAX_DELIVERY_ATTEMPTS) {
         this.logger.error(
           {
@@ -147,6 +168,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           "Max delivery attempts exceeded — permanently failing",
         );
         await this.writeL6Result(
+          destSchemaName,
           srcSchemaName,
           outboundGatewayId,
           connectionId,
@@ -165,16 +187,19 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           undefined, // targetAppName
           undefined, // targetTenantId
           undefined, // targetObject
-          currentAttemptCount, // expectedAttemptCount
-          currentStatus, // expectedStatus
         );
-        return;
+        return; // Exit safely, message is acknowledged
+      }
+
+      if (currentStatus === "SUCCESS") {
+        this.logger.debug(
+          { event: "l5.skip_success", traceId, routeId, layer: "L5" },
+          "Delivery already succeeded, skipping duplicate processing",
+        );
+        return; // Safely acknowledge duplicate message
       }
 
       if (!this.tokenManagerService) {
-        // TokenManagerService is required for credential resolution.
-        // Throwing here leaves outbound_gateway untouched so the delivery
-        // outbox worker will redeliver the message after the backoff window.
         throw new Error(
           `TokenManagerService unavailable — cannot resolve credentials for connection ${targetConnectionId} (traceId=${traceId})`,
         );
@@ -205,13 +230,10 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       }
 
       // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
-      // Uses conditional WHERE to prevent double-processing if another worker
-      // already claimed the row (FOR UPDATE SKIP LOCKED at the outbox worker level
-      // provides the first guard; this is the second guard at service level).
       await this.db.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
+        assertValidSchemaName(destSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
         );
         const claimRes = await tx
           .update(outboundGateway)
@@ -244,7 +266,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           },
           "Delivery already claimed or completed by another worker",
         );
-        return;
+        return; // Safely acknowledge, SQS will drop the duplicate
       }
 
       const stitchDocs = await this.db
@@ -263,7 +285,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       try {
         const resp = await piece.executeAction(
           targetObject,
-          reqPayload,
+          hydratedPayload,
           credentials as unknown as Record<string, unknown>,
         );
         resPayload = resp.body;
@@ -273,35 +295,17 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         if (statusCode >= 200 && statusCode < 300) {
           finalStatus = "SUCCESS";
         } else if (resp.retry === true) {
-          // Piece explicitly opts-in to retry via response.retry flag
           finalStatus = "RETRY";
         } else {
-          // Non-2xx without explicit retry opt-in — permanent failure.
           finalStatus = "FAIL";
         }
       } catch (error_: unknown) {
-        // ── Retry classification for thrown errors ────────────────────────────
-        // ONLY retry if the piece explicitly opts-in via RetryableException
-        // or marks the error with `retryable: true`. Plain thrown errors
-        // (including 5xx from fetch) are treated as FAIL because we cannot
-        // guarantee the piece operation is idempotent.
         if (error_ instanceof RetryableException) {
           statusCode = error_.statusCode;
           finalStatus = "RETRY";
           resPayload = { error: sanitizeError(error_) };
-          this.logger.warn(
-            {
-              event: "l5.retryable_error",
-              err: sanitizeError(error_),
-              statusCode,
-              traceId,
-              layer: "L5",
-            },
-            "Piece executeAction raised RetryableException — will retry",
-          );
         } else {
           const errObj = error_ as Record<string, unknown>;
-          // Check for explicit opt-in retry flag set by the piece on the error object.
           const isExplicitlyRetryable =
             typeof errObj?.["retryable"] === "boolean"
               ? errObj["retryable"]
@@ -312,10 +316,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               ? errObj["statusCode"]
               : 500;
 
-          // Respect the piece's explicit retryable flag; otherwise FAIL.
-          // We deliberately do NOT consult isRetryableStatusCode here because
-          // the piece threw (vs returning) — we cannot tell if the remote
-          // operation completed, so retrying risks duplicate writes.
           if (isExplicitlyRetryable) {
             finalStatus = "RETRY";
           } else {
@@ -323,27 +323,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           }
 
           resPayload = { error: sanitizeError(error_) };
-          this.logger.error(
-            {
-              event: "l5.execute_failed",
-              err: sanitizeError(error_),
-              statusCode,
-              retryable: isExplicitlyRetryable,
-              traceId,
-              routeId,
-              layer: "L5",
-            },
-            "Piece executeAction threw an error",
-          );
         }
       }
 
       // ── TX-3 (L6): Write result, GEM upsert, sync_log ────────────────────
-      // `entityId` is explicitly surfaced by each Piece in VendorResponse
-      // instead of being guessed from the raw body by the pipeline core.
       const destVendorId = finalStatus === "SUCCESS" ? respEntityId : undefined;
 
       await this.writeL6Result(
+        destSchemaName,
         srcSchemaName,
         outboundGatewayId,
         connectionId,
@@ -362,55 +349,20 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetAppName,
         targetTenantId,
         targetObject,
-        currentAttemptCount + 1, // expectedAttemptCount
-        "PROCESSING", // expectedStatus
       );
 
       this.logger.log(
         { event: `l6.completed`, traceId, routeId, finalStatus, layer: "L6" },
         "L6 delivery completed",
       );
-    } catch (err: unknown) {
-      if (claimed) {
-        // On unexpected error, attempt to mark outbound_gateway as FAIL and write error sync_log.
-        try {
-          const srcSchemaName =
-            await this.storageResolver.resolveSchemaName(connectionId);
-          await this.db.transaction(async (tx) => {
-            assertValidSchemaName(srcSchemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-            );
-            const { outboundGateway, syncLog } =
-              buildTenantSchema(srcSchemaName);
-            await tx
-              .update(outboundGateway)
-              .set({ status: "FAIL" })
-              .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
-            await tx
-              .insert(syncLog)
-              .values({
-                traceId,
-                routeId,
-                layer: "L6",
-                status: "FAIL",
-                durationMs: Date.now() - start,
-              })
-              .onConflictDoNothing({
-                // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
-                target: [
-                  syncLog.traceId,
-                  syncLog.routeId,
-                  syncLog.layer,
-                  syncLog.status,
-                ],
-                where: sql`${syncLog.routeId} IS NOT NULL`,
-              });
-          });
-        } catch {
-          // Swallow rollback errors — original error is rethrown below.
-        }
+
+      // If it's a RETRY, throw an error to force SQS to redeliver it!
+      if (finalStatus === "RETRY") {
+        throw new Error(
+          `API call failed with retryable error (HTTP ${statusCode}). Deferring to SQS for retry.`,
+        );
       }
+    } catch (err: unknown) {
       const sanitized = sanitizeError(err);
       this.logger.error(
         {
@@ -421,20 +373,15 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           outboundGatewayId,
           layer: "L5",
           err: sanitized,
-          stack: err instanceof Error ? err.stack : undefined,
         },
-        "DeliveryService encountered an unexpected error",
+        "DeliveryService encountered an error",
       );
-      throw err;
+      throw err; // SQS will natively retry
     }
   }
 
-  /**
-   * TX-3 (L6): Persists delivery result to outbound_gateway, writes GEM upsert
-   * on success, and records audit row in sync_log. All within a single atomic
-   * transaction to guarantee consistency even if the process crashes mid-write.
-   */
   private async writeL6Result(
+    destSchemaName: string,
     srcSchemaName: string,
     outboundGatewayId: string,
     connectionId: string,
@@ -453,38 +400,63 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     targetAppName?: string,
     targetTenantId?: string,
     targetObject?: string,
-    expectedAttemptCount?: number,
-    expectedStatus?: string,
   ): Promise<void> {
-    const { outboundGateway, syncLog, activeSyncLocks } =
-      buildTenantSchema(srcSchemaName);
+    // ── Destination Schema Transaction ──────────────────────────────────────
+    await this.db.transaction(async (tx) => {
+      assertValidSchemaName(destSchemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+      );
 
+      const { outboundGateway, replicaEntity } =
+        buildTenantSchema(destSchemaName);
+
+      await tx
+        .update(outboundGateway)
+        .set({ resPayload: resPayload ?? {}, statusCode, status: finalStatus })
+        .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
+
+      if (
+        finalStatus === "SUCCESS" &&
+        resPayload &&
+        targetObject &&
+        destVendorId
+      ) {
+        await tx
+          .insert(replicaEntity)
+          .values({
+            traceId,
+            connectionId: targetConnectionId,
+            entityType: targetObject,
+            entityId: destVendorId,
+            data: resPayload,
+            version: 1,
+          })
+          .onConflictDoUpdate({
+            target: [
+              replicaEntity.connectionId,
+              replicaEntity.entityType,
+              replicaEntity.entityId,
+            ],
+            set: {
+              data: resPayload,
+              traceId,
+              version: sql`${replicaEntity.version} + 1`,
+              updatedAt: sql`NOW()`,
+            },
+          });
+      }
+    });
+
+    // ── Source Schema Transaction ──────────────────────────────────────────
     await this.db.transaction(async (tx) => {
       assertValidSchemaName(srcSchemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
       );
 
-      // Update outbound_gateway with result conditionally to prevent clobbering
-      // if another transaction already processed this attempt.
-      const updateQ = tx
-        .update(outboundGateway)
-        .set({ resPayload: resPayload ?? {}, statusCode, status: finalStatus });
+      const { syncLog, activeSyncLocks } = buildTenantSchema(srcSchemaName);
 
-      if (expectedAttemptCount !== undefined && expectedStatus !== undefined) {
-        await updateQ.where(
-          sql`${outboundGateway.id} = ${outboundGatewayId} 
-              AND ${outboundGateway.attemptCount} = ${expectedAttemptCount}
-              AND ${outboundGateway.status} = ${expectedStatus}`,
-        );
-      } else {
-        await updateQ.where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
-      }
-
-      // ── Global Entity Map upsert (L6 write) ──────────────────────────────
-      // Only write GEM on successful delivery with both source and destination IDs.
-      // ON CONFLICT DO UPDATE keeps the destEntityId current for subsequent syncs
-      // of the same source record (e.g. an updated Invoice).
       if (
         finalStatus === "SUCCESS" &&
         srcVendorId &&
@@ -497,7 +469,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .values({
             stitchId: routeId,
             sourceAppName: srcAppName,
-            // connectionId IS the app_connection.id (UUID FK to appConnections)
             sourceAppId: connectionId,
             sourceOrgId: srcTenantId,
             sourceEntityType: canonicalType,
@@ -526,43 +497,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               lastSyncedAt: sql`NOW()`,
             },
           });
-
-        // ── Target Replica Write-Back (Synthetic Webhook) ──────────────────
-        // Keep the target connection's replica cache instantly up-to-date
-        // to avoid expensive API GET calls for SyncTokens during future updates.
-        if (resPayload && targetObject) {
-          const targetSchemaName =
-            await this.storageResolver.resolveSchemaName(targetConnectionId);
-          const { replicaEntity: targetReplicaEntity } =
-            buildTenantSchema(targetSchemaName);
-
-          await tx
-            .insert(targetReplicaEntity)
-            .values({
-              traceId,
-              connectionId: targetConnectionId,
-              entityType: targetObject,
-              entityId: destVendorId,
-              data: resPayload,
-              version: 1,
-            })
-            .onConflictDoUpdate({
-              target: [
-                targetReplicaEntity.connectionId,
-                targetReplicaEntity.entityType,
-                targetReplicaEntity.entityId,
-              ],
-              set: {
-                data: resPayload,
-                traceId,
-                version: sql`${targetReplicaEntity.version} + 1`,
-                updatedAt: sql`NOW()`,
-              },
-            });
-        }
       }
 
-      // Sync log audit row — idempotent on (traceId, routeId, layer, status)
       await tx
         .insert(syncLog)
         .values({
@@ -573,7 +509,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           durationMs: Date.now() - start,
         })
         .onConflictDoNothing({
-          // uq_sync_log_routed covers (traceId, routeId, layer, status) where routeId IS NOT NULL
           target: [
             syncLog.traceId,
             syncLog.routeId,
@@ -583,18 +518,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           where: sql`${syncLog.routeId} IS NOT NULL`,
         });
 
-      // ── Release Entity Lock ───────────────────────────────────────────────
-      // If there are no more active routes for this traceId, we can safely
-      // release the lock so the next CDC event for this entity can begin.
-      const remainingPending = await tx
-        .select({ id: outboundGateway.id })
-        .from(outboundGateway)
-        .where(
-          sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} IN ('PENDING', 'PROCESSING', 'RETRY')`,
-        )
-        .limit(1);
-
-      if (remainingPending.length === 0) {
+      // Simple lock release: If a final status is reached, delete the lock for this traceId
+      if (finalStatus !== "RETRY") {
         await tx
           .delete(activeSyncLocks)
           .where(sql`${activeSyncLocks.lockedByTraceId} = ${traceId}`);
