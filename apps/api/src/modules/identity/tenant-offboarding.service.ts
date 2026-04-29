@@ -6,7 +6,7 @@ import {
   organization,
 } from '@nexiom/database';
 import { eq, sql } from 'drizzle-orm';
-import * as crypto from 'node:crypto';
+import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
 
 @Injectable()
 export class TenantOffboardingService {
@@ -41,18 +41,11 @@ export class TenantOffboardingService {
     } else {
       // Best-effort schema cleanup - idempotent and safe to retry
       for (const currConnection of connections) {
-        // Compute the deterministic schema name for the Tenant Database
-        const hashedSuffix = crypto
-          .createHash('sha256')
-          .update(currConnection.id)
-          .digest('hex')
-          .substring(0, 16);
-        const sanitizedProvider = currConnection.appName
-          .toLowerCase()
-          .replaceAll(/[^a-z0-9]/g, '');
-        const finalProviderToken = sanitizedProvider || 'unknown';
-        const safeToken = finalProviderToken.substring(0, 40);
-        const dataNamespace = `ws_${safeToken}_${hashedSuffix}`;
+        // Compute the deterministic schema name using the shared helper
+        const dataNamespace = getWorkspaceSchemaName(
+          currConnection.id,
+          currConnection.appName,
+        );
 
         this.logger.log(`Safely dropping physical schema: ${dataNamespace}`);
         try {

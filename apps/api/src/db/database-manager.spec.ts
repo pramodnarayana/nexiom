@@ -139,11 +139,13 @@ describe('DatabaseManager', () => {
     drizzleMocks.update.mockImplementation(makeUpdateChain);
 
     const makeSelectChain = () => {
+      const limitMock = vi.fn().mockResolvedValue([]);
       const chain = {
         from: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([]),
+            limit: limitMock,
           }),
+          limit: limitMock,
         }),
       };
       return chain;

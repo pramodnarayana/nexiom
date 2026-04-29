@@ -309,7 +309,10 @@ export class DatabaseManager {
         systemTenantId,
       };
 
-      await seedSystemRbac(db, config, console);
+      // Create a separate DB instance with identity schema for seedSystemRbac
+      const identitySchema = await import("@nexiom/identity/schema");
+      const identityDb = drizzle(client, { schema: identitySchema });
+      await seedSystemRbac(identityDb, config, console);
 
       // 3. Seed Bootstrap Owner (User Request)
       const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
@@ -679,11 +682,10 @@ export class DatabaseManager {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { TenantDatabaseManager } = await import("@nexiom/dbmanager");
     const { SchemaPlan } = await import("@nexiom/dbmanager");
-    const dbSchema = await import("./schema.js");
     const client = await this.getPgClient();
 
     try {
-      const db = drizzle(client, { schema: dbSchema });
+      const db = drizzle(client, { schema });
       const { getDomainProvisioner } = await import("@nexiom/piece-framework");
       const { Pool } = await import("pg");
       const schemaMgr = new TenantDatabaseManager(
@@ -696,7 +698,7 @@ export class DatabaseManager {
             connectionTimeoutMillis: 5_000,
           });
           return drizzle(pool, {
-            schema: dbSchema,
+            schema,
           }) as unknown as import("@nexiom/database").DrizzleDb;
         },
         getDomainProvisioner,
@@ -741,18 +743,19 @@ export class DatabaseManager {
           `  ℹ️  Provisioning connection ${fixture.appName} (preserving secrets if exists)`,
         );
 
-        const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
+        const { getWorkspaceSchemaName } = await import("@nexiom/dbmanager");
+        const schemaName = getWorkspaceSchemaName(fixture.id, fixture.appName);
 
         await db.transaction(async (tx) => {
           const existRes = await tx
             .select()
-            .from(dbSchema.appConnections)
-            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`)
+            .from(schema.appConnections)
+            .where(sql`${schema.appConnections.id} = ${fixture.id}`)
             .limit(1);
           const existing = existRes[0];
 
           if (!existing) {
-            await tx.insert(dbSchema.appConnections).values({
+            await tx.insert(schema.appConnections).values({
               id: fixture.id,
               tenantId: systemTenantId,
               appName: fixture.appName,
@@ -764,16 +767,16 @@ export class DatabaseManager {
             });
           } else {
             await tx
-              .update(dbSchema.appConnections)
+              .update(schema.appConnections)
               .set({ status: "INACTIVE" })
-              .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
+              .where(sql`${schema.appConnections.id} = ${fixture.id}`);
           }
 
           // Seed the tenant_storage_registry to map the tenant to its physical database.
           // In a real environment, this is created when the tenant signs up.
-          // For local dev, we derive a sanitized host identifier and avoid persisting credentials.
+          // For local dev, we derive a sanitized host identifier (protocol-qualified) and avoid persisting credentials.
           let dbName = "nexiom_local";
-          let hostIdentifier = "localhost:5432";
+          let hostIdentifier = "postgresql://localhost:5432";
           if (process.env.DATABASE_URL) {
             try {
               const parsedUrl = new URL(process.env.DATABASE_URL);
@@ -784,25 +787,26 @@ export class DatabaseManager {
               } else {
                 dbName = parsedUrl.host || dbName;
               }
-              hostIdentifier = parsedUrl.host || hostIdentifier;
+              // Build full protocol-qualified URL with host and port, no credentials or pathname
+              hostIdentifier = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ":" + parsedUrl.port : ""}`;
             } catch {
               // Fallback to safe default for invalid/Unix-socket-style URLs
               dbName = "nexiom_local";
-              hostIdentifier = "localhost:5432";
+              hostIdentifier = "postgresql://localhost:5432";
             }
           }
 
           const existReg = await tx
             .select()
-            .from(dbSchema.tenantStorageRegistry)
+            .from(schema.tenantStorageRegistry)
             .where(
-              sql`${dbSchema.tenantStorageRegistry.tenantId} = ${systemTenantId}`,
+              sql`${schema.tenantStorageRegistry.tenantId} = ${systemTenantId}`,
             )
             .limit(1);
 
           if (!existReg[0]) {
             // Insert registry entry first
-            await tx.insert(dbSchema.tenantStorageRegistry).values({
+            await tx.insert(schema.tenantStorageRegistry).values({
               tenantId: systemTenantId,
               databaseName: dbName,
               databaseHostUrl: hostIdentifier,
@@ -821,9 +825,9 @@ export class DatabaseManager {
         // Update connection to ACTIVE status in a new transaction
         await db.transaction(async (tx2) => {
           await tx2
-            .update(dbSchema.appConnections)
+            .update(schema.appConnections)
             .set({ status: "ACTIVE" })
-            .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
+            .where(sql`${schema.appConnections.id} = ${fixture.id}`);
         });
 
         console.log(

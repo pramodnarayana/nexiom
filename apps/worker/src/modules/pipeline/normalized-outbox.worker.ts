@@ -47,10 +47,11 @@ export class NormalizedOutboxWorker {
           // 2. Use TenantDatabaseManager to connect to the specific physical tenant DB.
           const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
 
-          // 3. Query app_connection inside each tenant DB to find all active connections.
+          // 3. Query app_connection inside each tenant DB to find all ACTIVE connections.
           const connections = await tenantDb
             .select({ id: appConnections.id, appName: appConnections.appName })
-            .from(appConnections);
+            .from(appConnections)
+            .where(eq(appConnections.status, "ACTIVE"));
 
           // 4. Run drainWorkspaceOutbox on each schema derived from the connection.
           for (const connection of connections) {

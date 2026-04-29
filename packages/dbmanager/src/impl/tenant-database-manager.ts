@@ -19,6 +19,7 @@ interface Logger {
 export class TenantDatabaseManager implements DatabaseManager {
     private readonly logger: Logger;
     private readonly dbCache = new Map<string, DrizzleDb>();
+    private readonly inProgress = new Map<string, Promise<DrizzleDb>>();
 
     constructor(
         private readonly globalDb: DrizzleDb,
@@ -37,48 +38,66 @@ export class TenantDatabaseManager implements DatabaseManager {
 
     /**
      * Resolves and caches a physical database connection for a specific tenant.
+     * Prevents race conditions by deduplicating concurrent creation requests.
      * @param tenantId The organization ID
      */
     async getTenantDb(tenantId: string): Promise<DrizzleDb> {
+        // Return cached instance if already created
         if (this.dbCache.has(tenantId)) {
             return this.dbCache.get(tenantId)!;
         }
 
-        const registryInfo = await this.globalDb
-            .select()
-            .from(tenantStorageRegistry)
-            .where(eq(tenantStorageRegistry.tenantId, tenantId))
-            .limit(1);
-
-        if (registryInfo.length === 0) {
-            throw new Error(`[TenantDatabaseManager] No physical database found in registry for tenant ${tenantId}`);
+        // Return in-progress Promise if another caller is already creating this connection
+        if (this.inProgress.has(tenantId)) {
+            return this.inProgress.get(tenantId)!;
         }
 
-        const { databaseName, databaseHostUrl } = registryInfo[0];
+        // Start creation and store the Promise
+        const creationPromise = (async () => {
+            try {
+                const registryInfo = await this.globalDb
+                    .select()
+                    .from(tenantStorageRegistry)
+                    .where(eq(tenantStorageRegistry.tenantId, tenantId))
+                    .limit(1);
 
-        // Construct the full connection string.
-        // In local development, databaseHostUrl will be the base URL (e.g., postgres://postgres:postgres@localhost:5432)
-        // and databaseName will be 'db_tenant_uuid'.
-        // We ensure a valid Postgres URL is formed by combining them properly.
+                if (registryInfo.length === 0) {
+                    throw new Error(`[TenantDatabaseManager] No physical database found in registry for tenant ${tenantId}`);
+                }
 
-        // Validate and sanitize databaseName for safe URL paths
-        const sanitizedDbName = databaseName.trim().replace(/^\/+|\/+$/g, '');
-        if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedDbName)) {
-            throw new Error(
-                `[TenantDatabaseManager] Invalid databaseName "${databaseName}" for tenant ${tenantId}. ` +
-                `Only alphanumeric, underscore, and hyphen characters are allowed.`
-            );
-        }
+                const { databaseName, databaseHostUrl } = registryInfo[0];
 
-        const baseUrl = databaseHostUrl.endsWith('/') ? databaseHostUrl.slice(0, -1) : databaseHostUrl;
-        const fullUrl = `${baseUrl}/${encodeURIComponent(sanitizedDbName)}`;
+                // Construct the full connection string.
+                // In local development, databaseHostUrl will be the base URL (e.g., postgres://postgres:postgres@localhost:5432)
+                // and databaseName will be 'db_tenant_uuid'.
+                // We ensure a valid Postgres URL is formed by combining them properly.
 
-        this.logger.debug(`Establishing new connection pool for tenant ${tenantId} at ${databaseName}`);
-        
-        const tenantDb = this.dbFactory(fullUrl);
-        this.dbCache.set(tenantId, tenantDb);
+                // Validate and sanitize databaseName for safe URL paths
+                const sanitizedDbName = databaseName.trim().replace(/^\/+|\/+$/g, '');
+                if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedDbName)) {
+                    throw new Error(
+                        `[TenantDatabaseManager] Invalid databaseName "${databaseName}" for tenant ${tenantId}. ` +
+                        `Only alphanumeric, underscore, and hyphen characters are allowed.`
+                    );
+                }
 
-        return tenantDb;
+                const baseUrl = databaseHostUrl.endsWith('/') ? databaseHostUrl.slice(0, -1) : databaseHostUrl;
+                const fullUrl = `${baseUrl}/${encodeURIComponent(sanitizedDbName)}`;
+
+                this.logger.debug(`Establishing new connection pool for tenant ${tenantId} at ${databaseName}`);
+
+                const tenantDb = this.dbFactory(fullUrl);
+                this.dbCache.set(tenantId, tenantDb);
+
+                return tenantDb;
+            } finally {
+                // Clean up in-progress Promise regardless of success or failure
+                this.inProgress.delete(tenantId);
+            }
+        })();
+
+        this.inProgress.set(tenantId, creationPromise);
+        return creationPromise;
     }
 
     /**

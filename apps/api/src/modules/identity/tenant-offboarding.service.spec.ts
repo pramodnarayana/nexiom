@@ -163,5 +163,27 @@ describe('TenantOffboardingService', () => {
     expect(db.execute).toHaveBeenCalledTimes(2);
     // Assert transaction still invoked for logical deletion
     expect(db.transaction).toHaveBeenCalledTimes(1);
+
+    // Import the schema helper to compute the expected normalized schema name
+    const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+    const expectedSchemaName = getWorkspaceSchemaName(
+      'conn-2',
+      'SalesForce-API',
+    );
+
+    // Assert that at least one db.execute call contains the normalized schema prefix for SalesForce-API
+    const executeCall = db.execute.mock.calls.find((call) => {
+      const sqlObj = call[0] as unknown as SQL;
+      const sqlString = (
+        sqlObj?.queryChunks as Array<{ value?: string | string[] }>
+      )
+        .flatMap((chunk) =>
+          Array.isArray(chunk.value) ? chunk.value : [chunk.value ?? ''],
+        )
+        .join('');
+      return sqlString.includes(expectedSchemaName.split('_').slice(0, 2).join('_'));
+    });
+
+    expect(executeCall).toBeDefined();
   });
 });

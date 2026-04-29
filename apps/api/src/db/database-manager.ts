@@ -840,7 +840,11 @@ export class DatabaseManager {
 
           const resolved = inserted;
 
-          const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
+          const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+          const schemaName = getWorkspaceSchemaName(
+            resolved.id,
+            resolved.appName,
+          );
 
           // Seed the tenant_storage_registry to map the tenant to its physical database.
           // In a real environment, this is created when the tenant signs up.
@@ -868,12 +872,24 @@ export class DatabaseManager {
             .limit(1);
 
           if (!existReg[0]) {
+            // Sanitize DATABASE_URL to remove credentials and pathname
+            let sanitizedHostUrl: string;
+            try {
+              const parsedUrl = new URL(
+                process.env.DATABASE_URL ||
+                  'postgresql://localhost:5432/nexiom_local',
+              );
+              // Build safe URL with protocol + hostname + optional port, no credentials or pathname
+              sanitizedHostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+            } catch {
+              // Fallback to safe default if parsing fails
+              sanitizedHostUrl = 'postgresql://localhost:5432';
+            }
+
             await db.insert(dbSchema.tenantStorageRegistry).values({
               tenantId: systemTenantId,
               databaseName: dbName,
-              databaseHostUrl:
-                process.env.DATABASE_URL ||
-                'postgresql://localhost:5432/nexiom_local',
+              databaseHostUrl: sanitizedHostUrl,
               regionContext: 'local',
             });
           }

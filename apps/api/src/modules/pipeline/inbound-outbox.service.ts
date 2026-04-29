@@ -16,6 +16,7 @@ import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
+const DEFAULT_TENANT_CONCURRENCY = 5;
 
 @Injectable()
 export class InboundOutboxService {
@@ -33,32 +34,42 @@ export class InboundOutboxService {
       const tenants = await this.globalDb.select().from(tenantStorageRegistry);
       if (tenants.length === 0) return;
 
-      await Promise.allSettled(
-        tenants.map(async (tenant) => {
-          try {
-            const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-            const connections = await tenantDb.select().from(appConnections);
+      // Process tenants with bounded concurrency to prevent DB pool exhaustion
+      const results: PromiseSettledResult<void>[] = [];
+      for (let i = 0; i < tenants.length; i += DEFAULT_TENANT_CONCURRENCY) {
+        const chunk = tenants.slice(i, i + DEFAULT_TENANT_CONCURRENCY);
+        const chunkResults = await Promise.allSettled(
+          chunk.map(async (tenant) => {
+            try {
+              const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+              const { eq } = await import('drizzle-orm');
+              const connections = await tenantDb
+                .select()
+                .from(appConnections)
+                .where(eq(appConnections.status, 'ACTIVE'));
 
-            for (const connection of connections) {
-              const schemaName = getWorkspaceSchemaName(
-                connection.id,
-                connection.appName,
-              );
-              try {
-                await this.drainWorkspaceOutbox(tenantDb, schemaName);
-              } catch (schemaErr) {
-                this.logger.error(
-                  `[${tenant.tenantId}] Failed to drain inbound outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+              for (const connection of connections) {
+                const schemaName = getWorkspaceSchemaName(
+                  connection.id,
+                  connection.appName,
                 );
+                try {
+                  await this.drainWorkspaceOutbox(tenantDb, schemaName);
+                } catch (schemaErr) {
+                  this.logger.error(
+                    `[${tenant.tenantId}] Failed to drain inbound outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+                  );
+                }
               }
+            } catch (tenantErr) {
+              this.logger.error(
+                `Failed to process inbound outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+              );
             }
-          } catch (tenantErr) {
-            this.logger.error(
-              `Failed to process inbound outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
-            );
-          }
-        }),
-      );
+          }),
+        );
+        results.push(...chunkResults);
+      }
     } catch (err) {
       this.logger.error(
         `Failed to query global tenant registry for inbound outbox: ${err instanceof Error ? err.message : String(err)}`,
@@ -79,7 +90,7 @@ export class InboundOutboxService {
     // increment attempts in processOutboxRow when a real delivery fails.
     const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier([schemaName])}`,
       );
 
       return tx
