@@ -6,6 +6,7 @@ import { StitchesController } from './stitches.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
 import { UpdateScheduleBody } from './update-schedule.validation.js';
+import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
 
@@ -37,7 +38,7 @@ describe('StitchesController — schedule endpoints', () => {
   });
 
   it('create — delegates to service', async () => {
-    const body: any = { name: 'Test Stitch' };
+    const body = { name: 'Test Stitch' } as unknown as CreateStitch;
     mockService.create.mockResolvedValue({ id: STITCH_ID });
     const result = await controller.create(makeAuth(), body);
     expect(result).toEqual({ id: STITCH_ID });
@@ -59,7 +60,7 @@ describe('StitchesController — schedule endpoints', () => {
   });
 
   it('update — delegates to service', async () => {
-    const body: any = { name: 'Updated Stitch' };
+    const body = { name: 'Updated Stitch' } as unknown as UpdateStitch;
     mockService.update.mockResolvedValue({ id: STITCH_ID });
     const result = await controller.update(makeAuth(), STITCH_ID, body);
     expect(result).toEqual({ id: STITCH_ID });

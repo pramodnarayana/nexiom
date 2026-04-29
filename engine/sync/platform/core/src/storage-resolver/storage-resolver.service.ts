@@ -1,35 +1,21 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
-import {
-  DATABASE_CONNECTION,
-  connectionStorageRegistry,
-} from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { eq, type InferSelectModel } from 'drizzle-orm';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-export type HostContext = InferSelectModel<typeof connectionStorageRegistry>;
+export type HostContext = {
+  databaseHostUrl: string;
+  regionContext: string;
+};
 
 @Injectable()
 export class StorageResolverService {
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor() {}
 
   /**
    * Resolves the physical PostgreSQL schema name for a connection.
    * Used by Ingestion and Replica workers for 'SET search_path'.
    */
   async resolveSchemaName(connectionId: string): Promise<string> {
-    const registryEntry = await this.db
-      .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
-      .from(connectionStorageRegistry)
-      .where(eq(connectionStorageRegistry.connectionId, connectionId))
-      .limit(1);
-
-    if (registryEntry.length === 0) {
-      throw new NotFoundException(
-        `Infrastructure Error: Connection ${connectionId} has no physical storage schema assigned.`,
-      );
-    }
-
-    return registryEntry[0].dataNamespace;
+    // In Tenant-per-Database, the schema name is purely deterministic
+    return `ws_${connectionId.replaceAll('-', '_')}`;
   }
 
   /**
@@ -37,18 +23,13 @@ export class StorageResolverService {
    * Critical for multi-region routing and residency compliance.
    */
   async getHostContext(connectionId: string): Promise<HostContext> {
-    const registryEntry = await this.db
-      .select()
-      .from(connectionStorageRegistry)
-      .where(eq(connectionStorageRegistry.connectionId, connectionId))
-      .limit(1);
-
-    if (registryEntry.length === 0) {
-      throw new NotFoundException(
-        `No infrastructure registry found for connection: ${connectionId}`,
-      );
-    }
-
-    return registryEntry[0];
+    // TODO (Tenant-per-Database): 
+    // This needs to resolve the tenantId for the connectionId via a global cache,
+    // and then lookup the TenantStorageRegistry in the Global DB.
+    // Stubbed for now to allow compilation.
+    return {
+      databaseHostUrl: process.env.DATABASE_URL || '',
+      regionContext: 'local'
+    };
   }
 }

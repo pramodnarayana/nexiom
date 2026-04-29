@@ -1,15 +1,18 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { notInArray, sql } from 'drizzle-orm';
-import { SchemaPlan } from '@nexiom/dbmanager';
+import { sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
-  connectionStorageRegistry,
+  tenantStorageRegistry,
+  appConnections,
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
+import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
@@ -21,53 +24,54 @@ export class InboundOutboxService {
   private isProcessingOutbox = false;
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly queueService: QueueService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
-    if (this.isProcessingOutbox) {
-      this.logger.debug(
-        'processOutbox already running, skipping this invocation',
-      );
-      return;
-    }
-
-    this.isProcessingOutbox = true;
     try {
-      // 1. Fetch all unique schema names (workspaces)
-      const workspaces = await this.db
-        .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
-        .from(connectionStorageRegistry)
-        .where(
-          notInArray(connectionStorageRegistry.schemaPlan, [
-            SchemaPlan.NAMESPACE_ONLY,
-          ]),
-        )
-        .groupBy(connectionStorageRegistry.dataNamespace);
+      const tenants = await this.globalDb.select().from(tenantStorageRegistry);
+      if (tenants.length === 0) return;
 
-      const results = await Promise.allSettled(
-        workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
+      await Promise.allSettled(
+        tenants.map(async (tenant) => {
+          try {
+            const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+            const connections = await tenantDb.select().from(appConnections);
+
+            for (const connection of connections) {
+              const schemaName = getWorkspaceSchemaName(
+                connection.id,
+                connection.appName,
+              );
+              try {
+                await this.drainWorkspaceOutbox(tenantDb, schemaName);
+              } catch (schemaErr) {
+                this.logger.error(
+                  `[${tenant.tenantId}] Failed to drain inbound outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+                );
+              }
+            }
+          } catch (tenantErr) {
+            this.logger.error(
+              `Failed to process inbound outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+            );
+          }
+        }),
       );
-
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          this.logger.error(
-            `[${workspaces[index].dataNamespace}] drainWorkspaceOutbox failed: ${
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
-            }`,
-          );
-        }
-      });
-    } finally {
-      this.isProcessingOutbox = false;
+    } catch (err) {
+      this.logger.error(
+        `Failed to query global tenant registry for inbound outbox: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
-  private async drainWorkspaceOutbox(schemaName: string): Promise<void> {
+  private async drainWorkspaceOutbox(
+    tenantDb: DrizzleDb,
+    schemaName: string,
+  ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
 
     // Atomically claim rows
@@ -75,7 +79,7 @@ export class InboundOutboxService {
     // claim attempts rather than actual delivery failures. Consider adding a
     // separate claim_attempts column in a future schema migration, and only
     // increment attempts in processOutboxRow when a real delivery fails.
-    const claimed = await this.db.transaction(async (tx) => {
+    const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
@@ -114,7 +118,7 @@ export class InboundOutboxService {
       for (let i = 0; i < rows.length; i += CONCURRENCY_LIMIT) {
         const chunk = rows.slice(i, i + CONCURRENCY_LIMIT);
         const chunkResults = await Promise.allSettled(
-          chunk.map((row) => this.processOutboxRow(schemaName, row)),
+          chunk.map((row) => this.processOutboxRow(tenantDb, schemaName, row)),
         );
         results.push(...chunkResults);
       }
@@ -144,6 +148,7 @@ export class InboundOutboxService {
   }
 
   private async processOutboxRow(
+    tenantDb: DrizzleDb,
     schemaName: string,
     row: {
       id: string;
@@ -162,7 +167,7 @@ export class InboundOutboxService {
       });
 
       // Mark success - only if we still own this claim
-      await this.db
+      await tenantDb
         .update(inboundOutbox)
         .set({ status: 'SUCCESS', lastError: null })
         .where(
@@ -176,7 +181,7 @@ export class InboundOutboxService {
       const errorMessage = err instanceof Error ? err.message : String(err);
 
       if (row.attempts >= MAX_ATTEMPTS) {
-        await this.db
+        await tenantDb
           .update(inboundOutbox)
           .set({ status: 'FAIL', lastError: errorMessage })
           .where(
@@ -189,7 +194,7 @@ export class InboundOutboxService {
         const delayMs = Math.pow(2, row.attempts) * 1_000;
         const nextRetryAt = new Date(Date.now() + delayMs);
 
-        await this.db
+        await tenantDb
           .update(inboundOutbox)
           .set({ status: 'RETRY', nextRetryAt, lastError: errorMessage })
           .where(

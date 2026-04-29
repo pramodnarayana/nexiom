@@ -56,11 +56,7 @@ describe('TenantOffboardingService', () => {
 
   it('should perform hard deletion of schemas and logical cascade', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
-    // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
-    ]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
 
     await service.offboardTenant('test-tenant');
 
@@ -80,17 +76,13 @@ describe('TenantOffboardingService', () => {
       )
       .join('');
     expect(sqlString).toMatch(/DROP SCHEMA/i);
-    expect(sqlString).toMatch(/ws_test_schema/);
+    expect(sqlString).toMatch(/ws_testapp_/);
     expect(sqlString).toMatch(/CASCADE/i);
   });
 
   it('should handle schema drop errors gracefully without halting', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }]);
-    // Second query: get registry for connection
-    db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_test_schema' },
-    ]);
+    db.where.mockResolvedValueOnce([{ id: 'conn-1', appName: 'testapp' }]);
 
     db.execute.mockRejectedValueOnce(new Error('PG Connection Dead'));
 
@@ -128,11 +120,9 @@ describe('TenantOffboardingService', () => {
 
   it('should handle tenant with multiple connections', async () => {
     // First query: get connections for tenant - return multiple connections
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registries for all connections
     db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
-      { connectionId: 'conn-2', dataNamespace: 'ws_schema_2' },
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'app2' },
     ]);
 
     await service.offboardTenant('test-tenant');
@@ -143,19 +133,18 @@ describe('TenantOffboardingService', () => {
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });
 
-  it('should handle tenant with some connections missing registry entries', async () => {
+  it('should deterministically drop schemas for all returned connections', async () => {
     // First query: get connections for tenant
-    db.where.mockResolvedValueOnce([{ id: 'conn-1' }, { id: 'conn-2' }]);
-    // Second query: get registries for all connections (only conn-1 has one)
     db.where.mockResolvedValueOnce([
-      { connectionId: 'conn-1', dataNamespace: 'ws_schema_1' },
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'app2' },
     ]);
 
     // Should resolve without throwing
     await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
 
-    // Assert db.execute called only for existing namespace (conn-1)
-    expect(db.execute).toHaveBeenCalledTimes(1);
+    // Assert db.execute called for both connections since schema names are deterministic
+    expect(db.execute).toHaveBeenCalledTimes(2);
     // Assert transaction still invoked for logical deletion
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });

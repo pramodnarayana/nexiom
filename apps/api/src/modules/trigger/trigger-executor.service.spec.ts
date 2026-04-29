@@ -90,6 +90,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
       });
 
       expect(runSpy).not.toHaveBeenCalled();
@@ -111,6 +112,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
       });
 
       // Lock is released via Lua eval (atomic check-and-delete)
@@ -133,6 +135,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
         headers: {},
         rawBody: Buffer.from('{}'),
       });
@@ -155,6 +158,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
         headers: { 'x-hub-signature': 'sha256=abc' },
         rawBody: Buffer.from('{}'),
         secret: 'my_secret',
@@ -179,6 +183,7 @@ describe('TriggerExecutorService', () => {
           propsValue: {},
           workspaceId: 'ws_1',
           connectionId: TEST_CONNECTION_ID,
+          tenantId: 'tenant_test',
           headers: { 'x-hub-signature': 'sha256=bad' },
           rawBody: Buffer.from('{}'),
           secret: 'wrong_secret',
@@ -205,6 +210,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
       });
 
       expect(onEnable).toHaveBeenCalled();
@@ -224,6 +230,7 @@ describe('TriggerExecutorService', () => {
           propsValue: {},
           workspaceId: 'ws_1',
           connectionId: TEST_CONNECTION_ID,
+          tenantId: 'tenant_test',
         }),
       ).resolves.not.toThrow();
     });
@@ -248,6 +255,7 @@ describe('TriggerExecutorService', () => {
         propsValue: {},
         workspaceId: 'ws_1',
         connectionId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
       });
 
       expect(redis.lpush).toHaveBeenCalledWith(

@@ -10,7 +10,7 @@ import {
     unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { organization } from './identity.js';
+import { organization } from '../global/identity.js';
 import { appConnections, envTypeEnum } from './tenant.js';
 export { envTypeEnum } from './tenant.js';
 

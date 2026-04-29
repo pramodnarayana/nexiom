@@ -26,6 +26,7 @@ interface DlqJob {
   appName: string;
   triggerName: string;
   workspaceId: string;
+  tenantId: string;
   connectionId: string;
   objectType?: string;
   propsValue: Record<string, unknown>;
@@ -239,6 +240,7 @@ export class DlqProcessorService {
       objectType: job.objectType,
       auth: job.auth,
       propsValue: job.propsValue,
+      tenantId: job.tenantId,
       workspaceId: job.workspaceId,
       connectionId: job.connectionId,
     };
@@ -315,6 +317,7 @@ export class DlqProcessorService {
       const retryJob = JSON.stringify({
         appName: job.appName,
         triggerName: job.triggerName,
+        tenantId: job.tenantId,
         workspaceId: job.workspaceId,
         connectionId: job.connectionId,
         objectType: job.objectType,

@@ -19,8 +19,8 @@ const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 
 @Injectable()
-export class NormalizedOutboxWorker {
-  private readonly logger = new Logger(NormalizedOutboxWorker.name);
+export class OutboundOutboxWorker {
+  private readonly logger = new Logger(OutboundOutboxWorker.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
@@ -58,20 +58,20 @@ export class NormalizedOutboxWorker {
                 await this.drainWorkspaceOutbox(tenantDb, schemaName);
               } catch (schemaErr) {
                 this.logger.error(
-                  `[${tenant.tenantId}] Failed to drain normalized outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+                  `[${tenant.tenantId}] Failed to drain outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
                 );
               }
             }
           } catch (tenantErr) {
             this.logger.error(
-              `Failed to process normalized outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+              `Failed to process outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
             );
           }
         }),
       );
     } catch (err) {
       this.logger.error(
-        `Failed to query global tenant registry for normalized outbox: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to query global tenant registry for outbound outbox: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -80,7 +80,7 @@ export class NormalizedOutboxWorker {
     tenantDb: DrizzleDb,
     schemaName: string,
   ): Promise<void> {
-    const { normalizedOutbox } = buildTenantSchema(schemaName);
+    const { outboundOutbox } = buildTenantSchema(schemaName);
 
     // Atomically claim rows
     const claimed = await tenantDb.transaction(async (tx) => {
@@ -89,15 +89,15 @@ export class NormalizedOutboxWorker {
       );
 
       return tx
-        .update(normalizedOutbox)
+        .update(outboundOutbox)
         .set({
           status: "PROCESSING",
-          attempts: sql`${normalizedOutbox.attempts} + 1`,
+          attempts: sql`${outboundOutbox.attempts} + 1`,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
         .where(
-          sql`${normalizedOutbox.id} IN (
-            SELECT id FROM ${sql.identifier(schemaName)}.normalized_outbox
+          sql`${outboundOutbox.id} IN (
+            SELECT id FROM ${sql.identifier(schemaName)}.outbound_outbox
             WHERE status = 'PENDING' 
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
@@ -112,7 +112,7 @@ export class NormalizedOutboxWorker {
     if (claimed.length === 0) return;
 
     this.logger.debug(
-      `[${schemaName}] Claimed ${claimed.length} normalized outbox rows`,
+      `[${schemaName}] Claimed ${claimed.length} delivery outbox rows`,
     );
 
     // Process claimed rows
@@ -140,22 +140,18 @@ export class NormalizedOutboxWorker {
     schemaName: string,
     row: {
       id: string;
-      traceId: string;
-      connectionId: string;
+      payload: unknown;
       attempts: number;
     },
   ): Promise<void> {
-    const { normalizedOutbox } = buildTenantSchema(schemaName);
+    const { outboundOutbox } = buildTenantSchema(schemaName);
 
     let queueSuccess = false;
     try {
-      // Send to L4 Queue (NormalizedQueue -> consumed by FanOut)
-      // Note: traceId acts as the consumer deduplication key. Duplicate queue
-      // messages are harmless because the L4 consumer enforces idempotency
-      // via ON CONFLICT DO NOTHING using this traceId/routeId.
-      await this.queueService.send(QueueName.NormalizedQueue, {
-        traceId: row.traceId,
-        connectionId: row.connectionId,
+      // Send to L5 Queue (DeliveryQueue -> consumed by DeliveryService)
+      await this.queueService.send(QueueName.DeliveryQueue, {
+        ...(row.payload as Record<string, unknown>),
+        idempotencyKey: row.id, // provide stable key
       });
       queueSuccess = true;
     } catch (err) {
@@ -163,26 +159,26 @@ export class NormalizedOutboxWorker {
       try {
         if (row.attempts >= MAX_ATTEMPTS) {
           await tenantDb
-            .update(normalizedOutbox)
+            .update(outboundOutbox)
             .set({ status: "FAIL", lastError })
-            .where(eq(normalizedOutbox.id, row.id));
+            .where(eq(outboundOutbox.id, row.id));
           this.logger.error(
-            `[${schemaName}] NormalizedOutbox delivery permanently failed for traceId=${row.traceId}: ${lastError}`,
+            `[${schemaName}] OutboundOutbox dispatch permanently failed for outbox id=${row.id}: ${lastError}`,
           );
         } else {
           const delayMs = Math.pow(2, row.attempts) * 1_000;
           const nextRetryAt = new Date(Date.now() + delayMs);
           await tenantDb
-            .update(normalizedOutbox)
+            .update(outboundOutbox)
             .set({ status: "RETRY", lastError, nextRetryAt })
-            .where(eq(normalizedOutbox.id, row.id));
+            .where(eq(outboundOutbox.id, row.id));
           this.logger.warn(
-            `[${schemaName}] NormalizedOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${lastError}`,
+            `[${schemaName}] OutboundOutbox dispatch delayed for outbox id=${row.id} (attempt ${row.attempts}): ${lastError}`,
           );
         }
       } catch (dbErr) {
         this.logger.error(
-          `[${schemaName}] Failed to persist FAIL/RETRY status for normalized_outbox id=${row.id}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
+          `[${schemaName}] Failed to persist FAIL/RETRY status for outbound_outbox id=${row.id}: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
         );
       }
       return; // Stop processing this row
@@ -192,17 +188,17 @@ export class NormalizedOutboxWorker {
       try {
         // Mark success
         await tenantDb
-          .update(normalizedOutbox)
+          .update(outboundOutbox)
           .set({ status: "SUCCESS" })
-          .where(eq(normalizedOutbox.id, row.id));
+          .where(eq(outboundOutbox.id, row.id));
 
         this.logger.debug(
-          `[${schemaName}] Delivered L3->L4 trace=${row.traceId}`,
+          `[${schemaName}] Delivered L4->L5 outbox row id=${row.id}`,
         );
       } catch (dbErr) {
         const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
         this.logger.error(
-          `[${schemaName}] Published to queue but failed to update status to SUCCESS for normalized_outbox id=${row.id}: ${msg}`,
+          `[${schemaName}] Published to queue but failed to update status to SUCCESS for outbound_outbox id=${row.id}: ${msg}`,
         );
       }
     }

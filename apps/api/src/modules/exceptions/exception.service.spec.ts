@@ -21,7 +21,7 @@ vi.mock('@nexiom/database', async (importOriginal) => {
     ...actual,
     buildTenantSchema: vi.fn(() => ({
       outboundGateway: 'outbound_gateway_table',
-      deliveryOutbox: 'delivery_outbox_table',
+      outboundOutbox: 'outbound_outbox_table',
     })),
     assertValidSchemaName: vi.fn(),
   };
@@ -305,9 +305,9 @@ describe('ExceptionService', () => {
     // retryException runs 4 transactions:
     //   TX-1 (resolveOutboundRow): SELECT to find the outbound row
     //   TX-2 (retryException):     UPDATE outboundGateway status + INSERT outbox row (idempotent)
-    //   TX-3 (retryException):     Atomic claim — UPDATE delivery_outbox SET status='PROCESSING'
+    //   TX-3 (retryException):     Atomic claim — UPDATE outbound_outbox SET status='PROCESSING'
     //                              WHERE id=outboxId AND status='PENDING' RETURNING payload
-    //   TX-4 (retryException):     UPDATE delivery_outbox SET status='SUCCESS'
+    //   TX-4 (retryException):     UPDATE outbound_outbox SET status='SUCCESS'
     function buildRetryTransactions({
       updatedRows = [{ id: OUTBOUND_ID }] as unknown[],
       insertReturning = [
@@ -333,7 +333,7 @@ describe('ExceptionService', () => {
           .mockReturnValue(buildResolveSelectChain([MOCK_OUTBOUND_ROW])),
       };
 
-      // TX-2: UPDATE outboundGateway + INSERT into delivery_outbox (idempotent via onConflictDoNothing).
+      // TX-2: UPDATE outboundGateway + INSERT into outbound_outbox (idempotent via onConflictDoNothing).
       // When insertReturning=[] simulates a conflict — the code then falls back to a SELECT.
       const insertChain: Record<string, unknown> = {};
       insertChain['values'] = vi.fn().mockReturnValue(insertChain);
@@ -368,7 +368,7 @@ describe('ExceptionService', () => {
         update: vi.fn().mockReturnValue(claimUpdateChain),
       };
 
-      // TX-4: UPDATE delivery_outbox SET status='SUCCESS'
+      // TX-4: UPDATE outbound_outbox SET status='SUCCESS'
       const markDeliveredTx = {
         execute: vi.fn().mockResolvedValue(undefined),
         update: vi
@@ -425,7 +425,7 @@ describe('ExceptionService', () => {
     });
 
     it('returns queued:true without double-publish when claim loses the race', async () => {
-      // TX-3 (claim UPDATE) returns [] — DeliveryOutboxWorker already claimed it.
+      // TX-3 (claim UPDATE) returns [] — OutboundOutboxWorker already claimed it.
       // The service must NOT call queueService.send (avoid duplicate delivery).
       let txCallCount = 0;
       mockDb.transaction = vi
@@ -470,7 +470,7 @@ describe('ExceptionService', () => {
       expect(mockQueue.send).not.toHaveBeenCalled();
     });
 
-    it('transitions deliveryOutbox PROCESSING → RETRY and rethrows when queueService.send fails', async () => {
+    it('transitions outboundOutbox PROCESSING → RETRY and rethrows when queueService.send fails', async () => {
       // TX-3 (claim) succeeds but queueService.send throws.
       // A compensating TX must set status='RETRY' and the error propagates.
       const OUTBOX_ROW_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';

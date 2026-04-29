@@ -44,7 +44,7 @@ describe('ConnectorsService', () => {
 
   beforeEach(async () => {
     mockDbValues = vi.fn().mockReturnValue({
-      onConflictDoNothing: vi.fn(), // for connectionStorageRegistry
+      onConflictDoNothing: vi.fn(),
     });
     mockDbUpdate = vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
@@ -504,7 +504,7 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      expect(mockDbInsert).toHaveBeenCalledTimes(2);
+      expect(mockDbInsert).toHaveBeenCalledTimes(1);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
@@ -526,10 +526,11 @@ describe('ConnectorsService', () => {
 
       // At connection setup time only the schema namespace is provisioned.
       // The full table stack is applied incrementally when a stitch is activated.
-      const { applyPlan } = service['dbManager'] as {
+      const { applyPlan } = service['dbManager'] as unknown as {
         applyPlan: ReturnType<typeof vi.fn>;
       };
       expect(applyPlan).toHaveBeenCalledWith(
+        'tenant-123',
         expect.stringMatching(/^ws_/),
         SchemaPlan.NAMESPACE_ONLY,
       );
@@ -719,42 +720,6 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should throw InternalServerErrorException and abort if connectionStorageRegistry insert fails', async () => {
-      mockDb.where = vi.fn().mockReturnValue(
-        Object.assign(Promise.resolve([]), {
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      );
-      // Mock the appConnection insert succeeding:
-      mockDbInsert.mockReturnValueOnce({
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),
-        }),
-      });
-
-      // Mock the storageRegistry insert failing:
-      mockDbInsert.mockReturnValueOnce({
-        values: vi.fn().mockReturnValue({
-          onConflictDoNothing: vi
-            .fn()
-            .mockRejectedValue(new Error('Registry DB write failed')),
-        }),
-      });
-
-      await expect(
-        service.storeOAuthConnection({
-          tenantId: 'tenant-123',
-          providerName: 'mock-piece',
-          externalId: 'mock-piece-tms',
-          displayName: 'TMS MockPiece',
-          authType: 'OAUTH2',
-          value: 'encrypted-value-blob',
-          expiresAt: new Date(),
-          metadata: { env: 'sandbox' },
-        }),
-      ).rejects.toThrow(InternalServerErrorException);
-    });
-
     it('should throw InternalServerErrorException and abort if DB manager applyPlan fails', async () => {
       mockDb.where = vi.fn().mockReturnValue(
         Object.assign(Promise.resolve([]), {
@@ -765,15 +730,6 @@ describe('ConnectorsService', () => {
       mockDbInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),
-        }),
-      });
-
-      // Mock storageRegistry insert succeeding:
-      mockDbInsert.mockReturnValueOnce({
-        values: vi.fn().mockReturnValue({
-          onConflictDoNothing: vi
-            .fn()
-            .mockResolvedValue([{ id: 'mock-registry-id' }]),
         }),
       });
 

@@ -75,11 +75,11 @@ export class CdcRelayController {
       this.logger.log(
         `[DEBUG] Relayed L3->L4 event for trace=${trace_id} (schema=${resolvedSchema}) to ${QueueName.NormalizedQueue}`,
       );
-    } else if (__table === 'delivery_outbox') {
-      // delivery_outbox is handled by the DeliveryOutboxWorker via DB polling.
+    } else if (__table === 'outbound_outbox') {
+      // outbound_outbox is handled by the OutboundOutboxWorker via DB polling.
       // We don't relay it to the queue from CDC because the queue payload requires the full JSONB payload blob.
       this.logger.debug(
-        `[DEBUG] Ignored CDC event for delivery_outbox (trace=${trace_id}) — handled by worker polling`,
+        `[DEBUG] Ignored CDC event for outbound_outbox (trace=${trace_id}) — handled by worker polling`,
       );
     } else {
       this.logger.warn(

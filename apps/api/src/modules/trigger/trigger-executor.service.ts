@@ -3,9 +3,9 @@ import type { Trigger, TriggerContext } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
 import {
   DATABASE_CONNECTION,
-  connectionStorageRegistry,
   buildTenantSchema,
   assertValidSchemaName,
+  appConnections,
 } from '@nexiom/database';
 import { sql, eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
@@ -40,6 +40,7 @@ export interface TriggerRunParams {
   objectType: string | undefined;
   auth: unknown;
   propsValue: Record<string, unknown>;
+  tenantId: string;
   workspaceId: string;
   connectionId: string;
 }
@@ -153,18 +154,16 @@ export class TriggerExecutorService {
     let wroteRegistryRow = false;
     let registeredPublication = false;
     try {
-      // 1. Ensure all pipeline tables are provisioned lazily
-      await this.dbManager.applyPlan(
-        params.workspaceId,
-        SchemaPlan.OUTBOUND_ACTIVE,
-      );
-
-      // 2. Register the tenant's outbox tables with Debezium CDC publication.
-      // We wrap the ALTER PUBLICATION safe DO block to ignore duplicate additions.
-      // This must happen BEFORE onEnable so that publication failures don't leave
-      // external subscriptions (e.g., webhooks) active without CDC relay.
       const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
         params.connectionId,
+      );
+      assertValidSchemaName(resolvedSchemaName);
+
+      // 1. Ensure all pipeline tables are provisioned lazily
+      await this.dbManager.applyPlan(
+        params.tenantId,
+        resolvedSchemaName,
+        SchemaPlan.OUTBOUND_ACTIVE,
       );
       assertValidSchemaName(resolvedSchemaName);
       await this.db.execute(sql`
@@ -175,7 +174,7 @@ export class TriggerExecutorService {
               ADD TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
                         ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
                         ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,
-                        ${sql.raw('"' + resolvedSchemaName + '"')}.delivery_outbox;
+                        ${sql.raw('"' + resolvedSchemaName + '"')}.outbound_outbox;
           EXCEPTION WHEN duplicate_object THEN
             -- Ignore gracefully if the table is already in the publication
           END;
@@ -191,9 +190,9 @@ export class TriggerExecutorService {
 
       // 4. Persist the provisioned schemaPlan only once onEnable has succeeded.
       await this.db
-        .update(connectionStorageRegistry)
+        .update(appConnections)
         .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-        .where(eq(connectionStorageRegistry.dataNamespace, params.workspaceId));
+        .where(eq(appConnections.id, params.connectionId));
       wroteRegistryRow = true;
 
       this.logger.log('onEnable completed', {
@@ -210,11 +209,9 @@ export class TriggerExecutorService {
       if (wroteRegistryRow) {
         try {
           await this.db
-            .update(connectionStorageRegistry)
+            .update(appConnections)
             .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
-            .where(
-              eq(connectionStorageRegistry.dataNamespace, params.workspaceId),
-            );
+            .where(eq(appConnections.id, params.connectionId));
         } catch (revertErr) {
           this.logger.error(
             'Failed to revert schemaPlan after onEnable failure',
@@ -244,7 +241,7 @@ export class TriggerExecutorService {
                   DROP TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
                              ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
                              ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,
-                             ${sql.raw('"' + resolvedSchemaName + '"')}.delivery_outbox;
+                             ${sql.raw('"' + resolvedSchemaName + '"')}.outbound_outbox;
               EXCEPTION WHEN undefined_object THEN
                 -- Ignore gracefully if the table is not in the publication
               END;
@@ -490,6 +487,7 @@ export class TriggerExecutorService {
     const job = JSON.stringify({
       appName: params.appName,
       triggerName: params.triggerName,
+      tenantId: params.tenantId,
       workspaceId: params.workspaceId,
       connectionId: params.connectionId,
       objectType: params.objectType,

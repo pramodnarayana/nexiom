@@ -221,7 +221,7 @@ PHASE 2 (50+ customers):
 ```
 nexiom.inbound_outbox.events   ← L1 → L2 relay
 nexiom.replica_outbox.events   ← L2 → L3 relay
-nexiom.delivery_outbox.events  ← L4 → L5 relay
+nexiom.outbound_outbox.events  ← L4 → L5 relay
 
 Partition key: connectionId
 → All events for one connection land in the same partition

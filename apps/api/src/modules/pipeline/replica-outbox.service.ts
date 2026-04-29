@@ -1,15 +1,18 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { notInArray, eq, sql } from 'drizzle-orm';
-import { SchemaPlan } from '@nexiom/dbmanager';
+import { eq, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
-  connectionStorageRegistry,
+  tenantStorageRegistry,
+  appConnections,
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
+import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
@@ -19,45 +22,58 @@ export class ReplicaOutboxService {
   private readonly logger = new Logger(ReplicaOutboxService.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly queueService: QueueService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
-    // 1. Fetch all unique schema names (workspaces)
-    const workspaces = await this.db
-      .select({ dataNamespace: connectionStorageRegistry.dataNamespace })
-      .from(connectionStorageRegistry)
-      .where(
-        notInArray(connectionStorageRegistry.schemaPlan, [
-          SchemaPlan.NAMESPACE_ONLY,
-        ]),
-      )
-      .groupBy(connectionStorageRegistry.dataNamespace);
+    try {
+      const tenants = await this.globalDb.select().from(tenantStorageRegistry);
+      if (tenants.length === 0) return;
 
-    const results = await Promise.allSettled(
-      workspaces.map((ws) => this.drainWorkspaceOutbox(ws.dataNamespace)),
-    );
+      await Promise.allSettled(
+        tenants.map(async (tenant) => {
+          try {
+            const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+            const connections = await tenantDb.select().from(appConnections);
 
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        this.logger.error(
-          `[${workspaces[index].dataNamespace}] drainWorkspaceOutbox failed: ${
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason)
-          }`,
-        );
-      }
-    });
+            for (const connection of connections) {
+              const schemaName = getWorkspaceSchemaName(
+                connection.id,
+                connection.appName,
+              );
+              try {
+                await this.drainWorkspaceOutbox(tenantDb, schemaName);
+              } catch (schemaErr) {
+                this.logger.error(
+                  `[${tenant.tenantId}] Failed to drain replica outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+                );
+              }
+            }
+          } catch (tenantErr) {
+            this.logger.error(
+              `Failed to process replica outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+            );
+          }
+        }),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to query global tenant registry for replica outbox: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
-  private async drainWorkspaceOutbox(schemaName: string): Promise<void> {
+  private async drainWorkspaceOutbox(
+    tenantDb: DrizzleDb,
+    schemaName: string,
+  ): Promise<void> {
     const { replicaOutbox } = buildTenantSchema(schemaName);
 
     // Atomically claim rows
-    const claimed = await this.db.transaction(async (tx) => {
+    const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
@@ -91,11 +107,12 @@ export class ReplicaOutboxService {
 
     // Process claimed rows
     await Promise.allSettled(
-      claimed.map((row) => this.processOutboxRow(schemaName, row)),
+      claimed.map((row) => this.processOutboxRow(tenantDb, schemaName, row)),
     );
   }
 
   private async processOutboxRow(
+    tenantDb: DrizzleDb,
     schemaName: string,
     row: {
       id: string;
@@ -114,7 +131,7 @@ export class ReplicaOutboxService {
       });
 
       // Mark success
-      await this.db
+      await tenantDb
         .update(replicaOutbox)
         .set({ status: 'SUCCESS' })
         .where(eq(replicaOutbox.id, row.id));
@@ -126,7 +143,7 @@ export class ReplicaOutboxService {
       const lastError = err instanceof Error ? err.message : String(err);
 
       if (row.attempts >= MAX_ATTEMPTS) {
-        await this.db
+        await tenantDb
           .update(replicaOutbox)
           .set({ status: 'FAIL', lastError })
           .where(eq(replicaOutbox.id, row.id));
@@ -137,7 +154,7 @@ export class ReplicaOutboxService {
         const delayMs = Math.pow(2, row.attempts) * 1_000;
         const nextRetryAt = new Date(Date.now() + delayMs);
 
-        await this.db
+        await tenantDb
           .update(replicaOutbox)
           .set({ status: 'RETRY', lastError, nextRetryAt })
           .where(eq(replicaOutbox.id, row.id));

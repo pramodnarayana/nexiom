@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { organization } from './identity.js';
+import { organization } from '../global/identity.js';
 
 // Shared environment discriminator — used by both app_connection and ui_workspace.
 // Defined here (tenant.ts) so workspace.ts can import it without a circular dep.
@@ -67,6 +67,9 @@ export const appConnections = pgTable('app_connection', {
     // Plain-text metadata for display purposes only (e.g. connected account email, env label)
     metadata: jsonb('metadata').default({}),
 
+    // Which DBManager SchemaPlan was last applied to this connection's schema
+    schemaPlan: varchar('schema_plan', { length: 64 }).notNull().default('NAMESPACE_ONLY'),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -100,6 +103,7 @@ export const safeAppConnectionColumns = {
     status: appConnections.status,
     expiresAt: appConnections.expiresAt,
     metadata: appConnections.metadata,
+    schemaPlan: appConnections.schemaPlan,
     createdAt: appConnections.createdAt,
     updatedAt: appConnections.updatedAt,
 } as const;

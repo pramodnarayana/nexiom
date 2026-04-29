@@ -45,8 +45,8 @@ export { appConnections } from '@nexiom/database';
 // Piece registry
 export { pieces } from '@nexiom/database';
 
-// Infrastructure registry — maps connection IDs to physical DB schema + region
-export { connectionStorageRegistry } from '@nexiom/database';
+// Infrastructure registry — maps tenant IDs to physical DB location
+export { tenantStorageRegistry } from '@nexiom/database';
 
 // Workspaces — logical folders grouping connections per team/environment
 export {

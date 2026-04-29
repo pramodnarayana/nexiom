@@ -1,14 +1,14 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as identitySchema from './schema/identity.js';
-import * as tenantSchema from './schema/tenant.js';
-import * as registrySchema from './schema/storage_registry.js';
-import * as profileSchema from './schema/connector_object_profiles.js';
-import * as piecesSchema from './schema/pieces.js';
-import * as workspaceSchema from './schema/workspace.js';
-import * as stitchesSchema from './schema/stitches.js';
-import * as gemSchema from './schema/gem.js';
-import * as pipelineSchema from './schema/pipeline.js';
+import * as identitySchema from './schema/global/identity.js';
+import * as tenantSchema from './schema/tenant/tenant.js';
+import * as registrySchema from './schema/global/storage_registry.js';
+import * as profileSchema from './schema/tenant/connector_object_profiles.js';
+import * as piecesSchema from './schema/global/pieces.js';
+import * as workspaceSchema from './schema/tenant/workspace.js';
+import * as stitchesSchema from './schema/tenant/stitches.js';
+import * as gemSchema from './schema/tenant/gem.js';
+import * as pipelineSchema from './schema/tenant/pipeline.js';
 
 const schemaBundle = {
     ...identitySchema,

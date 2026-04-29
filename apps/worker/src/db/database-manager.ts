@@ -677,7 +677,7 @@ export class DatabaseManager {
     }
 
     const { drizzle } = await import("drizzle-orm/node-postgres");
-    const { SqlDatabaseManager } = await import("@nexiom/dbmanager");
+    const { TenantDatabaseManager } = await import("@nexiom/dbmanager");
     const { SchemaPlan } = await import("@nexiom/dbmanager");
     const dbSchema = await import("./schema.js");
     const client = await this.getPgClient();
@@ -685,11 +685,20 @@ export class DatabaseManager {
     try {
       const db = drizzle(client, { schema: dbSchema });
       const { getDomainProvisioner } = await import("@nexiom/piece-framework");
-      // SqlDatabaseManager only calls db.$client.query() — the schema generic mismatch
-      // between the local schema and @nexiom/database's schema is safe to cast here.
-      const schemaMgr = new SqlDatabaseManager(
+      const { Pool } = await import("pg");
+      const schemaMgr = new TenantDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
-        undefined,
+        (connectionString: string) => {
+          const pool = new Pool({
+            connectionString,
+            max: 20,
+            idleTimeoutMillis: 30_000,
+            connectionTimeoutMillis: 5_000,
+          });
+          return drizzle(pool, {
+            schema: dbSchema,
+          }) as unknown as import("@nexiom/database").DrizzleDb;
+        },
         getDomainProvisioner,
       );
 
@@ -760,33 +769,37 @@ export class DatabaseManager {
 
           const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
 
-          // Also seed the connection_storage_registry so applyPlan can resolve appName
+          // Seed the tenant_storage_registry to map the tenant to its physical database.
+          // In a real environment, this is created when the tenant signs up.
+          // For local dev, we just map it to the current database name.
+          const dbName =
+            process.env.DATABASE_URL?.split("/").pop()?.split("?")[0] ||
+            "nexiom_local";
           const existReg = await tx
             .select()
-            .from(dbSchema.connectionStorageRegistry)
+            .from(dbSchema.tenantStorageRegistry)
             .where(
-              sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
+              sql`${dbSchema.tenantStorageRegistry.tenantId} = ${systemTenantId}`,
             )
             .limit(1);
 
           if (!existReg[0]) {
-            await tx.insert(dbSchema.connectionStorageRegistry).values({
-              connectionId: fixture.id,
-              dataNamespace: schemaName,
-              databaseHostId: "aurora-prod",
+            await tx.insert(dbSchema.tenantStorageRegistry).values({
+              tenantId: systemTenantId,
+              databaseName: dbName,
+              databaseHostUrl:
+                process.env.DATABASE_URL ||
+                "postgresql://localhost:5432/nexiom_local",
               regionContext: "local",
-              schemaPlan: "OUTBOUND_ACTIVE",
             });
-          } else {
-            await tx
-              .update(dbSchema.connectionStorageRegistry)
-              .set({ schemaPlan: "OUTBOUND_ACTIVE", dataNamespace: schemaName })
-              .where(
-                sql`${dbSchema.connectionStorageRegistry.connectionId} = ${fixture.id}`,
-              );
           }
+
           // SchemaPlan.OUTBOUND_ACTIVE creates all full pipeline stages
-          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+          await schemaMgr.applyPlan(
+            systemTenantId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+          );
 
           await tx
             .update(dbSchema.appConnections)

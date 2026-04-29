@@ -669,19 +669,30 @@ export class DatabaseManager {
    * Ensures client.end() in a finally block.
    */
   private async withSchemaMgr<T>(
-    cb: (mgr: import('@nexiom/dbmanager').SqlDatabaseManager) => Promise<T>,
+    cb: (mgr: import('@nexiom/dbmanager').TenantDatabaseManager) => Promise<T>,
   ): Promise<T> {
-    const { SqlDatabaseManager } = await import('@nexiom/dbmanager');
+    const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
     const { getDomainProvisioner } = await import('@nexiom/piece-framework');
     const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { Pool } = await import('pg');
     const dbSchema = await import('./schema.js');
     const client = await this.getPgClient();
 
     try {
       const db = drizzle(client, { schema: dbSchema });
-      const schemaMgr = new SqlDatabaseManager(
+      const schemaMgr = new TenantDatabaseManager(
         db as unknown as import('@nexiom/database').DrizzleDb,
-        undefined,
+        (connectionString: string) => {
+          const pool = new Pool({
+            connectionString,
+            max: 20,
+            idleTimeoutMillis: 30_000,
+            connectionTimeoutMillis: 5_000,
+          });
+          return drizzle(pool, {
+            schema: dbSchema,
+          }) as unknown as import('@nexiom/database').DrizzleDb;
+        },
         getDomainProvisioner,
       );
       return await cb(schemaMgr);
@@ -831,43 +842,34 @@ export class DatabaseManager {
 
           const schemaName = `ws_${resolved.id.replaceAll('-', '_')}`;
 
-          // Seed the connection_storage_registry so applyPlan can resolve appName
+          // Seed the tenant_storage_registry to map the tenant to its physical database.
+          // In a real environment, this is created when the tenant signs up.
+          // For local dev, we just map it to the current database name.
+          const dbName =
+            process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ||
+            'nexiom_local';
           const existReg = await db
             .select()
-            .from(dbSchema.connectionStorageRegistry)
-            .where(
-              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
-            )
+            .from(dbSchema.tenantStorageRegistry)
+            .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId))
             .limit(1);
 
           if (!existReg[0]) {
-            await db.insert(dbSchema.connectionStorageRegistry).values({
-              connectionId: resolved.id,
-              dataNamespace: schemaName,
-              databaseHostId: 'aurora-prod',
+            await db.insert(dbSchema.tenantStorageRegistry).values({
+              tenantId: systemTenantId,
+              databaseName: dbName,
+              databaseHostUrl:
+                process.env.DATABASE_URL ||
+                'postgresql://localhost:5432/nexiom_local',
               regionContext: 'local',
             });
-          } else {
-            await db
-              .update(dbSchema.connectionStorageRegistry)
-              .set({ dataNamespace: schemaName })
-              .where(
-                eq(
-                  dbSchema.connectionStorageRegistry.connectionId,
-                  resolved.id,
-                ),
-              );
           }
 
-          await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
-
-          // Update schemaPlan to OUTBOUND_ACTIVE after successful provisioning
-          await db
-            .update(dbSchema.connectionStorageRegistry)
-            .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-            .where(
-              eq(dbSchema.connectionStorageRegistry.connectionId, resolved.id),
-            );
+          await schemaMgr.applyPlan(
+            systemTenantId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+          );
 
           // After successful schema provisioning, mark connection ACTIVE
           await db
@@ -908,7 +910,13 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      await schemaMgr.applyPlan(schemaName, SchemaPlan.GATEWAY_ACTIVE);
+      const systemTenantId = process.env.SYSTEM_TENANT_ID;
+      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      await schemaMgr.applyPlan(
+        systemTenantId,
+        schemaName,
+        SchemaPlan.GATEWAY_ACTIVE,
+      );
       console.log(`  ✓ Schema "${schemaName}" upgraded to GATEWAY_ACTIVE`);
       console.log(
         '  ✓ inbound_gateway table is now ready for webhook ingestion',
@@ -926,7 +934,13 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      await schemaMgr.applyPlan(schemaName, SchemaPlan.OUTBOUND_ACTIVE);
+      const systemTenantId = process.env.SYSTEM_TENANT_ID;
+      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      await schemaMgr.applyPlan(
+        systemTenantId,
+        schemaName,
+        SchemaPlan.OUTBOUND_ACTIVE,
+      );
       console.log(`  ✓ Schema "${schemaName}" upgraded to OUTBOUND_ACTIVE`);
     });
   }
@@ -947,6 +961,8 @@ export class DatabaseManager {
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
       try {
+        const systemTenantId = process.env.SYSTEM_TENANT_ID;
+        if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
         const result = await client.query<{ schema_name: string }>(`
           SELECT schema_name
           FROM information_schema.schemata
@@ -963,7 +979,10 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateToOutboundActive(schema_name);
+            await schemaMgr.migrateToOutboundActive(
+              systemTenantId,
+              schema_name,
+            );
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);

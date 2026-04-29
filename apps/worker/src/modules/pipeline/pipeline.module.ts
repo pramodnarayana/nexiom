@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { QueueModule } from "@nexiom/queue";
 import { DbModule } from "../../db/db.module.js";
+import { DbManagerModule } from "../dbmanager/dbmanager.module.js";
 import { StorageResolverModule } from "@nexiom/engine";
 import {
   TokenManagerService,
@@ -20,11 +21,17 @@ import { TargetBuilderService } from "./target-builder.service.js";
 import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
-import { DeliveryOutboxWorker } from "./delivery-outbox.worker.js";
+import { OutboundOutboxWorker } from "./outbound-outbox.worker.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 
 @Module({
-  imports: [QueueModule, DbModule, StorageResolverModule, PiecesModule],
+  imports: [
+    QueueModule,
+    DbModule,
+    DbManagerModule,
+    StorageResolverModule,
+    PiecesModule,
+  ],
   providers: [
     ReplicaService,
     NormalizationService, // Extended with app canonical write hook (step 3.5)
@@ -32,7 +39,7 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
     FanOutService,
     DeliveryService,
     NormalizedOutboxWorker,
-    DeliveryOutboxWorker,
+    OutboundOutboxWorker,
     GitopsSyncWorker,
     {
       provide: EncryptionService,
