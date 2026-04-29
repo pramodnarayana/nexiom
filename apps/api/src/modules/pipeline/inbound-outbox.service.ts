@@ -21,8 +21,6 @@ const MAX_ATTEMPTS = 6;
 export class InboundOutboxService {
   private readonly logger = new Logger(InboundOutboxService.name);
 
-  private isProcessingOutbox = false;
-
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly queueService: QueueService,

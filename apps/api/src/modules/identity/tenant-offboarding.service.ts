@@ -47,10 +47,9 @@ export class TenantOffboardingService {
           .update(currConnection.id)
           .digest('hex')
           .substring(0, 16);
-        const sanitizedProvider = currConnection.appName.replaceAll(
-          /[^a-z0-9]/g,
-          '',
-        );
+        const sanitizedProvider = currConnection.appName
+          .toLowerCase()
+          .replaceAll(/[^a-z0-9]/g, '');
         const finalProviderToken = sanitizedProvider || 'unknown';
         const safeToken = finalProviderToken.substring(0, 40);
         const dataNamespace = `ws_${safeToken}_${hashedSuffix}`;

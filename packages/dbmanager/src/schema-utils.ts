@@ -16,10 +16,10 @@ export function getWorkspaceSchemaName(
     .update(connectionId)
     .digest('hex')
     .substring(0, 16);
-    
-  const sanitizedProvider = appName.replaceAll(/[^a-z0-9]/g, '');
+
+  const sanitizedProvider = appName.toLowerCase().replaceAll(/[^a-z0-9]/g, '');
   const finalProviderToken = sanitizedProvider || 'unknown';
   const safeToken = finalProviderToken.substring(0, 40);
-  
+
   return `ws_${safeToken}_${hashedSuffix}`;
 }

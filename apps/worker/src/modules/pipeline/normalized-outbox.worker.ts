@@ -32,43 +32,46 @@ export class NormalizedOutboxWorker {
   async processOutbox(): Promise<void> {
     try {
       // 1. Query tenantStorageRegistry in the Global DB to get all tenant databases.
-      const tenants = await this.globalDb.select().from(tenantStorageRegistry);
+      const tenants = await this.globalDb
+        .select({ tenantId: tenantStorageRegistry.tenantId })
+        .from(tenantStorageRegistry);
 
       if (tenants.length === 0) {
         return;
       }
 
-      // Process tenants concurrently
-      await Promise.allSettled(
-        tenants.map(async (tenant) => {
-          try {
-            // 2. Use TenantDatabaseManager to connect to the specific physical tenant DB.
-            const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+      // Process tenants with bounded concurrency to prevent unbounded fan-out
+      const TENANT_CONCURRENCY = 5;
+      await processInChunks(tenants, TENANT_CONCURRENCY, async (tenant) => {
+        try {
+          // 2. Use TenantDatabaseManager to connect to the specific physical tenant DB.
+          const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
 
-            // 3. Query app_connection inside each tenant DB to find all active connections.
-            const connections = await tenantDb.select().from(appConnections);
+          // 3. Query app_connection inside each tenant DB to find all active connections.
+          const connections = await tenantDb
+            .select({ id: appConnections.id, appName: appConnections.appName })
+            .from(appConnections);
 
-            // 4. Run drainWorkspaceOutbox on each schema derived from the connection.
-            for (const connection of connections) {
-              const schemaName = getWorkspaceSchemaName(
-                connection.id,
-                connection.appName,
-              );
-              try {
-                await this.drainWorkspaceOutbox(tenantDb, schemaName);
-              } catch (schemaErr) {
-                this.logger.error(
-                  `[${tenant.tenantId}] Failed to drain normalized outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
-                );
-              }
-            }
-          } catch (tenantErr) {
-            this.logger.error(
-              `Failed to process normalized outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+          // 4. Run drainWorkspaceOutbox on each schema derived from the connection.
+          for (const connection of connections) {
+            const schemaName = getWorkspaceSchemaName(
+              connection.id,
+              connection.appName,
             );
+            try {
+              await this.drainWorkspaceOutbox(tenantDb, schemaName);
+            } catch (schemaErr) {
+              this.logger.error(
+                `[${tenant.tenantId}] Failed to drain normalized outbox for schema ${schemaName}: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`,
+              );
+            }
           }
-        }),
-      );
+        } catch (tenantErr) {
+          this.logger.error(
+            `Failed to process normalized outbox for tenant ${tenant.tenantId}: ${tenantErr instanceof Error ? tenantErr.message : String(tenantErr)}`,
+          );
+        }
+      });
     } catch (err) {
       this.logger.error(
         `Failed to query global tenant registry for normalized outbox: ${err instanceof Error ? err.message : String(err)}`,

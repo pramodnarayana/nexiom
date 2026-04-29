@@ -38,7 +38,12 @@ describe('StitchesController — schedule endpoints', () => {
   });
 
   it('create — delegates to service', async () => {
-    const body = { name: 'Test Stitch' } as unknown as CreateStitch;
+    const body: CreateStitch = {
+      name: 'Test Stitch',
+      workspaceId: 'workspace-uuid-1',
+      srcConnectionId: 'src-conn-uuid-1',
+      destConnectionId: 'dest-conn-uuid-1',
+    };
     mockService.create.mockResolvedValue({ id: STITCH_ID });
     const result = await controller.create(makeAuth(), body);
     expect(result).toEqual({ id: STITCH_ID });
@@ -60,7 +65,10 @@ describe('StitchesController — schedule endpoints', () => {
   });
 
   it('update — delegates to service', async () => {
-    const body = { name: 'Updated Stitch' } as unknown as UpdateStitch;
+    const body: UpdateStitch = {
+      name: 'Updated Stitch',
+      status: 'ACTIVE',
+    };
     mockService.update.mockResolvedValue({ id: STITCH_ID });
     const result = await controller.update(makeAuth(), STITCH_ID, body);
     expect(result).toEqual({ id: STITCH_ID });

@@ -55,13 +55,23 @@ export class TenantDatabaseManager implements DatabaseManager {
         }
 
         const { databaseName, databaseHostUrl } = registryInfo[0];
-        
+
         // Construct the full connection string.
         // In local development, databaseHostUrl will be the base URL (e.g., postgres://postgres:postgres@localhost:5432)
         // and databaseName will be 'db_tenant_uuid'.
         // We ensure a valid Postgres URL is formed by combining them properly.
+
+        // Validate and sanitize databaseName for safe URL paths
+        const sanitizedDbName = databaseName.trim().replace(/^\/+|\/+$/g, '');
+        if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedDbName)) {
+            throw new Error(
+                `[TenantDatabaseManager] Invalid databaseName "${databaseName}" for tenant ${tenantId}. ` +
+                `Only alphanumeric, underscore, and hyphen characters are allowed.`
+            );
+        }
+
         const baseUrl = databaseHostUrl.endsWith('/') ? databaseHostUrl.slice(0, -1) : databaseHostUrl;
-        const fullUrl = `${baseUrl}/${databaseName}`;
+        const fullUrl = `${baseUrl}/${encodeURIComponent(sanitizedDbName)}`;
 
         this.logger.debug(`Establishing new connection pool for tenant ${tenantId} at ${databaseName}`);
         
@@ -87,5 +97,47 @@ export class TenantDatabaseManager implements DatabaseManager {
         const tenantDb = await this.getTenantDb(tenantId);
         const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
         await sqlManager.migrateToOutboundActive(schemaName);
+    }
+
+    /**
+     * Closes the connection pool for a specific tenant.
+     * @param tenantId The organization ID
+     */
+    async closeTenantDb(tenantId: string): Promise<void> {
+        const tenantDb = this.dbCache.get(tenantId);
+        if (!tenantDb) {
+            this.logger.debug(`No cached connection to close for tenant ${tenantId}`);
+            return;
+        }
+
+        try {
+            // Call the Drizzle/connection-pool shutdown method
+            // Drizzle's pg adapter exposes .$pool or similar; adapt as needed
+            if (typeof (tenantDb as any).$client?.end === 'function') {
+                await (tenantDb as any).$client.end();
+            } else if (typeof (tenantDb as any).end === 'function') {
+                await (tenantDb as any).end();
+            }
+            this.logger.debug(`Closed connection pool for tenant ${tenantId}`);
+        } catch (err) {
+            this.logger.debug(`Error closing tenant connection for ${tenantId}: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            this.dbCache.delete(tenantId);
+        }
+    }
+
+    /**
+     * Closes all cached tenant connections for graceful shutdown.
+     */
+    async closeAll(): Promise<void> {
+        const tenantIds = Array.from(this.dbCache.keys());
+        this.logger.debug(`Closing ${tenantIds.length} cached tenant connections`);
+
+        await Promise.allSettled(
+            tenantIds.map(tenantId => this.closeTenantDb(tenantId))
+        );
+
+        this.dbCache.clear();
+        this.logger.debug('All tenant connections closed');
     }
 }

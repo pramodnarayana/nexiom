@@ -165,7 +165,6 @@ export class TriggerExecutorService {
         resolvedSchemaName,
         SchemaPlan.OUTBOUND_ACTIVE,
       );
-      assertValidSchemaName(resolvedSchemaName);
       await this.db.execute(sql`
         DO $$
         BEGIN

@@ -36,8 +36,8 @@ export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [
 export const OutboundGatewayStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY', 'DISMISSED'] as const;
 export type OutboundGatewayStatus = (typeof OutboundGatewayStatus)[number];
 
-export const OutboundOutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;
-export type OutboundOutboxStatus = (typeof OutboundOutboxStatus)[number];
+export const OutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;
+export type OutboxStatus = (typeof OutboxStatus)[number];
 
 // ---------------------------------------------------------------------------
 // Tenant Schema Builder
@@ -243,7 +243,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<OutboundOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -266,7 +266,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<OutboundOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -289,7 +289,7 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         connectionId: uuid('connection_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<OutboundOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
@@ -314,7 +314,7 @@ export function buildTenantSchema(schemaName: string) {
         outboundGatewayId: uuid('outbound_gateway_id').notNull(),
         payload: jsonb('payload').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
-        status: text('status').$type<OutboundOutboxStatus>().notNull().default('PENDING'),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         lastError: varchar('last_error', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),

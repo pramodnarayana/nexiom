@@ -24,10 +24,13 @@ describe('StorageResolverService', () => {
   });
 
   describe('getHostContext', () => {
-    it('should return a local stub for now', async () => {
-      const result = await service.getHostContext('conn-123');
-      expect(result).toHaveProperty('regionContext', 'local');
-      expect(result).toHaveProperty('databaseHostUrl');
+    it('should throw when tenant-per-database logic is not yet implemented', async () => {
+      await expect(service.getHostContext('conn-123')).rejects.toThrow(
+        /getHostContext not yet implemented/
+      );
+      await expect(service.getHostContext('conn-123')).rejects.toThrow(
+        /conn-123/
+      );
     });
   });
 });

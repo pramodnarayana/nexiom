@@ -55,7 +55,6 @@ describe('InboundOutboxService', () => {
         { provide: DATABASE_CONNECTION, useValue: globalDb },
         { provide: QueueService, useValue: queueService },
         { provide: DB_MANAGER, useValue: dbManager },
-        { provide: QueueService, useValue: queueService },
       ],
     }).compile();
 

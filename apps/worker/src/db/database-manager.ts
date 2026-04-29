@@ -741,6 +741,8 @@ export class DatabaseManager {
           `  ℹ️  Provisioning connection ${fixture.appName} (preserving secrets if exists)`,
         );
 
+        const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
+
         await db.transaction(async (tx) => {
           const existRes = await tx
             .select()
@@ -767,14 +769,29 @@ export class DatabaseManager {
               .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
           }
 
-          const schemaName = `ws_${fixture.id.replaceAll("-", "_")}`;
-
           // Seed the tenant_storage_registry to map the tenant to its physical database.
           // In a real environment, this is created when the tenant signs up.
-          // For local dev, we just map it to the current database name.
-          const dbName =
-            process.env.DATABASE_URL?.split("/").pop()?.split("?")[0] ||
-            "nexiom_local";
+          // For local dev, we derive a sanitized host identifier and avoid persisting credentials.
+          let dbName = "nexiom_local";
+          let hostIdentifier = "localhost:5432";
+          if (process.env.DATABASE_URL) {
+            try {
+              const parsedUrl = new URL(process.env.DATABASE_URL);
+              const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, "");
+              if (pathname) {
+                const segments = pathname.split("/");
+                dbName = segments[segments.length - 1] || parsedUrl.host || dbName;
+              } else {
+                dbName = parsedUrl.host || dbName;
+              }
+              hostIdentifier = parsedUrl.host || hostIdentifier;
+            } catch {
+              // Fallback to safe default for invalid/Unix-socket-style URLs
+              dbName = "nexiom_local";
+              hostIdentifier = "localhost:5432";
+            }
+          }
+
           const existReg = await tx
             .select()
             .from(dbSchema.tenantStorageRegistry)
@@ -784,32 +801,34 @@ export class DatabaseManager {
             .limit(1);
 
           if (!existReg[0]) {
+            // Insert registry entry first
             await tx.insert(dbSchema.tenantStorageRegistry).values({
               tenantId: systemTenantId,
               databaseName: dbName,
-              databaseHostUrl:
-                process.env.DATABASE_URL ||
-                "postgresql://localhost:5432/nexiom_local",
+              databaseHostUrl: hostIdentifier,
               regionContext: "local",
             });
           }
+        });
 
-          // SchemaPlan.OUTBOUND_ACTIVE creates all full pipeline stages
-          await schemaMgr.applyPlan(
-            systemTenantId,
-            schemaName,
-            SchemaPlan.OUTBOUND_ACTIVE,
-          );
+        // Now apply schema plan outside the committed transaction
+        await schemaMgr.applyPlan(
+          systemTenantId,
+          schemaName,
+          SchemaPlan.OUTBOUND_ACTIVE,
+        );
 
-          await tx
+        // Update connection to ACTIVE status in a new transaction
+        await db.transaction(async (tx2) => {
+          await tx2
             .update(dbSchema.appConnections)
             .set({ status: "ACTIVE" })
             .where(sql`${dbSchema.appConnections.id} = ${fixture.id}`);
-
-          console.log(
-            `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
-          );
         });
+
+        console.log(
+          `  ✓ ${fixture.displayName} → ${fixture.id} (schema: ${schemaName})`,
+        );
       }
 
       console.log("\n✅ Local dev fixtures provisioned.");

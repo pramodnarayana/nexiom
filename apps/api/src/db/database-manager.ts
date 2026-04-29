@@ -845,9 +845,22 @@ export class DatabaseManager {
           // Seed the tenant_storage_registry to map the tenant to its physical database.
           // In a real environment, this is created when the tenant signs up.
           // For local dev, we just map it to the current database name.
-          const dbName =
-            process.env.DATABASE_URL?.split('/').pop()?.split('?')[0] ||
-            'nexiom_local';
+          let dbName = 'nexiom_local';
+          if (process.env.DATABASE_URL) {
+            try {
+              const parsedUrl = new URL(process.env.DATABASE_URL);
+              const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, '');
+              if (pathname) {
+                const segments = pathname.split('/');
+                dbName = segments[segments.length - 1] || parsedUrl.host || dbName;
+              } else {
+                dbName = parsedUrl.host || dbName;
+              }
+            } catch {
+              // Fallback to safe default for invalid/Unix-socket-style URLs
+              dbName = 'nexiom_local';
+            }
+          }
           const existReg = await db
             .select()
             .from(dbSchema.tenantStorageRegistry)

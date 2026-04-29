@@ -300,7 +300,9 @@ export class DlqProcessorService {
       const failedPayload = JSON.stringify({
         appName: job.appName,
         triggerName: job.triggerName,
+        tenantId: job.tenantId,
         workspaceId: job.workspaceId,
+        connectionId: job.connectionId,
         attempt: nextAttempt,
         exhaustedAt: new Date().toISOString(),
         error: err instanceof Error ? err.message : String(err),

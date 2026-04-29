@@ -148,4 +148,20 @@ describe('TenantOffboardingService', () => {
     // Assert transaction still invoked for logical deletion
     expect(db.transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('should normalize mixed-case provider names when building schema names', async () => {
+    // First query: get connections for tenant - include a mixed-case appName
+    db.where.mockResolvedValueOnce([
+      { id: 'conn-1', appName: 'app1' },
+      { id: 'conn-2', appName: 'SalesForce-API' },
+    ]);
+
+    // Should resolve without throwing
+    await expect(service.offboardTenant('test-tenant')).resolves.not.toThrow();
+
+    // Assert db.execute called for both connections (including the normalized schema for SalesForce-API)
+    expect(db.execute).toHaveBeenCalledTimes(2);
+    // Assert transaction still invoked for logical deletion
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
 });

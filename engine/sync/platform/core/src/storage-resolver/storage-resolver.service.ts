@@ -15,7 +15,25 @@ export class StorageResolverService {
    */
   async resolveSchemaName(connectionId: string): Promise<string> {
     // In Tenant-per-Database, the schema name is purely deterministic
-    return `ws_${connectionId.replaceAll('-', '_')}`;
+    // Normalize to lowercase and replace any non-alphanumeric/underscore with '_'
+    let sanitized = connectionId.toLowerCase().replaceAll(/[^a-z0-9_]/g, '_');
+
+    // Ensure the first character is a letter or underscore (prefix '_' if starts with digit)
+    if (sanitized.length > 0 && /^[0-9]/.test(sanitized)) {
+      sanitized = '_' + sanitized;
+    }
+
+    // Truncate to Postgres max identifier length (63 bytes)
+    if (sanitized.length > 63) {
+      sanitized = sanitized.substring(0, 63);
+    }
+
+    // Ensure non-empty
+    if (!sanitized) {
+      throw new Error(`Cannot derive valid schema name from connectionId: ${connectionId}`);
+    }
+
+    return `ws_${sanitized}`;
   }
 
   /**
@@ -23,13 +41,9 @@ export class StorageResolverService {
    * Critical for multi-region routing and residency compliance.
    */
   async getHostContext(connectionId: string): Promise<HostContext> {
-    // TODO (Tenant-per-Database): 
-    // This needs to resolve the tenantId for the connectionId via a global cache,
-    // and then lookup the TenantStorageRegistry in the Global DB.
-    // Stubbed for now to allow compilation.
-    return {
-      databaseHostUrl: process.env.DATABASE_URL || '',
-      regionContext: 'local'
-    };
+    throw new Error(
+      `getHostContext not yet implemented for tenant-per-database architecture (connectionId: ${connectionId}). ` +
+      `Requires resolving tenantId and querying TenantStorageRegistry.`
+    );
   }
 }

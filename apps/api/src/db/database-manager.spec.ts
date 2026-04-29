@@ -63,6 +63,7 @@ vi.mock('pg', () => {
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
+    select: drizzleMocks.select,
     update: drizzleMocks.update,
     insert: drizzleMocks.insert,
     transaction: drizzleMocks.transaction,
