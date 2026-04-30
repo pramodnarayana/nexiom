@@ -159,6 +159,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       let canonicalData = replica.data;
 
       // ── Normalize via HookBroker or Piece ────────────────────────────────
+
       const normalizedFromShard = await this.hookBroker
         .normalize(connectionAppName, appProfile, {
           entityType: replica.entityType,
@@ -168,14 +169,14 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           // Log the error for operational visibility, then fall through to piece.normalize
           this.logger.warn(
             {
-              event: 'l3.shard_normalize_failed',
+              event: "l3.shard_normalize_failed",
               connectionAppName,
               appProfile,
               entityType: replica.entityType,
               err: err instanceof Error ? err.message : String(err),
               stack: err instanceof Error ? err.stack : undefined,
             },
-            'Shard normalize failed — falling back to piece.normalize',
+            "Shard normalize failed — falling back to piece.normalize",
           );
           return null;
         }); // shard may not exist yet — fall through to piece.normalize

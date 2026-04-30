@@ -54,6 +54,7 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
     systemTenantId: getRequiredSystemTenantId(),
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   await seedSystemRbac(db as any, config, console);
 }
 

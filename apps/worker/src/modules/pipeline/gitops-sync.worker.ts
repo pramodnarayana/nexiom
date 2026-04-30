@@ -37,8 +37,12 @@ export class GitopsSyncWorker implements OnModuleInit {
 
       // Check reentrancy guard before processing
       if (this.isSyncRunning) {
-        this.logger.warn("Skipping GitOps sync — previous run still in progress");
-        throw new Error("GitOps sync already in progress — message will be retried");
+        this.logger.warn(
+          "Skipping GitOps sync — previous run still in progress",
+        );
+        throw new Error(
+          "GitOps sync already in progress — message will be retried",
+        );
       }
 
       try {
@@ -112,7 +116,7 @@ export class GitopsSyncWorker implements OnModuleInit {
     // Ensure repoPath is contained within SHARD_BASE_PATH
     const relativePath = path.relative(resolvedBasePath, repoPath);
     if (
-      relativePath.startsWith('..') ||
+      relativePath.startsWith("..") ||
       path.isAbsolute(relativePath) ||
       !repoPath.startsWith(resolvedBasePath + path.sep)
     ) {

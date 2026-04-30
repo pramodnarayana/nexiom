@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
@@ -48,7 +49,9 @@ export class GitopsWebhookGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Strategy 1: GitHub X-Hub-Signature-256 (HMAC SHA256 of raw body)
-    const githubSig = request.headers['x-hub-signature-256'] as string | undefined;
+    const githubSig = request.headers['x-hub-signature-256'] as
+      | string
+      | undefined;
     if (githubSig) {
       return this.validateGitHubSignature(request, githubSig);
     }
@@ -70,7 +73,10 @@ export class GitopsWebhookGuard implements CanActivate {
     );
   }
 
-  private validateGitHubSignature(request: Request, signature: string): boolean {
+  private validateGitHubSignature(
+    request: Request,
+    signature: string,
+  ): boolean {
     // Signature format: "sha256=<hex_digest>"
     if (!signature.startsWith('sha256=')) {
       throw new UnauthorizedException('Invalid X-Hub-Signature-256 format');
@@ -79,7 +85,7 @@ export class GitopsWebhookGuard implements CanActivate {
     const providedDigest = signature.slice(7);
 
     // Get raw request body (must be available via express.raw() middleware)
-    const rawBody = (request as any).rawBody as Buffer | undefined;
+    const rawBody = (request as RawBodyRequest<Request>).rawBody;
     if (!rawBody) {
       throw new UnauthorizedException(
         'Raw request body not available for HMAC verification',
@@ -107,7 +113,9 @@ export class GitopsWebhookGuard implements CanActivate {
       return true;
     } catch (err) {
       if (err instanceof UnauthorizedException) throw err;
-      throw new UnauthorizedException('Invalid GitHub webhook signature format');
+      throw new UnauthorizedException(
+        'Invalid GitHub webhook signature format',
+      );
     }
   }
 
@@ -115,7 +123,9 @@ export class GitopsWebhookGuard implements CanActivate {
     // Validate token is non-empty and non-whitespace
     const trimmedToken = token.trim();
     if (trimmedToken.length === 0) {
-      throw new UnauthorizedException('X-Gitlab-Token cannot be empty or whitespace');
+      throw new UnauthorizedException(
+        'X-Gitlab-Token cannot be empty or whitespace',
+      );
     }
 
     // GitLab uses exact match - constant-time comparison
@@ -135,7 +145,9 @@ export class GitopsWebhookGuard implements CanActivate {
     // Validate token is non-empty and non-whitespace
     const trimmedToken = token.trim();
     if (trimmedToken.length === 0) {
-      throw new UnauthorizedException('Bearer token cannot be empty or whitespace');
+      throw new UnauthorizedException(
+        'Bearer token cannot be empty or whitespace',
+      );
     }
 
     const tokenDigest = createHash('sha256').update(token).digest();

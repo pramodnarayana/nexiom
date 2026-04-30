@@ -690,7 +690,8 @@ export class DatabaseManager {
     try {
       const db = drizzle(client, { schema });
       const { Pool } = await import("pg");
-      const { ApplicationLoaderService, PipelineHookBrokerService } = await import("@nexiom/engine");
+      const { ApplicationLoaderService, PipelineHookBrokerService } =
+        await import("@nexiom/engine");
 
       // Instantiate the loader directly — this is a CLI script, not in NestJS DI.
       // The loader reads from SHARD_APPLICATION_PATH and caches dynamically imported modules.
@@ -709,7 +710,9 @@ export class DatabaseManager {
           } catch (provisionErr) {
             console.error(
               `domainProvisionerResolver: broker.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
-              provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
+              provisionErr instanceof Error
+                ? provisionErr.message
+                : String(provisionErr),
             );
             throw provisionErr;
           }

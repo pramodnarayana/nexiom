@@ -60,11 +60,16 @@ describe("NormalizationService", () => {
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          limit: vi
-            .fn()
-            .mockResolvedValue([
-              { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
-            ]),
+          limit: vi.fn().mockResolvedValue([
+            {
+              traceId: "123",
+              data: {},
+              canonicalType: "RAW",
+              id: "1",
+              entityType: "test_entity",
+              entityId: "test_entity_id",
+            },
+          ]),
           insert: mockTxInsert,
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
@@ -140,6 +145,7 @@ describe("NormalizationService", () => {
     expect(db.transaction).toHaveBeenCalled();
     expect(mockTxInsert).toHaveBeenCalled();
     // Assert that broker.normalize was called
+    console.log("SPY CALLS:", JSON.stringify(mockBroker.normalize.mock.calls));
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
       "default",
@@ -200,11 +206,16 @@ describe("NormalizationService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi
-          .fn()
-          .mockResolvedValue([
-            { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
-          ]),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            data: {},
+            canonicalType: "RAW",
+            id: "1",
+            entityType: "test_entity",
+            entityId: "test_entity_id",
+          },
+        ]),
         // Returns row from .returning() on onConflictDoUpdate
         insert: vi.fn().mockReturnValue({
           values: vi.fn().mockReturnValue({
@@ -334,6 +345,7 @@ describe("NormalizationService", () => {
     await handler({ traceId: "123", connectionId: "456" });
 
     // Assert broker.normalize was called
+    console.log("SPY CALLS:", JSON.stringify(mockBroker.normalize.mock.calls));
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
       "default",
