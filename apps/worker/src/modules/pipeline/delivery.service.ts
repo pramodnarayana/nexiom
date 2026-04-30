@@ -308,6 +308,122 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
+      // ── Check if delivery already failed AND source-side finalized ─────
+      if (currentStatus === "FAIL") {
+        // Verify source-side finalization completed by checking sync_log
+        sourceFinalized = await this.isSourceFinalized(
+          srcSchemaName,
+          traceId,
+          routeId,
+        );
+        if (sourceFinalized) {
+          this.logger.debug(
+            { event: "l5.skip_fail", traceId, routeId, layer: "L5" },
+            "Delivery already failed and source finalized, skipping duplicate processing",
+          );
+          return; // Safely acknowledge duplicate message
+        } else {
+          this.logger.warn(
+            {
+              event: "l5.partial_fail",
+              traceId,
+              routeId,
+              layer: "L5",
+            },
+            "Delivery failed but source-side incomplete — retrying finalization only",
+          );
+          // Fetch existing result from outbound_gateway and retry source finalization
+          const existingResult = await this.db.transaction(async (tx) => {
+            assertValidSchemaName(destSchemaName);
+            await tx.execute(
+              sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+            );
+            return await tx
+              .select({
+                resPayload: outboundGateway.resPayload,
+                statusCode: outboundGateway.statusCode,
+              })
+              .from(outboundGateway)
+              .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
+              .limit(1);
+          });
+
+          if (existingResult.length === 0) {
+            throw new Error("Outbound gateway result not found for retry");
+          }
+
+          // Need to fetch target metadata for GEM
+          const connRows = await this.db
+            .select({
+              appName: appConnections.appName,
+              tenantId: appConnections.tenantId,
+            })
+            .from(appConnections)
+            .where(eq(appConnections.id, targetConnectionId))
+            .limit(1);
+
+          const targetAppName = connRows[0]?.appName;
+          const targetTenantId = connRows[0]?.tenantId;
+
+          const stitchDocs = await this.db
+            .select()
+            .from(integrationStitches)
+            .where(sql`id = ${routeId}`)
+            .limit(1);
+          const targetObject = stitchDocs[0]?.targetObject ?? "";
+
+          // Extract destVendorId from existing result
+          const resPayload = existingResult[0].resPayload as Record<
+            string,
+            unknown
+          > | null;
+          // Extract entityId from resPayload
+          const destVendorId =
+            typeof resPayload?.["entityId"] === "string"
+              ? resPayload["entityId"]
+              : undefined;
+
+          sourceFinalized = await this.writeL6Result(
+            destSchemaName,
+            srcSchemaName,
+            outboundGatewayId,
+            connectionId,
+            traceId,
+            routeId,
+            resPayload,
+            existingResult[0].statusCode ?? 500,
+            "FAIL",
+            start,
+            destVendorId,
+            canonicalType,
+            srcAppName,
+            srcTenantId,
+            srcVendorId,
+            targetConnectionId,
+            targetAppName,
+            targetTenantId,
+            targetObject,
+          );
+
+          if (!sourceFinalized) {
+            throw new Error(
+              "Source-side finalization retry failed. Deferring to SQS for retry.",
+            );
+          }
+
+          this.logger.log(
+            {
+              event: "l6.finalization_retry_success",
+              traceId,
+              routeId,
+              layer: "L6",
+            },
+            "Source-side finalization retry succeeded",
+          );
+          return; // Exit successfully
+        }
+      }
+
       if (!this.tokenManagerService) {
         throw new Error(
           `TokenManagerService unavailable — cannot resolve credentials for connection ${targetConnectionId} (traceId=${traceId})`,
