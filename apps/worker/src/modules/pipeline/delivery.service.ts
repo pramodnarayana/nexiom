@@ -467,7 +467,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       );
 
       this.logger.log(
-        { event: `l6.completed`, traceId, routeId, finalStatus, sourceFinalized, layer: "L6" },
+        {
+          event: `l6.completed`,
+          traceId,
+          routeId,
+          finalStatus,
+          sourceFinalized,
+          layer: "L6",
+        },
         "L6 delivery completed",
       );
 
@@ -560,7 +567,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     srcAppName: string,
     srcTenantId: string,
     srcVendorId: string | undefined,
-    start: any,
+    start: number,
   ): Promise<boolean> {
     const { outboundGateway } = buildTenantSchema(destSchemaName);
 

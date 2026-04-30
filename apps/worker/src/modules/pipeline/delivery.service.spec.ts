@@ -419,4 +419,295 @@ describe("DeliveryService", () => {
       "TokenManagerService unavailable",
     );
   });
+  describe("Idempotency Bouncer Logic", () => {
+    it("should skip processing if currentStatus is SUCCESS and source is finalized", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+      expect(pieceRegistry.getPiece).not.toHaveBeenCalled();
+    });
+
+    it("should retry finalization if currentStatus is SUCCESS but source NOT finalized (Partial Success)", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        true,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+      expect((service as any).retrySourceFinalization).toHaveBeenCalledWith(
+        "ws_1",
+        "ws_1",
+        "o",
+        "123",
+        "r",
+        "456",
+        "tgt",
+        "SUCCESS",
+        200,
+        "RAW",
+        "unknown",
+        "unknown",
+        undefined,
+        expect.any(Number),
+      );
+    });
+
+    it("should throw error if Partial Success finalization retry fails", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        false,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).rejects.toThrow(
+        "Source-side finalization retry failed. Deferring to SQS for retry.",
+      );
+    });
+
+    it("should skip processing if currentStatus is FAIL and source is finalized", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+    });
+
+    it("should retry finalization if currentStatus is FAIL but source NOT finalized (Partial Fail)", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        true,
+      );
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+    });
+
+    it("should throw error if Partial Fail finalization retry fails", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        false,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).rejects.toThrow(
+        "Source-side finalization retry failed. Deferring to SQS for retry.",
+      );
+    });
+  });
+
+  describe("writeL6Result", () => {
+    it("should successfully write L6 result", async () => {
+      const mockTx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+      };
+      db.transaction.mockImplementation(async (cb: any) => cb(mockTx));
+      const res = await (service as any).writeL6Result(
+        "ws_schema",
+        "ws_schema",
+        "o",
+        "conn",
+        "trace",
+        "route",
+        null,
+        500,
+        "SUCCESS",
+        Date.now(),
+        undefined,
+        "RAW",
+        "app",
+        "org",
+        undefined,
+        "tgt",
+      );
+      expect(res).toBe(true);
+    });
+    it("should return false on writeL6Result failure", async () => {
+      const mockTx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+      };
+      // first transaction succeeds, second fails
+      db.transaction.mockImplementationOnce(async (cb: any) => cb(mockTx));
+      db.transaction.mockRejectedValueOnce(new Error("db failure"));
+      const res = await (service as any).writeL6Result(
+        "ws_schema",
+        "ws_schema",
+        "o",
+        "conn",
+        "trace",
+        "route",
+        null,
+        500,
+        "SUCCESS",
+        Date.now(),
+        undefined,
+        "RAW",
+        "app",
+        "org",
+        undefined,
+        "tgt",
+      );
+      expect(res).toBe(false);
+    });
+  });
+
+  describe("isSourceFinalized", () => {
+    it("should return true if L6 sync log exists", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([{ id: 1 }]),
+        }),
+      );
+
+      const res = await (service as any).isSourceFinalized(
+        "ws_schema",
+        "trace",
+        "route",
+      );
+      expect(res).toBe(true);
+    });
+    it("should return false if L6 sync log does not exist", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
+
+      const res = await (service as any).isSourceFinalized(
+        "ws_schema",
+        "trace",
+        "route",
+      );
+      expect(res).toBe(false);
+    });
+  });
 });
