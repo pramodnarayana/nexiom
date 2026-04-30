@@ -164,7 +164,21 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           entityType: replica.entityType,
           data: replica.data as Record<string, unknown>,
         })
-        .catch(() => null); // shard may not exist yet — fall through to piece.normalize
+        .catch((err) => {
+          // Log the error for operational visibility, then fall through to piece.normalize
+          this.logger.warn(
+            {
+              event: 'l3.shard_normalize_failed',
+              connectionAppName,
+              appProfile,
+              entityType: replica.entityType,
+              err: err instanceof Error ? err.message : String(err),
+              stack: err instanceof Error ? err.stack : undefined,
+            },
+            'Shard normalize failed — falling back to piece.normalize',
+          );
+          return null;
+        }); // shard may not exist yet — fall through to piece.normalize
 
       if (normalizedFromShard) {
         canonicalType = normalizedFromShard.canonicalType;

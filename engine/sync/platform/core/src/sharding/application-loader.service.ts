@@ -49,20 +49,39 @@ export class ApplicationLoaderService {
     const resolvedBase = path.resolve(this.SHARD_BASE_PATH);
     const shardPath = path.resolve(resolvedBase, shardName, 'index.js');
 
-    // Path traversal guard: ensure the shard path stays within SHARD_BASE_PATH
-    if (!shardPath.startsWith(resolvedBase + path.sep)) {
+    // Canonicalize paths to prevent symlink-based traversal attacks
+    let baseReal: string;
+    let shardReal: string;
+    try {
+      baseReal = await fs.realpath(resolvedBase);
+    } catch {
       throw new Error(
-        `Security violation: shard path escapes trusted boundary — shardName="${shardName}"`,
+        `SHARD_BASE_PATH does not exist or is not accessible: ${resolvedBase}`,
       );
     }
 
-    // Verify the file exists before attempting import
+    // Verify the file exists before attempting canonicalization
     try {
       await fs.access(shardPath, fsConstants.F_OK);
     } catch {
       throw new Error(
         `Application shard not found at ${shardPath}. ` +
           `Ensure the shard has been synced via GitOps before the pipeline processes events.`,
+      );
+    }
+
+    try {
+      shardReal = await fs.realpath(shardPath);
+    } catch {
+      throw new Error(
+        `Failed to canonicalize shard path: ${shardPath}`,
+      );
+    }
+
+    // Path traversal guard: ensure the canonical shard path stays within canonical base
+    if (shardReal !== baseReal && !shardReal.startsWith(baseReal + path.sep)) {
+      throw new Error(
+        `Security violation: shard path escapes trusted boundary — shardName="${shardName}"`,
       );
     }
 
@@ -74,6 +93,24 @@ export class ApplicationLoaderService {
     const mod = (await import(
       `${shardPath}?v=${Date.now()}`
     )) as ApplicationShardModule;
+
+    // Validate exported shape to ensure required functions are present
+    const requiredExports = ['extractReplica', 'normalize', 'writeNormalized', 'buildTarget', 'provisionDomain'];
+    const missingExports: string[] = [];
+
+    for (const exportName of requiredExports) {
+      if (typeof mod[exportName as keyof ApplicationShardModule] !== 'function') {
+        missingExports.push(exportName);
+      }
+    }
+
+    if (missingExports.length > 0) {
+      throw new Error(
+        `Invalid shard module at ${shardPath} (shardName="${shardName}"): ` +
+          `missing or invalid exports: ${missingExports.join(', ')}. ` +
+          `All application shards must export: ${requiredExports.join(', ')}.`,
+      );
+    }
 
     this.cache.set(shardName, mod);
     this.logger.log(`Application shard loaded and cached: ${shardName}`);

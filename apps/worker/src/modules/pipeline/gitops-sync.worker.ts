@@ -91,7 +91,24 @@ export class GitopsSyncWorker implements OnModuleInit {
    * when a webhook is received from GitHub/GitLab.
    */
   async syncShard(shardName: string): Promise<void> {
-    const repoPath = path.join(this.SHARD_BASE_PATH, shardName);
+    // Normalize and validate shardName to prevent path traversal
+    const resolvedBasePath = path.resolve(this.SHARD_BASE_PATH);
+    const repoPath = path.resolve(this.SHARD_BASE_PATH, shardName);
+
+    // Ensure repoPath is contained within SHARD_BASE_PATH
+    const relativePath = path.relative(resolvedBasePath, repoPath);
+    if (
+      relativePath.startsWith('..') ||
+      path.isAbsolute(relativePath) ||
+      !repoPath.startsWith(resolvedBasePath + path.sep)
+    ) {
+      this.logger.warn(
+        `Path traversal attempt detected: shardName="${shardName}" escapes SHARD_BASE_PATH. Rejecting sync.`,
+      );
+      throw new Error(
+        `Security violation: shardName escapes trusted boundary — shardName="${shardName}"`,
+      );
+    }
 
     try {
       await fs.stat(path.join(repoPath, ".git"));

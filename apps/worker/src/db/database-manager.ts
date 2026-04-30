@@ -703,11 +703,27 @@ export class DatabaseManager {
           tenantDb: import("@nexiom/database").DrizzleDb,
           schemaName: string,
         ) => {
-          const shard = await loaderInstance
-            .load(`${appName}-${appName}`)
-            .catch(() => null);
+          let shard;
+          try {
+            shard = await loaderInstance.load(`${appName}-${appName}`);
+          } catch (loadErr) {
+            console.error(
+              `domainProvisionerResolver: Failed to load shard ${appName}-${appName} for schema ${schemaName}:`,
+              loadErr instanceof Error ? loadErr.message : String(loadErr),
+            );
+            throw loadErr;
+          }
+
           if (shard?.provisionDomain) {
-            await shard.provisionDomain(tenantDb, schemaName);
+            try {
+              await shard.provisionDomain(tenantDb, schemaName);
+            } catch (provisionErr) {
+              console.error(
+                `domainProvisionerResolver: shard.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
+                provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
+              );
+              throw provisionErr;
+            }
           }
         };
       };

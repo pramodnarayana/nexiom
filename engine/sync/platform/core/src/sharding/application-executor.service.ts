@@ -88,9 +88,17 @@ export class ApplicationExecutorService {
       // 2. Initialize QuickJS WebAssembly Sandbox
       const QuickJS = await getQuickJS();
       const vm = QuickJS.newContext();
-      
+
       // Hard memory limit: 128MB per execution
       vm.runtime.setMemoryLimit(128 * 1024 * 1024);
+
+      // Set interrupt handler with deadline (30 second timeout)
+      const TIMEOUT_MS = 30_000;
+      const deadline = Date.now() + TIMEOUT_MS;
+      const shouldInterruptAfterDeadline = () => {
+        return Date.now() > deadline;
+      };
+      vm.runtime.setInterruptHandler(shouldInterruptAfterDeadline);
 
       try {
         // 3. Pass data securely across the boundary
@@ -103,11 +111,11 @@ export class ApplicationExecutorService {
         vm.setProp(vm.global, 'funcName', funcNameHandle);
         funcNameHandle.dispose();
 
-        // 4. Compile execution wrapper
+        // 4. Compile execution wrapper that produces a guest Promise
         const scriptCode = `
           var __sandbox_result = null;
           var __sandbox_error = null;
-          (async () => {
+          var __sandbox_promise = (async () => {
             try {
               ${code}
               const fn = CustomLogic[funcName];
@@ -120,7 +128,7 @@ export class ApplicationExecutorService {
           })();
         `;
 
-        // 5. Execute Code and flush the Promise Microtask Queue
+        // 5. Execute Code
         const evalResult = vm.evalCode(scriptCode);
         if (evalResult.error) {
           const errDump = vm.dump(evalResult.error);
@@ -128,8 +136,19 @@ export class ApplicationExecutorService {
           throw new Error(errDump.message || "Unknown Sandbox Evaluation Error");
         }
         evalResult.value.dispose();
-        
+
+        // Check if deadline has elapsed before executing pending jobs
+        if (Date.now() > deadline) {
+          throw new Error(`Execution timeout: exceeded ${TIMEOUT_MS}ms deadline before async completion`);
+        }
+
+        // Flush the Promise Microtask Queue
         vm.runtime.executePendingJobs();
+
+        // Check again after job execution
+        if (Date.now() > deadline) {
+          throw new Error(`Execution timeout: exceeded ${TIMEOUT_MS}ms deadline during async execution`);
+        }
 
         // Extract result or error from the global context
         const errorHandle = vm.getProp(vm.global, '__sandbox_error');
@@ -145,7 +164,17 @@ export class ApplicationExecutorService {
         const resultStr = vm.getString(resultHandle);
         resultHandle.dispose();
 
-        return JSON.parse(resultStr);
+        // Parse and validate return type
+        const parsed = JSON.parse(resultStr);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          throw new Error(
+            `Invalid shard mapping return: expected Record<string, unknown>, got ${
+              parsed === null ? 'null' : Array.isArray(parsed) ? 'array' : typeof parsed
+            }`
+          );
+        }
+
+        return parsed as Record<string, unknown>;
       } finally {
         vm.dispose();
       }

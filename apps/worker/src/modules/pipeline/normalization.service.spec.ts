@@ -111,10 +111,37 @@ describe("NormalizationService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
 
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        NormalizationService,
+        { provide: QueueService, useValue: queueService },
+        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: StorageResolverService, useValue: storageResolver },
+        { provide: PieceRegistryService, useValue: pieceRegistry },
+        {
+          provide: PipelineHookBrokerService,
+          useValue: {
+            normalize: vi.fn().mockResolvedValue(null),
+            writeNormalized: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      ],
+    }).compile();
+    const mockBroker = module.get(PipelineHookBrokerService);
+
     await handler({ traceId: "123", connectionId: "456" });
 
     expect(db.transaction).toHaveBeenCalled();
     expect(mockTxInsert).toHaveBeenCalled();
+    // Assert that broker.normalize was called
+    expect(mockBroker.normalize).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.objectContaining({
+        entityType: expect.any(String),
+        data: expect.any(Object),
+      }),
+    );
   });
 
   it("should handle errors gracefully", async () => {
@@ -272,5 +299,59 @@ describe("NormalizationService", () => {
     ).rejects.toThrow("normalize failed");
     // Error-handler transaction attempted (for FAIL sync_log)
     expect(db.transaction).toHaveBeenCalled();
+  });
+
+  it("should call broker.writeNormalized when broker.normalize returns non-null", async () => {
+    const mockBroker = {
+      normalize: vi.fn().mockResolvedValue({
+        canonicalType: "BROKER_TYPE",
+        data: { brokered: true },
+      }),
+      writeNormalized: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        NormalizationService,
+        { provide: QueueService, useValue: queueService },
+        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: StorageResolverService, useValue: storageResolver },
+        { provide: PieceRegistryService, useValue: pieceRegistry },
+        { provide: PipelineHookBrokerService, useValue: mockBroker },
+      ],
+    }).compile();
+
+    const svc = module.get<NormalizationService>(NormalizationService);
+    svc.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await handler({ traceId: "123", connectionId: "456" });
+
+    // Assert broker.normalize was called
+    expect(mockBroker.normalize).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.objectContaining({
+        entityType: expect.any(String),
+        data: expect.any(Object),
+      }),
+    );
+
+    // Assert broker.writeNormalized was called
+    expect(mockBroker.writeNormalized).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.anything(), // tx
+      expect.anything(), // db
+      "ws_1", // schemaName
+      "1", // replicaId
+      expect.any(String), // entityId
+      "123", // traceId
+      "BROKER_TYPE", // normalizedEntityType
+      expect.objectContaining({ brokered: true }), // data
+    );
+
+    // Piece.normalize should NOT have been called (broker took precedence)
+    expect(pieceRegistry.getPiece().normalize).not.toHaveBeenCalled();
   });
 });

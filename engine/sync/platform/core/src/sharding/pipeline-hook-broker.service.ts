@@ -135,12 +135,43 @@ export class PipelineHookBrokerService {
     body: unknown,
     headers: Record<string, string>,
   ): Promise<ReturnType<NonNullable<ApplicationShardModule['getWebhookResponse']>> | null> {
+    let shard: ApplicationShardModule;
     try {
-      const shard = await this.loader.load(this.shardName(appName, appProfile));
-      return shard.getWebhookResponse?.(body, headers) ?? null;
-    } catch {
-      // Shard may not exist for this app — webhook response is always optional
+      shard = await this.loader.load(this.shardName(appName, appProfile));
+    } catch (loadErr) {
+      // Inspect error to determine if it's a "not found" case
+      const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      if (errMsg.includes('not found') || errMsg.includes('ENOENT')) {
+        // Shard does not exist — return null (webhook response is optional)
+        return null;
+      }
+      // Loader error is NOT a "missing shard" — log and rethrow
+      this.logger.error(
+        { event: 'hook.getWebhookResponse.loader_error', appName, appProfile, err: errMsg },
+        'Failed to load shard for getWebhookResponse',
+      );
+      throw loadErr;
+    }
+
+    // Shard loaded successfully — invoke getWebhookResponse if it exists
+    if (!shard.getWebhookResponse) {
       return null;
+    }
+
+    try {
+      return await shard.getWebhookResponse(body, headers);
+    } catch (hookErr) {
+      // Runtime error in the shard's getWebhookResponse — log and rethrow
+      this.logger.error(
+        {
+          event: 'hook.getWebhookResponse.runtime_error',
+          appName,
+          appProfile,
+          err: hookErr instanceof Error ? hookErr.message : String(hookErr),
+        },
+        'Shard getWebhookResponse threw an error',
+      );
+      throw hookErr;
     }
   }
 }
