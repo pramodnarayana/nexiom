@@ -690,11 +690,12 @@ export class DatabaseManager {
     try {
       const db = drizzle(client, { schema });
       const { Pool } = await import("pg");
-      const { ApplicationLoaderService } = await import("@nexiom/engine");
+      const { ApplicationLoaderService, PipelineHookBrokerService } = await import("@nexiom/engine");
 
       // Instantiate the loader directly — this is a CLI script, not in NestJS DI.
       // The loader reads from SHARD_APPLICATION_PATH and caches dynamically imported modules.
       const loaderInstance = new ApplicationLoaderService();
+      const broker = new PipelineHookBrokerService(loaderInstance);
 
       // Build a domainProvisionerResolver function that matches the TenantDatabaseManager interface:
       //   (appName: string) => ((db, schemaName) => Promise<void>) | undefined
@@ -703,27 +704,14 @@ export class DatabaseManager {
           tenantDb: import("@nexiom/database").DrizzleDb,
           schemaName: string,
         ) => {
-          let shard;
           try {
-            shard = await loaderInstance.load(`${appName}-${appName}`);
-          } catch (loadErr) {
+            await broker.provisionDomain(appName, tenantDb, schemaName);
+          } catch (provisionErr) {
             console.error(
-              `domainProvisionerResolver: Failed to load shard ${appName}-${appName} for schema ${schemaName}:`,
-              loadErr instanceof Error ? loadErr.message : String(loadErr),
+              `domainProvisionerResolver: broker.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
+              provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
             );
-            throw loadErr;
-          }
-
-          if (shard?.provisionDomain) {
-            try {
-              await shard.provisionDomain(tenantDb, schemaName);
-            } catch (provisionErr) {
-              console.error(
-                `domainProvisionerResolver: shard.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
-                provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
-              );
-              throw provisionErr;
-            }
+            throw provisionErr;
           }
         };
       };

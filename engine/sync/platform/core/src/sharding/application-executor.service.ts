@@ -49,20 +49,41 @@ export class ApplicationExecutorService {
     transformFunctionName: string,
     payload: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    // Use path.resolve to get absolute paths for reliable comparison across platforms
-    const resolvedBasePath = path.resolve(this.SHARD_BASE_PATH);
-    const modulePath = path.resolve(this.SHARD_BASE_PATH, shardName, 'index.js');
+    // Resolve real filesystem paths to prevent symlink traversal attacks
+    let resolvedBasePath: string;
+    let realModulePath: string;
 
-    // Verify the resolved module path is within the base path to prevent path traversal
-    if (!modulePath.startsWith(resolvedBasePath + path.sep) && modulePath !== resolvedBasePath) {
-      throw new InternalServerErrorException(`Security Violation: Module path escapes trusted boundary.`);
+    try {
+      resolvedBasePath = await fs.realpath(this.SHARD_BASE_PATH);
+    } catch (err) {
+      this.logger.error(
+        `Failed to resolve SHARD_BASE_PATH: ${this.SHARD_BASE_PATH}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      throw new InternalServerErrorException(`Internal server error`);
     }
 
-    // Use async filesystem check instead of blocking existsSync
+    const modulePath = path.resolve(this.SHARD_BASE_PATH, shardName, 'index.js');
+
+    // Use async filesystem check and resolve real path
     try {
       await fs.access(modulePath, fsConstants.F_OK);
-    } catch {
-      throw new InternalServerErrorException(`Cannot find synced shard module at ${modulePath}`);
+      realModulePath = await fs.realpath(modulePath);
+    } catch (err) {
+      this.logger.error(
+        `Cannot find or resolve shard module: ${modulePath}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      throw new InternalServerErrorException(`Failed to load shard module`);
+    }
+
+    // Verify the real module path is within the real base path to prevent path traversal
+    if (!realModulePath.startsWith(resolvedBasePath + path.sep) && realModulePath !== resolvedBasePath) {
+      this.logger.error(
+        `Security violation: realModulePath escapes trusted boundary. ` +
+        `realModulePath="${realModulePath}", resolvedBasePath="${resolvedBasePath}"`,
+      );
+      throw new InternalServerErrorException(`Internal server error`);
     }
 
     try {
@@ -179,8 +200,11 @@ export class ApplicationExecutorService {
         vm.dispose();
       }
     } catch (error) {
-      this.logger.error(`Failed to execute custom logic in shard ${shardName}`, error);
-      throw new InternalServerErrorException(`Custom mapping execution failed for shard ${shardName}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to execute custom logic in shard ${shardName} at modulePath ${modulePath}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(`Failed to load shard module`);
     }
   }
 }

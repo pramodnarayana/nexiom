@@ -256,7 +256,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
                 connectionAppName,
                 appProfile,
                 sp,
-                this.db,
+                sp,
                 schemaName,
                 replica.id,
                 replica.entityId,

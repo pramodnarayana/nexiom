@@ -40,8 +40,8 @@ export class GitopsWebhookGuard implements CanActivate {
       );
     }
 
-    this.secret = secret;
-    this.expectedDigest = createHash('sha256').update(secret).digest();
+    this.secret = trimmedSecret;
+    this.expectedDigest = createHash('sha256').update(trimmedSecret).digest();
   }
 
   canActivate(context: ExecutionContext): boolean {

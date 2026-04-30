@@ -34,7 +34,19 @@ export class GitopsSyncWorker implements OnModuleInit {
       this.logger.log(
         "GitOps webhook event received — triggering immediate sync",
       );
-      await this.syncShardRepositories();
+
+      // Check reentrancy guard before processing
+      if (this.isSyncRunning) {
+        this.logger.warn("Skipping GitOps sync — previous run still in progress");
+        throw new Error("GitOps sync already in progress — message will be retried");
+      }
+
+      try {
+        await this.syncShardRepositories();
+      } catch (error) {
+        this.logger.error("GitOps sync failed via queue message", error);
+        throw error;
+      }
     });
   }
 
@@ -72,6 +84,8 @@ export class GitopsSyncWorker implements OnModuleInit {
 
       if (shardDirs.length === 0) {
         this.logger.debug("No active shard directories found for gitops sync.");
+        // When called from cron, we just return (this is not an error condition)
+        // When called from queue, this will propagate up without throwing
         return;
       }
 

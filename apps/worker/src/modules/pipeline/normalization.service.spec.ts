@@ -68,6 +68,10 @@ describe("NormalizationService", () => {
           insert: mockTxInsert,
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
+          // Add transaction method to support nested transactions (savepoints)
+          transaction: vi.fn().mockImplementation(async (spCb) => {
+            return spCb(tx);
+          }),
         };
         return cb(tx);
       }),
@@ -104,13 +108,13 @@ describe("NormalizationService", () => {
   });
 
   it("should process message normally", async () => {
-    service.onModuleInit();
-    expect(queueService.consume).toHaveBeenCalledWith(
-      QueueName.ReplicaQueue,
-      expect.any(Function),
-    );
-    const handler = queueService.consume.mock.calls[0][1];
+    // Create a spy for the broker that was injected into the service
+    const mockBroker = {
+      normalize: vi.fn().mockResolvedValue(null),
+      writeNormalized: vi.fn().mockResolvedValue(undefined),
+    };
 
+    // Create a new module with the spy broker
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NormalizationService,
@@ -118,16 +122,18 @@ describe("NormalizationService", () => {
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: PieceRegistryService, useValue: pieceRegistry },
-        {
-          provide: PipelineHookBrokerService,
-          useValue: {
-            normalize: vi.fn().mockResolvedValue(null),
-            writeNormalized: vi.fn().mockResolvedValue(undefined),
-          },
-        },
+        { provide: PipelineHookBrokerService, useValue: mockBroker },
       ],
     }).compile();
-    const mockBroker = module.get(PipelineHookBrokerService);
+
+    const testService = module.get<NormalizationService>(NormalizationService);
+    testService.onModuleInit();
+
+    expect(queueService.consume).toHaveBeenCalledWith(
+      QueueName.ReplicaQueue,
+      expect.any(Function),
+    );
+    const handler = queueService.consume.mock.calls[0][1];
 
     await handler({ traceId: "123", connectionId: "456" });
 
