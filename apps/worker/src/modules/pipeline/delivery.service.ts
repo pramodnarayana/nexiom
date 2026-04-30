@@ -216,77 +216,22 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             },
             "Delivery succeeded but source-side incomplete — retrying finalization only",
           );
-          // Fetch existing result from outbound_gateway and retry source finalization
-          const existingResult = await this.db.transaction(async (tx) => {
-            assertValidSchemaName(destSchemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
-            );
-            return await tx
-              .select({
-                resPayload: outboundGateway.resPayload,
-                statusCode: outboundGateway.statusCode,
-              })
-              .from(outboundGateway)
-              .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
-              .limit(1);
-          });
 
-          if (existingResult.length === 0) {
-            throw new Error("Outbound gateway result not found for retry");
-          }
-
-          // Need to fetch target metadata for GEM
-          const connRows = await this.db
-            .select({
-              appName: appConnections.appName,
-              tenantId: appConnections.tenantId,
-            })
-            .from(appConnections)
-            .where(eq(appConnections.id, targetConnectionId))
-            .limit(1);
-
-          const targetAppName = connRows[0]?.appName;
-          const targetTenantId = connRows[0]?.tenantId;
-
-          const stitchDocs = await this.db
-            .select()
-            .from(integrationStitches)
-            .where(sql`id = ${routeId}`)
-            .limit(1);
-          const targetObject = stitchDocs[0]?.targetObject ?? "";
-
-          // Extract destVendorId from existing result
-          const resPayload = existingResult[0].resPayload as Record<
-            string,
-            unknown
-          > | null;
-          // Extract entityId from resPayload
-          const destVendorId =
-            typeof resPayload?.["entityId"] === "string"
-              ? resPayload["entityId"]
-              : undefined;
-
-          sourceFinalized = await this.writeL6Result(
+          sourceFinalized = await this.retrySourceFinalization(
             destSchemaName,
             srcSchemaName,
             outboundGatewayId,
-            connectionId,
             traceId,
             routeId,
-            resPayload,
-            existingResult[0].statusCode ?? 200,
+            connectionId,
+            targetConnectionId,
             "SUCCESS",
-            start,
-            destVendorId,
+            200,
             canonicalType,
             srcAppName,
             srcTenantId,
             srcVendorId,
-            targetConnectionId,
-            targetAppName,
-            targetTenantId,
-            targetObject,
+            start,
           );
 
           if (!sourceFinalized) {
@@ -332,77 +277,22 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             },
             "Delivery failed but source-side incomplete — retrying finalization only",
           );
-          // Fetch existing result from outbound_gateway and retry source finalization
-          const existingResult = await this.db.transaction(async (tx) => {
-            assertValidSchemaName(destSchemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
-            );
-            return await tx
-              .select({
-                resPayload: outboundGateway.resPayload,
-                statusCode: outboundGateway.statusCode,
-              })
-              .from(outboundGateway)
-              .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
-              .limit(1);
-          });
 
-          if (existingResult.length === 0) {
-            throw new Error("Outbound gateway result not found for retry");
-          }
-
-          // Need to fetch target metadata for GEM
-          const connRows = await this.db
-            .select({
-              appName: appConnections.appName,
-              tenantId: appConnections.tenantId,
-            })
-            .from(appConnections)
-            .where(eq(appConnections.id, targetConnectionId))
-            .limit(1);
-
-          const targetAppName = connRows[0]?.appName;
-          const targetTenantId = connRows[0]?.tenantId;
-
-          const stitchDocs = await this.db
-            .select()
-            .from(integrationStitches)
-            .where(sql`id = ${routeId}`)
-            .limit(1);
-          const targetObject = stitchDocs[0]?.targetObject ?? "";
-
-          // Extract destVendorId from existing result
-          const resPayload = existingResult[0].resPayload as Record<
-            string,
-            unknown
-          > | null;
-          // Extract entityId from resPayload
-          const destVendorId =
-            typeof resPayload?.["entityId"] === "string"
-              ? resPayload["entityId"]
-              : undefined;
-
-          sourceFinalized = await this.writeL6Result(
+          sourceFinalized = await this.retrySourceFinalization(
             destSchemaName,
             srcSchemaName,
             outboundGatewayId,
-            connectionId,
             traceId,
             routeId,
-            resPayload,
-            existingResult[0].statusCode ?? 500,
+            connectionId,
+            targetConnectionId,
             "FAIL",
-            start,
-            destVendorId,
+            500,
             canonicalType,
             srcAppName,
             srcTenantId,
             srcVendorId,
-            targetConnectionId,
-            targetAppName,
-            targetTenantId,
-            targetObject,
+            start,
           );
 
           if (!sourceFinalized) {
@@ -650,6 +540,102 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       );
       return false;
     }
+  }
+
+  /**
+   * Retry source-side finalization for a delivery that already completed (SUCCESS or FAIL)
+   * but whose source-side write didn't finish.
+   */
+  private async retrySourceFinalization(
+    destSchemaName: string,
+    srcSchemaName: string,
+    outboundGatewayId: string,
+    traceId: string,
+    routeId: string,
+    connectionId: string,
+    targetConnectionId: string,
+    finalStatus: "SUCCESS" | "FAIL",
+    defaultStatusCode: number,
+    canonicalType: string,
+    srcAppName: string,
+    srcTenantId: string,
+    srcVendorId: string | undefined,
+    start: any,
+  ): Promise<boolean> {
+    const { outboundGateway } = buildTenantSchema(destSchemaName);
+
+    // Fetch existing result from outbound_gateway and retry source finalization
+    const existingResult = await this.db.transaction(async (tx) => {
+      assertValidSchemaName(destSchemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+      );
+      return await tx
+        .select({
+          resPayload: outboundGateway.resPayload,
+          statusCode: outboundGateway.statusCode,
+        })
+        .from(outboundGateway)
+        .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
+        .limit(1);
+    });
+
+    if (existingResult.length === 0) {
+      throw new Error("Outbound gateway result not found for retry");
+    }
+
+    // Need to fetch target metadata for GEM
+    const connRows = await this.db
+      .select({
+        appName: appConnections.appName,
+        tenantId: appConnections.tenantId,
+      })
+      .from(appConnections)
+      .where(eq(appConnections.id, targetConnectionId))
+      .limit(1);
+
+    const targetAppName = connRows[0]?.appName;
+    const targetTenantId = connRows[0]?.tenantId;
+
+    const stitchDocs = await this.db
+      .select()
+      .from(integrationStitches)
+      .where(sql`id = ${routeId}`)
+      .limit(1);
+    const targetObject = stitchDocs[0]?.targetObject ?? "";
+
+    // Extract destVendorId from existing result
+    const resPayload = existingResult[0].resPayload as Record<
+      string,
+      unknown
+    > | null;
+    // Extract entityId from resPayload
+    const destVendorId =
+      typeof resPayload?.["entityId"] === "string"
+        ? resPayload["entityId"]
+        : undefined;
+
+    return await this.writeL6Result(
+      destSchemaName,
+      srcSchemaName,
+      outboundGatewayId,
+      connectionId,
+      traceId,
+      routeId,
+      resPayload,
+      existingResult[0].statusCode ?? defaultStatusCode,
+      finalStatus,
+      start,
+      destVendorId,
+      canonicalType,
+      srcAppName,
+      srcTenantId,
+      srcVendorId,
+      targetConnectionId,
+      targetAppName,
+      targetTenantId,
+      targetObject,
+    );
   }
 
   private async writeL6Result(
