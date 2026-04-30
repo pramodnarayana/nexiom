@@ -1,10 +1,6 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
 import { Logger } from "@nestjs/common";
-// Side-effect imports — populate the in-memory extractor/normalizer registries
-// before any queue message is processed. Each application package calls
-// registerReplicaExtractor / registerNormalizer at module load time.
-import "@nexiom/application-revenova";
 
 async function bootstrap() {
   try {

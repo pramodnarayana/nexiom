@@ -1,5 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
+import { ApplicationLoaderService } from "@nexiom/engine";
+import { QueueService } from "@nexiom/queue";
 import * as fs from "node:fs/promises";
 import type { Dirent, Stats } from "node:fs";
 import { execFile } from "node:child_process";
@@ -29,12 +31,26 @@ vi.mock("node:child_process", () => ({
 
 describe("GitopsSyncWorker", () => {
   let service: GitopsSyncWorker;
+  let invalidateCacheSpy: ReturnType<typeof vi.fn>;
+  let queueConsumeSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    invalidateCacheSpy = vi.fn();
+    queueConsumeSpy = vi.fn();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [GitopsSyncWorker],
+      providers: [
+        GitopsSyncWorker,
+        {
+          provide: ApplicationLoaderService,
+          useValue: { invalidateCache: invalidateCacheSpy },
+        },
+        {
+          provide: QueueService,
+          useValue: { consume: queueConsumeSpy, send: vi.fn() },
+        },
+      ],
     }).compile();
 
     service = module.get<GitopsSyncWorker>(GitopsSyncWorker);
@@ -47,18 +63,21 @@ describe("GitopsSyncWorker", () => {
     expect(service).toBeDefined();
   });
 
+  it("should subscribe to GitopsQueue on init", () => {
+    service.onModuleInit();
+    expect(queueConsumeSpy).toHaveBeenCalledWith(
+      "gitops-queue",
+      expect.any(Function),
+    );
+  });
+
   it("should handle missing base directory gracefully", async () => {
-    // Simulate fs.readdir failing if path suddenly not accessible
     vi.mocked(fs.readdir).mockRejectedValueOnce(new Error("ENOENT"));
-
     await service.syncShardRepositories();
-
-    // Worker gracefully catches outer errors
     expect(fs.mkdir).toHaveBeenCalled();
   });
 
   it("should exit early if no valid shard directories found", async () => {
-    // Hidden directories or non-directories should be skipped
     vi.mocked(fs.readdir).mockResolvedValueOnce([
       { name: ".hidden", isDirectory: () => true } as unknown as Dirent<
         Buffer<ArrayBuffer>
@@ -87,8 +106,7 @@ describe("GitopsSyncWorker", () => {
     expect(execFile).toHaveBeenCalled();
   });
 
-  it("should correctly log if sync pulled new changes", async () => {
-    // Overriding mock to return pull content
+  it("should correctly invalidate cache when sync pulls new changes", async () => {
     vi.mocked(execFile).mockImplementationOnce(
       (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
         (cb as ExecFileCallback)(null, {
@@ -110,17 +128,29 @@ describe("GitopsSyncWorker", () => {
 
     await service.syncShardRepositories();
     expect(execFile).toHaveBeenCalled();
+
+    // Verify the module cache is invalidated so the new code is hot-reloaded
+    expect(invalidateCacheSpy).toHaveBeenCalledWith("update-shard");
   });
 
   it("should skip shards with invalid branch names", async () => {
-    // Override the environment branch strictly for this run
     const originalBranch = process.env.DEFAULT_BRANCH;
 
     try {
       process.env.DEFAULT_BRANCH = "invalid&&branch;name";
 
       const testModule: TestingModule = await Test.createTestingModule({
-        providers: [GitopsSyncWorker],
+        providers: [
+          GitopsSyncWorker,
+          {
+            provide: ApplicationLoaderService,
+            useValue: { invalidateCache: vi.fn() },
+          },
+          {
+            provide: QueueService,
+            useValue: { consume: vi.fn(), send: vi.fn() },
+          },
+        ],
       }).compile();
 
       const testService = testModule.get<GitopsSyncWorker>(GitopsSyncWorker);
@@ -139,7 +169,7 @@ describe("GitopsSyncWorker", () => {
       // Execution shouldn't happen due to validation failure
       expect(execFile).not.toHaveBeenCalled();
     } finally {
-      process.env.DEFAULT_BRANCH = originalBranch; // restore
+      process.env.DEFAULT_BRANCH = originalBranch;
     }
   });
 

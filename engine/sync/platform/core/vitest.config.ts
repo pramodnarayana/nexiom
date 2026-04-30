@@ -5,6 +5,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts'],
+    // Run in a single isolated fork — WebAssembly sandbox tests (e.g. memory-limit
+    // tests) can spike host RSS briefly. Using a dedicated fork prevents these tests
+    // from crashing shared Tinypool workers that other monorepo packages rely on.
+    pool: 'forks',
+    poolOptions: {
+      forks: { singleFork: true },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -13,3 +20,4 @@ export default defineConfig({
     },
   },
 });
+

@@ -51,12 +51,18 @@
 	},
 	"packageManager": "pnpm@10.27.0",
 	"engines": {
-		"node": "20.x"
+		"node": "20.18.1"
 	},
 	"pnpm": {
 		"overrides": {
 			"axios": "1.13.2",
 			"esbuild": "0.25.12"
-		}
+		},
+		"onlyBuiltDependencies": [
+			"@nestjs/core",
+			"@swc/core",
+			"esbuild",
+			"sharp"
+		]
 	}
 }

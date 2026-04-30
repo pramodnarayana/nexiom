@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { QueueModule } from "@nexiom/queue";
 import { DbModule } from "../../db/db.module.js";
 import { DbManagerModule } from "../dbmanager/dbmanager.module.js";
-import { StorageResolverModule } from "@nexiom/engine";
+import { StorageResolverModule, ApplicationLoaderModule } from "@nexiom/engine";
 import {
   TokenManagerService,
   AesEncryptionService,
@@ -29,8 +29,10 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
     DbModule,
     DbManagerModule,
     StorageResolverModule,
+    ApplicationLoaderModule,
     PiecesModule,
   ],
+
   providers: [
     ReplicaService,
     NormalizationService, // Extended with app canonical write hook (step 3.5)

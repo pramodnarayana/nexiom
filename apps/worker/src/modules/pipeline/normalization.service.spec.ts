@@ -3,7 +3,10 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NormalizationService } from "./normalization.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
+import {
+  StorageResolverService,
+  PipelineHookBrokerService,
+} from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -85,6 +88,15 @@ describe("NormalizationService", () => {
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: PieceRegistryService, useValue: pieceRegistry },
+        {
+          provide: PipelineHookBrokerService,
+          // Default: shard normalize returns null → falls through to piece.normalize
+          // and writeNormalized is a no-op (returns void).
+          useValue: {
+            normalize: vi.fn().mockResolvedValue(null),
+            writeNormalized: vi.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 

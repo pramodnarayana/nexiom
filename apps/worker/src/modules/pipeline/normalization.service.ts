@@ -14,14 +14,16 @@ import {
   appConnections,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
+import {
+  StorageResolverService,
+  PipelineHookBrokerService,
+} from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { sql } from "drizzle-orm";
 import {
   sanitizeError,
   isValidPipelineMessage,
 } from "../../shared/pipeline.utils.js";
-import { getNormalizer, getNormalizedWriter } from "@nexiom/piece-framework";
 
 @Injectable()
 export class NormalizationService implements OnModuleInit, OnModuleDestroy {
@@ -32,6 +34,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly pieceRegistry: PieceRegistryService,
+    private readonly hookBroker: PipelineHookBrokerService,
   ) {}
 
   onModuleInit() {
@@ -155,18 +158,17 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       let canonicalType = "RAW";
       let canonicalData = replica.data;
 
-      // ── Normalize via Registry or Piece ─────────────────────────────────
-      const customNormalizer = getNormalizer(connectionAppName, appProfile);
-
-      if (customNormalizer) {
-        const normalized = await customNormalizer({
+      // ── Normalize via HookBroker or Piece ────────────────────────────────
+      const normalizedFromShard = await this.hookBroker
+        .normalize(connectionAppName, appProfile, {
           entityType: replica.entityType,
           data: replica.data as Record<string, unknown>,
-        });
-        if (normalized) {
-          canonicalType = normalized.canonicalType;
-          canonicalData = normalized.data;
-        }
+        })
+        .catch(() => null); // shard may not exist yet — fall through to piece.normalize
+
+      if (normalizedFromShard) {
+        canonicalType = normalizedFromShard.canonicalType;
+        canonicalData = normalizedFromShard.data;
       } else if (piece.normalize) {
         const normalized = await piece.normalize(
           replica.entityType,
@@ -230,42 +232,38 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
         if (insertRes.length > 0) {
           // ── Step 3.5: Application canonical write hook ─────────────────────
-          // Call the app-registered writer to persist into typed per-entity
-          // tables (e.g., tms_carrier, tms_tp). The platform knows nothing
-          // about these tables — the application owns the schema.
-          const appNormalizedWriter = getNormalizedWriter(
-            connectionAppName,
-            appProfile,
-          );
-          if (appNormalizedWriter) {
-            try {
-              // Wrap in nested savepoint so hook failures roll back only the savepoint
-              await tx.transaction((sp) =>
-                appNormalizedWriter(
-                  sp,
-                  this.db,
-                  schemaName,
-                  replica.id,
-                  replica.entityId,
-                  traceId,
-                  canonicalType,
-                  safeData,
-                ),
-              );
-            } catch (hookErr) {
-              // Log but do not fail the pipeline — the generic normalized_entity
-              // write already succeeded. App table write failure is observable
-              // via logs and can be replayed.
-              this.logger.warn(
-                {
-                  event: "l3.normalized_writer_hook_failed",
-                  traceId,
-                  normalizedEntityType: canonicalType,
-                  err: sanitizeError(hookErr),
-                },
-                "App normalized writer hook failed — typed table write skipped",
-              );
-            }
+          // Delegates to the application shard's writeNormalized function.
+          // The shard receives the live Drizzle savepoint and executes its own
+          // upserts into application-owned tables (e.g. tms_carrier, tms_tp).
+          // The platform knows nothing about those tables — only the shard does.
+          try {
+            await tx.transaction((sp) =>
+              this.hookBroker.writeNormalized(
+                connectionAppName,
+                appProfile,
+                sp,
+                this.db,
+                schemaName,
+                replica.id,
+                replica.entityId,
+                traceId,
+                canonicalType,
+                safeData,
+              ),
+            );
+          } catch (hookErr) {
+            // Log but do not fail the pipeline — the generic normalized_entity
+            // write already succeeded. App table write failure is observable
+            // via logs and can be replayed.
+            this.logger.warn(
+              {
+                event: "l3.normalized_writer_hook_failed",
+                traceId,
+                normalizedEntityType: canonicalType,
+                err: sanitizeError(hookErr),
+              },
+              "App normalized writer hook failed — typed table write skipped",
+            );
           }
 
           // ── Transactional outbox for L3→L4 handoff ──────────────────────────

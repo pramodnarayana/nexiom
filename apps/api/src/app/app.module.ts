@@ -35,6 +35,7 @@ import { TraceModule } from '../modules/trace/trace.module.js';
 import { ExceptionsModule } from '../modules/exceptions/exceptions.module.js';
 import { AiModule } from '../modules/ai/ai.module.js';
 import { MappingsModule } from '../modules/mappings/mappings.module.js';
+import { GitopsModule } from '../modules/gitops/gitops.module.js';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { MappingsModule } from '../modules/mappings/mappings.module.js';
     ExceptionsModule,
     AiModule,
     MappingsModule,
+    GitopsModule,
   ],
   controllers: [AppController],
   providers: [AppService, ShutdownService],

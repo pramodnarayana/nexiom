@@ -1,11 +1,16 @@
 // ---------------------------------------------------------------------------
 // Application Hook Registries
 //
-// Provides the extension points that application-layer packages (domain/tms,
-// domain/accounting, etc.) use to plug into the platform pipeline.
+// @deprecated
+// These static in-memory registries are superseded by the dynamic shard
+// loading architecture (ApplicationLoaderService + PipelineHookBrokerService).
 //
-// Naming convention: "normalized" everywhere — consistent with NormalizationService,
-// normalized_entity, and NormalizedRecord.
+// Pipeline services (ReplicaService, NormalizationService, TargetBuilderService)
+// now load application code at runtime via PipelineHookBrokerService and
+// no longer call any register* / get* functions from this file.
+//
+// This file is retained for one release cycle to avoid breaking any external
+// consumers. It will be deleted in a future cleanup pass.
 // ---------------------------------------------------------------------------
 
 /**

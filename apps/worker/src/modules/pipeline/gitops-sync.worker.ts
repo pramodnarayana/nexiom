@@ -1,4 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Inject, OnModuleInit } from "@nestjs/common";
+import { ApplicationLoaderService } from "@nexiom/engine";
+import { QueueService, QueueName } from "@nexiom/queue";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -8,7 +10,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 @Injectable()
-export class GitopsSyncWorker {
+export class GitopsSyncWorker implements OnModuleInit {
   private readonly logger = new Logger(GitopsSyncWorker.name);
   private readonly SHARD_BASE_PATH =
     process.env.SHARD_APPLICATION_PATH ||
@@ -16,30 +18,51 @@ export class GitopsSyncWorker {
   private readonly DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || "main";
   private isSyncRunning = false;
 
+  constructor(
+    @Inject(ApplicationLoaderService)
+    private readonly applicationLoaderService: ApplicationLoaderService,
+    private readonly queueService: QueueService,
+  ) {}
+
   /**
-   * Runs every 5 minutes to synchronize tenant logic shards.
-   * This decoupled architecture allows application developers to push PRs,
-   * pass standard CI/CD, and be natively picked up by the platform
-   * without restarting or rebuilding the core integration monorepo.
+   * Subscribe to the GitopsQueue on startup.
+   * Messages arrive immediately when the API receives a GitHub/GitLab webhook push.
+   * This ensures new application code is live within seconds of a git push.
+   */
+  onModuleInit() {
+    this.queueService.consume(QueueName.GitopsQueue, async () => {
+      this.logger.log(
+        "GitOps webhook event received — triggering immediate sync",
+      );
+      await this.syncShardRepositories();
+    });
+  }
+
+  /**
+   * Fallback safety net — runs every 5 minutes to catch any git commits that
+   * were missed (e.g. if the webhook was not delivered due to a network blip).
+   *
+   * The primary trigger is the webhook endpoint:
+   *   POST /internal/gitops/sync  (GitopsSyncController)
+   * This cron is the secondary fallback only.
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async syncShardRepositories() {
     // Reentrancy guard to prevent overlapping sync runs
     if (this.isSyncRunning) {
-      this.logger.warn("Skipping GitOps sync - previous run still in progress");
+      this.logger.warn("Skipping GitOps sync — previous run still in progress");
       return;
     }
 
     this.isSyncRunning = true;
-    this.logger.log("Starting GitOps Shard Synchronization...");
+    this.logger.debug(
+      "Starting GitOps shard synchronization (cron fallback)...",
+    );
 
     try {
-      // 1. Ensure the base sync directory exists
+      // Ensure the base sync directory exists
       await fs.mkdir(this.SHARD_BASE_PATH, { recursive: true });
 
-      // 2. Discover mapped shard repositories from the central storage registry or configuration.
-      // For this phase of the enterprise implementation, we scan the known local directories
-      // and perform a git pull to maintain hot-reload parity.
       const entries = await fs.readdir(this.SHARD_BASE_PATH, {
         withFileTypes: true,
       });
@@ -48,64 +71,66 @@ export class GitopsSyncWorker {
       );
 
       if (shardDirs.length === 0) {
-        this.logger.debug(
-          "No active sharding directories found for gitops sync.",
-        );
+        this.logger.debug("No active shard directories found for gitops sync.");
         return;
       }
 
       for (const shard of shardDirs) {
-        const repoPath = path.join(this.SHARD_BASE_PATH, shard.name);
-
-        // 3. Verify it is a valid git repository
-        try {
-          const isRepo = await fs.stat(path.join(repoPath, ".git"));
-          if (isRepo.isDirectory() || isRepo.isFile()) {
-            this.logger.debug(`Synchronizing Shard: ${shard.name}`);
-
-            // Execute git pull. Because the LogicResolver dynamic import appends a
-            // query string cache-buster `?update=timestamp`, Node natively evaluates
-            // the new pulled JS without requiring a worker restart!
-            const branchName = this.DEFAULT_BRANCH;
-
-            // Validate branch name to prevent command injection
-            if (!/^[a-zA-Z0-9/_\-.]+$/.test(branchName)) {
-              this.logger.warn(
-                `Invalid branch name format: ${branchName}. Skipping sync for ${shard.name}.`,
-              );
-              continue;
-            }
-
-            const { stdout } = await execFileAsync(
-              "git",
-              ["pull", "origin", branchName, "--ff-only"],
-              {
-                cwd: repoPath,
-                env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
-                timeout: 60000, // 60 second timeout
-                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-              },
-            );
-
-            if (stdout.includes("Already up to date.")) {
-              this.logger.debug(`[${shard.name}] Up to date.`);
-            } else {
-              this.logger.log(
-                `[${shard.name}] Successfully synced new logic: \n${stdout}`,
-              );
-            }
-          }
-        } catch (err) {
-          this.logger.warn(
-            `Directory ${shard.name} is not a valid git repository or git operation failed. Skipping sync.`,
-            err instanceof Error ? err.message : String(err),
-          );
-        }
+        await this.syncShard(shard.name);
       }
     } catch (error) {
-      this.logger.error("GitOps Shard Synchronization failed", error);
+      this.logger.error("GitOps shard synchronization failed", error);
     } finally {
       this.isSyncRunning = false;
+    }
+  }
+
+  /**
+   * Synchronizes a single shard by running git pull.
+   * Called both by the cron fallback and directly by GitopsSyncController
+   * when a webhook is received from GitHub/GitLab.
+   */
+  async syncShard(shardName: string): Promise<void> {
+    const repoPath = path.join(this.SHARD_BASE_PATH, shardName);
+
+    try {
+      await fs.stat(path.join(repoPath, ".git"));
+
+      // Validate branch name to prevent command injection
+      const branchName = this.DEFAULT_BRANCH;
+      if (!/^[a-zA-Z0-9/_\-.]+$/.test(branchName)) {
+        this.logger.warn(
+          `Invalid branch name format: ${branchName}. Skipping sync for ${shardName}.`,
+        );
+        return;
+      }
+
+      this.logger.debug(`Synchronizing shard: ${shardName}`);
+      const { stdout } = await execFileAsync(
+        "git",
+        ["pull", "origin", branchName, "--ff-only"],
+        {
+          cwd: repoPath,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+          timeout: 60_000,
+          maxBuffer: 1024 * 1024 * 10,
+        },
+      );
+
+      if (stdout.includes("Already up to date.")) {
+        this.logger.debug(`[${shardName}] Already up to date.`);
+      } else {
+        this.logger.log(
+          `[${shardName}] New commits pulled — invalidating module cache:\n${stdout}`,
+        );
+        // Invalidate the module cache so the next pipeline event imports fresh code
+        this.applicationLoaderService.invalidateCache(shardName);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `[${shardName}] Not a git repository or git pull failed — skipping.`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 }
