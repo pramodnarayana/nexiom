@@ -491,6 +491,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           "Delivery succeeded but source-side finalization failed. Deferring to SQS for retry.",
         );
       }
+
+      // If delivery failed but source-side finalization incomplete, throw to trigger SQS retry
+      if (finalStatus === "FAIL" && !sourceFinalized) {
+        throw new Error(
+          "Delivery failed but source-side finalization failed. Deferring to SQS for retry.",
+        );
+      }
     } catch (err: unknown) {
       const sanitized = sanitizeError(err);
       this.logger.error(
@@ -529,7 +536,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .select()
           .from(syncLog)
           .where(
-            sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${routeId} AND ${syncLog.layer} = 'L6'`,
+            sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${routeId} AND ${syncLog.layer} = 'L6' AND ${syncLog.status} != 'RETRY'`,
           )
           .limit(1);
       });
