@@ -315,9 +315,7 @@ export class ExceptionService {
       );
     }
 
-    const { outboundGateway, outboundOutbox } = buildTenantSchema(schemaName);
-
-    let outboxId: string = '';
+    const { outboundGateway } = buildTenantSchema(schemaName);
 
     await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
@@ -334,7 +332,11 @@ export class ExceptionService {
             sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
           ),
         )
-        .returning({ id: outboundGateway.id });
+        .returning({
+          traceId: outboundGateway.traceId,
+          routeId: outboundGateway.routeId,
+          reqPayload: outboundGateway.reqPayload,
+        });
 
       if (updatedRows.length === 0) {
         throw new ConflictException(
@@ -342,132 +344,27 @@ export class ExceptionService {
         );
       }
 
-      // onConflictDoNothing makes this idempotent: if the operator retries the
-      // same exception twice, the second insert is silently skipped and the
-      // existing outbox row (already PENDING or PROCESSING) drives delivery.
-      const inserted = await tx
-        .insert(outboundOutbox)
-        .values({
-          traceId: outboundGatewayRow.traceId,
-          routeId: outboundGatewayRow.routeId,
-          outboundGatewayId,
-          payload: {
-            outboundGatewayId,
-            routeId: outboundGatewayRow.routeId,
-            traceId: outboundGatewayRow.traceId,
-            connectionId: stitch.srcConnectionId,
-            targetConnectionId: stitch.destConnectionId,
-          },
-          status: 'PENDING',
-        })
-        .onConflictDoNothing({
-          target: [
-            outboundOutbox.traceId,
-            outboundOutbox.routeId,
-            outboundOutbox.outboundGatewayId,
-          ],
-        })
-        .returning({ id: outboundOutbox.id });
+      const row = updatedRows[0];
 
-      if (inserted.length > 0) {
-        outboxId = inserted[0].id;
-      } else {
-        // Row already exists — fetch its id so the send loop can still mark it SUCCESS.
-        const existing = await tx
-          .select({ id: outboundOutbox.id })
-          .from(outboundOutbox)
-          .where(
-            sql`${outboundOutbox.traceId} = ${outboundGatewayRow.traceId}
-            AND ${outboundOutbox.routeId} = ${outboundGatewayRow.routeId}
-            AND ${outboundOutbox.outboundGatewayId} = ${outboundGatewayId}`,
-          )
-          .limit(1);
-        if (existing.length > 0) outboxId = existing[0].id;
-      }
-    });
-
-    // Atomic claim: UPDATE status='PROCESSING' WHERE id=outboxId AND status='PENDING'
-    // RETURNING payload. This races safely with OutboundOutboxWorker — exactly one
-    // claimant wins and publishes; the other skips.  If the row is already
-    // PROCESSING/SUCCESS (worker got there first) we return queued:true idempotently.
-    //
-    // Intentional design: operator-triggered claims do NOT increment `attempts` or
-    // adjust `nextRetryAt`.  Manual retries initiated from the UI bypass the
-    // exponential back-off schedule and should not consume the row's worker retry
-    // budget (MAX_ATTEMPTS).  The row transitions directly to SUCCESS after the
-    // operator's publish succeeds, which is consistent with "operator fixed the
-    // problem and wants immediate re-delivery".
-    const claimed = outboxId
-      ? await this.db.transaction(async (tx) => {
-          assertValidSchemaName(schemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-          );
-          // Also push nextRetryAt 1 minute forward so the worker cannot immediately
-          // re-claim the row while this operator publish is in-flight.
-          return tx
-            .update(outboundOutbox)
-            .set({
-              status: 'PROCESSING',
-              nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
-            } as never)
-            .where(
-              and(
-                eq(outboundOutbox.id, outboxId),
-                sql`${outboundOutbox.status} = 'PENDING'`,
-              ),
-            )
-            .returning({
-              id: outboundOutbox.id,
-              payload: outboundOutbox.payload,
-            });
-        })
-      : [];
-
-    if (claimed.length > 0) {
       try {
-        await this.queueService.send(
-          QueueName.DeliveryQueue,
-          claimed[0].payload as Record<string, unknown>,
-        );
+        await this.queueService.send(QueueName.DeliveryQueue, {
+          traceId: row.traceId,
+          srcConnectionId: stitch.srcConnectionId,
+          destConnectionId: stitch.destConnectionId,
+          routeId: row.routeId,
+          hydratedPayload: row.reqPayload,
+        });
       } catch (sendErr) {
-        // Publish failed — move row back to RETRY so the worker can reattempt.
-        // Do not increment attempts here (operator retries are budget-neutral).
         this.logger.warn(
           {
             id: outboundGatewayId,
-            outboxId,
             err: sendErr instanceof Error ? sendErr.message : String(sendErr),
           },
-          'exception.retry: queueService.send failed — reverting to RETRY',
+          'exception.retry: queueService.send failed',
         );
-        await this.db.transaction(async (tx) => {
-          assertValidSchemaName(schemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-          );
-          await tx
-            .update(outboundOutbox)
-            .set({
-              status: 'RETRY',
-              nextRetryAt: sql`NOW() + INTERVAL '1 minute'`,
-            } as never)
-            .where(eq(outboundOutbox.id, outboxId));
-        });
-        throw sendErr;
+        throw sendErr; // Rolls back the PENDING status update automatically
       }
-
-      await this.db.transaction(async (tx) => {
-        assertValidSchemaName(schemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-        await tx
-          .update(outboundOutbox)
-          .set({ status: 'SUCCESS' } as never)
-          .where(eq(outboundOutbox.id, outboxId));
-      });
-    }
+    });
 
     this.logger.info(
       { id: outboundGatewayId, traceId: outboundGatewayRow.traceId },

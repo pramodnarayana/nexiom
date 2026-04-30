@@ -2,7 +2,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
-import { QueueService } from "@nexiom/queue";
+import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -166,6 +166,14 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.objectContaining({
+        traceId: "123",
+        srcConnectionId: "456",
+        routeId: "stitch_1",
+      }),
+    );
     expect(mockTxInsert).toHaveBeenCalled();
   });
 
@@ -297,6 +305,14 @@ describe("FanOutService", () => {
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
+    expect(queueService.send).toHaveBeenCalledWith(
+      QueueName.DeliveryQueue,
+      expect.objectContaining({
+        traceId: "123",
+        routeId: "stitch_1",
+        hydratedPayload: expect.objectContaining({ _hydrated: true }),
+      }),
+    );
     expect(mockTxInsert).toHaveBeenCalled();
   });
 
@@ -433,5 +449,106 @@ describe("FanOutService", () => {
 
   it("should destroy module", () => {
     expect(() => service.onModuleDestroy()).not.toThrow();
+  });
+
+  it("should skip route and release lock if no mapping rules found", async () => {
+    // Configure db.transaction to return a replica but NO field mappings
+    let txCount = 0;
+    db.transaction.mockImplementation(async (cb: any) => {
+      txCount++;
+      const isFirstTx = txCount === 1; // getReplicaAndStitches
+      const isSecondTx = txCount === 2; // lock check
+
+      const tx = Object.assign(Promise.resolve([]), {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          if (isFirstTx) {
+            return Promise.resolve([
+              {
+                id: "outbound_1",
+                data: { name: "hi" },
+                canonicalType: "RAW",
+                reqPayload: {},
+                sourceId: "src_vendor",
+              },
+            ]);
+          }
+          if (isSecondTx) {
+            return Promise.resolve([]); // NO sync locks
+          }
+          // The next select is for field_mapping rules
+          return Promise.resolve([]); // RETURN EMPTY MAPPINGS
+        }),
+        insert: mockTxInsert,
+        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+      });
+      return cb(tx);
+    });
+
+    let dbSelectCount = 0;
+    db.select.mockImplementation(() => {
+      dbSelectCount++;
+      // Call 1: integrationStitches
+      if (dbSelectCount === 1) {
+        return Object.assign(
+          Promise.resolve([
+            {
+              id: "stitch_1",
+              syncCondition: [],
+              mappingRules: [],
+            },
+          ]),
+          {
+            from: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+          },
+        );
+      }
+      // Call 2: appConnections
+      if (dbSelectCount === 2) {
+        return Object.assign(
+          Promise.resolve([
+            {
+              appName: "testApp",
+              tenantId: "org_1",
+              metadata: { appProfile: "" },
+            },
+          ]),
+          {
+            from: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+          },
+        );
+      }
+      // Call 3: fieldMappings
+      return Object.assign(Promise.resolve([]), {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+      });
+    });
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    // spy on writeSyncLog
+    vi.spyOn(service as any, "writeSyncLog").mockResolvedValue(undefined);
+
+    await expect(
+      handler({ traceId: "123", connectionId: "456" }),
+    ).resolves.toBeUndefined();
+
+    expect((service as any).writeSyncLog).toHaveBeenCalledWith(
+      "ws_1",
+      "123",
+      "stitch_1",
+      "L4",
+      "SKIPPED",
+      expect.any(Number),
+      expect.anything(),
+    );
   });
 });

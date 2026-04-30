@@ -23,7 +23,9 @@ describe("DeliveryService", () => {
       where: vi.fn().mockReturnThis(),
       limit: vi
         .fn()
-        .mockResolvedValue([{ appName: "test", targetObject: "obj" }]),
+        .mockResolvedValue([
+          { appName: "test", targetObject: "obj", tenantId: "tenant_1" },
+        ]),
       transaction: vi.fn().mockImplementation(async (cb) => {
         const tx = {
           execute: vi.fn(),
@@ -32,7 +34,9 @@ describe("DeliveryService", () => {
           where: vi.fn().mockReturnThis(),
           limit: vi
             .fn()
-            .mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            ]),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
           insert: vi.fn().mockReturnThis(),
@@ -40,6 +44,7 @@ describe("DeliveryService", () => {
           onConflictDoNothing: vi.fn().mockReturnThis(),
           onConflictDoUpdate: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+          delete: vi.fn().mockReturnThis(),
         };
         return cb(tx);
       }),
@@ -52,10 +57,6 @@ describe("DeliveryService", () => {
           .mockResolvedValue({ body: { id: "DEST-001" }, statusCode: 200 }),
       }),
     };
-    // Return target appName + tenantId from the non-transactional select chain
-    db.limit.mockResolvedValue([
-      { appName: "test", targetObject: "obj", tenantId: "tenant_1" },
-    ]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -74,6 +75,14 @@ describe("DeliveryService", () => {
     service = module.get<DeliveryService>(DeliveryService);
   });
 
+  const validPayload = {
+    traceId: "123",
+    srcConnectionId: "456",
+    destConnectionId: "tgt",
+    routeId: "r",
+    hydratedPayload: {},
+  };
+
   it("should deliver message and write success", async () => {
     service.onModuleInit();
     expect(queueService.consume).toHaveBeenCalledWith(
@@ -81,13 +90,7 @@ describe("DeliveryService", () => {
       expect.any(Function),
     );
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "123",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
+    await handler(validPayload);
     expect(pieceRegistry.getPiece).toHaveBeenCalled();
   });
 
@@ -99,35 +102,28 @@ describe("DeliveryService", () => {
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
+        execute: vi.fn(),
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
-        where: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
         onConflictDoNothing: vi.fn().mockReturnThis(),
         onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
-        execute: vi.fn(),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
-    expect(queueService.consume).toHaveBeenCalledWith(
-      QueueName.DeliveryQueue,
-      expect.any(Function),
-    );
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).resolves.toBeUndefined();
+    await expect(handler(validPayload)).resolves.toBeUndefined();
 
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,23 +142,17 @@ describe("DeliveryService", () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
       }),
     );
     service.onModuleInit();
-    expect(queueService.consume).toHaveBeenCalledWith(
-      QueueName.DeliveryQueue,
-      expect.any(Function),
-    );
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("Outbound gateway record not found");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "Outbound gateway record not found",
+    );
   });
 
   it("should return early if delivery is already claimed by another worker", async () => {
@@ -172,59 +162,41 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {} }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
-    expect(queueService.consume).toHaveBeenCalledWith(
-      QueueName.DeliveryQueue,
-      expect.any(Function),
-    );
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).resolves.toBeUndefined();
+    await expect(handler(validPayload)).resolves.toBeUndefined();
   });
 
   it("should throw if target connection not found", async () => {
-    db.limit.mockResolvedValueOnce([]);
+    db.limit.mockResolvedValue([]);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("Target connection tgt not found");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "Target connection tgt not found",
+    );
   });
 
   it("should throw if piece not registered", async () => {
     pieceRegistry.getPiece.mockReturnValueOnce(null);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("Piece test not registered");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "Piece test not registered",
+    );
   });
 
   it("should throw if piece has no executeAction", async () => {
@@ -233,15 +205,9 @@ describe("DeliveryService", () => {
     });
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("has no executeAction defined");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "has no executeAction defined",
+    );
   });
 
   it("should extract statusCode from a thrown error object with statusCode property", async () => {
@@ -253,7 +219,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         onConflictDoNothing: vi.fn().mockReturnThis(),
@@ -261,39 +231,21 @@ describe("DeliveryService", () => {
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).resolves.toBeUndefined();
+    await expect(handler(validPayload)).resolves.toBeUndefined();
   });
 
   it("should swallow rollback error and rethrow original error", async () => {
-    // First resolveSchemaName works; make the outer try fail by rejecting connDocs lookup.
-    // Then the error-handler resolveSchemaName also fails → swallowed by inner catch {}.
-    db.limit.mockResolvedValueOnce([]);
-    storageResolver.resolveSchemaName
-      .mockResolvedValueOnce("ws_1") // outer try: fetch outbound tx → ok
-      .mockRejectedValueOnce(new Error("rollback fail")); // error-handler → swallowed
+    db.limit.mockResolvedValue([]);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "123",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("Target connection tgt not found");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "Target connection tgt not found",
+    );
   });
 
   it("should destroy module", () => {
@@ -302,21 +254,19 @@ describe("DeliveryService", () => {
 
   // ── Enterprise hardening tests ──────────────────────────────────────────────
 
-  it("should ACK and return early on invalid message (missing traceId)", async () => {
+  it("should ACK and return early on invalid message (missing required fields)", async () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({
         connectionId: "456",
         targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
       }),
     ).resolves.toBeUndefined();
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("should set RETRY status when piece returns 429 with explicit retry flag", async () => {
+  it("should throw error and defer to SQS when piece returns 429 with explicit retry flag", async () => {
     pieceRegistry.getPiece().executeAction.mockResolvedValueOnce({
       body: {},
       statusCode: 429,
@@ -329,7 +279,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
         insert: vi.fn().mockReturnThis(),
@@ -337,60 +291,22 @@ describe("DeliveryService", () => {
         onConflictDoNothing: vi.fn().mockReturnThis(),
         onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "t1",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
+    await expect(handler(validPayload)).rejects.toThrow(
+      "API call failed with retryable error (HTTP 429). Deferring to SQS for retry.",
+    );
+
+    // It still writes the RETRY status
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({ status: "RETRY" }),
     );
   });
 
-  it("should set RETRY status when piece returns 503 with explicit retry flag", async () => {
-    pieceRegistry.getPiece().executeAction.mockResolvedValueOnce({
-      body: {},
-      statusCode: 503,
-      retry: true,
-    });
-    const setMock = vi.fn().mockReturnThis();
-    db.transaction.mockImplementation(async (cb: any) =>
-      cb({
-        execute: vi.fn(),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
-        update: vi.fn().mockReturnThis(),
-        set: setMock,
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-        onConflictDoNothing: vi.fn().mockReturnThis(),
-        onConflictDoUpdate: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
-      }),
-    );
-    service.onModuleInit();
-    const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "t1",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "RETRY" }),
-    );
-  });
-
-  it("should set RETRY status when piece throws RetryableException", async () => {
+  it("should set RETRY status and throw when piece throws RetryableException", async () => {
     const { RetryableException } = await import("@nexiom/piece-framework");
     pieceRegistry
       .getPiece()
@@ -404,7 +320,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
         insert: vi.fn().mockReturnThis(),
@@ -412,17 +332,14 @@ describe("DeliveryService", () => {
         onConflictDoNothing: vi.fn().mockReturnThis(),
         onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "t1",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
+    await expect(handler(validPayload)).rejects.toThrow(
+      "API call failed with retryable error (HTTP 429). Deferring to SQS for retry.",
+    );
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({ status: "RETRY" }),
     );
@@ -439,7 +356,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
         insert: vi.fn().mockReturnThis(),
@@ -447,17 +368,12 @@ describe("DeliveryService", () => {
         onConflictDoNothing: vi.fn().mockReturnThis(),
         onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "t1",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
+    await expect(handler(validPayload)).resolves.toBeUndefined();
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({ status: "FAIL" }),
     );
@@ -471,8 +387,11 @@ describe("DeliveryService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        // attemptCount >= 5 triggers MAX_ATTEMPTS guard
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 5 }]),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "o", reqPayload: {}, attemptCount: 5, status: "RETRY" },
+          ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
@@ -480,55 +399,315 @@ describe("DeliveryService", () => {
         onConflictDoNothing: vi.fn().mockReturnThis(),
         onConflictDoUpdate: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        delete: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({
-      traceId: "t1",
-      connectionId: "456",
-      targetConnectionId: "tgt",
-      routeId: "r",
-      outboundGatewayId: "o",
-    });
-    // executeAction must NOT have been called — piece protected from overuse
+    await expect(handler(validPayload)).resolves.toBeUndefined();
     expect(executeAction).not.toHaveBeenCalled();
   });
+
   it("should NOT rewrite outbound gateway if claimed is false during pre-claim exception", async () => {
-    const updateSpy = vi.fn().mockReturnThis();
-    db.transaction.mockImplementation(async (cb: any) =>
-      cb({
-        execute: vi.fn(),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockResolvedValue([{ reqPayload: {}, attemptCount: 0 }]),
-        update: updateSpy,
-        set: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-        onConflictDoNothing: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([]),
-      }),
-    );
     // Trigger pre-claim error by removing the token manager completely
     (service as any).tokenManagerService = null;
     service.onModuleInit();
 
     // We expect the original error to be thrown to the caller!
     const handler = queueService.consume.mock.calls[0][1];
-    await expect(
-      handler({
-        traceId: "t1",
-        connectionId: "456",
-        targetConnectionId: "tgt",
-        routeId: "r",
-        outboundGatewayId: "o",
-      }),
-    ).rejects.toThrow("TokenManagerService unavailable");
+    await expect(handler(validPayload)).rejects.toThrow(
+      "TokenManagerService unavailable",
+    );
+  });
+  describe("Idempotency Bouncer Logic", () => {
+    it("should skip processing if currentStatus is SUCCESS and source is finalized", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+      expect(pieceRegistry.getPiece).not.toHaveBeenCalled();
+    });
 
-    // The catch block must NOT have executed update set status = FAIL
-    // Since it was during an un-claimed state (token resolution is before DB claim)
-    expect(updateSpy).not.toHaveBeenCalled();
+    it("should retry finalization if currentStatus is SUCCESS but source NOT finalized (Partial Success)", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        true,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+      expect((service as any).retrySourceFinalization).toHaveBeenCalledWith(
+        "ws_1",
+        "ws_1",
+        "o",
+        "123",
+        "r",
+        "456",
+        "tgt",
+        "SUCCESS",
+        200,
+        "RAW",
+        "unknown",
+        "unknown",
+        undefined,
+        expect.any(Number),
+      );
+    });
+
+    it("should throw error if Partial Success finalization retry fails", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        false,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).rejects.toThrow(
+        "Source-side finalization retry failed. Deferring to SQS for retry.",
+      );
+    });
+
+    it("should skip processing if currentStatus is FAIL and source is finalized", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+    });
+
+    it("should retry finalization if currentStatus is FAIL but source NOT finalized (Partial Fail)", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        true,
+      );
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).resolves.toBeUndefined();
+    });
+
+    it("should throw error if Partial Fail finalization retry fails", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+            ]),
+          insert: vi.fn().mockReturnThis(),
+          values: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockResolvedValue([{ id: "o" }]),
+        }),
+      );
+      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+        false,
+      );
+
+      service.onModuleInit();
+      const handler = queueService.consume.mock.calls[0][1];
+      await expect(handler(validPayload)).rejects.toThrow(
+        "Source-side finalization retry failed. Deferring to SQS for retry.",
+      );
+    });
+  });
+
+  describe("writeL6Result", () => {
+    it("should successfully write L6 result", async () => {
+      const mockTx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+      };
+      db.transaction.mockImplementation(async (cb: any) => cb(mockTx));
+      const res = await (service as any).writeL6Result(
+        "ws_schema",
+        "ws_schema",
+        "o",
+        "conn",
+        "trace",
+        "route",
+        null,
+        500,
+        "SUCCESS",
+        Date.now(),
+        undefined,
+        "RAW",
+        "app",
+        "org",
+        undefined,
+        "tgt",
+      );
+      expect(res).toBe(true);
+    });
+    it("should return false on writeL6Result failure", async () => {
+      const mockTx = {
+        execute: vi.fn(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
+        delete: vi.fn().mockReturnThis(),
+      };
+      // first transaction succeeds, second fails
+      db.transaction.mockImplementationOnce(async (cb: any) => cb(mockTx));
+      db.transaction.mockRejectedValueOnce(new Error("db failure"));
+      const res = await (service as any).writeL6Result(
+        "ws_schema",
+        "ws_schema",
+        "o",
+        "conn",
+        "trace",
+        "route",
+        null,
+        500,
+        "SUCCESS",
+        Date.now(),
+        undefined,
+        "RAW",
+        "app",
+        "org",
+        undefined,
+        "tgt",
+      );
+      expect(res).toBe(false);
+    });
+  });
+
+  describe("isSourceFinalized", () => {
+    it("should return true if L6 sync log exists", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([{ id: 1 }]),
+        }),
+      );
+
+      const res = await (service as any).isSourceFinalized(
+        "ws_schema",
+        "trace",
+        "route",
+      );
+      expect(res).toBe(true);
+    });
+    it("should return false if L6 sync log does not exist", async () => {
+      db.transaction.mockImplementation(async (cb: any) =>
+        cb({
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]),
+        }),
+      );
+
+      const res = await (service as any).isSourceFinalized(
+        "ws_schema",
+        "trace",
+        "route",
+      );
+      expect(res).toBe(false);
+    });
   });
 });

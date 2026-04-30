@@ -83,14 +83,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // ── Resolve schema first to get entityId for potential lock cleanup ────
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const {
-        normalizedEntity,
-        replicaEntity,
-        outboundGateway,
-        outboundOutbox,
-        syncLog,
-        activeSyncLocks,
-      } = buildTenantSchema(schemaName);
+      const { normalizedEntity, replicaEntity, syncLog, activeSyncLocks } =
+        buildTenantSchema(schemaName);
 
       // ── Read normalized data + sourceId (for GEM) in one transaction ──────
       // sourceId comes from replica_entity and is needed by DeliveryService (L5/L6)
@@ -202,8 +196,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           normalizedData,
           stitch,
           start,
-          outboundGateway,
-          outboundOutbox,
           syncLog,
           activeSyncLocks,
         ),
@@ -255,8 +247,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     normalizedData: Record<string, unknown>,
     stitch: typeof integrationStitches.$inferSelect,
     start: number,
-    outboundGateway: ReturnType<typeof buildTenantSchema>["outboundGateway"],
-    outboundOutbox: ReturnType<typeof buildTenantSchema>["outboundOutbox"],
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
     activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
   ): Promise<void> {
@@ -437,61 +427,69 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        // ── Write outbound_gateway BEFORE outboundOutbox (crash-safety) ──────
-        // If the process crashes between these two writes, the next outbox
-        // worker sweep will re-insert the outboundOutbox row — the
-        // onConflictDoUpdate on outbound_gateway is idempotent.
-        const [outbound] = await tx
-          .insert(outboundGateway)
-          .values({
-            traceId,
-            routeId: stitch.id,
-            reqPayload: hydratedPayload,
-            status: "PENDING",
-          })
-          .onConflictDoUpdate({
-            target: [outboundGateway.traceId, outboundGateway.routeId],
-            set: {
-              reqPayload: hydratedPayload,
-              // Reset to PENDING on replay so the delivery outbox worker can
-              // re-claim the row. attemptCount is intentionally omitted here
-              // — L5 (DeliveryService) is the sole owner of retry accounting.
-              status: "PENDING",
-              updatedAt: sql`NOW()`,
-            },
-          })
-          .returning({ id: outboundGateway.id });
+        // ── Persist pending delivery record before publishing ─────────────────
+        // Create outbound_gateway record in destination schema BEFORE sending to
+        // DeliveryQueue to ensure delivery can be retried even if send() fails.
+        const destSchemaName = await this.storageResolver.resolveSchemaName(
+          stitch.destConnectionId,
+        );
+        assertValidSchemaName(destSchemaName);
 
-        // ── Delivery outbox payload includes all fields needed by L5+L6 ──────
-        // srcVendorId and canonicalType are threaded here so DeliveryService
-        // can write the Global Entity Map without an extra JOIN.
-        await tx
-          .insert(outboundOutbox)
-          .values({
-            traceId,
-            routeId: stitch.id,
-            outboundGatewayId: outbound.id,
-            payload: {
+        const { outboundGateway: destOutboundGateway } =
+          buildTenantSchema(destSchemaName);
+
+        // Execute in nested transaction on destination schema
+        await this.db.transaction(async (destTx) => {
+          await destTx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          );
+          await destTx
+            .insert(destOutboundGateway)
+            .values({
               traceId,
-              connectionId,
-              targetConnectionId: stitch.destConnectionId,
               routeId: stitch.id,
-              outboundGatewayId: outbound.id,
-              // GEM fields threaded from L2/L3
-              srcVendorId: srcVendorId ?? null,
-              canonicalType,
-              srcAppName,
-              srcTenantId,
-            },
-            status: "PENDING",
-          })
-          .onConflictDoNothing({
-            target: [
-              outboundOutbox.traceId,
-              outboundOutbox.routeId,
-              outboundOutbox.outboundGatewayId,
-            ],
+              reqPayload: hydratedPayload,
+              status: "PENDING",
+              attemptCount: 0,
+            })
+            .onConflictDoNothing({
+              target: [
+                destOutboundGateway.traceId,
+                destOutboundGateway.routeId,
+              ],
+            });
+        });
+
+        // ── Publish directly to Delivery Queue (Decoupled Message Routing) ──
+        // Instead of writing to the Source Schema's outbox, L4 pushes directly
+        // to the Delivery queue. L5 will own the destination state.
+        // Now safe to send — if this fails, outbound_gateway exists for retry.
+        try {
+          await this.queueService.send(QueueName.DeliveryQueue, {
+            traceId,
+            srcConnectionId: connectionId,
+            destConnectionId: stitch.destConnectionId,
+            routeId: stitch.id,
+            srcVendorId: srcVendorId ?? null,
+            canonicalType,
+            srcAppName,
+            srcTenantId,
+            hydratedPayload,
           });
+        } catch (sendErr) {
+          this.logger.error(
+            {
+              event: "l4.queue_send_failed",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
+              err: sanitizeError(sendErr),
+            },
+            "Failed to publish to DeliveryQueue — outbound_gateway persisted, will retry",
+          );
+          // Rethrow to mark L4/FAIL and trigger retry of normalized message
+          throw sendErr;
+        }
 
         // ── SUCCESS sync_log — idempotent (uq_sync_log_trace_layer_status) ──
         await tx
