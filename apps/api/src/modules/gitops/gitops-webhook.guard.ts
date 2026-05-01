@@ -49,15 +49,15 @@ export class GitopsWebhookGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Strategy 1: GitHub X-Hub-Signature-256 (HMAC SHA256 of raw body)
-    const githubSig = request.headers['x-hub-signature-256'] as
-      | string
-      | undefined;
+    const githubSig = this.getSingleHeader(
+      request.headers['x-hub-signature-256'],
+    );
     if (githubSig) {
       return this.validateGitHubSignature(request, githubSig);
     }
 
     // Strategy 2: GitLab X-Gitlab-Token (exact match)
-    const gitlabToken = request.headers['x-gitlab-token'] as string | undefined;
+    const gitlabToken = this.getSingleHeader(request.headers['x-gitlab-token']);
     if (gitlabToken) {
       return this.validateGitLabToken(gitlabToken);
     }
@@ -71,6 +71,19 @@ export class GitopsWebhookGuard implements CanActivate {
     throw new UnauthorizedException(
       'Missing or invalid authentication header (expected X-Hub-Signature-256, X-Gitlab-Token, or Authorization: Bearer)',
     );
+  }
+
+  /**
+   * Helper to extract a single header value from string | string[] | undefined.
+   * Throws UnauthorizedException if the header is an array (duplicate headers).
+   */
+  private getSingleHeader(
+    value: string | string[] | undefined,
+  ): string | undefined {
+    if (Array.isArray(value)) {
+      throw new UnauthorizedException('Duplicate headers are not allowed');
+    }
+    return value;
   }
 
   private validateGitHubSignature(
@@ -129,7 +142,7 @@ export class GitopsWebhookGuard implements CanActivate {
     }
 
     // GitLab uses exact match - constant-time comparison
-    const tokenDigest = createHash('sha256').update(token).digest();
+    const tokenDigest = createHash('sha256').update(trimmedToken).digest();
 
     if (!timingSafeEqual(tokenDigest, this.expectedDigest)) {
       throw new UnauthorizedException('Invalid GitLab webhook token');
@@ -149,7 +162,7 @@ export class GitopsWebhookGuard implements CanActivate {
       );
     }
 
-    const tokenDigest = createHash('sha256').update(token).digest();
+    const tokenDigest = createHash('sha256').update(trimmedToken).digest();
 
     if (!timingSafeEqual(tokenDigest, this.expectedDigest)) {
       throw new UnauthorizedException('Invalid gitops webhook secret');
