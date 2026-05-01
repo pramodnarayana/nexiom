@@ -145,7 +145,6 @@ describe("NormalizationService", () => {
     expect(db.transaction).toHaveBeenCalled();
     expect(mockTxInsert).toHaveBeenCalled();
     // Assert that broker.normalize was called
-    console.log("SPY CALLS:", JSON.stringify(mockBroker.normalize.mock.calls));
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
       "default",
@@ -345,7 +344,6 @@ describe("NormalizationService", () => {
     await handler({ traceId: "123", connectionId: "456" });
 
     // Assert broker.normalize was called
-    console.log("SPY CALLS:", JSON.stringify(mockBroker.normalize.mock.calls));
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
       "default",

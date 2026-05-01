@@ -13,6 +13,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import * as schema from '../db/schema.js';
+import * as identitySchema from '@nexiom/identity/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -54,8 +55,7 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
     systemTenantId: getRequiredSystemTenantId(),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  await seedSystemRbac(db as any, config, console);
+  await seedSystemRbac(db as NodePgDatabase<typeof identitySchema>, config, console);
 }
 
 // Shared helper to elevate a user to System Owner

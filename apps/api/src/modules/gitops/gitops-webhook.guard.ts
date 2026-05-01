@@ -130,9 +130,8 @@ export class GitopsWebhookGuard implements CanActivate {
 
     // GitLab uses exact match - constant-time comparison
     const tokenDigest = createHash('sha256').update(token).digest();
-    const secretDigest = createHash('sha256').update(this.secret).digest();
 
-    if (!timingSafeEqual(tokenDigest, secretDigest)) {
+    if (!timingSafeEqual(tokenDigest, this.expectedDigest)) {
       throw new UnauthorizedException('Invalid GitLab webhook token');
     }
 
