@@ -2,7 +2,7 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
-import { getTargetBuilder } from "@nexiom/piece-framework";
+import { PipelineHookBrokerService } from "@nexiom/engine";
 import type { Rule } from "@nexiom/engine";
 import { hydratePayload } from "@nexiom/engine";
 
@@ -23,7 +23,10 @@ import { hydratePayload } from "@nexiom/engine";
 export class TargetBuilderService {
   private readonly logger = new Logger(TargetBuilderService.name);
 
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    private readonly hookBroker: PipelineHookBrokerService,
+  ) {}
 
   async buildPayload(
     schemaName: string,
@@ -34,14 +37,14 @@ export class TargetBuilderService {
     normalizedData: Record<string, unknown>,
     rules: Rule[],
   ): Promise<Record<string, unknown>> {
-    // ── 1. Attempt app-registered enrichment ─────────────────────────────────
-    const appBuilder = getTargetBuilder(appName, appProfile);
-
+    // ── 1. Attempt app shard enrichment via PipelineHookBrokerService ─────────
     let enrichedContext = normalizedData;
 
-    if (appBuilder && srcEntityId) {
+    if (srcEntityId) {
       try {
-        const appContext = await appBuilder(
+        const appContext = await this.hookBroker.buildTarget(
+          appName,
+          appProfile,
           this.db,
           schemaName,
           normalizedEntityType,
@@ -49,7 +52,6 @@ export class TargetBuilderService {
         );
 
         if (Object.keys(appContext).length > 0) {
-          // Merge: top-level normalizedData fields + app-enriched aliases
           enrichedContext = { ...normalizedData, ...appContext };
           this.logger.debug(
             {
@@ -61,7 +63,7 @@ export class TargetBuilderService {
                 (k) => appContext[k] !== null,
               ),
             },
-            "Enrichment context assembled from app hook",
+            "Enrichment context assembled from application shard",
           );
         } else {
           this.logger.debug(
@@ -71,40 +73,32 @@ export class TargetBuilderService {
               normalizedEntityType,
               srcEntityId,
             },
-            "App target builder returned empty context — using normalizedData",
+            "Application shard buildTarget returned empty context — using normalizedData",
           );
         }
       } catch (err) {
-        const errPayload =
-          err instanceof Error
-            ? { message: err.message, stack: err.stack }
-            : err;
         this.logger.warn(
           {
             event: "target_builder.hook_failed",
             appName,
             normalizedEntityType,
             srcEntityId,
-            err: errPayload,
+            err:
+              err instanceof Error
+                ? { message: err.message, stack: err.stack }
+                : err,
           },
-          "App target builder hook failed — falling back to normalizedData",
+          "Application shard buildTarget failed — falling back to normalizedData",
         );
       }
-    } else if (appBuilder && !srcEntityId) {
+    } else {
       this.logger.debug(
         {
           event: "target_builder.missing_src_entity_id",
           appName,
           normalizedEntityType,
-          appProfile,
-          srcEntityId,
         },
-        "App builder registered but srcEntityId is undefined — skipping enrichment",
-      );
-    } else if (!appBuilder) {
-      this.logger.debug(
-        { event: "target_builder.no_hook", appName, appProfile },
-        "No app target builder registered — applying rules to normalizedData directly",
+        "srcEntityId is undefined — skipping enrichment",
       );
     }
 

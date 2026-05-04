@@ -6,8 +6,9 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { DATABASE_CONNECTION, canonicalMappings } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { DB_MANAGER } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
+import { canonicalMappings } from '@nexiom/database';
 import { PinoLogger } from 'nestjs-pino';
 import type { CreateMapping, UpdateMapping } from './mappings.validation.js';
 
@@ -15,20 +16,22 @@ import type { CreateMapping, UpdateMapping } from './mappings.validation.js';
 export class MappingsService {
   constructor(
     private readonly logger: PinoLogger,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {
     this.logger.setContext(MappingsService.name);
   }
 
-  async findAll() {
-    return this.db
+  async findAll(tenantId: string) {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    return tenantDb
       .select()
       .from(canonicalMappings)
       .orderBy(canonicalMappings.createdAt);
   }
 
-  async findOne(id: string) {
-    const records = await this.db
+  async findOne(tenantId: string, id: string) {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    const records = await tenantDb
       .select()
       .from(canonicalMappings)
       .where(eq(canonicalMappings.id, id))
@@ -39,16 +42,16 @@ export class MappingsService {
     return records[0];
   }
 
-  async create(payload: CreateMapping) {
+  async create(tenantId: string, payload: CreateMapping) {
     try {
-      const records = await this.db
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      const records = await tenantDb
         .insert(canonicalMappings)
         .values({
           appName: payload.appName,
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          tenantId: (payload.tenantId?.trim() || null) ?? null,
           version: (payload.version?.trim() || 'v1') ?? 'v1',
           mappingConfig: payload.mappingConfig,
         })
@@ -70,16 +73,16 @@ export class MappingsService {
     }
   }
 
-  async update(id: string, payload: UpdateMapping) {
+  async update(tenantId: string, id: string, payload: UpdateMapping) {
     try {
-      const records = await this.db
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      const records = await tenantDb
         .update(canonicalMappings)
         .set({
           appName: payload.appName,
           category: payload.category,
           entity: payload.entity,
           viewMode: payload.viewMode,
-          tenantId: payload.tenantId?.trim() || null,
           version: payload.version?.trim() || 'v1',
           mappingConfig: payload.mappingConfig,
         })
@@ -110,10 +113,13 @@ export class MappingsService {
     }
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(tenantId: string, id: string) {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    await this.findOne(tenantId, id);
 
-    await this.db.delete(canonicalMappings).where(eq(canonicalMappings.id, id));
+    await tenantDb
+      .delete(canonicalMappings)
+      .where(eq(canonicalMappings.id, id));
 
     return { success: true };
   }

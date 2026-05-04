@@ -3,7 +3,10 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NormalizationService } from "./normalization.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
+import {
+  StorageResolverService,
+  PipelineHookBrokerService,
+} from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -57,14 +60,23 @@ describe("NormalizationService", () => {
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          limit: vi
-            .fn()
-            .mockResolvedValue([
-              { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
-            ]),
+          limit: vi.fn().mockResolvedValue([
+            {
+              traceId: "123",
+              data: {},
+              canonicalType: "RAW",
+              id: "1",
+              entityType: "test_entity",
+              entityId: "test_entity_id",
+            },
+          ]),
           insert: mockTxInsert,
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
+          // Add transaction method to support nested transactions (savepoints)
+          transaction: vi.fn().mockImplementation(async (spCb) => {
+            return spCb(tx);
+          }),
         };
         return cb(tx);
       }),
@@ -85,6 +97,15 @@ describe("NormalizationService", () => {
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: PieceRegistryService, useValue: pieceRegistry },
+        {
+          provide: PipelineHookBrokerService,
+          // Default: shard normalize returns null → falls through to piece.normalize
+          // and writeNormalized is a no-op (returns void).
+          useValue: {
+            normalize: vi.fn().mockResolvedValue(null),
+            writeNormalized: vi.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -92,7 +113,27 @@ describe("NormalizationService", () => {
   });
 
   it("should process message normally", async () => {
-    service.onModuleInit();
+    // Create a spy for the broker that was injected into the service
+    const mockBroker = {
+      normalize: vi.fn().mockResolvedValue(null),
+      writeNormalized: vi.fn().mockResolvedValue(undefined),
+    };
+
+    // Create a new module with the spy broker
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        NormalizationService,
+        { provide: QueueService, useValue: queueService },
+        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: StorageResolverService, useValue: storageResolver },
+        { provide: PieceRegistryService, useValue: pieceRegistry },
+        { provide: PipelineHookBrokerService, useValue: mockBroker },
+      ],
+    }).compile();
+
+    const testService = module.get<NormalizationService>(NormalizationService);
+    testService.onModuleInit();
+
     expect(queueService.consume).toHaveBeenCalledWith(
       QueueName.ReplicaQueue,
       expect.any(Function),
@@ -103,6 +144,15 @@ describe("NormalizationService", () => {
 
     expect(db.transaction).toHaveBeenCalled();
     expect(mockTxInsert).toHaveBeenCalled();
+    // Assert that broker.normalize was called
+    expect(mockBroker.normalize).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.objectContaining({
+        entityType: expect.any(String),
+        data: expect.any(Object),
+      }),
+    );
   });
 
   it("should handle errors gracefully", async () => {
@@ -155,11 +205,16 @@ describe("NormalizationService", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
-        limit: vi
-          .fn()
-          .mockResolvedValue([
-            { traceId: "123", data: {}, canonicalType: "RAW", id: "1" },
-          ]),
+        limit: vi.fn().mockResolvedValue([
+          {
+            traceId: "123",
+            data: {},
+            canonicalType: "RAW",
+            id: "1",
+            entityType: "test_entity",
+            entityId: "test_entity_id",
+          },
+        ]),
         // Returns row from .returning() on onConflictDoUpdate
         insert: vi.fn().mockReturnValue({
           values: vi.fn().mockReturnValue({
@@ -260,5 +315,59 @@ describe("NormalizationService", () => {
     ).rejects.toThrow("normalize failed");
     // Error-handler transaction attempted (for FAIL sync_log)
     expect(db.transaction).toHaveBeenCalled();
+  });
+
+  it("should call broker.writeNormalized when broker.normalize returns non-null", async () => {
+    const mockBroker = {
+      normalize: vi.fn().mockResolvedValue({
+        canonicalType: "BROKER_TYPE",
+        data: { brokered: true },
+      }),
+      writeNormalized: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        NormalizationService,
+        { provide: QueueService, useValue: queueService },
+        { provide: DATABASE_CONNECTION, useValue: db },
+        { provide: StorageResolverService, useValue: storageResolver },
+        { provide: PieceRegistryService, useValue: pieceRegistry },
+        { provide: PipelineHookBrokerService, useValue: mockBroker },
+      ],
+    }).compile();
+
+    const svc = module.get<NormalizationService>(NormalizationService);
+    svc.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    await handler({ traceId: "123", connectionId: "456" });
+
+    // Assert broker.normalize was called
+    expect(mockBroker.normalize).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.objectContaining({
+        entityType: expect.any(String),
+        data: expect.any(Object),
+      }),
+    );
+
+    // Assert broker.writeNormalized was called
+    expect(mockBroker.writeNormalized).toHaveBeenCalledWith(
+      "test_app",
+      "default",
+      expect.anything(), // tx
+      expect.anything(), // db
+      "ws_1", // schemaName
+      "1", // replicaId
+      expect.any(String), // entityId
+      "123", // traceId
+      "BROKER_TYPE", // normalizedEntityType
+      expect.objectContaining({ brokered: true }), // data
+    );
+
+    // Piece.normalize should NOT have been called (broker took precedence)
+    expect(pieceRegistry.getPiece().normalize).not.toHaveBeenCalled();
   });
 });

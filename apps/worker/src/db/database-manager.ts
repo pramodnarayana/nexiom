@@ -689,8 +689,36 @@ export class DatabaseManager {
 
     try {
       const db = drizzle(client, { schema });
-      const { getDomainProvisioner } = await import("@nexiom/piece-framework");
       const { Pool } = await import("pg");
+      const { ApplicationLoaderService, PipelineHookBrokerService } =
+        await import("@nexiom/engine");
+
+      // Instantiate the loader directly — this is a CLI script, not in NestJS DI.
+      // The loader reads from SHARD_APPLICATION_PATH and caches dynamically imported modules.
+      const loaderInstance = new ApplicationLoaderService();
+      const broker = new PipelineHookBrokerService(loaderInstance);
+
+      // Build a domainProvisionerResolver function that matches the TenantDatabaseManager interface:
+      //   (appName: string) => ((db, schemaName) => Promise<void>) | undefined
+      const domainProvisionerResolver = (appName: string) => {
+        return async (
+          tenantDb: import("@nexiom/database").DrizzleDb,
+          schemaName: string,
+        ) => {
+          try {
+            await broker.provisionDomain(appName, tenantDb, schemaName);
+          } catch (provisionErr) {
+            console.error(
+              `domainProvisionerResolver: broker.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
+              provisionErr instanceof Error
+                ? provisionErr.message
+                : String(provisionErr),
+            );
+            throw provisionErr;
+          }
+        };
+      };
+
       const schemaMgr = new TenantDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
         (hostIdentifier: string) => {
@@ -713,7 +741,7 @@ export class DatabaseManager {
             schema,
           }) as unknown as import("@nexiom/database").DrizzleDb;
         },
-        getDomainProvisioner,
+        domainProvisionerResolver,
       );
 
       const fixtures = [

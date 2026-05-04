@@ -1,6 +1,6 @@
 {
-  "id": "7ee90d03-640f-4b72-8a4c-8df0254a51ca",
-  "prevId": "38b72cd1-429b-47d0-a5a8-ae2885d8eb91",
+  "id": "11355518-0b43-4f42-a050-a6ae06260230",
+  "prevId": "279b691e-a4c8-472b-aa1c-b83fa02be78f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -38,12 +38,6 @@
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
         },
         "version": {
           "name": "version",
@@ -115,423 +109,6 @@
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.connector_object_profiles": {
-      "name": "connector_object_profiles",
-      "schema": "",
-      "columns": {
-        "connection_id": {
-          "name": "connection_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "object_name": {
-          "name": "object_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "profile": {
-          "name": "profile",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cop_connection_idx": {
-          "name": "cop_connection_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "connector_object_profiles_connection_id_app_connection_id_fk": {
-          "name": "connector_object_profiles_connection_id_app_connection_id_fk",
-          "tableFrom": "connector_object_profiles",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "connector_object_profiles_connection_id_object_name_pk": {
-          "name": "connector_object_profiles_connection_id_object_name_pk",
-          "columns": [
-            "connection_id",
-            "object_name"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.global_entity_map": {
-      "name": "global_entity_map",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "stitch_id": {
-          "name": "stitch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_app_name": {
-          "name": "source_app_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_app_id": {
-          "name": "source_app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_org_id": {
-          "name": "source_org_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_org_name": {
-          "name": "source_org_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source_entity_type": {
-          "name": "source_entity_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_entity_id": {
-          "name": "source_entity_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_ref_layer": {
-          "name": "source_ref_layer",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_trace_id": {
-          "name": "source_trace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_app_name": {
-          "name": "dest_app_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_app_id": {
-          "name": "dest_app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_org_id": {
-          "name": "dest_org_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_org_name": {
-          "name": "dest_org_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dest_entity_type": {
-          "name": "dest_entity_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_entity_id": {
-          "name": "dest_entity_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_ref_layer": {
-          "name": "dest_ref_layer",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dest_trace_id": {
-          "name": "dest_trace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "gem_unique_mapping_idx": {
-          "name": "gem_unique_mapping_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dest_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dest_entity_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_src_lookup_idx": {
-          "name": "gem_src_lookup_idx",
-          "columns": [
-            {
-              "expression": "source_entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_dest_lookup_idx": {
-          "name": "gem_dest_lookup_idx",
-          "columns": [
-            {
-              "expression": "dest_entity_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "dest_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_source_app_idx": {
-          "name": "gem_source_app_idx",
-          "columns": [
-            {
-              "expression": "source_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_dest_app_idx": {
-          "name": "gem_dest_app_idx",
-          "columns": [
-            {
-              "expression": "dest_app_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_src_trace_idx": {
-          "name": "gem_src_trace_idx",
-          "columns": [
-            {
-              "expression": "source_trace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_dest_trace_idx": {
-          "name": "gem_dest_trace_idx",
-          "columns": [
-            {
-              "expression": "dest_trace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gem_stitch_idx": {
-          "name": "gem_stitch_idx",
-          "columns": [
-            {
-              "expression": "stitch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "global_entity_map_stitch_id_integration_stitch_id_fk": {
-          "name": "global_entity_map_stitch_id_integration_stitch_id_fk",
-          "tableFrom": "global_entity_map",
-          "tableTo": "integration_stitch",
-          "columnsFrom": [
-            "stitch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "global_entity_map_source_app_id_app_connection_id_fk": {
-          "name": "global_entity_map_source_app_id_app_connection_id_fk",
-          "tableFrom": "global_entity_map",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "source_app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "global_entity_map_dest_app_id_app_connection_id_fk": {
-          "name": "global_entity_map_dest_app_id_app_connection_id_fk",
-          "tableFrom": "global_entity_map",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "dest_app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1546,6 +1123,732 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.tenant_storage_registry": {
+      "name": "tenant_storage_registry",
+      "schema": "",
+      "columns": {
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "database_name": {
+          "name": "database_name",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "database_host_url": {
+          "name": "database_host_url",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region_context": {
+          "name": "region_context",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "registry_dbname_unique_idx": {
+          "name": "registry_dbname_unique_idx",
+          "columns": [
+            {
+              "expression": "database_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "registry_region_idx": {
+          "name": "registry_region_idx",
+          "columns": [
+            {
+              "expression": "region_context",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ai_conversations": {
+      "name": "ai_conversations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'New Conversation'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ai_conv_tenant_idx": {
+          "name": "ai_conv_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_conv_created_idx": {
+          "name": "ai_conv_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "ai_conversations_tenant_id_id_pk": {
+          "name": "ai_conversations_tenant_id_id_pk",
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ai_messages": {
+      "name": "ai_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ai_msg_conv_idx": {
+          "name": "ai_msg_conv_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_msg_tenant_idx": {
+          "name": "ai_msg_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_msg_timeline_idx": {
+          "name": "ai_msg_timeline_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ai_messages_conversation_fk": {
+          "name": "ai_messages_conversation_fk",
+          "tableFrom": "ai_messages",
+          "tableTo": "ai_conversations",
+          "columnsFrom": [
+            "tenant_id",
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ai_messages_tenant_id_id_pk": {
+          "name": "ai_messages_tenant_id_id_pk",
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.connector_object_profiles": {
+      "name": "connector_object_profiles",
+      "schema": "",
+      "columns": {
+        "connection_id": {
+          "name": "connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_name": {
+          "name": "object_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile": {
+          "name": "profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "cop_connection_idx": {
+          "name": "cop_connection_idx",
+          "columns": [
+            {
+              "expression": "connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "connector_object_profiles_connection_id_app_connection_id_fk": {
+          "name": "connector_object_profiles_connection_id_app_connection_id_fk",
+          "tableFrom": "connector_object_profiles",
+          "tableTo": "app_connection",
+          "columnsFrom": [
+            "connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "connector_object_profiles_connection_id_object_name_pk": {
+          "name": "connector_object_profiles_connection_id_object_name_pk",
+          "columns": [
+            "connection_id",
+            "object_name"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.global_entity_map": {
+      "name": "global_entity_map",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "stitch_id": {
+          "name": "stitch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_app_name": {
+          "name": "source_app_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_app_id": {
+          "name": "source_app_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_org_id": {
+          "name": "source_org_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_org_name": {
+          "name": "source_org_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_entity_type": {
+          "name": "source_entity_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_entity_id": {
+          "name": "source_entity_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_ref_layer": {
+          "name": "source_ref_layer",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_trace_id": {
+          "name": "source_trace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_app_name": {
+          "name": "dest_app_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_app_id": {
+          "name": "dest_app_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_org_id": {
+          "name": "dest_org_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_org_name": {
+          "name": "dest_org_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dest_entity_type": {
+          "name": "dest_entity_type",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_entity_id": {
+          "name": "dest_entity_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_ref_layer": {
+          "name": "dest_ref_layer",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dest_trace_id": {
+          "name": "dest_trace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "gem_unique_mapping_idx": {
+          "name": "gem_unique_mapping_idx",
+          "columns": [
+            {
+              "expression": "stitch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dest_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dest_entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_src_lookup_idx": {
+          "name": "gem_src_lookup_idx",
+          "columns": [
+            {
+              "expression": "source_entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_dest_lookup_idx": {
+          "name": "gem_dest_lookup_idx",
+          "columns": [
+            {
+              "expression": "dest_entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "dest_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_source_app_idx": {
+          "name": "gem_source_app_idx",
+          "columns": [
+            {
+              "expression": "source_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_dest_app_idx": {
+          "name": "gem_dest_app_idx",
+          "columns": [
+            {
+              "expression": "dest_app_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_src_trace_idx": {
+          "name": "gem_src_trace_idx",
+          "columns": [
+            {
+              "expression": "source_trace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_dest_trace_idx": {
+          "name": "gem_dest_trace_idx",
+          "columns": [
+            {
+              "expression": "dest_trace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gem_stitch_idx": {
+          "name": "gem_stitch_idx",
+          "columns": [
+            {
+              "expression": "stitch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "global_entity_map_stitch_id_integration_stitch_id_fk": {
+          "name": "global_entity_map_stitch_id_integration_stitch_id_fk",
+          "tableFrom": "global_entity_map",
+          "tableTo": "integration_stitch",
+          "columnsFrom": [
+            "stitch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "global_entity_map_source_app_id_app_connection_id_fk": {
+          "name": "global_entity_map_source_app_id_app_connection_id_fk",
+          "tableFrom": "global_entity_map",
+          "tableTo": "app_connection",
+          "columnsFrom": [
+            "source_app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "global_entity_map_dest_app_id_app_connection_id_fk": {
+          "name": "global_entity_map_dest_app_id_app_connection_id_fk",
+          "tableFrom": "global_entity_map",
+          "tableTo": "app_connection",
+          "columnsFrom": [
+            "dest_app_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.field_mapping": {
       "name": "field_mapping",
       "schema": "",
@@ -2120,125 +2423,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.connection_storage_registry": {
-      "name": "connection_storage_registry",
-      "schema": "",
-      "columns": {
-        "connection_id": {
-          "name": "connection_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "data_namespace": {
-          "name": "data_namespace",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "schema_plan": {
-          "name": "schema_plan",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'NAMESPACE_ONLY'"
-        },
-        "database_host_id": {
-          "name": "database_host_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'primary-cluster'"
-        },
-        "region_context": {
-          "name": "region_context",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "registry_namespace_unique_idx": {
-          "name": "registry_namespace_unique_idx",
-          "columns": [
-            {
-              "expression": "data_namespace",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "registry_host_idx": {
-          "name": "registry_host_idx",
-          "columns": [
-            {
-              "expression": "database_host_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "registry_region_idx": {
-          "name": "registry_region_idx",
-          "columns": [
-            {
-              "expression": "region_context",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "connection_storage_registry_connection_id_app_connection_id_fk": {
-          "name": "connection_storage_registry_connection_id_app_connection_id_fk",
-          "tableFrom": "connection_storage_registry",
-          "tableTo": "app_connection",
-          "columnsFrom": [
-            "connection_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.app_connection": {
       "name": "app_connection",
       "schema": "",
@@ -2315,6 +2499,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'{}'::jsonb"
+        },
+        "schema_plan": {
+          "name": "schema_plan",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NAMESPACE_ONLY'"
         },
         "created_at": {
           "name": "created_at",
@@ -2433,21 +2624,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "app_connection_tenant_id_organization_id_fk": {
-          "name": "app_connection_tenant_id_organization_id_fk",
-          "tableFrom": "app_connection",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2648,21 +2825,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "ui_workspace_org_id_organization_id_fk": {
-          "name": "ui_workspace_org_id_organization_id_fk",
-          "tableFrom": "ui_workspace",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "ui_workspace_id_org_unique_idx": {

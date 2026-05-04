@@ -10,7 +10,7 @@ import {
 import { sql, eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { StorageResolverService } from '@nexiom/engine';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';

@@ -14,6 +14,9 @@ function buildMockDb() {
   const returningUpdate = vi.fn();
   const deleteReturning = vi.fn();
   const selectOrderBy = vi.fn();
+  const execute = vi.fn();
+
+  const wherePromise = vi.fn();
 
   return {
     findFirst,
@@ -21,7 +24,9 @@ function buildMockDb() {
     returningInsert,
     returningUpdate,
     deleteReturning,
+    wherePromise,
     selectOrderBy,
+    execute,
     db: {
       query: {
         uiWorkspaces: { findFirst, findMany },
@@ -39,6 +44,11 @@ function buildMockDb() {
       }),
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockReturnValue({
+          where: vi.fn().mockImplementation(() => {
+            return Object.assign(Promise.resolve(wherePromise()), {
+              orderBy: selectOrderBy,
+            });
+          }),
           leftJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               where: vi.fn().mockReturnValue({
@@ -48,6 +58,7 @@ function buildMockDb() {
           }),
         }),
       }),
+      execute,
     },
   };
 }
@@ -83,16 +94,55 @@ describe('WorkspacesService', () => {
 
   // ── create ────────────────────────────────────────────────────────────────
 
-  it('creates a workspace', async () => {
+  it('creates a workspace and claims a WARM database if org has none', async () => {
+    // 1st execute: SELECT existing active tenant -> no rows
+    mocks.execute.mockResolvedValueOnce({ rowCount: 0 });
+    // 2nd execute: UPDATE to claim WARM -> 1 row claimed
+    mocks.execute.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{ tenant_id: ORG_ID }],
+    });
     mocks.returningInsert.mockResolvedValue([WORKSPACE]);
 
     const result = await service.create(ORG_ID, { name: 'Logistics' });
 
     expect(result).toEqual(WORKSPACE);
+    expect(mocks.execute).toHaveBeenCalledTimes(2);
     expect(mocks.db.insert).toHaveBeenCalled();
   });
 
+  it('skips claiming WARM database if org already has an ACTIVE one', async () => {
+    // 1st execute: SELECT existing active tenant -> 1 row found
+    mocks.execute.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{ tenant_id: ORG_ID }],
+    });
+    mocks.returningInsert.mockResolvedValue([WORKSPACE]);
+
+    const result = await service.create(ORG_ID, { name: 'Logistics' });
+
+    expect(result).toEqual(WORKSPACE);
+    expect(mocks.execute).toHaveBeenCalledTimes(1); // the update execute is NOT called
+    expect(mocks.db.insert).toHaveBeenCalled();
+  });
+
+  it('throws ServiceUnavailableException when claiming WARM database fails (pool empty)', async () => {
+    // 1st execute: SELECT existing active tenant -> no rows
+    mocks.execute.mockResolvedValueOnce({ rowCount: 0 });
+    // 2nd execute: UPDATE to claim WARM -> 0 rows claimed (pool is empty)
+    mocks.execute.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+    await expect(service.create(ORG_ID, { name: 'Logistics' })).rejects.toThrow(
+      'Workspace infrastructure is being provisioned. Please try again in a few seconds.',
+    );
+  });
+
   it('throws ConflictException when DB raises a unique-violation (23505)', async () => {
+    // 1st execute: SELECT existing active tenant -> 1 row found
+    mocks.execute.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{ tenant_id: ORG_ID }],
+    });
     const pgUniqueError = Object.assign(new Error('unique'), { code: '23505' });
     mocks.returningInsert.mockRejectedValue(pgUniqueError);
 
@@ -102,6 +152,11 @@ describe('WorkspacesService', () => {
   });
 
   it('re-throws unexpected errors from insert', async () => {
+    // 1st execute: SELECT existing active tenant -> 1 row found
+    mocks.execute.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{ tenant_id: ORG_ID }],
+    });
     const boom = new Error('connection lost');
     mocks.returningInsert.mockRejectedValue(boom);
 
@@ -111,6 +166,11 @@ describe('WorkspacesService', () => {
   });
 
   it('throws InternalServerErrorException if insert returns no row', async () => {
+    // 1st execute: SELECT existing active tenant -> 1 row found
+    mocks.execute.mockResolvedValueOnce({
+      rowCount: 1,
+      rows: [{ tenant_id: ORG_ID }],
+    });
     mocks.returningInsert.mockResolvedValue([]);
 
     await expect(service.create(ORG_ID, { name: 'Logistics' })).rejects.toThrow(
@@ -191,6 +251,41 @@ describe('WorkspacesService', () => {
     await expect(service.remove(ORG_ID, WS_ID)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  // ── listAvailableConnections ──────────────────────────────────────────────
+
+  describe('listAvailableConnections', () => {
+    it('returns available connections when some are assigned', async () => {
+      // Mock workspace exists
+      mocks.findFirst.mockResolvedValue(WORKSPACE);
+      // Mock assigned connections
+      mocks.wherePromise.mockReturnValueOnce([{ connectionId: 'conn-1' }]);
+      // Mock available connections
+      mocks.selectOrderBy.mockResolvedValue([
+        { id: 'conn-2', appName: 'salesforce' },
+      ]);
+
+      const result = await service.listAvailableConnections(ORG_ID, WS_ID);
+
+      expect(result).toEqual([{ id: 'conn-2', appName: 'salesforce' }]);
+      expect(mocks.db.select).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns available connections when none are assigned', async () => {
+      // Mock workspace exists
+      mocks.findFirst.mockResolvedValue(WORKSPACE);
+      // Mock assigned connections (none)
+      mocks.wherePromise.mockReturnValueOnce([]);
+      // Mock available connections
+      mocks.selectOrderBy.mockResolvedValue([
+        { id: 'conn-1', appName: 'salesforce' },
+      ]);
+
+      const result = await service.listAvailableConnections(ORG_ID, WS_ID);
+
+      expect(result).toEqual([{ id: 'conn-1', appName: 'salesforce' }]);
+    });
   });
 
   // ── listConnections ───────────────────────────────────────────────────────

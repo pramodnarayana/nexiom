@@ -8,6 +8,11 @@ import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 import { StorageResolverService } from '@nexiom/engine';
+import { executeAppWebhookResponses } from '@nexiom/piece-framework';
+
+vi.mock('@nexiom/piece-framework', () => ({
+  executeAppWebhookResponses: vi.fn(),
+}));
 
 const loggerMock = {
   assign: vi.fn(),
@@ -111,6 +116,24 @@ describe('WebhooksController', () => {
     const pgError = Object.assign(new Error('unique_violation'), {
       code: '23505',
       constraint: 'idx_l1_ext_id',
+    });
+    db.transaction.mockRejectedValueOnce(pgError);
+
+    await expect(
+      controller.ingest(
+        '00000000-0000-0000-0000-000000000001',
+        { foo: 'bar' },
+        {},
+        {} as any,
+        {} as any,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('returns 202 (does not throw) when DB throws 23505 with detail containing ext_req_id', async () => {
+    const pgError = Object.assign(new Error('unique_violation'), {
+      code: '23505',
+      detail: 'Key (connection_id, ext_req_id)=(..., ...) already exists.',
     });
     db.transaction.mockRejectedValueOnce(pgError);
 
@@ -405,5 +428,56 @@ describe('WebhooksController', () => {
       traceId: 'existing-trace-id',
       connectionId: '00000000-0000-0000-0000-000000000001',
     });
+  });
+
+  it('returns app-defined synchronous response on idempotency collision', async () => {
+    const pgError = Object.assign(new Error('unique_violation'), {
+      code: '23505',
+      constraint: 'idx_l1_ext_id',
+    });
+    db.transaction
+      .mockRejectedValueOnce(pgError)
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          execute: vi.fn().mockResolvedValue(undefined),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([
+              { traceId: 'existing-trace-id', response: null },
+            ]),
+          update: vi.fn().mockReturnThis(),
+          set: vi.fn().mockReturnThis(),
+        };
+        await cb(mockTx);
+      });
+
+    vi.mocked(executeAppWebhookResponses).mockReturnValue({
+      status: 200,
+      contentType: 'text/xml',
+      body: '<response>ok</response>',
+    });
+
+    const mockRes = {
+      status: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    };
+
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      { foo: 'bar' },
+      { 'x-webhook-id': 'sf-event-123' },
+      {} as any,
+      mockRes as any,
+    );
+
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.set).toHaveBeenCalledWith('Content-Type', 'text/xml');
+    expect(mockRes.send).toHaveBeenCalledWith('<response>ok</response>');
+
+    vi.mocked(executeAppWebhookResponses).mockReturnValue(null); // reset
   });
 });

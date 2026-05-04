@@ -3,7 +3,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
-import { DB_MANAGER } from "../dbmanager/dbmanager.module.js";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const MAX_ATTEMPTS = 6; // mirrors the constant in the worker
@@ -48,20 +48,19 @@ describe("NormalizedOutboxWorker", () => {
       { id: "out_1", traceId: "trace_1", connectionId: "conn_1", attempts: 1 },
     ]);
 
+    const mockTenants: any = [{ tenantId: "tenant_1" }];
+    mockTenants.where = vi
+      .fn()
+      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
+
     globalDb = {
       select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockResolvedValue([{ tenantId: "tenant_1" }]),
+      from: vi.fn().mockReturnValue(mockTenants),
     };
 
     dbManager = {
       getTenantDb: vi.fn().mockResolvedValue(tenantDb),
     };
-
-    tenantDb.select = vi.fn().mockReturnThis();
-    tenantDb.from = vi.fn().mockReturnThis();
-    tenantDb.where = vi
-      .fn()
-      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -128,11 +127,6 @@ describe("NormalizedOutboxWorker", () => {
         attempts: MAX_ATTEMPTS,
       },
     ]);
-    tenantDb.select = vi.fn().mockReturnThis();
-    tenantDb.from = vi.fn().mockReturnThis();
-    tenantDb.where = vi
-      .fn()
-      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
     dbManager.getTenantDb.mockResolvedValue(tenantDb);
 
     const module = await Test.createTestingModule({
@@ -195,7 +189,10 @@ describe("NormalizedOutboxWorker", () => {
   });
 
   it("should handle schema query errors securely without throwing", async () => {
-    tenantDb.from.mockRejectedValueOnce(new Error("Schema query error"));
+    // Mock rejection from where() chain, simulating a query error in production code
+    globalDb.from.mockReturnValueOnce({
+      where: vi.fn().mockRejectedValueOnce(new Error("Schema query error")),
+    });
     await expect(worker.processOutbox()).resolves.toBeUndefined();
   });
 

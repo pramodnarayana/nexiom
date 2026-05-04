@@ -5,7 +5,7 @@ import { ConnectorsService } from './connectors.service.js';
 import { EncryptionService, AppCredentialError } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { SchemaPlan } from '@nexiom/dbmanager';
 import {
   InternalServerErrorException,

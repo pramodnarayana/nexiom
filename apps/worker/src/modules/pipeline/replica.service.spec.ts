@@ -3,45 +3,31 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ReplicaService } from "./replica.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
+import {
+  StorageResolverService,
+  PipelineHookBrokerService,
+} from "@nexiom/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@nexiom/piece-framework", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@nexiom/piece-framework")>();
-  return {
-    ...actual,
-    getReplicaExtractor: vi
-      .fn()
-      .mockImplementation((appName: string, appProfile: string) => {
-        if (appName === "test_extraction_fail") {
-          return () => null; // Extractor returns null → no entityId found
-        }
-        if (appName === "test_empty_entityid") {
-          return () => ({ entityType: "DEFAULT", entityId: "", data: {} });
-        }
-        if (appName === "salesforce" && appProfile === "revenova") {
-          // Happy-path extractor: returns a stable entityId from the request
-          return (payload: Record<string, unknown>) => ({
-            entityType: (payload?.objectType as string) || "sf_Account",
-            entityId: (payload?.extReqId as string) || "mock-entity-id",
-            data: payload ?? {},
-          });
-        }
-        return undefined;
-      }),
-  };
-});
 describe("ReplicaService", () => {
   let service: ReplicaService;
   let queueService: any;
   let db: any;
   let storageResolver: any;
+  let hookBroker: { extractReplica: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     queueService = {
       consume: vi.fn(),
       send: vi.fn().mockResolvedValue(undefined),
+    };
+    // Default happy-path extractor
+    hookBroker = {
+      extractReplica: vi.fn().mockResolvedValue({
+        entityType: "sf_Account",
+        entityId: "mock-entity-id",
+        data: {},
+      }),
     };
     db = {
       select: vi.fn().mockReturnThis(),
@@ -87,6 +73,7 @@ describe("ReplicaService", () => {
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        { provide: PipelineHookBrokerService, useValue: hookBroker },
       ],
     }).compile();
 
@@ -215,8 +202,10 @@ describe("ReplicaService", () => {
   });
 
   it("should throw if replica extraction fails due to payload shape mismatch", async () => {
-    // Return a piece appName that demands extraction and has a mock returning null
-    db.limit.mockResolvedValueOnce([{ appName: "test_extraction_fail" }]);
+    hookBroker.extractReplica.mockResolvedValueOnce(null);
+    db.limit.mockResolvedValueOnce([
+      { appName: "salesforce", metadata: { appProfile: "revenova" } },
+    ]);
     db.transaction.mockImplementationOnce(async (cb: any) =>
       cb({
         execute: vi.fn(),
@@ -230,7 +219,7 @@ describe("ReplicaService", () => {
             extReqId: "bar",
             id: "1",
             status: "RECEIVED",
-            request: { junk: "data" }, // Missing the root envelope to fail extraction
+            request: { junk: "data" },
           },
         ]),
         insert: vi.fn().mockReturnThis(),
@@ -246,15 +235,12 @@ describe("ReplicaService", () => {
   });
 
   it("should throw if extractor returns null (no stable entityId found)", async () => {
-    // Override connection to use an appName that always fails extraction
-    db.limit.mockResolvedValueOnce([
-      { appName: "test_extraction_fail", metadata: { appProfile: "default" } },
-    ]);
+    hookBroker.extractReplica.mockResolvedValueOnce(null);
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", connectionId: "456" }),
-    ).rejects.toThrow("extractor returned null");
+    ).rejects.toThrow("shard returned null");
   });
 
   it("should log nested error when error-handler transaction also fails", async () => {
@@ -319,10 +305,12 @@ describe("ReplicaService", () => {
   });
 
   it("should throw if extractor returns an entity with empty entityId", async () => {
-    // Use a dedicated mock appName that returns a blank entityId
-    db.limit.mockResolvedValueOnce([
-      { appName: "test_empty_entityid", metadata: { appProfile: "default" } },
-    ]);
+    // hookBroker returns an entity with blank entityId
+    hookBroker.extractReplica.mockResolvedValueOnce({
+      entityType: "DEFAULT",
+      entityId: "",
+      data: {},
+    });
     db.transaction.mockImplementationOnce(async (cb: any) =>
       cb({
         execute: vi.fn().mockResolvedValue(undefined),

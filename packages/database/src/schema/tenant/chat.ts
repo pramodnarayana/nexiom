@@ -1,6 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, index, primaryKey, foreignKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { organization } from '../global/identity.js';
+// NOTE: No cross-DB FK to organization — tenant isolation enforced by TenantDatabaseManager routing.
 
 /**
  * Storage for ChatGPT-style conversational grouping.
@@ -47,22 +47,13 @@ export const aiMessages = pgTable('ai_messages', {
     };
 });
 
-// Relationships
-export const aiConversationsRelations = relations(aiConversations, ({ one, many }) => ({
-    tenant: one(organization, {
-        fields: [aiConversations.tenantId],
-        references: [organization.id],
-    }),
+// Relationships (within-tenant only — no cross-DB relations to global organization table)
+export const aiConversationsRelations = relations(aiConversations, ({ many }) => ({
     messages: many(aiMessages),
 }));
 
 export const aiMessagesRelations = relations(aiMessages, ({ one }) => ({
-    tenant: one(organization, {
-        fields: [aiMessages.tenantId],
-        references: [organization.id],
-    }),
     conversation: one(aiConversations, {
-        // Must match the composite PK
         fields: [aiMessages.tenantId, aiMessages.conversationId],
         references: [aiConversations.tenantId, aiConversations.id],
     }),

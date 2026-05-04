@@ -42,12 +42,11 @@ if (!process.env.DATABASE_URL) {
     );
 }
 
-// Schema points to the compiled JavaScript source files.
-// This bypasses jiti's difficulty in resolving explicit .js extensions
-// inside TypeScript files when using type: "module" (ESM resolution).
+// Global DB schema ONLY — identity, registry, pieces.
+// Tenant-specific tables are managed by drizzle.config.tenant.ts.
 export default {
-    schema: './dist/schema/*.js',
-    out: './drizzle',
+    schema: ['./dist/schema/global/**/*.js'],
+    out: './drizzle/global',
     dialect: 'postgresql',
     dbCredentials: {
         url: process.env.DATABASE_URL,

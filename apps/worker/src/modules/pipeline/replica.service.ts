@@ -13,9 +13,11 @@ import {
   appConnections,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
+import {
+  StorageResolverService,
+  PipelineHookBrokerService,
+} from "@nexiom/engine";
 import { sql, eq, and } from "drizzle-orm";
-import { getReplicaExtractor } from "@nexiom/piece-framework";
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
@@ -25,6 +27,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    private readonly hookBroker: PipelineHookBrokerService,
   ) {}
 
   onModuleInit() {
@@ -134,33 +137,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        const extractor = getReplicaExtractor(appName, appProfile);
-
-        // If the connection has an explicit appProfile (e.g. "revenova") but no
-        // extractor is registered for it, this is a hard misconfiguration — fail
-        // loudly rather than silently emitting raw data, which would be invisible
-        // until someone notices the replica table looks wrong.
-        if (!extractor && appProfile !== "default") {
-          throw new Error(
-            `No ReplicaExtractor registered for appName="${appName}" appProfile="${appProfile}". ` +
-              `Ensure the application package (e.g. @nexiom/application-${appProfile}) is imported in the worker entry point.`,
-          );
-        }
-
-        // If no extractor is available (appProfile=default), fail early with a clear error
-        if (!extractor) {
-          throw new Error(
-            `No ReplicaExtractor available for traceId ${traceId} (appName="${appName}", appProfile="${appProfile}"). ` +
-              `Cannot derive stable entityId from raw payload. ` +
-              `Set a valid appProfile on the connection or register a default extractor.`,
-          );
-        }
-
-        const extracted = extractor(inbound.request);
+        const extracted = await this.hookBroker.extractReplica(
+          appName,
+          appProfile,
+          inbound.request,
+        );
 
         if (!extracted) {
           throw new Error(
-            `Replica extraction failed for traceId ${traceId}: extractor returned null. ` +
+            `Replica extraction failed for traceId ${traceId}: shard returned null. ` +
               `Likely the payload is missing the required entity ID (e.g. sf:id).`,
           );
         }

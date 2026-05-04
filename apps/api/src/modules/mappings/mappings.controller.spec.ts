@@ -43,24 +43,24 @@ describe('MappingsController', () => {
     const payload = new CreateMapping();
     const expected = { id: '123', ...payload };
     const spy = vi.spyOn(service, 'create').mockResolvedValue(expected as any);
-    const result = await controller.create(payload);
-    expect(spy).toHaveBeenCalledWith(payload);
+    const result = await controller.create('tenant1', payload);
+    expect(spy).toHaveBeenCalledWith('tenant1', payload);
     expect(result).toEqual(expected);
   });
 
   it('findAll() should map to service.findAll', async () => {
     const expected = [{ id: '1' }, { id: '2' }];
     const spy = vi.spyOn(service, 'findAll').mockResolvedValue(expected as any);
-    const result = await controller.findAll();
-    expect(spy).toHaveBeenCalled();
+    const result = await controller.findAll('tenant1');
+    expect(spy).toHaveBeenCalledWith('tenant1');
     expect(result).toEqual(expected);
   });
 
   it('findOne() should map to service.findOne', async () => {
     const expected = { id: 'abc', appName: 'test' };
     const spy = vi.spyOn(service, 'findOne').mockResolvedValue(expected as any);
-    const result = await controller.findOne('abc');
-    expect(spy).toHaveBeenCalledWith('abc');
+    const result = await controller.findOne('tenant1', 'abc');
+    expect(spy).toHaveBeenCalledWith('tenant1', 'abc');
     expect(result).toEqual(expected);
   });
 
@@ -68,8 +68,8 @@ describe('MappingsController', () => {
     const payload = new UpdateMapping();
     const expected = { id: 'abc', ...payload };
     const spy = vi.spyOn(service, 'update').mockResolvedValue(expected as any);
-    const result = await controller.updatePartial('abc', payload);
-    expect(spy).toHaveBeenCalledWith('abc', payload);
+    const result = await controller.updatePartial('tenant1', 'abc', payload);
+    expect(spy).toHaveBeenCalledWith('tenant1', 'abc', payload);
     expect(result).toEqual(expected);
   });
 
@@ -77,16 +77,16 @@ describe('MappingsController', () => {
     const payload = new UpdateMapping();
     const expected = { id: 'abc', ...payload };
     const spy = vi.spyOn(service, 'update').mockResolvedValue(expected as any);
-    const result = await controller.update('abc', payload);
-    expect(spy).toHaveBeenCalledWith('abc', payload);
+    const result = await controller.update('tenant1', 'abc', payload);
+    expect(spy).toHaveBeenCalledWith('tenant1', 'abc', payload);
     expect(result).toEqual(expected);
   });
 
   it('remove() should map to service.remove', async () => {
     const expected = { success: true };
     const spy = vi.spyOn(service, 'remove').mockResolvedValue(expected as any);
-    const result = await controller.remove('abc');
-    expect(spy).toHaveBeenCalledWith('abc');
+    const result = await controller.remove('tenant1', 'abc');
+    expect(spy).toHaveBeenCalledWith('tenant1', 'abc');
     expect(result).toEqual(expected);
   });
 });

@@ -1,11 +1,16 @@
 // ---------------------------------------------------------------------------
 // Application Hook Registries
 //
-// Provides the extension points that application-layer packages (domain/tms,
-// domain/accounting, etc.) use to plug into the platform pipeline.
+// @deprecated
+// These static in-memory registries are superseded by the dynamic shard
+// loading architecture (ApplicationLoaderService + PipelineHookBrokerService).
 //
-// Naming convention: "normalized" everywhere — consistent with NormalizationService,
-// normalized_entity, and NormalizedRecord.
+// Pipeline services (ReplicaService, NormalizationService, TargetBuilderService)
+// now load application code at runtime via PipelineHookBrokerService and
+// no longer call any register* / get* functions from this file.
+//
+// This file is retained for one release cycle to avoid breaking any external
+// consumers. It will be deleted in a future cleanup pass.
 // ---------------------------------------------------------------------------
 
 /**
@@ -15,6 +20,8 @@
  *
  * tx and db are typed as `unknown` so @nexiom/piece-framework stays
  * database-agnostic. Domain packages cast them to DrizzleDb.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppNormalizedWriterFn = (
     tx: unknown,
@@ -32,6 +39,8 @@ export type AppNormalizedWriterFn = (
  * application's typed normalized tables before field mapping is applied.
  *
  * db is typed as `unknown` so the framework stays database-agnostic.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppTargetBuilderFn = (
     db: unknown,
@@ -50,6 +59,8 @@ export type AppTargetBuilderFn = (
  * per-entity tables (tms_carrier, tms_tp, etc.) using IF NOT EXISTS DDL.
  *
  * db is typed as `unknown` so the framework stays database-agnostic.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppDomainProvisionerFn = (
     db: unknown,
@@ -63,6 +74,8 @@ const domainProvisionerRegistry = new Map<string, AppDomainProvisionerFn>();
 /**
  * Registers an application-layer normalized writer.
  * Called from the connector piece's index.ts at module load time.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export function registerNormalizedWriter(appName: string, appProfile: string, fn: AppNormalizedWriterFn): void {
     if (!normalizedWriterRegistry.has(appName)) normalizedWriterRegistry.set(appName, new Map());
@@ -77,6 +90,9 @@ export function registerNormalizedWriter(appName: string, appProfile: string, fn
     appMap.set(appProfile, fn);
 }
 
+/**
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
+ */
 export function getNormalizedWriter(appName: string, appProfile: string | undefined): AppNormalizedWriterFn | undefined {
     if (!appProfile) return undefined;
     return normalizedWriterRegistry.get(appName)?.get(appProfile);
@@ -85,6 +101,8 @@ export function getNormalizedWriter(appName: string, appProfile: string | undefi
 /**
  * Registers an application-layer target builder.
  * Called from the connector piece's index.ts at module load time.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export function registerTargetBuilder(appName: string, appProfile: string, fn: AppTargetBuilderFn): void {
     if (!targetBuilderRegistry.has(appName)) targetBuilderRegistry.set(appName, new Map());
@@ -99,6 +117,9 @@ export function registerTargetBuilder(appName: string, appProfile: string, fn: A
     appMap.set(appProfile, fn);
 }
 
+/**
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
+ */
 export function getTargetBuilder(appName: string, appProfile: string | undefined): AppTargetBuilderFn | undefined {
     if (!appProfile) return undefined;
     return targetBuilderRegistry.get(appName)?.get(appProfile);
@@ -111,6 +132,8 @@ export function getTargetBuilder(appName: string, appProfile: string | undefined
  * The platform's workspace activation flow calls this to create the
  * application's domain tables (tms_carrier, tms_tp, etc.) per tenant schema.
  * All DDL inside MUST be idempotent (CREATE TABLE IF NOT EXISTS).
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export function registerDomainProvisioner(appName: string, fn: AppDomainProvisionerFn): void {
     if (domainProvisionerRegistry.has(appName)) {
@@ -123,6 +146,9 @@ export function registerDomainProvisioner(appName: string, fn: AppDomainProvisio
     domainProvisionerRegistry.set(appName, fn);
 }
 
+/**
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
+ */
 export function getDomainProvisioner(appName: string): AppDomainProvisionerFn | undefined {
     return domainProvisionerRegistry.get(appName);
 }
@@ -130,6 +156,8 @@ export function getDomainProvisioner(appName: string): AppDomainProvisionerFn | 
 /**
  * INTERNAL TEST HELPER — Clears all app hook registries.
  * This function is exported for test isolation only. Do not call in production code.
+ *
+ * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export function __resetAppHookRegistries(): void {
     normalizedWriterRegistry.clear();

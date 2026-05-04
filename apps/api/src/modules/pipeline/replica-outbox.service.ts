@@ -12,7 +12,7 @@ import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
 import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;

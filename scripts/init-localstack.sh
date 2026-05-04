@@ -15,6 +15,8 @@ QUEUES=(
   "replica-queue"
   "normalized-queue"
   "delivery-queue"
+  "gitops-queue"
+  "tenant-provision-queue"
 )
 
 # Step 1: Create all DLQs first (no redrive policy); idempotent — ignore

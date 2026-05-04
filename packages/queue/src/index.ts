@@ -11,3 +11,4 @@ export type {
   QueueModuleAsyncOptions,
 } from "./queue.module.js";
 export { createQueueModuleOptions } from "./queue.options.js";
+export type { ProvisionDatabaseEvent } from "./events/provision-database.event.js";

@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "1.0.0",
 	"scripts": {
-		"dev": "dotenv -e .env -- turbo dev",
+		"dev": "dotenv -e .env -- turbo dev --concurrency=20",
 		"dev:light": "QUEUE_ENABLED=false dotenv -e .env -- pnpm --parallel --filter=api --filter=web --filter=@nexiom/ai-engine --filter=@nexiom/piece-quickbooks --filter=@nexiom/piece-salesforce --filter=@nexiom/piece-registry --filter=@nexiom/application-revenova dev",
 		"build": "turbo build",
 		"lint": "turbo lint",
@@ -14,6 +14,7 @@
 		"db:migrate": "pnpm --filter @nexiom/database db:migrate",
 		"db:generate": "pnpm --filter @nexiom/database db:generate",
 		"db:studio": "pnpm --filter @nexiom/database db:studio",
+		"db:studio:tenant": "pnpm --filter @nexiom/database db:studio:tenant",
 		"db:seed": "pnpm --filter api db:seed",
 		"check:env": "{ [ -e .env ] || { echo '\n❌ ERROR: .env file is missing at the root! Please create it or fetch it from your secrets manager.\n'; exit 1; }; }",
 		"infra:reset": "pnpm check:env && docker compose down -v && pnpm setup:local",
@@ -51,7 +52,7 @@
 	},
 	"packageManager": "pnpm@10.27.0",
 	"engines": {
-		"node": "20.x"
+		"node": ">=20.18.1"
 	},
 	"pnpm": {
 		"overrides": {

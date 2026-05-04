@@ -1,12 +1,14 @@
 import {
   Injectable,
   Inject,
+  Logger,
   NotFoundException,
   ConflictException,
   BadRequestException,
   InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { eq, and, asc, notInArray } from 'drizzle-orm';
+import { eq, and, asc, notInArray, sql } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -23,10 +25,49 @@ import { isUniqueViolation } from '../../shared/db.utils.js';
 
 @Injectable()
 export class WorkspacesService {
+  private readonly logger = new Logger(WorkspacesService.name);
+
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
 
   async create(orgId: string, body: CreateWorkspace) {
     try {
+      // ── Deferred Provisioning: Claim a WARM database slot ──────────────
+      // Only claim a new database if this org does not already have one.
+      // FOR UPDATE SKIP LOCKED ensures concurrent workspace creations do not
+      // race to claim the same slot.
+      const hasDb = await this.db.execute<{ tenant_id: string }>(
+        sql`SELECT tenant_id
+            FROM tenant_storage_registry
+            WHERE tenant_id = ${orgId}
+              AND status = 'ACTIVE'
+            LIMIT 1`,
+      );
+
+      if ((hasDb.rowCount ?? 0) === 0) {
+        const claimed = await this.db.execute<{ tenant_id: string }>(
+          sql`UPDATE tenant_storage_registry
+              SET tenant_id = ${orgId}, status = 'ACTIVE', updated_at = NOW()
+              WHERE tenant_id = (
+                SELECT tenant_id FROM tenant_storage_registry
+                WHERE status = 'WARM'
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+              )
+              RETURNING tenant_id`,
+        );
+
+        if ((claimed.rowCount ?? 0) === 0) {
+          // Pool is empty — the CapacityManager will replenish it shortly.
+          // Return 503 so the client can retry after the pool is filled.
+          throw new ServiceUnavailableException(
+            'Workspace infrastructure is being provisioned. Please try again in a few seconds.',
+          );
+        }
+
+        this.logger.log(`Claimed WARM database slot for orgId=${orgId}`);
+      }
+
+      // ── Create the logical Workspace record ───────────────────────────
       const [workspace] = await this.db
         .insert(uiWorkspaces)
         .values({
