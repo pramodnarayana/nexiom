@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCipheriv, randomBytes } from 'node:crypto';
-import { Client } from 'pg';
+import { Client, type Pool } from 'pg';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, sql } from 'drizzle-orm';
 import * as schema from './schema.js';

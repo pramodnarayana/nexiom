@@ -1,5 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { QueueService, QueueName, type ProvisionDatabaseEvent } from "@nexiom/queue";
+import {
+  QueueService,
+  QueueName,
+  type ProvisionDatabaseEvent,
+} from "@nexiom/queue";
 import { Client as PgClient, Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -99,11 +103,11 @@ export class TenantProvisionWorker implements OnModuleInit {
 
   private async runMigrations(dbName: string, hostUrl: string): Promise<void> {
     // Recompose full connection string by reading credentials from DATABASE_URL
-    const dbUrl = process.env.DATABASE_URL ?? '';
+    const dbUrl = process.env.DATABASE_URL ?? "";
     const parsedEnv = new URL(dbUrl);
     const auth = parsedEnv.username
-      ? `${parsedEnv.username}${parsedEnv.password ? ':' + parsedEnv.password : ''}@`
-      : '';
+      ? `${parsedEnv.username}${parsedEnv.password ? ":" + parsedEnv.password : ""}@`
+      : "";
     const tenantUrl = `${hostUrl.replace(/\/$/, "").replace(/^([^:]+:\/\/)/, `$1${auth}`)}/${dbName}`;
 
     const migrationsFolder =

@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
-import { canonicalMappings } from '@nexiom/database';
+import { canonicalMappings, DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
 import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
 
 @Injectable()
@@ -9,6 +9,7 @@ export class MappingService {
   constructor(
     private readonly logger: PinoLogger,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
   ) {
     this.logger.setContext(MappingService.name);
   }
@@ -48,8 +49,7 @@ export class MappingService {
     }
 
     // If no tenant-specific mapping found, fall back to global canonical mapping
-    const globalDb = await this.dbManager.getGlobalDb();
-    const globalMappingRecord = await globalDb.select({ config: canonicalMappings.mappingConfig })
+    const globalMappingRecord = await this.globalDb.select({ config: canonicalMappings.mappingConfig })
       .from(canonicalMappings)
       .where(
         and(

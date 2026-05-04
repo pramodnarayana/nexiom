@@ -44,10 +44,7 @@ const getDbClient = () => {
 
 // --- Helpers ---
 
-async function seedRbac(
-  client: Client,
-  db: NodePgDatabase<typeof schema>,
-) {
+async function seedRbac(client: Client) {
   console.log('3️⃣  Seeding RBAC (Roles & Permissions)...');
 
   // Get validated env vars (throws if missing)
@@ -103,7 +100,7 @@ async function elevateToOwner(
     .onConflictDoNothing();
 
   if (!skipSeed) {
-    await seedRbac(client, db);
+    await seedRbac(client);
   }
 
   // Find user

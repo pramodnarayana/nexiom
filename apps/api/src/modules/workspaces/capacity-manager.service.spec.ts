@@ -35,6 +35,8 @@ describe('CapacityManagerService', () => {
     vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
     errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
   });
 
   describe('replenishPool', () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TenantProvisionWorker } from "./tenant-provision.worker.js";
 import { QueueName } from "@nexiom/queue";
 import type { QueueService } from "@nexiom/queue";
-import type { ProvisionDatabaseEvent } from "./provision-database.event.js";
+import type { ProvisionDatabaseEvent } from "@nexiom/queue";
 
 // --- Mocks ---
 const mockQuery = vi.fn();
@@ -41,6 +41,12 @@ describe("TenantProvisionWorker", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockQuery.mockReset();
+    mockConnect.mockReset();
+    mockEnd.mockReset();
+    mockPoolEnd.mockReset();
+
+    process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/testdb";
 
     queueServiceMock = {
       consume: vi.fn(),
@@ -73,7 +79,7 @@ describe("TenantProvisionWorker", () => {
 
     it("creates database, runs migrations, and registers slot as WARM", async () => {
       // Mock PG to simulate the database does NOT exist initially
-      mockQuery.mockResolvedValueOnce({ rowCount: 0 }); // SELECT 1 FROM pg_database ...
+      mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // SELECT 1 FROM pg_database ...
       mockQuery.mockResolvedValueOnce({ rowCount: 0 }); // CREATE DATABASE
       mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE tenant_storage_registry
 
@@ -114,7 +120,10 @@ describe("TenantProvisionWorker", () => {
 
     it("skips database creation if it already exists, but still runs migrations and updates registry", async () => {
       // Mock PG to simulate the database DOES exist
-      mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // SELECT 1 FROM pg_database ...
+      mockQuery.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ "?column?": 1 }],
+      }); // SELECT 1 FROM pg_database ...
       mockQuery.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE tenant_storage_registry
 
       await handler({

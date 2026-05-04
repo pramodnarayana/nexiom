@@ -2,7 +2,11 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { QueueService, QueueName, type ProvisionDatabaseEvent } from '@nexiom/queue';
+import {
+  QueueService,
+  QueueName,
+  type ProvisionDatabaseEvent,
+} from '@nexiom/queue';
 import { sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
