@@ -1,11 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName, type ProvisionDatabaseEvent } from "@nexiom/queue";
 import { Client as PgClient, Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ProvisionDatabaseEvent } from "./provision-database.event.js";
 
 /**
  * TenantProvisionWorker
@@ -34,7 +33,15 @@ export class TenantProvisionWorker implements OnModuleInit {
         this.logger.log(
           `Received ProvisionDatabaseEvent — poolSlotId=${event.poolSlotId}`,
         );
-        await this.provision(event);
+        try {
+          await this.provision(event);
+        } catch (err) {
+          this.logger.error(
+            `Failed to provision database for poolSlotId=${event.poolSlotId}: ${err instanceof Error ? err.message : String(err)}`,
+            err instanceof Error ? err.stack : undefined,
+          );
+          throw err;
+        }
       },
     );
   }
@@ -79,7 +86,7 @@ export class TenantProvisionWorker implements OnModuleInit {
         `SELECT 1 FROM pg_database WHERE datname = $1`,
         [dbName],
       );
-      if ((existing.rowCount ?? 0) === 0) {
+      if (existing.rows.length === 0) {
         await adminClient.query(`CREATE DATABASE "${dbName}"`);
         this.logger.log(`  ✓ Created database: ${dbName}`);
       } else {
@@ -91,16 +98,23 @@ export class TenantProvisionWorker implements OnModuleInit {
   }
 
   private async runMigrations(dbName: string, hostUrl: string): Promise<void> {
-    const tenantUrl = `${hostUrl.replace(/\/$/, "")}/${dbName}`;
+    // Recompose full connection string by reading credentials from DATABASE_URL
+    const dbUrl = process.env.DATABASE_URL ?? '';
+    const parsedEnv = new URL(dbUrl);
+    const auth = parsedEnv.username
+      ? `${parsedEnv.username}${parsedEnv.password ? ':' + parsedEnv.password : ''}@`
+      : '';
+    const tenantUrl = `${hostUrl.replace(/\/$/, "").replace(/^([^:]+:\/\/)/, `$1${auth}`)}/${dbName}`;
 
-    const rootDir = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../../../",
-    );
-    const migrationsFolder = path.join(
-      rootDir,
-      "packages/database/drizzle/tenant",
-    );
+    const migrationsFolder =
+      process.env.MIGRATIONS_DIR ??
+      path.join(
+        path.resolve(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "../../../../",
+        ),
+        "packages/database/drizzle/tenant",
+      );
 
     const pool = new Pool({ connectionString: tenantUrl, max: 2 });
     try {
@@ -120,15 +134,21 @@ export class TenantProvisionWorker implements OnModuleInit {
 
     try {
       // Update the INITIALIZING slot to WARM
-      await adminClient.query(
+      const result = await adminClient.query(
         `UPDATE tenant_storage_registry
          SET status = 'WARM', updated_at = NOW()
          WHERE tenant_id = $1`,
         [`WARM-${poolSlotId}`],
       );
-      this.logger.log(
-        `  ✓ Registered WARM slot in registry: WARM-${poolSlotId}`,
-      );
+      if (result.rowCount === 0) {
+        this.logger.warn(
+          `  ⚠️  No row updated in tenant_storage_registry for poolSlotId=${poolSlotId} (tenant_id=WARM-${poolSlotId}). The INITIALIZING row may not exist.`,
+        );
+      } else {
+        this.logger.log(
+          `  ✓ Registered WARM slot in registry: WARM-${poolSlotId}`,
+        );
+      }
     } finally {
       await adminClient.end();
     }

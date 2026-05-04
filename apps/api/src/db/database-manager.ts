@@ -881,7 +881,13 @@ export class DatabaseManager {
         ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
         : '';
       hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
-    } catch {
+    } catch (err) {
+      const redactedUrl = process.env.DATABASE_URL
+        ? process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***:***@')
+        : '(not set)';
+      console.warn(
+        `⚠️  Failed to parse DATABASE_URL: ${redactedUrl}. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to default.`,
+      );
       hostUrl = 'postgresql://user:password@localhost:5432';
     }
 
@@ -922,25 +928,27 @@ export class DatabaseManager {
 
     // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
     const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
-    const tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
-    const tenantDb = drizzle(tenantPool, { schema: dbSchema });
-
-    const { SchemaPlan } = await import('@nexiom/dbmanager');
-    const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
-    const { getDomainProvisioner } = await import('@nexiom/piece-framework');
-
-    const schemaMgr = new TenantDatabaseManager(
-      globalDb as unknown as import('@nexiom/database').DrizzleDb,
-      (_hostIdentifier: string) => {
-        const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
-        return drizzle(pool2, {
-          schema: dbSchema,
-        }) as unknown as import('@nexiom/database').DrizzleDb;
-      },
-      getDomainProvisioner,
-    );
+    let tenantPool: Pool | undefined;
 
     try {
+      tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
+      const tenantDb = drizzle(tenantPool, { schema: dbSchema });
+
+      const { SchemaPlan } = await import('@nexiom/dbmanager');
+      const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
+      const { getDomainProvisioner } = await import('@nexiom/piece-framework');
+
+      const schemaMgr = new TenantDatabaseManager(
+        globalDb as unknown as import('@nexiom/database').DrizzleDb,
+        (_hostIdentifier: string) => {
+          const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+          return drizzle(pool2, {
+            schema: dbSchema,
+          }) as unknown as import('@nexiom/database').DrizzleDb;
+        },
+        getDomainProvisioner,
+      );
+
       const fixtures = [
         {
           id: '00000000-0000-0000-0000-000000000001',
@@ -1050,7 +1058,9 @@ export class DatabaseManager {
           '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
       );
     } finally {
-      await tenantPool.end();
+      if (tenantPool) {
+        await tenantPool.end();
+      }
       await globalClient.end();
     }
   }

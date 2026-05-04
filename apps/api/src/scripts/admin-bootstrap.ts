@@ -44,7 +44,10 @@ const getDbClient = () => {
 
 // --- Helpers ---
 
-async function seedRbac(db: NodePgDatabase<typeof schema>) {
+async function seedRbac(
+  client: Client,
+  db: NodePgDatabase<typeof schema>,
+) {
   console.log('3️⃣  Seeding RBAC (Roles & Permissions)...');
 
   // Get validated env vars (throws if missing)
@@ -55,15 +58,14 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
     systemTenantId: getRequiredSystemTenantId(),
   };
 
-  await seedSystemRbac(
-    db as unknown as NodePgDatabase<typeof identitySchema>,
-    config,
-    console,
-  );
+  // Create a new Drizzle instance scoped to the identity schema
+  const identityDb = drizzle(client, { schema: identitySchema });
+  await seedSystemRbac(identityDb, config, console);
 }
 
 // Shared helper to elevate a user to System Owner
 async function elevateToOwner(
+  client: Client,
   db: NodePgDatabase<typeof schema>,
   email: string,
   skipSeed?: boolean,
@@ -101,7 +103,7 @@ async function elevateToOwner(
     .onConflictDoNothing();
 
   if (!skipSeed) {
-    await seedRbac(db);
+    await seedRbac(client, db);
   }
 
   // Find user
@@ -248,7 +250,7 @@ async function bootstrapAdmin() {
     await client.connect();
     const db = drizzle(client, { schema });
 
-    await elevateToOwner(db, EMAIL);
+    await elevateToOwner(client, db, EMAIL);
     console.log(`Basic setup complete.`);
   } finally {
     await client.end();
@@ -401,7 +403,7 @@ async function forceResetAdmin() {
     }
 
     // 4. Elevate to System Owner
-    await elevateToOwner(db, EMAIL);
+    await elevateToOwner(client, db, EMAIL);
     console.log(`   Credentials: ${EMAIL} / ********`);
   } finally {
     await client.end();

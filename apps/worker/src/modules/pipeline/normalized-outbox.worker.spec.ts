@@ -189,7 +189,10 @@ describe("NormalizedOutboxWorker", () => {
   });
 
   it("should handle schema query errors securely without throwing", async () => {
-    tenantDb.from.mockRejectedValueOnce(new Error("Schema query error"));
+    // Mock rejection from where() chain, simulating a query error in production code
+    globalDb.from.mockReturnValueOnce({
+      where: vi.fn().mockRejectedValueOnce(new Error("Schema query error")),
+    });
     await expect(worker.processOutbox()).resolves.toBeUndefined();
   });
 

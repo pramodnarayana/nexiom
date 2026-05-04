@@ -8,6 +8,7 @@ describe('db.utils', () => {
   describe('extractPgError', () => {
     it('returns null for non-objects', () => {
       expect(extractPgError(null)).toBeNull();
+      expect(extractPgError(undefined)).toBeNull();
       expect(extractPgError('string')).toBeNull();
       expect(extractPgError(123)).toBeNull();
     });
@@ -38,6 +39,11 @@ describe('db.utils', () => {
 
     it('returns null if cause is present but has no code string', () => {
       const error = { cause: { code: 123 } };
+      expect(extractPgError(error)).toBeNull();
+    });
+
+    it('returns null for non-string direct code', () => {
+      const error = { code: 123 };
       expect(extractPgError(error)).toBeNull();
     });
   });

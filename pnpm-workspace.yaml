@@ -8,3 +8,9 @@ packages:
   - 'packages/pieces/application/*'
   - 'packages/domain/*'
 
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@swc/core'
+  - 'esbuild'
+  - 'sharp'
+

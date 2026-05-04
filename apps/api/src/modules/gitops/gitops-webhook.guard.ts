@@ -97,6 +97,13 @@ export class GitopsWebhookGuard implements CanActivate {
 
     const providedDigest = signature.slice(7);
 
+    // Validate that providedDigest is exactly 64 hex characters (SHA-256 output)
+    if (!/^[a-fA-F0-9]{64}$/.test(providedDigest)) {
+      throw new UnauthorizedException(
+        'Invalid X-Hub-Signature-256: digest must be exactly 64 hexadecimal characters',
+      );
+    }
+
     // Get raw request body (must be available via express.raw() middleware)
     const rawBody = (request as RawBodyRequest<Request>).rawBody;
     if (!rawBody) {

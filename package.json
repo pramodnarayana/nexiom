@@ -58,12 +58,6 @@
 		"overrides": {
 			"axios": "1.13.2",
 			"esbuild": "0.25.12"
-		},
-		"onlyBuiltDependencies": [
-			"@nestjs/core",
-			"@swc/core",
-			"esbuild",
-			"sharp"
-		]
+		}
 	}
 }

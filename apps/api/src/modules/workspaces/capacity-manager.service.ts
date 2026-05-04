@@ -2,10 +2,9 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { QueueService, QueueName, type ProvisionDatabaseEvent } from '@nexiom/queue';
 import { sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import type { ProvisionDatabaseEvent } from './capacity-manager.types.js';
 
 /** The minimum number of WARM databases we always want in the pool. */
 const WARM_POOL_TARGET = 5;
@@ -59,7 +58,10 @@ export class CapacityManagerService {
         const event: ProvisionDatabaseEvent = { poolSlotId, hostUrl };
         const dbName = `nexiom_tenant_${poolSlotId.replace(/-/g, '_')}`;
 
-        // 1. Insert INITIALIZING slot to prevent double-queueing on next cron tick
+        // 1. Dispatch the job first (if this fails, we don't create orphaned rows)
+        await this.queueService.send(QueueName.TenantProvisionQueue, event);
+
+        // 2. Insert INITIALIZING slot only after successful queue send
         await this.db.execute(
           sql`INSERT INTO tenant_storage_registry
               (tenant_id, database_name, database_host_url, region_context, status, created_at, updated_at)
@@ -74,8 +76,6 @@ export class CapacityManagerService {
               )`,
         );
 
-        // 2. Dispatch the job
-        await this.queueService.send(QueueName.TenantProvisionQueue, event);
         this.logger.debug(`  → Queued provision job: poolSlotId=${poolSlotId}`);
       }
     } catch (err) {
@@ -94,20 +94,19 @@ export class CapacityManagerService {
   }
 
   /**
-   * Derives the base host URL (no database name) from DATABASE_URL.
+   * Derives the base host URL (no database name, no credentials) from DATABASE_URL.
    * This is sent in the queue message so the tenant-provisioner knows
-   * which Postgres cluster to provision on.
+   * which Postgres cluster to provision on. Credentials are stripped for security.
    */
   private deriveHostUrl(): string {
     const raw = process.env.DATABASE_URL ?? '';
     try {
       const parsed = new URL(raw);
-      const auth = parsed.username
-        ? `${parsed.username}${parsed.password ? ':' + parsed.password : ''}@`
-        : '';
-      return `${parsed.protocol}//${auth}${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}`;
-    } catch {
-      return 'postgresql://user:password@localhost:5432';
+      return `${parsed.protocol}//${parsed.hostname}${parsed.port ? ':' + parsed.port : ''}`;
+    } catch (err) {
+      throw new Error(
+        `Failed to parse DATABASE_URL: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

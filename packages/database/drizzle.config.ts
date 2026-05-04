@@ -45,7 +45,7 @@ if (!process.env.DATABASE_URL) {
 // Global DB schema ONLY — identity, registry, pieces.
 // Tenant-specific tables are managed by drizzle.config.tenant.ts.
 export default {
-    schema: ['./dist/schema/global/**/*.js', './dist/schema/tenant/**/*.js'],
+    schema: ['./dist/schema/global/**/*.js'],
     out: './drizzle/global',
     dialect: 'postgresql',
     dbCredentials: {

@@ -27,7 +27,7 @@ export class MappingService {
     version: string = 'v1'
   ): Promise<Record<string, unknown> | null> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
-    
+
     // Look for mapping config in the tenant's dedicated database
     const mappingRecord = await tenantDb.select({ config: canonicalMappings.mappingConfig })
       .from(canonicalMappings)
@@ -45,6 +45,26 @@ export class MappingService {
     if (mappingRecord.length > 0) {
       this.logger.debug({ appName, category, entity, viewMode }, 'Loaded Tenant Mapping Configuration');
       return mappingRecord[0].config as Record<string, unknown>;
+    }
+
+    // If no tenant-specific mapping found, fall back to global canonical mapping
+    const globalDb = await this.dbManager.getGlobalDb();
+    const globalMappingRecord = await globalDb.select({ config: canonicalMappings.mappingConfig })
+      .from(canonicalMappings)
+      .where(
+        and(
+          eq(canonicalMappings.appName, appName),
+          eq(canonicalMappings.category, category),
+          eq(canonicalMappings.entity, entity),
+          eq(canonicalMappings.viewMode, viewMode),
+          eq(canonicalMappings.version, version)
+        )
+      )
+      .limit(1);
+
+    if (globalMappingRecord.length > 0) {
+      this.logger.debug({ appName, category, entity, viewMode }, 'Loaded Global Mapping Configuration');
+      return globalMappingRecord[0].config as Record<string, unknown>;
     }
 
     // --- TEMPORARY MOCK MAPPING FOR PHASE 1 TESTING ---
