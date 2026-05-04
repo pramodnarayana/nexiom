@@ -5,7 +5,7 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 
 describe('InboundOutboxService', () => {
   let service: InboundOutboxService;

@@ -8,7 +8,7 @@ import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { StorageResolverModule, StorageResolverService } from '@nexiom/engine';
 

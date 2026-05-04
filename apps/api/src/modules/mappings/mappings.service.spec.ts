@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MappingsService } from './mappings.service.js';
 import { PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { CreateMapping, UpdateMapping } from './mappings.validation.js';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { vi } from 'vitest';
@@ -35,7 +35,10 @@ describe('MappingsService', () => {
       providers: [
         MappingsService,
         { provide: PinoLogger, useValue: mockLogger },
-        { provide: DATABASE_CONNECTION, useValue: mockDb },
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(mockDb) },
+        },
       ],
     }).compile();
 
@@ -55,7 +58,7 @@ describe('MappingsService', () => {
       mockDb.from = dbFromSpy;
       mockDb.orderBy = dbOrderBySpy;
 
-      const result = await service.findAll();
+      const result = await service.findAll('tenant1');
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(result).toEqual([{ id: '1' }]);
@@ -71,7 +74,7 @@ describe('MappingsService', () => {
         .fn()
         .mockResolvedValue([{ id: '1', appName: 'salesforce' }]);
 
-      const result = await service.findOne('1');
+      const result = await service.findOne('tenant1', '1');
       expect(result).toEqual({ id: '1', appName: 'salesforce' });
     });
 
@@ -81,7 +84,7 @@ describe('MappingsService', () => {
       mockDb.where = vi.fn().mockReturnThis();
       mockDb.limit = vi.fn().mockResolvedValue([]);
 
-      await expect(service.findOne('invalid')).rejects.toThrow(
+      await expect(service.findOne('tenant1', 'invalid')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -111,9 +114,29 @@ describe('MappingsService', () => {
         }),
       });
 
-      const result = await service.create(dto);
+      const result = await service.create('tenant1', dto);
 
       expect(result.id).toBe('123');
+    });
+
+    it('should default version to v1 if not provided', async () => {
+      const dto = new CreateMapping();
+      dto.appName = 'salesforce';
+      dto.category = 'tms';
+      dto.entity = 'Load__c';
+      dto.viewMode = 'summary';
+      dto.mappingConfig = {};
+
+      const returningSpy = vi.fn().mockResolvedValue([{ version: 'v1' }]);
+      const valuesSpy = vi.fn().mockReturnValue({ returning: returningSpy });
+      mockDb.insert = vi.fn().mockReturnValue({ values: valuesSpy });
+
+      const result = await service.create('tenant1', dto);
+
+      expect(valuesSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ version: 'v1' }),
+      );
+      expect(result.version).toBe('v1');
     });
 
     it('should log and throw BadRequestException on insert error', async () => {
@@ -122,7 +145,9 @@ describe('MappingsService', () => {
         throw new Error('DB Error');
       });
 
-      await expect(service.create(dto)).rejects.toThrow(BadRequestException);
+      await expect(service.create('tenant1', dto)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockLogger.error).toHaveBeenCalled();
     });
   });
@@ -144,8 +169,26 @@ describe('MappingsService', () => {
         }),
       });
 
-      const result = await service.update('123', dto);
+      const result = await service.update('tenant1', '123', dto);
       expect(result.appName).toBe('testapp');
+    });
+
+    it('should default version to v1 if not provided on update', async () => {
+      const dto = new UpdateMapping();
+      // @ts-expect-error test mock
+      vi.spyOn(service, 'findOne').mockResolvedValue({ id: '123' });
+
+      const returningSpy = vi.fn().mockResolvedValue([{ version: 'v1' }]);
+      const whereSpy = vi.fn().mockReturnValue({ returning: returningSpy });
+      const setSpy = vi.fn().mockReturnValue({ where: whereSpy });
+      mockDb.update = vi.fn().mockReturnValue({ set: setSpy });
+
+      const result = await service.update('tenant1', '123', dto);
+
+      expect(setSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ version: 'v1' }),
+      );
+      expect(result.version).toBe('v1');
     });
 
     it('should throw BadRequestException wrapping the internal missing record on update', async () => {
@@ -159,9 +202,21 @@ describe('MappingsService', () => {
         }),
       });
 
-      await expect(service.update('123', new UpdateMapping())).rejects.toThrow(
-        NotFoundException,
+      await expect(
+        service.update('tenant1', '123', new UpdateMapping()),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should log and throw BadRequestException on update DB error', async () => {
+      const dto = new UpdateMapping();
+      mockDb.update = vi.fn().mockImplementation(() => {
+        throw new Error('DB Error');
+      });
+
+      await expect(service.update('tenant1', '123', dto)).rejects.toThrow(
+        BadRequestException,
       );
+      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 
@@ -179,7 +234,7 @@ describe('MappingsService', () => {
         .fn()
         .mockReturnValue({ where: vi.fn().mockResolvedValue(true) });
 
-      const result = await service.remove('123');
+      const result = await service.remove('tenant1', '123');
       expect(result.success).toBe(true);
       expect(mockDb.delete).toHaveBeenCalled();
     });

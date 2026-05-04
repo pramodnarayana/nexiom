@@ -30,6 +30,9 @@ export const tenantStorageRegistry = pgTable(
         // e.g. 'us-east-1' | 'eu-central-1'
         regionContext: varchar('region_context', { length: 50 }).notNull(),
 
+        // The lifecycle state of the database (WARM, ACTIVE, SUSPENDED, DELETED)
+        status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     },

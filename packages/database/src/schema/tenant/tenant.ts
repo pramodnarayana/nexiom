@@ -1,6 +1,7 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { organization } from '../global/identity.js';
+// NOTE: No cross-DB FK to organization — tenant isolation is enforced by TenantDatabaseManager
+// routing: every request resolves tenantId from auth context and connects to the correct tenant DB.
 
 // Shared environment discriminator — used by both app_connection and ui_workspace.
 // Defined here (tenant.ts) so workspace.ts can import it without a circular dep.
@@ -34,7 +35,10 @@ export type AppConnectionStatus = (typeof AppConnectionStatus)[keyof typeof AppC
  */
 export const appConnections = pgTable('app_connection', {
     id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: text('tenant_id').notNull().references(() => organization.id, { onDelete: 'cascade' }),
+    // tenantId identifies which organization this connection belongs to.
+    // No FK to organization — cross-database FKs are not supported in Postgres.
+    // Tenant isolation is enforced by TenantDatabaseManager: each org routes to its own DB.
+    tenantId: text('tenant_id').notNull(),
 
     // Provider name — validated against PROVIDER_REGISTRY in application code
     appName: varchar('app_name', { length: 100 }).notNull(),

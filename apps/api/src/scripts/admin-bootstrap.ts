@@ -55,7 +55,11 @@ async function seedRbac(db: NodePgDatabase<typeof schema>) {
     systemTenantId: getRequiredSystemTenantId(),
   };
 
-  await seedSystemRbac(db as NodePgDatabase<typeof identitySchema>, config, console);
+  await seedSystemRbac(
+    db as unknown as NodePgDatabase<typeof identitySchema>,
+    config,
+    console,
+  );
 }
 
 // Shared helper to elevate a user to System Owner

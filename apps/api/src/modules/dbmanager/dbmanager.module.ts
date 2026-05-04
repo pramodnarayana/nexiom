@@ -1,5 +1,5 @@
 import { Module, Global } from '@nestjs/common';
-import { TenantDatabaseManager } from '@nexiom/dbmanager';
+import { TenantDatabaseManager, DB_MANAGER } from '@nexiom/dbmanager';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '../../db/schema.js';
@@ -8,8 +8,6 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 
 import { getDomainProvisioner } from '@nexiom/piece-framework';
-
-export const DB_MANAGER = 'DATABASE_MANAGER';
 
 @Global()
 @Module({

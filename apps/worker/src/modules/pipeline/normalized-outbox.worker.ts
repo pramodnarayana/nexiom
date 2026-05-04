@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -12,7 +12,7 @@ import { QueueName } from "@nexiom/queue";
 import { QueueService } from "@nexiom/queue";
 import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
 import type { DatabaseManager } from "@nexiom/dbmanager";
-import { DB_MANAGER } from "../dbmanager/dbmanager.module.js";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { processInChunks } from "./outbox.utils.js";
 
 const BATCH_SIZE = 50;
@@ -47,11 +47,16 @@ export class NormalizedOutboxWorker {
           // 2. Use TenantDatabaseManager to connect to the specific physical tenant DB.
           const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
 
-          // 3. Query app_connection inside each tenant DB to find all ACTIVE connections.
-          const connections = await tenantDb
+          // 3. Query app_connection inside the Global DB to find all ACTIVE connections for this tenant.
+          const connections = await this.globalDb
             .select({ id: appConnections.id, appName: appConnections.appName })
             .from(appConnections)
-            .where(eq(appConnections.status, "ACTIVE"));
+            .where(
+              and(
+                eq(appConnections.status, "ACTIVE"),
+                eq(appConnections.tenantId, tenant.tenantId),
+              ),
+            );
 
           // 4. Run drainWorkspaceOutbox on each schema derived from the connection.
           for (const connection of connections) {

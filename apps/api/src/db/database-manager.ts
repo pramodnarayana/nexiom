@@ -189,13 +189,43 @@ export class DatabaseManager {
     } finally {
       await client.end();
     }
+
+    // Drop tenant databases so fresh truly starts from scratch
+    await this.dropTenantDatabaseIfExists('nexiom_tenant_system');
   }
 
   /**
-   * Run pending Drizzle migrations
+   * Drop a tenant database if it exists (local dev only).
+   */
+  private async dropTenantDatabaseIfExists(dbName: string): Promise<void> {
+    const { PgClient } = await this.resolvePgModule();
+    const adminClient = new PgClient({
+      connectionString: process.env.DATABASE_URL,
+    });
+    await adminClient.connect();
+    try {
+      // Terminate any existing connections first
+      await adminClient.query(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
+        [dbName],
+      );
+      await adminClient.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+      console.log(`  ✓ Dropped tenant database: ${dbName}`);
+    } finally {
+      await adminClient.end();
+    }
+  }
+
+  /**
+   * Run pending global Drizzle migrations (nexiom_global DB only).
+   * Applies identity, registry, and pieces schema.
    */
   migrate(): void {
-    console.log('🔨 Running centralized migrations...');
+    this.migrateGlobal();
+  }
+
+  migrateGlobal(): void {
+    console.log('🔨 Running global DB migrations...');
     let rootCwd: string;
     if (typeof __dirname !== 'undefined') {
       rootCwd = path.resolve(__dirname, '../../../../');
@@ -205,14 +235,88 @@ export class DatabaseManager {
         '../../../../',
       );
     }
-    // Orchestrate migrations from the root monorepo script
     execSync('pnpm db:migrate', {
       stdio: 'inherit',
       cwd: rootCwd,
       env: { ...process.env, FORCE_COLOR: '1' },
     });
+    console.log('  ✓ Global migrations complete');
+  }
 
-    console.log('  ✓ Centralized migrations complete');
+  /**
+   * Create a new tenant database on the same Postgres server and run
+   * all tenant-schema migrations against it.
+   *
+   * @param dbName  Database name to create e.g. "nexiom_tenant_abc123"
+   * @param hostUrl Full connection URL to the server (with credentials, without db path)
+   *                e.g. "postgres://user:password@localhost:5432"
+   */
+  async createTenantDatabase(dbName: string, hostUrl: string): Promise<void> {
+    const { PgClient } = await this.resolvePgModule();
+
+    // CREATE DATABASE must run outside a transaction — connect to the global DB
+    const adminClient = new PgClient({
+      connectionString: process.env.DATABASE_URL,
+    });
+    await adminClient.connect();
+
+    try {
+      // Idempotent — skip if the DB already exists
+      const existing = await adminClient.query(
+        `SELECT 1 FROM pg_database WHERE datname = $1`,
+        [dbName],
+      );
+      if (existing.rowCount === 0) {
+        // Sanitize dbName (alphanumeric + underscores only)
+        if (!/^[a-zA-Z0-9_]+$/.test(dbName)) {
+          throw new Error(`Invalid tenant database name: ${dbName}`);
+        }
+        await adminClient.query(`CREATE DATABASE "${dbName}"`);
+        console.log(`  ✓ Created tenant database: ${dbName}`);
+      } else {
+        console.log(`  ℹ️  Tenant database already exists: ${dbName}`);
+      }
+    } finally {
+      await adminClient.end();
+    }
+
+    // Now run tenant migrations against the new (or existing) database
+    await this.migrateTenant(dbName, hostUrl);
+  }
+
+  /**
+   * Run tenant-schema Drizzle migrations against a specific tenant database.
+   * Uses the drizzle/tenant migration folder generated from drizzle.config.tenant.ts.
+   */
+  async migrateTenant(dbName: string, hostUrl: string): Promise<void> {
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { migrate } = await import('drizzle-orm/node-postgres/migrator');
+    const { Pool } = await import('pg');
+
+    const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${dbName}`;
+
+    let rootDir: string;
+    if (typeof __dirname !== 'undefined') {
+      rootDir = path.resolve(__dirname, '../../../../');
+    } else {
+      rootDir = path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../../../../',
+      );
+    }
+    const migrationsFolder = path.join(
+      rootDir,
+      'packages/database/drizzle/tenant',
+    );
+
+    const pool = new Pool({ connectionString: tenantUrl, max: 2 });
+    try {
+      const db = drizzle(pool);
+      await migrate(db, { migrationsFolder });
+      console.log(`  ✓ Tenant migrations applied to: ${dbName}`);
+    } finally {
+      await pool.end();
+    }
   }
 
   /**
@@ -765,173 +869,190 @@ export class DatabaseManager {
       );
     }
 
-    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    // ── Step 1: Derive host URL + tenant DB name ────────────────────────────
+    let hostUrl: string;
+    const tenantDbName = 'nexiom_tenant_system';
+    try {
+      const parsedUrl = new URL(
+        process.env.DATABASE_URL ||
+          'postgresql://user:password@localhost:5432/nexiom_global',
+      );
+      const auth = parsedUrl.username
+        ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
+        : '';
+      hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+    } catch {
+      hostUrl = 'postgresql://user:password@localhost:5432';
+    }
+
+    // ── Step 2: CREATE DATABASE nexiom_tenant_system + run tenant migrations ─
+    console.log(`\n📦 Provisioning tenant database: ${tenantDbName}`);
+    await this.createTenantDatabase(tenantDbName, hostUrl);
+
+    // ── Step 3: Connect to global DB to register the tenant ─────────────────
+    const { drizzle } = await import('drizzle-orm/node-postgres');
+    const { Pool } = await import('pg');
     const dbSchema = await import('./schema.js');
+    const globalClient = await this.getPgClient();
+    const globalDb = drizzle(globalClient, { schema: dbSchema });
 
-    await this.withSchemaMgr(async (schemaMgr) => {
-      const { drizzle } = await import('drizzle-orm/node-postgres');
-      const client = await this.getPgClient();
-      try {
-        const db = drizzle(client, { schema: dbSchema });
+    // Register in global tenant_storage_registry
+    const existReg = await globalDb
+      .select()
+      .from(dbSchema.tenantStorageRegistry)
+      .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId))
+      .limit(1);
 
-        const fixtures = [
-          {
-            id: '00000000-0000-0000-0000-000000000001',
-            appName: 'salesforce',
-            externalId: 'dev-salesforce',
-            displayName: 'Dev Salesforce',
-            metadata: this.deriveMetadata('salesforce'),
-            credentials: {
-              clientId: 'dev-sf-client-id',
-              clientSecret: 'dev-sf-client-secret',
-              accessToken: 'dev-sf-access-token',
-              refreshToken: 'dev-sf-refresh-token',
-              data: { instance_url: 'https://test.salesforce.com' },
-            },
+    if (!existReg[0]) {
+      await globalDb.insert(dbSchema.tenantStorageRegistry).values({
+        tenantId: systemTenantId,
+        databaseName: tenantDbName,
+        databaseHostUrl: hostUrl,
+        regionContext: 'local',
+      });
+      console.log(`  ✓ Registered ${tenantDbName} in tenant_storage_registry`);
+    } else {
+      // Update host URL in case credentials changed
+      await globalDb
+        .update(dbSchema.tenantStorageRegistry)
+        .set({ databaseName: tenantDbName, databaseHostUrl: hostUrl })
+        .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId));
+      console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
+    }
+
+    // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
+    const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
+    const tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
+    const tenantDb = drizzle(tenantPool, { schema: dbSchema });
+
+    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
+    const { getDomainProvisioner } = await import('@nexiom/piece-framework');
+
+    const schemaMgr = new TenantDatabaseManager(
+      globalDb as unknown as import('@nexiom/database').DrizzleDb,
+      (_hostIdentifier: string) => {
+        const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+        return drizzle(pool2, {
+          schema: dbSchema,
+        }) as unknown as import('@nexiom/database').DrizzleDb;
+      },
+      getDomainProvisioner,
+    );
+
+    try {
+      const fixtures = [
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          appName: 'salesforce',
+          externalId: 'dev-salesforce',
+          displayName: 'Dev Salesforce',
+          metadata: this.deriveMetadata('salesforce'),
+          credentials: {
+            clientId: 'dev-sf-client-id',
+            clientSecret: 'dev-sf-client-secret',
+            accessToken: 'dev-sf-access-token',
+            refreshToken: 'dev-sf-refresh-token',
+            data: { instance_url: 'https://test.salesforce.com' },
           },
-          {
-            id: '00000000-0000-0000-0000-000000000002',
-            appName: 'quickbooks',
-            externalId: 'dev-quickbooks',
-            displayName: 'Dev QuickBooks',
-            metadata: this.deriveMetadata('quickbooks'),
-            credentials: {
-              clientId: 'dev-qb-client-id',
-              clientSecret: 'dev-qb-client-secret',
-              accessToken: 'dev-qb-access-token',
-              refreshToken: 'dev-qb-refresh-token',
-              data: { realmId: 'dev-realm-id' },
-            },
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000002',
+          appName: 'quickbooks',
+          externalId: 'dev-quickbooks',
+          displayName: 'Dev QuickBooks',
+          metadata: this.deriveMetadata('quickbooks'),
+          credentials: {
+            clientId: 'dev-qb-client-id',
+            clientSecret: 'dev-qb-client-secret',
+            accessToken: 'dev-qb-access-token',
+            refreshToken: 'dev-qb-refresh-token',
+            data: { realmId: 'dev-realm-id' },
           },
-        ] as const;
+        },
+      ] as const;
 
-        for (const fixture of fixtures) {
-          const encryptedValue = this.encryptFixture(
-            JSON.stringify(fixture.credentials),
-            encryptionKey,
-          );
+      const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
 
-          const [inserted] = await db
-            .insert(dbSchema.appConnections)
-            .values({
-              id: fixture.id,
-              tenantId: systemTenantId,
-              appName: fixture.appName,
-              externalId: fixture.externalId,
-              displayName: fixture.displayName,
-              authType: 'OAUTH2',
+      for (const fixture of fixtures) {
+        const encryptedValue = this.encryptFixture(
+          JSON.stringify(fixture.credentials),
+          encryptionKey,
+        );
+
+        // Write app_connection into the TENANT DB (not global)
+        const [inserted] = await tenantDb
+          .insert(dbSchema.appConnections)
+          .values({
+            id: fixture.id,
+            tenantId: systemTenantId,
+            appName: fixture.appName,
+            externalId: fixture.externalId,
+            displayName: fixture.displayName,
+            authType: 'OAUTH2',
+            value: encryptedValue,
+            metadata: fixture.metadata,
+            status: 'INACTIVE',
+          })
+          .onConflictDoUpdate({
+            target: [
+              dbSchema.appConnections.tenantId,
+              dbSchema.appConnections.externalId,
+            ],
+            set: {
               value: encryptedValue,
+              displayName: fixture.displayName,
+              appName: fixture.appName,
+              authType: 'OAUTH2',
               metadata: fixture.metadata,
-              status: 'INACTIVE',
-            })
-            .onConflictDoUpdate({
-              target: [
-                dbSchema.appConnections.tenantId,
-                dbSchema.appConnections.externalId,
-              ],
-              set: {
-                value: encryptedValue,
-                displayName: fixture.displayName,
-                appName: fixture.appName,
-                authType: 'OAUTH2',
-                metadata: fixture.metadata,
-                status: sql`CASE
-                  WHEN ${dbSchema.appConnections.status} IN ('ACTIVE', 'REVOKED')
-                  THEN ${dbSchema.appConnections.status}
-                  ELSE 'INACTIVE'
-                END`,
-              },
-            })
-            .returning();
+              status: sql`CASE
+                WHEN ${dbSchema.appConnections.status} IN ('ACTIVE', 'REVOKED')
+                THEN ${dbSchema.appConnections.status}
+                ELSE 'INACTIVE'
+              END`,
+            },
+          })
+          .returning();
 
-          if (!inserted) {
-            throw new Error(
-              `Upsert returned no row for externalId=${fixture.externalId}`,
-            );
-          }
-
-          const resolved = inserted;
-
-          const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
-          const schemaName = getWorkspaceSchemaName(
-            resolved.id,
-            resolved.appName,
-          );
-
-          // Seed the tenant_storage_registry to map the tenant to its physical database.
-          // In a real environment, this is created when the tenant signs up.
-          // For local dev, we just map it to the current database name.
-          let dbName = 'nexiom_local';
-          if (process.env.DATABASE_URL) {
-            try {
-              const parsedUrl = new URL(process.env.DATABASE_URL);
-              const pathname = parsedUrl.pathname.replace(/^\/+|\/+$/g, '');
-              if (pathname) {
-                const segments = pathname.split('/');
-                dbName = segments[segments.length - 1] || dbName;
-              }
-              // If pathname is empty, keep the default dbName instead of using parsedUrl.host
-            } catch {
-              // Fallback to safe default for invalid/Unix-socket-style URLs
-              dbName = 'nexiom_local';
-            }
-          }
-          const existReg = await db
-            .select()
-            .from(dbSchema.tenantStorageRegistry)
-            .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId))
-            .limit(1);
-
-          if (!existReg[0]) {
-            // Sanitize DATABASE_URL to remove credentials and pathname
-            let sanitizedHostUrl: string;
-            try {
-              const parsedUrl = new URL(
-                process.env.DATABASE_URL ||
-                  'postgresql://localhost:5432/nexiom_local',
-              );
-              // Build safe URL with protocol + hostname + optional port, no credentials or pathname
-              sanitizedHostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
-            } catch {
-              // Fallback to safe default if parsing fails
-              sanitizedHostUrl = 'postgresql://localhost:5432';
-            }
-
-            await db.insert(dbSchema.tenantStorageRegistry).values({
-              tenantId: systemTenantId,
-              databaseName: dbName,
-              databaseHostUrl: sanitizedHostUrl,
-              regionContext: 'local',
-            });
-          }
-
-          await schemaMgr.applyPlan(
-            systemTenantId,
-            schemaName,
-            SchemaPlan.OUTBOUND_ACTIVE,
-          );
-
-          // After successful schema provisioning, mark connection ACTIVE
-          await db
-            .update(dbSchema.appConnections)
-            .set({ status: 'ACTIVE' })
-            .where(eq(dbSchema.appConnections.id, resolved.id));
-
-          console.log(
-            `  ✓ ${resolved.displayName} → ${resolved.id} (schema: ${schemaName})`,
+        if (!inserted) {
+          throw new Error(
+            `Upsert returned no row for externalId=${fixture.externalId}`,
           );
         }
 
-        console.log('\n✅ Local dev fixtures provisioned.');
-        console.log(
-          '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
-            '   and update app_connection.value with the resulting ciphertext.\n' +
-            '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
+        const schemaName = getWorkspaceSchemaName(
+          inserted.id,
+          inserted.appName,
         );
-      } finally {
-        await client.end();
+
+        // Provision workspace pipeline schemas inside the tenant DB
+        await schemaMgr.applyPlan(
+          systemTenantId,
+          schemaName,
+          SchemaPlan.OUTBOUND_ACTIVE,
+        );
+
+        // Mark connection ACTIVE in the tenant DB
+        await tenantDb
+          .update(dbSchema.appConnections)
+          .set({ status: 'ACTIVE' })
+          .where(eq(dbSchema.appConnections.id, inserted.id));
+
+        console.log(
+          `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,
+        );
       }
-    });
+
+      console.log('\n✅ Local dev fixtures provisioned.');
+      console.log(
+        '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
+          '   and update app_connection.value with the resulting ciphertext.\n' +
+          '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
+      );
+    } finally {
+      await tenantPool.end();
+      await globalClient.end();
+    }
   }
 
   /**

@@ -1,5 +1,7 @@
 import type { DrizzleDb } from '@nexiom/database';
 
+export const DB_MANAGER = 'DB_MANAGER';
+
 export enum SchemaPlan {
     /**
      * Only the empty PostgreSQL schema namespace (e.g., "ws_abc123")

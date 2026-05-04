@@ -26,6 +26,7 @@
     "@nestjs/common": "^11.0.1",
     "@nexiom/credentials": "workspace:*",
     "@nexiom/database": "workspace:*",
+    "@nexiom/dbmanager": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "@nexiom/piece-registry": "workspace:*",
     "@nexiom/cache": "workspace:*",

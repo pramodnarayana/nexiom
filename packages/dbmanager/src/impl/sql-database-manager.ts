@@ -377,15 +377,19 @@ export class SqlDatabaseManager {
 
     private async provisionCanonicalTables(schemaName: string): Promise<void> {
         try {
-            // Find appName from connection_storage_registry
-            const res = await this.db.$client.query(`
-                SELECT ac.app_name 
-                FROM public.connection_storage_registry csr
-                JOIN public.app_connection ac ON ac.id = csr.connection_id
-                WHERE csr.data_namespace = $1
-            `, [schemaName]);
+            // Find appName by deriving connection_id from schemaName (e.g. ws_{connection_id_with_underscores})
+            const connectionIdCandidate = schemaName.startsWith('ws_') ? schemaName.slice(3).replace(/_/g, '-') : null;
+            const isUuid = connectionIdCandidate && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionIdCandidate);
             
-            const appName = res.rows[0]?.app_name as string | undefined;
+            let appName: string | undefined;
+            if (isUuid) {
+                const res = await this.db.$client.query(`
+                    SELECT app_name 
+                    FROM public.app_connection
+                    WHERE id = $1
+                `, [connectionIdCandidate]);
+                appName = res.rows[0]?.app_name as string | undefined;
+            }
             
             if (appName && this.domainProvisionerResolver) {
                 const provisioner = this.domainProvisionerResolver(appName);

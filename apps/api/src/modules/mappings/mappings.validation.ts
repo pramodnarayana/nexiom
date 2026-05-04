@@ -7,7 +7,6 @@ const BaseMappingSchema = z.object({
   category: z.string().min(1, 'Category is required'),
   entity: z.string().min(1, 'Entity is required'),
   viewMode: z.string().min(1, 'View mode is required'),
-  tenantId: z.string().optional(),
   version: z.string().optional(),
   mappingConfig: z.record(z.string(), z.any()),
 });

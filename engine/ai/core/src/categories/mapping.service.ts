@@ -1,14 +1,14 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION, canonicalMappings } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { canonicalMappings } from '@nexiom/database';
+import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
 
 @Injectable()
 export class MappingService {
   constructor(
     private readonly logger: PinoLogger,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {
     this.logger.setContext(MappingService.name);
   }
@@ -26,9 +26,10 @@ export class MappingService {
     tenantId: string,
     version: string = 'v1'
   ): Promise<Record<string, unknown> | null> {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
     
-    // First: Look for tenant-specific override
-    const tenantOverride = await this.db.select({ config: canonicalMappings.mappingConfig })
+    // Look for mapping config in the tenant's dedicated database
+    const mappingRecord = await tenantDb.select({ config: canonicalMappings.mappingConfig })
       .from(canonicalMappings)
       .where(
         and(
@@ -36,34 +37,14 @@ export class MappingService {
           eq(canonicalMappings.category, category),
           eq(canonicalMappings.entity, entity),
           eq(canonicalMappings.viewMode, viewMode),
-          eq(canonicalMappings.version, version),
-          eq(canonicalMappings.tenantId, tenantId)
+          eq(canonicalMappings.version, version)
         )
       )
       .limit(1);
 
-    if (tenantOverride.length > 0) {
-      this.logger.debug({ appName, category, entity, viewMode }, 'Loaded Tenant-Specific Mapping Override');
-      return tenantOverride[0].config as Record<string, unknown>;
-    }
-
-    // Second: Fallback to global default
-    const globalDefault = await this.db.select({ config: canonicalMappings.mappingConfig })
-      .from(canonicalMappings)
-      .where(
-        and(
-          eq(canonicalMappings.appName, appName),
-          eq(canonicalMappings.category, category),
-          eq(canonicalMappings.entity, entity),
-          eq(canonicalMappings.viewMode, viewMode),
-          eq(canonicalMappings.version, version),
-          isNull(canonicalMappings.tenantId)
-        )
-      )
-      .limit(1);
-
-    if (globalDefault.length > 0) {
-      return globalDefault[0].config as Record<string, unknown>;
+    if (mappingRecord.length > 0) {
+      this.logger.debug({ appName, category, entity, viewMode }, 'Loaded Tenant Mapping Configuration');
+      return mappingRecord[0].config as Record<string, unknown>;
     }
 
     // --- TEMPORARY MOCK MAPPING FOR PHASE 1 TESTING ---

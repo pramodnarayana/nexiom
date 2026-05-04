@@ -10,9 +10,9 @@ import {
     unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { organization } from '../global/identity.js';
 import { appConnections, envTypeEnum } from './tenant.js';
 export { envTypeEnum } from './tenant.js';
+// NOTE: No cross-DB FK to organization — tenant isolation enforced by TenantDatabaseManager routing.
 
 // ---------------------------------------------------------------------------
 
@@ -27,10 +27,8 @@ export { envTypeEnum } from './tenant.js';
  */
 export const uiWorkspaces = pgTable('ui_workspace', {
     id: uuid('id').defaultRandom().primaryKey(),
-    // text — matches organization.id which is also text
-    orgId: text('org_id')
-        .notNull()
-        .references(() => organization.id, { onDelete: 'cascade' }),
+    // orgId identifies the owning organization. No cross-DB FK to organization table.
+    orgId: text('org_id').notNull(),
     name: varchar('name', { length: 255 }).notNull(),
     envType: envTypeEnum('env_type').notNull().default('PRODUCTION'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

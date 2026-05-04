@@ -1,13 +1,13 @@
 import { Injectable, Logger, Inject, NotFoundException } from '@nestjs/common';
-import { DATABASE_CONNECTION, aiConversations, aiMessages } from '@nexiom/database';
+import { aiConversations, aiMessages } from '@nexiom/database';
+import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
 import { eq, and, desc } from 'drizzle-orm';
-import type { DrizzleDb } from '@nexiom/database';
 
 @Injectable()
 export class ChatPersistenceService {
   private readonly logger = new Logger(ChatPersistenceService.name);
 
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor(@Inject(DB_MANAGER) private readonly dbManager: DatabaseManager) {}
 
   /**
    * Initializes or retrieves an existing conversation.
@@ -18,8 +18,10 @@ export class ChatPersistenceService {
     conversationId?: string,
     initialTitle?: string
   ) {
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
     if (conversationId) {
-      const existing = await this.db.select().from(aiConversations)
+      const existing = await tenantDb.select().from(aiConversations)
         .where(
           and(
             eq(aiConversations.id, conversationId),
@@ -34,7 +36,7 @@ export class ChatPersistenceService {
       return existing[0];
     }
 
-    const inserted = await this.db.insert(aiConversations).values({
+    const inserted = await tenantDb.insert(aiConversations).values({
       tenantId: tenantId,
       title: initialTitle || 'New Query',
     }).returning();
@@ -58,7 +60,9 @@ export class ChatPersistenceService {
     content: string;
     status?: 'pending' | 'completed' | 'failed';
   }) {
-    const inserted = await this.db.insert(aiMessages).values({
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    
+    const inserted = await tenantDb.insert(aiMessages).values({
       tenantId,
       conversationId,
       role,
@@ -73,7 +77,8 @@ export class ChatPersistenceService {
    * Fetch complete message lineage for a conversation.
    */
   async getLineage(tenantId: string, conversationId: string) {
-    return this.db.select().from(aiMessages)
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    return tenantDb.select().from(aiMessages)
       .where(
         and(
           eq(aiMessages.conversationId, conversationId),
@@ -87,7 +92,8 @@ export class ChatPersistenceService {
    * Fetch all conversations for a given tenant, ordered by newest first.
    */
   async listConversations(tenantId: string) {
-    return this.db.select().from(aiConversations)
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    return tenantDb.select().from(aiConversations)
       .where(eq(aiConversations.tenantId, tenantId))
       .orderBy(desc(aiConversations.createdAt));
   }
@@ -96,7 +102,9 @@ export class ChatPersistenceService {
    * Update the title of a conversation.
    */
   async updateConversationTitle(tenantId: string, conversationId: string, title: string) {
-    const updated = await this.db.update(aiConversations)
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+    
+    const updated = await tenantDb.update(aiConversations)
       .set({ title })
       .where(
         and(

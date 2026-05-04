@@ -24,7 +24,7 @@ import {
 import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan, getWorkspaceSchemaName } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '../dbmanager/dbmanager.module.js';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { PieceRegistryService } from '@nexiom/piece-registry';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
