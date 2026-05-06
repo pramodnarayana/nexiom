@@ -53,43 +53,55 @@ export class DependencySweeperService {
             );
 
           for (const conn of connections) {
-            const schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
-            const { outboundGateway } = buildTenantSchema(schemaName);
+            try {
+              const schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
+              const { outboundGateway } = buildTenantSchema(schemaName);
 
-            const staleRecords = await tenantDb
-              .select({ traceId: outboundGateway.traceId })
-              .from(outboundGateway)
-              .where(
-                sql`${outboundGateway.status} = 'DEFERRED_DEPENDENCY' AND ${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`,
-              );
+              const staleRecords = await tenantDb
+                .select({ traceId: outboundGateway.traceId })
+                .from(outboundGateway)
+                .where(
+                  sql`${outboundGateway.status} = 'DEFERRED_DEPENDENCY' AND ${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`,
+                );
 
-            if (staleRecords.length > 0) {
-              this.logger.log(
-                `DependencySweeperService: Found ${staleRecords.length} stale DEFERRED_DEPENDENCY records in schema ${schemaName}`,
-              );
+              if (staleRecords.length > 0) {
+                this.logger.log(
+                  `DependencySweeperService: Found ${staleRecords.length} stale DEFERRED_DEPENDENCY records in schema ${schemaName}`,
+                );
 
-              for (const record of staleRecords) {
-                const { replicaEntity } = buildTenantSchema(schemaName);
-                const replicaRows = await tenantDb
-                  .select({ connectionId: replicaEntity.connectionId })
-                  .from(replicaEntity)
-                  .where(sql`${replicaEntity.traceId} = ${record.traceId}`)
-                  .limit(1);
+                // Deduplicate by traceId to avoid enqueueing the same trace multiple times
+                const uniqueTraceIds = new Set(
+                  staleRecords.map((record) => record.traceId),
+                );
 
-                if (replicaRows[0]) {
-                  await this.queueService.send(QueueName.NormalizedQueue, {
-                    traceId: record.traceId,
-                    connectionId: replicaRows[0].connectionId,
-                  });
+                for (const traceId of uniqueTraceIds) {
+                  const { replicaEntity } = buildTenantSchema(schemaName);
+                  const replicaRows = await tenantDb
+                    .select({ connectionId: replicaEntity.connectionId })
+                    .from(replicaEntity)
+                    .where(sql`${replicaEntity.traceId} = ${traceId}`)
+                    .limit(1);
 
-                  await tenantDb
-                    .update(outboundGateway)
-                    .set({ status: "PENDING", updatedAt: sql`NOW()` })
-                    .where(
-                      sql`${outboundGateway.traceId} = ${record.traceId} AND ${outboundGateway.status} = 'DEFERRED_DEPENDENCY'`,
-                    );
+                  if (replicaRows[0]) {
+                    await this.queueService.send(QueueName.NormalizedQueue, {
+                      traceId: traceId,
+                      connectionId: replicaRows[0].connectionId,
+                    });
+
+                    await tenantDb
+                      .update(outboundGateway)
+                      .set({ status: "PENDING", updatedAt: sql`NOW()` })
+                      .where(
+                        sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} = 'DEFERRED_DEPENDENCY'`,
+                      );
+                  }
                 }
               }
+            } catch (connErr) {
+              this.logger.error(
+                `DependencySweeperService: Failed to process connection ${conn.id} (schema: ${getWorkspaceSchemaName(conn.id, conn.appName)})`,
+                connErr instanceof Error ? connErr.stack : String(connErr),
+              );
             }
           }
         } catch (tenantErr) {

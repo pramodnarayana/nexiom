@@ -452,11 +452,17 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               status: "PENDING",
               attemptCount: 0,
             })
-            .onConflictDoNothing({
+            .onConflictDoUpdate({
               target: [
                 destOutboundGateway.traceId,
                 destOutboundGateway.routeId,
               ],
+              set: {
+                reqPayload: hydratedPayload,
+                status: "PENDING",
+                attemptCount: 0,
+                updatedAt: sql`NOW()`,
+              },
             });
         });
 
