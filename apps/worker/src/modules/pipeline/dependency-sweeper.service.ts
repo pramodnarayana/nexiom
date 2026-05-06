@@ -80,31 +80,39 @@ export class DependencySweeperService {
                 );
 
                 for (const traceId of uniqueTraceIds) {
-                  const replicaRows = await tenantDb
-                    .select({ connectionId: replicaEntity.connectionId })
-                    .from(replicaEntity)
-                    .where(sql`${replicaEntity.traceId} = ${traceId}`)
-                    .limit(1);
+                  try {
+                    const replicaRows = await tenantDb
+                      .select({ connectionId: replicaEntity.connectionId })
+                      .from(replicaEntity)
+                      .where(sql`${replicaEntity.traceId} = ${traceId}`)
+                      .limit(1);
 
-                  if (replicaRows[0]) {
-                    await this.queueService.send(QueueName.NormalizedQueue, {
-                      traceId: traceId,
-                      connectionId: replicaRows[0].connectionId,
-                    });
+                    if (replicaRows[0]) {
+                      await this.queueService.send(QueueName.NormalizedQueue, {
+                        traceId: traceId,
+                        connectionId: replicaRows[0].connectionId,
+                      });
 
-                    await tenantDb
-                      .update(outboundGateway)
-                      .set({ status: "PENDING", updatedAt: sql`NOW()` })
-                      .where(
-                        and(
-                          eq(outboundGateway.traceId, traceId),
-                          eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
-                        ),
+                      await tenantDb
+                        .update(outboundGateway)
+                        .set({ status: "PENDING", updatedAt: sql`NOW()` })
+                        .where(
+                          and(
+                            eq(outboundGateway.traceId, traceId),
+                            eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
+                          ),
+                        );
+                    } else {
+                      this.logger.warn(
+                        `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`,
                       );
-                  } else {
-                    this.logger.warn(
-                      `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`,
+                    }
+                  } catch (traceErr) {
+                    this.logger.error(
+                      `DependencySweeperService: Failed to process traceId ${traceId} in schema ${schemaName}`,
+                      traceErr instanceof Error ? traceErr.stack : String(traceErr),
                     );
+                    // Continue to next traceId without re-throwing
                   }
                 }
               }

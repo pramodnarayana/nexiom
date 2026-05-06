@@ -1,1 +1,1 @@
-ALTER TYPE "public"."pipeline_status_enum" ADD VALUE 'DEFERRED_DEPENDENCY';
+ALTER TYPE "public"."pipeline_status_enum" ADD VALUE IF NOT EXISTS 'DEFERRED_DEPENDENCY';

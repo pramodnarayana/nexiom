@@ -5,7 +5,7 @@ import {
   BadRequestException,
   HttpException,
 } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, isNull, and } from 'drizzle-orm';
 import { DB_MANAGER } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { canonicalMappings } from '@nexiom/database';
@@ -26,6 +26,7 @@ export class MappingsService {
     return tenantDb
       .select()
       .from(canonicalMappings)
+      .where(isNull(canonicalMappings.tenantId))
       .orderBy(canonicalMappings.createdAt);
   }
 
@@ -34,7 +35,12 @@ export class MappingsService {
     const records = await tenantDb
       .select()
       .from(canonicalMappings)
-      .where(eq(canonicalMappings.id, id))
+      .where(
+        and(
+          eq(canonicalMappings.id, id),
+          isNull(canonicalMappings.tenantId)
+        )
+      )
       .limit(1);
     if (!records.length) {
       throw new NotFoundException(`Mapping with ID ${id} not found`);
@@ -48,6 +54,7 @@ export class MappingsService {
       const records = await tenantDb
         .insert(canonicalMappings)
         .values({
+          tenantId: null, // In tenant DB, tenant_id should be NULL
           appName: payload.appName,
           category: payload.category,
           entity: payload.entity,
@@ -86,7 +93,12 @@ export class MappingsService {
           version: payload.version?.trim() || 'v1',
           mappingConfig: payload.mappingConfig,
         })
-        .where(eq(canonicalMappings.id, id))
+        .where(
+          and(
+            eq(canonicalMappings.id, id),
+            isNull(canonicalMappings.tenantId)
+          )
+        )
         .returning();
 
       if (records.length === 0) {
@@ -119,7 +131,12 @@ export class MappingsService {
 
     await tenantDb
       .delete(canonicalMappings)
-      .where(eq(canonicalMappings.id, id));
+      .where(
+        and(
+          eq(canonicalMappings.id, id),
+          isNull(canonicalMappings.tenantId)
+        )
+      );
 
     return { success: true };
   }

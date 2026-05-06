@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, desc } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
 import { canonicalMappings, DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
 import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
@@ -30,6 +30,7 @@ export class MappingService {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     // Look for mapping config in the tenant's dedicated database
+    // Filter on tenant_id IS NULL to get tenant-specific mappings in tenant DB
     const mappingRecord = await tenantDb.select({ config: canonicalMappings.mappingConfig })
       .from(canonicalMappings)
       .where(
@@ -38,7 +39,8 @@ export class MappingService {
           eq(canonicalMappings.category, category),
           eq(canonicalMappings.entity, entity),
           eq(canonicalMappings.viewMode, viewMode),
-          eq(canonicalMappings.version, version)
+          eq(canonicalMappings.version, version),
+          isNull(canonicalMappings.tenantId)
         )
       )
       .limit(1);
@@ -49,6 +51,8 @@ export class MappingService {
     }
 
     // If no tenant-specific mapping found, fall back to global canonical mapping
+    // In global DB, query both tenant-specific (tenant_id = tenantId) and global (tenant_id IS NULL)
+    // Order by tenant_id DESC NULLS LAST to prefer tenant-specific rows
     const globalMappingRecord = await this.globalDb.select({ config: canonicalMappings.mappingConfig })
       .from(canonicalMappings)
       .where(
@@ -60,6 +64,7 @@ export class MappingService {
           eq(canonicalMappings.version, version)
         )
       )
+      .orderBy(desc(canonicalMappings.tenantId))
       .limit(1);
 
     if (globalMappingRecord.length > 0) {

@@ -561,16 +561,30 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
                 destOutboundGateway.traceId,
                 destOutboundGateway.routeId,
               ],
-              set: { status: "DEFERRED_DEPENDENCY", updatedAt: sql`NOW()` },
+              set: { status: "DEFERRED_DEPENDENCY", reqPayload: {}, updatedAt: sql`NOW()` },
             });
         });
 
-        // Publish to ActiveFetchQueue
-        await this.queueService.send(QueueName.ActiveFetchQueue, {
-          traceId,
-          connectionId,
-          missingDependencies: missingDeps,
-        });
+        // Publish to ActiveFetchQueue (wrapped to prevent sync lock leak on failure)
+        try {
+          await this.queueService.send(QueueName.ActiveFetchQueue, {
+            traceId,
+            connectionId,
+            missingDependencies: missingDeps,
+          });
+        } catch (queueErr) {
+          this.logger.error(
+            {
+              event: "l4.active_fetch_queue_failed",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
+              err: sanitizeError(queueErr),
+            },
+            "Failed to publish to ActiveFetchQueue — DependencySweeperService will retry",
+          );
+          // Continue to cleanup (writeSyncLog + releaseSyncLock) despite queue failure
+        }
 
         await this.writeSyncLog(
           schemaName,
