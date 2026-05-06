@@ -23,6 +23,7 @@ import {
   Condition,
 } from "@nexiom/engine";
 import type { Rule } from "@nexiom/engine";
+import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
 import {
@@ -510,15 +511,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           .onConflictDoNothing();
       });
     } catch (err) {
-      if (err instanceof Error && err.name === "DependenciesMissingError") {
-        const missingDeps = (
-          err as unknown as {
-            missingDependencies: Array<{
-              entityType: string;
-              sourceId: string;
-            }>;
-          }
-        ).missingDependencies;
+      if (err instanceof DependenciesMissingError) {
+        const missingDeps = err.missingDependencies;
         this.logger.warn(
           {
             event: "l4.dependencies_missing",
@@ -576,6 +570,16 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           Date.now() - start,
           syncLog,
         );
+        // Release lock — no outbound work will occur for this entity
+        if (srcVendorId) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+            traceId,
+          );
+        }
         return;
       }
 

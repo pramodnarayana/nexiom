@@ -24,7 +24,7 @@ export class DependencySweeperService {
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES, { waitForCompletion: true })
   async sweepDeferredDependencies(): Promise<void> {
     try {
       this.logger.debug(
@@ -53,15 +53,19 @@ export class DependencySweeperService {
             );
 
           for (const conn of connections) {
+            let schemaName: string | undefined;
             try {
-              const schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
-              const { outboundGateway } = buildTenantSchema(schemaName);
+              schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
+              const { outboundGateway, replicaEntity } = buildTenantSchema(schemaName);
 
               const staleRecords = await tenantDb
                 .select({ traceId: outboundGateway.traceId })
                 .from(outboundGateway)
                 .where(
-                  sql`${outboundGateway.status} = 'DEFERRED_DEPENDENCY' AND ${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`,
+                  and(
+                    eq(outboundGateway.status, 'DEFERRED_DEPENDENCY'),
+                    sql`${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`
+                  )
                 );
 
               if (staleRecords.length > 0) {
@@ -75,7 +79,6 @@ export class DependencySweeperService {
                 );
 
                 for (const traceId of uniqueTraceIds) {
-                  const { replicaEntity } = buildTenantSchema(schemaName);
                   const replicaRows = await tenantDb
                     .select({ connectionId: replicaEntity.connectionId })
                     .from(replicaEntity)
@@ -92,14 +95,21 @@ export class DependencySweeperService {
                       .update(outboundGateway)
                       .set({ status: "PENDING", updatedAt: sql`NOW()` })
                       .where(
-                        sql`${outboundGateway.traceId} = ${traceId} AND ${outboundGateway.status} = 'DEFERRED_DEPENDENCY'`,
+                        and(
+                          eq(outboundGateway.traceId, traceId),
+                          eq(outboundGateway.status, 'DEFERRED_DEPENDENCY')
+                        )
                       );
+                  } else {
+                    this.logger.warn(
+                      `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`
+                    );
                   }
                 }
               }
             } catch (connErr) {
               this.logger.error(
-                `DependencySweeperService: Failed to process connection ${conn.id} (schema: ${getWorkspaceSchemaName(conn.id, conn.appName)})`,
+                `DependencySweeperService: Failed to process connection ${conn.id} (schema: ${schemaName ?? 'unknown'})`,
                 connErr instanceof Error ? connErr.stack : String(connErr),
               );
             }
