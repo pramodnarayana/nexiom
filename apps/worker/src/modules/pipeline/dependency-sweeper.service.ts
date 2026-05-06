@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { sql, and, eq } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -75,22 +75,41 @@ export class DependencySweeperService {
                 );
 
                 // Deduplicate by traceId to avoid enqueueing the same trace multiple times
-                const uniqueTraceIds = new Set(
-                  staleRecords.map((record) => record.traceId),
+                const uniqueTraceIds = Array.from(
+                  new Set(staleRecords.map((record) => record.traceId)),
                 );
 
+                // Batch-fetch all replica rows in one query to avoid N+1 problem
+                const replicaRows = await tenantDb
+                  .select({
+                    traceId: replicaEntity.traceId,
+                    connectionId: replicaEntity.connectionId,
+                  })
+                  .from(replicaEntity)
+                  .where(inArray(replicaEntity.traceId, uniqueTraceIds));
+
+                // Build a map from traceId -> replica row
+                const replicaMap = new Map<
+                  string,
+                  { connectionId: string }
+                >();
+                for (const row of replicaRows) {
+                  if (!replicaMap.has(row.traceId)) {
+                    replicaMap.set(row.traceId, {
+                      connectionId: row.connectionId,
+                    });
+                  }
+                }
+
+                // Process each trace with per-trace error handling
                 for (const traceId of uniqueTraceIds) {
                   try {
-                    const replicaRows = await tenantDb
-                      .select({ connectionId: replicaEntity.connectionId })
-                      .from(replicaEntity)
-                      .where(sql`${replicaEntity.traceId} = ${traceId}`)
-                      .limit(1);
+                    const replicaRow = replicaMap.get(traceId);
 
-                    if (replicaRows[0]) {
+                    if (replicaRow) {
                       await this.queueService.send(QueueName.NormalizedQueue, {
                         traceId: traceId,
-                        connectionId: replicaRows[0].connectionId,
+                        connectionId: replicaRow.connectionId,
                       });
 
                       await tenantDb
