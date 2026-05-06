@@ -80,4 +80,29 @@ export interface ApplicationShardModule {
     body: unknown,
     headers: Record<string, string>,
   ): WebhookResponseShape | null;
+
+  /**
+   * Optional — Active Fetching hook. 
+   * Given a list of missing dependencies, delegate to the application piece 
+   * to fetch them from the source system (e.g., using a Composite API) and 
+   * ingest them into the L1 gateway.
+   */
+  activeFetch?(
+    missingDependencies: Array<{ entityType: string; sourceId: string }>,
+    connectionId: string,
+  ): Promise<void>;
+
+  /**
+   * Optional — Reverse Lookup hook.
+   * After L3 normalization writes a child entity to the database, this hook 
+   * is called to find any parent entities that might have been paused 
+   * (DEFERRED_DEPENDENCY) waiting for this child.
+   * Returns an array of parent traceIds to be re-triggered.
+   */
+  reverseLookup?(
+    db: unknown,
+    schemaName: string,
+    normalizedEntityType: string,
+    entityId: string,
+  ): Promise<string[]>;
 }

@@ -504,6 +504,75 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           .onConflictDoNothing();
       });
     } catch (err) {
+      if (err instanceof Error && err.name === "DependenciesMissingError") {
+        const missingDeps = (
+          err as unknown as {
+            missingDependencies: Array<{
+              entityType: string;
+              sourceId: string;
+            }>;
+          }
+        ).missingDependencies;
+        this.logger.warn(
+          {
+            event: "l4.dependencies_missing",
+            stitchId: stitch.id,
+            traceId,
+            missingDeps,
+            layer: "L4",
+          },
+          "Dependencies missing for target payload. Deferring route and triggering active fetch.",
+        );
+
+        // Mark route as DEFERRED_DEPENDENCY
+        const destSchemaName = await this.storageResolver.resolveSchemaName(
+          stitch.destConnectionId,
+        );
+        assertValidSchemaName(destSchemaName);
+        const { outboundGateway: destOutboundGateway } =
+          buildTenantSchema(destSchemaName);
+
+        await this.db.transaction(async (destTx) => {
+          await destTx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          );
+          await destTx
+            .insert(destOutboundGateway)
+            .values({
+              traceId,
+              routeId: stitch.id,
+              reqPayload: {}, // Hydration failed, so no payload yet
+              status: "DEFERRED_DEPENDENCY",
+              attemptCount: 0,
+            })
+            .onConflictDoUpdate({
+              target: [
+                destOutboundGateway.traceId,
+                destOutboundGateway.routeId,
+              ],
+              set: { status: "DEFERRED_DEPENDENCY", updatedAt: sql`NOW()` },
+            });
+        });
+
+        // Publish to ActiveFetchQueue
+        await this.queueService.send(QueueName.ActiveFetchQueue, {
+          traceId,
+          connectionId,
+          missingDependencies: missingDeps,
+        });
+
+        await this.writeSyncLog(
+          schemaName,
+          traceId,
+          stitch.id,
+          "L4",
+          "SKIPPED",
+          Date.now() - start,
+          syncLog,
+        );
+        return;
+      }
+
       this.logger.error(
         {
           event: "l4.stitch_error",

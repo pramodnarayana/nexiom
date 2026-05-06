@@ -27,13 +27,14 @@ export const pipelineStatusEnum = pgEnum('pipeline_status_enum', [
     'FAIL',
     'RETRY',
     'DISMISSED',  // operator explicitly dismissed a failed delivery — no further retries
+    'DEFERRED_DEPENDENCY', // paused waiting for dependency
 ]);
 
 export const pipelineLayerEnum = pgEnum('pipeline_layer_enum', [
     'L1', 'L2', 'L3', 'L4', 'L5', 'L6',
 ]);
 
-export const OutboundGatewayStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY', 'DISMISSED'] as const;
+export const OutboundGatewayStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY', 'DISMISSED', 'DEFERRED_DEPENDENCY'] as const;
 export type OutboundGatewayStatus = (typeof OutboundGatewayStatus)[number];
 
 export const OutboxStatus = ['PENDING', 'PROCESSING', 'SUCCESS', 'FAIL', 'RETRY'] as const;

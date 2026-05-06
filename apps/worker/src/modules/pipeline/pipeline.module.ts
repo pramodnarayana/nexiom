@@ -23,6 +23,9 @@ import { DeliveryService } from "./delivery.service.js";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 
+import { ActiveFetchWorker } from "./active-fetch.worker.js";
+import { DependencySweeperService } from "./dependency-sweeper.service.js";
+
 @Module({
   imports: [
     QueueModule,
@@ -41,6 +44,9 @@ import { GitopsSyncWorker } from "./gitops-sync.worker.js";
     DeliveryService,
     NormalizedOutboxWorker,
     GitopsSyncWorker,
+    ActiveFetchWorker,
+    DependencySweeperService,
+
     {
       provide: EncryptionService,
       useClass: AesEncryptionService,

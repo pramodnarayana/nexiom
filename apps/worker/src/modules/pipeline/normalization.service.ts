@@ -252,8 +252,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           // upserts into application-owned tables (e.g. tms_carrier, tms_tp).
           // The platform knows nothing about those tables — only the shard does.
           try {
-            await tx.transaction((sp) =>
-              this.hookBroker.writeNormalized(
+            await tx.transaction(async (sp) => {
+              await this.hookBroker.writeNormalized(
                 connectionAppName,
                 appProfile,
                 sp,
@@ -264,8 +264,36 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
                 traceId,
                 canonicalType,
                 safeData,
-              ),
-            );
+              );
+
+              // ── Step 3.6: Reverse Lookup (Dependency Resolution) ──────────────
+              const parentTraceIds = await this.hookBroker.reverseLookup(
+                connectionAppName,
+                appProfile,
+                sp,
+                schemaName,
+                canonicalType,
+                replica.entityId,
+              );
+
+              for (const pTraceId of parentTraceIds) {
+                // Re-queue the parent so L4 FanOut will process it again
+                // now that the required child dependency has been written.
+                await this.queueService.send(QueueName.NormalizedQueue, {
+                  traceId: pTraceId,
+                  connectionId,
+                });
+                this.logger.debug(
+                  {
+                    event: "l3.reverse_lookup.requeued",
+                    traceId: pTraceId,
+                    childEntityId: replica.entityId,
+                    layer: "L3",
+                  },
+                  `Re-queued parent traceId ${pTraceId} from reverse lookup of ${canonicalType}`,
+                );
+              }
+            });
           } catch (hookErr) {
             // Log but do not fail the pipeline — the generic normalized_entity
             // write already succeeded. App table write failure is observable
