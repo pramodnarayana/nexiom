@@ -56,16 +56,17 @@ export class DependencySweeperService {
             let schemaName: string | undefined;
             try {
               schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
-              const { outboundGateway, replicaEntity } = buildTenantSchema(schemaName);
+              const { outboundGateway, replicaEntity } =
+                buildTenantSchema(schemaName);
 
               const staleRecords = await tenantDb
                 .select({ traceId: outboundGateway.traceId })
                 .from(outboundGateway)
                 .where(
                   and(
-                    eq(outboundGateway.status, 'DEFERRED_DEPENDENCY'),
-                    sql`${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`
-                  )
+                    eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
+                    sql`${outboundGateway.updatedAt} < NOW() - INTERVAL '5 minutes'`,
+                  ),
                 );
 
               if (staleRecords.length > 0) {
@@ -97,19 +98,19 @@ export class DependencySweeperService {
                       .where(
                         and(
                           eq(outboundGateway.traceId, traceId),
-                          eq(outboundGateway.status, 'DEFERRED_DEPENDENCY')
-                        )
+                          eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
+                        ),
                       );
                   } else {
                     this.logger.warn(
-                      `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`
+                      `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`,
                     );
                   }
                 }
               }
             } catch (connErr) {
               this.logger.error(
-                `DependencySweeperService: Failed to process connection ${conn.id} (schema: ${schemaName ?? 'unknown'})`,
+                `DependencySweeperService: Failed to process connection ${conn.id} (schema: ${schemaName ?? "unknown"})`,
                 connErr instanceof Error ? connErr.stack : String(connErr),
               );
             }

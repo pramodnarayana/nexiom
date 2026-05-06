@@ -1,0 +1,1 @@
+ALTER TYPE "public"."pipeline_status_enum" ADD VALUE 'DEFERRED_DEPENDENCY';

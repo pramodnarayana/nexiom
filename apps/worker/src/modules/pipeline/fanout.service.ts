@@ -252,6 +252,37 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
   ): Promise<void> {
     try {
+      // ── Idempotency: skip if this (traceId, routeId) already succeeded ──
+      const successLogs = await this.db
+        .select()
+        .from(syncLog)
+        .where(
+          sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${stitch.id} AND ${syncLog.layer} = 'L4' AND ${syncLog.status} = 'SUCCESS'`,
+        )
+        .limit(1);
+
+      if (successLogs.length > 0) {
+        this.logger.debug(
+          {
+            event: "l4.skip_success",
+            traceId,
+            routeId: stitch.id,
+            layer: "L4",
+          },
+          "Route already succeeded previously, skipping",
+        );
+        // Release lock — no outbound work will occur for this entity
+        if (srcVendorId) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+            traceId,
+          );
+        }
+        return;
+      }
       const conditions = stitch.syncCondition as Condition[];
       const matched = evaluateConditions(conditions, normalizedData);
 
@@ -406,27 +437,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
-        // ── Idempotency: skip if this (traceId, routeId) already succeeded ──
-        const successLogs = await tx
-          .select()
-          .from(syncLog)
-          .where(
-            sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${stitch.id} AND ${syncLog.layer} = 'L4' AND ${syncLog.status} = 'SUCCESS'`,
-          )
-          .limit(1);
-
-        if (successLogs.length > 0) {
-          this.logger.debug(
-            {
-              event: "l4.skip_success",
-              traceId,
-              routeId: stitch.id,
-              layer: "L4",
-            },
-            "Route already succeeded previously, skipping",
-          );
-          return;
-        }
+        // Idempotency guard moved to start of processSingleStitch
 
         // ── Persist pending delivery record before publishing ─────────────────
         // Create outbound_gateway record in destination schema BEFORE sending to

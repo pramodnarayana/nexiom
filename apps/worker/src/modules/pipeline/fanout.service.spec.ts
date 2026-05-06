@@ -138,6 +138,7 @@ describe("FanOutService", () => {
   });
 
   it("should fanout properly if stitches are found", async () => {
+    let selectCallIdx = 0;
     db.select.mockImplementation((args: any) => {
       if (args && args.appName !== undefined)
         return Object.assign(
@@ -148,6 +149,16 @@ describe("FanOutService", () => {
             limit: vi.fn().mockReturnThis(),
           },
         );
+
+      selectCallIdx++;
+      if (selectCallIdx === 2) {
+        return Object.assign(Promise.resolve([]), {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+        });
+      }
+
       return Object.assign(
         Promise.resolve([
           {
@@ -180,6 +191,7 @@ describe("FanOutService", () => {
   it("should skip if conditions do not match", async () => {
     vi.mocked(engine.evaluateConditions).mockReturnValue(false);
 
+    let selectCallIdx = 0;
     db.select.mockImplementation((args: any) => {
       if (args && args.appName !== undefined)
         return Object.assign(
@@ -190,6 +202,16 @@ describe("FanOutService", () => {
             limit: vi.fn().mockReturnThis(),
           },
         );
+
+      selectCallIdx++;
+      if (selectCallIdx === 2) {
+        return Object.assign(Promise.resolve([]), {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+        });
+      }
+
       return Object.assign(
         Promise.resolve([
           {
@@ -288,6 +310,15 @@ describe("FanOutService", () => {
           },
         );
       }
+
+      if (selectCallIdx === 2) {
+        return Object.assign(Promise.resolve([]), {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+        });
+      }
+
       return Object.assign(
         Promise.resolve([
           {
@@ -317,6 +348,7 @@ describe("FanOutService", () => {
   });
 
   it("should record stitch failure and continue to next stitch if a route fails", async () => {
+    let selectCallIdx = 0;
     db.select.mockImplementation((args: any) => {
       if (args && args.appName !== undefined)
         return Object.assign(
@@ -327,6 +359,16 @@ describe("FanOutService", () => {
             limit: vi.fn().mockReturnThis(),
           },
         );
+
+      selectCallIdx++;
+      if (selectCallIdx === 2 || selectCallIdx === 3) {
+        return Object.assign(Promise.resolve([]), {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+        });
+      }
+
       return Object.assign(
         Promise.resolve([
           {
