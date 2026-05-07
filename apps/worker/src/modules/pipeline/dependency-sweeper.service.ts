@@ -52,6 +52,9 @@ export class DependencySweeperService {
               ),
             );
 
+          // Global deduplication set to prevent re-enqueueing same trace across connections
+          const processedTraceIds = new Set<string>();
+
           for (const conn of connections) {
             let schemaName: string | undefined;
             try {
@@ -77,7 +80,14 @@ export class DependencySweeperService {
                 // Deduplicate by traceId to avoid enqueueing the same trace multiple times
                 const uniqueTraceIds = Array.from(
                   new Set(staleRecords.map((record) => record.traceId)),
-                );
+                ).filter((traceId) => !processedTraceIds.has(traceId));
+
+                if (uniqueTraceIds.length === 0) {
+                  this.logger.debug(
+                    `DependencySweeperService: All traces in schema ${schemaName} already processed by previous connection, skipping`,
+                  );
+                  continue;
+                }
 
                 // Batch-fetch all replica rows in one query to avoid N+1 problem
                 const replicaRows = await tenantDb
@@ -89,7 +99,10 @@ export class DependencySweeperService {
                   .where(inArray(replicaEntity.traceId, uniqueTraceIds));
 
                 // Build a map from traceId -> replica row
-                const replicaMap = new Map<string, { connectionId: string }>();
+                const replicaMap = new Map<
+                  string,
+                  { connectionId: string }
+                >();
                 for (const row of replicaRows) {
                   if (!replicaMap.has(row.traceId)) {
                     replicaMap.set(row.traceId, {
@@ -109,6 +122,9 @@ export class DependencySweeperService {
                         connectionId: replicaRow.connectionId,
                       });
 
+                      // Mark as processed globally to prevent re-enqueueing in subsequent connections
+                      processedTraceIds.add(traceId);
+
                       await tenantDb
                         .update(outboundGateway)
                         .set({ status: "PENDING", updatedAt: sql`NOW()` })
@@ -126,9 +142,7 @@ export class DependencySweeperService {
                   } catch (traceErr) {
                     this.logger.error(
                       `DependencySweeperService: Failed to process traceId ${traceId} in schema ${schemaName}`,
-                      traceErr instanceof Error
-                        ? traceErr.stack
-                        : String(traceErr),
+                      traceErr instanceof Error ? traceErr.stack : String(traceErr),
                     );
                     // Continue to next traceId without re-throwing
                   }

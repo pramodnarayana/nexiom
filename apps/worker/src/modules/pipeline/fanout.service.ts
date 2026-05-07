@@ -153,9 +153,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Initialize refcount for the number of stitches that will process
-      lockRefCount.count = stitches.length;
-
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
       const srcConnRows = await this.db
         .select({
@@ -190,49 +187,54 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
       // concurrency and prevent a large fan-out from blocking the event loop.
-      const stitchResults = await processInChunks(stitches, 5, (stitch) =>
-        this.processSingleStitch(
-          schemaName,
-          traceId,
-          connectionId,
-          srcAppName,
-          appProfile,
-          srcTenantId,
-          srcVendorId,
-          canonicalType,
-          normalizedData,
-          stitch,
-          start,
-          syncLog,
-          activeSyncLocks,
-          lockRefCount,
-        ),
-      );
+      // Initialize refcount immediately before work that will decrement it
+      lockRefCount.count = stitches.length;
 
-      stitchResults.forEach((result, idx) => {
-        if (result.status === "rejected") {
-          this.logger.error(
-            {
-              event: "l4.stitch_chunk_error",
-              stitchId: stitches[idx].id,
-              traceId,
-              layer: "L4",
-              err: sanitizeError(result.reason),
-            },
-            "L4 stitch processInChunks rejection (already logged per stitch)",
+      try {
+        const stitchResults = await processInChunks(stitches, 5, (stitch) =>
+          this.processSingleStitch(
+            schemaName,
+            traceId,
+            connectionId,
+            srcAppName,
+            appProfile,
+            srcTenantId,
+            srcVendorId,
+            canonicalType,
+            normalizedData,
+            stitch,
+            start,
+            syncLog,
+            activeSyncLocks,
+            lockRefCount,
+          ),
+        );
+
+        stitchResults.forEach((result, idx) => {
+          if (result.status === "rejected") {
+            this.logger.error(
+              {
+                event: "l4.stitch_chunk_error",
+                stitchId: stitches[idx].id,
+                traceId,
+                layer: "L4",
+                err: sanitizeError(result.reason),
+              },
+              "L4 stitch processInChunks rejection (already logged per stitch)",
+            );
+          }
+        });
+      } finally {
+        // After all stitches have settled, release lock if refcount reached zero
+        if (srcVendorId && lockRefCount.count === 0) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            activeSyncLocks,
+            traceId,
           );
         }
-      });
-
-      // After all stitches have settled, release lock if refcount reached zero
-      if (srcVendorId && lockRefCount.count === 0) {
-        await this.releaseSyncLock(
-          schemaName,
-          connectionId,
-          srcVendorId,
-          activeSyncLocks,
-          traceId,
-        );
       }
 
       this.logger.log(
@@ -421,7 +423,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         );
         assertValidSchemaName(destSchemaName);
 
-        assertValidSchemaName(destSchemaName);
+        const { outboundGateway: destOutboundGateway } =
+          buildTenantSchema(destSchemaName);
 
         // Execute in nested transaction on destination schema
         // Use conditional upsert with RETURNING to determine if we should publish
@@ -528,7 +531,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           stitch.destConnectionId,
         );
         assertValidSchemaName(destSchemaName);
-        assertValidSchemaName(destSchemaName);
+        const { outboundGateway: destOutboundGateway } =
+          buildTenantSchema(destSchemaName);
 
         let shouldPublishActiveFetch = false;
         await this.db.transaction(async (destTx) => {

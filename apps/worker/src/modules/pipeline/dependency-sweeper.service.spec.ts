@@ -26,7 +26,8 @@ describe("DependencySweeperService", () => {
         if (fields && "connectionId" in fields) {
           return {
             from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockResolvedValue(replicaRows),
+            where: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockResolvedValue(replicaRows),
           };
         }
         // Otherwise assume outboundGateway
@@ -42,10 +43,7 @@ describe("DependencySweeperService", () => {
   beforeEach(async () => {
     queueService = { send: vi.fn() };
 
-    tenantDb = buildDb(
-      [{ traceId: "trace-1" }],
-      [{ traceId: "trace-1", connectionId: "conn-1" }],
-    );
+    tenantDb = buildDb([{ traceId: "trace-1" }], [{ connectionId: "conn-1" }]);
 
     dbManager = {
       getTenantDb: vi.fn().mockResolvedValue(tenantDb),
@@ -128,7 +126,7 @@ describe("DependencySweeperService", () => {
     dbManager.getTenantDb.mockRejectedValue(new Error("Db connection failed"));
 
     // Should not throw, should just log error
-    await expect(service.sweepDeferredDependencies()).resolves.not.toThrow();
+    await expect(service.sweepDeferredDependencies()).resolves.toBeUndefined();
   });
 
   it("should catch and log critical errors during sweep", async () => {
@@ -137,6 +135,6 @@ describe("DependencySweeperService", () => {
       throw new Error("Critical DB failure");
     });
 
-    await expect(service.sweepDeferredDependencies()).resolves.not.toThrow();
+    await expect(service.sweepDeferredDependencies()).resolves.toBeUndefined();
   });
 });

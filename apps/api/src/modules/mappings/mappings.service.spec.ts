@@ -63,6 +63,7 @@ describe('MappingsService', () => {
       const result = await service.findAll('tenant1');
 
       expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.where).toHaveBeenCalled();
       expect(result).toEqual([{ id: '1' }]);
     });
   });
