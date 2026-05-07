@@ -36,10 +36,7 @@ export class MappingsService {
       .select()
       .from(canonicalMappings)
       .where(
-        and(
-          eq(canonicalMappings.id, id),
-          isNull(canonicalMappings.tenantId)
-        )
+        and(eq(canonicalMappings.id, id), isNull(canonicalMappings.tenantId)),
       )
       .limit(1);
     if (!records.length) {
@@ -94,10 +91,7 @@ export class MappingsService {
           mappingConfig: payload.mappingConfig,
         })
         .where(
-          and(
-            eq(canonicalMappings.id, id),
-            isNull(canonicalMappings.tenantId)
-          )
+          and(eq(canonicalMappings.id, id), isNull(canonicalMappings.tenantId)),
         )
         .returning();
 
@@ -132,10 +126,7 @@ export class MappingsService {
     await tenantDb
       .delete(canonicalMappings)
       .where(
-        and(
-          eq(canonicalMappings.id, id),
-          isNull(canonicalMappings.tenantId)
-        )
+        and(eq(canonicalMappings.id, id), isNull(canonicalMappings.tenantId)),
       );
 
     return { success: true };

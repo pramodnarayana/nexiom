@@ -26,8 +26,7 @@ describe("DependencySweeperService", () => {
         if (fields && "connectionId" in fields) {
           return {
             from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockResolvedValue(replicaRows),
+            where: vi.fn().mockResolvedValue(replicaRows),
           };
         }
         // Otherwise assume outboundGateway
@@ -43,7 +42,10 @@ describe("DependencySweeperService", () => {
   beforeEach(async () => {
     queueService = { send: vi.fn() };
 
-    tenantDb = buildDb([{ traceId: "trace-1" }], [{ connectionId: "conn-1" }]);
+    tenantDb = buildDb(
+      [{ traceId: "trace-1" }],
+      [{ traceId: "trace-1", connectionId: "conn-1" }],
+    );
 
     dbManager = {
       getTenantDb: vi.fn().mockResolvedValue(tenantDb),
