@@ -99,10 +99,7 @@ export class DependencySweeperService {
                   .where(inArray(replicaEntity.traceId, uniqueTraceIds));
 
                 // Build a map from traceId -> replica row
-                const replicaMap = new Map<
-                  string,
-                  { connectionId: string }
-                >();
+                const replicaMap = new Map<string, { connectionId: string }>();
                 for (const row of replicaRows) {
                   if (!replicaMap.has(row.traceId)) {
                     replicaMap.set(row.traceId, {
@@ -142,7 +139,9 @@ export class DependencySweeperService {
                   } catch (traceErr) {
                     this.logger.error(
                       `DependencySweeperService: Failed to process traceId ${traceId} in schema ${schemaName}`,
-                      traceErr instanceof Error ? traceErr.stack : String(traceErr),
+                      traceErr instanceof Error
+                        ? traceErr.stack
+                        : String(traceErr),
                     );
                     // Continue to next traceId without re-throwing
                   }

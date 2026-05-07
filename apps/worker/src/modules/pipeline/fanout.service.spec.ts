@@ -17,6 +17,59 @@ vi.mock("@nexiom/engine", async (importOriginal) => {
 });
 
 describe("FanOutService", () => {
+  const createDbSelectMock = (
+    stitches: any[],
+    mappings: any[],
+    logs: any[] = [],
+  ) => {
+    return (args: any) => {
+      if (args && args.appName !== undefined) {
+        return Object.assign(
+          Promise.resolve([
+            {
+              appName: "testApp",
+              tenantId: "org_1",
+              metadata: { appProfile: "" },
+            },
+          ]),
+          {
+            from: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+          },
+        );
+      }
+
+      return Object.assign(Promise.resolve([]), {
+        from: vi.fn().mockImplementation((table) => {
+          if (
+            table &&
+            "status" in table &&
+            "routeId" in table &&
+            !("destConnectionId" in table)
+          ) {
+            return Object.assign(Promise.resolve(logs), {
+              where: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+            });
+          }
+          if (table && "mappingRules" in table) {
+            return Object.assign(Promise.resolve(mappings), {
+              where: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+            });
+          }
+          return Object.assign(Promise.resolve(stitches), {
+            where: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+          });
+        }),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+      });
+    };
+  };
+
   let service: FanOutService;
   let queueService: any;
   let db: any;
@@ -39,30 +92,24 @@ describe("FanOutService", () => {
     });
     queueService = { consume: vi.fn(), send: vi.fn() };
 
-    const queryBuilder: any = Object.assign(Promise.resolve([]), {
-      select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      values: vi.fn().mockReturnThis(),
-      returning: vi.fn().mockReturnThis(),
-    });
-
     db = {
-      select: vi.fn().mockImplementation((args) => {
-        if (args && args.appName !== undefined) {
-          return Object.assign(
-            Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
+      select: vi.fn().mockImplementation(
+        createDbSelectMock(
+          [
             {
-              from: vi.fn().mockReturnThis(),
-              where: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
+              id: "stitch_1",
+              syncCondition: [{ field: "name", op: "eq", value: "hi" }],
+              mappingRules: [],
             },
-          );
-        }
-        return queryBuilder;
-      }),
+          ],
+          [
+            {
+              mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+              sourceCanonical: "RAW",
+            },
+          ],
+        ),
+      ),
       transaction: vi.fn(),
     };
 
@@ -88,7 +135,10 @@ describe("FanOutService", () => {
             : [],
         ),
         insert: mockTxInsert,
-        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "PENDING", was_insert: true }],
+        }),
       });
       return cb(tx);
     });
@@ -138,42 +188,23 @@ describe("FanOutService", () => {
   });
 
   it("should fanout properly if stitches are found", async () => {
-    let selectCallIdx = 0;
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-
-      selectCallIdx++;
-      if (selectCallIdx === 2) {
-        return Object.assign(Promise.resolve([]), {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        });
-      }
-
-      return Object.assign(
-        Promise.resolve([
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
             id: "stitch_1",
             syncCondition: [{ field: "name", op: "eq", value: "hi" }],
             mappingRules: [],
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+        [
+          {
+            mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+            sourceCanonical: "RAW",
+          },
+        ],
+      ),
+    );
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
@@ -190,43 +221,23 @@ describe("FanOutService", () => {
 
   it("should skip if conditions do not match", async () => {
     vi.mocked(engine.evaluateConditions).mockReturnValue(false);
-
-    let selectCallIdx = 0;
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-
-      selectCallIdx++;
-      if (selectCallIdx === 2) {
-        return Object.assign(Promise.resolve([]), {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        });
-      }
-
-      return Object.assign(
-        Promise.resolve([
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
             id: "stitch_2",
             syncCondition: [{ field: "name", op: "eq", value: "bye" }],
             mappingRules: [],
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+        [
+          {
+            mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+            sourceCanonical: "RAW",
+          },
+        ],
+      ),
+    );
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
@@ -281,58 +292,23 @@ describe("FanOutService", () => {
   });
 
   it("should run hydratePayload when field mappings are found", async () => {
-    let selectCallIdx = 0;
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
+            id: "stitch_1",
+            syncCondition: [{ field: "name", op: "eq", value: "hi" }],
+            mappingRules: [],
           },
-        );
-
-      selectCallIdx++;
-      if (selectCallIdx === 1) {
-        return Object.assign(
-          Promise.resolve([
-            {
-              id: "stitch_1",
-              syncCondition: [{ field: "name", op: "eq", value: "hi" }],
-              destConnectionId: "dest",
-            },
-          ]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      }
-
-      if (selectCallIdx === 2) {
-        return Object.assign(Promise.resolve([]), {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        });
-      }
-
-      return Object.assign(
-        Promise.resolve([
+        ],
+        [
           {
             mappingRules: [{ src: "$.name", dest: "$.fullName" }],
             sourceCanonical: "RAW",
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+      ),
+    );
 
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", connectionId: "456" });
@@ -348,29 +324,9 @@ describe("FanOutService", () => {
   });
 
   it("should record stitch failure and continue to next stitch if a route fails", async () => {
-    let selectCallIdx = 0;
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-
-      selectCallIdx++;
-      if (selectCallIdx === 2 || selectCallIdx === 3) {
-        return Object.assign(Promise.resolve([]), {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        });
-      }
-
-      return Object.assign(
-        Promise.resolve([
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
             id: "stitch_fail",
             syncCondition: [{ field: "name", op: "eq", value: "hi" }],
@@ -381,14 +337,15 @@ describe("FanOutService", () => {
             syncCondition: [{ field: "name", op: "eq", value: "hi" }],
             mappingRules: [],
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+        [
+          {
+            mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+            sourceCanonical: "RAW",
+          },
+        ],
+      ),
+    );
 
     const mockValues = mockTxInsert().values;
     mockTxInsert.mockClear();
@@ -451,7 +408,10 @@ describe("FanOutService", () => {
           return Promise.resolve([]);
         }),
         insert: mockTxInsert,
-        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "PENDING", was_insert: true }],
+        }),
       });
       return cb(tx);
     });
@@ -621,7 +581,10 @@ describe("FanOutService", () => {
           return Promise.resolve([]); // RETURN EMPTY MAPPINGS
         }),
         insert: mockTxInsert,
-        execute: vi.fn().mockResolvedValue({ rowCount: 0 }),
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "PENDING", was_insert: true }],
+        }),
       });
       return cb(tx);
     });

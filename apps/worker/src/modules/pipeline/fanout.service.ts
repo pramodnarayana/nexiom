@@ -423,9 +423,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         );
         assertValidSchemaName(destSchemaName);
 
-        const { outboundGateway: destOutboundGateway } =
-          buildTenantSchema(destSchemaName);
-
         // Execute in nested transaction on destination schema
         // Use conditional upsert with RETURNING to determine if we should publish
         let shouldPublish = false;
@@ -531,8 +528,6 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           stitch.destConnectionId,
         );
         assertValidSchemaName(destSchemaName);
-        const { outboundGateway: destOutboundGateway } =
-          buildTenantSchema(destSchemaName);
 
         let shouldPublishActiveFetch = false;
         await this.db.transaction(async (destTx) => {
