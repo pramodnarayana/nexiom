@@ -17,6 +17,7 @@ import {
   StorageResolverService,
   PipelineHookBrokerService,
 } from "@nexiom/engine";
+import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
 import { sql, eq, and } from "drizzle-orm";
 
 @Injectable()
@@ -25,7 +26,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: TenantDatabaseManager,
     private readonly storageResolver: StorageResolverService,
     private readonly hookBroker: PipelineHookBrokerService,
   ) {}
@@ -56,8 +58,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       if (passedSchemaName) {
         assertValidSchemaName(passedSchemaName);
       }
-      const resolvedSchemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+      const { schemaName: resolvedSchemaName, tenantId } =
+        await this.storageResolver.resolveStorageProfile(connectionId);
       const schemaName = passedSchemaName ?? resolvedSchemaName;
       if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
         this.logger.error(
@@ -83,7 +85,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       } = buildTenantSchema(schemaName);
 
       // Fetch application metadata
-      const connRows = await this.db
+      const connRows = await this.globalDb
         .select({
           appName: appConnections.appName,
           metadata: appConnections.metadata,
@@ -111,7 +113,8 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         );
       }
 
-      await this.db.transaction(async (tx) => {
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -315,10 +318,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       );
 
       try {
-        const schemaName =
-          await this.storageResolver.resolveSchemaName(connectionId);
+        const { schemaName, tenantId } =
+          await this.storageResolver.resolveStorageProfile(connectionId);
         const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
-        await this.db.transaction(async (tx) => {
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        await tenantDb.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
           await tx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,

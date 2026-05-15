@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   Logger,
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import {
   DATABASE_CONNECTION,
@@ -14,7 +14,6 @@ import {
   integrationStitches,
   fieldMappings,
   appConnections,
-  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -23,6 +22,8 @@ import {
   Condition,
 } from "@nexiom/engine";
 import type { Rule } from "@nexiom/engine";
+import { DB_MANAGER } from "@nexiom/dbmanager";
+import type { DatabaseManager } from "@nexiom/dbmanager";
 import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
@@ -35,12 +36,12 @@ import { TargetBuilderService } from "./target-builder.service.js";
 @Injectable()
 export class FanOutService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FanOutService.name);
-
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
   onModuleInit() {
@@ -85,9 +86,22 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
     try {
       // ── Resolve schema first to get entityId for potential lock cleanup ────
+      const connectionMeta = await this.globalDb.query.appConnections.findFirst(
+        {
+          where: eq(appConnections.id, connectionId),
+          columns: { tenantId: true },
+        },
+      );
+      if (!connectionMeta) {
+        throw new Error(`Connection ${connectionId} not found in global DB`);
+      }
+
+      const tenantId = connectionMeta.tenantId;
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { normalizedEntity, replicaEntity, syncLog, activeSyncLocks } =
+      const { normalizedEntity, replicaEntity, syncLog } =
         buildTenantSchema(schemaName);
 
       // ── Read normalized data + sourceId (for GEM) in one transaction ──────
@@ -97,19 +111,39 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       let canonicalType = "RAW";
       let srcVendorId: string | undefined;
 
-      await this.db.transaction(async (tx) => {
+      const fanoutResult = await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
+        // ── Primary lookup: exact traceId match ──────────────────────────────
         const normRows = await tx
           .select()
           .from(normalizedEntity)
           .where(sql`${normalizedEntity.traceId} = ${traceId}`)
           .limit(1);
-        if (!normRows.length)
-          throw new Error(`Normalized record for traceId ${traceId} not found`);
+
+        if (!normRows.length) {
+          // ── Superseded check ───────────────────────────────────────────────
+          // normalized_entity.traceId is overwritten on each UPSERT. If the
+          // entity was updated again before L4 ran, this traceId is stale.
+          const anyNorm = await tx
+            .select({ traceId: normalizedEntity.traceId })
+            .from(normalizedEntity)
+            .where(sql`${normalizedEntity.traceId} != ${traceId}`)
+            .limit(1);
+
+          if (anyNorm.length > 0) {
+            return { kind: "superseded" as const };
+          }
+
+          throw new Error(
+            `Normalized record for traceId ${traceId} not found and no superseding record exists. ` +
+              `L3 may not have committed. The message will be retried.`,
+          );
+        }
+
         normalizedData = normRows[0].data as Record<string, unknown>;
         canonicalType = normRows[0].canonicalType ?? "RAW";
 
@@ -125,10 +159,26 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           );
         }
         srcVendorId = replicaRows[0].entityId ?? undefined;
+
+        return { kind: "found" as const };
       });
 
+      if (fanoutResult.kind === "superseded") {
+        this.logger.log(
+          {
+            event: "l4.superseded",
+            traceId,
+            connectionId,
+            layer: "L4",
+          },
+          "L4: normalized traceId superseded by newer trace — ACK without processing",
+        );
+        return;
+      }
+
       // ── Find active stitches for this source connection ───────────────────
-      const stitches = await this.db
+      // We read stitches from the tenant DB, enforcing the cell-based isolation
+      const stitches = await tenantDb
         .select()
         .from(integrationStitches)
         .where(
@@ -146,15 +196,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             schemaName,
             connectionId,
             srcVendorId,
-            activeSyncLocks,
-            traceId,
+            tenantDb,
           );
         }
         return;
       }
 
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
-      const srcConnRows = await this.db
+      const srcConnRows = await tenantDb
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
@@ -205,7 +254,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             stitch,
             start,
             syncLog,
-            activeSyncLocks,
+            tenantDb,
             lockRefCount,
           ),
         );
@@ -231,8 +280,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             schemaName,
             connectionId,
             srcVendorId,
-            activeSyncLocks,
-            traceId,
+            tenantDb,
           );
         }
       }
@@ -269,7 +317,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     stitch: typeof integrationStitches.$inferSelect,
     start: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
-    _activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
+    tenantDb: DrizzleDb,
     lockRefCount: { count: number },
   ): Promise<void> {
     try {
@@ -285,6 +333,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           "SKIPPED",
           Date.now() - start,
           syncLog,
+          tenantDb,
         );
         // Decrement refcount — no outbound work will occur for this entity
         if (srcVendorId) {
@@ -294,7 +343,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       }
 
       // ── Hydrate payload via field_mapping rules ───────────────────────────
-      const mappings = await this.db
+      const mappings = await tenantDb
         .select()
         .from(fieldMappings)
         .where(
@@ -321,6 +370,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           "SKIPPED",
           Date.now() - start,
           syncLog,
+          tenantDb,
         );
         // Decrement refcount — no outbound work will occur for this entity
         if (srcVendorId) {
@@ -351,13 +401,20 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
       // ── Lookup GEM destEntityId for Updates ────────────────────────────────
       if (srcVendorId) {
-        const gemMappings = await this.db
-          .select()
-          .from(globalEntityMap)
-          .where(
-            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
-          )
-          .limit(1);
+        const { globalEntityMap } = buildTenantSchema(schemaName);
+        const gemMappings = await tenantDb.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          return tx
+            .select()
+            .from(globalEntityMap)
+            .where(
+              sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
+            )
+            .limit(1);
+        });
 
         if (gemMappings.length > 0) {
           const destEntityId = gemMappings[0].destEntityId;
@@ -377,7 +434,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               );
             const { replicaEntity: targetReplicaEntity } =
               buildTenantSchema(targetSchemaName);
-            const targetReplica = await this.db
+            const targetReplica = await tenantDb
               .select()
               .from(targetReplicaEntity)
               .where(
@@ -409,7 +466,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -426,20 +483,20 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         // Execute in nested transaction on destination schema
         // Use conditional upsert with RETURNING to determine if we should publish
         let shouldPublish = false;
-        await this.db.transaction(async (destTx) => {
+        await tenantDb.transaction(async (destTx) => {
           await destTx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
           );
 
           // Use raw SQL for conditional upsert with RETURNING to detect transitions
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, req_payload, status, attempt_count, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
-              req_payload = ${JSON.stringify(hydratedPayload)},
+              payload = ${JSON.stringify(hydratedPayload)},
               status = 'PENDING',
-              attempt_count = 0,
+              attempts = 0,
               updated_at = NOW()
             WHERE outbound_gateway.status IN ('DEFERRED_DEPENDENCY', 'FAILED')
               OR outbound_gateway.status IS NULL
@@ -530,19 +587,19 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         assertValidSchemaName(destSchemaName);
 
         let shouldPublishActiveFetch = false;
-        await this.db.transaction(async (destTx) => {
+        await tenantDb.transaction(async (destTx) => {
           await destTx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
           );
 
           // Use conditional upsert to only transition if not already DEFERRED_DEPENDENCY or processed
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, req_payload, status, attempt_count, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
               status = 'DEFERRED_DEPENDENCY',
-              req_payload = ${JSON.stringify({})},
+              payload = ${JSON.stringify({})},
               updated_at = NOW()
             WHERE outbound_gateway.status NOT IN ('DEFERRED_DEPENDENCY', 'PENDING', 'SUCCESS')
               OR outbound_gateway.status IS NULL
@@ -585,6 +642,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             "SKIPPED",
             Date.now() - start,
             syncLog,
+            tenantDb,
           );
         } else {
           this.logger.debug(
@@ -624,6 +682,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         "FAIL",
         Date.now() - start,
         syncLog,
+        tenantDb,
       );
       // Decrement refcount on error
       if (srcVendorId) {
@@ -640,8 +699,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     status: "PROCESSING" | "SUCCESS" | "FAIL" | "SKIPPED",
     durationMs: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
+    tenantDb: DrizzleDb,
   ) {
-    await this.db.transaction(async (tx) => {
+    await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -670,18 +730,21 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     schemaName: string,
     connectionId: string,
     entityId: string,
-    activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
-    traceId: string,
+    tenantDb: DrizzleDb,
   ): Promise<void> {
-    await this.db.transaction(async (tx) => {
+    await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
+      const { activeSyncLocks } = buildTenantSchema(schemaName);
       await tx
         .delete(activeSyncLocks)
         .where(
-          sql`${activeSyncLocks.connectionId} = ${connectionId} AND ${activeSyncLocks.entityId} = ${entityId} AND ${activeSyncLocks.lockedByTraceId} = ${traceId}`,
+          and(
+            eq(activeSyncLocks.connectionId, connectionId),
+            eq(activeSyncLocks.entityId, entityId),
+          ),
         );
     });
   }

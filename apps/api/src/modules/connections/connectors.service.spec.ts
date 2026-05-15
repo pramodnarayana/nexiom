@@ -7,6 +7,7 @@ import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { Piece } from '@nexiom/piece-framework';
 import { DB_MANAGER } from '@nexiom/dbmanager';
 import { SchemaPlan } from '@nexiom/dbmanager';
+import { StorageResolverService } from '@nexiom/engine';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -100,6 +101,10 @@ describe('ConnectorsService', () => {
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
         { provide: DB_MANAGER, useValue: { applyPlan: vi.fn() } },
+        {
+          provide: StorageResolverService,
+          useValue: { resolveSchemaName: vi.fn().mockResolvedValue('ws_test') },
+        },
       ],
     }).compile();
 
@@ -504,7 +509,7 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      expect(mockDbInsert).toHaveBeenCalledTimes(1);
+      expect(mockDbInsert).toHaveBeenCalledTimes(3);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
@@ -524,15 +529,15 @@ describe('ConnectorsService', () => {
         status: 'PROVISIONING',
       });
 
-      // At connection setup time only the schema namespace is provisioned.
-      // The full table stack is applied incrementally when a stitch is activated.
+      // At connection setup time, L1→L3 pipeline tables are provisioned so
+      // webhook ingestion works immediately without a stitch being configured.
       const { applyPlan } = service['dbManager'] as unknown as {
         applyPlan: ReturnType<typeof vi.fn>;
       };
       expect(applyPlan).toHaveBeenCalledWith(
         'tenant-123',
         expect.stringMatching(/^ws_/),
-        SchemaPlan.NAMESPACE_ONLY,
+        SchemaPlan.NORMALIZE_ACTIVE,
       );
 
       // Verify the final transition to ACTIVE
@@ -561,7 +566,7 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
       expect(mockDb.update).toHaveBeenCalled();
-      expect(mockDbInsert).not.toHaveBeenCalled(); // No inserts, no registry creation
+      expect(mockDbInsert).toHaveBeenCalledTimes(1); // One insert for registry outbox
     });
     it('should throw HttpException 409 on displayName conflict when updating', async () => {
       mockDbUpdate.mockReturnValueOnce({
@@ -748,6 +753,12 @@ describe('ConnectorsService', () => {
           { provide: EncryptionService, useValue: mockEncryptionService },
           { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
           { provide: DB_MANAGER, useValue: failingDbManager },
+          {
+            provide: StorageResolverService,
+            useValue: {
+              resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
+            },
+          },
         ],
       }).compile();
 

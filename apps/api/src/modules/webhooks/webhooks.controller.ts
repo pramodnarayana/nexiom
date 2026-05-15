@@ -26,6 +26,7 @@ import {
 import type { DrizzleDb } from '@nexiom/database';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { StorageResolverService } from '@nexiom/engine';
+import { DB_MANAGER, type TenantDatabaseManager } from '@nexiom/dbmanager';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 
@@ -59,7 +60,8 @@ export class WebhooksController {
   constructor(
     @InjectPinoLogger(WebhooksController.name)
     private readonly logger: PinoLogger,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: TenantDatabaseManager,
     private readonly storageResolver: StorageResolverService,
     private readonly queueService: QueueService,
   ) {}
@@ -95,8 +97,8 @@ export class WebhooksController {
     let appResponseBody: unknown;
 
     try {
-      const schemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+      const { schemaName, tenantId } =
+        await this.storageResolver.resolveStorageProfile(connectionId);
       const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
       const inboundGatewayId = randomUUID();
       const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
@@ -151,7 +153,8 @@ export class WebhooksController {
         appResponseBody = {};
       }
 
-      await this.db.transaction(async (tx) => {
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      await tenantDb.transaction(async (tx) => {
         // assertValidSchemaName is already called inside buildTenantSchema above,
         // but we call it again here as an explicit defence-in-depth guard directly
         // adjacent to the sql.raw() usage, so a future refactor cannot silently
@@ -216,7 +219,8 @@ export class WebhooksController {
           'Returning app-defined synchronous response',
         );
         // Persist the response so support teams can see what was sent back.
-        await this.db.transaction(async (tx) => {
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        await tenantDb.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
           await tx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -249,8 +253,8 @@ export class WebhooksController {
         );
 
         try {
-          const schemaName =
-            await this.storageResolver.resolveSchemaName(connectionId);
+          const { schemaName, tenantId } =
+            await this.storageResolver.resolveStorageProfile(connectionId);
           const { inboundGateway } = buildTenantSchema(schemaName);
           const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
@@ -261,7 +265,8 @@ export class WebhooksController {
               response: unknown;
             } | null = null;
 
-            await this.db.transaction(async (tx) => {
+            const tenantDb = await this.dbManager.getTenantDb(tenantId);
+            await tenantDb.transaction(async (tx) => {
               assertValidSchemaName(schemaName);
               await tx.execute(
                 sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -317,7 +322,8 @@ export class WebhooksController {
                   }
                 ).response === null
               ) {
-                await this.db.transaction(async (tx) => {
+                const tenantDb = await this.dbManager.getTenantDb(tenantId);
+                await tenantDb.transaction(async (tx) => {
                   assertValidSchemaName(schemaName);
                   await tx.execute(
                     sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,

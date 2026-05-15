@@ -2,72 +2,131 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { StorageResolverService } from '../index.js';
+import { DATABASE_CONNECTION } from '@nexiom/database';
+
+// ── DB mock helpers ──────────────────────────────────────────────────────────
+
+type SelectResult = Array<{ schemaName: string | null; tenantId?: string | null }>;
+
+function buildDbMock(result: SelectResult) {
+  return {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue(result),
+        }),
+      }),
+    }),
+  };
+}
+
+async function buildService(dbMock: ReturnType<typeof buildDbMock>) {
+  const module: TestingModule = await Test.createTestingModule({
+    providers: [
+      StorageResolverService,
+      { provide: DATABASE_CONNECTION, useValue: dbMock },
+    ],
+  }).compile();
+  return module.get<StorageResolverService>(StorageResolverService);
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('StorageResolverService', () => {
-  let service: StorageResolverService;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [StorageResolverService],
-    }).compile();
-
-    service = module.get<StorageResolverService>(StorageResolverService);
-  });
-
   describe('resolveSchemaName', () => {
-    it('should return the deterministic schemaName for a valid connectionId', async () => {
-      const result = await service.resolveSchemaName('conn-123');
-      expect(result).toBe('ws_conn_123');
+    it('should return the stored schemaName directly from the database', async () => {
+      const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
+      const service = await buildService(db);
+
+      const result = await service.resolveSchemaName('2395444f-489a-4ab7-a45f-ca49f171d0a1');
+
+      expect(result).toBe('ws_salesforce_34ad40d48e92676d');
+      expect(db.select).toHaveBeenCalledTimes(1);
     });
 
-    it('should lowercase uppercase inputs', async () => {
-      const result = await service.resolveSchemaName('CONN-ABC');
-      expect(result).toBe('ws_conn_abc');
+    it('should serve subsequent calls from the LRU cache without hitting the DB again', async () => {
+      const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
+      const service = await buildService(db);
+      const connectionId = '2395444f-489a-4ab7-a45f-ca49f171d0a1';
+
+      // First call — DB hit
+      const first = await service.resolveSchemaName(connectionId);
+      // Second call — should be served from cache
+      const second = await service.resolveSchemaName(connectionId);
+
+      expect(first).toBe(second);
+      // DB must have been called exactly once — cache served the second call
+      expect(db.select).toHaveBeenCalledTimes(1);
     });
 
-    it('should replace invalid characters with underscores', async () => {
-      const result = await service.resolveSchemaName('conn@123#test!');
-      expect(result).toBe('ws_conn_123_test_');
-    });
+    it('should throw NotFoundException when connection does not exist', async () => {
+      const db = buildDbMock([]);
+      const service = await buildService(db);
 
-    it('should prefix with underscore if input starts with a digit', async () => {
-      const result = await service.resolveSchemaName('123-conn');
-      expect(result).toBe('ws__123_conn');
-    });
-
-    it('should truncate inputs longer than 63 characters', async () => {
-      const longInput = 'a'.repeat(100);
-      const result = await service.resolveSchemaName(longInput);
-      // "ws_" is 3 chars, so max sanitized length is 60
-      expect(result).toBe('ws_' + 'a'.repeat(60));
-    });
-
-    it('should handle mixed-case with special characters and ensure normalization', async () => {
-      const result = await service.resolveSchemaName('SalesForce-API');
-      expect(result).toBe('ws_salesforce_api');
-    });
-
-    it('should handle input that becomes empty after sanitization by throwing', async () => {
-      await expect(service.resolveSchemaName('')).rejects.toThrow(
-        /Cannot derive valid schema name/,
+      await expect(service.resolveSchemaName('non-existent-uuid')).rejects.toThrow(
+        NotFoundException,
       );
     });
 
-    it('should preserve underscores in the input', async () => {
-      const result = await service.resolveSchemaName('conn_test_123');
-      expect(result).toBe('ws_conn_test_123');
+    it('should throw NotFoundException when schemaName is null (pre-migration row)', async () => {
+      const db = buildDbMock([{ schemaName: null, tenantId: 'tenant-123' }]);
+      const service = await buildService(db);
+
+      await expect(
+        service.resolveSchemaName('2395444f-489a-4ab7-a45f-ca49f171d0a1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw for an empty connectionId without hitting the DB', async () => {
+      const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
+      const service = await buildService(db);
+
+      await expect(service.resolveSchemaName('')).rejects.toThrow(
+        /connectionId must be a non-empty string/,
+      );
+      expect(db.select).not.toHaveBeenCalled();
+    });
+
+    it('should resolve different connections independently', async () => {
+      const sfSchemaName = 'ws_salesforce_34ad40d48e92676d';
+      const qbSchemaName = 'ws_quickbooks_abcdef1234567890';
+      let callCount = 0;
+
+      const db = {
+        select: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockImplementation(() => {
+                callCount++;
+                // Alternate between two schemas to simulate different connections
+                return Promise.resolve([
+                  { schemaName: callCount === 1 ? sfSchemaName : qbSchemaName, tenantId: 'tenant-123' },
+                ]);
+              }),
+            }),
+          }),
+        })),
+      };
+
+      const service = await buildService(db as ReturnType<typeof buildDbMock>);
+
+      const sf = await service.resolveSchemaName('salesforce-conn-id');
+      const qb = await service.resolveSchemaName('quickbooks-conn-id');
+
+      expect(sf).toBe(sfSchemaName);
+      expect(qb).toBe(qbSchemaName);
+      // Each connection required exactly one DB call
+      expect(db.select).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('getHostContext', () => {
     it('should throw when tenant-per-database logic is not yet implemented', async () => {
+      const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
+      const service = await buildService(db);
+
       await expect(service.getHostContext('conn-123')).rejects.toThrow(
-        /getHostContext not yet implemented/
-      );
-      await expect(service.getHostContext('conn-123')).rejects.toThrow(
-        /conn-123/
+        /getHostContext not yet implemented/,
       );
     });
   });

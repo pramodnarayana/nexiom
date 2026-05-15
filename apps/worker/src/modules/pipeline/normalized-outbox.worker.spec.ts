@@ -49,12 +49,16 @@ describe("NormalizedOutboxWorker", () => {
     ]);
 
     const mockTenants: any = [{ tenantId: "tenant_1" }];
+    mockTenants.innerJoin = vi.fn().mockReturnThis();
     mockTenants.where = vi
       .fn()
-      .mockResolvedValue([{ id: "conn_1", appName: "salesforce" }]);
+      .mockResolvedValue([
+        { id: "conn_1", appName: "salesforce", tenantId: "tenant_1" },
+      ]);
 
     globalDb = {
       select: vi.fn().mockReturnThis(),
+      selectDistinct: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnValue(mockTenants),
     };
 

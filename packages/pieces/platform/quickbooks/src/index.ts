@@ -392,8 +392,13 @@ export const quickbooks = createPiece({
 
     // Extract the cached SyncToken from the stored replica state.
     // QuickBooks wraps the entity under the object type key (e.g. body.Vendor.SyncToken).
+    // Use a case-insensitive key search because stitch.targetObject may be stored as
+    // "VENDOR" while the QB API response key is "Vendor" — they must be treated as equivalent.
+    const destStateEntityKey = destState
+      ? Object.keys(destState).find(k => k.toLowerCase() === objectType.toLowerCase())
+      : undefined;
     const cachedSyncToken =
-      (destState?.[objectType] as Record<string, unknown> | undefined)?.['SyncToken'] as string | undefined ??
+      (destStateEntityKey && destState?.[destStateEntityKey] as Record<string, unknown> | undefined)?.['SyncToken'] as string | undefined ??
       (typeof destState?.['SyncToken'] === 'string' ? destState['SyncToken'] : undefined);
 
     let reqPayload = payload;
@@ -491,7 +496,8 @@ export const quickbooks = createPiece({
 
     // Explicitly surface the entity ID from the response body so the pipeline
     // can write to the GEM table without needing to parse app-specific response shapes.
-    const entityObj = body[objectType] as Record<string, unknown> | undefined;
+    const matchingKey = Object.keys(body).find(k => k.toLowerCase() === objectType.toLowerCase()) ?? objectType;
+    const entityObj = body[matchingKey] as Record<string, unknown> | undefined;
     const entityId = (typeof entityObj?.['Id'] === 'string' ? entityObj['Id'] : undefined)
       ?? (typeof body['Id'] === 'string' ? body['Id'] : undefined)
       ?? destId;

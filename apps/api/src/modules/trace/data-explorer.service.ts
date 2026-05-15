@@ -5,7 +5,6 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   integrationStitches,
-  globalEntityMap,
   buildTenantSchema,
   assertValidSchemaName,
 } from '@nexiom/database';
@@ -197,20 +196,35 @@ export class DataExplorerService {
   ) {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     // Validate access via stitch
-    await this.resolveStitch(orgId, stitchId, workspaceId);
+    const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
+    const schemaName = await this.storageResolver.resolveSchemaName(
+      stitch.srcConnectionId,
+    );
+    assertValidSchemaName(schemaName);
+    const { globalEntityMap } = buildTenantSchema(schemaName);
 
     const [rows, countResult] = await Promise.all([
-      this.db
-        .select()
-        .from(globalEntityMap)
-        .where(eq(globalEntityMap.stitchId, stitchId))
-        .orderBy(desc(globalEntityMap.lastSyncedAt))
-        .limit(safeLimit)
-        .offset(offset),
-      this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(globalEntityMap)
-        .where(eq(globalEntityMap.stitchId, stitchId)),
+      this.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        return tx
+          .select()
+          .from(globalEntityMap)
+          .where(eq(globalEntityMap.stitchId, stitchId))
+          .orderBy(desc(globalEntityMap.lastSyncedAt))
+          .limit(safeLimit)
+          .offset(offset);
+      }),
+      this.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        return tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(globalEntityMap)
+          .where(eq(globalEntityMap.stitchId, stitchId));
+      }),
     ]);
     return {
       data: rows,

@@ -7,6 +7,7 @@ import {
   StorageResolverService,
   PipelineHookBrokerService,
 } from "@nexiom/engine";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("ReplicaService", () => {
@@ -57,6 +58,7 @@ describe("ReplicaService", () => {
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
           onConflictDoUpdate: vi.fn().mockReturnThis(),
+          onConflictDoNothing: vi.fn().mockReturnThis(),
           returning: vi.fn().mockResolvedValue([{ id: "1" }]),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
@@ -65,10 +67,19 @@ describe("ReplicaService", () => {
         return cb(tx);
       }),
     };
-    storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_1") };
+    storageResolver = {
+      resolveSchemaName: vi.fn().mockResolvedValue("ws_1"),
+      resolveStorageProfile: vi
+        .fn()
+        .mockResolvedValue({ schemaName: "ws_1", tenantId: "tenant_1" }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         ReplicaService,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },

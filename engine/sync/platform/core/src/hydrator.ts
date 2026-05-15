@@ -1,6 +1,7 @@
 export interface Rule {
   src: string;
   dest: string;
+  required?: boolean;
 }
 
 /**
@@ -73,6 +74,9 @@ export function hydratePayload(
   const payload: any = {};
   for (const rule of rules) {
     const val = getNestedValue(data, rule.src);
+    if (rule.required && (val === undefined || val === null || val === '')) {
+      throw new Error(`Mapping validation failed: Required mapped field '${rule.dest}' resolved to empty/null from source path '${rule.src}'.`);
+    }
     if (val !== undefined) {
       setNestedValue(payload, rule.dest, val);
     }

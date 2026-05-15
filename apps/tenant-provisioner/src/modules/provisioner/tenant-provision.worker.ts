@@ -115,7 +115,7 @@ export class TenantProvisionWorker implements OnModuleInit {
       path.join(
         path.resolve(
           path.dirname(fileURLToPath(import.meta.url)),
-          "../../../../",
+          "../../../../../",
         ),
         "packages/database/drizzle/tenant",
       );
@@ -137,12 +137,19 @@ export class TenantProvisionWorker implements OnModuleInit {
     await adminClient.connect();
 
     try {
-      // Update the INITIALIZING slot to WARM
+      // Derive the credential-LESS host URL from DATABASE_URL.
+      // Credentials are NEVER persisted in the registry — they are injected
+      // at connection time by the TenantDatabaseManager's CredentialResolver.
+      // This follows the enterprise principle: topology in the database,
+      // auth from a secrets source (env vars, AWS Secrets Manager, Vault, etc.).
+      const dbUrl = new URL(process.env.DATABASE_URL ?? "");
+      const hostUrl = `${dbUrl.protocol}//${dbUrl.host}`;
+
       const result = await adminClient.query(
         `UPDATE tenant_storage_registry
-         SET status = 'WARM', updated_at = NOW()
+         SET status = 'WARM', database_host_url = $2, updated_at = NOW()
          WHERE tenant_id = $1`,
-        [`WARM-${poolSlotId}`],
+        [`WARM-${poolSlotId}`, hostUrl],
       );
       if (result.rowCount === 0) {
         this.logger.warn(

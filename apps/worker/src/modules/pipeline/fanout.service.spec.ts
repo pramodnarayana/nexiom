@@ -5,6 +5,7 @@ import { TargetBuilderService } from "./target-builder.service.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as engine from "@nexiom/engine";
 
@@ -93,6 +94,11 @@ describe("FanOutService", () => {
     queueService = { consume: vi.fn(), send: vi.fn() };
 
     db = {
+      query: {
+        appConnections: {
+          findFirst: vi.fn().mockResolvedValue({ tenantId: "tenant_1" }),
+        },
+      },
       select: vi.fn().mockImplementation(
         createDbSelectMock(
           [
@@ -142,10 +148,19 @@ describe("FanOutService", () => {
       });
       return cb(tx);
     });
-    storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_1") };
+    storageResolver = {
+      resolveSchemaName: vi.fn().mockResolvedValue("ws_1"),
+      resolveStorageProfile: vi
+        .fn()
+        .mockResolvedValue({ schemaName: "ws_1", tenantId: "tenant_1" }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         FanOutService,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
@@ -650,6 +665,7 @@ describe("FanOutService", () => {
       "L4",
       "SKIPPED",
       expect.any(Number),
+      expect.anything(),
       expect.anything(),
     );
   });

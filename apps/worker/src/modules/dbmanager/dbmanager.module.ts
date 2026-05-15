@@ -19,10 +19,23 @@ import type { DrizzleDb } from "@nexiom/database";
           (connectionString: string) => {
             const pool = new Pool({
               connectionString,
-              max: 20,
-              idleTimeoutMillis: 30_000,
+              // Tenant pools are scoped to pipeline event processing.
+              // max:5 is sufficient — tenant DBs handle one pipeline at a time.
+              // Budget: 100 tenants × 5 = 500 max connections (well within limits).
+              max: 5,
+              idleTimeoutMillis: 60_000,
               connectionTimeoutMillis: 5_000,
+              keepAlive: true,
+              keepAliveInitialDelayMillis: 10_000,
             });
+
+            pool.on("error", (err) => {
+              console.error(
+                `Unexpected error on idle tenant DB client [${connectionString.split("/").pop()}]`,
+                err,
+              );
+            });
+
             return drizzle(pool, { schema }) as unknown as DrizzleDb;
           },
         );

@@ -437,11 +437,11 @@ export class TraceService {
         ? {
             id: l5.id,
             routeId: l5.routeId,
-            reqPayload: l5.reqPayload,
-            resPayload: l5.resPayload,
+            reqPayload: l5.payload,
+            resPayload: l5.response,
             statusCode: l5.statusCode,
             status: l5.status,
-            attemptCount: l5.attemptCount,
+            attemptCount: l5.attempts,
             createdAt: l5.createdAt,
             updatedAt: l5.updatedAt,
           }

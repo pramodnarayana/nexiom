@@ -168,16 +168,27 @@ describe('DataExplorerService', () => {
         destConnectionId: 'c2',
       });
 
-      const originalSelect = db.select;
-      db.select = vi.fn().mockImplementation((args) => {
-        if (args && args.count) {
-          return {
-            from: () => ({ where: () => Promise.resolve([{ count: 4 }]) }),
-          };
+      // GEM queries are now wrapped in SET search_path transactions
+      let txCallCount = 0;
+      db.transaction = vi.fn().mockImplementation(async (cb: any) => {
+        txCallCount++;
+        const tx = {
+          execute: vi.fn(),
+          select: vi.fn().mockReturnThis(),
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          offset: vi
+            .fn()
+            .mockResolvedValue(txCallCount === 1 ? [{ id: 'gem_1' }] : []),
+        };
+        // Count query: second transaction call returns count array
+        if (txCallCount === 2) {
+          tx.where = vi.fn().mockResolvedValue([{ count: 4 }]);
         }
-        return db;
+        return cb(tx);
       });
-      db.offset.mockResolvedValueOnce([{ id: 'gem_1' }]);
 
       const res = await service.listEntityMap(
         'org_1',

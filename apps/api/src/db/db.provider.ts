@@ -23,6 +23,12 @@ export const databaseProvider: Provider = {
       max: 20,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+    });
+
+    pool.on('error', (err) => {
+      logger.error('Unexpected error on idle global DB client', err);
     });
 
     const db = drizzle(pool, { schema });

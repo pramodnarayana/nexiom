@@ -9,6 +9,7 @@ import {
   syncCursors,
 } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { TokenManagerService } from '@nexiom/credentials';
 import { CursorManagerService } from '@nexiom/engine';
 import { PieceRegistryService } from '@nexiom/piece-registry';
@@ -174,6 +175,10 @@ describe('PollSyncRunner', () => {
       providers: [
         { provide: SyncRunner, useClass: PollSyncRunner },
         { provide: DATABASE_CONNECTION, useValue: db },
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         { provide: REDIS_CLIENT, useValue: redis },
         {
           provide: ConfigService,

@@ -14,13 +14,15 @@ import {
   assertValidSchemaName,
   integrationStitches,
   appConnections,
-  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { TokenManagerService } from "@nexiom/credentials";
 import { RetryableException } from "@nexiom/piece-framework";
+import { DB_MANAGER } from "@nexiom/dbmanager";
+import type { DatabaseManager } from "@nexiom/dbmanager";
+
 import {
   sanitizeError,
   isValidPipelineMessage,
@@ -32,12 +34,12 @@ const MAX_DELIVERY_ATTEMPTS = 5;
 @Injectable()
 export class DeliveryService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeliveryService.name);
-
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly pieceRegistry: PieceRegistryService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Optional() private readonly tokenManagerService?: TokenManagerService,
   ) {}
 
@@ -113,11 +115,25 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
       const { outboundGateway } = buildTenantSchema(destSchemaName);
 
+      const connectionMeta = await this.globalDb.query.appConnections.findFirst(
+        {
+          where: eq(appConnections.id, targetConnectionId),
+          columns: { tenantId: true },
+        },
+      );
+      if (!connectionMeta) {
+        throw new Error(
+          `Connection ${targetConnectionId} not found in global DB`,
+        );
+      }
+      const tenantId = connectionMeta.tenantId;
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
       // ── TX-1: Insert PENDING or fetch existing outbound_gateway ─
       let currentAttemptCount = 0;
       let currentStatus = "";
       let sourceFinalized = false;
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
@@ -128,9 +144,10 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .values({
             traceId,
             routeId,
-            reqPayload: hydratedPayload,
+            connectionId: targetConnectionId,
+            payload: hydratedPayload,
             status: "PENDING",
-            attemptCount: 0,
+            attempts: 0,
           })
           .onConflictDoNothing({
             target: [outboundGateway.traceId, outboundGateway.routeId],
@@ -140,7 +157,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         const ob = await tx
           .select({
             id: outboundGateway.id,
-            attemptCount: outboundGateway.attemptCount,
+            attempts: outboundGateway.attempts,
             status: outboundGateway.status,
           })
           .from(outboundGateway)
@@ -151,7 +168,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
         if (!ob.length) throw new Error("Outbound gateway record not found");
         outboundGatewayId = ob[0].id;
-        currentAttemptCount = ob[0].attemptCount ?? 0;
+        currentAttemptCount = ob[0].attempts ?? 0;
         currentStatus = ob[0].status;
       });
 
@@ -188,6 +205,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           undefined, // targetAppName
           undefined, // targetTenantId
           undefined, // targetObject
+          tenantDb,
         );
         return; // Exit safely, message is acknowledged
       }
@@ -199,6 +217,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           srcSchemaName,
           traceId,
           routeId,
+          tenantDb,
         );
         if (sourceFinalized) {
           this.logger.debug(
@@ -232,6 +251,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             srcTenantId,
             srcVendorId,
             start,
+            tenantDb,
           );
 
           if (!sourceFinalized) {
@@ -260,6 +280,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           srcSchemaName,
           traceId,
           routeId,
+          tenantDb,
         );
         if (sourceFinalized) {
           this.logger.debug(
@@ -293,6 +314,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             srcTenantId,
             srcVendorId,
             start,
+            tenantDb,
           );
 
           if (!sourceFinalized) {
@@ -324,7 +346,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         await this.tokenManagerService.getValidCredentials(targetConnectionId);
 
       // ── Resolve target piece using typed appConnections query ─────────────
-      const connRows = await this.db
+      const connRows = await tenantDb
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
@@ -345,7 +367,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       }
 
       // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
@@ -354,7 +376,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .update(outboundGateway)
           .set({
             status: "PROCESSING",
-            attemptCount: sql`${outboundGateway.attemptCount} + 1`,
+            attempts: sql`${outboundGateway.attempts} + 1`,
             updatedAt: sql`NOW()`,
           })
           .where(
@@ -384,7 +406,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         return; // Safely acknowledge, SQS will drop the duplicate
       }
 
-      const stitchDocs = await this.db
+      const stitchDocs = await tenantDb
         .select()
         .from(integrationStitches)
         .where(sql`id = ${routeId}`)
@@ -464,6 +486,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetAppName,
         targetTenantId,
         targetObject,
+        tenantDb,
       );
 
       this.logger.log(
@@ -524,10 +547,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     srcSchemaName: string,
     traceId: string,
     routeId: string,
+    tenantDb: DrizzleDb,
   ): Promise<boolean> {
     try {
       const { syncLog } = buildTenantSchema(srcSchemaName);
-      const logs = await this.db.transaction(async (tx) => {
+      const logs = await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
@@ -575,18 +599,19 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     srcTenantId: string,
     srcVendorId: string | undefined,
     start: number,
+    tenantDb: DrizzleDb,
   ): Promise<boolean> {
     const { outboundGateway } = buildTenantSchema(destSchemaName);
 
     // Fetch existing result from outbound_gateway and retry source finalization
-    const existingResult = await this.db.transaction(async (tx) => {
+    const existingResult = await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(destSchemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
       );
       return await tx
         .select({
-          resPayload: outboundGateway.resPayload,
+          response: outboundGateway.response,
           statusCode: outboundGateway.statusCode,
         })
         .from(outboundGateway)
@@ -599,7 +624,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Need to fetch target metadata for GEM
-    const connRows = await this.db
+    const connRows = await tenantDb
       .select({
         appName: appConnections.appName,
         tenantId: appConnections.tenantId,
@@ -611,7 +636,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     const targetAppName = connRows[0]?.appName;
     const targetTenantId = connRows[0]?.tenantId;
 
-    const stitchDocs = await this.db
+    const stitchDocs = await tenantDb
       .select()
       .from(integrationStitches)
       .where(sql`id = ${routeId}`)
@@ -619,7 +644,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     const targetObject = stitchDocs[0]?.targetObject ?? "";
 
     // Extract destVendorId from existing result
-    const resPayload = existingResult[0].resPayload as Record<
+    const resPayload = existingResult[0].response as Record<
       string,
       unknown
     > | null;
@@ -649,6 +674,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       targetAppName,
       targetTenantId,
       targetObject,
+      tenantDb,
     );
   }
 
@@ -672,9 +698,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     targetAppName?: string,
     targetTenantId?: string,
     targetObject?: string,
+    tenantDb?: DrizzleDb,
   ): Promise<boolean> {
+    if (!tenantDb) throw new Error("tenantDb is required for writeL6Result");
     // ── Destination Schema Transaction ──────────────────────────────────────
-    await this.db.transaction(async (tx) => {
+    await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(destSchemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
@@ -685,7 +713,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
       await tx
         .update(outboundGateway)
-        .set({ resPayload: resPayload ?? {}, statusCode, status: finalStatus })
+        .set({ response: resPayload ?? {}, statusCode, status: finalStatus })
         .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
 
       if (
@@ -723,13 +751,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     // ── Source Schema Transaction ──────────────────────────────────────────
     let sourceCommitted = false;
     try {
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
         );
 
-        const { syncLog, activeSyncLocks } = buildTenantSchema(srcSchemaName);
+        const { syncLog, activeSyncLocks, globalEntityMap } =
+          buildTenantSchema(srcSchemaName);
 
         if (
           finalStatus === "SUCCESS" &&
@@ -771,6 +800,19 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
                 lastSyncedAt: sql`NOW()`,
               },
             });
+
+          this.logger.log(
+            {
+              event: "gem.mapped",
+              traceId,
+              routeId,
+              sourceAppName: srcAppName,
+              sourceEntityId: srcVendorId,
+              destAppName: targetAppName,
+              destEntityId: destVendorId,
+            },
+            `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
+          );
         }
 
         await tx

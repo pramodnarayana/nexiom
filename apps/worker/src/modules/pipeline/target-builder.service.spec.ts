@@ -10,7 +10,10 @@ vi.mock("@nexiom/engine", async (importOriginal) => {
     ...actual,
     hydratePayload: vi
       .fn()
-      .mockImplementation((_rules: unknown, data: unknown) => data),
+      .mockImplementation((_rules: unknown, data: unknown) => ({
+        ...(data as object),
+        _hydrated: true,
+      })),
   };
 });
 
@@ -57,10 +60,10 @@ describe("TargetBuilderService", () => {
       TYPE,
       ENTITY_ID,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
-    expect(result).toEqual(NORMALIZED_DATA);
+    expect(result).toEqual({ ...NORMALIZED_DATA, _hydrated: true });
   });
 
   it("merges enrichment context from hookBroker.buildTarget", async () => {
@@ -77,7 +80,7 @@ describe("TargetBuilderService", () => {
       TYPE,
       ENTITY_ID,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
     expect(result).toMatchObject({ ...NORMALIZED_DATA, ...enrichment });
@@ -113,10 +116,10 @@ describe("TargetBuilderService", () => {
       TYPE,
       ENTITY_ID,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
-    expect(result).toEqual(NORMALIZED_DATA);
+    expect(result).toEqual({ ...NORMALIZED_DATA, _hydrated: true });
   });
 
   it("falls back to normalizedData and logs warning when hookBroker.buildTarget throws", async () => {
@@ -130,10 +133,10 @@ describe("TargetBuilderService", () => {
       TYPE,
       ENTITY_ID,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
-    expect(result).toEqual(NORMALIZED_DATA);
+    expect(result).toEqual({ ...NORMALIZED_DATA, _hydrated: true });
     expect(warnSpy).toHaveBeenCalledWith(
       expect.objectContaining({ event: "target_builder.hook_failed" }),
       expect.any(String),
@@ -151,10 +154,10 @@ describe("TargetBuilderService", () => {
       TYPE,
       ENTITY_ID,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
-    expect(result).toEqual(NORMALIZED_DATA);
+    expect(result).toEqual({ ...NORMALIZED_DATA, _hydrated: true });
     expect(warnSpy).toHaveBeenCalledWith(
       expect.objectContaining({ event: "target_builder.hook_failed" }),
       expect.any(String),
@@ -169,28 +172,23 @@ describe("TargetBuilderService", () => {
       TYPE,
       undefined,
       NORMALIZED_DATA,
-      [],
+      RULES,
     );
 
     expect(hookBrokerBuildTarget).not.toHaveBeenCalled();
   });
 
-  it("returns enrichedContext unchanged when rules array is empty", async () => {
-    const { hydratePayload } = await import("@nexiom/engine");
-    hookBrokerBuildTarget.mockResolvedValue({ extra: "x" });
-
-    const result = await service.buildPayload(
-      SCHEMA,
-      APP,
-      PROFILE,
-      TYPE,
-      ENTITY_ID,
-      NORMALIZED_DATA,
-      [],
-    );
-
-    // No rules → return merged context directly (hydratePayload not called)
-    expect(result).toMatchObject({ ...NORMALIZED_DATA, extra: "x" });
-    expect(vi.mocked(hydratePayload)).not.toHaveBeenCalled();
+  it("throws an error when mapping rules are empty", async () => {
+    await expect(
+      service.buildPayload(
+        SCHEMA,
+        APP,
+        PROFILE,
+        TYPE,
+        ENTITY_ID,
+        NORMALIZED_DATA,
+        [],
+      ),
+    ).rejects.toThrowError(/No mapping rules configured/);
   });
 });

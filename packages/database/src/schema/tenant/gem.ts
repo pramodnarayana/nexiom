@@ -6,8 +6,8 @@ import {
     index,
     uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { integrationStitches } from './stitches.js';
-import { appConnections } from './tenant.js';
+import { integrationStitches } from '../global/stitches.js';
+import { appConnections } from '../global/routing.js';
 
 /**
  * GLOBAL ENTITY MAP (GEM)

@@ -55,20 +55,25 @@ describe("DependencySweeperService", () => {
 
     const mockConnections: any = {
       from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
       where: vi
         .fn()
-        .mockResolvedValue([{ id: "conn-1", appName: "salesforce" }]),
+        .mockResolvedValue([
+          { id: "conn-1", appName: "salesforce", tenantId: "tenant-1" },
+        ]),
     };
 
     globalDb = {
       select: vi.fn().mockImplementation((fields) => {
         if (fields && "tenantId" in fields) {
           return {
-            from: vi.fn().mockResolvedValue(mockTenants),
+            from: vi.fn().mockReturnThis(),
+            where: vi.fn().mockResolvedValue(mockTenants),
           };
         }
         return mockConnections;
       }),
+      selectDistinct: vi.fn().mockReturnValue(mockConnections),
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({

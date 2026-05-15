@@ -15,6 +15,13 @@
       "when": 1778067731392,
       "tag": "0001_bizarre_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1746683311000,
+      "tag": "0002_app_connection_schema_name",
+      "breakpoints": true
     }
   ]
 }

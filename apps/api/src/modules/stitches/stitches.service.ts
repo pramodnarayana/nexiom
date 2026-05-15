@@ -16,6 +16,7 @@ import {
   uiWorkspaces,
   appConnections,
   schedulerOutbox,
+  globalRegistryOutbox,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 import {
@@ -23,12 +24,61 @@ import {
   isUniqueViolation,
   PG_UNIQUE_VIOLATION,
 } from '../../shared/db.utils.js';
+import {
+  DB_MANAGER,
+  SchemaPlan,
+  getWorkspaceSchemaName,
+} from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
 
 @Injectable()
 export class StitchesService {
   private readonly logger = new Logger(StitchesService.name);
 
-  constructor(@Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
+  ) {}
+
+  /**
+   * Idempotently provisions both connection schemas to OUTBOUND_ACTIVE so the
+   * full pipeline table stack (L1→L6) is ready before the first webhook fires.
+   * Failures are logged but do NOT abort the stitch operation — the schema
+   * can always be re-provisioned by re-saving the stitch.
+   */
+  private async provisionStitchSchemas(
+    orgId: string,
+    srcConnectionId: string,
+    destConnectionId: string,
+    srcAppName: string,
+    destAppName: string,
+  ): Promise<void> {
+    const pairs = [
+      { connectionId: srcConnectionId, appName: srcAppName },
+      { connectionId: destConnectionId, appName: destAppName },
+    ];
+    await Promise.all(
+      pairs.map(async ({ connectionId, appName }) => {
+        const schemaName = getWorkspaceSchemaName(connectionId, appName);
+        try {
+          await this.dbManager.applyPlan(
+            orgId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+          );
+          this.logger.debug(
+            `Provisioned schema ${schemaName} to OUTBOUND_ACTIVE`,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Failed to provision schema ${schemaName}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          // Re-throw — a missing schema would cause immediate pipeline failures.
+          throw err;
+        }
+      }),
+    );
+  }
 
   async create(orgId: string, body: CreateStitch) {
     // Verify workspace belongs to org
@@ -110,11 +160,24 @@ export class StitchesService {
         // Doing this in the same transaction guarantees no orphaned stitch rows
         // when the mapping insert would otherwise fail after a successful stitch insert.
         if (body.fieldMappings && body.fieldMappings.length > 0) {
-          await tx.insert(fieldMappings).values(
-            body.fieldMappings.map((fm) => ({
-              stitchId: row.id,
-              sourceCanonical: fm.sourceCanonical,
-              mappingRules: fm.mappingRules,
+          const insertedFms = await tx
+            .insert(fieldMappings)
+            .values(
+              body.fieldMappings.map((fm) => ({
+                stitchId: row.id,
+                sourceCanonical: fm.sourceCanonical,
+                mappingRules: fm.mappingRules,
+              })),
+            )
+            .returning();
+
+          await tx.insert(globalRegistryOutbox).values(
+            insertedFms.map((fm) => ({
+              tenantId: orgId,
+              entityType: 'FIELD_MAPPING' as const,
+              entityId: fm.id,
+              action: 'UPSERT' as const,
+              payload: fm,
             })),
           );
         }
@@ -122,6 +185,14 @@ export class StitchesService {
         await tx
           .insert(schedulerOutbox)
           .values({ stitchId: row.id, action: 'created' });
+
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: orgId,
+          entityType: 'INTEGRATION_STITCH',
+          entityId: row.id,
+          action: 'UPSERT',
+          payload: row,
+        });
 
         return row;
       });
@@ -144,6 +215,18 @@ export class StitchesService {
       }
       throw err;
     }
+
+    // ── Provision both connection schemas to OUTBOUND_ACTIVE ────────────────
+    // Must happen AFTER the stitch row exists (not inside the TX) so that
+    // the provisioner can reference the committed connection rows.
+    // All DDL is idempotent — safe to re-run if the schemas already exist.
+    await this.provisionStitchSchemas(
+      orgId,
+      srcConn.id,
+      destConn.id,
+      srcConn.appName,
+      destConn.appName,
+    );
 
     return stitch;
   }
@@ -234,6 +317,14 @@ export class StitchesService {
             .insert(schedulerOutbox)
             .values({ stitchId: row.id, action: 'updated' });
         }
+
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: orgId,
+          entityType: 'INTEGRATION_STITCH',
+          entityId: row.id,
+          action: 'UPSERT',
+          payload: row,
+        });
 
         return row;
       });
@@ -377,6 +468,16 @@ export class StitchesService {
           .values(
             rows.map((r) => ({ stitchId: r.id, action: 'updated' as const })),
           );
+
+        await tx.insert(globalRegistryOutbox).values(
+          rows.map((r) => ({
+            tenantId: orgId,
+            entityType: 'INTEGRATION_STITCH' as const,
+            entityId: r.id,
+            action: 'UPSERT' as const,
+            payload: r,
+          })),
+        );
       }
 
       return { updated: rows, count: rows.length };
@@ -411,6 +512,14 @@ export class StitchesService {
       await tx
         .insert(schedulerOutbox)
         .values({ stitchId: id, action: 'deleted' });
+
+      await tx.insert(globalRegistryOutbox).values({
+        tenantId: orgId,
+        entityType: 'INTEGRATION_STITCH',
+        entityId: id,
+        action: 'DELETE',
+        payload: archived,
+      });
     });
   }
 }

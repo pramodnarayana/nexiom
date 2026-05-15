@@ -22,6 +22,8 @@ import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
 import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
+import { RegistryOutboxWorker } from "./registry-outbox.worker.js";
+import { RegistryReplicationService } from "./registry-replication.service.js";
 
 import { ActiveFetchWorker } from "./active-fetch.worker.js";
 import { DependencySweeperService } from "./dependency-sweeper.service.js";
@@ -46,6 +48,8 @@ import { DependencySweeperService } from "./dependency-sweeper.service.js";
     GitopsSyncWorker,
     ActiveFetchWorker,
     DependencySweeperService,
+    RegistryOutboxWorker,
+    RegistryReplicationService,
 
     {
       provide: EncryptionService,
@@ -82,6 +86,9 @@ import { DependencySweeperService } from "./dependency-sweeper.service.js";
   ],
 })
 export class PipelineModule {
-  // Intentionally injected to force eager instantiation of DeliveryService
-  constructor(private readonly deliveryService: DeliveryService) {}
+  // Intentionally injected to force eager instantiation
+  constructor(
+    private readonly deliveryService: DeliveryService,
+    private readonly registryReplicationService: RegistryReplicationService,
+  ) {}
 }

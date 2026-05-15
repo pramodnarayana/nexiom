@@ -8,6 +8,7 @@ import {
   PipelineHookBrokerService,
 } from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("NormalizationService", () => {
@@ -81,7 +82,12 @@ describe("NormalizationService", () => {
         return cb(tx);
       }),
     };
-    storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_1") };
+    storageResolver = {
+      resolveSchemaName: vi.fn().mockResolvedValue("ws_1"),
+      resolveStorageProfile: vi
+        .fn()
+        .mockResolvedValue({ schemaName: "ws_1", tenantId: "tenant_1" }),
+    };
     pieceRegistry = {
       getPiece: vi.fn().mockReturnValue({
         normalize: vi
@@ -92,6 +98,10 @@ describe("NormalizationService", () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         NormalizationService,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
@@ -122,6 +132,10 @@ describe("NormalizationService", () => {
     // Create a new module with the spy broker
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         NormalizationService,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
@@ -328,6 +342,10 @@ describe("NormalizationService", () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         NormalizationService,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },

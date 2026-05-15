@@ -13,7 +13,7 @@ x-windmill-env: &windmill-env
 
 x-common-env: &common-env
   DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-nexiom_local}
-  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/${POSTGRES_DB:-nexiom_local}
+  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/nexiom_global
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 
@@ -35,7 +35,7 @@ services:
       - ./scripts/create-windmill-db.sh:/docker-entrypoint-initdb.d/01-create-windmill-db.sh:ro
       - ./scripts/init-postgres-cdc.sh:/docker-entrypoint-initdb.d/02-init-postgres-cdc.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-nexiom_local}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,21 +45,17 @@ services:
   # --- PgBouncer (transaction-mode connection pooler) ---
   # Accepts connections on Docker-internal port 5432 (exposed as host port 5433)
   # and pools them to postgres:5432.
-  # DATABASE_POOLED_URL points here; use it for services that benefit from
-  # connection pooling (e.g. high-concurrency workers).
+  # DATABASE_POOLED_URL points here; use it for all services.
+  #
+  # Config: infra/pgbouncer/pgbouncer.ini
+  #   - nexiom_global: explicit mapping with pool_size=25
+  #   - *: wildcard catch-all for dynamically provisioned tenant databases
+  # Auth:   infra/pgbouncer/userlist.txt (md5 hashes)
   pgbouncer:
     image: edoburu/pgbouncer:v1.24.0-p0
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-user}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      DB_NAME: ${POSTGRES_DB:-nexiom_local}
-      AUTH_TYPE: md5
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: "200"
-      DEFAULT_POOL_SIZE: "20"
-      LISTEN_PORT: 5432
+    volumes:
+      - ./infra/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./infra/pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     ports:
       - "5433:5432"
     healthcheck:

@@ -10,8 +10,8 @@ import {
     unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { appConnections, envTypeEnum } from './tenant.js';
-export { envTypeEnum } from './tenant.js';
+import { appConnections, envTypeEnum } from './routing.js';
+export { envTypeEnum } from './routing.js';
 // NOTE: No cross-DB FK to organization — tenant isolation enforced by TenantDatabaseManager routing.
 
 // ---------------------------------------------------------------------------

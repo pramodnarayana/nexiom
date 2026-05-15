@@ -7,6 +7,7 @@ import {
   buildTenantSchema,
   tenantStorageRegistry,
   appConnections,
+  integrationStitches,
 } from "@nexiom/database";
 import { QueueName, QueueService } from "@nexiom/queue";
 import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
@@ -33,24 +34,59 @@ export class DependencySweeperService {
 
       const tenants = await this.globalDb
         .select({ tenantId: tenantStorageRegistry.tenantId })
-        .from(tenantStorageRegistry);
+        .from(tenantStorageRegistry)
+        .where(eq(tenantStorageRegistry.status, "ACTIVE"));
 
-      if (tenants.length === 0) return;
+      // Scope to connections that are SOURCE in an ACTIVE stitch only.
+      // The sweeper re-queues DEFERRED_DEPENDENCY records — if no active stitch
+      // exists for a connection, FanOut would drop the re-queued event anyway.
+      const allConnections = await this.globalDb
+        .selectDistinct({
+          id: appConnections.id,
+          appName: appConnections.appName,
+          tenantId: appConnections.tenantId,
+        })
+        .from(appConnections)
+        .innerJoin(
+          integrationStitches,
+          eq(integrationStitches.srcConnectionId, appConnections.id),
+        )
+        .where(
+          and(
+            eq(appConnections.status, "ACTIVE"),
+            eq(integrationStitches.status, "ACTIVE"),
+            sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+          ),
+        );
+
+      if (allConnections.length === 0) {
+        this.logger.debug(
+          "DependencySweeperService: No connections with active stitches found, skipping sweep",
+        );
+        return;
+      }
+
+      // Group by tenantId for O(1) lookup inside the per-tenant loop
+      const connectionsByTenant = new Map<
+        string,
+        Array<{ id: string; appName: string }>
+      >();
+      for (const conn of allConnections) {
+        if (!connectionsByTenant.has(conn.tenantId)) {
+          connectionsByTenant.set(conn.tenantId, []);
+        }
+        connectionsByTenant
+          .get(conn.tenantId)!
+          .push({ id: conn.id, appName: conn.appName });
+      }
 
       const TENANT_CONCURRENCY = 5;
       await processInChunks(tenants, TENANT_CONCURRENCY, async (tenant) => {
         try {
+          const connections = connectionsByTenant.get(tenant.tenantId);
+          if (!connections || connections.length === 0) return;
+
           const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-          const connections = await this.globalDb
-            .select({ id: appConnections.id, appName: appConnections.appName })
-            .from(appConnections)
-            .where(
-              and(
-                eq(appConnections.status, "ACTIVE"),
-                eq(appConnections.tenantId, tenant.tenantId),
-                sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE')`,
-              ),
-            );
 
           // Global deduplication set to prevent re-enqueueing same trace across connections
           const processedTraceIds = new Set<string>();

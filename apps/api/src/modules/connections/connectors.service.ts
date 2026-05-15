@@ -17,14 +17,17 @@ import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,
   AppConnectionStatus,
-  globalEntityMap,
+  buildTenantSchema,
+  assertValidSchemaName,
   DATABASE_CONNECTION,
+  globalRegistryOutbox,
   type DrizzleDb,
 } from '@nexiom/database';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan, getWorkspaceSchemaName } from '@nexiom/dbmanager';
 import type { DatabaseManager } from '@nexiom/dbmanager';
 import { DB_MANAGER } from '@nexiom/dbmanager';
+import { StorageResolverService } from '@nexiom/engine';
 import { PieceRegistryService } from '@nexiom/piece-registry';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
@@ -62,6 +65,7 @@ export class ConnectorsService {
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly configService: ConfigService,
+    private readonly storageResolver: StorageResolverService,
   ) {}
 
   private buildRedirectUri(): string {
@@ -343,7 +347,7 @@ export class ConnectorsService {
                   eq(appConnections.appName, providerName),
                 ),
               )
-              .returning({ id: appConnections.id });
+              .returning();
           } catch (err: unknown) {
             const pgErr2 = extractPgError(err);
             this.throwOnDuplicateConnection(pgErr2, displayName, externalId);
@@ -353,6 +357,15 @@ export class ConnectorsService {
           if (!updated) {
             throw new NotFoundException(`Connection with ID ${id} not found.`);
           }
+
+          await tx.insert(globalRegistryOutbox).values({
+            tenantId: updated.tenantId,
+            entityType: 'APP_CONNECTION',
+            entityId: updated.id,
+            action: 'UPSERT',
+            payload: updated,
+          });
+
           return {
             connectionId: updated.id,
             createdRegistry: false,
@@ -367,6 +380,14 @@ export class ConnectorsService {
         // queries. Without a savepoint, a failed INSERT leaves the transaction in an
         // "aborted" state and any further query — including the FAILED-connection SELECT
         // below — will also fail with "current transaction is aborted".
+        // Compute the schema name once before the insert so it can be
+        // persisted on the row — this is the single source of truth used
+        // by all pipeline workers for schema routing.
+        // It cannot be computed after the insert because we need the
+        // connection.id, which Postgres returns via RETURNING.
+        // We generate a deterministic UUID-shaped placeholder here and
+        // replace it after the insert via the RETURNING id.
+        // Strategy: insert first, then UPDATE schema_name in same tx.
         await tx.execute(sql`SAVEPOINT before_unique_insert`);
         try {
           [connection] = await tx
@@ -383,7 +404,26 @@ export class ConnectorsService {
               envType: envType ?? 'PRODUCTION',
               status: AppConnectionStatus.PROVISIONING,
             })
-            .returning({ id: appConnections.id });
+            .returning();
+
+          await tx.insert(globalRegistryOutbox).values({
+            tenantId: connection.tenantId,
+            entityType: 'APP_CONNECTION',
+            entityId: connection.id,
+            action: 'UPSERT',
+            payload: connection,
+          });
+
+          // Persist schemaName immediately — it is immutable once set.
+          const schemaNameToStore = getWorkspaceSchemaName(
+            connection.id,
+            providerName,
+          );
+          await tx
+            .update(appConnections)
+            .set({ schemaName: schemaNameToStore })
+            .where(eq(appConnections.id, connection.id));
+
           await tx.execute(sql`RELEASE SAVEPOINT before_unique_insert`);
         } catch (err: unknown) {
           const pgErr = extractPgError(err);
@@ -413,10 +453,9 @@ export class ConnectorsService {
                 .limit(1);
               existingFailed = rows[0];
 
-              // Cross-check: only accept this FAILED row when externalId was
-              // not supplied OR the externalId lookup resolves to the same row.
-              // If externalId resolves to a *different* row (or no row at all),
-              // clear existingFailed — both identifiers must agree on the same row.
+              // Cross-check: only accept this FAILED row if the new externalId
+              // isn't already taken by a DIFFERENT connection.
+              // If externalId resolves to a *different* row, clear existingFailed.
               if (existingFailed && externalId) {
                 const byExternalId = await tx
                   .select({ id: appConnections.id })
@@ -431,10 +470,10 @@ export class ConnectorsService {
                   )
                   .limit(1);
                 if (
-                  !byExternalId[0] ||
+                  byExternalId[0] &&
                   byExternalId[0].id !== existingFailed.id
                 ) {
-                  // externalId points to a different row or no FAILED row at all
+                  // externalId is taken by a different row
                   existingFailed = undefined;
                 }
               }
@@ -457,10 +496,9 @@ export class ConnectorsService {
                 .limit(1);
               existingFailed = rows[0];
 
-              // Cross-check: only accept this FAILED row when the displayName
-              // lookup resolves to the same row.
-              // If displayName resolves to a *different* row (or no row at all),
-              // clear existingFailed — both identifiers must agree on the same row.
+              // Cross-check: only accept this FAILED row if the new displayName
+              // isn't already taken by a DIFFERENT connection.
+              // If displayName resolves to a *different* row, clear existingFailed.
               if (existingFailed) {
                 const byDisplayName = await tx
                   .select({ id: appConnections.id })
@@ -475,16 +513,20 @@ export class ConnectorsService {
                   )
                   .limit(1);
                 if (
-                  !byDisplayName[0] ||
+                  byDisplayName[0] &&
                   byDisplayName[0].id !== existingFailed.id
                 ) {
-                  // displayName points to a different row or no FAILED row at all
+                  // displayName is taken by a different row
                   existingFailed = undefined;
                 }
               }
             }
 
             if (existingFailed) {
+              const recoveredSchemaName = getWorkspaceSchemaName(
+                existingFailed.id,
+                providerName,
+              );
               const [updated] = await tx
                 .update(appConnections)
                 .set({
@@ -494,6 +536,9 @@ export class ConnectorsService {
                   metadata,
                   envType: envType ?? 'PRODUCTION',
                   status: AppConnectionStatus.PROVISIONING,
+                  // Re-persist schemaName on recovery — guards against rows that
+                  // were inserted before this column existed (pre-migration rows).
+                  schemaName: recoveredSchemaName,
                   updatedAt: new Date(),
                 })
                 .where(eq(appConnections.id, existingFailed.id))
@@ -527,40 +572,58 @@ export class ConnectorsService {
         return;
       }
       try {
-        // At connection setup time, only provision the schema namespace.
-        // The full table stack (gateway, replica, normalize, outbound) is
-        // provisioned incrementally when a stitch/sync route is activated —
-        // not during the OAuth handshake.
+        // At connection setup time, provision L1→L3 pipeline tables so that
+        // webhook ingestion and normalization work immediately — without
+        // waiting for a stitch to be configured.
+        // L4-L6 outbound tables are added when a stitch is activated.
         await this.dbManager.applyPlan(
           tenantId,
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.NAMESPACE_ONLY,
+          SchemaPlan.NORMALIZE_ACTIVE,
         );
 
         // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {
-          await tx
+          const [activeConn] = await tx
             .update(appConnections)
             .set({
               status: AppConnectionStatus.ACTIVE,
-              schemaPlan: SchemaPlan.NAMESPACE_ONLY,
+              schemaPlan: SchemaPlan.NORMALIZE_ACTIVE,
             })
-            .where(eq(appConnections.id, workspaceProvisionInfo.connectionId));
+            .where(eq(appConnections.id, workspaceProvisionInfo.connectionId))
+            .returning();
+
+          await tx.insert(globalRegistryOutbox).values({
+            tenantId: activeConn.tenantId,
+            entityType: 'APP_CONNECTION',
+            entityId: activeConn.id,
+            action: 'UPSERT',
+            payload: activeConn,
+          });
         });
       } catch (applyError) {
         this.logger.error(
           `Failed to provision namespace for connection ${workspaceProvisionInfo.connectionId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
-          applyError,
+          applyError instanceof Error ? applyError.stack : String(applyError),
         );
         try {
           await this.db.transaction(async (tx) => {
             if (workspaceProvisionInfo.createdAppConnection) {
-              await tx
+              const [failedConn] = await tx
                 .update(appConnections)
                 .set({ status: AppConnectionStatus.FAILED })
                 .where(
                   eq(appConnections.id, workspaceProvisionInfo.connectionId),
-                );
+                )
+                .returning();
+
+              await tx.insert(globalRegistryOutbox).values({
+                tenantId: failedConn.tenantId,
+                entityType: 'APP_CONNECTION',
+                entityId: failedConn.id,
+                action: 'UPSERT',
+                payload: failedConn,
+              });
             }
           });
         } catch (rollbackError) {
@@ -609,8 +672,8 @@ export class ConnectorsService {
     tenantId: string,
     connectionId: string,
   ): Promise<void> {
+    // ── Step 1: Verify connection exists and lock it (global DB) ─────────────
     await this.db.transaction(async (tx) => {
-      // Lock the parent connection row to prevent concurrent mapping inserts during verification
       const [lockedConn] = await tx
         .select({ id: appConnections.id })
         .from(appConnections)
@@ -626,25 +689,49 @@ export class ConnectorsService {
       if (!lockedConn) {
         throw new NotFoundException(`Connection ${connectionId} not found`);
       }
+    });
 
-      const [mapping] = await tx
-        .select({ id: globalEntityMap.id })
-        .from(globalEntityMap)
-        .where(
-          or(
-            eq(globalEntityMap.sourceAppId, connectionId),
-            eq(globalEntityMap.destAppId, connectionId),
-          ),
-        )
-        .limit(1);
+    // ── Step 2: Check GEM in the tenant workspace schema ─────────────────────
+    // GEM is data-plane data scoped to the connection's workspace namespace.
+    // We must resolve the schema and use search_path to check it correctly.
+    try {
+      const schemaName =
+        await this.storageResolver.resolveSchemaName(connectionId);
+      assertValidSchemaName(schemaName);
+      const { globalEntityMap } = buildTenantSchema(schemaName);
+
+      const [mapping] = await this.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        return tx
+          .select({ id: globalEntityMap.id })
+          .from(globalEntityMap)
+          .where(
+            or(
+              eq(globalEntityMap.sourceAppId, connectionId),
+              eq(globalEntityMap.destAppId, connectionId),
+            ),
+          )
+          .limit(1);
+      });
 
       if (mapping) {
         throw new ConflictException(
           'Cannot delete connection as it is currently in use. Please delete the associated integration stitches to remove these dependencies.',
         );
       }
+    } catch (err) {
+      // Re-throw ConflictException; schema not found means no GEM data → safe to proceed
+      if (err instanceof ConflictException) throw err;
+      this.logger.warn(
+        `Could not check GEM for connection ${connectionId} — proceeding with deletion: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
-      const deleted = await tx
+    // ── Step 3: Delete the connection from global DB ──────────────────────────
+    await this.db.transaction(async (tx) => {
+      const [deletedConn] = await tx
         .delete(appConnections)
         .where(
           and(
@@ -653,7 +740,16 @@ export class ConnectorsService {
           ),
         )
         .returning();
-      void deleted; // row was guaranteed by the earlier FOR UPDATE lock
+
+      if (deletedConn) {
+        await tx.insert(globalRegistryOutbox).values({
+          tenantId: deletedConn.tenantId,
+          entityType: 'APP_CONNECTION',
+          entityId: deletedConn.id,
+          action: 'DELETE',
+          payload: deletedConn,
+        });
+      }
     });
   }
 

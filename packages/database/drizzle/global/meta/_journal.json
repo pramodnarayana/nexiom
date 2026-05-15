@@ -29,6 +29,20 @@
       "when": 1778067482424,
       "tag": "0004_familiar_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778329742536,
+      "tag": "0005_stiff_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778484824533,
+      "tag": "0006_sturdy_scourge",
+      "breakpoints": true
     }
   ]
 }

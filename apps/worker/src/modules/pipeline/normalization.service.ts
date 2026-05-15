@@ -18,6 +18,7 @@ import {
   StorageResolverService,
   PipelineHookBrokerService,
 } from "@nexiom/engine";
+import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { sql } from "drizzle-orm";
 import {
@@ -31,7 +32,8 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: TenantDatabaseManager,
     private readonly storageResolver: StorageResolverService,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly hookBroker: PipelineHookBrokerService,
@@ -75,14 +77,16 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
     try {
       const passedSchemaName = msg.schemaName as string | undefined;
       let schemaName: string;
+      let tenantId: string;
 
       if (passedSchemaName) {
         // Validate syntax
         assertValidSchemaName(passedSchemaName);
 
         // Verify ownership: passedSchemaName must belong to this connectionId
-        const expectedSchemaName =
-          await this.storageResolver.resolveSchemaName(connectionId);
+        const profile =
+          await this.storageResolver.resolveStorageProfile(connectionId);
+        const expectedSchemaName = profile.schemaName;
 
         if (passedSchemaName !== expectedSchemaName) {
           throw new Error(
@@ -91,8 +95,12 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         }
 
         schemaName = passedSchemaName;
+        tenantId = profile.tenantId;
       } else {
-        schemaName = await this.storageResolver.resolveSchemaName(connectionId);
+        const profile =
+          await this.storageResolver.resolveStorageProfile(connectionId);
+        schemaName = profile.schemaName;
+        tenantId = profile.tenantId;
       }
       const {
         inboundGateway,
@@ -106,7 +114,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       // Query the public-schema app_connection table using typed Drizzle columns
       // to get the appName needed for piece resolution. Never use raw sql`` here
       // — appConnections provides compile-time safety and prevents SQL injection.
-      const connRows = await this.db
+      const connRows = await this.globalDb
         .select({
           appName: appConnections.appName,
           metadata: appConnections.metadata,
@@ -138,22 +146,71 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         );
       }
 
-      const replica = await this.db.transaction(async (tx) => {
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      const replicaOrSuperseded = await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
-        const replicaRows = await tx
+        // ── Primary lookup: exact traceId match ──────────────────────────────
+        // Happy-path: the L2 UPSERT wrote this row and traceId still matches.
+        const exactRows = await tx
           .select()
           .from(replicaEntity)
           .where(sql`${replicaEntity.traceId} = ${traceId}`)
           .limit(1);
-        const rep = replicaRows[0];
-        if (!rep)
-          throw new Error(`Replica record for traceId ${traceId} not found`);
-        return rep;
+
+        if (exactRows[0])
+          return { kind: "found" as const, replica: exactRows[0] };
+
+        // ── Superseded check ─────────────────────────────────────────────────
+        // The traceId does NOT match. This happens when:
+        //   1. A later Update event already UPSERTed the same entity row and
+        //      overwrote traceId with a newer trace.
+        //   2. SQS redelivers the old message after a worker crash/restart.
+        //
+        // We cannot use entityId here because we don't have it in the queue
+        // message — but we can check whether ANY replica_entity row exists
+        // for this connectionId whose traceId differs. If yes, the event is
+        // superseded and we ACK it silently.  If none exist, the L2 write
+        // never committed — rethrow so the message retries.
+        const anyRows = await tx
+          .select({ id: replicaEntity.id, traceId: replicaEntity.traceId })
+          .from(replicaEntity)
+          .where(
+            sql`${replicaEntity.connectionId} = ${connectionId}
+                AND ${replicaEntity.traceId} != ${traceId}`,
+          )
+          .limit(1);
+
+        if (anyRows.length > 0) {
+          // A newer trace owns the entity — this message is stale.
+          return { kind: "superseded" as const };
+        }
+
+        // Neither exact match nor superseded — L2 transaction likely rolled back.
+        throw new Error(
+          `Replica record for traceId ${traceId} not found and no superseding record exists. ` +
+            `L2 may not have committed. The message will be retried.`,
+        );
       });
+
+      // Superseded messages are silently ACK'd — no work to do.
+      if (replicaOrSuperseded.kind === "superseded") {
+        this.logger.log(
+          {
+            event: "l3.superseded",
+            traceId,
+            connectionId,
+            layer: "L3",
+          },
+          "L3: replica traceId superseded by newer trace — ACK without processing",
+        );
+        return;
+      }
+
+      const replica = replicaOrSuperseded.replica;
 
       let canonicalType = "RAW";
       let canonicalData = replica.data;
@@ -195,7 +252,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -351,6 +408,51 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         }
       });
 
+      // ── L3→L4 event-driven handoff ────────────────────────────────────────
+      // Attempt immediate publish to NormalizedQueue after the transaction
+      // commits. This is the happy path — zero delay to L4 FanOut.
+      //
+      // If publish succeeds → mark normalized_outbox SUCCESS (event is in flight)
+      // If publish fails   → leave normalized_outbox PENDING; the recovery
+      //                      worker (NormalizedOutboxWorker, every 5 min) will
+      //                      retry. This is the crash-recovery path only.
+      //
+      // IMPORTANT: publish must happen AFTER the transaction — never inside.
+      // Publishing inside the transaction creates a dual-write problem: if the
+      // transaction rolls back after the queue send, the event is orphaned.
+      try {
+        await this.queueService.send(QueueName.NormalizedQueue, {
+          traceId,
+          connectionId,
+        });
+
+        // Mark outbox row SUCCESS — the event is now in the queue.
+        // Uses the same schemaName resolved earlier in processMessage.
+        await tenantDb
+          .update(normalizedOutbox)
+          .set({ status: "SUCCESS" })
+          .where(
+            sql`${normalizedOutbox.traceId} = ${traceId} AND ${normalizedOutbox.connectionId} = ${connectionId}`,
+          );
+
+        this.logger.debug(
+          { event: "l3.queue_published", traceId, connectionId, layer: "L3" },
+          "L3→L4: published to NormalizedQueue",
+        );
+      } catch (publishErr) {
+        // Leave normalized_outbox PENDING — recovery worker will retry within 5 min.
+        this.logger.warn(
+          {
+            event: "l3.queue_publish_failed",
+            traceId,
+            connectionId,
+            layer: "L3",
+            err: sanitizeError(publishErr),
+          },
+          "L3→L4: failed to publish to NormalizedQueue — outbox recovery will retry",
+        );
+      }
+
       this.logger.log(
         {
           event: "l3.completed",
@@ -374,10 +476,13 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         "L3 normalization failed",
       );
       try {
-        const schemaName =
-          await this.storageResolver.resolveSchemaName(connectionId);
+        const profile =
+          await this.storageResolver.resolveStorageProfile(connectionId);
+        const schemaName = profile.schemaName;
+        const tenantId = profile.tenantId;
         const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
-        await this.db.transaction(async (tx) => {
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        await tenantDb.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
           await tx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
