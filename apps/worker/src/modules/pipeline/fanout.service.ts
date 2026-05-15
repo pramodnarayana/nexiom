@@ -128,14 +128,25 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           // ── Superseded check ───────────────────────────────────────────────
           // normalized_entity.traceId is overwritten on each UPSERT. If the
           // entity was updated again before L4 ran, this traceId is stale.
-          const anyNorm = await tx
-            .select({ traceId: normalizedEntity.traceId })
-            .from(normalizedEntity)
-            .where(sql`${normalizedEntity.traceId} != ${traceId}`)
+          // First look up the replica row to get the replica_id, then check
+          // if any normalized row exists for that replica (scoped query).
+          const replicaRows = await tx
+            .select({ replicaId: replicaEntity.replicaId })
+            .from(replicaEntity)
+            .where(sql`${replicaEntity.traceId} = ${traceId}`)
             .limit(1);
 
-          if (anyNorm.length > 0) {
-            return { kind: "superseded" as const };
+          if (replicaRows.length > 0) {
+            const replicaId = replicaRows[0].replicaId;
+            const anyNorm = await tx
+              .select({ traceId: normalizedEntity.traceId })
+              .from(normalizedEntity)
+              .where(sql`${normalizedEntity.replicaId} = ${replicaId} AND ${normalizedEntity.traceId} != ${traceId}`)
+              .limit(1);
+
+            if (anyNorm.length > 0) {
+              return { kind: "superseded" as const };
+            }
           }
 
           throw new Error(
@@ -274,7 +285,10 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           }
         });
       } finally {
-        // After all stitches have settled, release lock if refcount reached zero
+        // After all stitches have settled, release lock if refcount reached zero.
+        // NOTE: lockRefCount is only decremented for skipped/error stitches.
+        // For successful publishes, releaseSyncLock is performed by the delivery
+        // path (L5/L6) for the last delivered route, maintaining the handoff contract.
         if (srcVendorId && lockRefCount.count === 0) {
           await this.releaseSyncLock(
             schemaName,
@@ -434,7 +448,21 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               );
             const { replicaEntity: targetReplicaEntity } =
               buildTenantSchema(targetSchemaName);
-            const targetReplica = await tenantDb
+
+            // Fetch destination connection's tenantId to get the correct DB
+            const destConnMeta = await this.globalDb.query.appConnections.findFirst(
+              {
+                where: eq(appConnections.id, stitch.destConnectionId),
+                columns: { tenantId: true },
+              },
+            );
+            if (!destConnMeta) {
+              throw new Error(`Destination connection ${stitch.destConnectionId} not found`);
+            }
+
+            const destTenantDb = await this.dbManager.getTenantDb(destConnMeta.tenantId);
+
+            const targetReplica = await destTenantDb
               .select()
               .from(targetReplicaEntity)
               .where(

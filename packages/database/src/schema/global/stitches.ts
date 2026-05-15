@@ -151,16 +151,16 @@ export const fieldMappings = pgTable('field_mapping', {
 // ---------------------------------------------------------------------------
 
 export const schedulerOutboxActionEnum = pgEnum('scheduler_outbox_action_enum', [
-  'created',
-  'updated',
-  'deleted',
+  'CREATED',
+  'UPDATED',
+  'DELETED',
 ]);
 
 export const schedulerOutboxStatusEnum = pgEnum('scheduler_outbox_status_enum', [
-  'pending',
-  'processing',
-  'succeeded',
-  'failed',
+  'PENDING',
+  'PROCESSING',
+  'SUCCEEDED',
+  'FAILED',
 ]);
 
 /**
@@ -193,7 +193,7 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
   /** What the scheduler should do for this stitch. */
   action: schedulerOutboxActionEnum('action').notNull(),
   /** Lifecycle state managed by OutboxWorkerService. */
-  status: schedulerOutboxStatusEnum('status').notNull().default('pending'),
+  status: schedulerOutboxStatusEnum('status').notNull().default('PENDING'),
   /** How many delivery attempts have been made (incremented before each try). */
   attempts: smallint('attempts').notNull().default(0),
   /**
@@ -215,11 +215,11 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
     name: 'scheduler_outbox_stitch_fk',
   }).onDelete('cascade'),
   // Partial index covering only pending rows — excludes the large succeeded/failed
-  // population so the poll query (WHERE status='pending' AND next_retry_at<=NOW())
+  // population so the poll query (WHERE status='PENDING' AND next_retry_at<=NOW())
   // stays fast as the table grows.
   index('scheduler_outbox_poll_idx')
     .on(table.nextRetryAt)
-    .where(sql`status = 'pending'`),
+    .where(sql`status = 'PENDING'`),
   index('scheduler_outbox_stitch_idx').on(table.stitchId),
 ]);
 

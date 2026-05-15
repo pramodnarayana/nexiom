@@ -105,7 +105,7 @@ export class TargetBuilderService {
     // ── 2. Apply field mapping rules ─────────────────────────────────────────
     if (rules.length === 0) {
       throw new Error(
-        `No mapping rules configured for ${normalizedEntityType}. Sync cannot proceed without explicit mapping rules.`,
+        `No mapping rules configured for ${normalizedEntityType}. Please configure field mappings for this integration before syncing.`,
       );
     }
 
@@ -114,7 +114,8 @@ export class TargetBuilderService {
       unknown
     >;
 
-    if (hydrated === enrichedContext || Object.keys(hydrated).length === 0) {
+    // Remove fragile identity check; rely only on empty-object check
+    if (Object.keys(hydrated).length === 0) {
       throw new Error(
         `Mapping rules failed to produce a valid payload for ${normalizedEntityType}. Check your field mapping configuration.`,
       );

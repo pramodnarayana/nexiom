@@ -45,6 +45,7 @@ export class DependencySweeperService {
           id: appConnections.id,
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
+          schemaName: appConnections.schemaName,
         })
         .from(appConnections)
         .innerJoin(
@@ -69,7 +70,7 @@ export class DependencySweeperService {
       // Group by tenantId for O(1) lookup inside the per-tenant loop
       const connectionsByTenant = new Map<
         string,
-        Array<{ id: string; appName: string }>
+        Array<{ id: string; appName: string; schemaName: string | null }>
       >();
       for (const conn of allConnections) {
         if (!connectionsByTenant.has(conn.tenantId)) {
@@ -77,7 +78,7 @@ export class DependencySweeperService {
         }
         connectionsByTenant
           .get(conn.tenantId)!
-          .push({ id: conn.id, appName: conn.appName });
+          .push({ id: conn.id, appName: conn.appName, schemaName: conn.schemaName });
       }
 
       const TENANT_CONCURRENCY = 5;
@@ -94,7 +95,10 @@ export class DependencySweeperService {
           for (const conn of connections) {
             let schemaName: string | undefined;
             try {
-              schemaName = getWorkspaceSchemaName(conn.id, conn.appName);
+              // Use persisted schema name if available, otherwise compute
+              schemaName = conn.schemaName && conn.schemaName.trim() !== ''
+                ? conn.schemaName
+                : getWorkspaceSchemaName(conn.id, conn.appName);
               const { outboundGateway, replicaEntity } =
                 buildTenantSchema(schemaName);
 
@@ -150,15 +154,8 @@ export class DependencySweeperService {
                     const replicaRow = replicaMap.get(traceId);
 
                     if (replicaRow) {
-                      await this.queueService.send(QueueName.NormalizedQueue, {
-                        traceId: traceId,
-                        connectionId: replicaRow.connectionId,
-                      });
-
-                      // Mark as processed globally to prevent re-enqueueing in subsequent connections
-                      processedTraceIds.add(traceId);
-
-                      await tenantDb
+                      // First perform the DB claim/update and ensure it affected rows
+                      const updateResult = await tenantDb
                         .update(outboundGateway)
                         .set({ status: "PENDING", updatedAt: sql`NOW()` })
                         .where(
@@ -166,7 +163,19 @@ export class DependencySweeperService {
                             eq(outboundGateway.traceId, traceId),
                             eq(outboundGateway.status, "DEFERRED_DEPENDENCY"),
                           ),
-                        );
+                        )
+                        .returning({ id: outboundGateway.id });
+
+                      // Only send to queue if the update affected rows
+                      if (updateResult.length > 0) {
+                        await this.queueService.send(QueueName.NormalizedQueue, {
+                          traceId: traceId,
+                          connectionId: replicaRow.connectionId,
+                        });
+
+                        // Mark as processed globally to prevent re-enqueueing in subsequent connections
+                        processedTraceIds.add(traceId);
+                      }
                     } else {
                       this.logger.warn(
                         `DependencySweeperService: No replica rows found for traceId ${traceId} in schema ${schemaName}. Orphaned DEFERRED_DEPENDENCY may reprocess forever. TODO: Add retry counter and transition to FAILED_DEPENDENCY after threshold.`,

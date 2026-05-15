@@ -43,8 +43,16 @@ export class StitchesService {
   /**
    * Idempotently provisions both connection schemas to OUTBOUND_ACTIVE so the
    * full pipeline table stack (L1→L6) is ready before the first webhook fires.
-   * Failures are logged but do NOT abort the stitch operation — the schema
-   * can always be re-provisioned by re-saving the stitch.
+   *
+   * This method is invoked after the create transaction commits, so any errors
+   * thrown from provisionStitchSchemas will propagate and abort the stitch
+   * operation. However, because the stitch row has already been committed along
+   * with queued registry outbox entries, a thrown error will leave both a
+   * committed stitch and queued registry entries. Callers must handle
+   * retry-on-resave or implement remediation logic for this state.
+   *
+   * Failures are logged and re-thrown to prevent pipeline execution against
+   * un-provisioned schemas (which would cause immediate failures at L1/L2).
    */
   private async provisionStitchSchemas(
     orgId: string,
@@ -184,7 +192,7 @@ export class StitchesService {
 
         await tx
           .insert(schedulerOutbox)
-          .values({ stitchId: row.id, action: 'created' });
+          .values({ stitchId: row.id, action: 'CREATED' });
 
         await tx.insert(globalRegistryOutbox).values({
           tenantId: orgId,
@@ -315,7 +323,7 @@ export class StitchesService {
         if (scheduleFieldsChanged) {
           await tx
             .insert(schedulerOutbox)
-            .values({ stitchId: row.id, action: 'updated' });
+            .values({ stitchId: row.id, action: 'UPDATED' });
         }
 
         await tx.insert(globalRegistryOutbox).values({
@@ -361,7 +369,7 @@ export class StitchesService {
 
       await tx
         .insert(schedulerOutbox)
-        .values({ stitchId: row.id, action: 'updated' });
+        .values({ stitchId: row.id, action: 'UPDATED' });
 
       return row;
     });
@@ -385,7 +393,7 @@ export class StitchesService {
 
       await tx
         .insert(schedulerOutbox)
-        .values({ stitchId: row.id, action: 'updated' });
+        .values({ stitchId: row.id, action: 'UPDATED' });
 
       return row;
     });
@@ -466,7 +474,7 @@ export class StitchesService {
         await tx
           .insert(schedulerOutbox)
           .values(
-            rows.map((r) => ({ stitchId: r.id, action: 'updated' as const })),
+            rows.map((r) => ({ stitchId: r.id, action: 'UPDATED' as const })),
           );
 
         await tx.insert(globalRegistryOutbox).values(
@@ -511,7 +519,7 @@ export class StitchesService {
 
       await tx
         .insert(schedulerOutbox)
-        .values({ stitchId: id, action: 'deleted' });
+        .values({ stitchId: id, action: 'DELETED' });
 
       await tx.insert(globalRegistryOutbox).values({
         tenantId: orgId,

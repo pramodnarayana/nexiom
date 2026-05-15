@@ -48,9 +48,14 @@ export class StorageResolverService {
       throw new Error('connectionId must be a non-empty string');
     }
 
-    // ── Fast path: cache hit ──────────────────────────────────────────────────
+    // ── Fast path: cache hit with LRU update ──────────────────────────────────
     const cached = this.cache.get(connectionId);
-    if (cached) return cached;
+    if (cached) {
+      // Update LRU insertion order by removing and re-inserting
+      this.cache.delete(connectionId);
+      this.cache.set(connectionId, cached);
+      return cached;
+    }
 
     // ── Slow path: DB lookup ──────────────────────────────────────────────────
     const [row] = await this.db
@@ -66,6 +71,15 @@ export class StorageResolverService {
       throw new NotFoundException(
         `Cannot resolve storage profile for connection "${connectionId}". ` +
           `The connection may not exist or schema_name/tenant_id was not set.`,
+      );
+    }
+
+    // ── Validate schemaName format before caching ─────────────────────────────
+    const schemaNamePattern = /^[a-z0-9_]+$/i;
+    if (!schemaNamePattern.test(row.schemaName)) {
+      throw new NotFoundException(
+        `Invalid schema_name format for connection "${connectionId}": "${row.schemaName}". ` +
+          `Schema names must contain only alphanumeric characters and underscores.`,
       );
     }
 

@@ -9,6 +9,8 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
+import { DB_MANAGER } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
 
 export interface ExplorerPage<T> {
   data: T[];
@@ -25,6 +27,7 @@ export class DataExplorerService {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {
     this.logger.setContext(DataExplorerService.name);
   }
@@ -197,14 +200,18 @@ export class DataExplorerService {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     // Validate access via stitch
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
-    const schemaName = await this.storageResolver.resolveSchemaName(
+    const storageProfile = await this.storageResolver.resolveStorageProfile(
       stitch.srcConnectionId,
     );
+    const schemaName = storageProfile.schemaName;
+    const tenantId = storageProfile.tenantId;
     assertValidSchemaName(schemaName);
     const { globalEntityMap } = buildTenantSchema(schemaName);
 
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
     const [rows, countResult] = await Promise.all([
-      this.db.transaction(async (tx) => {
+      tenantDb.transaction(async (tx) => {
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
@@ -216,7 +223,7 @@ export class DataExplorerService {
           .limit(safeLimit)
           .offset(offset);
       }),
-      this.db.transaction(async (tx) => {
+      tenantDb.transaction(async (tx) => {
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );

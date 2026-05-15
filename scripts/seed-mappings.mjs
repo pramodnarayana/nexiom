@@ -8,6 +8,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 config({ path: path.resolve(__dirname, "../.env") });
 
+// Safety gate: prevent running against production
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
+  console.error("Error: Seeding is not allowed in production. Set ALLOW_SEED=true to override.");
+  process.exit(1);
+}
+
 const TENANT_DATABASE_URL = process.env.TENANT_DATABASE_URL;
 
 if (!TENANT_DATABASE_URL) {
@@ -71,11 +77,13 @@ async function run() {
     console.log("Mappings seeded successfully.");
   } catch(e) {
     console.error("Error seeding mappings:", e);
+    throw e;
+  } finally {
+    await pool.end();
   }
-  process.exit(0);
 }
 
-run().catch(e => { 
-  console.error(e); 
-  process.exit(1); 
+run().catch(e => {
+  console.error(e);
+  process.exit(1);
 });

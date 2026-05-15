@@ -92,6 +92,8 @@ export class RegistryReplicationService implements OnModuleInit {
     try {
       const tenantDb = await this.dbManager.getTenantDb(row.tenantId);
 
+      let operationPerformed = false;
+
       await tenantDb.transaction(async (tx) => {
         if (row.action === "UPSERT") {
           const data = rehydrateDates(row.payload as Record<string, unknown>);
@@ -106,6 +108,7 @@ export class RegistryReplicationService implements OnModuleInit {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 set: connData as any,
               });
+            operationPerformed = true;
           } else if (row.entityType === "INTEGRATION_STITCH") {
             await tx
               .insert(schema.integrationStitches)
@@ -116,6 +119,7 @@ export class RegistryReplicationService implements OnModuleInit {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 set: data as any,
               });
+            operationPerformed = true;
           } else if (row.entityType === "FIELD_MAPPING") {
             await tx
               .insert(schema.fieldMappings)
@@ -126,23 +130,34 @@ export class RegistryReplicationService implements OnModuleInit {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 set: data as any,
               });
+            operationPerformed = true;
           }
         } else if (row.action === "DELETE") {
           if (row.entityType === "APP_CONNECTION") {
             await tx
               .delete(schema.appConnections)
               .where(eq(schema.appConnections.id, row.entityId));
+            operationPerformed = true;
           } else if (row.entityType === "INTEGRATION_STITCH") {
             await tx
               .delete(schema.integrationStitches)
               .where(eq(schema.integrationStitches.id, row.entityId));
+            operationPerformed = true;
           } else if (row.entityType === "FIELD_MAPPING") {
             await tx
               .delete(schema.fieldMappings)
               .where(eq(schema.fieldMappings.id, row.entityId));
+            operationPerformed = true;
           }
         }
       });
+
+      // Throw if no operation was performed (unrecognized action or entityType)
+      if (!operationPerformed) {
+        throw new Error(
+          `Unrecognized registry outbox operation: action="${row.action}", entityType="${row.entityType}"`
+        );
+      }
 
       // Mark outbox as success
       await this.globalDb

@@ -16,6 +16,7 @@ const MAX_ATTEMPTS = 6;
 @Injectable()
 export class RegistryOutboxWorker {
   private readonly logger = new Logger(RegistryOutboxWorker.name);
+  private isProcessing = false;
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
@@ -24,6 +25,13 @@ export class RegistryOutboxWorker {
 
   @Cron(CronExpression.EVERY_5_SECONDS)
   async processOutbox(): Promise<void> {
+    // Re-entrancy guard: prevent concurrent runs
+    if (this.isProcessing) {
+      this.logger.debug('Skipping processOutbox - already running');
+      return;
+    }
+
+    this.isProcessing = true;
     try {
       // Atomically claim rows from the global outbox
       const claimed = await this.globalDb.transaction(async (tx) => {
@@ -37,7 +45,7 @@ export class RegistryOutboxWorker {
           .where(
             sql`${globalRegistryOutbox.id} IN (
               SELECT id FROM ${globalRegistryOutbox}
-              WHERE status = 'PENDING' 
+              WHERE (status = 'PENDING' AND next_retry_at <= NOW())
                  OR (status = 'RETRY' AND next_retry_at <= NOW())
                  OR (status = 'PROCESSING' AND next_retry_at <= NOW())
               ORDER BY next_retry_at ASC
@@ -73,6 +81,8 @@ export class RegistryOutboxWorker {
       this.logger.error(
         `Failed to process registry outbox: ${err instanceof Error ? err.message : String(err)}`,
       );
+    } finally {
+      this.isProcessing = false;
     }
   }
 

@@ -406,14 +406,6 @@ export class ConnectorsService {
             })
             .returning();
 
-          await tx.insert(globalRegistryOutbox).values({
-            tenantId: connection.tenantId,
-            entityType: 'APP_CONNECTION',
-            entityId: connection.id,
-            action: 'UPSERT',
-            payload: connection,
-          });
-
           // Persist schemaName immediately — it is immutable once set.
           const schemaNameToStore = getWorkspaceSchemaName(
             connection.id,
@@ -423,6 +415,17 @@ export class ConnectorsService {
             .update(appConnections)
             .set({ schemaName: schemaNameToStore })
             .where(eq(appConnections.id, connection.id));
+
+          // Set schemaName on connection object before emitting to outbox
+          connection.schemaName = schemaNameToStore;
+
+          await tx.insert(globalRegistryOutbox).values({
+            tenantId: connection.tenantId,
+            entityType: 'APP_CONNECTION',
+            entityId: connection.id,
+            action: 'UPSERT',
+            payload: connection,
+          });
 
           await tx.execute(sql`RELEASE SAVEPOINT before_unique_insert`);
         } catch (err: unknown) {
@@ -724,9 +727,20 @@ export class ConnectorsService {
     } catch (err) {
       // Re-throw ConflictException; schema not found means no GEM data → safe to proceed
       if (err instanceof ConflictException) throw err;
-      this.logger.warn(
-        `Could not check GEM for connection ${connectionId} — proceeding with deletion: ${err instanceof Error ? err.message : String(err)}`,
-      );
+
+      // Only swallow "schema does not exist" errors — all other errors should abort deletion
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('schema') && (errMsg.includes('does not exist') || errMsg.includes('not found'))) {
+        this.logger.warn(
+          `Schema not found for connection ${connectionId} — proceeding with deletion: ${errMsg}`,
+        );
+      } else {
+        // Transient failures or unexpected errors should abort deletion
+        this.logger.error(
+          `Failed to check GEM for connection ${connectionId} — aborting deletion: ${errMsg}`,
+        );
+        throw err;
+      }
     }
 
     // ── Step 3: Delete the connection from global DB ──────────────────────────

@@ -17,11 +17,13 @@ interface Logger {
  *   - The registry stores WHERE the database lives (host:port)
  *   - Credentials are resolved at runtime from env vars or a secrets manager
  *
+ * Supports both sync and async resolution for flexibility (e.g., AWS Secrets Manager).
+ *
  * @example
  *   // Reads from DATABASE_URL at connection time — never from the registry
  *   (hostUrl) => hostUrl.replace('postgres://', `postgres://user:password@`)
  */
-export type CredentialResolver = (hostUrl: string) => string;
+export type CredentialResolver = (hostUrl: string) => string | Promise<string>;
 
 /**
  * Enterprise implementation of DatabaseManager that dynamically resolves
@@ -100,11 +102,14 @@ export class TenantDatabaseManager implements DatabaseManager {
                 // The registry stores only the host (no credentials) — this is
                 // the enterprise pattern: topology in the DB, auth from a secrets source.
                 const resolvedHostUrl = this.credentialResolver
-                    ? this.credentialResolver(databaseHostUrl)
+                    ? await this.credentialResolver(databaseHostUrl)
                     : databaseHostUrl;
 
-                const baseUrl = resolvedHostUrl.endsWith('/') ? resolvedHostUrl.slice(0, -1) : resolvedHostUrl;
-                const fullUrl = `${baseUrl}/${encodeURIComponent(sanitizedDbName)}`;
+                // Construct URL safely using URL object
+                const url = new URL(resolvedHostUrl);
+                // Append database name to pathname, properly encoded
+                url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(sanitizedDbName);
+                const fullUrl = url.toString();
 
                 this.logger.debug(`Establishing new connection pool for tenant ${tenantId} at ${databaseName}`);
 
