@@ -10,6 +10,8 @@ export enum QueueName {
   AiCopilotQueue = "ai-copilot-queue",
   GitopsQueue = "gitops-queue",
   TenantProvisionQueue = "tenant-provision-queue",
+  ActiveFetchQueue = "active-fetch-queue",
+  RegistryReplicationQueue = "registry-replication-queue",
 
   // Dead-letter queues — activated after 5 failed attempts
   InboundQueueDLQ = "inbound-queue-dlq",
@@ -19,6 +21,8 @@ export enum QueueName {
   AiCopilotQueueDLQ = "ai-copilot-queue-dlq",
   GitopsQueueDLQ = "gitops-queue-dlq",
   TenantProvisionQueueDLQ = "tenant-provision-queue-dlq",
+  ActiveFetchQueueDLQ = "active-fetch-queue-dlq",
+  RegistryReplicationQueueDLQ = "registry-replication-queue-dlq",
 }
 
 /** Injection token — use to inject QueueService across the application. */

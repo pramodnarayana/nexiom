@@ -6,6 +6,7 @@ import { DATABASE_CONNECTION } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
 import { PieceRegistryService } from "@nexiom/piece-registry";
 import { TokenManagerService } from "@nexiom/credentials";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("DeliveryService", () => {
@@ -18,6 +19,11 @@ describe("DeliveryService", () => {
   beforeEach(async () => {
     queueService = { consume: vi.fn() };
     db = {
+      query: {
+        appConnections: {
+          findFirst: vi.fn().mockResolvedValue({ tenantId: "tenant_1" }),
+        },
+      },
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -35,7 +41,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
             ]),
           update: vi.fn().mockReturnThis(),
           set: vi.fn().mockReturnThis(),
@@ -49,7 +55,12 @@ describe("DeliveryService", () => {
         return cb(tx);
       }),
     };
-    storageResolver = { resolveSchemaName: vi.fn().mockResolvedValue("ws_1") };
+    storageResolver = {
+      resolveSchemaName: vi.fn().mockResolvedValue("ws_1"),
+      resolveStorageProfile: vi
+        .fn()
+        .mockResolvedValue({ schemaName: "ws_1", tenantId: "tenant_1" }),
+    };
     pieceRegistry = {
       getPiece: vi.fn().mockReturnValue({
         executeAction: vi
@@ -62,6 +73,10 @@ describe("DeliveryService", () => {
       providers: [
         DeliveryService,
         { provide: QueueService, useValue: queueService },
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: PieceRegistryService, useValue: pieceRegistry },
@@ -109,7 +124,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
@@ -129,7 +144,7 @@ describe("DeliveryService", () => {
       expect.objectContaining({
         status: "FAIL",
         statusCode: 500,
-        resPayload: { error: "api error" },
+        response: { error: "api error" },
       }),
     );
   });
@@ -165,7 +180,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
@@ -222,7 +237,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
@@ -282,7 +297,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
@@ -323,7 +338,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
@@ -359,7 +374,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 0, status: "PENDING" },
+            { id: "o", reqPayload: {}, attempts: 0, status: "PENDING" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: setMock,
@@ -390,7 +405,7 @@ describe("DeliveryService", () => {
         limit: vi
           .fn()
           .mockResolvedValue([
-            { id: "o", reqPayload: {}, attemptCount: 5, status: "RETRY" },
+            { id: "o", reqPayload: {}, attempts: 6, status: "RETRY" },
           ]),
         update: vi.fn().mockReturnThis(),
         set: vi.fn().mockReturnThis(),
@@ -430,7 +445,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "SUCCESS" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -455,7 +470,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "SUCCESS" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -486,6 +501,7 @@ describe("DeliveryService", () => {
         "unknown",
         undefined,
         expect.any(Number),
+        expect.anything(),
       );
     });
 
@@ -499,7 +515,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "SUCCESS" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "SUCCESS" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -529,7 +545,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "FAIL" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -553,7 +569,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "FAIL" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -580,7 +596,7 @@ describe("DeliveryService", () => {
           limit: vi
             .fn()
             .mockResolvedValue([
-              { id: "o", reqPayload: {}, attemptCount: 0, status: "FAIL" },
+              { id: "o", reqPayload: {}, attempts: 0, status: "FAIL" },
             ]),
           insert: vi.fn().mockReturnThis(),
           values: vi.fn().mockReturnThis(),
@@ -632,6 +648,10 @@ describe("DeliveryService", () => {
         "org",
         undefined,
         "tgt",
+        undefined,
+        undefined,
+        undefined,
+        db,
       );
       expect(res).toBe(true);
     });
@@ -667,6 +687,10 @@ describe("DeliveryService", () => {
         "org",
         undefined,
         "tgt",
+        undefined,
+        undefined,
+        undefined,
+        db,
       );
       expect(res).toBe(false);
     });
@@ -688,6 +712,7 @@ describe("DeliveryService", () => {
         "ws_schema",
         "trace",
         "route",
+        db,
       );
       expect(res).toBe(true);
     });
@@ -706,6 +731,7 @@ describe("DeliveryService", () => {
         "ws_schema",
         "trace",
         "route",
+        db,
       );
       expect(res).toBe(false);
     });

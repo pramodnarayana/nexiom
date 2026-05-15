@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReplicaOutboxService } from './replica-outbox.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION, tenantStorageRegistry } from '@nexiom/database';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -42,7 +42,16 @@ describe('ReplicaOutboxService', () => {
 
     globalDb = {
       select: vi.fn().mockReturnThis(),
-      from: vi.fn().mockResolvedValue([{ tenantId: 'tenant-1' }]),
+      from: vi.fn().mockImplementation((table: any) => {
+        if (table === tenantStorageRegistry) {
+          return Promise.resolve([{ tenantId: 'tenant-1' }]);
+        }
+        return {
+          where: vi
+            .fn()
+            .mockResolvedValue([{ id: 'conn_1', appName: 'test-app' }]),
+        };
+      }),
     };
 
     dbManager = {

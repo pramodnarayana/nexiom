@@ -6,6 +6,7 @@ import { PiecesModule, PieceRegistryService } from '@nexiom/piece-registry';
 import { TokenManagerService } from '@nexiom/credentials';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { WindmillClient } from './windmill.client.js';
@@ -61,6 +62,7 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
         if (config.get<string>('WINDMILL_ENABLED') === 'true') {
           return new PollSyncRunner(
             moduleRef.get(DATABASE_CONNECTION, { strict: false }),
+            moduleRef.get(DB_MANAGER, { strict: false }),
             moduleRef.get(REDIS_CLIENT, { strict: false }),
             config,
             moduleRef.get(TokenManagerService, { strict: false }),

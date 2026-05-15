@@ -12,9 +12,29 @@ interface Logger {
 }
 
 /**
+ * A function that injects runtime credentials into a credential-less host URL.
+ * Implements the principle of separation of topology from auth:
+ *   - The registry stores WHERE the database lives (host:port)
+ *   - Credentials are resolved at runtime from env vars or a secrets manager
+ *
+ * Supports both sync and async resolution for flexibility (e.g., AWS Secrets Manager).
+ *
+ * @example
+ *   // Reads from DATABASE_URL at connection time — never from the registry
+ *   (hostUrl) => hostUrl.replace('postgres://', `postgres://user:password@`)
+ */
+export type CredentialResolver = (hostUrl: string) => string | Promise<string>;
+
+/**
  * Enterprise implementation of DatabaseManager that dynamically resolves
  * physical database connections based on the Tenant ID using the Global Database's
  * tenant_storage_registry.
+ *
+ * Design principles:
+ *   - The registry stores data topology (host, database name) — never credentials.
+ *   - Auth is injected at connection time via a `credentialResolver`, which can
+ *     pull from env vars, AWS Secrets Manager, Vault, etc.
+ *   - Connection pools are cached per-tenant and deduplicated under concurrent load.
  */
 export class TenantDatabaseManager implements DatabaseManager {
     private readonly logger: Logger;
@@ -26,6 +46,8 @@ export class TenantDatabaseManager implements DatabaseManager {
         private readonly dbFactory: (connectionString: string) => DrizzleDb,
         private readonly domainProvisionerResolver?: (appName: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
         logger?: Logger,
+        /** Resolves credentials for a given credential-less host URL at connection time. */
+        private readonly credentialResolver?: CredentialResolver,
     ) {
         this.logger = logger ?? {
             debug: (msg: string, ...args: unknown[]) => {
@@ -67,12 +89,7 @@ export class TenantDatabaseManager implements DatabaseManager {
 
                 const { databaseName, databaseHostUrl } = registryInfo[0];
 
-                // Construct the full connection string.
-                // In local development, databaseHostUrl will be the base URL (e.g., postgres://postgres:postgres@localhost:5432)
-                // and databaseName will be 'db_tenant_uuid'.
-                // We ensure a valid Postgres URL is formed by combining them properly.
-
-                // Validate and sanitize databaseName for safe URL paths
+                // Validate and sanitize databaseName for safe URL paths.
                 const sanitizedDbName = databaseName.trim().replace(/^\/+|\/+$/g, '');
                 if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedDbName)) {
                     throw new Error(
@@ -81,8 +98,18 @@ export class TenantDatabaseManager implements DatabaseManager {
                     );
                 }
 
-                const baseUrl = databaseHostUrl.endsWith('/') ? databaseHostUrl.slice(0, -1) : databaseHostUrl;
-                const fullUrl = `${baseUrl}/${encodeURIComponent(sanitizedDbName)}`;
+                // Inject credentials at connection time via the resolver.
+                // The registry stores only the host (no credentials) — this is
+                // the enterprise pattern: topology in the DB, auth from a secrets source.
+                const resolvedHostUrl = this.credentialResolver
+                    ? await this.credentialResolver(databaseHostUrl)
+                    : databaseHostUrl;
+
+                // Construct URL safely using URL object
+                const url = new URL(resolvedHostUrl);
+                // Append database name to pathname, properly encoded
+                url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(sanitizedDbName);
+                const fullUrl = url.toString();
 
                 this.logger.debug(`Establishing new connection pool for tenant ${tenantId} at ${databaseName}`);
 

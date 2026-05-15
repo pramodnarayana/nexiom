@@ -19,6 +19,7 @@ import {
 import { TokenManagerService } from '@nexiom/credentials';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { Piece } from '@nexiom/piece-framework';
+import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {
   CursorManagerService,
@@ -115,6 +116,7 @@ export class PollSyncRunner extends SyncRunner {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService,
     private readonly tokenManager: TokenManagerService,
@@ -150,7 +152,7 @@ export class PollSyncRunner extends SyncRunner {
 
     // 6. Poll the single stream
     const streamResult = await this.pollStream(
-      stitchId,
+      stitch,
       stitch.syncIntervalMinutes,
       descriptor,
       piece,
@@ -183,12 +185,13 @@ export class PollSyncRunner extends SyncRunner {
   // ── Per-stream poll ───────────────────────────────────────────────────────
 
   private async pollStream(
-    stitchId: string,
+    stitch: { id: string; orgId: string },
     syncIntervalMinutes: number,
     descriptor: StreamDescriptor,
     piece: Piece,
     credentials: OAuthCredentialBlob,
   ): Promise<StreamResult> {
+    const stitchId = stitch.id;
     const key = pollLockKey(stitchId, descriptor.streamName);
     // Use 2× the sync interval as the lock TTL so that a slow poll run that
     // approaches the full interval does not lose the lock mid-pagination.
@@ -210,7 +213,7 @@ export class PollSyncRunner extends SyncRunner {
 
     try {
       return await this.runPollLoop(
-        stitchId,
+        stitch,
         descriptor,
         piece,
         credentials,
@@ -237,7 +240,7 @@ export class PollSyncRunner extends SyncRunner {
   // ── Poll loop (lock already held) ────────────────────────────────────────
 
   private async runPollLoop(
-    stitchId: string,
+    stitch: { id: string; orgId: string },
     descriptor: StreamDescriptor,
     piece: Piece,
     credentials: OAuthCredentialBlob,
@@ -245,10 +248,17 @@ export class PollSyncRunner extends SyncRunner {
     lockToken: string,
     ttlMs: number,
   ): Promise<StreamResult> {
+    const stitchId = stitch.id;
     const { streamName } = descriptor;
 
+    const tenantDb = await this.dbManager.getTenantDb(stitch.orgId);
+
     // Read or initialise the Singer-style state document for this stream.
-    const stateDoc = await this.readOrCreateStateDoc(stitchId, streamName);
+    const stateDoc = await this.readOrCreateStateDoc(
+      tenantDb,
+      stitchId,
+      streamName,
+    );
     const bookmark = stateDoc.bookmarks[streamName];
 
     // Crash-resume: if currently_syncing is set, the last run crashed after
@@ -261,7 +271,7 @@ export class PollSyncRunner extends SyncRunner {
 
     // Mark run as in-progress before the first page so a crash is detectable.
     stateDoc.currently_syncing = streamName;
-    await this.writeStateDoc(stitchId, streamName, stateDoc);
+    await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
 
     const window = this.cursorManager.calculateWindow(bookmark, descriptor);
     const keyType = descriptor.replicationKeyType ?? 'opaque';
@@ -305,7 +315,7 @@ export class PollSyncRunner extends SyncRunner {
           hwm,
           nextCursor,
         );
-        await this.writeStateDoc(stitchId, streamName, stateDoc);
+        await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
         this.logger.debug(
           `Intermediate checkpoint at page ${pageCount} for stream "${streamName}" (hwm=${safeHwm(hwm, keyType)})`,
         );
@@ -321,7 +331,7 @@ export class PollSyncRunner extends SyncRunner {
       undefined,
     );
     stateDoc.currently_syncing = null;
-    await this.writeStateDoc(stitchId, streamName, stateDoc);
+    await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
 
     this.logger.log(
       `Stream "${streamName}" completed: ${recordsIngested} records ingested over ${pageCount} page(s), hwm=${safeHwm(hwm, keyType)}`,
@@ -357,10 +367,11 @@ export class PollSyncRunner extends SyncRunner {
   }
 
   private async readOrCreateStateDoc(
+    tenantDb: DrizzleDb,
     stitchId: string,
     streamName: string,
   ): Promise<SyncStateDocument> {
-    const [row] = await this.db
+    const [row] = await tenantDb
       .select({ stateDocument: syncCursors.stateDocument })
       .from(syncCursors)
       .where(
@@ -388,11 +399,12 @@ export class PollSyncRunner extends SyncRunner {
   }
 
   private async writeStateDoc(
+    tenantDb: DrizzleDb,
     stitchId: string,
     streamName: string,
     stateDoc: SyncStateDocument,
   ): Promise<void> {
-    await this.db
+    await tenantDb
       .insert(syncCursors)
       .values({
         stitchId,

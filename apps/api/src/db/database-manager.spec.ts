@@ -55,7 +55,7 @@ vi.mock('node:child_process');
 vi.mock('pg', () => {
   const mClient = {
     connect: vi.fn(),
-    query: vi.fn(),
+    query: vi.fn().mockResolvedValue({ rows: [] }),
     end: vi.fn(),
   };
   return { Client: vi.fn(() => mClient) };
@@ -296,9 +296,11 @@ describe('DatabaseManager', () => {
       expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
 
       // Verify pieces discovery check
-      const expectedPath = path.join('engine', 'application', 'pieces');
       expect(fsMocks.readdir).toHaveBeenCalledWith(
-        expect.stringContaining(expectedPath),
+        expect.stringContaining(path.join('packages', 'pieces', 'application')),
+      );
+      expect(fsMocks.readdir).toHaveBeenCalledWith(
+        expect.stringContaining(path.join('packages', 'pieces', 'platform')),
       );
     });
 
@@ -321,9 +323,11 @@ describe('DatabaseManager', () => {
       expect(rbacMocks.seedSystemRbac).toHaveBeenCalled();
 
       // Verify pieces discovery check
-      const expectedPath = path.join('engine', 'application', 'pieces');
       expect(fsMocks.readdir).toHaveBeenCalledWith(
-        expect.stringContaining(expectedPath),
+        expect.stringContaining(path.join('packages', 'pieces', 'application')),
+      );
+      expect(fsMocks.readdir).toHaveBeenCalledWith(
+        expect.stringContaining(path.join('packages', 'pieces', 'platform')),
       );
     });
   });

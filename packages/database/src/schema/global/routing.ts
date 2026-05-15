@@ -74,6 +74,13 @@ export const appConnections = pgTable('app_connection', {
     // Which DBManager SchemaPlan was last applied to this connection's schema
     schemaPlan: varchar('schema_plan', { length: 64 }).notNull().default('NAMESPACE_ONLY'),
 
+    // The physical PostgreSQL schema name for this connection's tenant workspace.
+    // Computed once by getWorkspaceSchemaName(id, appName) at connection creation time
+    // and never changed. This is the single source of truth used by all pipeline
+    // workers to route data into the correct schema namespace.
+    // Format: ws_{provider}_{sha256(id)[0:16]}  e.g. "ws_salesforce_34ad40d48e92676d"
+    schemaName: varchar('schema_name', { length: 100 }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -108,6 +115,7 @@ export const safeAppConnectionColumns = {
     expiresAt: appConnections.expiresAt,
     metadata: appConnections.metadata,
     schemaPlan: appConnections.schemaPlan,
+    schemaName: appConnections.schemaName,
     createdAt: appConnections.createdAt,
     updatedAt: appConnections.updatedAt,
 } as const;

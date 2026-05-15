@@ -229,6 +229,66 @@ export class SqlDatabaseManager {
                 CONSTRAINT uq_sync_lock UNIQUE (connection_id, entity_id)
             );
         `);
+
+        await this.db.$client.query(`
+        CREATE TABLE IF NOT EXISTS "${schemaName}".sync_log (
+            id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id    UUID        NOT NULL,
+            route_id    UUID,
+            layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
+            status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY','DISMISSED')),
+            duration_ms INTEGER,
+            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    `);
+
+        // Drop legacy unique constraint before creating partial indexes
+        await this.db.$client.query(`
+        DO $$
+        DECLARE
+            constraint_name TEXT;
+        BEGIN
+            -- Find any unique constraint on sync_log (excluding the new partial indexes)
+            SELECT conname INTO constraint_name
+            FROM pg_constraint
+            WHERE conrelid = '"${schemaName}".sync_log'::regclass
+              AND contype = 'u'
+              AND conname NOT IN ('uq_sync_log_routed', 'uq_sync_log_unrouted')
+            LIMIT 1;
+
+            IF constraint_name IS NOT NULL THEN
+                EXECUTE 'ALTER TABLE "${schemaName}".sync_log DROP CONSTRAINT IF EXISTS ' || quote_ident(constraint_name);
+            END IF;
+        END $$;
+    `);
+
+        // Create the modern routed/unrouted partial unique indexes
+        await this.db.$client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_routed
+            ON "${schemaName}".sync_log (trace_id, route_id, layer, status)
+            WHERE route_id IS NOT NULL;
+    `);
+
+        await this.db.$client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_unrouted
+            ON "${schemaName}".sync_log (trace_id, layer, status)
+            WHERE route_id IS NULL;
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_trace
+            ON "${schemaName}".sync_log (trace_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_route
+            ON "${schemaName}".sync_log (route_id);
+    `);
+
+        await this.db.$client.query(`
+        CREATE INDEX IF NOT EXISTS idx_log_trace_layer
+            ON "${schemaName}".sync_log (trace_id, layer);
+    `);
     }
 
     private async provisionReplicaTables(schemaName: string): Promise<void> {
@@ -416,12 +476,15 @@ export class SqlDatabaseManager {
             id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
             trace_id      UUID        NOT NULL,
             route_id      UUID        NOT NULL,
-            req_payload   JSONB       NOT NULL,
-            res_payload   JSONB,
+            connection_id UUID        NOT NULL,
+            payload       JSONB       NOT NULL,
+            response      JSONB,
             status_code   INTEGER,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
-            attempt_count INTEGER     NOT NULL DEFAULT 0,
+            attempts      INTEGER     NOT NULL DEFAULT 0,
+            last_error    TEXT,
+            next_retry_at TIMESTAMPTZ,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_outbound_trace_route UNIQUE (trace_id, route_id)
@@ -483,65 +546,6 @@ export class SqlDatabaseManager {
             ON "${schemaName}".outbound_gateway (status);
     `);
 
-        await this.db.$client.query(`
-        CREATE TABLE IF NOT EXISTS "${schemaName}".sync_log (
-            id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            trace_id    UUID        NOT NULL,
-            route_id    UUID,
-            layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
-            status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY','DISMISSED')),
-            duration_ms INTEGER,
-            timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-    `);
-
-        // Drop legacy unique constraint before creating partial indexes
-        await this.db.$client.query(`
-        DO $$
-        DECLARE
-            constraint_name TEXT;
-        BEGIN
-            -- Find any unique constraint on sync_log (excluding the new partial indexes)
-            SELECT conname INTO constraint_name
-            FROM pg_constraint
-            WHERE conrelid = '"${schemaName}".sync_log'::regclass
-              AND contype = 'u'
-              AND conname NOT IN ('uq_sync_log_routed', 'uq_sync_log_unrouted')
-            LIMIT 1;
-
-            IF constraint_name IS NOT NULL THEN
-                EXECUTE 'ALTER TABLE "${schemaName}".sync_log DROP CONSTRAINT IF EXISTS ' || quote_ident(constraint_name);
-            END IF;
-        END $$;
-    `);
-
-        // Create the modern routed/unrouted partial unique indexes
-        await this.db.$client.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_routed
-            ON "${schemaName}".sync_log (trace_id, route_id, layer, status)
-            WHERE route_id IS NOT NULL;
-    `);
-
-        await this.db.$client.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_unrouted
-            ON "${schemaName}".sync_log (trace_id, layer, status)
-            WHERE route_id IS NULL;
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_log_trace
-            ON "${schemaName}".sync_log (trace_id);
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_log_route
-            ON "${schemaName}".sync_log (route_id);
-    `);
-
-        await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_log_trace_layer
-            ON "${schemaName}".sync_log (trace_id, layer);
-    `);
 
         /**
          * DELIVERY OUTBOX — Transactional outbox for reliable queue hand-off.

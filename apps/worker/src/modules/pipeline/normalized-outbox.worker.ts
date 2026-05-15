@@ -7,6 +7,7 @@ import {
   buildTenantSchema,
   tenantStorageRegistry,
   appConnections,
+  integrationStitches,
 } from "@nexiom/database";
 import { QueueName } from "@nexiom/queue";
 import { QueueService } from "@nexiom/queue";
@@ -28,44 +29,78 @@ export class NormalizedOutboxWorker {
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_SECONDS)
+  // Crash-recovery only — runs every 5 minutes to pick up any normalized_outbox
+  // rows that are stuck PENDING because the direct publish in NormalizationService
+  // failed (queue unavailable, process crash, etc.).
+  // The happy path is fully event-driven: NormalizationService publishes directly
+  // to NormalizedQueue after the transaction commits.
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async processOutbox(): Promise<void> {
     try {
-      // 1. Query tenantStorageRegistry in the Global DB to get all tenant databases.
+      // Only process tenants with fully provisioned databases — skip WARM/INITIALIZING warm pool entries
       const tenants = await this.globalDb
         .select({ tenantId: tenantStorageRegistry.tenantId })
-        .from(tenantStorageRegistry);
+        .from(tenantStorageRegistry)
+        .where(eq(tenantStorageRegistry.status, "ACTIVE"));
 
       if (tenants.length === 0) {
         return;
+      }
+
+      // Crash-recovery scope: only connections that are SOURCE in an ACTIVE stitch.
+      // If a connection has no active stitch, FanOut would drop the event anyway —
+      // no point scanning its normalized_outbox.
+      const allConnections = await this.globalDb
+        .selectDistinct({
+          id: appConnections.id,
+          appName: appConnections.appName,
+          tenantId: appConnections.tenantId,
+        })
+        .from(appConnections)
+        .innerJoin(
+          integrationStitches,
+          eq(integrationStitches.srcConnectionId, appConnections.id),
+        )
+        .where(
+          and(
+            eq(appConnections.status, "ACTIVE"),
+            eq(integrationStitches.status, "ACTIVE"),
+            sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+          ),
+        );
+
+      if (allConnections.length === 0) {
+        return;
+      }
+
+      // Group by tenantId for O(1) lookup inside the per-tenant loop
+      const connectionsByTenant = new Map<
+        string,
+        Array<{ id: string; appName: string }>
+      >();
+      for (const conn of allConnections) {
+        if (!connectionsByTenant.has(conn.tenantId)) {
+          connectionsByTenant.set(conn.tenantId, []);
+        }
+        connectionsByTenant
+          .get(conn.tenantId)!
+          .push({ id: conn.id, appName: conn.appName });
       }
 
       // Process tenants with bounded concurrency to prevent unbounded fan-out
       const TENANT_CONCURRENCY = 5;
       await processInChunks(tenants, TENANT_CONCURRENCY, async (tenant) => {
         try {
-          // 2. Use TenantDatabaseManager to connect to the specific physical tenant DB.
-          const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-
-          // 3. Query app_connection inside the Global DB to find all ACTIVE connections for this tenant
-          // that have normalized_outbox provisioned (OUTBOUND_ACTIVE or GATEWAY_ACTIVE plans).
-          const connections = await this.globalDb
-            .select({ id: appConnections.id, appName: appConnections.appName })
-            .from(appConnections)
-            .where(
-              and(
-                eq(appConnections.status, "ACTIVE"),
-                eq(appConnections.tenantId, tenant.tenantId),
-                sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE')`,
-              ),
-            );
-
-          if (connections.length === 0) {
+          const tenantConnections = connectionsByTenant.get(tenant.tenantId);
+          if (!tenantConnections || tenantConnections.length === 0) {
             return;
           }
 
-          // 4. Run drainWorkspaceOutbox on each schema derived from the connection.
-          for (const connection of connections) {
+          // Connect to the specific physical tenant DB.
+          const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
+
+          // Drain the normalized outbox for each workspace schema.
+          for (const connection of tenantConnections) {
             const schemaName = getWorkspaceSchemaName(
               connection.id,
               connection.appName,

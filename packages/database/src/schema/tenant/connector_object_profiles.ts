@@ -1,5 +1,5 @@
 import { jsonb, pgTable, uuid, varchar, timestamp, primaryKey, index } from 'drizzle-orm/pg-core';
-import { appConnections } from './tenant.js';
+import { appConnections } from '../global/routing.js';
 
 /**
  * CONNECTOR OBJECT PROFILES

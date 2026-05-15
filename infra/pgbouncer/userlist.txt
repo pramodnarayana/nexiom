@@ -1,0 +1,11 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PgBouncer userlist.txt
+;;
+;; For local dev with Postgres 15+ (which defaults to SCRAM),
+;; we provide the plain text password here. This allows PgBouncer
+;; to authenticate to Postgres via SCRAM while still allowing
+;; clients to connect however they want.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+"user" "password"
+"pgbouncer" "pgbouncer"

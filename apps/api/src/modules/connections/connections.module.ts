@@ -14,6 +14,7 @@ import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh
 import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
 import { PiecesModule } from '@nexiom/piece-registry';
+import { StorageResolverModule } from '@nexiom/engine';
 
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { type DrizzleDb } from '@nexiom/database';
@@ -28,7 +29,7 @@ import { type DrizzleDb } from '@nexiom/database';
  */
 @Global()
 @Module({
-  imports: [DbModule, PiecesModule],
+  imports: [DbModule, PiecesModule, StorageResolverModule],
   controllers: [OAuthCallbackController, ConnectorsController],
   providers: [
     {

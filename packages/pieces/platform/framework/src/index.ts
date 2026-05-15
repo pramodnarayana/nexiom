@@ -8,6 +8,7 @@ export * from './jsonata-normalizer.js';
 export * from './app-hooks.js';
 export * from './canonical/index.js';
 export * from './retryable-exception.js';
+export * from './dependencies-missing-error.js';
 export {
     httpClient,
     initializeHttpClient,

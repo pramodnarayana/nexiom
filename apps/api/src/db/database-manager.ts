@@ -190,8 +190,22 @@ export class DatabaseManager {
       await client.end();
     }
 
-    // Drop tenant databases so fresh truly starts from scratch
-    await this.dropTenantDatabaseIfExists('nexiom_tenant_system');
+    // Drop all tenant databases so fresh truly starts from scratch
+    const { PgClient } = await this.resolvePgModule();
+    const adminClient = new PgClient({
+      connectionString: process.env.DATABASE_URL,
+    });
+    await adminClient.connect();
+    try {
+      const result = await adminClient.query<{ datname: string }>(
+        `SELECT datname FROM pg_database WHERE datname LIKE 'nexiom_tenant_%'`,
+      );
+      for (const row of result.rows) {
+        await this.dropTenantDatabaseIfExists(row.datname);
+      }
+    } finally {
+      await adminClient.end();
+    }
   }
 
   /**
@@ -387,26 +401,32 @@ export class DatabaseManager {
       // → resolve 4 levels up to reach the monorepo root.
       const thisFile = fileURLToPath(import.meta.url);
       const monorepoRoot = path.resolve(path.dirname(thisFile), '../../../../');
-      const piecesDir = path.join(monorepoRoot, 'engine/application/pieces');
-      let pieceFolders: string[];
+      const piecePaths = [
+        path.join(monorepoRoot, 'packages/pieces/application'),
+        path.join(monorepoRoot, 'packages/pieces/platform'),
+      ];
+
+      const allPieceFolders: string[] = [];
       let discoverySuccess = true;
-      try {
-        pieceFolders = await fs.readdir(piecesDir);
-      } catch (readdirErr) {
-        console.warn(
-          `  ⚠️  Could not read pieces directory "${piecesDir}": ${readdirErr instanceof Error ? readdirErr.message : String(readdirErr)}. ` +
-            `No marketplace pieces will be seeded.`,
-        );
-        pieceFolders = [];
-        discoverySuccess = false;
+
+      for (const pDir of piecePaths) {
+        try {
+          const folders = await fs.readdir(pDir);
+          allPieceFolders.push(...folders.map((f) => path.join(pDir, f)));
+        } catch (readdirErr) {
+          console.warn(
+            `  ⚠️  Could not read pieces directory "${pDir}": ${readdirErr instanceof Error ? readdirErr.message : String(readdirErr)}. `,
+          );
+          discoverySuccess = false;
+        }
       }
+
       const discoveredPieces = [];
 
-      for (const folder of pieceFolders) {
-        const piecePath = path.join(piecesDir, folder);
+      for (const piecePath of allPieceFolders) {
         const stat = await fs.stat(piecePath).catch((err: unknown) => {
           console.warn(
-            `    ⚠️ Could not stat piece folder "${folder}": ${err instanceof Error ? err.message : String(err)}. Marking discovery as failed.`,
+            `    ⚠️ Could not stat piece path "${piecePath}": ${err instanceof Error ? err.message : String(err)}. Marking discovery as failed.`,
           );
           discoverySuccess = false;
           return null;
@@ -453,7 +473,7 @@ export class DatabaseManager {
             }
           } catch (e) {
             console.warn(
-              `    ⚠️ Failed to load piece from folder ${folder}: ${e instanceof Error ? e.message : String(e)}. Marking discovery as failed.`,
+              `    ⚠️ Failed to load piece from folder ${piecePath}: ${e instanceof Error ? e.message : String(e)}. Marking discovery as failed.`,
             );
             discoverySuccess = false;
           }
@@ -869,9 +889,12 @@ export class DatabaseManager {
       );
     }
 
+    // Generate a dedicated, stable UUID for the local dev customer to perfectly mimic production.
+    const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
+
     // ── Step 1: Derive host URL + tenant DB name ────────────────────────────
     let hostUrl: string;
-    const tenantDbName = 'nexiom_tenant_system';
+    const tenantDbName = `nexiom_tenant_${devTenantId.replace(/-/g, '_')}`;
     try {
       const parsedUrl = new URL(
         process.env.DATABASE_URL ||
@@ -906,12 +929,26 @@ export class DatabaseManager {
     const existReg = await globalDb
       .select()
       .from(dbSchema.tenantStorageRegistry)
-      .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId))
+      .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId))
       .limit(1);
 
     if (!existReg[0]) {
+      // First, create the mock Customer Organization
+      await globalDb
+        .insert(dbSchema.organization)
+        .values({
+          id: devTenantId,
+          name: 'Edlewis Trucking (Local Dev)',
+          slug: 'edlewis-trucking-dev',
+          isSystem: false,
+        })
+        .onConflictDoNothing();
+      console.log(
+        `  ✓ Created mock customer org: Edlewis Trucking (${devTenantId})`,
+      );
+
       await globalDb.insert(dbSchema.tenantStorageRegistry).values({
-        tenantId: systemTenantId,
+        tenantId: devTenantId,
         databaseName: tenantDbName,
         databaseHostUrl: hostUrl,
         regionContext: 'local',
@@ -922,7 +959,7 @@ export class DatabaseManager {
       await globalDb
         .update(dbSchema.tenantStorageRegistry)
         .set({ databaseName: tenantDbName, databaseHostUrl: hostUrl })
-        .where(eq(dbSchema.tenantStorageRegistry.tenantId, systemTenantId));
+        .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId));
       console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
     }
 
@@ -993,7 +1030,7 @@ export class DatabaseManager {
           .insert(dbSchema.appConnections)
           .values({
             id: fixture.id,
-            tenantId: systemTenantId,
+            tenantId: devTenantId,
             appName: fixture.appName,
             externalId: fixture.externalId,
             displayName: fixture.displayName,
@@ -1035,7 +1072,7 @@ export class DatabaseManager {
 
         // Provision workspace pipeline schemas inside the tenant DB
         await schemaMgr.applyPlan(
-          systemTenantId,
+          devTenantId,
           schemaName,
           SchemaPlan.OUTBOUND_ACTIVE,
         );
@@ -1081,10 +1118,9 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      const systemTenantId = process.env.SYSTEM_TENANT_ID;
-      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
       await schemaMgr.applyPlan(
-        systemTenantId,
+        devTenantId,
         schemaName,
         SchemaPlan.GATEWAY_ACTIVE,
       );
@@ -1105,10 +1141,9 @@ export class DatabaseManager {
     const { SchemaPlan } = await import('@nexiom/dbmanager');
 
     await this.withSchemaMgr(async (schemaMgr) => {
-      const systemTenantId = process.env.SYSTEM_TENANT_ID;
-      if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+      const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
       await schemaMgr.applyPlan(
-        systemTenantId,
+        devTenantId,
         schemaName,
         SchemaPlan.OUTBOUND_ACTIVE,
       );
@@ -1132,8 +1167,7 @@ export class DatabaseManager {
     await this.withSchemaMgr(async (schemaMgr) => {
       const client = await this.getPgClient();
       try {
-        const systemTenantId = process.env.SYSTEM_TENANT_ID;
-        if (!systemTenantId) throw new Error('SYSTEM_TENANT_ID is required');
+        const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
         const result = await client.query<{ schema_name: string }>(`
           SELECT schema_name
           FROM information_schema.schemata
@@ -1150,10 +1184,7 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateToOutboundActive(
-              systemTenantId,
-              schema_name,
-            );
+            await schemaMgr.migrateToOutboundActive(devTenantId, schema_name);
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);

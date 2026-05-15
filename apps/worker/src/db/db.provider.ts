@@ -23,6 +23,12 @@ export const databaseProvider: Provider = {
       max: 20,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
+      // Prevent Postgres from silently closing idle pool connections at the TCP
+      // level. Without keepAlive, the server drops the socket after a few minutes
+      // of silence and pg-pool doesn't discover this until the next query attempt,
+      // causing "Connection terminated unexpectedly" on cron ticks.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
     });
 
     const db = drizzle(pool, { schema });

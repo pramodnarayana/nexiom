@@ -215,10 +215,10 @@ export class ExceptionService {
             id: outboundGateway.id,
             traceId: outboundGateway.traceId,
             routeId: outboundGateway.routeId,
-            reqPayload: outboundGateway.reqPayload,
-            resPayload: outboundGateway.resPayload,
+            payload: outboundGateway.payload,
+            response: outboundGateway.response,
             statusCode: outboundGateway.statusCode,
-            attemptCount: outboundGateway.attemptCount,
+            attempts: outboundGateway.attempts,
             status: outboundGateway.status,
             createdAt: outboundGateway.createdAt,
             updatedAt: outboundGateway.updatedAt,
@@ -250,10 +250,10 @@ export class ExceptionService {
           id: row.id,
           traceId: row.traceId,
           routeId: row.routeId,
-          reqPayload: row.reqPayload,
-          resPayload: row.resPayload,
+          reqPayload: row.payload,
+          resPayload: row.response,
           statusCode: row.statusCode,
-          attemptCount: row.attemptCount,
+          attemptCount: row.attempts,
           status: row.status,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -335,7 +335,7 @@ export class ExceptionService {
         .returning({
           traceId: outboundGateway.traceId,
           routeId: outboundGateway.routeId,
-          reqPayload: outboundGateway.reqPayload,
+          payload: outboundGateway.payload,
         });
 
       if (updatedRows.length === 0) {
@@ -352,7 +352,7 @@ export class ExceptionService {
           srcConnectionId: stitch.srcConnectionId,
           destConnectionId: stitch.destConnectionId,
           routeId: row.routeId,
-          hydratedPayload: row.reqPayload,
+          hydratedPayload: row.payload,
         });
       } catch (sendErr) {
         this.logger.warn(

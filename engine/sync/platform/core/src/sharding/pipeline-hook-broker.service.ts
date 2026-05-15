@@ -174,4 +174,55 @@ export class PipelineHookBrokerService {
       throw hookErr;
     }
   }
+  /**
+   * Optional — Active Fetching hook.
+   * Given a list of missing dependencies, delegate to the application piece
+   * to fetch them from the source system (e.g., using a Composite API) and
+   * ingest them into the L1 gateway.
+   */
+  async activeFetch(
+    appName: string,
+    appProfile: string,
+    missingDependencies: Array<{ entityType: string; sourceId: string }>,
+    connectionId: string,
+  ): Promise<void> {
+    const shard = await this.loader.load(this.shardName(appName, appProfile));
+    if (!shard.activeFetch) {
+      this.logger.debug(
+        { event: 'hook.activeFetch.missing', appName, appProfile },
+        'Application shard does not implement activeFetch hook',
+      );
+      return;
+    }
+    this.logger.log(
+      { event: 'hook.activeFetch', appName, appProfile, count: missingDependencies.length },
+      'Delegating activeFetch to application shard',
+    );
+    return shard.activeFetch(missingDependencies, connectionId);
+  }
+
+  /**
+   * Optional — Reverse Lookup hook.
+   * After L3 normalization writes a child entity to the database, this hook
+   * is called to find any parent entities that might have been paused
+   * (DEFERRED_DEPENDENCY) waiting for this child.
+   */
+  async reverseLookup(
+    appName: string,
+    appProfile: string,
+    db: unknown,
+    schemaName: string,
+    normalizedEntityType: string,
+    entityId: string,
+  ): Promise<string[]> {
+    const shard = await this.loader.load(this.shardName(appName, appProfile));
+    if (!shard.reverseLookup) {
+      return [];
+    }
+    this.logger.debug(
+      { event: 'hook.reverseLookup', appName, appProfile, normalizedEntityType },
+      'Delegating reverseLookup to application shard',
+    );
+    return shard.reverseLookup(db, schemaName, normalizedEntityType, entityId);
+  }
 }

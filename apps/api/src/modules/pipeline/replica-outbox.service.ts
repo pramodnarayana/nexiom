@@ -37,7 +37,10 @@ export class ReplicaOutboxService {
         tenants.map(async (tenant) => {
           try {
             const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
-            const connections = await tenantDb.select().from(appConnections);
+            const connections = await this.globalDb
+              .select()
+              .from(appConnections)
+              .where(eq(appConnections.tenantId, tenant.tenantId));
 
             for (const connection of connections) {
               const schemaName = getWorkspaceSchemaName(

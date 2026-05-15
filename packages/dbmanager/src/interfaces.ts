@@ -10,9 +10,9 @@ export enum SchemaPlan {
     NAMESPACE_ONLY = 'NAMESPACE_ONLY',
 
     /**
-     * The L1 Gateway tables (inbound_gateway).
+     * The L1 Gateway tables (inbound_gateway, sync_log).
      * Provisioned when a Route/Webhook is activated.
-     * Note: sync_log is provisioned by provisionOutboundTables() (OUTBOUND_ACTIVE).
+     * Note: sync_log is provisioned here so L1/L2 can log successes/failures.
      */
     GATEWAY_ACTIVE = 'GATEWAY_ACTIVE',
 

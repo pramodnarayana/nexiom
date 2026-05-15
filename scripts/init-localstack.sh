@@ -17,6 +17,9 @@ QUEUES=(
   "delivery-queue"
   "gitops-queue"
   "tenant-provision-queue"
+  "active-fetch-queue"
+  "ai-copilot-queue"
+  "registry-replication-queue"
 )
 
 # Step 1: Create all DLQs first (no redrive policy); idempotent — ignore

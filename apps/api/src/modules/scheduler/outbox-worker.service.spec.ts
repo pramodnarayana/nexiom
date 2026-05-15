@@ -30,14 +30,14 @@ const STITCH = {
 };
 
 function makeRecord(
-  action: 'created' | 'updated' | 'deleted',
+  action: 'CREATED' | 'UPDATED' | 'DELETED',
   attempts = 0,
 ): typeof import('@nexiom/database').schedulerOutbox.$inferSelect {
   return {
     id: RECORD_ID,
     stitchId: STITCH_ID,
     action,
-    status: 'processing' as const,
+    status: 'PROCESSING' as const,
     attempts,
     nextRetryAt: new Date(),
     lastError: null,
@@ -124,7 +124,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('calls onStitchDeleted for a deleted record without reading the stitch', async () => {
-      const record = makeRecord('deleted');
+      const record = makeRecord('DELETED');
       mocks.returningClaim.mockResolvedValue([record]);
 
       await service.processOutbox();
@@ -136,7 +136,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('calls onStitchCreated after re-reading the active stitch', async () => {
-      const record = makeRecord('created');
+      const record = makeRecord('CREATED');
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
 
@@ -147,7 +147,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('calls onStitchUpdated after re-reading the active stitch', async () => {
-      const record = makeRecord('updated');
+      const record = makeRecord('UPDATED');
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
 
@@ -157,7 +157,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('skips and marks succeeded when stitch is absent for created/updated', async () => {
-      const record = makeRecord('created');
+      const record = makeRecord('CREATED');
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(null);
 
@@ -169,7 +169,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('skips and marks succeeded when stitch is ARCHIVED for updated', async () => {
-      const record = makeRecord('updated');
+      const record = makeRecord('UPDATED');
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue({
         ...STITCH,
@@ -187,7 +187,7 @@ describe('OutboxWorkerService', () => {
 
   describe('retry and backoff', () => {
     it('re-queues the record with pending status on transient failure', async () => {
-      const record = makeRecord('created', 1);
+      const record = makeRecord('CREATED', 1);
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
       scheduler.onStitchCreated.mockRejectedValue(new Error('Windmill down'));
@@ -198,14 +198,14 @@ describe('OutboxWorkerService', () => {
         status: string;
         lastError: string;
       };
-      expect(setCall.status).toBe('pending');
+      expect(setCall.status).toBe('PENDING');
       expect(setCall.lastError).toContain('Windmill down');
     });
 
     it('retries with 32s delay when attempts=5 (5th attempt, not yet exhausted)', async () => {
       // With MAX_OUTBOX_ATTEMPTS=6 (1 initial + 5 retries), attempt 5 still retries.
       // Back-off delay = 2^5 * 1000 = 32 000 ms.
-      const record = makeRecord('created', 5);
+      const record = makeRecord('CREATED', 5);
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
       scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));
@@ -216,7 +216,7 @@ describe('OutboxWorkerService', () => {
         status: string;
         nextRetryAt: Date;
       };
-      expect(setCall.status).toBe('pending');
+      expect(setCall.status).toBe('PENDING');
       // 32s delay: nextRetryAt should be approximately 32s in the future.
       const delayMs = setCall.nextRetryAt.getTime() - Date.now();
       expect(delayMs).toBeGreaterThan(30_000);
@@ -224,7 +224,7 @@ describe('OutboxWorkerService', () => {
     });
 
     it('permanently fails when attempts=6 (all 6 attempts exhausted)', async () => {
-      const record = makeRecord('created', 6);
+      const record = makeRecord('CREATED', 6);
       mocks.returningClaim.mockResolvedValue([record]);
       mocks.findFirstStitch.mockResolvedValue(STITCH);
       scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));
@@ -236,7 +236,7 @@ describe('OutboxWorkerService', () => {
         lastError: string;
         processedAt: Date;
       };
-      expect(setCall.status).toBe('failed');
+      expect(setCall.status).toBe('FAILED');
       expect(setCall.lastError).toContain('still down');
       expect(setCall.processedAt).toBeInstanceOf(Date);
     });
@@ -245,9 +245,9 @@ describe('OutboxWorkerService', () => {
       const RECORD_ID_2 = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
       const STITCH_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
-      const record1 = makeRecord('deleted');
+      const record1 = makeRecord('DELETED');
       const record2 = {
-        ...makeRecord('deleted'),
+        ...makeRecord('DELETED'),
         id: RECORD_ID_2,
         stitchId: STITCH_ID_2,
       };

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { StitchesService } from './stitches.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { Test } from '@nestjs/testing';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,10 @@ describe('StitchesService', () => {
       providers: [
         StitchesService,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
+        {
+          provide: DB_MANAGER,
+          useValue: { applyPlan: vi.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -131,8 +136,16 @@ describe('StitchesService', () => {
     // Return distinct objects for each parallel lookup so the test catches
     // any ID-mixing bug (e.g. both checks accidentally using srcConnectionId)
     mocks.findFirstConnections
-      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
-      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+      .mockResolvedValueOnce({
+        id: SRC_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'salesforce',
+      })
+      .mockResolvedValueOnce({
+        id: DEST_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'quickbooks',
+      });
     mocks.returningInsert.mockResolvedValue([STITCH]);
 
     const result = await service.create(ORG_ID, CREATE_BODY);
@@ -188,8 +201,16 @@ describe('StitchesService', () => {
   it('throws InternalServerErrorException if insert returns no row', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     mocks.findFirstConnections
-      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
-      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+      .mockResolvedValueOnce({
+        id: SRC_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'salesforce',
+      })
+      .mockResolvedValueOnce({
+        id: DEST_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'quickbooks',
+      });
     mocks.returningInsert.mockResolvedValue([]);
 
     await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
@@ -200,8 +221,16 @@ describe('StitchesService', () => {
   it('throws ConflictException on duplicate stitch name (stitch_name_workspace_unique_idx)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     mocks.findFirstConnections
-      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
-      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+      .mockResolvedValueOnce({
+        id: SRC_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'salesforce',
+      })
+      .mockResolvedValueOnce({
+        id: DEST_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'quickbooks',
+      });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
       constraint: 'stitch_name_workspace_unique_idx',
@@ -216,8 +245,16 @@ describe('StitchesService', () => {
   it('throws ConflictException on duplicate field mapping (field_mapping_stitch_canonical_unique_idx)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     mocks.findFirstConnections
-      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
-      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
+      .mockResolvedValueOnce({
+        id: SRC_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'salesforce',
+      })
+      .mockResolvedValueOnce({
+        id: DEST_CONN_ID,
+        tenantId: ORG_ID,
+        appName: 'quickbooks',
+      });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
       constraint: 'field_mapping_stitch_canonical_unique_idx',
@@ -339,7 +376,7 @@ describe('StitchesService', () => {
       values: ReturnType<typeof vi.fn>;
     };
     expect(insertCallChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({ stitchId: STITCH_ID, action: 'deleted' }),
+      expect.objectContaining({ stitchId: STITCH_ID, action: 'DELETED' }),
     );
   });
 

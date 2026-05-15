@@ -4,6 +4,7 @@ import { QueueService, QueueName } from "@nexiom/queue";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { watch } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -30,6 +31,10 @@ export class GitopsSyncWorker implements OnModuleInit {
    * This ensures new application code is live within seconds of a git push.
    */
   onModuleInit() {
+    if (process.env.NODE_ENV === "development") {
+      void this.setupLocalFileWatcher();
+    }
+
     this.queueService.consume(QueueName.GitopsQueue, async () => {
       this.logger.log(
         "GitOps webhook event received — triggering immediate sync",
@@ -52,6 +57,38 @@ export class GitopsSyncWorker implements OnModuleInit {
         throw error;
       }
     });
+  }
+
+  /**
+   * Sets up a local file watcher to hot-reload application shards when edited
+   * locally. This simulates the production GitOps webhook flow for developers
+   * without requiring git commits or push events.
+   */
+  private async setupLocalFileWatcher() {
+    try {
+      await fs.mkdir(this.SHARD_BASE_PATH, { recursive: true });
+
+      this.logger.log(
+        `[Local Dev] Starting file watcher on ${this.SHARD_BASE_PATH} for hot-reloading shards...`,
+      );
+      watch(
+        this.SHARD_BASE_PATH,
+        { recursive: true },
+        (_eventType, filename) => {
+          if (!filename || filename.startsWith(".")) return;
+
+          // Extract shard name from filename (e.g., 'salesforce-default/index.js' -> 'salesforce-default')
+          const shardName = filename.split(path.sep)[0];
+          if (shardName) {
+            this.applicationLoaderService.invalidateCache(shardName);
+          }
+        },
+      ).on("error", (err) => {
+        this.logger.error("Local file watcher error", err);
+      });
+    } catch (err) {
+      this.logger.error("Failed to setup local file watcher", err);
+    }
   }
 
   /**

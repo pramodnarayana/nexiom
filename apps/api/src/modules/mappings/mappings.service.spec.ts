@@ -53,14 +53,19 @@ describe('MappingsService', () => {
     it('should query the database for all records ordered by creation', async () => {
       const dbSelectSpy = vi.fn().mockReturnThis();
       const dbFromSpy = vi.fn().mockReturnThis();
+      const dbWhereSpy = vi.fn().mockReturnThis();
       const dbOrderBySpy = vi.fn().mockResolvedValue([{ id: '1' }]);
       mockDb.select = dbSelectSpy;
       mockDb.from = dbFromSpy;
+      mockDb.where = dbWhereSpy;
       mockDb.orderBy = dbOrderBySpy;
 
       const result = await service.findAll('tenant1');
 
       expect(mockDb.select).toHaveBeenCalled();
+      expect(mockDb.where).toHaveBeenCalled();
+      // Verify the predicate passed to where() was called
+      expect(dbWhereSpy).toHaveBeenCalledWith(expect.anything());
       expect(result).toEqual([{ id: '1' }]);
     });
   });

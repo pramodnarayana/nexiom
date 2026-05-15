@@ -311,7 +311,7 @@ describe('ExceptionService', () => {
         {
           traceId: TRACE_ID,
           routeId: STITCH_ID,
-          reqPayload: { amount: 100 },
+          payload: { amount: 100 },
         },
       ] as unknown[],
     } = {}) {

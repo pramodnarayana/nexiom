@@ -111,7 +111,7 @@ describe("TenantProvisionWorker", () => {
       expect(mockQuery).toHaveBeenNthCalledWith(
         3,
         expect.stringContaining("UPDATE tenant_storage_registry"),
-        ["WARM-1234-abcd"],
+        ["WARM-1234-abcd", "postgresql://localhost:5432"],
       );
 
       // 3. Pool cleanup check
@@ -139,7 +139,7 @@ describe("TenantProvisionWorker", () => {
       // Should still update registry
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining("UPDATE tenant_storage_registry"),
-        ["WARM-1234-abcd"],
+        ["WARM-1234-abcd", "postgresql://localhost:5432"],
       );
     });
 

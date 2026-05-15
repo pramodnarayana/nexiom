@@ -5,11 +5,12 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   integrationStitches,
-  globalEntityMap,
   buildTenantSchema,
   assertValidSchemaName,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
+import { DB_MANAGER } from '@nexiom/dbmanager';
+import type { DatabaseManager } from '@nexiom/dbmanager';
 
 export interface ExplorerPage<T> {
   data: T[];
@@ -26,6 +27,7 @@ export class DataExplorerService {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {
     this.logger.setContext(DataExplorerService.name);
   }
@@ -197,20 +199,39 @@ export class DataExplorerService {
   ) {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     // Validate access via stitch
-    await this.resolveStitch(orgId, stitchId, workspaceId);
+    const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
+    const storageProfile = await this.storageResolver.resolveStorageProfile(
+      stitch.srcConnectionId,
+    );
+    const schemaName = storageProfile.schemaName;
+    const tenantId = storageProfile.tenantId;
+    assertValidSchemaName(schemaName);
+    const { globalEntityMap } = buildTenantSchema(schemaName);
+
+    const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     const [rows, countResult] = await Promise.all([
-      this.db
-        .select()
-        .from(globalEntityMap)
-        .where(eq(globalEntityMap.stitchId, stitchId))
-        .orderBy(desc(globalEntityMap.lastSyncedAt))
-        .limit(safeLimit)
-        .offset(offset),
-      this.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(globalEntityMap)
-        .where(eq(globalEntityMap.stitchId, stitchId)),
+      tenantDb.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        return tx
+          .select()
+          .from(globalEntityMap)
+          .where(eq(globalEntityMap.stitchId, stitchId))
+          .orderBy(desc(globalEntityMap.lastSyncedAt))
+          .limit(safeLimit)
+          .offset(offset);
+      }),
+      tenantDb.transaction(async (tx) => {
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+        return tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(globalEntityMap)
+          .where(eq(globalEntityMap.stitchId, stitchId));
+      }),
     ]);
     return {
       data: rows,

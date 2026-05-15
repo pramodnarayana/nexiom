@@ -54,13 +54,13 @@ export class OutboxWorkerService {
       return tx
         .update(schedulerOutbox)
         .set({
-          status: 'processing',
+          status: 'PROCESSING',
           attempts: sql`${schedulerOutbox.attempts} + 1`,
         })
         .where(
           sql`${schedulerOutbox.id} IN (
             SELECT id FROM scheduler_outbox
-            WHERE status = 'pending' AND next_retry_at <= NOW()
+            WHERE status = 'PENDING' AND next_retry_at <= NOW()
             ORDER BY next_retry_at ASC
             LIMIT ${BATCH_SIZE}
             FOR UPDATE SKIP LOCKED
@@ -84,7 +84,7 @@ export class OutboxWorkerService {
     record: typeof schedulerOutbox.$inferSelect,
   ): Promise<void> {
     try {
-      if (record.action === 'deleted') {
+      if (record.action === 'DELETED') {
         await this.scheduler.onStitchDeleted(record.stitchId);
       } else {
         // Re-read stitch to get current state before calling Windmill.
@@ -102,7 +102,7 @@ export class OutboxWorkerService {
           return;
         }
 
-        if (record.action === 'created') {
+        if (record.action === 'CREATED') {
           await this.scheduler.onStitchCreated(stitch);
         } else {
           await this.scheduler.onStitchUpdated(stitch);
@@ -121,7 +121,7 @@ export class OutboxWorkerService {
   private async markSucceeded(id: string): Promise<void> {
     await this.db
       .update(schedulerOutbox)
-      .set({ status: 'succeeded', processedAt: new Date() })
+      .set({ status: 'SUCCEEDED', processedAt: new Date() })
       .where(eq(schedulerOutbox.id, id));
   }
 
@@ -138,7 +138,7 @@ export class OutboxWorkerService {
       // Permanently failed — mark for alerting/human review.
       await this.db
         .update(schedulerOutbox)
-        .set({ status: 'failed', lastError, processedAt: new Date() })
+        .set({ status: 'FAILED', lastError, processedAt: new Date() })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.error(
         `Outbox record permanently failed: id=${record.id} action=${record.action} ` +
@@ -151,7 +151,7 @@ export class OutboxWorkerService {
       const nextRetryAt = new Date(Date.now() + delayMs);
       await this.db
         .update(schedulerOutbox)
-        .set({ status: 'pending', lastError, nextRetryAt })
+        .set({ status: 'PENDING', lastError, nextRetryAt })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +

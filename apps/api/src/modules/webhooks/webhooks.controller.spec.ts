@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 import { QueueService, QueueName } from '@nexiom/queue';
 import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
@@ -66,19 +67,30 @@ const queueServiceMock = {
 describe('WebhooksController', () => {
   let controller: WebhooksController;
   let db: ReturnType<typeof makeDbMock>;
-  let storageResolver: { resolveSchemaName: ReturnType<typeof vi.fn> };
+  let storageResolver: {
+    resolveSchemaName: ReturnType<typeof vi.fn>;
+    resolveStorageProfile: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     vi.clearAllMocks();
     db = makeDbMock();
     storageResolver = {
       resolveSchemaName: vi.fn().mockResolvedValue('ws_test_001'),
+      resolveStorageProfile: vi.fn().mockResolvedValue({
+        schemaName: 'ws_test_001',
+        tenantId: 'tenant_001',
+      }),
     };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [WebhooksController],
       providers: [
         { provide: DATABASE_CONNECTION, useValue: db },
+        {
+          provide: DB_MANAGER,
+          useValue: { getTenantDb: vi.fn().mockResolvedValue(db) },
+        },
         { provide: StorageResolverService, useValue: storageResolver },
         { provide: QueueService, useValue: queueServiceMock },
         {
@@ -245,6 +257,45 @@ describe('WebhooksController', () => {
 
     expect(capturedValues).toBeDefined();
     expect(capturedValues?.['extReqId']).toBeUndefined();
+  });
+
+  it('handles custom app responses returned by executeAppWebhookResponses', async () => {
+    vi.mocked(executeAppWebhookResponses).mockReturnValueOnce({
+      status: 202,
+      contentType: 'text/plain',
+      body: 'Accepted by Piece',
+    });
+
+    const resMock = {
+      status: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+      send: vi.fn(),
+    };
+
+    await controller.ingest(
+      '00000000-0000-0000-0000-000000000001',
+      { data: 1 },
+      { 'content-type': 'application/json' },
+      {} as any,
+      resMock as any,
+    );
+
+    expect(executeAppWebhookResponses).toHaveBeenCalled();
+    expect(resMock.status).toHaveBeenCalledWith(202);
+    expect(resMock.set).toHaveBeenCalledWith('Content-Type', 'text/plain');
+    expect(resMock.send).toHaveBeenCalledWith('Accepted by Piece');
+
+    // Verify it updated the inboundGateway row
+    expect(db._tx.update).toHaveBeenCalled();
+    expect(db._setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        response: {
+          status: 202,
+          contentType: 'text/plain',
+          body: 'Accepted by Piece',
+        },
+      }),
+    );
   });
 
   it('only persists allowlisted headers (strips sensitive headers)', async () => {

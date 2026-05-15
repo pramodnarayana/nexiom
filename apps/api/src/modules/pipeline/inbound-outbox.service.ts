@@ -44,11 +44,16 @@ export class InboundOutboxService {
               const tenantDb = await this.dbManager.getTenantDb(
                 tenant.tenantId,
               );
-              const { eq } = await import('drizzle-orm');
-              const connections = await tenantDb
+              const { eq, and } = await import('drizzle-orm');
+              const connections = await this.globalDb
                 .select()
                 .from(appConnections)
-                .where(eq(appConnections.status, 'ACTIVE'));
+                .where(
+                  and(
+                    eq(appConnections.tenantId, tenant.tenantId),
+                    eq(appConnections.status, 'ACTIVE'),
+                  ),
+                );
 
               for (const connection of connections) {
                 const schemaName = getWorkspaceSchemaName(

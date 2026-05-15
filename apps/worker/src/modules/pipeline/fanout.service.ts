@@ -5,7 +5,7 @@ import {
   OnModuleDestroy,
   Logger,
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import {
   DATABASE_CONNECTION,
@@ -14,7 +14,6 @@ import {
   integrationStitches,
   fieldMappings,
   appConnections,
-  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -23,6 +22,9 @@ import {
   Condition,
 } from "@nexiom/engine";
 import type { Rule } from "@nexiom/engine";
+import { DB_MANAGER } from "@nexiom/dbmanager";
+import type { DatabaseManager } from "@nexiom/dbmanager";
+import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
 import {
@@ -34,12 +36,12 @@ import { TargetBuilderService } from "./target-builder.service.js";
 @Injectable()
 export class FanOutService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FanOutService.name);
-
   constructor(
     private readonly queueService: QueueService,
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
   ) {}
 
   onModuleInit() {
@@ -79,11 +81,27 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       "L4 fan-out started",
     );
 
+    // Reference-counted lock tracker for this message processing
+    const lockRefCount = { count: 0 };
+
     try {
       // ── Resolve schema first to get entityId for potential lock cleanup ────
+      const connectionMeta = await this.globalDb.query.appConnections.findFirst(
+        {
+          where: eq(appConnections.id, connectionId),
+          columns: { tenantId: true },
+        },
+      );
+      if (!connectionMeta) {
+        throw new Error(`Connection ${connectionId} not found in global DB`);
+      }
+
+      const tenantId = connectionMeta.tenantId;
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
       const schemaName =
         await this.storageResolver.resolveSchemaName(connectionId);
-      const { normalizedEntity, replicaEntity, syncLog, activeSyncLocks } =
+      const { normalizedEntity, replicaEntity, syncLog } =
         buildTenantSchema(schemaName);
 
       // ── Read normalized data + sourceId (for GEM) in one transaction ──────
@@ -93,19 +111,52 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       let canonicalType = "RAW";
       let srcVendorId: string | undefined;
 
-      await this.db.transaction(async (tx) => {
+      const fanoutResult = await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
+        // ── Primary lookup: exact traceId match ──────────────────────────────
         const normRows = await tx
           .select()
           .from(normalizedEntity)
           .where(sql`${normalizedEntity.traceId} = ${traceId}`)
           .limit(1);
-        if (!normRows.length)
-          throw new Error(`Normalized record for traceId ${traceId} not found`);
+
+        if (!normRows.length) {
+          // ── Superseded check ───────────────────────────────────────────────
+          // normalized_entity.traceId is overwritten on each UPSERT. If the
+          // entity was updated again before L4 ran, this traceId is stale.
+          // First look up the replica row to get the replica_id, then check
+          // if any normalized row exists for that replica (scoped query).
+          const replicaRows = await tx
+            .select({ replicaId: replicaEntity.id })
+            .from(replicaEntity)
+            .where(sql`${replicaEntity.traceId} = ${traceId}`)
+            .limit(1);
+
+          if (replicaRows.length > 0) {
+            const replicaId = replicaRows[0].replicaId;
+            const anyNorm = await tx
+              .select({ traceId: normalizedEntity.traceId })
+              .from(normalizedEntity)
+              .where(
+                sql`${normalizedEntity.replicaId} = ${replicaId} AND ${normalizedEntity.traceId} != ${traceId}`,
+              )
+              .limit(1);
+
+            if (anyNorm.length > 0) {
+              return { kind: "superseded" as const };
+            }
+          }
+
+          throw new Error(
+            `Normalized record for traceId ${traceId} not found and no superseding record exists. ` +
+              `L3 may not have committed. The message will be retried.`,
+          );
+        }
+
         normalizedData = normRows[0].data as Record<string, unknown>;
         canonicalType = normRows[0].canonicalType ?? "RAW";
 
@@ -121,10 +172,26 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           );
         }
         srcVendorId = replicaRows[0].entityId ?? undefined;
+
+        return { kind: "found" as const };
       });
 
+      if (fanoutResult.kind === "superseded") {
+        this.logger.log(
+          {
+            event: "l4.superseded",
+            traceId,
+            connectionId,
+            layer: "L4",
+          },
+          "L4: normalized traceId superseded by newer trace — ACK without processing",
+        );
+        return;
+      }
+
       // ── Find active stitches for this source connection ───────────────────
-      const stitches = await this.db
+      // We read stitches from the tenant DB, enforcing the cell-based isolation
+      const stitches = await tenantDb
         .select()
         .from(integrationStitches)
         .where(
@@ -142,15 +209,14 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             schemaName,
             connectionId,
             srcVendorId,
-            activeSyncLocks,
-            traceId,
+            tenantDb,
           );
         }
         return;
       }
 
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
-      const srcConnRows = await this.db
+      const srcConnRows = await tenantDb
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
@@ -183,38 +249,57 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
       // concurrency and prevent a large fan-out from blocking the event loop.
-      const stitchResults = await processInChunks(stitches, 5, (stitch) =>
-        this.processSingleStitch(
-          schemaName,
-          traceId,
-          connectionId,
-          srcAppName,
-          appProfile,
-          srcTenantId,
-          srcVendorId,
-          canonicalType,
-          normalizedData,
-          stitch,
-          start,
-          syncLog,
-          activeSyncLocks,
-        ),
-      );
+      // Initialize refcount immediately before work that will decrement it
+      lockRefCount.count = stitches.length;
 
-      stitchResults.forEach((result, idx) => {
-        if (result.status === "rejected") {
-          this.logger.error(
-            {
-              event: "l4.stitch_chunk_error",
-              stitchId: stitches[idx].id,
-              traceId,
-              layer: "L4",
-              err: sanitizeError(result.reason),
-            },
-            "L4 stitch processInChunks rejection (already logged per stitch)",
+      try {
+        const stitchResults = await processInChunks(stitches, 5, (stitch) =>
+          this.processSingleStitch(
+            schemaName,
+            traceId,
+            connectionId,
+            srcAppName,
+            appProfile,
+            srcTenantId,
+            srcVendorId,
+            canonicalType,
+            normalizedData,
+            stitch,
+            start,
+            syncLog,
+            tenantDb,
+            lockRefCount,
+          ),
+        );
+
+        stitchResults.forEach((result, idx) => {
+          if (result.status === "rejected") {
+            this.logger.error(
+              {
+                event: "l4.stitch_chunk_error",
+                stitchId: stitches[idx].id,
+                traceId,
+                layer: "L4",
+                err: sanitizeError(result.reason),
+              },
+              "L4 stitch processInChunks rejection (already logged per stitch)",
+            );
+          }
+        });
+      } finally {
+        // After all stitches have settled, release lock if refcount reached zero.
+        // NOTE: lockRefCount is only decremented for skipped/error stitches.
+        // For successful publishes, releaseSyncLock is performed by the delivery
+        // path (L5/L6) for the last delivered route, maintaining the handoff contract.
+        if (srcVendorId && lockRefCount.count === 0) {
+          await this.releaseSyncLock(
+            schemaName,
+            connectionId,
+            srcVendorId,
+            tenantDb,
           );
         }
-      });
+      }
 
       this.logger.log(
         { event: "l4.completed", traceId, connectionId, layer: "L4" },
@@ -248,7 +333,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     stitch: typeof integrationStitches.$inferSelect,
     start: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
-    activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
+    tenantDb: DrizzleDb,
+    lockRefCount: { count: number },
   ): Promise<void> {
     try {
       const conditions = stitch.syncCondition as Condition[];
@@ -263,22 +349,17 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           "SKIPPED",
           Date.now() - start,
           syncLog,
+          tenantDb,
         );
-        // Release lock — no outbound work will occur for this entity
+        // Decrement refcount — no outbound work will occur for this entity
         if (srcVendorId) {
-          await this.releaseSyncLock(
-            schemaName,
-            connectionId,
-            srcVendorId,
-            activeSyncLocks,
-            traceId,
-          );
+          lockRefCount.count--;
         }
         return;
       }
 
       // ── Hydrate payload via field_mapping rules ───────────────────────────
-      const mappings = await this.db
+      const mappings = await tenantDb
         .select()
         .from(fieldMappings)
         .where(
@@ -305,16 +386,11 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           "SKIPPED",
           Date.now() - start,
           syncLog,
+          tenantDb,
         );
-        // Release lock — no outbound work will occur for this entity
+        // Decrement refcount — no outbound work will occur for this entity
         if (srcVendorId) {
-          await this.releaseSyncLock(
-            schemaName,
-            connectionId,
-            srcVendorId,
-            activeSyncLocks,
-            traceId,
-          );
+          lockRefCount.count--;
         }
         return;
       }
@@ -341,13 +417,20 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
       // ── Lookup GEM destEntityId for Updates ────────────────────────────────
       if (srcVendorId) {
-        const gemMappings = await this.db
-          .select()
-          .from(globalEntityMap)
-          .where(
-            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
-          )
-          .limit(1);
+        const { globalEntityMap } = buildTenantSchema(schemaName);
+        const gemMappings = await tenantDb.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          return tx
+            .select()
+            .from(globalEntityMap)
+            .where(
+              sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
+            )
+            .limit(1);
+        });
 
         if (gemMappings.length > 0) {
           const destEntityId = gemMappings[0].destEntityId;
@@ -367,7 +450,24 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               );
             const { replicaEntity: targetReplicaEntity } =
               buildTenantSchema(targetSchemaName);
-            const targetReplica = await this.db
+
+            // Fetch destination connection's tenantId to get the correct DB
+            const destConnMeta =
+              await this.globalDb.query.appConnections.findFirst({
+                where: eq(appConnections.id, stitch.destConnectionId),
+                columns: { tenantId: true },
+              });
+            if (!destConnMeta) {
+              throw new Error(
+                `Destination connection ${stitch.destConnectionId} not found`,
+              );
+            }
+
+            const destTenantDb = await this.dbManager.getTenantDb(
+              destConnMeta.tenantId,
+            );
+
+            const targetReplica = await destTenantDb
               .select()
               .from(targetReplicaEntity)
               .where(
@@ -399,33 +499,11 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         }
       }
 
-      await this.db.transaction(async (tx) => {
+      await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
-
-        // ── Idempotency: skip if this (traceId, routeId) already succeeded ──
-        const successLogs = await tx
-          .select()
-          .from(syncLog)
-          .where(
-            sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${stitch.id} AND ${syncLog.layer} = 'L4' AND ${syncLog.status} = 'SUCCESS'`,
-          )
-          .limit(1);
-
-        if (successLogs.length > 0) {
-          this.logger.debug(
-            {
-              event: "l4.skip_success",
-              traceId,
-              routeId: stitch.id,
-              layer: "L4",
-            },
-            "Route already succeeded previously, skipping",
-          );
-          return;
-        }
 
         // ── Persist pending delivery record before publishing ─────────────────
         // Create outbound_gateway record in destination schema BEFORE sending to
@@ -435,75 +513,189 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         );
         assertValidSchemaName(destSchemaName);
 
-        const { outboundGateway: destOutboundGateway } =
-          buildTenantSchema(destSchemaName);
-
         // Execute in nested transaction on destination schema
-        await this.db.transaction(async (destTx) => {
+        // Use conditional upsert with RETURNING to determine if we should publish
+        let shouldPublish = false;
+        await tenantDb.transaction(async (destTx) => {
           await destTx.execute(
             sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
           );
-          await destTx
-            .insert(destOutboundGateway)
-            .values({
-              traceId,
-              routeId: stitch.id,
-              reqPayload: hydratedPayload,
-              status: "PENDING",
-              attemptCount: 0,
-            })
-            .onConflictDoNothing({
-              target: [
-                destOutboundGateway.traceId,
-                destOutboundGateway.routeId,
-              ],
-            });
+
+          // Use raw SQL for conditional upsert with RETURNING to detect transitions
+          const result = await destTx.execute<{ status: string }>(sql`
+            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
+            ON CONFLICT (trace_id, route_id)
+            DO UPDATE SET
+              payload = ${JSON.stringify(hydratedPayload)},
+              status = 'PENDING',
+              attempts = 0,
+              updated_at = NOW()
+            WHERE outbound_gateway.status IN ('DEFERRED_DEPENDENCY', 'FAILED')
+              OR outbound_gateway.status IS NULL
+            RETURNING status, (xmax = 0) as was_insert
+          `);
+
+          // Publish only if we inserted a new row or updated from a retriable state
+          if (result.rows.length > 0) {
+            shouldPublish = true;
+          }
         });
 
         // ── Publish directly to Delivery Queue (Decoupled Message Routing) ──
-        // Instead of writing to the Source Schema's outbox, L4 pushes directly
-        // to the Delivery queue. L5 will own the destination state.
-        // Now safe to send — if this fails, outbound_gateway exists for retry.
-        try {
-          await this.queueService.send(QueueName.DeliveryQueue, {
-            traceId,
-            srcConnectionId: connectionId,
-            destConnectionId: stitch.destConnectionId,
-            routeId: stitch.id,
-            srcVendorId: srcVendorId ?? null,
-            canonicalType,
-            srcAppName,
-            srcTenantId,
-            hydratedPayload,
-          });
-        } catch (sendErr) {
-          this.logger.error(
-            {
-              event: "l4.queue_send_failed",
+        // Only publish if the outboundGateway write indicated a state transition
+        if (shouldPublish) {
+          try {
+            await this.queueService.send(QueueName.DeliveryQueue, {
+              traceId,
+              srcConnectionId: connectionId,
+              destConnectionId: stitch.destConnectionId,
+              routeId: stitch.id,
+              srcVendorId: srcVendorId ?? null,
+              canonicalType,
+              srcAppName,
+              srcTenantId,
+              hydratedPayload,
+            });
+          } catch (sendErr) {
+            this.logger.error(
+              {
+                event: "l4.queue_send_failed",
+                traceId,
+                routeId: stitch.id,
+                layer: "L4",
+                err: sanitizeError(sendErr),
+              },
+              "Failed to publish to DeliveryQueue — outbound_gateway persisted, will retry",
+            );
+            // Rethrow to mark L4/FAIL and trigger retry of normalized message
+            throw sendErr;
+          }
+
+          // ── SUCCESS sync_log — idempotent (uq_sync_log_trace_layer_status) ──
+          await tx
+            .insert(syncLog)
+            .values({
               traceId,
               routeId: stitch.id,
               layer: "L4",
-              err: sanitizeError(sendErr),
+              status: "SUCCESS",
+              durationMs: Date.now() - start,
+            })
+            .onConflictDoNothing();
+        } else {
+          // Already processed, skip and decrement refcount
+          this.logger.debug(
+            {
+              event: "l4.skip_already_processed",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
             },
-            "Failed to publish to DeliveryQueue — outbound_gateway persisted, will retry",
+            "Route already processed (outbound_gateway in non-retriable state), skipping",
           );
-          // Rethrow to mark L4/FAIL and trigger retry of normalized message
-          throw sendErr;
+          if (srcVendorId) {
+            lockRefCount.count--;
+          }
         }
-
-        // ── SUCCESS sync_log — idempotent (uq_sync_log_trace_layer_status) ──
-        await tx
-          .insert(syncLog)
-          .values({
-            traceId,
-            routeId: stitch.id,
-            layer: "L4",
-            status: "SUCCESS",
-            durationMs: Date.now() - start,
-          })
-          .onConflictDoNothing();
       });
     } catch (err) {
+      if (err instanceof DependenciesMissingError) {
+        const missingDeps = err.missingDependencies;
+        this.logger.warn(
+          {
+            event: "l4.dependencies_missing",
+            stitchId: stitch.id,
+            traceId,
+            missingDeps,
+            layer: "L4",
+          },
+          "Dependencies missing for target payload. Deferring route and triggering active fetch.",
+        );
+
+        // Mark route as DEFERRED_DEPENDENCY
+        const destSchemaName = await this.storageResolver.resolveSchemaName(
+          stitch.destConnectionId,
+        );
+        assertValidSchemaName(destSchemaName);
+
+        let shouldPublishActiveFetch = false;
+        await tenantDb.transaction(async (destTx) => {
+          await destTx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          );
+
+          // Use conditional upsert to only transition if not already DEFERRED_DEPENDENCY or processed
+          const result = await destTx.execute<{ status: string }>(sql`
+            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
+            ON CONFLICT (trace_id, route_id)
+            DO UPDATE SET
+              status = 'DEFERRED_DEPENDENCY',
+              payload = ${JSON.stringify({})},
+              updated_at = NOW()
+            WHERE outbound_gateway.status NOT IN ('DEFERRED_DEPENDENCY', 'PENDING', 'SUCCESS')
+              OR outbound_gateway.status IS NULL
+            RETURNING status
+          `);
+
+          // Only trigger active fetch if we actually transitioned to DEFERRED_DEPENDENCY
+          if (result.rows.length > 0) {
+            shouldPublishActiveFetch = true;
+          }
+        });
+
+        // Publish to ActiveFetchQueue only if we transitioned to DEFERRED_DEPENDENCY
+        if (shouldPublishActiveFetch) {
+          try {
+            await this.queueService.send(QueueName.ActiveFetchQueue, {
+              traceId,
+              connectionId,
+              missingDependencies: missingDeps,
+            });
+          } catch (queueErr) {
+            this.logger.error(
+              {
+                event: "l4.active_fetch_queue_failed",
+                traceId,
+                routeId: stitch.id,
+                layer: "L4",
+                err: sanitizeError(queueErr),
+              },
+              "Failed to publish to ActiveFetchQueue — DependencySweeperService will retry",
+            );
+            // Continue to cleanup (writeSyncLog + releaseSyncLock) despite queue failure
+          }
+
+          await this.writeSyncLog(
+            schemaName,
+            traceId,
+            stitch.id,
+            "L4",
+            "SKIPPED",
+            Date.now() - start,
+            syncLog,
+            tenantDb,
+          );
+        } else {
+          this.logger.debug(
+            {
+              event: "l4.skip_already_deferred",
+              traceId,
+              routeId: stitch.id,
+              layer: "L4",
+            },
+            "Route already in deferred or non-retriable state, skipping active fetch",
+          );
+        }
+
+        // Decrement refcount — no outbound work will occur for this entity
+        if (srcVendorId) {
+          lockRefCount.count--;
+        }
+        return;
+      }
+
       this.logger.error(
         {
           event: "l4.stitch_error",
@@ -523,7 +715,12 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         "FAIL",
         Date.now() - start,
         syncLog,
+        tenantDb,
       );
+      // Decrement refcount on error
+      if (srcVendorId) {
+        lockRefCount.count--;
+      }
     }
   }
 
@@ -535,8 +732,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     status: "PROCESSING" | "SUCCESS" | "FAIL" | "SKIPPED",
     durationMs: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
+    tenantDb: DrizzleDb,
   ) {
-    await this.db.transaction(async (tx) => {
+    await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -565,18 +763,21 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     schemaName: string,
     connectionId: string,
     entityId: string,
-    activeSyncLocks: ReturnType<typeof buildTenantSchema>["activeSyncLocks"],
-    traceId: string,
+    tenantDb: DrizzleDb,
   ): Promise<void> {
-    await this.db.transaction(async (tx) => {
+    await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
       );
+      const { activeSyncLocks } = buildTenantSchema(schemaName);
       await tx
         .delete(activeSyncLocks)
         .where(
-          sql`${activeSyncLocks.connectionId} = ${connectionId} AND ${activeSyncLocks.entityId} = ${entityId} AND ${activeSyncLocks.lockedByTraceId} = ${traceId}`,
+          and(
+            eq(activeSyncLocks.connectionId, connectionId),
+            eq(activeSyncLocks.entityId, entityId),
+          ),
         );
     });
   }

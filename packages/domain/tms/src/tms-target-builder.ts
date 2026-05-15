@@ -37,6 +37,8 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     if (!accountRows[0]) return {};
     const account = accountRows[0];
 
+    const missingDependencies: Array<{ entityType: string; sourceId: string }> = [];
+
     // ── 2. Transportation Profile ─────────────────────────────────────────────
     let tp: Record<string, unknown> | null = null;
     let remitTo: Record<string, unknown> | null = null;
@@ -59,6 +61,8 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
             
             // To be resolved below
             (account as any)._tpRemitToSourceId = r.remitToSourceId;
+        } else {
+            missingDependencies.push({ entityType: 'TMS_TP', sourceId: account.tpSourceId as string });
         }
     }
 
@@ -84,8 +88,15 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
                     city: ra.billingCity, state: ra.billingState,
                     postalCode: ra.billingPostalCode, country: ra.billingCountry,
                     phone: ra.phone, fax: ra.fax };
+            } else {
+                missingDependencies.push({ entityType: 'TMS_REMIT_TO', sourceId: finalRemitToSourceId as string });
             }
         }
+    }
+
+    if (missingDependencies.length > 0) {
+        const { DependenciesMissingError } = await import('@nexiom/piece-framework');
+        throw new DependenciesMissingError(missingDependencies);
     }
 
     // ── 4. Flat enrichment context for Rule[] field mapping ───────────────────
