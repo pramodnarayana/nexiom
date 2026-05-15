@@ -151,7 +151,7 @@ export class OutboxWorkerService {
       const nextRetryAt = new Date(Date.now() + delayMs);
       await this.db
         .update(schedulerOutbox)
-        .set({ status: 'pending', lastError, nextRetryAt })
+        .set({ status: 'PENDING', lastError, nextRetryAt })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +

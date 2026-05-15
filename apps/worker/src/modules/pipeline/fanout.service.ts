@@ -131,7 +131,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           // First look up the replica row to get the replica_id, then check
           // if any normalized row exists for that replica (scoped query).
           const replicaRows = await tx
-            .select({ replicaId: replicaEntity.replicaId })
+            .select({ replicaId: replicaEntity.id })
             .from(replicaEntity)
             .where(sql`${replicaEntity.traceId} = ${traceId}`)
             .limit(1);
@@ -141,7 +141,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
             const anyNorm = await tx
               .select({ traceId: normalizedEntity.traceId })
               .from(normalizedEntity)
-              .where(sql`${normalizedEntity.replicaId} = ${replicaId} AND ${normalizedEntity.traceId} != ${traceId}`)
+              .where(
+                sql`${normalizedEntity.replicaId} = ${replicaId} AND ${normalizedEntity.traceId} != ${traceId}`,
+              )
               .limit(1);
 
             if (anyNorm.length > 0) {
@@ -450,17 +452,20 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               buildTenantSchema(targetSchemaName);
 
             // Fetch destination connection's tenantId to get the correct DB
-            const destConnMeta = await this.globalDb.query.appConnections.findFirst(
-              {
+            const destConnMeta =
+              await this.globalDb.query.appConnections.findFirst({
                 where: eq(appConnections.id, stitch.destConnectionId),
                 columns: { tenantId: true },
-              },
-            );
+              });
             if (!destConnMeta) {
-              throw new Error(`Destination connection ${stitch.destConnectionId} not found`);
+              throw new Error(
+                `Destination connection ${stitch.destConnectionId} not found`,
+              );
             }
 
-            const destTenantDb = await this.dbManager.getTenantDb(destConnMeta.tenantId);
+            const destTenantDb = await this.dbManager.getTenantDb(
+              destConnMeta.tenantId,
+            );
 
             const targetReplica = await destTenantDb
               .select()

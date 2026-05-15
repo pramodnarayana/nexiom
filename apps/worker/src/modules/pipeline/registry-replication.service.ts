@@ -155,7 +155,7 @@ export class RegistryReplicationService implements OnModuleInit {
       // Throw if no operation was performed (unrecognized action or entityType)
       if (!operationPerformed) {
         throw new Error(
-          `Unrecognized registry outbox operation: action="${row.action}", entityType="${row.entityType}"`
+          `Unrecognized registry outbox operation: action="${row.action}", entityType="${row.entityType}"`,
         );
       }
 

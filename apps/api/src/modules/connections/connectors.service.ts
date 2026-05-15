@@ -730,7 +730,10 @@ export class ConnectorsService {
 
       // Only swallow "schema does not exist" errors — all other errors should abort deletion
       const errMsg = err instanceof Error ? err.message : String(err);
-      if (errMsg.includes('schema') && (errMsg.includes('does not exist') || errMsg.includes('not found'))) {
+      if (
+        errMsg.includes('schema') &&
+        (errMsg.includes('does not exist') || errMsg.includes('not found'))
+      ) {
         this.logger.warn(
           `Schema not found for connection ${connectionId} — proceeding with deletion: ${errMsg}`,
         );

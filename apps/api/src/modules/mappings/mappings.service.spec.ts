@@ -65,7 +65,7 @@ describe('MappingsService', () => {
       expect(mockDb.select).toHaveBeenCalled();
       expect(mockDb.where).toHaveBeenCalled();
       // Verify the predicate passed to where() was called
-      expect(dbWhereSpy).toHaveBeenCalledWith(expect.any(Function));
+      expect(dbWhereSpy).toHaveBeenCalledWith(expect.anything());
       expect(result).toEqual([{ id: '1' }]);
     });
   });

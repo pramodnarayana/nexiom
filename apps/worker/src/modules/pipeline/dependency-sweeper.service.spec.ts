@@ -16,7 +16,9 @@ describe("DependencySweeperService", () => {
   // Helper to construct a mock database
   function buildDb(staleRecords: any[], replicaRows: any[]) {
     const mockUpdateSet = vi.fn().mockReturnThis();
-    const mockUpdateWhere = vi.fn().mockReturnThis();
+    const mockUpdateWhere = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "outbound-1" }]),
+    });
     const mockUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
     mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
 
@@ -143,5 +145,92 @@ describe("DependencySweeperService", () => {
     });
 
     await expect(service.sweepDeferredDependencies()).resolves.toBeUndefined();
+  });
+  it("should catch and log error if connection loop throws", async () => {
+    tenantDb.select = vi.fn().mockImplementation(() => {
+      throw new Error("Connection loop failed");
+    });
+    await expect(service.sweepDeferredDependencies()).resolves.toBeUndefined();
+  });
+
+  it("should return early if no active connections found", async () => {
+    globalDb.selectDistinct = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
+    });
+    await service.sweepDeferredDependencies();
+    expect(dbManager.getTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("should skip tenant with no connections in connection map", async () => {
+    globalDb.selectDistinct = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([
+        {
+          id: "conn-2",
+          appName: "quickbooks",
+          tenantId: "tenant-other",
+          schemaName: null,
+        },
+      ]),
+    });
+    await service.sweepDeferredDependencies();
+    expect(dbManager.getTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("should not send to queue if update affects zero rows", async () => {
+    const mockReturning = vi.fn().mockResolvedValue([]);
+    const mockWhere = vi.fn().mockReturnValue({ returning: mockReturning });
+    const mockSet = vi.fn().mockReturnValue({ where: mockWhere });
+    tenantDb.update = vi.fn().mockReturnValue({ set: mockSet });
+    dbManager.getTenantDb.mockResolvedValue(tenantDb);
+
+    await service.sweepDeferredDependencies();
+    expect(queueService.send).not.toHaveBeenCalled();
+  });
+
+  it("should use persisted schemaName when available", async () => {
+    globalDb.selectDistinct = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([
+        {
+          id: "conn-1",
+          appName: "salesforce",
+          tenantId: "tenant-1",
+          schemaName: "ws_salesforce_conn1",
+        },
+      ]),
+    });
+    await service.sweepDeferredDependencies();
+    expect(queueService.send).toHaveBeenCalledWith(QueueName.NormalizedQueue, {
+      traceId: "trace-1",
+      connectionId: "conn-1",
+    });
+  });
+
+  it("should deduplicate traces across multiple connections", async () => {
+    globalDb.selectDistinct = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([
+        {
+          id: "conn-1",
+          appName: "salesforce",
+          tenantId: "tenant-1",
+          schemaName: null,
+        },
+        {
+          id: "conn-2",
+          appName: "salesforce",
+          tenantId: "tenant-1",
+          schemaName: null,
+        },
+      ]),
+    });
+    await service.sweepDeferredDependencies();
+    expect(queueService.send).toHaveBeenCalledTimes(1);
   });
 });

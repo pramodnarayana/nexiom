@@ -76,9 +76,11 @@ export class DependencySweeperService {
         if (!connectionsByTenant.has(conn.tenantId)) {
           connectionsByTenant.set(conn.tenantId, []);
         }
-        connectionsByTenant
-          .get(conn.tenantId)!
-          .push({ id: conn.id, appName: conn.appName, schemaName: conn.schemaName });
+        connectionsByTenant.get(conn.tenantId)!.push({
+          id: conn.id,
+          appName: conn.appName,
+          schemaName: conn.schemaName,
+        });
       }
 
       const TENANT_CONCURRENCY = 5;
@@ -96,9 +98,10 @@ export class DependencySweeperService {
             let schemaName: string | undefined;
             try {
               // Use persisted schema name if available, otherwise compute
-              schemaName = conn.schemaName && conn.schemaName.trim() !== ''
-                ? conn.schemaName
-                : getWorkspaceSchemaName(conn.id, conn.appName);
+              schemaName =
+                conn.schemaName && conn.schemaName.trim() !== ""
+                  ? conn.schemaName
+                  : getWorkspaceSchemaName(conn.id, conn.appName);
               const { outboundGateway, replicaEntity } =
                 buildTenantSchema(schemaName);
 
@@ -168,10 +171,13 @@ export class DependencySweeperService {
 
                       // Only send to queue if the update affected rows
                       if (updateResult.length > 0) {
-                        await this.queueService.send(QueueName.NormalizedQueue, {
-                          traceId: traceId,
-                          connectionId: replicaRow.connectionId,
-                        });
+                        await this.queueService.send(
+                          QueueName.NormalizedQueue,
+                          {
+                            traceId: traceId,
+                            connectionId: replicaRow.connectionId,
+                          },
+                        );
 
                         // Mark as processed globally to prevent re-enqueueing in subsequent connections
                         processedTraceIds.add(traceId);

@@ -33,7 +33,10 @@ import type { DrizzleDb } from "@nexiom/database";
               let dbName = connectionString;
               try {
                 const url = new URL(connectionString);
-                dbName = url.pathname.replace(/^\/+/, '') || url.searchParams.get('dbname') || connectionString;
+                dbName =
+                  url.pathname.replace(/^\/+/, "") ||
+                  url.searchParams.get("dbname") ||
+                  connectionString;
               } catch {
                 // Fall back to original connectionString if URL parsing fails
               }

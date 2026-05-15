@@ -27,7 +27,7 @@ export class RegistryOutboxWorker {
   async processOutbox(): Promise<void> {
     // Re-entrancy guard: prevent concurrent runs
     if (this.isProcessing) {
-      this.logger.debug('Skipping processOutbox - already running');
+      this.logger.debug("Skipping processOutbox - already running");
       return;
     }
 

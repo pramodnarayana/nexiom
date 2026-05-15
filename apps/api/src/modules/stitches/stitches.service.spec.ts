@@ -376,7 +376,7 @@ describe('StitchesService', () => {
       values: ReturnType<typeof vi.fn>;
     };
     expect(insertCallChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({ stitchId: STITCH_ID, action: 'deleted' }),
+      expect.objectContaining({ stitchId: STITCH_ID, action: 'DELETED' }),
     );
   });
 
