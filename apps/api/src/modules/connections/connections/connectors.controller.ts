@@ -31,6 +31,7 @@ import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import {
   appConnections,
+  AppConnectionStatus,
   DATABASE_CONNECTION,
   type DrizzleDb,
   member,
@@ -339,7 +340,10 @@ export class ConnectorsController {
       offset = 0;
     }
 
-    const whereClause = eq(appConnections.tenantId, tenantId);
+    const whereClause = and(
+      eq(appConnections.tenantId, tenantId),
+      eq(appConnections.status, AppConnectionStatus.ACTIVE)
+    );
 
     let activeConnections: {
       id: string;

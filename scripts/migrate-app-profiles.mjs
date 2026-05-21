@@ -29,6 +29,8 @@ await client.connect();
 console.log(`Connected to global database.`);
 
 try {
+    await client.query('BEGIN');
+
     console.log('Migrating Salesforce connections to appProfile "revenova"...');
     const sfResult = await client.query(`
         UPDATE app_connection
@@ -46,8 +48,12 @@ try {
           AND (metadata->>'appProfile' IS NULL OR metadata->>'appProfile' = 'default')
     `);
     console.log(`Updated ${qbResult.rowCount} QuickBooks connections.`);
+
+    await client.query('COMMIT');
 } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Migration failed:', err);
+    process.exitCode = 1;
 } finally {
     await client.end();
     console.log('Done.');

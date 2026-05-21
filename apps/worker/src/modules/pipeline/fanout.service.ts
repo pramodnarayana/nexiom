@@ -432,8 +432,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         columns: { tenantId: true, appName: true, metadata: true },
       });
       if (!destConnMeta) {
-        throw new Error(
-          `Destination connection ${stitch.destConnectionId} not found`,
+        // Destination connection not found — treat as retryable in case of replication lag
+        throw new DependenciesMissingError(
+          `Destination connection ${stitch.destConnectionId} not found (may still be replicating)`,
         );
       }
       const destAppName = destConnMeta.appName;
@@ -441,9 +442,11 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         ?.appProfile as string | undefined;
 
       if (!destAppProfile) {
-        throw new Error(
+        // Missing appProfile — treat as retryable in case metadata is backfilling
+        throw new DependenciesMissingError(
           `Destination connection ${stitch.destConnectionId} (${destAppName}) is missing 'appProfile' in its metadata. ` +
-            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova').`,
+            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova'). ` +
+            `This may be transient if the connection is still provisioning.`,
         );
       }
 

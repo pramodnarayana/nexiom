@@ -267,18 +267,33 @@ export const salesforce = createPiece({
                 ),
             ]);
 
+            // Check if either probe failed — treat as an access/verification error, not "not installed"
+            if (pkgRes.status === 'rejected') {
+                const pkgError = pkgRes.reason instanceof Error ? pkgRes.reason.message : String(pkgRes.reason);
+                console.error(`[salesforce.validateConnection] Failed to query PackageLicense: ${pkgError}`);
+                throw new Error(
+                    `Failed to verify Revenova installation: Could not query PackageLicense. ` +
+                    `This may indicate insufficient permissions or an API error. Details: ${pkgError}`
+                );
+            }
+            if (installedRes.status === 'rejected') {
+                const installedError = installedRes.reason instanceof Error ? installedRes.reason.message : String(installedRes.reason);
+                console.error(`[salesforce.validateConnection] Failed to query InstalledSubscriberPackage: ${installedError}`);
+                throw new Error(
+                    `Failed to verify Revenova installation: Could not query InstalledSubscriberPackage. ` +
+                    `This may indicate insufficient permissions or an API error. Details: ${installedError}`
+                );
+            }
+
+            // Both probes succeeded — now check results
             const namespaces = new Set<string>();
             const packageNames = new Set<string>();
 
-            if (pkgRes.status === 'fulfilled') {
-                for (const r of pkgRes.value.records) {
-                    if (r.NamespacePrefix) namespaces.add(r.NamespacePrefix.toLowerCase());
-                }
+            for (const r of pkgRes.value.records) {
+                if (r.NamespacePrefix) namespaces.add(r.NamespacePrefix.toLowerCase());
             }
-            if (installedRes.status === 'fulfilled') {
-                for (const r of installedRes.value.records) {
-                    if (r.SubscriberPackageName) packageNames.add(r.SubscriberPackageName.toLowerCase());
-                }
+            for (const r of installedRes.value.records) {
+                if (r.SubscriberPackageName) packageNames.add(r.SubscriberPackageName.toLowerCase());
             }
 
             const hasRtmsNamespace = namespaces.has('rtms');

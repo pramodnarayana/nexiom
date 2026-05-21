@@ -24,6 +24,7 @@ import { useToast } from '@/shared/hooks/use-toast';
 interface ActiveConnectionCardProps {
     connection: ActiveConnectionResponse;
     provider?: ProviderResponse;
+    onDelete?: (connectionId: string) => void | Promise<void>;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -33,7 +34,7 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'second
     REVOKED: { label: 'Revoked', variant: 'destructive' },
 };
 
-export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveConnectionCardProps>) {
+export function ActiveConnectionCard({ connection, provider, onDelete }: Readonly<ActiveConnectionCardProps>) {
     const statusInfo = STATUS_BADGE[connection.status] || { label: connection.status, variant: 'outline' };
     const { connect, remove } = useConnections();
     const { toast } = useToast();
@@ -201,13 +202,17 @@ export function ActiveConnectionCard({ connection, provider }: Readonly<ActiveCo
                             Reconnect
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                             className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                             disabled={deleting || reconnecting || loadingManage}
                             onClick={async () => {
                                 try {
                                     setDeleting(true);
                                     await remove(connection.id);
+                                    // Notify parent to refresh its connection list
+                                    if (onDelete) {
+                                        await onDelete(connection.id);
+                                    }
                                 } finally {
                                     setDeleting(false);
                                 }

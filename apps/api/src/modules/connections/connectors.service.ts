@@ -698,7 +698,15 @@ export class ConnectorsService {
     try {
       const storageProfile =
         await this.storageResolver.resolveStorageProfile(connectionId);
-      const tenantId = storageProfile.tenantId;
+
+      // Verify that the resolved storage profile belongs to the correct tenant
+      if (storageProfile.tenantId !== tenantId) {
+        throw new ForbiddenException(
+          `Connection ${connectionId} belongs to tenant ${storageProfile.tenantId}, ` +
+          `but was accessed in the context of tenant ${tenantId}. ` +
+          `Cross-tenant access is not permitted.`
+        );
+      }
 
       const tenantDb = await this.dbManager.getTenantDb(tenantId);
 

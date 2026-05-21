@@ -173,7 +173,7 @@ export function useConnections() {
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : 'Failed to delete connection';
                 toast({ title: 'Delete failed', description: msg, variant: 'destructive' });
-                throw err;
+                // Error is already surfaced to the user via toast, do not rethrow
             }
         },
         [refresh, toast],

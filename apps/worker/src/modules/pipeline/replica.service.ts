@@ -17,6 +17,7 @@ import {
   StorageResolverService,
   PipelineHookBrokerService,
 } from "@nexiom/engine";
+import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
 import { sql, eq, and } from "drizzle-orm";
 
@@ -95,8 +96,9 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       });
 
       if (!connMeta) {
-        throw new Error(
-          `Connection ${connectionId} not found in appConnections!`,
+        // Connection not found — treat as retryable to handle replication lag or backfill scenarios
+        throw new DependenciesMissingError(
+          `Connection ${connectionId} not found in appConnections (may still be replicating)`,
         );
       }
 
@@ -105,9 +107,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         ?.appProfile as string | undefined;
 
       if (!appProfile) {
-        throw new Error(
+        // Missing appProfile — treat as retryable to handle metadata backfill scenarios
+        throw new DependenciesMissingError(
           `Connection ${connectionId} (${appName}) is missing 'appProfile' in its metadata. ` +
-            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova').`,
+            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova'). ` +
+            `This may be transient if the connection is still provisioning.`,
         );
       }
       await tenantDb.transaction(async (tx) => {

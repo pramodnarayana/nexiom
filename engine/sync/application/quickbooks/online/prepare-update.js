@@ -38,7 +38,7 @@ async function PrepareQBUpdatePayload(payload, destId, destState) {
     if (destState) {
         // Direct key (legacy or already-unwrapped)
         syncToken = destState['SyncToken'] ?? destState['syncToken'];
-        if (!syncToken) {
+        if (syncToken == null) {
             // Unwrap nested entity envelope: { Vendor: { SyncToken: '0' } }
             const entityKey = Object.keys(destState).find(k => k !== 'time' && typeof destState[k] === 'object' && destState[k] !== null);
             if (entityKey) {
@@ -47,7 +47,7 @@ async function PrepareQBUpdatePayload(payload, destId, destState) {
             }
         }
     }
-    if (syncToken) {
+    if (syncToken != null) {
         finalPayload['SyncToken'] = syncToken;
     }
     // ── 4. Inject sparse and domain ──────────────────────────────────────────

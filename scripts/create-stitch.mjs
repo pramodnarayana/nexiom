@@ -185,6 +185,17 @@ async function run() {
     const srcConn = connections.find(c => c.id === opts.srcConn);
     const destConn = connections.find(c => c.id === opts.destConn);
 
+    // Verify both connections belong to the same tenant to prevent cross-tenant stitches
+    if (srcConn.tenant_id !== destConn.tenant_id) {
+      console.error(
+        `\x1b[31mError: Cross-tenant stitch detected!\x1b[0m\n` +
+        `  Source connection ${srcConn.id} belongs to tenant ${srcConn.tenant_id}\n` +
+        `  Destination connection ${destConn.id} belongs to tenant ${destConn.tenant_id}\n` +
+        `  Both connections must belong to the same tenant.`
+      );
+      process.exit(1);
+    }
+
     const tenantId = srcConn.tenant_id;
     console.log(`\n\x1b[32m✔ Verified Connections (Tenant ID: ${tenantId})\x1b[0m`);
     console.log(`  Source:      ${srcConn.display_name} (${srcConn.app_name})`);
@@ -230,104 +241,117 @@ async function run() {
       orgId = workspaces[0].org_id;
     }
 
-    // 3. Link Connections to Workspace
-    for (const connId of [opts.srcConn, opts.destConn]) {
-      await pool.query(
-        `INSERT INTO public.ui_workspace_connection (workspace_id, connection_id)
-         VALUES ($1, $2)
-         ON CONFLICT (workspace_id, connection_id) DO NOTHING`,
-        [workspaceId, connId]
+    // 3-6. Link Connections, Create/Update Stitch, Field Mapping, and Outbox — all in a transaction
+    const client = await pool.connect();
+    let stitch, mapping;
+    try {
+      await client.query('BEGIN');
+
+      // 3. Link Connections to Workspace
+      for (const connId of [opts.srcConn, opts.destConn]) {
+        await client.query(
+          `INSERT INTO public.ui_workspace_connection (workspace_id, connection_id)
+           VALUES ($1, $2)
+           ON CONFLICT (workspace_id, connection_id) DO NOTHING`,
+          [workspaceId, connId]
+        );
+      }
+      console.log(`\x1b[32m✔ Linked connections to Workspace ${workspaceId}\x1b[0m`);
+
+      // 4. Create or Update Integration Stitch
+      const stitchName = opts.name || `${srcConn.app_name} to ${destConn.app_name} Sync`;
+
+      // Check for existing stitch
+      const { rows: existingStitches } = await client.query(
+        `SELECT * FROM public.integration_stitch
+         WHERE workspace_id = $1 AND src_connection_id = $2 AND dest_connection_id = $3
+           AND source_object = $4 AND target_object = $5`,
+        [workspaceId, opts.srcConn, opts.destConn, opts.srcObj, opts.destObj]
       );
-    }
-    console.log(`\x1b[32m✔ Linked connections to Workspace ${workspaceId}\x1b[0m`);
 
-    // 4. Create or Update Integration Stitch
-    const stitchName = opts.name || `${srcConn.app_name} to ${destConn.app_name} Sync`;
-    
-    // Check for existing stitch
-    const { rows: existingStitches } = await pool.query(
-      `SELECT * FROM public.integration_stitch 
-       WHERE workspace_id = $1 AND src_connection_id = $2 AND dest_connection_id = $3 
-         AND source_object = $4 AND target_object = $5`,
-      [workspaceId, opts.srcConn, opts.destConn, opts.srcObj, opts.destObj]
-    );
+      if (existingStitches.length > 0) {
+        stitch = existingStitches[0];
+        const res = await client.query(
+          `UPDATE public.integration_stitch
+           SET name = $1, sync_interval_minutes = $2, updated_at = NOW()
+           WHERE id = $3
+           RETURNING *`,
+          [stitchName, opts.interval, stitch.id]
+        );
+        stitch = res.rows[0];
+        console.log(`\x1b[32m✔ Updated existing Integration Stitch:\x1b[0m ${stitch.name} (${stitch.id})`);
+      } else {
+        const res = await client.query(
+          `INSERT INTO public.integration_stitch (
+            name, org_id, workspace_id, src_connection_id, dest_connection_id,
+            source_object, target_object, sync_interval_minutes
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [stitchName, orgId, workspaceId, opts.srcConn, opts.destConn, opts.srcObj, opts.destObj, opts.interval]
+        );
+        stitch = res.rows[0];
+        console.log(`\x1b[32m✔ Created new Integration Stitch:\x1b[0m ${stitch.name} (${stitch.id})`);
+      }
 
-    let stitch;
-    if (existingStitches.length > 0) {
-      stitch = existingStitches[0];
-      const res = await pool.query(
-        `UPDATE public.integration_stitch 
-         SET name = $1, sync_interval_minutes = $2, updated_at = NOW() 
-         WHERE id = $3 
-         RETURNING *`,
-        [stitchName, opts.interval, stitch.id]
+      // 5. Create or Update Field Mapping
+      const { rows: existingMappings } = await client.query(
+        "SELECT * FROM public.field_mapping WHERE stitch_id = $1 AND source_canonical = $2",
+        [stitch.id, opts.canonical]
       );
-      stitch = res.rows[0];
-      console.log(`\x1b[32m✔ Updated existing Integration Stitch:\x1b[0m ${stitch.name} (${stitch.id})`);
-    } else {
-      const res = await pool.query(
-        `INSERT INTO public.integration_stitch (
-          name, org_id, workspace_id, src_connection_id, dest_connection_id, 
-          source_object, target_object, sync_interval_minutes
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING *`,
-        [stitchName, orgId, workspaceId, opts.srcConn, opts.destConn, opts.srcObj, opts.destObj, opts.interval]
-      );
-      stitch = res.rows[0];
-      console.log(`\x1b[32m✔ Created new Integration Stitch:\x1b[0m ${stitch.name} (${stitch.id})`);
-    }
 
-    // 5. Create or Update Field Mapping
-    const { rows: existingMappings } = await pool.query(
-      "SELECT * FROM public.field_mapping WHERE stitch_id = $1 AND source_canonical = $2",
-      [stitch.id, opts.canonical]
-    );
+      if (existingMappings.length > 0) {
+        mapping = existingMappings[0];
+        const res = await client.query(
+          `UPDATE public.field_mapping
+           SET mapping_rules = $1::jsonb, updated_at = NOW()
+           WHERE id = $2
+           RETURNING *`,
+          [JSON.stringify(mappingRules), mapping.id]
+        );
+        mapping = res.rows[0];
+        console.log(`\x1b[32m✔ Updated Field Mapping rules for ${opts.canonical} (${mapping.id})\x1b[0m`);
+      } else {
+        const res = await client.query(
+          `INSERT INTO public.field_mapping (stitch_id, source_canonical, mapping_rules)
+           VALUES ($1, $2, $3::jsonb)
+           RETURNING *`,
+          [stitch.id, opts.canonical, JSON.stringify(mappingRules)]
+        );
+        mapping = res.rows[0];
+        console.log(`\x1b[32m✔ Created Field Mapping rules for ${opts.canonical} (${mapping.id})\x1b[0m`);
+      }
 
-    let mapping;
-    if (existingMappings.length > 0) {
-      mapping = existingMappings[0];
-      const res = await pool.query(
-        `UPDATE public.field_mapping 
-         SET mapping_rules = $1::jsonb, updated_at = NOW() 
-         WHERE id = $2 
-         RETURNING *`,
-        [JSON.stringify(mappingRules), mapping.id]
-      );
-      mapping = res.rows[0];
-      console.log(`\x1b[32m✔ Updated Field Mapping rules for ${opts.canonical} (${mapping.id})\x1b[0m`);
-    } else {
-      const res = await pool.query(
-        `INSERT INTO public.field_mapping (stitch_id, source_canonical, mapping_rules)
-         VALUES ($1, $2, $3::jsonb)
-         RETURNING *`,
-        [stitch.id, opts.canonical, JSON.stringify(mappingRules)]
-      );
-      mapping = res.rows[0];
-      console.log(`\x1b[32m✔ Created Field Mapping rules for ${opts.canonical} (${mapping.id})\x1b[0m`);
-    }
+      // 6. Push to global_registry_outbox for Tenant DB Replication
+      console.log(`\n\x1b[33mReplicating registry configurations to Tenant DB...\x1b[0m`);
 
-    // 6. Push to global_registry_outbox for Tenant DB Replication
-    console.log(`\n\x1b[33mReplicating registry configurations to Tenant DB...\x1b[0m`);
+      const entries = [
+        { entityType: "INTEGRATION_STITCH", entityId: stitch.id, payload: toCamel(stitch) },
+        { entityType: "FIELD_MAPPING", entityId: mapping.id, payload: toCamel(mapping) }
+      ];
 
-    const entries = [
-      { entityType: "INTEGRATION_STITCH", entityId: stitch.id, payload: toCamel(stitch) },
-      { entityType: "FIELD_MAPPING", entityId: mapping.id, payload: toCamel(mapping) }
-    ];
+      for (const e of entries) {
+        await client.query(
+          `INSERT INTO public.global_registry_outbox (
+            id, tenant_id, entity_type, entity_id, action, payload, status
+           ) VALUES (gen_random_uuid(), $1, $2, $3, 'UPSERT', $4::jsonb, 'PENDING')`,
+          [tenantId, e.entityType, e.entityId, JSON.stringify(e.payload)]
+        );
+        console.log(`  + Queued replication: ${e.entityType} (${e.entityId})`);
+      }
 
-    for (const e of entries) {
-      await pool.query(
-        `INSERT INTO public.global_registry_outbox (
-          id, tenant_id, entity_type, entity_id, action, payload, status
-         ) VALUES (gen_random_uuid(), $1, $2, $3, 'UPSERT', $4::jsonb, 'PENDING')`,
-        [tenantId, e.entityType, e.entityId, JSON.stringify(e.payload)]
-      );
-      console.log(`  + Queued replication: ${e.entityType} (${e.entityId})`);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
     }
 
     console.log(`\n\x1b[32m✔ Successfully completed! The changes will replicate to the tenant database within 5 seconds.\x1b[0m\n`);
 
   } catch (err) {
     console.error("\x1b[31mCritical error during stitch creation:\x1b[0m", err);
+    process.exit(1);
   } finally {
     await pool.end();
   }

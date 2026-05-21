@@ -201,6 +201,9 @@ describe('OauthStateService', () => {
         mockProvider,
       );
       const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
+      // Simulate legacy state discovery: overwrite the Redis entry created by generateState
+      // with an old-format object (vendorParams directly in the value, not wrapped in { vendorParams, metadata })
+      // to verify that verifyState() handles pre-migration state tokens correctly.
       redisStore.set(
         `oauth:state:${decoded.stateId}`,
         JSON.stringify({ realmId: 'old-123' }),

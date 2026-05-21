@@ -810,7 +810,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             .where(sql`${activeSyncLocks.lockedByTraceId} = ${traceId}`);
         }
       });
-      sourceCommitted = true;
 
       // ── Write GEM (Control Plane) ──────────────────────────────────────────
       if (
@@ -853,6 +852,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
               lastSyncedAt: sql`NOW()`,
             },
           });
+      }
+      // Only mark as committed after all write operations succeed
+      sourceCommitted = true;
 
         this.logger.log(
           {

@@ -446,6 +446,25 @@ export function createPiece(params: CreatePieceParams): Piece {
         }
     }
 
+    // Validate routing metadata upfront to catch misconfigurations early
+    if (params.defaultAppProfile !== undefined && (typeof params.defaultAppProfile !== 'string' || params.defaultAppProfile.trim() === '')) {
+        throw new Error(`Piece "${params.name}": defaultAppProfile must be a non-empty string, got: ${JSON.stringify(params.defaultAppProfile)}`);
+    }
+
+    if (params.aliases !== undefined) {
+        if (!Array.isArray(params.aliases)) {
+            throw new Error(`Piece "${params.name}": aliases must be an array, got: ${typeof params.aliases}`);
+        }
+        for (const alias of params.aliases) {
+            if (typeof alias.name !== 'string' || alias.name.trim() === '') {
+                throw new Error(`Piece "${params.name}": alias.name must be a non-empty string, got: ${JSON.stringify(alias.name)}`);
+            }
+            if (typeof alias.appProfile !== 'string' || alias.appProfile.trim() === '') {
+                throw new Error(`Piece "${params.name}": alias "${alias.name}" requires a non-empty appProfile, got: ${JSON.stringify(alias.appProfile)}`);
+            }
+        }
+    }
+
     return {
         name: params.name || '',
         displayName: params.displayName,

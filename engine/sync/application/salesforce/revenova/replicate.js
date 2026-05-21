@@ -27,13 +27,16 @@ export async function ReplicateRevenovaObject(payload) {
     const entityType = typeMatch[1];
     const entityId = idMatch[1];
     // Simple key-value extraction for all sf: tags
+    // TODO: Replace regex-based extraction with a proper XML parser (e.g., fast-xml-parser or DOMParser)
+    // to handle nested nodes, CDATA, and numeric/hex entities correctly.
     const data = {};
     const fieldRegex = /<sf:([a-zA-Z0-9_]+)[^>]*>(.*?)<\/sf:\1>/g;
     let match;
     while ((match = fieldRegex.exec(body)) !== null) {
         const [, key, value] = match;
         // Normalize key to lowercase for consistent downstream access
-        data[key.toLowerCase()] = value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+        // Decode entities in correct order: decode named entities first, then &amp; last to prevent double-decoding
+        data[key.toLowerCase()] = value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
     }
     return {
         entityType,

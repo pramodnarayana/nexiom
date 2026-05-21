@@ -151,10 +151,20 @@ export class PipelineHookBrokerService {
     } catch (loadErr) {
       this.logger.warn(
         { event: 'hook.prepareUpdate.loader_error', appName, appProfile, err: loadErr instanceof Error ? loadErr.message : String(loadErr) },
-        `[DEBUG] Failed to load shard ${appName}/${appProfile}, returning raw payload. Error: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`
+        `[DEBUG] Failed to load shard ${appName}/${appProfile}. Error: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`
       );
-      // If shard fails to load, assume no prepareUpdate logic
-      return payload;
+      // Only return raw payload if the shard is genuinely missing (not found error).
+      // For other loader failures (syntax errors, missing dependencies), rethrow to surface the issue.
+      const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      if (errMsg.includes('not found') || errMsg.includes('Cannot find module')) {
+        this.logger.warn(
+          { event: 'hook.prepareUpdate.shard_not_found', appName, appProfile },
+          `Shard ${appName}/${appProfile} not found, returning raw payload (no prepareUpdate logic available)`
+        );
+        return payload;
+      }
+      // Real failures (syntax, import errors) should propagate
+      throw loadErr;
     }
 
     if (!shard.prepareUpdate) {
