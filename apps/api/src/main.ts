@@ -36,7 +36,7 @@ async function bootstrap() {
   // Webhooks must NOT carry the /api prefix — vendor systems (Salesforce,
   // QuickBooks, etc.) POST directly to the URL we give them and cannot
   // dynamically inject path segments. Excluding 'webhooks' here keeps the
-  // ingest surface at POST /webhooks/:connectionId for every vendor.
+  // ingest surface at POST /webhooks/:dataSourceId for every vendor.
   app.setGlobalPrefix(globalPrefix, { exclude: ['webhooks', 'webhooks/(.*)'] });
 
   // Add fallback parser for raw payloads to support XML/plain webhooks

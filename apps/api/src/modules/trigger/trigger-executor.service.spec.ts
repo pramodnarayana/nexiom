@@ -89,7 +89,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
       });
 
@@ -111,7 +111,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
       });
 
@@ -134,7 +134,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
         headers: {},
         rawBody: Buffer.from('{}'),
@@ -157,7 +157,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
         headers: { 'x-hub-signature': 'sha256=abc' },
         rawBody: Buffer.from('{}'),
@@ -182,7 +182,7 @@ describe('TriggerExecutorService', () => {
           auth: {},
           propsValue: {},
           workspaceId: 'ws_1',
-          connectionId: TEST_CONNECTION_ID,
+          dataSourceId: TEST_CONNECTION_ID,
           tenantId: 'tenant_test',
           headers: { 'x-hub-signature': 'sha256=bad' },
           rawBody: Buffer.from('{}'),
@@ -209,7 +209,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
       });
 
@@ -229,7 +229,7 @@ describe('TriggerExecutorService', () => {
           auth: {},
           propsValue: {},
           workspaceId: 'ws_1',
-          connectionId: TEST_CONNECTION_ID,
+          dataSourceId: TEST_CONNECTION_ID,
           tenantId: 'tenant_test',
         }),
       ).resolves.not.toThrow();
@@ -254,7 +254,7 @@ describe('TriggerExecutorService', () => {
         auth: {},
         propsValue: {},
         workspaceId: 'ws_1',
-        connectionId: TEST_CONNECTION_ID,
+        dataSourceId: TEST_CONNECTION_ID,
         tenantId: 'tenant_test',
       });
 

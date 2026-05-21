@@ -1,12 +1,12 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { sql } from 'drizzle-orm';
+import { sql, eq, and, inArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
-  appConnections,
+  dataSources,
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
@@ -44,14 +44,13 @@ export class InboundOutboxService {
               const tenantDb = await this.dbManager.getTenantDb(
                 tenant.tenantId,
               );
-              const { eq, and } = await import('drizzle-orm');
               const connections = await this.globalDb
                 .select()
-                .from(appConnections)
+                .from(dataSources)
                 .where(
                   and(
-                    eq(appConnections.tenantId, tenant.tenantId),
-                    eq(appConnections.status, 'ACTIVE'),
+                    eq(dataSources.tenantId, tenant.tenantId),
+                    inArray(dataSources.schemaPlan, ['OUTBOUND_ACTIVE']),
                   ),
                 );
 
@@ -169,7 +168,7 @@ export class InboundOutboxService {
     row: {
       id: string;
       traceId: string;
-      connectionId: string;
+      dataSourceId: string;
       attempts: number;
     },
   ): Promise<void> {
@@ -179,7 +178,7 @@ export class InboundOutboxService {
       // Send to L2 Queue
       await this.queueService.send(QueueName.InboundQueue, {
         traceId: row.traceId,
-        connectionId: row.connectionId,
+        dataSourceId: row.dataSourceId,
       });
 
       // Mark success - only if we still own this claim

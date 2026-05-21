@@ -6,7 +6,7 @@ export class DebeziumUnwrappedEvent {
 
   @IsOptional()
   @IsUUID()
-  connection_id?: string;
+  data_source_id?: string;
 
   @IsOptional()
   @IsString()

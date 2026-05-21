@@ -15,7 +15,7 @@ import {
     check,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { appConnections } from './routing.js';
+import { dataSources } from './data-sources.js';
 import { uiWorkspaces } from './workspace.js';
 
 // ---------------------------------------------------------------------------
@@ -58,11 +58,11 @@ export const integrationStitches = pgTable('integration_stitch', {
     // workspace with an org that doesn't own it.
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    // FKs to appConnections are defined as explicit named foreignKey() constraints
+    // FKs to dataSources are defined as explicit named foreignKey() constraints
     // below (stitch_src_connection_fk / stitch_dest_connection_fk) — no inline
     // .references() here to avoid duplicate constraints on the same columns.
-    srcConnectionId: uuid('src_connection_id').notNull(),
-    destConnectionId: uuid('dest_connection_id').notNull(),
+    srcDataSourceId: uuid('src_data_source_id').notNull(),
+    destDataSourceId: uuid('dest_data_source_id').notNull(),
     // Vendor object names resolved at stitch-creation time via describe API
     sourceObject: varchar('source_object', { length: 255 }).notNull(),
     targetObject: varchar('target_object', { length: 255 }).notNull(),
@@ -88,16 +88,16 @@ export const integrationStitches = pgTable('integration_stitch', {
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
         name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
-    // Cascade deletes when either the source or destination connection is removed
+    // Cascade deletes when either the source or destination data source is removed
     foreignKey({
-        columns: [table.srcConnectionId],
-        foreignColumns: [appConnections.id],
-        name: 'stitch_src_connection_fk',
+        columns: [table.srcDataSourceId],
+        foreignColumns: [dataSources.id],
+        name: 'stitch_src_data_source_fk',
     }).onDelete('cascade'),
     foreignKey({
-        columns: [table.destConnectionId],
-        foreignColumns: [appConnections.id],
-        name: 'stitch_dest_connection_fk',
+        columns: [table.destDataSourceId],
+        foreignColumns: [dataSources.id],
+        name: 'stitch_dest_data_source_fk',
     }).onDelete('cascade'),
     // Reject zero/negative intervals at the DB layer
     check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
@@ -105,8 +105,8 @@ export const integrationStitches = pgTable('integration_stitch', {
     uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
-    index('stitch_src_conn_idx').on(table.srcConnectionId),
-    index('stitch_dest_conn_idx').on(table.destConnectionId),
+    index('stitch_src_ds_idx').on(table.srcDataSourceId),
+    index('stitch_dest_ds_idx').on(table.destDataSourceId),
     index('stitch_status_idx').on(table.orgId, table.status),
 ]);
 
@@ -232,15 +232,15 @@ export const integrationStitchesRelations = relations(integrationStitches, ({ on
         fields: [integrationStitches.workspaceId],
         references: [uiWorkspaces.id],
     }),
-    srcConnection: one(appConnections, {
-        fields: [integrationStitches.srcConnectionId],
-        references: [appConnections.id],
-        relationName: 'stitch_src_connection',
+    srcDataSource: one(dataSources, {
+        fields: [integrationStitches.srcDataSourceId],
+        references: [dataSources.id],
+        relationName: 'stitch_src_data_source',
     }),
-    destConnection: one(appConnections, {
-        fields: [integrationStitches.destConnectionId],
-        references: [appConnections.id],
-        relationName: 'stitch_dest_connection',
+    destDataSource: one(dataSources, {
+        fields: [integrationStitches.destDataSourceId],
+        references: [dataSources.id],
+        relationName: 'stitch_dest_data_source',
     }),
     fieldMappings: many(fieldMappings),
 }));

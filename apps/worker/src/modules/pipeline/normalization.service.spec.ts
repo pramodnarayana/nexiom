@@ -154,7 +154,7 @@ describe("NormalizationService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
 
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
 
     expect(db.transaction).toHaveBeenCalled();
     expect(mockTxInsert).toHaveBeenCalled();
@@ -178,7 +178,7 @@ describe("NormalizationService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("db fail");
   });
 
@@ -191,7 +191,7 @@ describe("NormalizationService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Connection 456 not found");
   });
 
@@ -204,7 +204,7 @@ describe("NormalizationService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("not registered in PieceRegistry");
   });
 
@@ -250,7 +250,7 @@ describe("NormalizationService", () => {
 
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     // Since rowCount = 0 (simulating already processed record),
     // it does not insert into the outbox. We can assert mockTxInsert was called fewer times than success.
     expect(db.transaction).toHaveBeenCalled();
@@ -264,7 +264,7 @@ describe("NormalizationService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("db fail");
   });
 
@@ -282,7 +282,7 @@ describe("NormalizationService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Replica record for traceId 123 not found");
   });
 
@@ -297,7 +297,7 @@ describe("NormalizationService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     // Should not throw — just ACK (return) so SQS does not redeliver the poison pill
     await expect(
-      handler({ connectionId: "456" }), // traceId missing
+      handler({ dataSourceId: "456" }), // traceId missing
     ).resolves.toBeUndefined();
     expect(db.transaction).not.toHaveBeenCalled();
   });
@@ -309,7 +309,7 @@ describe("NormalizationService", () => {
     });
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     // Transaction should have been called — record stored with canonicalType='RAW'
     expect(db.transaction).toHaveBeenCalled();
     // The tx insert should have been called (normalizedEntity and normalizedOutbox)
@@ -325,7 +325,7 @@ describe("NormalizationService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     // Error should propagate — rejected promise means SQS redelivers for retry
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("normalize failed");
     // Error-handler transaction attempted (for FAIL sync_log)
     expect(db.transaction).toHaveBeenCalled();
@@ -359,7 +359,7 @@ describe("NormalizationService", () => {
     svc.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
 
     // Assert broker.normalize was called
     expect(mockBroker.normalize).toHaveBeenCalledWith(

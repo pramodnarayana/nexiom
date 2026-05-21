@@ -60,12 +60,12 @@ export async function listWorkspaceConnections(workspaceId: string): Promise<Wor
   return res.data;
 }
 
-export async function assignConnection(workspaceId: string, connectionId: string): Promise<void> {
-  await apiClient.post(`/workspaces/${workspaceId}/connections/${connectionId}`);
+export async function assignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
+  await apiClient.post(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
 }
 
-export async function unassignConnection(workspaceId: string, connectionId: string): Promise<void> {
-  await apiClient.delete(`/workspaces/${workspaceId}/connections/${connectionId}`);
+export async function unassignConnection(workspaceId: string, dataSourceId: string): Promise<void> {
+  await apiClient.delete(`/workspaces/${workspaceId}/connections/${dataSourceId}`);
 }
 
 /** Connections available to assign: env-type matched, not yet assigned to this workspace. */

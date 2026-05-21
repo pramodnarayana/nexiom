@@ -36,7 +36,7 @@ export class CdcRelayController {
     }),
   )
   async relay(@Body() event: DebeziumUnwrappedEvent): Promise<void> {
-    const { __table, __op, trace_id, connection_id, schema_name, __schema } =
+    const { __table, __op, trace_id, data_source_id, schema_name, __schema } =
       event;
 
     // Fallback to Debezium's metadata __schema if the table lacks a schema_name column
@@ -51,7 +51,7 @@ export class CdcRelayController {
     if (__table === 'inbound_outbox') {
       await this.queueService.send(QueueName.InboundQueue, {
         traceId: trace_id,
-        connectionId: connection_id,
+        dataSourceId: data_source_id,
         schemaName: resolvedSchema,
       });
       this.logger.debug(
@@ -60,7 +60,7 @@ export class CdcRelayController {
     } else if (__table === 'replica_outbox') {
       await this.queueService.send(QueueName.ReplicaQueue, {
         traceId: trace_id,
-        connectionId: connection_id,
+        dataSourceId: data_source_id,
         schemaName: resolvedSchema,
       });
       this.logger.debug(
@@ -69,7 +69,7 @@ export class CdcRelayController {
     } else if (__table === 'normalized_outbox') {
       await this.queueService.send(QueueName.NormalizedQueue, {
         traceId: trace_id,
-        connectionId: connection_id,
+        dataSourceId: data_source_id,
         schemaName: resolvedSchema,
       });
       this.logger.log(

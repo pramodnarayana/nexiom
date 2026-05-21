@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   NotFoundException,
@@ -54,12 +55,24 @@ function buildMockDb() {
     db: {
       query: {
         uiWorkspaces: { findFirst: findFirstWorkspaces },
-        appConnections: { findFirst: findFirstConnections },
+        dataSources: { findFirst: findFirstConnections },
         integrationStitches: {
           findFirst: findFirstStitches,
           findMany: findManyStitches,
         },
       },
+      select: vi.fn().mockImplementation(() => {
+        const qb: any = {};
+        qb.from = vi.fn().mockReturnValue(qb);
+        qb.where = vi.fn().mockReturnValue(qb);
+        qb.limit = vi.fn().mockReturnValue(qb);
+        qb.then = (res: any, rej: any) =>
+          Promise.resolve(findFirstConnections()).then(
+            (r) => res(r ? [r] : []),
+            rej,
+          );
+        return qb;
+      }),
       insert: insertFn,
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnValue({
@@ -87,8 +100,8 @@ describe('StitchesService', () => {
     name: 'SF Loads → QB Invoices',
     orgId: ORG_ID,
     workspaceId: WS_ID,
-    srcConnectionId: SRC_CONN_ID,
-    destConnectionId: DEST_CONN_ID,
+    srcDataSourceId: SRC_CONN_ID,
+    destDataSourceId: DEST_CONN_ID,
     sourceObject: 'rtms__Load__c',
     targetObject: 'Invoice',
     syncCondition: [],
@@ -103,8 +116,8 @@ describe('StitchesService', () => {
   const CREATE_BODY = {
     name: 'SF Loads → QB Invoices',
     workspaceId: WS_ID,
-    srcConnectionId: SRC_CONN_ID,
-    destConnectionId: DEST_CONN_ID,
+    srcDataSourceId: SRC_CONN_ID,
+    destDataSourceId: DEST_CONN_ID,
     sourceObject: 'rtms__Load__c',
     targetObject: 'Invoice',
   };
@@ -134,7 +147,7 @@ describe('StitchesService', () => {
   it('creates a stitch after verifying workspace and connections', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     // Return distinct objects for each parallel lookup so the test catches
-    // any ID-mixing bug (e.g. both checks accidentally using srcConnectionId)
+    // any ID-mixing bug (e.g. both checks accidentally using srcDataSourceId)
     mocks.findFirstConnections
       .mockResolvedValueOnce({
         id: SRC_CONN_ID,
@@ -193,7 +206,7 @@ describe('StitchesService', () => {
     await expect(
       service.create(ORG_ID, {
         ...CREATE_BODY,
-        destConnectionId: SRC_CONN_ID,
+        destDataSourceId: SRC_CONN_ID,
       }),
     ).rejects.toThrow(BadRequestException);
   });

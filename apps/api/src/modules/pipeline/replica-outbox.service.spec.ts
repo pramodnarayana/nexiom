@@ -19,6 +19,8 @@ describe('ReplicaOutboxService', () => {
 
     tenantDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockResolvedValue([{ id: 'conn_1', appName: 'test-app' }]),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
@@ -33,7 +35,7 @@ describe('ReplicaOutboxService', () => {
           returning: vi
             .fn()
             .mockResolvedValue([
-              { id: '1', traceId: 't1', connectionId: 'c1', attempts: 1 },
+              { id: '1', traceId: 't1', dataSourceId: 'c1', attempts: 1 },
             ]),
         };
         return cb(tx);
@@ -42,6 +44,8 @@ describe('ReplicaOutboxService', () => {
 
     globalDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockImplementation((table: any) => {
         if (table === tenantStorageRegistry) {
           return Promise.resolve([{ tenantId: 'tenant-1' }]);
@@ -76,7 +80,7 @@ describe('ReplicaOutboxService', () => {
     // The claimed row is successfully delivered to QueueName.ReplicaQueue
     expect(queueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
       traceId: 't1',
-      connectionId: 'c1',
+      dataSourceId: 'c1',
     });
     expect(tenantDb.update).toHaveBeenCalled();
   });
@@ -100,7 +104,7 @@ describe('ReplicaOutboxService', () => {
         returning: vi
           .fn()
           .mockResolvedValue([
-            { id: '1', traceId: 't1', connectionId: 'c1', attempts: 6 },
+            { id: '1', traceId: 't1', dataSourceId: 'c1', attempts: 6 },
           ]), // Max attempts hit
       });
     });

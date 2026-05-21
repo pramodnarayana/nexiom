@@ -52,6 +52,8 @@ describe('ConnectorsController', () => {
     from: Mock;
     where: Mock;
     orderBy: Mock;
+
+    [key: string]: any;
   };
 
   beforeEach(async () => {
@@ -96,6 +98,8 @@ describe('ConnectorsController', () => {
 
     mockDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnValue(dataChain),
       orderBy: vi.fn().mockReturnThis(),
@@ -521,7 +525,7 @@ describe('ConnectorsController', () => {
         }),
       );
     });
-    it('should preserve existing externalId during a reconnect flow (connectionId provided)', async () => {
+    it('should preserve existing externalId during a reconnect flow (dataSourceId provided)', async () => {
       // Mock the essential services that processOAuthExchange relies on
       mockRedis.set.mockResolvedValue('OK');
       mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
@@ -539,7 +543,7 @@ describe('ConnectorsController', () => {
 
       const reconnectBody = {
         ...validBody,
-        connectionId: 'existing-connection-id',
+        dataSourceId: 'existing-connection-id',
       };
 
       const result = await controller.exchangeCode(mockCtx, reconnectBody);
@@ -561,7 +565,7 @@ describe('ConnectorsController', () => {
         }),
       );
     });
-    it('should throw NotFoundException if reconnect connectionId is not found in DB', async () => {
+    it('should throw NotFoundException if reconnect dataSourceId is not found in DB', async () => {
       mockOauthStateService.verifyState.mockResolvedValue({
         tenantId: 'tenant-123',
         vendorParams: { realmId: 'test-123' },
@@ -572,7 +576,7 @@ describe('ConnectorsController', () => {
 
       const reconnectBody = {
         ...validBody,
-        connectionId: 'missing-id',
+        dataSourceId: 'missing-id',
       };
 
       await expect(
@@ -597,7 +601,7 @@ describe('ConnectorsController', () => {
 
       const reconnectBody = {
         ...validBody,
-        connectionId: 'error-id',
+        dataSourceId: 'error-id',
       };
 
       await expect(

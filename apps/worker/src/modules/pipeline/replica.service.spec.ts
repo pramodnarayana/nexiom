@@ -32,7 +32,7 @@ describe("ReplicaService", () => {
     };
     db = {
       query: {
-        appConnections: {
+        dataSources: {
           findFirst: vi.fn().mockResolvedValue({
             appName: "salesforce",
             metadata: { appProfile: "revenova" },
@@ -145,12 +145,12 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     expect(queueService.consume.mock.calls[0][0]).toBe(QueueName.InboundQueue);
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
 
     // Best-effort enqueue to L3 bypasses CDC pooling delay — verify it fired
     expect(queueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
       traceId: "123",
-      connectionId: "456",
+      dataSourceId: "456",
     });
     // The main transaction must have run
     expect(db.transaction).toHaveBeenCalledTimes(1);
@@ -159,7 +159,7 @@ describe("ReplicaService", () => {
       (v) =>
         v.status === "PENDING" &&
         v.traceId === "123" &&
-        v.connectionId === "456",
+        v.dataSourceId === "456",
     );
     expect(outboxInsert).toBeDefined();
   });
@@ -169,7 +169,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("db fail");
   });
 
@@ -191,12 +191,12 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Inbound record for traceId 123 not found");
   });
 
-  it("should throw if connection not found in appConnections", async () => {
-    db.query.appConnections.findFirst.mockResolvedValueOnce(undefined);
+  it("should throw if connection not found in dataSources", async () => {
+    db.query.dataSources.findFirst.mockResolvedValueOnce(undefined);
     db.limit.mockResolvedValueOnce([]); // no appName returned
     db.transaction.mockImplementationOnce(async (cb: any) =>
       cb({
@@ -224,7 +224,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Missing dependencies: connection:456");
   });
 
@@ -259,7 +259,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Replica extraction failed for traceId 123");
   });
 
@@ -268,7 +268,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("shard returned null");
   });
 
@@ -282,7 +282,7 @@ describe("ReplicaService", () => {
 
     const loggerSpy = vi.spyOn((service as any).logger, "error");
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("db fail");
 
     const output = loggerSpy.mock.calls.flat().map(String).join(" ");
@@ -329,7 +329,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).resolves.toBeUndefined();
   });
 
@@ -366,7 +366,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Cannot determine entityId");
   });
 
@@ -401,7 +401,7 @@ describe("ReplicaService", () => {
     );
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     // Extractor/insert should not be called (mockExecute only called for SET search_path)
     expect(mockExecute).toHaveBeenCalledTimes(1);
     expect(queueService.send).toHaveBeenCalled();
@@ -439,7 +439,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("currently locked by an in-flight sync");
   });
 
@@ -475,7 +475,7 @@ describe("ReplicaService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Generic database error");
   });
 });

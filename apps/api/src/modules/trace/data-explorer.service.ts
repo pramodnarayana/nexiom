@@ -51,7 +51,7 @@ export class DataExplorerService {
             eq(integrationStitches.id, stitchId),
             eq(integrationStitches.orgId, orgId),
           ),
-      columns: { id: true, srcConnectionId: true, destConnectionId: true },
+      columns: { id: true, srcDataSourceId: true, destDataSourceId: true },
     });
     if (!stitch) throw new NotFoundException(`Stitch ${stitchId} not found`);
     return stitch;
@@ -85,7 +85,7 @@ export class DataExplorerService {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
     const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
     assertValidSchemaName(schemaName);
     const { inboundGateway } = buildTenantSchema(schemaName);
@@ -94,14 +94,14 @@ export class DataExplorerService {
       this.db
         .select()
         .from(inboundGateway)
-        .where(eq(inboundGateway.connectionId, stitch.srcConnectionId))
+        .where(eq(inboundGateway.dataSourceId, stitch.srcDataSourceId))
         .orderBy(desc(inboundGateway.createdAt))
         .limit(safeLimit)
         .offset(offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(inboundGateway)
-        .where(eq(inboundGateway.connectionId, stitch.srcConnectionId)),
+        .where(eq(inboundGateway.dataSourceId, stitch.srcDataSourceId)),
     ]);
     return {
       data: rows,
@@ -123,7 +123,7 @@ export class DataExplorerService {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
     const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
     assertValidSchemaName(schemaName);
     const { replicaEntity } = buildTenantSchema(schemaName);
@@ -132,14 +132,14 @@ export class DataExplorerService {
       this.db
         .select()
         .from(replicaEntity)
-        .where(eq(replicaEntity.connectionId, stitch.srcConnectionId))
+        .where(eq(replicaEntity.dataSourceId, stitch.srcDataSourceId))
         .orderBy(desc(replicaEntity.updatedAt))
         .limit(safeLimit)
         .offset(offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(replicaEntity)
-        .where(eq(replicaEntity.connectionId, stitch.srcConnectionId)),
+        .where(eq(replicaEntity.dataSourceId, stitch.srcDataSourceId)),
     ]);
     return {
       data: rows,
@@ -152,7 +152,7 @@ export class DataExplorerService {
   // ── L3: Normalized Entity ──────────────────────────────────────────────────
 
   // NOTE: L3 normalized_entity is tenant-global (schema-scoped) and does not
-  // have a direct connectionId column. It references replicaId which links back
+  // have a direct dataSourceId column. It references replicaId which links back
   // to L2. This endpoint intentionally returns rows from all source connections
   // within the tenant schema. To filter by connection, join through replicaEntity.
   async listNormalized(
@@ -165,7 +165,7 @@ export class DataExplorerService {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
     const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
     assertValidSchemaName(schemaName);
     const { normalizedEntity } = buildTenantSchema(schemaName);
@@ -202,7 +202,7 @@ export class DataExplorerService {
     // Validate access via stitch
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
     const storageProfile = await this.storageResolver.resolveStorageProfile(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
     const tenantId = storageProfile.tenantId;
 
@@ -241,7 +241,7 @@ export class DataExplorerService {
     const { safePage, safeLimit, offset } = this.safePagination(page, limit);
     const stitch = await this.resolveStitch(orgId, stitchId, workspaceId);
     const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.destConnectionId,
+      stitch.destDataSourceId,
     );
     assertValidSchemaName(schemaName);
     const { outboundGateway } = buildTenantSchema(schemaName);

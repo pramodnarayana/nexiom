@@ -145,7 +145,7 @@ describe('WebhooksController', () => {
   it('returns 202 (does not throw) when DB throws 23505 with detail containing ext_req_id', async () => {
     const pgError = Object.assign(new Error('unique_violation'), {
       code: '23505',
-      detail: 'Key (connection_id, ext_req_id)=(..., ...) already exists.',
+      detail: 'Key (data_source_id, ext_req_id)=(..., ...) already exists.',
     });
     db.transaction.mockRejectedValueOnce(pgError);
 
@@ -380,7 +380,7 @@ describe('WebhooksController', () => {
     expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       traceId: expect.any(String),
-      connectionId: '00000000-0000-0000-0000-000000000001',
+      dataSourceId: '00000000-0000-0000-0000-000000000001',
     });
   });
 
@@ -449,6 +449,8 @@ describe('WebhooksController', () => {
         const mockTx = {
           execute: vi.fn().mockResolvedValue(undefined),
           select: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi
@@ -477,7 +479,7 @@ describe('WebhooksController', () => {
     // Verify it attempted to re-enqueue
     expect(queueServiceMock.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
       traceId: 'existing-trace-id',
-      connectionId: '00000000-0000-0000-0000-000000000001',
+      dataSourceId: '00000000-0000-0000-0000-000000000001',
     });
   });
 
@@ -492,6 +494,8 @@ describe('WebhooksController', () => {
         const mockTx = {
           execute: vi.fn().mockResolvedValue(undefined),
           select: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi

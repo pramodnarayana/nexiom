@@ -20,7 +20,7 @@ describe("DeliveryService", () => {
     queueService = { consume: vi.fn() };
     db = {
       query: {
-        appConnections: {
+        dataSources: {
           findFirst: vi.fn().mockResolvedValue({ tenantId: "tenant_1" }),
         },
       },
@@ -92,8 +92,8 @@ describe("DeliveryService", () => {
 
   const validPayload = {
     traceId: "123",
-    srcConnectionId: "456",
-    destConnectionId: "tgt",
+    srcDataSourceId: "456",
+    destDataSourceId: "tgt",
     routeId: "r",
     hydratedPayload: {},
   };
@@ -201,7 +201,7 @@ describe("DeliveryService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(handler(validPayload)).rejects.toThrow(
-      "Target connection tgt not found",
+      "Connection tgt not found in global DB",
     );
   });
 
@@ -259,7 +259,7 @@ describe("DeliveryService", () => {
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
     await expect(handler(validPayload)).rejects.toThrow(
-      "Target connection tgt not found",
+      "Connection tgt not found in global DB",
     );
   });
 
@@ -274,7 +274,7 @@ describe("DeliveryService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({
-        connectionId: "456",
+        dataSourceId: "456",
         targetConnectionId: "tgt",
       }),
     ).resolves.toBeUndefined();
@@ -635,7 +635,7 @@ describe("DeliveryService", () => {
         "ws_schema", // destSchemaName
         "ws_schema", // srcSchemaName
         "o", // outboundGatewayId
-        "conn", // connectionId
+        "conn", // dataSourceId
         "trace", // traceId
         "route", // routeId
         null, // resPayload
@@ -675,7 +675,7 @@ describe("DeliveryService", () => {
         "ws_schema", // destSchemaName
         "ws_schema", // srcSchemaName
         "o", // outboundGatewayId
-        "conn", // connectionId
+        "conn", // dataSourceId
         "trace", // traceId
         "route", // routeId
         null, // resPayload

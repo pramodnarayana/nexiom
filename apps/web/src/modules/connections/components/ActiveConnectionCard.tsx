@@ -24,7 +24,7 @@ import { useToast } from '@/shared/hooks/use-toast';
 interface ActiveConnectionCardProps {
     connection: ActiveConnectionResponse;
     provider?: ProviderResponse;
-    onDelete?: (connectionId: string) => void | Promise<void>;
+    onDelete?: (dataSourceId: string) => void | Promise<void>;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {

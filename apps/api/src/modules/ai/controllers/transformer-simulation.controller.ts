@@ -23,7 +23,7 @@ import {
 class TransformerSimulationDto {
   @IsString()
   @IsNotEmpty()
-  connectionId!: string;
+  dataSourceId!: string;
 
   @IsIn(['hydrator', 'action'])
   toolType!: 'hydrator' | 'action';
@@ -76,12 +76,12 @@ export class TransformerSimulationController {
 
     this.logger.info(
       `Executing Transformer Simulation for Connection: [REDACTED]`,
-      { connectionId: body.connectionId },
+      { dataSourceId: body.dataSourceId },
     );
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return this.simulationService.simulateExecution(
       tenantId,
-      body.connectionId,
+      body.dataSourceId,
       body.toolType,
       body.actionName || null,
       body.payload,

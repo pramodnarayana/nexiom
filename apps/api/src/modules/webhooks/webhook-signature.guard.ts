@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION, appConnections } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import { PieceRegistryService } from '@nexiom/piece-registry';
@@ -36,14 +36,14 @@ export class WebhookSignatureGuard implements CanActivate {
         [WEBHOOK_RESOLVED_CONNECTION]?: WebhookResolvedConnection;
       }
     >();
-    const connectionId = req.params['connectionId'];
+    const dataSourceId = req.params['dataSourceId'];
 
     // Re-use the connection record cached by TenantRateLimitGuard (which always
     // runs first via @UseGuards ordering) to avoid a second DB round-trip.
     const cached = req[WEBHOOK_RESOLVED_CONNECTION];
     const appName = cached
       ? cached.appName
-      : await this.resolveAppName(connectionId);
+      : await this.resolveAppName(dataSourceId);
 
     const piece = this.pieceRegistry.getPiece(appName);
     // Fail closed: a connection referencing an unregistered piece is a
@@ -101,7 +101,7 @@ export class WebhookSignatureGuard implements CanActivate {
       expectedBuf.length !== receivedBuf.length ||
       !timingSafeEqual(expectedBuf, receivedBuf)
     ) {
-      this.logger.warn({ connectionId, appName }, 'Webhook signature mismatch');
+      this.logger.warn({ dataSourceId, appName }, 'Webhook signature mismatch');
       throw new ForbiddenException('Invalid webhook signature');
     }
 
@@ -109,15 +109,15 @@ export class WebhookSignatureGuard implements CanActivate {
   }
 
   /** Fallback DB lookup when TenantRateLimitGuard has not pre-resolved the connection. */
-  private async resolveAppName(connectionId: string): Promise<string> {
+  private async resolveAppName(dataSourceId: string): Promise<string> {
     const [conn] = await this.db
-      .select({ appName: appConnections.appName })
-      .from(appConnections)
-      .where(eq(appConnections.id, connectionId))
+      .select({ appName: dataSources.appName })
+      .from(dataSources)
+      .where(eq(dataSources.id, dataSourceId))
       .limit(1);
 
     if (!conn) {
-      throw new NotFoundException(`Connection ${connectionId} not found`);
+      throw new NotFoundException(`Connection ${dataSourceId} not found`);
     }
     return conn.appName;
   }

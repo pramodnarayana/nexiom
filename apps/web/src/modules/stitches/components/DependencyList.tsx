@@ -6,13 +6,13 @@ import { Input } from '@/shared/components/ui/input';
 import { listRelatedObjects, type RelatedObjectDescriptor } from '../api/metadata.api';
 
 interface DependencyListProps {
-  connectionId: string;
+  dataSourceId: string;
   objectName: string;
   selected?: string[];
   onSelectionChange?: (selected: string[]) => void;
 }
 
-export function DependencyList({ connectionId, objectName, selected = [], onSelectionChange }: DependencyListProps) {
+export function DependencyList({ dataSourceId, objectName, selected = [], onSelectionChange }: DependencyListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [relatedObjects, setRelatedObjects] = useState<RelatedObjectDescriptor[]>([]);
@@ -24,7 +24,7 @@ export function DependencyList({ connectionId, objectName, selected = [], onSele
       setLoading(true);
       setError(null);
       try {
-        const res = await listRelatedObjects(connectionId, objectName);
+        const res = await listRelatedObjects(dataSourceId, objectName);
         if (active) setRelatedObjects(res);
       } catch (e) {
         if (active) setError(e instanceof Error ? e.message : 'Failed to load dependencies');
@@ -34,7 +34,7 @@ export function DependencyList({ connectionId, objectName, selected = [], onSele
     }
     void load();
     return () => { active = false; };
-  }, [connectionId, objectName]);
+  }, [dataSourceId, objectName]);
 
   const filteredObjects = useMemo(() => {
     // Exclude 1:N reverse child relationships to prevent UI confusion for users

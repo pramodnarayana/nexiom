@@ -41,8 +41,8 @@ describe('StitchesController — schedule endpoints', () => {
     const body = {
       name: 'Test Stitch',
       workspaceId: 'workspace-uuid-1',
-      srcConnectionId: 'src-conn-uuid-1',
-      destConnectionId: 'dest-conn-uuid-1',
+      srcDataSourceId: 'src-conn-uuid-1',
+      destDataSourceId: 'dest-conn-uuid-1',
     } as unknown as CreateStitch;
     mockService.create.mockResolvedValue({ id: STITCH_ID });
     const result = await controller.create(makeAuth(), body);

@@ -43,7 +43,7 @@ export type OutboxStatus = (typeof OutboxStatus)[number];
 // ---------------------------------------------------------------------------
 // Tenant Schema Builder
 //
-// Data-plane tables live in isolated per-connection Postgres schemas
+// Data-plane tables live in isolated per-data-source Postgres schemas
 // (e.g. ws_sf_101, ws_qb_us_202) provisioned by the DBManager.
 //
 // `buildTenantSchema(schemaName)` returns typed Drizzle table references
@@ -85,7 +85,7 @@ export function buildTenantSchema(schemaName: string) {
     const inboundGateway = schema.table('inbound_gateway', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull().unique(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         // Object type detected at ingestion for early-stage routing
         objectType: varchar('object_type', { length: 100 }),
         request: jsonb('request').notNull(),
@@ -96,7 +96,7 @@ export function buildTenantSchema(schemaName: string) {
         status: pipelineStatusEnum('status').notNull().default('RECEIVED'),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
-        uniqueIndex('idx_l1_ext_id').on(table.connectionId, table.extReqId),
+        uniqueIndex('idx_l1_ext_id').on(table.dataSourceId, table.extReqId),
         index('idx_l1_object_type').on(table.objectType),
         index('idx_l1_status').on(table.status),
         index('idx_l1_request_gin').using('gin', table.request),
@@ -111,13 +111,13 @@ export function buildTenantSchema(schemaName: string) {
      */
     const activeSyncLocks = schema.table('active_sync_locks', {
         id: uuid('id').defaultRandom().primaryKey(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         entityId: varchar('entity_id', { length: 255 }).notNull(),
         lockedByTraceId: uuid('locked_by_trace_id').notNull(),
         expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
-        uniqueIndex('idx_sync_lock_unique').on(table.connectionId, table.entityId),
+        uniqueIndex('idx_sync_lock_unique').on(table.dataSourceId, table.entityId),
     ]);
 
     /**
@@ -132,7 +132,7 @@ export function buildTenantSchema(schemaName: string) {
      */
     const replicaEntity = schema.table('replica_entity', {
         id: uuid('id').defaultRandom().primaryKey(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         traceId: uuid('trace_id').notNull(),
         entityId: varchar('entity_id', { length: 255 }).notNull(),
         entityType: varchar('entity_type', { length: 100 }).notNull(),
@@ -141,7 +141,7 @@ export function buildTenantSchema(schemaName: string) {
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     }, (table) => [
-        uniqueIndex('idx_l2_unique_entity').on(table.connectionId, table.entityType, table.entityId),
+        uniqueIndex('idx_l2_unique_entity').on(table.dataSourceId, table.entityType, table.entityId),
         index('idx_l2_trace').on(table.traceId),
         index('idx_l2_data_gin').using('gin', table.data),
     ]);
@@ -178,7 +178,7 @@ export function buildTenantSchema(schemaName: string) {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
         routeId: uuid('route_id').notNull(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         payload: jsonb('payload').notNull(),
         response: jsonb('response'),
         statusCode: integer('status_code'),
@@ -221,19 +221,19 @@ export function buildTenantSchema(schemaName: string) {
     /**
      * SYNC CURSOR — Polling State
      *
-     * Tracks the high-water mark for each (connection, entityType) pair.
+     * Tracks the high-water mark for each (dataSource, entityType) pair.
      * The Poller advances the cursor only after the DB commit succeeds,
      * guaranteeing at-least-once delivery on restart.
      */
     const syncCursor = schema.table('sync_cursor', {
         id: uuid('id').defaultRandom().primaryKey(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         entityType: varchar('entity_type', { length: 100 }).notNull(),
         // ISO-8601 or vendor-specific cursor (offset, page token, etc.)
         lastSyncTimestamp: varchar('last_sync_timestamp', { length: 255 }).notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
     }, (table) => [
-        uniqueIndex('idx_unique_cursor').on(table.connectionId, table.entityType),
+        uniqueIndex('idx_unique_cursor').on(table.dataSourceId, table.entityType),
     ]);
 
     /**
@@ -245,7 +245,7 @@ export function buildTenantSchema(schemaName: string) {
     const inboundOutbox = schema.table('inbound_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
@@ -256,7 +256,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_inbound_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
-        uniqueIndex('idx_inbound_outbox_trace').on(table.traceId, table.connectionId),
+        uniqueIndex('idx_inbound_outbox_trace').on(table.traceId, table.dataSourceId),
     ]);
 
     /**
@@ -268,7 +268,7 @@ export function buildTenantSchema(schemaName: string) {
     const replicaOutbox = schema.table('replica_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
@@ -279,7 +279,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_replica_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
-        uniqueIndex('idx_replica_outbox_trace').on(table.traceId, table.connectionId),
+        uniqueIndex('idx_replica_outbox_trace').on(table.traceId, table.dataSourceId),
     ]);
 
     /**
@@ -291,7 +291,7 @@ export function buildTenantSchema(schemaName: string) {
     const normalizedOutbox = schema.table('normalized_outbox', {
         id: uuid('id').defaultRandom().primaryKey(),
         traceId: uuid('trace_id').notNull(),
-        connectionId: uuid('connection_id').notNull(),
+        dataSourceId: uuid('data_source_id').notNull(),
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
@@ -302,7 +302,7 @@ export function buildTenantSchema(schemaName: string) {
         index('idx_normalized_outbox_claim')
             .on(table.status, table.nextRetryAt)
             .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
-        uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.connectionId),
+        uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.dataSourceId),
     ]);
 
     return {

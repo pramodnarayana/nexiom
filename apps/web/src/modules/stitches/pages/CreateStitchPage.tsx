@@ -29,10 +29,10 @@ type Step = 1 | 2 | 3;
 interface WizardState {
   name: string;
   // Step 1
-  srcConnectionId: string;
+  srcDataSourceId: string;
   sourceObject: string;
   // Step 2
-  destConnectionId: string;
+  destDataSourceId: string;
   targetObject: string;
   // Step 3
   mappingRules: MappingRule[];
@@ -42,9 +42,9 @@ interface WizardState {
 
 const INITIAL_STATE: WizardState = {
   name: '',
-  srcConnectionId: '',
+  srcDataSourceId: '',
   sourceObject: '',
-  destConnectionId: '',
+  destDataSourceId: '',
   targetObject: '',
   mappingRules: [],
   syncConditions: [],
@@ -146,7 +146,7 @@ function ObjectPickerBody({
 interface ConnectionObjectPickerProps {
   label: string;
   connections: AvailableConnectionResponse[];
-  connectionId: string;
+  dataSourceId: string;
   onConnectionChange: (id: string) => void;
   objects: ObjectDescriptor[];
   objectsLoading: boolean;
@@ -159,7 +159,7 @@ interface ConnectionObjectPickerProps {
 function ConnectionObjectPicker({
   label,
   connections,
-  connectionId,
+  dataSourceId,
   onConnectionChange,
   objects,
   objectsLoading,
@@ -172,7 +172,7 @@ function ConnectionObjectPicker({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>{label} Connection</Label>
-        <Select value={connectionId} onValueChange={onConnectionChange}>
+        <Select value={dataSourceId} onValueChange={onConnectionChange}>
           <SelectTrigger>
             <SelectValue placeholder="Select a connection" />
           </SelectTrigger>
@@ -191,7 +191,7 @@ function ConnectionObjectPicker({
         </Select>
       </div>
 
-      {connectionId && (
+      {dataSourceId && (
         <div className="space-y-1.5">
           <Label>{label} Object</Label>
           <ObjectPickerBody
@@ -248,12 +248,12 @@ export function CreateStitchPage() {
       .finally(() => { setConnectionsLoading(false); });
   }, [workspaceId]);
 
-  const loadSrcObjects = useCallback((connectionId: string, refresh = false) => {
+  const loadSrcObjects = useCallback((dataSourceId: string, refresh = false) => {
     setSrcObjects([]);
     setSrcObjectsError(null);
     setSrcObjectsLoading(true);
     const token = ++srcLoadTokenRef.current;
-    listObjects(connectionId, { refresh })
+    listObjects(dataSourceId, { refresh })
       .then((objects) => { if (token === srcLoadTokenRef.current) setSrcObjects(objects); })
       .catch((e: unknown) => {
         if (token === srcLoadTokenRef.current) {
@@ -263,12 +263,12 @@ export function CreateStitchPage() {
       .finally(() => { if (token === srcLoadTokenRef.current) setSrcObjectsLoading(false); });
   }, []);
 
-  const loadDestObjects = useCallback((connectionId: string, refresh = false) => {
+  const loadDestObjects = useCallback((dataSourceId: string, refresh = false) => {
     setDestObjects([]);
     setDestObjectsError(null);
     setDestObjectsLoading(true);
     const token = ++destLoadTokenRef.current;
-    listObjects(connectionId, { refresh })
+    listObjects(dataSourceId, { refresh })
       .then((objects) => { if (token === destLoadTokenRef.current) setDestObjects(objects); })
       .catch((e: unknown) => {
         if (token === destLoadTokenRef.current) {
@@ -279,17 +279,17 @@ export function CreateStitchPage() {
   }, []);
 
   function handleSrcConnectionChange(id: string) {
-    setWizard((prev) => ({ ...prev, srcConnectionId: id, sourceObject: '' }));
+    setWizard((prev) => ({ ...prev, srcDataSourceId: id, sourceObject: '' }));
     loadSrcObjects(id);
   }
 
   function handleDestConnectionChange(id: string) {
-    setWizard((prev) => ({ ...prev, destConnectionId: id, targetObject: '' }));
+    setWizard((prev) => ({ ...prev, destDataSourceId: id, targetObject: '' }));
     loadDestObjects(id);
   }
 
-  const step1Valid = wizard.srcConnectionId && wizard.sourceObject && wizard.name.trim().length > 0;
-  const step2Valid = wizard.destConnectionId && wizard.targetObject;
+  const step1Valid = wizard.srcDataSourceId && wizard.sourceObject && wizard.name.trim().length > 0;
+  const step2Valid = wizard.destDataSourceId && wizard.targetObject;
 
   async function handleCreate() {
     if (!workspaceId) return;
@@ -299,8 +299,8 @@ export function CreateStitchPage() {
       await createStitch({
         workspaceId,
         name: wizard.name.trim(),
-        srcConnectionId: wizard.srcConnectionId,
-        destConnectionId: wizard.destConnectionId,
+        srcDataSourceId: wizard.srcDataSourceId,
+        destDataSourceId: wizard.destDataSourceId,
         sourceObject: wizard.sourceObject,
         targetObject: wizard.targetObject,
         config: Object.keys(wizard.config).length > 0 ? wizard.config : undefined,
@@ -377,20 +377,20 @@ export function CreateStitchPage() {
               <ConnectionObjectPicker
                 label="Source"
                 connections={connections}
-                connectionId={wizard.srcConnectionId}
+                dataSourceId={wizard.srcDataSourceId}
                 onConnectionChange={handleSrcConnectionChange}
                 objects={srcObjects}
                 objectsLoading={srcObjectsLoading}
                 objectsError={srcObjectsError}
                 objectName={wizard.sourceObject}
                 onObjectChange={(v) => { setWizard((prev) => ({ ...prev, sourceObject: v })); }}
-                onRefreshObjects={() => { loadSrcObjects(wizard.srcConnectionId, true); }}
+                onRefreshObjects={() => { loadSrcObjects(wizard.srcDataSourceId, true); }}
               />
 
-              {wizard.srcConnectionId && wizard.sourceObject && (
+              {wizard.srcDataSourceId && wizard.sourceObject && (
                   <div className="pt-2">
                     <DependencyList 
-                        connectionId={wizard.srcConnectionId} 
+                        dataSourceId={wizard.srcDataSourceId} 
                         objectName={wizard.sourceObject}
                         selected={(wizard.config.selectedRelatedObjects as string[]) || []}
                         onSelectionChange={(selected) => setWizard(prev => ({ ...prev, config: { ...prev.config, selectedRelatedObjects: selected } }))}
@@ -415,14 +415,14 @@ export function CreateStitchPage() {
               <ConnectionObjectPicker
                 label="Destination"
                 connections={connections}
-                connectionId={wizard.destConnectionId}
+                dataSourceId={wizard.destDataSourceId}
                 onConnectionChange={handleDestConnectionChange}
                 objects={destObjects}
                 objectsLoading={destObjectsLoading}
                 objectsError={destObjectsError}
                 objectName={wizard.targetObject}
                 onObjectChange={(v) => { setWizard((prev) => ({ ...prev, targetObject: v })); }}
-                onRefreshObjects={() => { loadDestObjects(wizard.destConnectionId, true); }}
+                onRefreshObjects={() => { loadDestObjects(wizard.destDataSourceId, true); }}
               />
 
               <div className="flex justify-between pt-2">
@@ -446,16 +446,16 @@ export function CreateStitchPage() {
                 </TabsList>
                 <TabsContent value="mapping" className="outline-none">
                     <MappingCanvas
-                        srcConnectionId={wizard.srcConnectionId}
+                        srcDataSourceId={wizard.srcDataSourceId}
                         sourceObject={wizard.sourceObject}
-                        destConnectionId={wizard.destConnectionId}
+                        destDataSourceId={wizard.destDataSourceId}
                         targetObject={wizard.targetObject}
                         onChange={handleMappingChange}
                     />
                 </TabsContent>
                 <TabsContent value="config" className="outline-none">
                     <StitchConfigPanel
-                        connectionId={wizard.srcConnectionId}
+                        dataSourceId={wizard.srcDataSourceId}
                         value={wizard.config}
                         onChange={(config) => setWizard((prev) => ({ ...prev, config }))}
                     />

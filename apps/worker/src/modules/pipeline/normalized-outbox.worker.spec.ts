@@ -45,7 +45,7 @@ describe("NormalizedOutboxWorker", () => {
   beforeEach(async () => {
     queueService = { send: vi.fn() };
     tenantDb = buildDb([
-      { id: "out_1", traceId: "trace_1", connectionId: "conn_1", attempts: 1 },
+      { id: "out_1", traceId: "trace_1", dataSourceId: "conn_1", attempts: 1 },
     ]);
 
     const mockTenants: any = [{ tenantId: "tenant_1" }];
@@ -81,10 +81,10 @@ describe("NormalizedOutboxWorker", () => {
   it("should claim and process pending outbox rows successfully", async () => {
     await worker.processOutbox();
 
-    // traceId/connectionId are the consumer dedup keys (no idempotencyKey)
+    // traceId/dataSourceId are the consumer dedup keys (no idempotencyKey)
     expect(queueService.send).toHaveBeenCalledWith(QueueName.NormalizedQueue, {
       traceId: "trace_1",
-      connectionId: "conn_1",
+      dataSourceId: "conn_1",
     });
 
     // Status must transition to SUCCESS
@@ -127,7 +127,7 @@ describe("NormalizedOutboxWorker", () => {
       {
         id: "out_2",
         traceId: "trace_2",
-        connectionId: "conn_2",
+        dataSourceId: "conn_2",
         attempts: MAX_ATTEMPTS,
       },
     ]);

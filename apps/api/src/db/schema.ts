@@ -40,7 +40,7 @@ export type {
 } from '@nexiom/database';
 
 // Engine schema — connection table (single-table Activepieces model)
-export { appConnections } from '@nexiom/database';
+export { dataSources, credentials } from '@nexiom/database';
 
 // Piece registry
 export { pieces } from '@nexiom/database';
@@ -51,7 +51,8 @@ export { tenantStorageRegistry } from '@nexiom/database';
 // Workspaces — logical folders grouping connections per team/environment
 export {
   uiWorkspaces,
-  uiWorkspaceConnections,
+  uiWorkspaceDataSources,
+  uiWorkspaceDataSourceRelations,
   envTypeEnum,
 } from '@nexiom/database';
 

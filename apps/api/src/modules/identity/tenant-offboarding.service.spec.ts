@@ -12,6 +12,8 @@ export type MockDb = {
   execute: Mock;
   transaction: Mock;
   delete?: Mock;
+
+  [key: string]: any;
 };
 
 describe('TenantOffboardingService', () => {
@@ -21,6 +23,8 @@ describe('TenantOffboardingService', () => {
   beforeEach(async () => {
     db = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockResolvedValue([]),
       limit: vi.fn().mockResolvedValue([]),
@@ -28,6 +32,8 @@ describe('TenantOffboardingService', () => {
       transaction: vi.fn((cb: (tx: any) => void) =>
         cb({
           select: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           limit: vi.fn().mockResolvedValue([{ id: 'test-tenant' }]),
@@ -106,6 +112,8 @@ describe('TenantOffboardingService', () => {
     db.transaction.mockImplementationOnce((cb: (tx: any) => void) =>
       cb({
         select: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([]),

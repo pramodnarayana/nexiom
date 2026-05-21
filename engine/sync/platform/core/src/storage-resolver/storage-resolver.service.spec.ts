@@ -47,12 +47,12 @@ describe('StorageResolverService', () => {
     it('should serve subsequent calls from the LRU cache without hitting the DB again', async () => {
       const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
       const service = await buildService(db);
-      const connectionId = '2395444f-489a-4ab7-a45f-ca49f171d0a1';
+      const dataSourceId = '2395444f-489a-4ab7-a45f-ca49f171d0a1';
 
       // First call — DB hit
-      const first = await service.resolveSchemaName(connectionId);
+      const first = await service.resolveSchemaName(dataSourceId);
       // Second call — should be served from cache
-      const second = await service.resolveSchemaName(connectionId);
+      const second = await service.resolveSchemaName(dataSourceId);
 
       expect(first).toBe(second);
       // DB must have been called exactly once — cache served the second call
@@ -77,12 +77,12 @@ describe('StorageResolverService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw for an empty connectionId without hitting the DB', async () => {
+    it('should throw for an empty dataSourceId without hitting the DB', async () => {
       const db = buildDbMock([{ schemaName: 'ws_salesforce_34ad40d48e92676d', tenantId: 'tenant-123' }]);
       const service = await buildService(db);
 
       await expect(service.resolveSchemaName('')).rejects.toThrow(
-        /connectionId must be a non-empty string/,
+        /dataSourceId must be a non-empty string/,
       );
       expect(db.select).not.toHaveBeenCalled();
     });

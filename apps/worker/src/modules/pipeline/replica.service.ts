@@ -10,7 +10,7 @@ import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
-  appConnections,
+  dataSources,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -46,11 +46,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
   private async processMessage(rawMsg: unknown): Promise<void> {
     const msg = rawMsg as Record<string, unknown>;
     const traceId = msg.traceId as string;
-    const connectionId = msg.connectionId as string;
+    const dataSourceId = msg.dataSourceId as string;
     const start = Date.now();
 
     this.logger.debug(
-      { event: "l2.started", traceId, connectionId },
+      { event: "l2.started", traceId, dataSourceId },
       "L2 replication started",
     );
 
@@ -60,14 +60,14 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         assertValidSchemaName(passedSchemaName);
       }
       const { schemaName: resolvedSchemaName, tenantId } =
-        await this.storageResolver.resolveStorageProfile(connectionId);
+        await this.storageResolver.resolveStorageProfile(dataSourceId);
       const schemaName = passedSchemaName ?? resolvedSchemaName;
       if (passedSchemaName && passedSchemaName !== resolvedSchemaName) {
         this.logger.error(
           {
             event: "l2.schema_mismatch",
             traceId,
-            connectionId,
+            dataSourceId,
             passedSchemaName,
             resolvedSchemaName,
           },
@@ -88,17 +88,24 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
       // Fetch application metadata
-      // appConnections (including metadata.appProfile) lives in the TENANT DB.
+      // dataSources (including metadata.appProfile) lives in the TENANT DB.
       // The global DB only holds tenantId for routing — never full metadata.
-      const connMeta = await tenantDb.query.appConnections.findFirst({
-        where: eq(appConnections.id, connectionId),
-        columns: { appName: true, metadata: true },
-      });
+      const connMeta = await tenantDb
+        .select()
+        .from(dataSources)
+        .where(
+          and(
+            eq(dataSources.id, dataSourceId),
+            eq(dataSources.tenantId, tenantId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0]);
 
       if (!connMeta) {
         // Connection not found — treat as retryable to handle replication lag or backfill scenarios
         throw new DependenciesMissingError([
-          { entityType: "connection", sourceId: connectionId },
+          { entityType: "connection", sourceId: dataSourceId },
         ]);
       }
 
@@ -109,7 +116,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
       if (!appProfile) {
         // Missing appProfile — treat as retryable to handle metadata backfill scenarios
         throw new DependenciesMissingError([
-          { entityType: "appProfile", sourceId: connectionId },
+          { entityType: "appProfile", sourceId: dataSourceId },
         ]);
       }
       await tenantDb.transaction(async (tx) => {
@@ -173,14 +180,14 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             .delete(activeSyncLocks)
             .where(
               and(
-                eq(activeSyncLocks.connectionId, connectionId),
+                eq(activeSyncLocks.dataSourceId, dataSourceId),
                 eq(activeSyncLocks.entityId, resolvedEntityId),
                 sql`${activeSyncLocks.expiresAt} < NOW()`,
               ),
             );
 
           await tx.insert(activeSyncLocks).values({
-            connectionId,
+            dataSourceId,
             entityId: resolvedEntityId,
             lockedByTraceId: traceId,
             expiresAt: sql`NOW() + INTERVAL '10 minutes'`,
@@ -202,14 +209,14 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           throw err;
         }
 
-        // Upsert into replica_entity keyed on (connectionId, entityType, extEntityId).
+        // Upsert into replica_entity keyed on (dataSourceId, entityType, extEntityId).
         // extEntityId is the vendor's stable business ID (e.g. Salesforce Account ID).
         // Multiple webhook deliveries for the same entity converge into one row via ON CONFLICT.
         await tx
           .insert(replicaEntity)
           .values({
             traceId,
-            connectionId,
+            dataSourceId,
             entityType: resolvedEntityType,
             entityId: resolvedEntityId,
             data: resolvedData,
@@ -217,7 +224,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           })
           .onConflictDoUpdate({
             target: [
-              replicaEntity.connectionId,
+              replicaEntity.dataSourceId,
               replicaEntity.entityType,
               replicaEntity.entityId,
             ],
@@ -254,23 +261,23 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         // key; if a duplicate is delivered the L3 ON CONFLICT DO NOTHING on
         // replicaId makes it idempotent. onConflictDoNothing guards against
         // InboundQueue message redelivery producing a second outbox row for
-        // the same (traceId, connectionId).
+        // the same (traceId, dataSourceId).
         await tx
           .insert(replicaOutbox)
           .values({
             traceId,
-            connectionId,
+            dataSourceId,
             status: "PENDING",
           })
           .onConflictDoNothing({
-            target: [replicaOutbox.traceId, replicaOutbox.connectionId],
+            target: [replicaOutbox.traceId, replicaOutbox.dataSourceId],
           });
       });
 
       // Best-effort enqueue to L3 bypassing CDC pooling delays and
       // fragile Debezium Docker setups in local dev. Safe due to L3 idempotency.
       await this.queueService
-        .send(QueueName.ReplicaQueue, { traceId, connectionId })
+        .send(QueueName.ReplicaQueue, { traceId, dataSourceId })
         .catch((err: unknown) => {
           this.logger.warn(
             {
@@ -317,7 +324,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       try {
         const { schemaName, tenantId } =
-          await this.storageResolver.resolveStorageProfile(connectionId);
+          await this.storageResolver.resolveStorageProfile(dataSourceId);
         const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
         const tenantDb = await this.dbManager.getTenantDb(tenantId);
         await tenantDb.transaction(async (tx) => {

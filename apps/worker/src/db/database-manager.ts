@@ -644,7 +644,7 @@ export class DatabaseManager {
   /**
    * Provision local dev fixture:
    *   1. Upserts one Salesforce + one QuickBooks connection under the system tenant.
-   *   2. Creates `ws_{connectionId}` schemas (GATEWAY_ACTIVE plan) for each.
+   *   2. Creates `ws_{dataSourceId}` schemas (GATEWAY_ACTIVE plan) for each.
    *
    * Idempotent — safe to run multiple times. Skips connections that already exist.
    */
@@ -811,31 +811,49 @@ export class DatabaseManager {
         await db.transaction(async (tx) => {
           const existRes = await tx
             .select()
-            .from(schema.appConnections)
-            .where(sql`${schema.appConnections.id} = ${fixture.id}`)
+            .from(schema.dataSources)
+            .where(sql`${schema.dataSources.id} = ${fixture.id}`)
             .limit(1);
           const existing = existRes[0];
 
           if (!existing) {
-            await tx.insert(schema.appConnections).values({
+            await tx.insert(schema.dataSources).values({
               id: fixture.id,
               tenantId: systemTenantId,
               appName: fixture.appName,
               externalId: fixture.externalId,
               displayName: fixture.displayName,
+              metadata: this.deriveMetadata(fixture.appName),
+            });
+            await tx.insert(schema.credentials).values({
+              dataSourceId: fixture.id,
               authType: "OAUTH2",
               value: encryptedValue,
               status: "INACTIVE",
-              metadata: this.deriveMetadata(fixture.appName),
             });
           } else {
             await tx
-              .update(schema.appConnections)
+              .update(schema.dataSources)
               .set({
-                status: "INACTIVE",
                 metadata: this.deriveMetadata(fixture.appName),
               })
-              .where(sql`${schema.appConnections.id} = ${fixture.id}`);
+              .where(sql`${schema.dataSources.id} = ${fixture.id}`);
+
+            await tx
+              .insert(schema.credentials)
+              .values({
+                dataSourceId: fixture.id,
+                authType: "OAUTH2",
+                value: encryptedValue,
+                status: "INACTIVE",
+              })
+              .onConflictDoUpdate({
+                target: [schema.credentials.dataSourceId],
+                set: {
+                  value: encryptedValue,
+                  status: "INACTIVE",
+                },
+              });
           }
 
           // Seed the tenant_storage_registry to map the tenant to its physical database.
@@ -890,9 +908,9 @@ export class DatabaseManager {
         // Update connection to ACTIVE status in a new transaction
         await db.transaction(async (tx2) => {
           await tx2
-            .update(schema.appConnections)
+            .update(schema.credentials)
             .set({ status: "ACTIVE" })
-            .where(sql`${schema.appConnections.id} = ${fixture.id}`);
+            .where(sql`${schema.credentials.dataSourceId} = ${fixture.id}`);
         });
 
         console.log(
@@ -903,7 +921,7 @@ export class DatabaseManager {
       console.log("\n✅ Local dev fixtures provisioned.");
       console.log(
         "   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n" +
-          "   and update app_connection.value with the resulting ciphertext.\n" +
+          "   and update credentials.value with the resulting ciphertext.\n" +
           "   Do NOT edit the value column manually — it holds AES-GCM ciphertext.",
       );
     } finally {

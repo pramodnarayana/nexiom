@@ -73,10 +73,10 @@ describe("ActiveFetchWorker", () => {
     await expect(
       queueService.trigger({
         traceId: "t1",
-        connectionId: "c1",
+        dataSourceId: "c1",
         missingDependencies: [],
       }),
-    ).rejects.toThrow(/Connection c1 not found/);
+    ).rejects.toThrow(/Data source c1 not found/);
   });
 
   it("should call hookBroker.activeFetch when message is valid", async () => {
@@ -84,7 +84,7 @@ describe("ActiveFetchWorker", () => {
 
     await queueService.trigger({
       traceId: "t1",
-      connectionId: "c1",
+      dataSourceId: "c1",
       missingDependencies: [{ entityType: "TMS_TP", sourceId: "source-1" }],
     });
 
@@ -104,7 +104,7 @@ describe("ActiveFetchWorker", () => {
 
     await queueService.trigger({
       traceId: "t1",
-      connectionId: "c1",
+      dataSourceId: "c1",
       missingDependencies: [
         { entityType: "TMS_CUSTOMER", sourceId: "source-2" },
       ],

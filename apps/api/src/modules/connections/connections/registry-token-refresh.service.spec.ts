@@ -37,6 +37,8 @@ describe('RegistryOAuthRefreshClient', () => {
     where: Mock;
     orderBy: Mock;
     limit: Mock;
+
+    [key: string]: any;
   };
 
   const encryptedValueBlob = 'encrypted-value-payload';
@@ -59,6 +61,8 @@ describe('RegistryOAuthRefreshClient', () => {
     // Chain: db.select().from().where().limit() -> returns [{value}]
     mockDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),

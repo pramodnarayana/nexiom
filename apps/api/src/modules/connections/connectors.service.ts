@@ -16,7 +16,8 @@ import { resolveOAuth2Url, PropertyType } from '@nexiom/piece-framework';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
-  appConnections,
+  dataSources,
+  credentials,
   AppConnectionStatus,
   DATABASE_CONNECTION,
   globalRegistryOutbox,
@@ -323,31 +324,49 @@ export class ConnectorsService {
 
     try {
       const workspaceProvisionInfo = await this.db.transaction(async (tx) => {
-        // 1. Check if we're doing an explicit update via connectionId
+        // 1. Check if we're doing an explicit update via dataSourceId
         if (id) {
           let updated;
           try {
             [updated] = await tx
-              .update(appConnections)
+              .update(dataSources)
               .set({
                 displayName,
                 externalId,
-                authType,
-                value,
-                expiresAt,
                 metadata,
-                status: AppConnectionStatus.ACTIVE,
                 updatedAt: new Date(),
                 ...(envType !== undefined && { envType }),
               })
               .where(
                 and(
-                  eq(appConnections.id, id),
-                  eq(appConnections.tenantId, tenantId),
-                  eq(appConnections.appName, providerName),
+                  eq(dataSources.id, id),
+                  eq(dataSources.tenantId, tenantId),
+                  eq(dataSources.appName, providerName),
                 ),
               )
               .returning();
+
+            if (updated) {
+              await tx
+                .insert(credentials)
+                .values({
+                  dataSourceId: updated.id,
+                  authType,
+                  value,
+                  expiresAt,
+                  status: AppConnectionStatus.ACTIVE,
+                })
+                .onConflictDoUpdate({
+                  target: [credentials.dataSourceId],
+                  set: {
+                    authType,
+                    value,
+                    expiresAt,
+                    status: AppConnectionStatus.ACTIVE,
+                    updatedAt: new Date(),
+                  },
+                });
+            }
           } catch (err: unknown) {
             const pgErr2 = extractPgError(err);
             this.throwOnDuplicateConnection(pgErr2, displayName, externalId);
@@ -367,7 +386,7 @@ export class ConnectorsService {
           });
 
           return {
-            connectionId: updated.id,
+            dataSourceId: updated.id,
             createdRegistry: false,
             schemaName: '',
             createdAppConnection: false,
@@ -391,20 +410,24 @@ export class ConnectorsService {
         await tx.execute(sql`SAVEPOINT before_unique_insert`);
         try {
           [connection] = await tx
-            .insert(appConnections)
+            .insert(dataSources)
             .values({
               tenantId,
               appName: providerName,
               externalId,
               displayName,
-              authType,
-              value,
-              expiresAt,
               metadata,
               envType: envType ?? 'PRODUCTION',
-              status: AppConnectionStatus.PROVISIONING,
             })
             .returning();
+
+          await tx.insert(credentials).values({
+            dataSourceId: connection.id,
+            authType,
+            value,
+            expiresAt,
+            status: AppConnectionStatus.PROVISIONING,
+          });
 
           // Persist schemaName immediately — it is immutable once set.
           const schemaNameToStore = getWorkspaceSchemaName(
@@ -412,9 +435,9 @@ export class ConnectorsService {
             providerName,
           );
           await tx
-            .update(appConnections)
+            .update(dataSources)
             .set({ schemaName: schemaNameToStore })
-            .where(eq(appConnections.id, connection.id));
+            .where(eq(dataSources.id, connection.id));
 
           // Set schemaName on connection object before emitting to outbox
           connection.schemaName = schemaNameToStore;
@@ -443,14 +466,13 @@ export class ConnectorsService {
             if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
               // displayName is the blocking duplicate — query only by displayName.
               const rows = await tx
-                .select({ id: appConnections.id })
-                .from(appConnections)
+                .select({ id: dataSources.id })
+                .from(dataSources)
                 .where(
                   and(
-                    eq(appConnections.tenantId, tenantId),
-                    eq(appConnections.appName, providerName),
-                    sql`lower(${appConnections.displayName}) = lower(${displayName})`,
-                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                    eq(dataSources.tenantId, tenantId),
+                    eq(dataSources.appName, providerName),
+                    sql`lower(${dataSources.displayName}) = lower(${displayName})`,
                   ),
                 )
                 .limit(1);
@@ -461,14 +483,13 @@ export class ConnectorsService {
               // If externalId resolves to a *different* row, clear existingFailed.
               if (existingFailed && externalId) {
                 const byExternalId = await tx
-                  .select({ id: appConnections.id })
-                  .from(appConnections)
+                  .select({ id: dataSources.id })
+                  .from(dataSources)
                   .where(
                     and(
-                      eq(appConnections.tenantId, tenantId),
-                      eq(appConnections.appName, providerName),
-                      eq(appConnections.externalId, externalId),
-                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                      eq(dataSources.tenantId, tenantId),
+                      eq(dataSources.appName, providerName),
+                      eq(dataSources.externalId, externalId),
                     ),
                   )
                   .limit(1);
@@ -486,14 +507,13 @@ export class ConnectorsService {
             ) {
               // externalId is the blocking duplicate — query only by externalId.
               const rows = await tx
-                .select({ id: appConnections.id })
-                .from(appConnections)
+                .select({ id: dataSources.id })
+                .from(dataSources)
                 .where(
                   and(
-                    eq(appConnections.tenantId, tenantId),
-                    eq(appConnections.appName, providerName),
-                    eq(appConnections.externalId, externalId),
-                    eq(appConnections.status, AppConnectionStatus.FAILED),
+                    eq(dataSources.tenantId, tenantId),
+                    eq(dataSources.appName, providerName),
+                    eq(dataSources.externalId, externalId),
                   ),
                 )
                 .limit(1);
@@ -504,14 +524,13 @@ export class ConnectorsService {
               // If displayName resolves to a *different* row, clear existingFailed.
               if (existingFailed) {
                 const byDisplayName = await tx
-                  .select({ id: appConnections.id })
-                  .from(appConnections)
+                  .select({ id: dataSources.id })
+                  .from(dataSources)
                   .where(
                     and(
-                      eq(appConnections.tenantId, tenantId),
-                      eq(appConnections.appName, providerName),
-                      sql`lower(${appConnections.displayName}) = lower(${displayName})`,
-                      eq(appConnections.status, AppConnectionStatus.FAILED),
+                      eq(dataSources.tenantId, tenantId),
+                      eq(dataSources.appName, providerName),
+                      sql`lower(${dataSources.displayName}) = lower(${displayName})`,
                     ),
                   )
                   .limit(1);
@@ -531,21 +550,37 @@ export class ConnectorsService {
                 providerName,
               );
               const [updated] = await tx
-                .update(appConnections)
+                .update(dataSources)
                 .set({
-                  authType,
-                  value,
-                  expiresAt,
                   metadata,
                   envType: envType ?? 'PRODUCTION',
-                  status: AppConnectionStatus.PROVISIONING,
                   // Re-persist schemaName on recovery — guards against rows that
                   // were inserted before this column existed (pre-migration rows).
                   schemaName: recoveredSchemaName,
                   updatedAt: new Date(),
                 })
-                .where(eq(appConnections.id, existingFailed.id))
-                .returning({ id: appConnections.id });
+                .where(eq(dataSources.id, existingFailed.id))
+                .returning({ id: dataSources.id });
+
+              await tx
+                .insert(credentials)
+                .values({
+                  dataSourceId: updated.id,
+                  authType,
+                  value,
+                  expiresAt,
+                  status: AppConnectionStatus.PROVISIONING,
+                })
+                .onConflictDoUpdate({
+                  target: [credentials.dataSourceId],
+                  set: {
+                    authType,
+                    value,
+                    expiresAt,
+                    status: AppConnectionStatus.PROVISIONING,
+                    updatedAt: new Date(),
+                  },
+                });
 
               connection = updated;
             } else {
@@ -565,7 +600,7 @@ export class ConnectorsService {
 
         return {
           schemaName,
-          connectionId: connection.id,
+          dataSourceId: connection.id,
           createdAppConnection: true,
         };
       });
@@ -588,13 +623,19 @@ export class ConnectorsService {
         // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {
           const [activeConn] = await tx
-            .update(appConnections)
+            .update(dataSources)
             .set({
-              status: AppConnectionStatus.ACTIVE,
               schemaPlan: SchemaPlan.NORMALIZE_ACTIVE,
             })
-            .where(eq(appConnections.id, workspaceProvisionInfo.connectionId))
+            .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
             .returning();
+
+          await tx
+            .update(credentials)
+            .set({ status: AppConnectionStatus.ACTIVE })
+            .where(
+              eq(credentials.dataSourceId, workspaceProvisionInfo.dataSourceId),
+            );
 
           await tx.insert(globalRegistryOutbox).values({
             tenantId: activeConn.tenantId,
@@ -606,19 +647,27 @@ export class ConnectorsService {
         });
       } catch (applyError) {
         this.logger.error(
-          `Failed to provision namespace for connection ${workspaceProvisionInfo.connectionId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
+          `Failed to provision namespace for connection ${workspaceProvisionInfo.dataSourceId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
           applyError instanceof Error ? applyError.stack : String(applyError),
         );
         try {
           await this.db.transaction(async (tx) => {
             if (workspaceProvisionInfo.createdAppConnection) {
               const [failedConn] = await tx
-                .update(appConnections)
+                .update(dataSources)
+                .set({ updatedAt: new Date() })
+                .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
+                .returning();
+
+              await tx
+                .update(credentials)
                 .set({ status: AppConnectionStatus.FAILED })
                 .where(
-                  eq(appConnections.id, workspaceProvisionInfo.connectionId),
-                )
-                .returning();
+                  eq(
+                    credentials.dataSourceId,
+                    workspaceProvisionInfo.dataSourceId,
+                  ),
+                );
 
               await tx.insert(globalRegistryOutbox).values({
                 tenantId: failedConn.tenantId,
@@ -673,24 +722,24 @@ export class ConnectorsService {
    */
   async deleteConnection(
     tenantId: string,
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<void> {
     // ── Step 1: Verify connection exists and lock it (global DB) ─────────────
     await this.db.transaction(async (tx) => {
       const [lockedConn] = await tx
-        .select({ id: appConnections.id })
-        .from(appConnections)
+        .select({ id: dataSources.id })
+        .from(dataSources)
         .where(
           and(
-            eq(appConnections.id, connectionId),
-            eq(appConnections.tenantId, tenantId),
+            eq(dataSources.id, dataSourceId),
+            eq(dataSources.tenantId, tenantId),
           ),
         )
         .for('update')
         .limit(1);
 
       if (!lockedConn) {
-        throw new NotFoundException(`Connection ${connectionId} not found`);
+        throw new NotFoundException(`Connection ${dataSourceId} not found`);
       }
     });
 
@@ -698,12 +747,12 @@ export class ConnectorsService {
     // GEM is data-plane data stored in the tenant control-plane public schema.
     try {
       const storageProfile =
-        await this.storageResolver.resolveStorageProfile(connectionId);
+        await this.storageResolver.resolveStorageProfile(dataSourceId);
 
       // Verify that the resolved storage profile belongs to the correct tenant
       if (storageProfile.tenantId !== tenantId) {
         throw new ForbiddenException(
-          `Connection ${connectionId} belongs to tenant ${storageProfile.tenantId}, ` +
+          `Connection ${dataSourceId} belongs to tenant ${storageProfile.tenantId}, ` +
             `but was accessed in the context of tenant ${tenantId}. ` +
             `Cross-tenant access is not permitted.`,
         );
@@ -716,8 +765,8 @@ export class ConnectorsService {
         .from(globalEntityMap)
         .where(
           or(
-            eq(globalEntityMap.sourceAppId, connectionId),
-            eq(globalEntityMap.destAppId, connectionId),
+            eq(globalEntityMap.sourceDataSourceId, dataSourceId),
+            eq(globalEntityMap.destDataSourceId, dataSourceId),
           ),
         )
         .limit(1);
@@ -748,12 +797,12 @@ export class ConnectorsService {
         (errMsg.includes('relation') && errMsg.includes('does not exist'))
       ) {
         this.logger.warn(
-          `Storage not fully provisioned for connection ${connectionId} — proceeding with deletion: ${errMsg}`,
+          `Storage not fully provisioned for connection ${dataSourceId} — proceeding with deletion: ${errMsg}`,
         );
       } else {
         // Transient failures or unexpected errors should abort deletion
         this.logger.error(
-          `Failed to check GEM for connection ${connectionId} — aborting deletion: ${errMsg}`,
+          `Failed to check GEM for connection ${dataSourceId} — aborting deletion: ${errMsg}`,
         );
         throw err;
       }
@@ -762,11 +811,11 @@ export class ConnectorsService {
     // ── Step 3: Delete the connection from global DB ──────────────────────────
     await this.db.transaction(async (tx) => {
       const [deletedConn] = await tx
-        .delete(appConnections)
+        .delete(dataSources)
         .where(
           and(
-            eq(appConnections.id, connectionId),
-            eq(appConnections.tenantId, tenantId),
+            eq(dataSources.id, dataSourceId),
+            eq(dataSources.tenantId, tenantId),
           ),
         )
         .returning();

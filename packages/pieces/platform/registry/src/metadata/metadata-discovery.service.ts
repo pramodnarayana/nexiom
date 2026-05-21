@@ -12,8 +12,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   connectorObjectProfiles,
-  safeAppConnectionColumns,
-  appConnections,
+  dataSources,
 } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import { TokenManagerService } from '@nexiom/credentials';
@@ -70,23 +69,45 @@ export class MetadataDiscoveryService implements OnModuleInit {
       Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_OBJECTS;
   }
 
-  onModuleInit() {
+  async onModuleInit() {
     this.logger.log(
       `MetadataDiscoveryService initialised — MAX_OBJECTS=${this.maxObjects}`,
     );
+    this.cleanupLegacyCacheKeys().catch(err => {
+      this.logger.error('Failed to cleanup legacy metadata cache keys', err);
+    });
+  }
+
+  private async cleanupLegacyCacheKeys(): Promise<void> {
+    const migrationFlag = 'migration:meta_cache_cleanup_datasource_id';
+    const alreadyRun = await this.redis.get(migrationFlag);
+    if (alreadyRun) return;
+
+    this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } while (cursor !== '0');
+    
+    await this.redis.set(migrationFlag, '1');
+    this.logger.log('Legacy metadata cache keys cleared.');
   }
 
   async describeObjects(
     orgId: string,
-    connectionId: string,
+    dataSourceId: string,
     limit = this.maxObjects,
     forceRefresh = false,
   ): Promise<ObjectDescriptor[]> {
     const effectiveLimit = Math.max(1, Math.min(limit, this.maxObjects));
-    const connection = await this.resolveConnection(orgId, connectionId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
-    const redisKey = `meta:objects:${connectionId}`;
+    const redisKey = `meta:objects:${dataSourceId}`;
 
     if (forceRefresh) {
       // Bust both caches so this request and all subsequent ones get fresh data.
@@ -104,7 +125,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
       const dbRows = await this.db
         .select()
         .from(connectorObjectProfiles)
-        .where(eq(connectorObjectProfiles.connectionId, connectionId));
+        .where(eq(connectorObjectProfiles.dataSourceId, dataSourceId));
 
       if (dbRows.length > 0) {
         const allFresh = dbRows.every(
@@ -149,14 +170,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
-    const credentials = await this.resolveCredentials(connectionId);
-    const objects = await this.fetchObjects(connection.appName, credentials);
+    const credentials = await this.resolveCredentials(dataSourceId);
+    const objects = await this.fetchObjects(dataSource.appName, credentials);
 
     // Emit a warning when the discovered count approaches the configured cap
     // (> 75%) so operators can raise METADATA_MAX_OBJECTS before objects are silently truncated.
     if (objects.length > this.maxObjects * 0.75) {
       this.logger.warn(
-        `describeObjects: connector "${connection.appName}" returned ${objects.length} objects — ` +
+        `describeObjects: connector "${dataSource.appName}" returned ${objects.length} objects — ` +
           `exceeds 75% of MAX_OBJECTS limit (${this.maxObjects}). ` +
           `Raise METADATA_MAX_OBJECTS env var if truncation is undesirable.`,
       );
@@ -169,7 +190,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     // describeFields call are preserved — descriptor and fields never overwrite
     // each other, they coexist under the same row.
     // Always run a transaction: upsert + targeted stale-delete when objects is
-    // non-empty; full delete for the connectionId when upstream returns nothing.
+    // non-empty; full delete for the dataSourceId when upstream returns nothing.
     // This prevents orphaned rows from lingering when a connector reports zero objects.
     await this.db.transaction(async (tx) => {
       if (objects.length > 0) {
@@ -179,7 +200,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
           .insert(connectorObjectProfiles)
           .values(
             objects.map((obj, idx) => ({
-              connectionId,
+              dataSourceId,
               objectName: obj.name,
               profile: {
                 descriptor: { label: obj.label, queryable: obj.queryable },
@@ -189,7 +210,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
           )
           .onConflictDoUpdate({
             target: [
-              connectorObjectProfiles.connectionId,
+              connectorObjectProfiles.dataSourceId,
               connectorObjectProfiles.objectName,
             ],
             // Merge existing profile (may contain fields from describeFields) with
@@ -207,7 +228,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
           .delete(connectorObjectProfiles)
           .where(
             and(
-              eq(connectorObjectProfiles.connectionId, connectionId),
+              eq(connectorObjectProfiles.dataSourceId, dataSourceId),
               notInArray(connectorObjectProfiles.objectName, currentNames),
             ),
           );
@@ -215,7 +236,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         // Upstream returned an empty list — purge all cached rows for this connection.
         await tx
           .delete(connectorObjectProfiles)
-          .where(eq(connectorObjectProfiles.connectionId, connectionId));
+          .where(eq(connectorObjectProfiles.dataSourceId, dataSourceId));
       }
     });
 
@@ -224,14 +245,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   async describeFields(
     orgId: string,
-    connectionId: string,
+    dataSourceId: string,
     objectName: string,
     forceRefresh = false,
   ): Promise<FieldDescriptor[]> {
-    const connection = await this.resolveConnection(orgId, connectionId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
-    const redisKey = `meta:fields:${connectionId}:${objectName}`;
+    const redisKey = `meta:fields:${dataSourceId}:${objectName}`;
 
     if (forceRefresh) {
       // Bust Redis so neither this request nor the DB-cache read below serves stale data.
@@ -250,7 +271,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         .from(connectorObjectProfiles)
         .where(
           and(
-            eq(connectorObjectProfiles.connectionId, connectionId),
+            eq(connectorObjectProfiles.dataSourceId, dataSourceId),
             eq(connectorObjectProfiles.objectName, objectName),
           ),
         )
@@ -276,15 +297,15 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
-    const credentials = await this.resolveCredentials(connectionId);
+    const credentials = await this.resolveCredentials(dataSourceId);
     const fields = await this.fetchFields(
-      connection.appName,
+      dataSource.appName,
       objectName,
       credentials,
     );
 
     this.logger.debug(
-      `[describeFields] ${connection.appName}:${objectName} → ${fields.length} fields: ` +
+      `[describeFields] ${dataSource.appName}:${objectName} → ${fields.length} fields: ` +
       fields.slice(0, 8).map((f) => f.name).join(', ') +
       (fields.length > 8 ? ` … (+${fields.length - 8} more)` : ''),
     );
@@ -298,13 +319,13 @@ export class MetadataDiscoveryService implements OnModuleInit {
     await this.db
       .insert(connectorObjectProfiles)
       .values({
-        connectionId,
+        dataSourceId,
         objectName,
         profile: { fields } as unknown as Record<string, unknown>,
       })
       .onConflictDoUpdate({
         target: [
-          connectorObjectProfiles.connectionId,
+          connectorObjectProfiles.dataSourceId,
           connectorObjectProfiles.objectName,
         ],
         set: {
@@ -318,14 +339,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   async describeRelatedObjects(
     orgId: string,
-    connectionId: string,
+    dataSourceId: string,
     objectName: string,
     forceRefresh = false,
   ): Promise<RelatedObjectDescriptor[]> {
-    const connection = await this.resolveConnection(orgId, connectionId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
-    const redisKey = `meta:related:${connectionId}:${objectName}`;
+    const redisKey = `meta:related:${dataSourceId}:${objectName}`;
     if (forceRefresh) {
       await this.redis.del(redisKey);
     } else {
@@ -336,21 +357,21 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 2. Live fetch (piece) ───────────────────────────────
-    const piece = this.pieceRegistry.getPiece(connection.appName);
+    const piece = this.pieceRegistry.getPiece(dataSource.appName);
     if (!piece?.describeRelatedObjects) {
       return [];
     }
 
-    const credentials = await this.resolveCredentials(connectionId);
+    const credentials = await this.resolveCredentials(dataSourceId);
 
     let related: RelatedObjectDescriptor[] = [];
     try {
       related = await piece.describeRelatedObjects(credentials, objectName);
-      
+
       // Hydrate object labels using the cached describeObjects registry to avoid
       // individual piece connectors having to perform N+1 queries.
       try {
-        const objects = await this.describeObjects(orgId, connectionId);
+        const objects = await this.describeObjects(orgId, dataSourceId);
         const objectMap = new Map(objects.map(o => [o.name, o.label]));
         for (const r of related) {
           const rAny = r as any;
@@ -372,7 +393,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
       );
     } catch (e) {
       this.logger.warn(
-        `Connector ${connection.appName} failed to describe related objects: ${String(e)}`,
+        `Connector ${dataSource.appName} failed to describe related objects: ${String(e)}`,
       );
     }
     return related;
@@ -380,26 +401,26 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   async describeConfig(
     orgId: string,
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<ConfigOption[]> {
-    const connection = await this.resolveConnection(orgId, connectionId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
-    const redisKey = `meta:config:${connectionId}`;
+    const redisKey = `meta:config:${dataSourceId}`;
     const cached = await this.redis.get(redisKey);
     if (cached) {
       return JSON.parse(cached) as ConfigOption[];
     }
 
     // ── 2. Live fetch ───────────────────────────────
-    const piece = this.pieceRegistry.getPiece(connection.appName);
+    const piece = this.pieceRegistry.getPiece(dataSource.appName);
     if (!piece) {
       throw new NotFoundException(
-        `Connector "${connection.appName}" not found.`,
+        `Connector "${dataSource.appName}" not found.`,
       );
     }
 
-    const credentials = await this.resolveCredentials(connectionId);
+    const credentials = await this.resolveCredentials(dataSourceId);
 
     let config: ConfigOption[] = [];
     if (piece.describeConfig) {
@@ -407,7 +428,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         config = await piece.describeConfig(credentials);
       } catch (e) {
         this.logger.warn(
-          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+          `Connector ${dataSource.appName} failed to describe config: ${String(e)}`,
         );
         return config; // Return empty on describe failure
       }
@@ -420,7 +441,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         );
       } catch (e) {
         this.logger.warn(
-          `Failed to cache config for ${connection.appName}: ${String(e)}`,
+          `Failed to cache config for ${dataSource.appName}: ${String(e)}`,
         );
       }
     }
@@ -432,23 +453,23 @@ export class MetadataDiscoveryService implements OnModuleInit {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /** Fetches the connection row, enforcing org ownership. */
-  private async resolveConnection(orgId: string, connectionId: string) {
-    const [connection] = await this.db
-      .select(safeAppConnectionColumns)
-      .from(appConnections)
+  /** Fetches the data source row, enforcing org ownership. */
+  private async resolveDataSource(orgId: string, dataSourceId: string) {
+    const [dataSource] = await this.db
+      .select({ appName: dataSources.appName })
+      .from(dataSources)
       .where(
         and(
-          eq(appConnections.id, connectionId),
-          eq(appConnections.tenantId, orgId),
+          eq(dataSources.id, dataSourceId),
+          eq(dataSources.tenantId, orgId),
         ),
       )
       .limit(1);
 
-    if (!connection) {
-      throw new NotFoundException(`Connection ${connectionId} not found.`);
+    if (!dataSource) {
+      throw new NotFoundException(`Data source ${dataSourceId} not found.`);
     }
-    return connection;
+    return dataSource;
   }
 
   /**
@@ -458,14 +479,14 @@ export class MetadataDiscoveryService implements OnModuleInit {
    * service does not duplicate that logic.
    */
   private async resolveCredentials(
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<Record<string, unknown>> {
     try {
       // TokenManagerService.getValidCredentials checks expiresAt with a 5-minute
       // buffer, acquires a Redis lock, calls the vendor token endpoint if needed,
       // and persists the refreshed token — all in one call.
       const blob: OAuthCredentialBlob =
-        await this.tokenManager.getValidCredentials(connectionId);
+        await this.tokenManager.getValidCredentials(dataSourceId);
 
       // Layer order (last write wins):
       //   1. All top-level blob scalars (clientId, clientSecret, environment, …)
@@ -485,7 +506,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
       if (e instanceof InternalServerErrorException) throw e;
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.error(
-        `Failed to resolve credentials for connection ${connectionId}: ${msg}`,
+        `Failed to resolve credentials for connection ${dataSourceId}: ${msg}`,
       );
       throw new InternalServerErrorException(
         'Failed to retrieve connection credentials.',

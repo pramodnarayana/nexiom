@@ -30,7 +30,8 @@ import type { AnyProperty } from '@nexiom/piece-framework';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import {
-  appConnections,
+  dataSources,
+  credentials,
   AppConnectionStatus,
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -341,8 +342,8 @@ export class ConnectorsController {
     }
 
     const whereClause = and(
-      eq(appConnections.tenantId, tenantId),
-      eq(appConnections.status, AppConnectionStatus.ACTIVE),
+      eq(dataSources.tenantId, tenantId),
+      eq(credentials.status, AppConnectionStatus.ACTIVE),
     );
 
     let activeConnections: {
@@ -365,28 +366,30 @@ export class ConnectorsController {
       [activeConnections, [countResult]] = await Promise.all([
         this.db
           .select({
-            id: appConnections.id,
-            appName: appConnections.appName,
-            externalId: appConnections.externalId,
-            displayName: appConnections.displayName,
-            authType: appConnections.authType,
-            status: appConnections.status,
-            envType: appConnections.envType,
-            metadata: appConnections.metadata,
-            expiresAt: appConnections.expiresAt,
-            createdAt: appConnections.createdAt,
-            updatedAt: appConnections.updatedAt,
-            value: appConnections.value,
+            id: dataSources.id,
+            appName: dataSources.appName,
+            externalId: dataSources.externalId,
+            displayName: dataSources.displayName,
+            authType: credentials.authType,
+            status: credentials.status,
+            envType: dataSources.envType,
+            metadata: dataSources.metadata,
+            expiresAt: credentials.expiresAt,
+            createdAt: dataSources.createdAt,
+            updatedAt: dataSources.updatedAt,
+            value: credentials.value,
           })
-          .from(appConnections)
+          .from(dataSources)
+          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
           .where(whereClause)
-          .orderBy(desc(appConnections.createdAt), desc(appConnections.id))
+          .orderBy(desc(dataSources.createdAt), desc(dataSources.id))
           .limit(limit)
           .offset(offset),
 
         this.db
           .select({ count: count() })
-          .from(appConnections)
+          .from(dataSources)
+          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
           .where(whereClause),
       ]);
     } catch (error) {
@@ -461,7 +464,7 @@ export class ConnectorsController {
   @Get('active/:id/credentials')
   async getConnectionCredentials(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('id', ParseUUIDPipe) connectionId: string,
+    @Param('id', ParseUUIDPipe) dataSourceId: string,
   ) {
     const tenantId = ctx.user?.organizationId;
     if (!tenantId || !ctx.user?.id) {
@@ -472,14 +475,15 @@ export class ConnectorsController {
 
     const [connection] = await this.db
       .select({
-        id: appConnections.id,
-        value: appConnections.value,
+        id: dataSources.id,
+        value: credentials.value,
       })
-      .from(appConnections)
+      .from(dataSources)
+      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
       .where(
         and(
-          eq(appConnections.id, connectionId),
-          eq(appConnections.tenantId, tenantId),
+          eq(dataSources.id, dataSourceId),
+          eq(dataSources.tenantId, tenantId),
         ),
       )
       .limit(1);
@@ -533,7 +537,7 @@ export class ConnectorsController {
   }
 
   private async decryptConnectionValue(
-    connectionId: string,
+    dataSourceId: string,
     encryptedValue: string,
     userId: string | undefined,
     tenantId: string,
@@ -547,18 +551,18 @@ export class ConnectorsController {
       const { clientSecret: _clientSecret, ...creds } =
         parseConnectionCredentials(decrypted);
       this.logger.log({
-        message: `Credentials accessed for connection ${connectionId}`,
+        message: `Credentials accessed for connection ${dataSourceId}`,
         action: 'ACCESS_CREDENTIALS',
         userId,
         tenantId,
-        connectionId,
+        dataSourceId,
         timestamp: new Date().toISOString(),
       });
       return creds;
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       this.logger.error(
-        `Failed to decrypt credentials for connection ${connectionId}: ${errMsg}`,
+        `Failed to decrypt credentials for connection ${dataSourceId}: ${errMsg}`,
       );
       throw new InternalServerErrorException(
         'Failed to decrypt connection credentials',
@@ -766,7 +770,7 @@ export class ConnectorsController {
     }
 
     this.logger.log(
-      `[OAuth Exchange] RECEIVED: providerName=${originalProviderName} → resolved=${body.providerName}, alias appProfile=${aliasAppProfile ?? 'none'}, displayName="${body.displayName}", connectionId=${body.connectionId || 'new'}`,
+      `[OAuth Exchange] RECEIVED: providerName=${originalProviderName} → resolved=${body.providerName}, alias appProfile=${aliasAppProfile ?? 'none'}, displayName="${body.displayName}", dataSourceId=${body.dataSourceId || 'new'}`,
     );
 
     const tenantId = ctx.user?.organizationId;
@@ -784,22 +788,22 @@ export class ConnectorsController {
       );
     }
     let externalId = toKebabSlug(body.providerName, trimmedDisplayName);
-    if (body.connectionId) {
+    if (body.dataSourceId) {
       try {
         const [existing] = await this.db
-          .select({ externalId: appConnections.externalId })
-          .from(appConnections)
+          .select({ externalId: dataSources.externalId })
+          .from(dataSources)
           .where(
             and(
-              eq(appConnections.id, body.connectionId),
-              eq(appConnections.tenantId, tenantId),
-              eq(appConnections.appName, body.providerName),
+              eq(dataSources.id, body.dataSourceId),
+              eq(dataSources.tenantId, tenantId),
+              eq(dataSources.appName, body.providerName),
             ),
           );
 
         if (!existing) {
           throw new NotFoundException(
-            `Connection ${body.connectionId} not found for provider "${body.providerName}"`,
+            `Connection ${body.dataSourceId} not found for provider "${body.providerName}"`,
           );
         }
 
@@ -811,7 +815,7 @@ export class ConnectorsController {
           throw err;
         }
         this.logger.error(
-          `Could not find existing connection ${body.connectionId} to inherit externalId: ${(err as Error).message}`,
+          `Could not find existing connection ${body.dataSourceId} to inherit externalId: ${(err as Error).message}`,
         );
         throw new BadRequestException(
           'Database error verifying existing connection for reconnect',
@@ -821,9 +825,9 @@ export class ConnectorsController {
 
     // Idempotency check: React StrictMode or double-clicks can cause this to fire twice rapidly.
     // Atomically claim the idempotency key to prevent TOCTOU races between duplicate requests.
-    // Use the explicit connectionId if available to scope updates uniquely.
-    const idempotencySuffix = body.connectionId
-      ? `update:${body.connectionId}:${body.code}`
+    // Use the explicit dataSourceId if available to scope updates uniquely.
+    const idempotencySuffix = body.dataSourceId
+      ? `update:${body.dataSourceId}:${body.code}`
       : `create:${body.code}`;
     const idempotencyKey = `oauth:idempotency:${tenantId}:${idempotencySuffix}`;
     const acquired = await this.redis.set(
@@ -928,13 +932,13 @@ export class ConnectorsController {
     validateVendorParams(authProps, decodedState.vendorParams);
 
     // For reconnect flows, clientSecret may not be provided (browser never received it).
-    // If connectionId is present, resolve the stored credentials server-side.
+    // If dataSourceId is present, resolve the stored credentials server-side.
     const { effectiveClientId, effectiveClientSecret } =
       await this.resolveCredentialsForExchange(
         tenantId,
         body.clientId,
         body.clientSecret,
-        body.connectionId,
+        body.dataSourceId,
       );
 
     // Exchange the code for actual OAuth tokens
@@ -1068,7 +1072,7 @@ export class ConnectorsController {
       externalId,
       encryptedValue,
       expiresAt,
-      body.connectionId,
+      body.dataSourceId,
       resolvedEnvType,
       metadata,
     );
@@ -1096,7 +1100,7 @@ export class ConnectorsController {
     tenantId: string,
     requestClientId: string | undefined,
     requestClientSecret: string | undefined,
-    connectionId: string | undefined,
+    dataSourceId: string | undefined,
   ): Promise<{ effectiveClientId: string; effectiveClientSecret: string }> {
     // If a new secret was explicitly supplied, use it as-is.
     if (requestClientSecret) {
@@ -1106,24 +1110,25 @@ export class ConnectorsController {
       };
     }
 
-    // No secret from the browser — resolve the stored credential from the connectionId.
-    if (connectionId) {
+    // No secret from the browser — resolve the stored credential from the dataSourceId.
+    if (dataSourceId) {
       let row: { value: string } | undefined;
       try {
         const [existing] = await this.db
-          .select({ value: appConnections.value })
-          .from(appConnections)
+          .select({ value: credentials.value })
+          .from(dataSources)
+          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
           .where(
             and(
-              eq(appConnections.id, connectionId),
-              eq(appConnections.tenantId, tenantId),
+              eq(dataSources.id, dataSourceId),
+              eq(dataSources.tenantId, tenantId),
             ),
           )
           .limit(1);
         row = existing;
       } catch (err) {
         this.logger.error(
-          `resolveCredentialsForExchange: DB error for ${connectionId}: ${(err as Error).message}`,
+          `resolveCredentialsForExchange: DB error for ${dataSourceId}: ${(err as Error).message}`,
         );
         throw new InternalServerErrorException(
           'Failed to load stored credentials for reconnect',
@@ -1132,7 +1137,7 @@ export class ConnectorsController {
 
       if (!row?.value) {
         throw new NotFoundException(
-          `Stored credentials not found for connection ${connectionId}`,
+          `Stored credentials not found for connection ${dataSourceId}`,
         );
       }
 
@@ -1142,7 +1147,7 @@ export class ConnectorsController {
         stored = parseConnectionCredentials(decrypted);
       } catch (err) {
         this.logger.error(
-          `resolveCredentialsForExchange: failed to decrypt/parse for ${connectionId}: ${(err as Error).message}`,
+          `resolveCredentialsForExchange: failed to decrypt/parse for ${dataSourceId}: ${(err as Error).message}`,
         );
         throw new InternalServerErrorException(
           'Failed to decrypt stored credentials for reconnect',
@@ -1151,7 +1156,7 @@ export class ConnectorsController {
 
       if (!stored.clientSecret) {
         throw new BadRequestException(
-          `No stored client secret found for connection ${connectionId}. Please provide a new client secret.`,
+          `No stored client secret found for connection ${dataSourceId}. Please provide a new client secret.`,
         );
       }
 
@@ -1161,7 +1166,7 @@ export class ConnectorsController {
       };
     }
 
-    // No connectionId and no secret — pass through whatever was provided (may fail at token exchange).
+    // No dataSourceId and no secret — pass through whatever was provided (may fail at token exchange).
     return {
       effectiveClientId: requestClientId ?? '',
       effectiveClientSecret: requestClientSecret ?? '',
@@ -1202,13 +1207,13 @@ export class ConnectorsController {
     externalId: string,
     encryptedValue: string,
     expiresAt: Date,
-    connectionId?: string,
+    dataSourceId?: string,
     envType?: 'PRODUCTION' | 'SANDBOX',
     metadata?: Record<string, unknown>,
   ) {
     try {
       await this.connectorsService.storeOAuthConnection({
-        id: connectionId,
+        id: dataSourceId,
         tenantId,
         providerName,
         externalId,
@@ -1236,11 +1241,11 @@ export class ConnectorsController {
     }
   }
 
-  @Delete(':connectionId')
+  @Delete(':dataSourceId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteConnection(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
   ) {
     const tenantId = ctx.user?.organizationId;
     if (!tenantId || !ctx.user?.id) {
@@ -1251,13 +1256,13 @@ export class ConnectorsController {
       await this.assertAdminOrOwner(ctx.user.id, tenantId);
 
       // Validates RESTRICT constraints on global_entity_map before deleting
-      await this.connectorsService.deleteConnection(tenantId, connectionId);
+      await this.connectorsService.deleteConnection(tenantId, dataSourceId);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
       }
       this.logger.error(
-        `Failed to delete connection ${connectionId} for tenant ${tenantId}`,
+        `Failed to delete connection ${dataSourceId} for tenant ${tenantId}`,
         error instanceof Error ? error.stack : String(error),
       );
       throw new InternalServerErrorException(

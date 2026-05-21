@@ -30,15 +30,17 @@ const VALID_UUID_UNKNOWN = '00000000-0000-0000-0000-000000000999';
 function makeDbMock(row: Record<string, unknown> | null) {
   return {
     select: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(row ? [row] : []),
   };
 }
 
-function makeExecutionContext(connectionId: string) {
+function makeExecutionContext(dataSourceId: string) {
   const setHeaderMock = vi.fn();
-  const requestObj: Record<string, unknown> = { params: { connectionId } };
+  const requestObj: Record<string, unknown> = { params: { dataSourceId } };
   const ctx = {
     switchToHttp: () => ({
       getRequest: () => requestObj,
@@ -202,7 +204,7 @@ describe('TenantRateLimitGuard', () => {
 
   // ── UUID validation (probe protection) ─────────────────────────────────────
 
-  it('throws BadRequestException for a malformed connectionId without hitting the DB', async () => {
+  it('throws BadRequestException for a malformed dataSourceId without hitting the DB', async () => {
     await setup(null); // DB would return nothing, but it must not be queried
     const { ctx } = makeExecutionContext('not-a-uuid');
 
@@ -260,7 +262,7 @@ describe('TenantRateLimitGuard', () => {
 
   it('serves neg-cache hit from Redis without querying the DB', async () => {
     await setup(null); // DB would return no rows, but must not be queried
-    // Simulate a warm negative cache entry for this connectionId
+    // Simulate a warm negative cache entry for this dataSourceId
     redisMock.exists.mockResolvedValue(1);
     const { ctx } = makeExecutionContext(VALID_UUID_UNKNOWN);
 

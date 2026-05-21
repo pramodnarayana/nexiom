@@ -39,8 +39,8 @@ export type {
   AbacConditions,
 } from "@nexiom/database";
 
-// Engine schema — connection table (single-table Activepieces model)
-export { appConnections } from "@nexiom/database";
+// Engine schema — decoupled model (separate dataSources and credentials tables/entities)
+export { dataSources, credentials } from "@nexiom/database";
 
 // Piece registry
 export { pieces } from "@nexiom/database";
@@ -51,7 +51,7 @@ export { tenantStorageRegistry } from "@nexiom/database";
 // Workspaces — logical folders grouping connections per team/environment
 export {
   uiWorkspaces,
-  uiWorkspaceConnections,
+  uiWorkspaceDataSources,
   envTypeEnum,
 } from "@nexiom/database";
 

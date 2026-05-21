@@ -27,7 +27,7 @@ export interface FullTrace {
   layers: LayerDetail[];
   inboundGateway: {
     id: string;
-    connectionId: string;
+    dataSourceId: string;
     objectType: string | null;
     request: unknown;
     response: unknown;

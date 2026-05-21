@@ -22,8 +22,8 @@ export interface CanonicalMappingEntry {
 }
 
 export interface MultiObjectMappingEditorProps {
-  srcConnectionId: string;
-  destConnectionId: string;
+  srcDataSourceId: string;
+  destDataSourceId: string;
   /**
    * The primary source object defined on the stitch (e.g. "Account").
    * This tab is always present and cannot be removed.
@@ -54,8 +54,8 @@ export interface MultiObjectMappingEditorProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MultiObjectMappingEditor({
-  srcConnectionId,
-  destConnectionId,
+  srcDataSourceId,
+  destDataSourceId,
   primaryObject,
   targetObject,
   initialMappings,
@@ -114,7 +114,7 @@ export function MultiObjectMappingEditor({
     }
     setLoadingObjects(true);
     try {
-      const objects = await listObjects(srcConnectionId, { refresh: forceRefresh || isStale });
+      const objects = await listObjects(srcDataSourceId, { refresh: forceRefresh || isStale });
       setAvailableObjects(objects);
       setAvailableObjectsTimestamp(now);
       setShowObjectPicker(true);
@@ -301,9 +301,9 @@ export function MultiObjectMappingEditor({
                 </p>
               )}
               <MappingCanvas
-                srcConnectionId={srcConnectionId}
+                srcDataSourceId={srcDataSourceId}
                 sourceObject={entry.sourceCanonical}
-                destConnectionId={destConnectionId}
+                destDataSourceId={destDataSourceId}
                 targetObject={targetObject}
                 initialRules={entry.mappingRules}
                 initialConditions={isPrimary ? conditions : []}

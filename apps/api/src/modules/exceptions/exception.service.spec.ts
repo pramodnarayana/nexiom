@@ -48,8 +48,8 @@ const UPDATED_AT = new Date('2026-01-02T00:00:00.000Z');
 const MOCK_STITCH = {
   id: STITCH_ID,
   orgId: ORG_ID,
-  srcConnectionId: SRC_CONN,
-  destConnectionId: DEST_CONN,
+  srcDataSourceId: SRC_CONN,
+  destDataSourceId: DEST_CONN,
 };
 
 const MOCK_OUTBOUND_ROW = {
@@ -351,8 +351,8 @@ describe('ExceptionService', () => {
         expect.objectContaining({
           traceId: TRACE_ID,
           routeId: STITCH_ID,
-          srcConnectionId: SRC_CONN,
-          destConnectionId: DEST_CONN,
+          srcDataSourceId: SRC_CONN,
+          destDataSourceId: DEST_CONN,
           hydratedPayload: { amount: 100 },
         }),
       );

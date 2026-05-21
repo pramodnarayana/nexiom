@@ -5,7 +5,7 @@ import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
-  appConnections,
+  dataSources,
 } from '@nexiom/database';
 import { sql, eq } from 'drizzle-orm';
 import { SchemaPlan } from '@nexiom/dbmanager';
@@ -42,7 +42,7 @@ export interface TriggerRunParams {
   propsValue: Record<string, unknown>;
   tenantId: string;
   workspaceId: string;
-  connectionId: string;
+  dataSourceId: string;
 }
 
 export interface WebhookRunParams extends TriggerRunParams {
@@ -155,7 +155,7 @@ export class TriggerExecutorService {
     let registeredPublication = false;
     try {
       const resolvedSchemaName = await this.storageResolver.resolveSchemaName(
-        params.connectionId,
+        params.dataSourceId,
       );
       assertValidSchemaName(resolvedSchemaName);
 
@@ -189,9 +189,9 @@ export class TriggerExecutorService {
 
       // 4. Persist the provisioned schemaPlan only once onEnable has succeeded.
       await this.db
-        .update(appConnections)
+        .update(dataSources)
         .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-        .where(eq(appConnections.id, params.connectionId));
+        .where(eq(dataSources.id, params.dataSourceId));
       wroteRegistryRow = true;
 
       this.logger.log('onEnable completed', {
@@ -208,9 +208,9 @@ export class TriggerExecutorService {
       if (wroteRegistryRow) {
         try {
           await this.db
-            .update(appConnections)
+            .update(dataSources)
             .set({ schemaPlan: SchemaPlan.NAMESPACE_ONLY })
-            .where(eq(appConnections.id, params.connectionId));
+            .where(eq(dataSources.id, params.dataSourceId));
         } catch (revertErr) {
           this.logger.error(
             'Failed to revert schemaPlan after onEnable failure',
@@ -230,7 +230,7 @@ export class TriggerExecutorService {
       if (registeredPublication) {
         try {
           const resolvedSchemaName =
-            await this.storageResolver.resolveSchemaName(params.connectionId);
+            await this.storageResolver.resolveSchemaName(params.dataSourceId);
           assertValidSchemaName(resolvedSchemaName);
           await this.db.execute(sql`
             DO $$
@@ -251,7 +251,7 @@ export class TriggerExecutorService {
             'Failed to revert publication registration after onEnable failure',
             {
               workspaceId: params.workspaceId,
-              connectionId: params.connectionId,
+              dataSourceId: params.dataSourceId,
               error:
                 pubRevertErr instanceof Error
                   ? pubRevertErr.message
@@ -329,7 +329,7 @@ export class TriggerExecutorService {
     }
 
     const schemaName = await this.storageResolver.resolveSchemaName(
-      params.connectionId,
+      params.dataSourceId,
     );
 
     let inserted = 0;
@@ -345,7 +345,7 @@ export class TriggerExecutorService {
 
       try {
         const didInsert = await this.insertGatewayRow(schemaName, {
-          connectionId: params.connectionId,
+          dataSourceId: params.dataSourceId,
           objectType: params.objectType,
           payload: record,
           extReqId: sourceEventId,
@@ -430,7 +430,7 @@ export class TriggerExecutorService {
   private async insertGatewayRow(
     schemaName: string,
     row: {
-      connectionId: string;
+      dataSourceId: string;
       objectType: string | undefined;
       payload: unknown;
       extReqId: string;
@@ -452,7 +452,7 @@ export class TriggerExecutorService {
         .insert(inboundGateway)
         .values({
           traceId: randomUUID(),
-          connectionId: row.connectionId,
+          dataSourceId: row.dataSourceId,
           extReqId: row.extReqId,
           objectType: row.objectType ?? null,
           request: row.payload,
@@ -465,10 +465,10 @@ export class TriggerExecutorService {
           .insert(inboundOutbox)
           .values({
             traceId: result[0].traceId,
-            connectionId: row.connectionId,
+            dataSourceId: row.dataSourceId,
           })
           .onConflictDoNothing({
-            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+            target: [inboundOutbox.traceId, inboundOutbox.dataSourceId],
           });
         didInsert = true;
       }
@@ -488,7 +488,7 @@ export class TriggerExecutorService {
       triggerName: params.triggerName,
       tenantId: params.tenantId,
       workspaceId: params.workspaceId,
-      connectionId: params.connectionId,
+      dataSourceId: params.dataSourceId,
       objectType: params.objectType,
       propsValue: params.propsValue,
       auth: params.auth, // required for credential reconstruction on retry
