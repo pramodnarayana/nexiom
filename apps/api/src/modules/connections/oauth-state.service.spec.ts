@@ -9,8 +9,10 @@ describe('OauthStateService', () => {
   let service: OauthStateService;
   const mockTenantId = 'tenant-123';
   const mockProvider = 'mock-piece';
+  let redisStore: Map<string, string>;
 
   beforeEach(async () => {
+    redisStore = new Map<string, string>();
     const mockConfigService = {
       get: vi.fn().mockImplementation((key: string) => {
         if (key === 'JWT_SECRET') return 'test-master-secret';
@@ -20,22 +22,32 @@ describe('OauthStateService', () => {
       }),
     };
 
+    const mockRedis = {
+      set: vi.fn().mockImplementation((key: string, value: string) => {
+        redisStore.set(key, value);
+        return Promise.resolve('OK');
+      }),
+      get: vi.fn().mockImplementation((key: string) => {
+        return Promise.resolve(redisStore.get(key) ?? null);
+      }),
+      getdel: vi.fn().mockImplementation((key: string) => {
+        const val = redisStore.get(key) ?? null;
+        redisStore.delete(key);
+        return Promise.resolve(val);
+      }),
+      del: vi.fn().mockImplementation((key: string) => {
+        redisStore.delete(key);
+        return Promise.resolve(1);
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OauthStateService,
         { provide: ConfigService, useValue: mockConfigService },
         {
           provide: REDIS_CLIENT,
-          useValue: {
-            set: vi.fn(),
-            get: vi
-              .fn()
-              .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
-            getdel: vi
-              .fn()
-              .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
-            del: vi.fn(),
-          },
+          useValue: mockRedis,
         },
       ],
     }).compile();
@@ -53,22 +65,33 @@ describe('OauthStateService', () => {
         }),
       };
 
+      const testStore = new Map<string, string>();
+      const explicitRedis = {
+        set: vi.fn().mockImplementation((key: string, value: string) => {
+          testStore.set(key, value);
+          return Promise.resolve('OK');
+        }),
+        get: vi.fn().mockImplementation((key: string) => {
+          return Promise.resolve(testStore.get(key) ?? null);
+        }),
+        getdel: vi.fn().mockImplementation((key: string) => {
+          const val = testStore.get(key) ?? null;
+          testStore.delete(key);
+          return Promise.resolve(val);
+        }),
+        del: vi.fn().mockImplementation((key: string) => {
+          testStore.delete(key);
+          return Promise.resolve(1);
+        }),
+      };
+
       const explicitModule = await Test.createTestingModule({
         providers: [
           OauthStateService,
           { provide: ConfigService, useValue: explicitConfigService },
           {
             provide: REDIS_CLIENT,
-            useValue: {
-              set: vi.fn(),
-              get: vi
-                .fn()
-                .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
-              getdel: vi
-                .fn()
-                .mockResolvedValue(JSON.stringify({ realmId: 'test-123' })),
-              del: vi.fn(),
-            },
+            useValue: explicitRedis,
           },
         ],
       }).compile();
@@ -152,6 +175,45 @@ describe('OauthStateService', () => {
       expect(result).toEqual({
         tenantId: mockTenantId,
         vendorParams: { realmId: 'test-123' },
+        metadata: {},
+      });
+    });
+
+    it('should successfully verify and extract vendorParams and metadata separately', async () => {
+      const validToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+        { realmId: 'test-123' },
+        { appProfile: 'custom' },
+      );
+
+      const result = await service.verifyState(validToken, mockProvider);
+      expect(result).toEqual({
+        tenantId: mockTenantId,
+        vendorParams: { realmId: 'test-123' },
+        metadata: { appProfile: 'custom' },
+      });
+    });
+
+    it('should be backward-compatible with old state objects stored in Redis', async () => {
+      const stateToken = await service.generateState(
+        mockTenantId,
+        mockProvider,
+      );
+      const decoded = jwt.decode(stateToken) as jwt.JwtPayload;
+      // Simulate legacy state discovery: overwrite the Redis entry created by generateState
+      // with an old-format object (vendorParams directly in the value, not wrapped in { vendorParams, metadata })
+      // to verify that verifyState() handles pre-migration state tokens correctly.
+      redisStore.set(
+        `oauth:state:${decoded.stateId}`,
+        JSON.stringify({ realmId: 'old-123' }),
+      );
+
+      const result = await service.verifyState(stateToken, mockProvider);
+      expect(result).toEqual({
+        tenantId: mockTenantId,
+        vendorParams: { realmId: 'old-123' },
+        metadata: undefined,
       });
     });
 
@@ -160,12 +222,6 @@ describe('OauthStateService', () => {
         mockTenantId,
         mockProvider,
       );
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const redisGetdelMock = vi.spyOn((service as any).redis, 'getdel');
-      redisGetdelMock
-        .mockResolvedValueOnce(JSON.stringify({ realmId: 'test-123' }))
-        .mockResolvedValueOnce(null);
 
       // First verification succeeds
       const firstResult = await service.verifyState(validToken, mockProvider);

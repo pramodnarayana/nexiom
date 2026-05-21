@@ -17,6 +17,8 @@ vi.mock("@nexiom/engine", async (importOriginal) => {
   };
 });
 
+import { ApplicationLoaderService } from "@nexiom/engine";
+
 describe("FanOutService", () => {
   const createDbSelectMock = (
     stitches: any[],
@@ -30,7 +32,7 @@ describe("FanOutService", () => {
             {
               appName: "testApp",
               tenantId: "org_1",
-              metadata: { appProfile: "" },
+              metadata: { appProfile: "online" },
             },
           ]),
           {
@@ -96,7 +98,11 @@ describe("FanOutService", () => {
     db = {
       query: {
         appConnections: {
-          findFirst: vi.fn().mockResolvedValue({ tenantId: "tenant_1" }),
+          findFirst: vi.fn().mockResolvedValue({
+            tenantId: "tenant_1",
+            appName: "testApp",
+            metadata: { appProfile: "online" },
+          }),
         },
       },
       select: vi.fn().mockImplementation(
@@ -165,6 +171,10 @@ describe("FanOutService", () => {
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
+        {
+          provide: ApplicationLoaderService,
+          useValue: { load: vi.fn().mockResolvedValue({}) },
+        },
         {
           provide: TargetBuilderService,
           useValue: {
@@ -525,7 +535,7 @@ describe("FanOutService", () => {
             {
               appName: "testApp",
               tenantId: "org_1",
-              metadata: { appProfile: "" },
+              metadata: { appProfile: "online" },
             },
           ]),
           {
@@ -630,7 +640,7 @@ describe("FanOutService", () => {
             {
               appName: "testApp",
               tenantId: "org_1",
-              metadata: { appProfile: "" },
+              metadata: { appProfile: "online" },
             },
           ]),
           {

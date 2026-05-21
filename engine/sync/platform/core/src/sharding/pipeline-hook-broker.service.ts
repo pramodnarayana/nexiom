@@ -21,11 +21,11 @@ export class PipelineHookBrokerService {
   constructor(private readonly loader: ApplicationLoaderService) {}
 
   /**
-   * Derives the shard name from appName + appProfile.
-   * Convention: "salesforce-revenova", "salesforce-default", etc.
+   * Derives the shard path from appName + appProfile.
+   * Convention: "salesforce/revenova", "quickbooks/online", etc.
    */
   private shardName(appName: string, appProfile: string): string {
-    return `${appName}-${appProfile}`;
+    return `${appName}/${appProfile}`;
   }
 
   /**
@@ -79,6 +79,9 @@ export class PipelineHookBrokerService {
     data: Record<string, unknown>,
   ): Promise<void> {
     const shard = await this.loader.load(this.shardName(appName, appProfile));
+    if (!shard.writeNormalized) {
+      return Promise.resolve();
+    }
     this.logger.debug(
       { event: 'hook.writeNormalized', appName, appProfile, normalizedEntityType },
       'Delegating writeNormalized to application shard',
@@ -99,6 +102,9 @@ export class PipelineHookBrokerService {
     srcEntityId: string,
   ): Promise<Record<string, unknown>> {
     const shard = await this.loader.load(this.shardName(appName, appProfile));
+    if (!shard.buildTarget) {
+      return Promise.resolve({});
+    }
     this.logger.debug(
       { event: 'hook.buildTarget', appName, appProfile, normalizedEntityType },
       'Delegating buildTarget to application shard',
@@ -112,17 +118,69 @@ export class PipelineHookBrokerService {
    */
   async provisionDomain(
     appName: string,
+    appProfile: string,
     db: unknown,
     schemaName: string,
   ): Promise<void> {
-    // For provisioning, the shard name is appName-appName (the domain shard)
-    // e.g. "salesforce-salesforce" which owns tms_carrier, tms_tp, etc.
-    const shard = await this.loader.load(this.shardName(appName, appName));
+    const shard = await this.loader.load(this.shardName(appName, appProfile));
+    if (!shard.provisionDomain) {
+      return Promise.resolve();
+    }
     this.logger.log(
-      { event: 'hook.provisionDomain', appName, schemaName },
+      { event: 'hook.provisionDomain', appName, appProfile, schemaName },
       'Delegating provisionDomain to application shard',
     );
     return shard.provisionDomain(db, schemaName);
+  }
+
+  /**
+   * Optional — Prepare Update payload.
+   * Called before L5 executeAction on UPDATE operations. Allows the application
+   * to inject destination-specific IDs or SyncTokens into the payload.
+   */
+  async prepareUpdate(
+    appName: string,
+    appProfile: string,
+    payload: Record<string, any>,
+    destId?: string,
+    destState?: Record<string, any>,
+  ): Promise<Record<string, any>> {
+    let shard: ApplicationShardModule;
+    try {
+      shard = await this.loader.load(this.shardName(appName, appProfile));
+    } catch (loadErr) {
+      this.logger.warn(
+        { event: 'hook.prepareUpdate.loader_error', appName, appProfile, err: loadErr instanceof Error ? loadErr.message : String(loadErr) },
+        `[DEBUG] Failed to load shard ${appName}/${appProfile}. Error: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`
+      );
+      // Only return raw payload if the shard is genuinely missing (not found error).
+      // For other loader failures (syntax errors, missing dependencies), rethrow to surface the issue.
+      const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+      const errCode = (loadErr as any)?.code;
+      if (errMsg.includes('not found') || errMsg.includes('Cannot find module') || errCode === 'ENOENT' || errMsg.includes('ENOENT')) {
+        this.logger.warn(
+          { event: 'hook.prepareUpdate.shard_not_found', appName, appProfile },
+          `Shard ${appName}/${appProfile} not found, returning raw payload (no prepareUpdate logic available)`
+        );
+        return payload;
+      }
+      // Real failures (syntax, import errors) should propagate
+      throw loadErr;
+    }
+
+    if (!shard.prepareUpdate) {
+      this.logger.warn(
+        { event: 'hook.prepareUpdate.missing_export', appName, appProfile, exportedKeys: Object.keys(shard) },
+        `[DEBUG] Shard ${appName}/${appProfile} loaded successfully, but 'prepareUpdate' export is missing. Returning raw payload.`
+      );
+      return payload;
+    }
+
+    this.logger.debug(
+      { event: 'hook.prepareUpdate', appName, appProfile, destId },
+      'Delegating prepareUpdate to application shard',
+    );
+    return shard.prepareUpdate(payload, destId, destState);
   }
 
   /**

@@ -13,6 +13,7 @@ describe('DataExplorerService', () => {
   let db: any;
   let storageResolver: any;
   let logger: any;
+  let dbManager: any;
 
   // Helper to mock db.select() for paginated queries
   const mockPageSelect = (rows: any[], count: number, hasWhere: boolean) => {
@@ -91,6 +92,39 @@ describe('DataExplorerService', () => {
       }),
     };
 
+    dbManager = {
+      getTenantDb: vi.fn().mockResolvedValue({
+        transaction: vi
+          .fn()
+          .mockImplementationOnce(async (cb: any) => {
+            // First call: data rows query
+            const tx = {
+              execute: vi.fn(),
+              select: vi.fn().mockReturnThis(),
+              from: vi.fn().mockReturnThis(),
+              where: vi.fn().mockReturnThis(),
+              orderBy: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              offset: vi.fn().mockResolvedValue([{ id: 'gem_1' }]),
+            };
+            return cb(tx);
+          })
+          .mockImplementationOnce(async (cb: any) => {
+            // Second call: count query
+            const tx = {
+              execute: vi.fn(),
+              select: vi.fn().mockReturnThis(),
+              from: vi.fn().mockReturnThis(),
+              where: vi.fn().mockResolvedValue([{ count: 4 }]),
+              orderBy: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              offset: vi.fn().mockResolvedValue([]),
+            };
+            return cb(tx);
+          }),
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DataExplorerService,
@@ -99,38 +133,7 @@ describe('DataExplorerService', () => {
         { provide: StorageResolverService, useValue: storageResolver },
         {
           provide: DB_MANAGER,
-          useValue: {
-            getTenantDb: vi.fn().mockResolvedValue({
-              transaction: vi
-                .fn()
-                .mockImplementationOnce(async (cb: any) => {
-                  // First call: data rows query
-                  const tx = {
-                    execute: vi.fn(),
-                    select: vi.fn().mockReturnThis(),
-                    from: vi.fn().mockReturnThis(),
-                    where: vi.fn().mockReturnThis(),
-                    orderBy: vi.fn().mockReturnThis(),
-                    limit: vi.fn().mockReturnThis(),
-                    offset: vi.fn().mockResolvedValue([{ id: 'gem_1' }]),
-                  };
-                  return cb(tx);
-                })
-                .mockImplementationOnce(async (cb: any) => {
-                  // Second call: count query
-                  const tx = {
-                    execute: vi.fn(),
-                    select: vi.fn().mockReturnThis(),
-                    from: vi.fn().mockReturnThis(),
-                    where: vi.fn().mockResolvedValue([{ count: 4 }]),
-                    orderBy: vi.fn().mockReturnThis(),
-                    limit: vi.fn().mockReturnThis(),
-                    offset: vi.fn().mockResolvedValue([]),
-                  };
-                  return cb(tx);
-                }),
-            }),
-          },
+          useValue: dbManager,
         },
       ],
     }).compile();
@@ -208,7 +211,26 @@ describe('DataExplorerService', () => {
         destConnectionId: 'c2',
       });
 
-      // GEM uses dbManager.getTenantDb() → transaction; the mock is set up in beforeEach
+      // Provide select mock directly on tenantDb
+      dbManager.getTenantDb.mockResolvedValue({
+        select: vi.fn().mockImplementation((args?: any) => {
+          const isCount = args && args.count !== undefined;
+          if (isCount) {
+            return {
+              from: vi.fn().mockReturnThis(),
+              where: vi.fn().mockResolvedValue([{ count: 4 }]),
+            };
+          }
+          return {
+            from: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            offset: vi.fn().mockResolvedValue([{ id: 'gem_1' }]),
+          };
+        }),
+      });
+
       const res = await service.listEntityMap(
         'org_1',
         'stitch_1',

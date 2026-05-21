@@ -289,6 +289,35 @@ export interface Piece {
     ): Promise<PollPage>;
     /** Per-piece webhook signature configuration for HMAC verification. */
     webhook?: PieceWebhookConfig;
+    /**
+     * Validates the connection context immediately after an OAuth exchange.
+     * If the requested appProfile is not supported (e.g., managed package missing),
+     * this hook should throw an error to reject the connection.
+     */
+    validateConnection?(
+        tokenResponse: Record<string, unknown>,
+        vendorParams: Record<string, unknown>,
+        requestedAppProfile: string | undefined
+    ): Promise<void>;
+    /** The default application shard profile used for pipeline routing (e.g., 'revenova', 'online'). */
+    defaultAppProfile?: string;
+    /** Virtual aliases that surface as distinct cards in the UI but share this piece's OAuth credentials. */
+    aliases?: PieceAlias[];
+}
+
+export interface PieceAlias {
+    /** Unique alias identifier (e.g., 'salesforce_revenova') */
+    name: string;
+    /** Human-readable label shown in the UI (e.g., 'Revenova TMS') */
+    displayName: string;
+    /** Optional custom logo for the alias; falls back to the parent piece logo if omitted. */
+    logoUrl?: string;
+    /** Optional custom description for the alias. */
+    description?: string;
+    /** Optional distinct category. */
+    category?: PieceCategory;
+    /** The mandatory application shard profile intent to inject when this alias is connected. */
+    appProfile: string;
 }
 
 export enum PieceCategory {
@@ -341,6 +370,20 @@ export interface CreatePieceParams {
     ): Promise<PollPage>;
     /** Per-piece webhook signature configuration for HMAC verification. */
     webhook?: PieceWebhookConfig;
+    /**
+     * Validates the connection context immediately after an OAuth exchange.
+     * If the requested appProfile is not supported (e.g., managed package missing),
+     * this hook should throw an error to reject the connection.
+     */
+    validateConnection?(
+        tokenResponse: Record<string, unknown>,
+        vendorParams: Record<string, unknown>,
+        requestedAppProfile: string | undefined
+    ): Promise<void>;
+    /** The default application shard profile used for pipeline routing (e.g., 'revenova', 'online'). */
+    defaultAppProfile?: string;
+    /** Virtual aliases that surface as distinct cards in the UI but share this piece's OAuth credentials. */
+    aliases?: PieceAlias[];
 }
 
 /**
@@ -403,6 +446,25 @@ export function createPiece(params: CreatePieceParams): Piece {
         }
     }
 
+    // Validate routing metadata upfront to catch misconfigurations early
+    if (params.defaultAppProfile !== undefined && (typeof params.defaultAppProfile !== 'string' || params.defaultAppProfile.trim() === '')) {
+        throw new Error(`Piece "${params.name}": defaultAppProfile must be a non-empty string, got: ${JSON.stringify(params.defaultAppProfile)}`);
+    }
+
+    if (params.aliases !== undefined) {
+        if (!Array.isArray(params.aliases)) {
+            throw new Error(`Piece "${params.name}": aliases must be an array, got: ${typeof params.aliases}`);
+        }
+        for (const alias of params.aliases) {
+            if (typeof alias.name !== 'string' || alias.name.trim() === '') {
+                throw new Error(`Piece "${params.name}": alias.name must be a non-empty string, got: ${JSON.stringify(alias.name)}`);
+            }
+            if (typeof alias.appProfile !== 'string' || alias.appProfile.trim() === '') {
+                throw new Error(`Piece "${params.name}": alias "${alias.name}" requires a non-empty appProfile, got: ${JSON.stringify(alias.appProfile)}`);
+            }
+        }
+    }
+
     return {
         name: params.name || '',
         displayName: params.displayName,
@@ -429,6 +491,9 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.executeFetch && { executeFetch: params.executeFetch }),
         ...(params.executeFind && { executeFind: params.executeFind }),
         ...(params.poll && { poll: params.poll }),
+        ...(params.validateConnection && { validateConnection: params.validateConnection }),
         ...(params.webhook && { webhook: params.webhook }),
+        ...(params.defaultAppProfile && { defaultAppProfile: params.defaultAppProfile }),
+        ...(params.aliases && { aliases: params.aliases }),
     };
 }

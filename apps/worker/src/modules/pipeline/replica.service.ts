@@ -17,6 +17,7 @@ import {
   StorageResolverService,
   PipelineHookBrokerService,
 } from "@nexiom/engine";
+import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
 import { sql, eq, and } from "drizzle-orm";
 
@@ -84,36 +85,33 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         activeSyncLocks,
       } = buildTenantSchema(schemaName);
 
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
       // Fetch application metadata
-      const connRows = await this.globalDb
-        .select({
-          appName: appConnections.appName,
-          metadata: appConnections.metadata,
-        })
-        .from(appConnections)
-        .where(eq(appConnections.id, connectionId))
-        .limit(1);
+      // appConnections (including metadata.appProfile) lives in the TENANT DB.
+      // The global DB only holds tenantId for routing — never full metadata.
+      const connMeta = await tenantDb.query.appConnections.findFirst({
+        where: eq(appConnections.id, connectionId),
+        columns: { appName: true, metadata: true },
+      });
 
-      const appName = connRows[0]?.appName;
-      const metadata = connRows[0]?.metadata as
-        | Record<string, unknown>
-        | undefined;
-
-      // Runtime validation of appProfile
-      const trimmedAppProfile =
-        typeof metadata?.appProfile === "string"
-          ? metadata.appProfile.trim()
-          : "";
-      const appProfile =
-        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
-
-      if (!appName) {
-        throw new Error(
-          `Connection ${connectionId} not found in appConnections!`,
-        );
+      if (!connMeta) {
+        // Connection not found — treat as retryable to handle replication lag or backfill scenarios
+        throw new DependenciesMissingError([
+          { entityType: "connection", sourceId: connectionId },
+        ]);
       }
 
-      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      const appName = connMeta.appName;
+      const appProfile = (connMeta.metadata as Record<string, any>)
+        ?.appProfile as string | undefined;
+
+      if (!appProfile) {
+        // Missing appProfile — treat as retryable to handle metadata backfill scenarios
+        throw new DependenciesMissingError([
+          { entityType: "appProfile", sourceId: connectionId },
+        ]);
+      }
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(

@@ -17,7 +17,7 @@ export class SqlDatabaseManager {
     constructor(
         private readonly db: DrizzleDb,
         logger?: Logger,
-        private readonly domainProvisionerResolver?: (appName: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
+        private readonly domainProvisionerResolver?: (appName: string, appProfile: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
     ) {
         this.logger = logger ?? {
             debug: (msg: string, ...args: unknown[]) => {
@@ -442,23 +442,26 @@ export class SqlDatabaseManager {
             const isUuid = connectionIdCandidate && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionIdCandidate);
             
             let appName: string | undefined;
+            let appProfile: string | undefined;
             if (isUuid) {
                 const res = await this.db.$client.query(`
-                    SELECT app_name 
+                    SELECT app_name, metadata->>'appProfile' as app_profile 
                     FROM public.app_connection
                     WHERE id = $1
                 `, [connectionIdCandidate]);
                 appName = res.rows[0]?.app_name as string | undefined;
+                // Default to 'standard' if the connection doesn't have an explicit profile yet
+                appProfile = (res.rows[0]?.app_profile as string | undefined) || 'standard';
             }
             
-            if (appName && this.domainProvisionerResolver) {
-                const provisioner = this.domainProvisionerResolver(appName);
+            if (appName && appProfile && this.domainProvisionerResolver) {
+                const provisioner = this.domainProvisionerResolver(appName, appProfile);
                 if (provisioner) {
-                    this.logger.debug(`Applying domain provisioner for appName=${appName} in schema=${schemaName}`);
+                    this.logger.debug(`Applying domain provisioner for appName=${appName}/${appProfile} in schema=${schemaName}`);
                     await provisioner(this.db, schemaName);
                     return;
                 } else {
-                    this.logger.debug(`No domain provisioner found for appName=${appName} in schema=${schemaName}`);
+                    this.logger.debug(`No domain provisioner found for appName=${appName}/${appProfile} in schema=${schemaName}`);
                 }
             } else if (!this.domainProvisionerResolver) {
                 this.logger.debug(`No domainProvisionerResolver provided to SqlDatabaseManager`);

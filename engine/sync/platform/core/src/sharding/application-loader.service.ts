@@ -95,7 +95,7 @@ export class ApplicationLoaderService {
     )) as ApplicationShardModule;
 
     // Validate exported shape to ensure required functions are present
-    const requiredExports = ['extractReplica', 'normalize', 'writeNormalized', 'buildTarget', 'provisionDomain'];
+    const requiredExports = ['extractReplica', 'normalize'];
     const missingExports: string[] = [];
 
     for (const exportName of requiredExports) {

@@ -73,3 +73,6 @@ export {
   schedulerOutboxActionEnum,
   schedulerOutboxStatusEnum,
 } from "@nexiom/database";
+
+// Global Entity Map - maps cross-system records
+export { globalEntityMap } from "@nexiom/database";

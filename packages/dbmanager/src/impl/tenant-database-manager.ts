@@ -44,7 +44,7 @@ export class TenantDatabaseManager implements DatabaseManager {
     constructor(
         private readonly globalDb: DrizzleDb,
         private readonly dbFactory: (connectionString: string) => DrizzleDb,
-        private readonly domainProvisionerResolver?: (appName: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
+        private readonly domainProvisionerResolver?: (appName: string, appProfile: string) => ((db: DrizzleDb, schemaName: string) => Promise<void>) | undefined,
         logger?: Logger,
         /** Resolves credentials for a given credential-less host URL at connection time. */
         private readonly credentialResolver?: CredentialResolver,

@@ -23,7 +23,7 @@ describe("ActiveFetchWorker", () => {
     const mockLimit = vi
       .fn()
       .mockResolvedValue([
-        { appName: "salesforce", metadata: { appProfile: "default" } },
+        { appName: "salesforce", metadata: { appProfile: "standard" } },
       ]);
     globalDb = {
       select: vi.fn().mockReturnThis(),
@@ -90,13 +90,13 @@ describe("ActiveFetchWorker", () => {
 
     expect(hookBroker.activeFetch).toHaveBeenCalledWith(
       "salesforce",
-      "default",
+      "standard",
       [{ entityType: "TMS_TP", sourceId: "source-1" }],
       "c1",
     );
   });
 
-  it("should call hookBroker.activeFetch with default profile when metadata does not specify appProfile", async () => {
+  it("should call hookBroker.activeFetch with standard profile when metadata does not specify appProfile", async () => {
     globalDb.limit.mockResolvedValueOnce([
       { appName: "quickbooks", metadata: null },
     ]);
@@ -112,7 +112,7 @@ describe("ActiveFetchWorker", () => {
 
     expect(hookBroker.activeFetch).toHaveBeenCalledWith(
       "quickbooks",
-      "default",
+      "standard",
       [{ entityType: "TMS_CUSTOMER", sourceId: "source-2" }],
       "c1",
     );
