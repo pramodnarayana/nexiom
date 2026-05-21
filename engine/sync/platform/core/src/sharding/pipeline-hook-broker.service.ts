@@ -156,7 +156,8 @@ export class PipelineHookBrokerService {
       // Only return raw payload if the shard is genuinely missing (not found error).
       // For other loader failures (syntax errors, missing dependencies), rethrow to surface the issue.
       const errMsg = loadErr instanceof Error ? loadErr.message : String(loadErr);
-      if (errMsg.includes('not found') || errMsg.includes('Cannot find module')) {
+      const errCode = (loadErr as any)?.code;
+      if (errMsg.includes('not found') || errMsg.includes('Cannot find module') || errCode === 'ENOENT' || errMsg.includes('ENOENT')) {
         this.logger.warn(
           { event: 'hook.prepareUpdate.shard_not_found', appName, appProfile },
           `Shard ${appName}/${appProfile} not found, returning raw payload (no prepareUpdate logic available)`

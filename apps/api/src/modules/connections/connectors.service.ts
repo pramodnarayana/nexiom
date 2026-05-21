@@ -8,6 +8,7 @@ import {
   HttpException,
   UnauthorizedException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppCredentialError } from '@nexiom/credentials';
