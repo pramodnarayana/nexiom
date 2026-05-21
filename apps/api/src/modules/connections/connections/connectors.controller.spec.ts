@@ -58,6 +58,7 @@ describe('ConnectorsController', () => {
     mockPieceRegistry = {
       getAllPieces: vi.fn(),
       getPiece: vi.fn(),
+      resolveBasePieceName: vi.fn().mockImplementation((x: string) => x),
     } as unknown as Mocked<PieceRegistryService>;
 
     mockConnectorsService = {
@@ -154,6 +155,7 @@ describe('ConnectorsController', () => {
         'tenant-123',
         'mock-piece',
         {},
+        undefined,
       );
       expect(mockConnectorsService.getAuthorizationUrl).toHaveBeenCalledWith(
         'mock-piece',
@@ -405,6 +407,7 @@ describe('ConnectorsController', () => {
     beforeEach(() => {
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
+        defaultAppProfile: 'standard',
         auth: {
           type: 'OAUTH2',
           props: { realmId: { type: 'SHORT_TEXT', required: false } },
@@ -461,7 +464,7 @@ describe('ConnectorsController', () => {
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
         expiresAt: expect.any(Date) as unknown as Date,
-        metadata: { appProfile: 'default' }, // controller always injects appProfile
+        metadata: { appProfile: 'standard' }, // controller always injects appProfile
         // No environment vendorParam in mock → deriveEnvType defaults to PRODUCTION
         envType: 'PRODUCTION',
       });
@@ -471,6 +474,7 @@ describe('ConnectorsController', () => {
       // Provider must declare `environment` so validateVendorParams accepts it
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
+        defaultAppProfile: 'standard',
         auth: {
           type: 'OAUTH2',
           props: {
@@ -496,7 +500,27 @@ describe('ConnectorsController', () => {
         expect.objectContaining({ envType: 'SANDBOX' }),
       );
     });
+    it('should resolve appProfile from state metadata during code exchange', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+        metadata: { appProfile: 'state-resolved-profile' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted-value-blob');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
 
+      await controller.exchangeCode(mockCtx, validBody);
+
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { appProfile: 'state-resolved-profile' },
+        }),
+      );
+    });
     it('should preserve existing externalId during a reconnect flow (connectionId provided)', async () => {
       // Mock the essential services that processOAuthExchange relies on
       mockRedis.set.mockResolvedValue('OK');

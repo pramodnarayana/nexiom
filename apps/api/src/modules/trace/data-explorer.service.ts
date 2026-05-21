@@ -7,6 +7,7 @@ import {
   integrationStitches,
   buildTenantSchema,
   assertValidSchemaName,
+  globalEntityMap,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
 import { DB_MANAGER } from '@nexiom/dbmanager';
@@ -203,35 +204,22 @@ export class DataExplorerService {
     const storageProfile = await this.storageResolver.resolveStorageProfile(
       stitch.srcConnectionId,
     );
-    const schemaName = storageProfile.schemaName;
     const tenantId = storageProfile.tenantId;
-    assertValidSchemaName(schemaName);
-    const { globalEntityMap } = buildTenantSchema(schemaName);
 
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
     const [rows, countResult] = await Promise.all([
-      tenantDb.transaction(async (tx) => {
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-        return tx
-          .select()
-          .from(globalEntityMap)
-          .where(eq(globalEntityMap.stitchId, stitchId))
-          .orderBy(desc(globalEntityMap.lastSyncedAt))
-          .limit(safeLimit)
-          .offset(offset);
-      }),
-      tenantDb.transaction(async (tx) => {
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-        return tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(globalEntityMap)
-          .where(eq(globalEntityMap.stitchId, stitchId));
-      }),
+      tenantDb
+        .select()
+        .from(globalEntityMap)
+        .where(eq(globalEntityMap.stitchId, stitchId))
+        .orderBy(desc(globalEntityMap.lastSyncedAt))
+        .limit(safeLimit)
+        .offset(offset),
+      tenantDb
+        .select({ count: sql<number>`count(*)::int` })
+        .from(globalEntityMap)
+        .where(eq(globalEntityMap.stitchId, stitchId)),
     ]);
     return {
       data: rows,

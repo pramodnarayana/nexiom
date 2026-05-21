@@ -53,4 +53,16 @@ export interface VendorResponse {
    * retried without the piece needing to throw a RetryableException.
    */
   retry?: boolean;
+  /**
+   * The exact payload that was ultimately sent to the vendor API.
+   *
+   * Pieces MUST populate this field. It may differ from the payload that the
+   * pipeline (FanOut) prepared — for example, when a piece performs an internal
+   * SyncToken refresh-and-retry, the retried payload carries the fresh SyncToken.
+   *
+   * DeliveryService writes this value back to outbound_gateway.payload so that
+   * the customer support team always sees the exact request that was accepted by
+   * the vendor, not an intermediate or stale version.
+   */
+  sentPayload?: Record<string, unknown>;
 }

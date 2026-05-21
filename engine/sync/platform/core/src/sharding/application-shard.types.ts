@@ -34,14 +34,14 @@ export interface ApplicationShardModule {
   ): NormalizedRecord | null | Promise<NormalizedRecord | null>;
 
   /**
-   * L3.5 — Write the normalized entity into application-owned typed tables
+   * L3.5 — Optional: Write the normalized entity into application-owned typed tables
    * (e.g. tms_carrier, tms_tp). Receives the live DB transaction so it can
    * participate in the platform's existing transaction boundary.
    *
    * tx and db are typed as unknown so the shard stays database-agnostic at the
    * type level. The implementation casts to DrizzleDb/DrizzleTransaction.
    */
-  writeNormalized(
+  writeNormalized?(
     tx: unknown,
     db: unknown,
     schemaName: string,
@@ -53,11 +53,11 @@ export interface ApplicationShardModule {
   ): Promise<void>;
 
   /**
-   * L4 — Build the enriched context for field-mapping rule hydration.
+   * L4 — Optional: Build the enriched context for field-mapping rule hydration.
    * Executes SQL lookups on application-owned typed tables and returns a flat
    * context object merged with normalizedData before rules are applied.
    */
-  buildTarget(
+  buildTarget?(
     db: unknown,
     schemaName: string,
     normalizedEntityType: string,
@@ -65,11 +65,11 @@ export interface ApplicationShardModule {
   ): Promise<Record<string, unknown>>;
 
   /**
-   * Provision — Idempotent DDL for application-owned domain tables.
+   * Provision — Optional: Idempotent DDL for application-owned domain tables.
    * Called once per tenant schema when a stitch for this app is first activated.
    * All DDL inside MUST use IF NOT EXISTS.
    */
-  provisionDomain(db: unknown, schemaName: string): Promise<void>;
+  provisionDomain?(db: unknown, schemaName: string): Promise<void>;
 
   /**
    * Optional — Return a custom HTTP response for vendor-specific webhook
@@ -105,4 +105,15 @@ export interface ApplicationShardModule {
     normalizedEntityType: string,
     entityId: string,
   ): Promise<string[]>;
+
+  /**
+   * Optional — Prepare Update hook.
+   * Called before L5 executeAction on UPDATE operations. Allows the application
+   * to inject destination-specific IDs or SyncTokens into the payload.
+   */
+  prepareUpdate?(
+    payload: Record<string, any>,
+    destId?: string,
+    destState?: Record<string, any>,
+  ): Promise<Record<string, any>> | Record<string, any>;
 }

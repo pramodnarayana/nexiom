@@ -51,6 +51,7 @@ export class OauthStateService {
     provider: string,
     clientId: string,
     vendorParams?: Record<string, any>,
+    metadata?: Record<string, any>,
   ): Promise<string> {
     const sessionId = crypto.randomUUID();
     const payload = JSON.stringify({
@@ -59,6 +60,7 @@ export class OauthStateService {
       provider,
       clientId,
       vendorParams,
+      metadata,
     });
 
     // Sessions exist purely to bridge the gap between the form submission
@@ -77,6 +79,7 @@ export class OauthStateService {
     provider: string;
     clientId: string;
     vendorParams?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
   }> {
     if (!sessionId || typeof sessionId !== 'string') {
       throw new UnauthorizedException('Missing or invalid session ID');
@@ -97,6 +100,7 @@ export class OauthStateService {
         provider: string;
         clientId: string;
         vendorParams?: Record<string, unknown>;
+        metadata?: Record<string, unknown>;
       };
     } catch {
       this.logger.error(
@@ -114,6 +118,7 @@ export class OauthStateService {
     tenantId: string,
     provider: string,
     vendorParams?: Record<string, string>,
+    metadata?: Record<string, any>,
   ): Promise<string> {
     const stateId = crypto.randomUUID();
 
@@ -129,11 +134,14 @@ export class OauthStateService {
       stateId,
     };
 
+    const dataToStore = {
+      vendorParams: vendorParams ?? {},
+      metadata: metadata ?? {},
+    };
+
     await this.redis.set(
       `oauth:state:${stateId}`,
-      vendorParams && Object.keys(vendorParams).length > 0
-        ? JSON.stringify(vendorParams)
-        : '{}', // Always persist a marker even for empty params
+      JSON.stringify(dataToStore),
       'EX',
       15 * 60, // 15 minutes
     );
@@ -174,7 +182,11 @@ export class OauthStateService {
     stateToken: string,
     expectedProvider: string,
     consume = true,
-  ): Promise<{ tenantId: string; vendorParams?: Record<string, string> }> {
+  ): Promise<{
+    tenantId: string;
+    vendorParams?: Record<string, string>;
+    metadata?: Record<string, any>;
+  }> {
     if (!stateToken) {
       this.logger.error('OAuth state token is missing entirely');
       throw new UnauthorizedException('Missing OAuth state token');
@@ -210,6 +222,7 @@ export class OauthStateService {
 
       const stateId = decoded.stateId as string;
       let vendorParams: Record<string, string> | undefined;
+      let metadata: Record<string, any> | undefined;
 
       const redisKey = `oauth:state:${stateId}`;
       const cachedParams = consume
@@ -226,19 +239,30 @@ export class OauthStateService {
       }
 
       try {
-        const parsed = JSON.parse(cachedParams) as Record<string, string>;
-        if (Object.keys(parsed).length > 0) {
-          vendorParams = parsed;
+        const parsed = JSON.parse(cachedParams) as {
+          vendorParams?: Record<string, string>;
+          metadata?: Record<string, unknown>;
+        };
+        if (
+          parsed &&
+          (parsed.vendorParams !== undefined || parsed.metadata !== undefined)
+        ) {
+          vendorParams = parsed.vendorParams;
+          metadata = parsed.metadata;
+        } else {
+          // Backward compatibility check for older session objects
+          vendorParams = parsed as unknown as Record<string, string>;
         }
       } catch {
         this.logger.warn(
-          `Failed to parse cached vendor params for stateId ${stateId}`,
+          `Failed to parse cached state details for stateId ${stateId}`,
         );
       }
 
       return {
         tenantId: decoded.tenantId as string,
         vendorParams,
+        metadata,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {

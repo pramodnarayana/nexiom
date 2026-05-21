@@ -100,7 +100,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
           ? metadata.appProfile.trim()
           : "";
       const appProfile =
-        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
+        trimmedAppProfile !== "" ? trimmedAppProfile : "standard";
 
       await this.hookBroker.activeFetch(
         connectionAppName,

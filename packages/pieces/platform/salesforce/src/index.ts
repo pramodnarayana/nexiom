@@ -221,6 +221,15 @@ export const salesforce = createPiece({
     ],
     categories: [PieceCategory.SALES_AND_CRM],
     auth: salesforceAuth,
+    aliases: [
+        {
+            name: 'salesforce_revenova',
+            displayName: 'Revenova TMS',
+            description: 'Connect to Revenova TMS to map loads and stops.',
+            category: PieceCategory.OTHER,
+            appProfile: 'revenova',
+        }
+    ],
     actions: [
         customApiAction
     ],
@@ -231,6 +240,70 @@ export const salesforce = createPiece({
     describeFields,
     describeRelatedObjects,
     describeConfig,
+    validateConnection: async (tokenResponse: Record<string, unknown>, _vendorParams: Record<string, unknown>, requestedAppProfile: string | undefined): Promise<void> => {
+        if (!requestedAppProfile || requestedAppProfile === 'default') {
+            return; // No specific managed package required for standard Salesforce
+        }
+
+        const instanceUrl = (tokenResponse['instance_url'] as string)?.replace(/\/$/, '');
+        const accessToken = tokenResponse['access_token'] as string;
+
+        if (!instanceUrl || !accessToken) {
+            throw new Error('Salesforce token response missing instance_url or access_token. Cannot validate connection context.');
+        }
+
+        if (requestedAppProfile === 'revenova') {
+            // Query both PackageLicense namespaces AND InstalledSubscriberPackage names
+            // to robustly detect the Revenova TMS managed package regardless of
+            // whether the org uses the 'rtms' namespace or a different identifier.
+            const [pkgRes, installedRes] = await Promise.allSettled([
+                sfFetch<{ records: Array<{ NamespacePrefix: string }> }>(
+                    `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent('SELECT NamespacePrefix FROM PackageLicense')}`,
+                    accessToken,
+                ),
+                sfFetch<{ records: Array<{ SubscriberPackageName: string }> }>(
+                    `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent('SELECT SubscriberPackageName FROM InstalledSubscriberPackage')}`,
+                    accessToken,
+                ),
+            ]);
+
+            const namespaces = new Set<string>();
+            const packageNames = new Set<string>();
+
+            if (pkgRes.status === 'fulfilled') {
+                for (const r of pkgRes.value.records) {
+                    if (r.NamespacePrefix) namespaces.add(r.NamespacePrefix.toLowerCase());
+                }
+            }
+            if (installedRes.status === 'fulfilled') {
+                for (const r of installedRes.value.records) {
+                    if (r.SubscriberPackageName) packageNames.add(r.SubscriberPackageName.toLowerCase());
+                }
+            }
+
+            const hasRtmsNamespace = namespaces.has('rtms');
+            const hasRevenovaPackage = [...packageNames].some(n => n.includes('revenova'));
+
+            console.log(
+                `[salesforce.validateConnection] Revenova check — namespaces: [${[...namespaces].join(', ')}], ` +
+                `installed packages: [${[...packageNames].join(', ')}], ` +
+                `hasRtmsNamespace=${String(hasRtmsNamespace)}, hasRevenovaPackage=${String(hasRevenovaPackage)}`,
+            );
+
+            if (!hasRtmsNamespace && !hasRevenovaPackage) {
+                const msg =
+                    `Connection rejected: Revenova TMS is not installed in this Salesforce organization. ` +
+                    `Detected namespaces: [${[...namespaces].join(', ') || 'none'}]. ` +
+                    `Installed packages: [${[...packageNames].join(', ') || 'none'}].`;
+                console.error(`[salesforce.validateConnection] ${msg}`);
+                throw new Error(msg);
+            }
+
+            return;
+        }
+
+        // Add other domain apps here (e.g., accounting_seed) as they are supported
+    },
     normalize: async (_objectType: string, _raw: Record<string, unknown>): Promise<NormalizedRecord | null> => {
         // Returns null — Salesforce records do not map to a pre-defined CanonicalType.
         // NormalizationService (L3) handles null by storing the raw record with

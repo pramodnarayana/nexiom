@@ -99,3 +99,7 @@ export async function exchangeOAuthCode(payload: {
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);
 }
+
+export async function deleteConnection(connectionId: string): Promise<void> {
+    await apiClient.delete(`/connectors/${connectionId}`);
+}

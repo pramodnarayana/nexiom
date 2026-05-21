@@ -3,6 +3,7 @@ packages:
   - 'packages/*'
   - 'engine/sync/platform/*'
   - 'engine/sync/application/*'
+  - 'engine/sync/application/*/*'
   - 'engine/ai/*'
   - 'packages/pieces/platform/*'
   - 'packages/pieces/application/*'

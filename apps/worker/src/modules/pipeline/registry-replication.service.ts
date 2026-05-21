@@ -93,64 +93,89 @@ export class RegistryReplicationService implements OnModuleInit {
       const tenantDb = await this.dbManager.getTenantDb(row.tenantId);
 
       let operationPerformed = false;
+      let attempts = 0;
+      const maxAttempts = 3;
+      const retryDelayMs = 1000;
 
-      await tenantDb.transaction(async (tx) => {
-        if (row.action === "UPSERT") {
-          const data = rehydrateDates(row.payload as Record<string, unknown>);
-          if (row.entityType === "APP_CONNECTION") {
-            const connData = prepareAppConnectionPayload(data);
-            await tx
-              .insert(schema.appConnections)
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-              .values(connData as any)
-              .onConflictDoUpdate({
-                target: [schema.appConnections.id],
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                set: connData as any,
-              });
-            operationPerformed = true;
-          } else if (row.entityType === "INTEGRATION_STITCH") {
-            await tx
-              .insert(schema.integrationStitches)
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-              .values(data as any)
-              .onConflictDoUpdate({
-                target: [schema.integrationStitches.id],
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                set: data as any,
-              });
-            operationPerformed = true;
-          } else if (row.entityType === "FIELD_MAPPING") {
-            await tx
-              .insert(schema.fieldMappings)
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-              .values(data as any)
-              .onConflictDoUpdate({
-                target: [schema.fieldMappings.id],
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                set: data as any,
-              });
-            operationPerformed = true;
-          }
-        } else if (row.action === "DELETE") {
-          if (row.entityType === "APP_CONNECTION") {
-            await tx
-              .delete(schema.appConnections)
-              .where(eq(schema.appConnections.id, row.entityId));
-            operationPerformed = true;
-          } else if (row.entityType === "INTEGRATION_STITCH") {
-            await tx
-              .delete(schema.integrationStitches)
-              .where(eq(schema.integrationStitches.id, row.entityId));
-            operationPerformed = true;
-          } else if (row.entityType === "FIELD_MAPPING") {
-            await tx
-              .delete(schema.fieldMappings)
-              .where(eq(schema.fieldMappings.id, row.entityId));
-            operationPerformed = true;
+      while (attempts < maxAttempts) {
+        try {
+          await tenantDb.transaction(async (tx) => {
+            if (row.action === "UPSERT") {
+              const data = rehydrateDates(
+                row.payload as Record<string, unknown>,
+              );
+              if (row.entityType === "APP_CONNECTION") {
+                const connData = prepareAppConnectionPayload(data);
+                await tx
+                  .insert(schema.appConnections)
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                  .values(connData as any)
+                  .onConflictDoUpdate({
+                    target: [schema.appConnections.id],
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    set: connData as any,
+                  });
+                operationPerformed = true;
+              } else if (row.entityType === "INTEGRATION_STITCH") {
+                await tx
+                  .insert(schema.integrationStitches)
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                  .values(data as any)
+                  .onConflictDoUpdate({
+                    target: [schema.integrationStitches.id],
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    set: data as any,
+                  });
+                operationPerformed = true;
+              } else if (row.entityType === "FIELD_MAPPING") {
+                await tx
+                  .insert(schema.fieldMappings)
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                  .values(data as any)
+                  .onConflictDoUpdate({
+                    target: [schema.fieldMappings.id],
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    set: data as any,
+                  });
+                operationPerformed = true;
+              }
+            } else if (row.action === "DELETE") {
+              if (row.entityType === "APP_CONNECTION") {
+                await tx
+                  .delete(schema.appConnections)
+                  .where(eq(schema.appConnections.id, row.entityId));
+                operationPerformed = true;
+              } else if (row.entityType === "INTEGRATION_STITCH") {
+                await tx
+                  .delete(schema.integrationStitches)
+                  .where(eq(schema.integrationStitches.id, row.entityId));
+                operationPerformed = true;
+              } else if (row.entityType === "FIELD_MAPPING") {
+                await tx
+                  .delete(schema.fieldMappings)
+                  .where(eq(schema.fieldMappings.id, row.entityId));
+                operationPerformed = true;
+              }
+            }
+          });
+          break; // Transaction succeeded, break retry loop!
+        } catch (err) {
+          attempts++;
+          const isFkViolation =
+            (err as { code?: string })?.code === "23503" ||
+            String(err).includes("foreign key constraint");
+
+          if (isFkViolation && attempts < maxAttempts) {
+            this.logger.warn(
+              `Foreign key constraint violation during replication of ${row.entityType} ${row.entityId} ` +
+                `to tenant ${row.tenantId}. Retrying in ${retryDelayMs}ms (attempt ${attempts}/${maxAttempts})...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+          } else {
+            throw err; // Rethrow if it's not a FK violation or we ran out of attempts
           }
         }
-      });
+      }
 
       // Throw if no operation was performed (unrecognized action or entityType)
       if (!operationPerformed) {

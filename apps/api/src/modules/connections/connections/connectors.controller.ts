@@ -31,7 +31,6 @@ import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import {
   appConnections,
-  AppConnectionStatus,
   DATABASE_CONNECTION,
   type DrizzleDb,
   member,
@@ -266,22 +265,43 @@ export class ConnectorsController {
   @Get('providers')
   getProviders() {
     try {
-      const providers = this.pieceRegistry.getAllPieces().map((piece) => {
-        const authProps =
-          piece.auth && 'props' in piece.auth
-            ? (piece.auth.props as Record<string, AnyProperty>)
-            : undefined;
+      const providers = this.pieceRegistry
+        .getAllPieces()
+        .map((piece) => {
+          const authProps =
+            piece.auth && 'props' in piece.auth
+              ? (piece.auth.props as Record<string, AnyProperty>)
+              : undefined;
 
-        return {
-          name: piece.name,
-          displayName: piece.displayName,
-          description: piece.description,
-          logoUrl: piece.logoUrl,
-          authType: piece.auth.type,
-          category: piece.categories?.[0] ?? 'Other',
-          uiSchema: authProps,
-        };
-      });
+          const baseProvider = {
+            name: piece.name,
+            displayName: piece.displayName,
+            description: piece.description,
+            logoUrl: piece.logoUrl,
+            authType: piece.auth.type,
+            category: piece.categories?.[0] ?? 'Other',
+            uiSchema: authProps,
+          };
+
+          const result = [baseProvider];
+
+          if (piece.aliases) {
+            for (const alias of piece.aliases) {
+              result.push({
+                name: alias.name,
+                displayName: alias.displayName,
+                description: alias.description || piece.description,
+                logoUrl: alias.logoUrl || piece.logoUrl,
+                authType: piece.auth.type,
+                category: alias.category || baseProvider.category,
+                uiSchema: authProps,
+              });
+            }
+          }
+
+          return result;
+        })
+        .flat();
       this.logger.debug(
         'GET PROVIDERS',
         providers.map((p) => p.name),
@@ -319,10 +339,7 @@ export class ConnectorsController {
       offset = 0;
     }
 
-    const whereClause = and(
-      eq(appConnections.tenantId, tenantId),
-      eq(appConnections.status, AppConnectionStatus.ACTIVE),
-    );
+    const whereClause = eq(appConnections.tenantId, tenantId);
 
     let activeConnections: {
       id: string;
@@ -381,12 +398,34 @@ export class ConnectorsController {
     }
 
     const total = Number(countResult?.count ?? 0);
+    this.logger.log(
+      `[getActiveConnections] tenantId=${tenantId}, total=${total}, returning ${activeConnections.length} rows`,
+    );
 
     const listConnections = activeConnections.map((conn) => {
       const hasCredentials = !!conn.value;
+
+      let aliasAppName = conn.appName;
+      const piece = this.pieceRegistry.getPiece(conn.appName);
+      if (
+        piece?.aliases &&
+        conn.metadata &&
+        typeof conn.metadata === 'object' &&
+        'appProfile' in conn.metadata
+      ) {
+        const appProfile = (conn.metadata as Record<string, unknown>)
+          .appProfile;
+        if (typeof appProfile === 'string') {
+          const alias = piece.aliases.find((a) => a.appProfile === appProfile);
+          if (alias) {
+            aliasAppName = alias.name;
+          }
+        }
+      }
+
       return {
         id: conn.id,
-        appName: conn.appName,
+        appName: aliasAppName,
         externalId: conn.externalId,
         displayName: conn.displayName,
         authType: conn.authType,
@@ -540,13 +579,44 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId or userId context is missing');
     }
 
-    const { clientId, vendorParams } = body;
+    const { vendorParams } = body;
+
+    // Capture alias appProfile BEFORE resolving to base name — once resolved
+    // the alias identity is lost and STEP 4 cannot find the appProfile.
+    const originalParamName = providerName;
+    const originalBodyName = body.providerName;
+
+    providerName = this.pieceRegistry.resolveBasePieceName(providerName);
+    body.providerName = this.pieceRegistry.resolveBasePieceName(
+      body.providerName,
+    );
 
     // validate that the path parameter matches the body payload for consistency
     if (providerName !== body.providerName) {
       throw new BadRequestException(
         'Path providerName must match body providerName',
       );
+    }
+
+    // If either the path param or body was an alias, inject its appProfile into
+    // vendorParams so it survives the Redis state token and is available during
+    // code exchange (decodedState.vendorParams.appProfile).
+    const aliasName =
+      originalParamName !== providerName
+        ? originalParamName
+        : originalBodyName !== providerName
+          ? originalBodyName
+          : undefined;
+    let aliasInjectedProfile: string | undefined;
+    if (aliasName) {
+      const basePiece = this.pieceRegistry.getPiece(providerName);
+      const aliasDef = basePiece?.aliases?.find((a) => a.name === aliasName);
+      if (aliasDef?.appProfile) {
+        aliasInjectedProfile = aliasDef.appProfile;
+        this.logger.log(
+          `[createOAuthSession] Alias "${aliasName}" detected → injecting appProfile="${aliasInjectedProfile}" into vendorParams`,
+        );
+      }
     }
 
     const providerDef =
@@ -560,12 +630,18 @@ export class ConnectorsController {
       vendorParams,
     );
 
+    const metadata: Record<string, any> = {};
+    if (aliasInjectedProfile) {
+      metadata.appProfile = aliasInjectedProfile;
+    }
+
     const sessionId = await this.oauthStateService.createPreFlightSession(
       tenantId,
       userId,
       providerName,
-      clientId,
+      body.clientId,
       validatedVendorParams,
+      metadata,
     );
 
     return { sessionId };
@@ -582,6 +658,8 @@ export class ConnectorsController {
     @Query('session') sessionId: string,
     @Res() res: Response,
   ) {
+    providerName = this.pieceRegistry.resolveBasePieceName(providerName);
+
     const tenantId = ctx.user?.organizationId;
     const userId = ctx.user?.id;
 
@@ -623,9 +701,10 @@ export class ConnectorsController {
       throw new UnauthorizedException('OAuth session context mismatch');
     }
 
-    const { clientId, vendorParams } = sessionData as {
+    const { clientId, vendorParams, metadata } = sessionData as {
       clientId: string;
       vendorParams?: Record<string, string>;
+      metadata?: Record<string, any>;
     };
 
     let authorizeUrl: string;
@@ -634,6 +713,7 @@ export class ConnectorsController {
         tenantId,
         providerName,
         vendorParams,
+        metadata,
       );
       authorizeUrl = this.connectorsService.getAuthorizationUrl(
         providerName,
@@ -665,8 +745,24 @@ export class ConnectorsController {
     @AuthContext() ctx: RequestAuthContext,
     @Body(new ValidationPipe({ whitelist: true })) body: ExchangeOAuthCode,
   ) {
-    this.logger.debug(
-      `oauth-exchange body received for provider: ${body.providerName}, connectionId: ${body.connectionId || 'none'}, displayName: ${body.displayName}`,
+    const originalProviderName = body.providerName;
+    body.providerName = this.pieceRegistry.resolveBasePieceName(
+      body.providerName,
+    );
+
+    let aliasAppProfile: string | undefined;
+    if (originalProviderName !== body.providerName) {
+      const basePiece = this.pieceRegistry.getPiece(body.providerName);
+      const aliasDef = basePiece?.aliases?.find(
+        (a) => a.name === originalProviderName,
+      );
+      if (aliasDef) {
+        aliasAppProfile = aliasDef.appProfile;
+      }
+    }
+
+    this.logger.log(
+      `[OAuth Exchange] RECEIVED: providerName=${originalProviderName} → resolved=${body.providerName}, alias appProfile=${aliasAppProfile ?? 'none'}, displayName="${body.displayName}", connectionId=${body.connectionId || 'new'}`,
     );
 
     const tenantId = ctx.user?.organizationId;
@@ -756,6 +852,7 @@ export class ConnectorsController {
         trimmedDisplayName,
         body,
         idempotencyKey,
+        aliasAppProfile,
       );
 
       this.logger.log(
@@ -787,20 +884,33 @@ export class ConnectorsController {
     trimmedDisplayName: string,
     body: ExchangeOAuthCode,
     idempotencyKey: string,
+    aliasAppProfile: string | undefined,
   ) {
     // Verify piece exists in registry
     const piece = this.pieceRegistry.getPiece(body.providerName);
     if (!piece) {
+      this.logger.error(
+        `[OAuth Exchange] STEP 1 FAIL: piece "${body.providerName}" not found in registry`,
+      );
       throw new NotFoundException(
         `Provider "${body.providerName}" is not registered`,
       );
     }
+    this.logger.log(
+      `[OAuth Exchange] STEP 1 OK: piece "${body.providerName}" found in registry`,
+    );
 
     const decodedState = await this.oauthStateService.verifyState(
       body.state,
       body.providerName,
     );
+    this.logger.log(
+      `[OAuth Exchange] STEP 2 OK: state verified for tenantId=${decodedState.tenantId}, vendorParams=${JSON.stringify(decodedState.vendorParams ?? {})}, metadata=${JSON.stringify(decodedState.metadata ?? {})}`,
+    );
     if (decodedState.tenantId !== tenantId) {
+      this.logger.error(
+        `[OAuth Exchange] STEP 2 FAIL: state tenantId=${decodedState.tenantId} does not match auth tenantId=${tenantId}`,
+      );
       throw new BadRequestException(
         'State token does not belong to this tenant',
       );
@@ -824,12 +934,18 @@ export class ConnectorsController {
       );
 
     // Exchange the code for actual OAuth tokens
+    this.logger.log(
+      `[OAuth Exchange] STEP 3: executing token exchange for ${body.providerName}...`,
+    );
     const tokenResponse = await this.executeTokenExchange(
       body.providerName,
       body.code,
       effectiveClientId,
       effectiveClientSecret,
       decodedState.vendorParams ?? {},
+    );
+    this.logger.log(
+      `[OAuth Exchange] STEP 3 OK: token exchange succeeded, has access_token=${!!tokenResponse.access_token}, has refresh_token=${!!tokenResponse.refresh_token}`,
     );
 
     if (
@@ -871,21 +987,76 @@ export class ConnectorsController {
 
     const resolvedEnvType = deriveEnvType(decodedState.vendorParams);
 
-    // Read appProfile from request (or vendor params), defaulting to 'default' when absent.
-    // This allows Salesforce OAuth flows to set appProfile dynamically rather than forcing 'revenova'.
-    let rawAppProfile = 'default';
-    if (typeof body.appProfile === 'string' && body.appProfile.trim() !== '') {
-      rawAppProfile = body.appProfile.trim();
+    // Resolve appProfile from the alias definition, the request, the piece definition, or fall back to 'standard'.
+    let rawAppProfile = 'standard';
+    if (aliasAppProfile) {
+      rawAppProfile = aliasAppProfile;
+      this.logger.log(
+        `[OAuth Exchange] STEP 4: appProfile="${rawAppProfile}" resolved from alias definition`,
+      );
     } else if (
-      typeof decodedState.vendorParams?.appProfile === 'string' &&
-      decodedState.vendorParams.appProfile.trim() !== ''
+      typeof body.appProfile === 'string' &&
+      body.appProfile.trim() !== ''
     ) {
-      rawAppProfile = decodedState.vendorParams.appProfile.trim();
+      rawAppProfile = body.appProfile.trim();
+      this.logger.log(
+        `[OAuth Exchange] STEP 4: appProfile="${rawAppProfile}" resolved from request body`,
+      );
+    } else if (
+      typeof decodedState.metadata?.appProfile === 'string' &&
+      decodedState.metadata.appProfile.trim() !== ''
+    ) {
+      rawAppProfile = decodedState.metadata.appProfile.trim();
+      this.logger.log(
+        `[OAuth Exchange] STEP 4: appProfile="${rawAppProfile}" resolved from metadata`,
+      );
+    } else if (piece.defaultAppProfile) {
+      rawAppProfile = piece.defaultAppProfile;
+      this.logger.log(
+        `[OAuth Exchange] STEP 4: appProfile="${rawAppProfile}" resolved from piece.defaultAppProfile`,
+      );
+    } else {
+      this.logger.log(
+        `[OAuth Exchange] STEP 4: appProfile defaulted to "standard"`,
+      );
     }
+
+    if (typeof piece.validateConnection === 'function') {
+      this.logger.log(
+        `[OAuth Exchange] STEP 5: running validateConnection for ${body.providerName} appProfile="${rawAppProfile}"...`,
+      );
+      try {
+        await piece.validateConnection(
+          tokenResponse,
+          decodedState.vendorParams ?? {},
+          rawAppProfile,
+        );
+        this.logger.log(
+          `[OAuth Exchange] STEP 5 OK: validateConnection passed for ${body.providerName}`,
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `[OAuth Exchange] STEP 5 FAIL: validateConnection rejected for provider "${body.providerName}" ` +
+            `(appProfile="${rawAppProfile}", tenant="${tenantId}"): ${reason}`,
+        );
+        throw new BadRequestException(
+          `Connection validation failed for provider "${body.providerName}": ${reason}`,
+        );
+      }
+    } else {
+      this.logger.log(
+        `[OAuth Exchange] STEP 5 SKIP: no validateConnection defined for ${body.providerName}`,
+      );
+    }
+
     const metadata: Record<string, unknown> = {
       appProfile: rawAppProfile,
     };
 
+    this.logger.log(
+      `[OAuth Exchange] STEP 6: persisting connection tenantId=${tenantId}, provider=${body.providerName}, externalId=${externalId}, appProfile=${rawAppProfile}...`,
+    );
     await this.persistConnection(
       tenantId,
       body.providerName,
@@ -896,6 +1067,9 @@ export class ConnectorsController {
       body.connectionId,
       resolvedEnvType,
       metadata,
+    );
+    this.logger.log(
+      `[OAuth Exchange] STEP 6 OK: connection persisted to database`,
     );
 
     // Mark as fully processed to prevent StrictMode duplicates from failing.
@@ -1069,10 +1243,23 @@ export class ConnectorsController {
       throw new BadRequestException('tenantId or user context is missing');
     }
 
-    await this.assertAdminOrOwner(ctx.user.id, tenantId);
+    try {
+      await this.assertAdminOrOwner(ctx.user.id, tenantId);
 
-    // Validates RESTRICT constraints on global_entity_map before deleting
-    await this.connectorsService.deleteConnection(tenantId, connectionId);
+      // Validates RESTRICT constraints on global_entity_map before deleting
+      await this.connectorsService.deleteConnection(tenantId, connectionId);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to delete connection ${connectionId} for tenant ${tenantId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while deleting the connection',
+      );
+    }
   }
 
   /**

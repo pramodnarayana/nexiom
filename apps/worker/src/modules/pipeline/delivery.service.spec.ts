@@ -632,26 +632,27 @@ describe("DeliveryService", () => {
       };
       db.transaction.mockImplementation(async (cb: any) => cb(mockTx));
       const res = await (service as any).writeL6Result(
-        "ws_schema",
-        "ws_schema",
-        "o",
-        "conn",
-        "trace",
-        "route",
-        null,
-        500,
-        "SUCCESS",
-        Date.now(),
-        undefined,
-        "RAW",
-        "app",
-        "org",
-        undefined,
-        "tgt",
-        undefined,
-        undefined,
-        undefined,
-        db,
+        "ws_schema", // destSchemaName
+        "ws_schema", // srcSchemaName
+        "o", // outboundGatewayId
+        "conn", // connectionId
+        "trace", // traceId
+        "route", // routeId
+        null, // resPayload
+        null, // sentPayload
+        500, // statusCode
+        "SUCCESS", // finalStatus
+        Date.now(), // start
+        undefined, // destVendorId
+        "RAW", // canonicalType
+        "app", // srcAppName
+        "org", // srcTenantId
+        undefined, // srcVendorId
+        "tgt", // targetConnectionId
+        undefined, // targetAppName
+        undefined, // targetTenantId
+        undefined, // targetObject
+        db, // tenantDb
       );
       expect(res).toBe(true);
     });
@@ -671,26 +672,27 @@ describe("DeliveryService", () => {
       db.transaction.mockImplementationOnce(async (cb: any) => cb(mockTx));
       db.transaction.mockRejectedValueOnce(new Error("db failure"));
       const res = await (service as any).writeL6Result(
-        "ws_schema",
-        "ws_schema",
-        "o",
-        "conn",
-        "trace",
-        "route",
-        null,
-        500,
-        "SUCCESS",
-        Date.now(),
-        undefined,
-        "RAW",
-        "app",
-        "org",
-        undefined,
-        "tgt",
-        undefined,
-        undefined,
-        undefined,
-        db,
+        "ws_schema", // destSchemaName
+        "ws_schema", // srcSchemaName
+        "o", // outboundGatewayId
+        "conn", // connectionId
+        "trace", // traceId
+        "route", // routeId
+        null, // resPayload
+        null, // sentPayload
+        500, // statusCode
+        "SUCCESS", // finalStatus
+        Date.now(), // start
+        undefined, // destVendorId
+        "RAW", // canonicalType
+        "app", // srcAppName
+        "org", // srcTenantId
+        undefined, // srcVendorId
+        "tgt", // targetConnectionId
+        undefined, // targetAppName
+        undefined, // targetTenantId
+        undefined, // targetObject
+        db, // tenantDb
       );
       expect(res).toBe(false);
     });

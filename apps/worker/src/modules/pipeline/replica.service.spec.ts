@@ -31,6 +31,17 @@ describe("ReplicaService", () => {
       }),
     };
     db = {
+      query: {
+        appConnections: {
+          findFirst: vi.fn().mockResolvedValue({
+            appName: "salesforce",
+            metadata: { appProfile: "revenova" },
+          }),
+        },
+        globalEntityMap: {
+          findFirst: vi.fn().mockResolvedValue({}),
+        },
+      },
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -172,6 +183,8 @@ describe("ReplicaService", () => {
         limit: vi.fn().mockResolvedValue([]), // mock inbound not found
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
       }),
     );
@@ -183,6 +196,7 @@ describe("ReplicaService", () => {
   });
 
   it("should throw if connection not found in appConnections", async () => {
+    db.query.appConnections.findFirst.mockResolvedValueOnce(undefined);
     db.limit.mockResolvedValueOnce([]); // no appName returned
     db.transaction.mockImplementationOnce(async (cb: any) =>
       cb({
@@ -202,6 +216,8 @@ describe("ReplicaService", () => {
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
       }),
     );
@@ -235,6 +251,8 @@ describe("ReplicaService", () => {
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
       }),
     );
@@ -340,6 +358,8 @@ describe("ReplicaService", () => {
         ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
         delete: vi.fn().mockReturnThis(),
       }),
     );
@@ -375,6 +395,8 @@ describe("ReplicaService", () => {
         delete: vi.fn().mockReturnThis(),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
+        onConflictDoUpdate: vi.fn().mockReturnThis(),
+        onConflictDoNothing: vi.fn().mockReturnThis(),
       }),
     );
     service.onModuleInit();

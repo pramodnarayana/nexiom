@@ -768,7 +768,16 @@ export class DatabaseManager {
    * For all other apps, returns empty metadata (default profile).
    */
   private deriveMetadata(appName: string): Record<string, unknown> {
-    return appName === 'salesforce' ? { appProfile: 'revenova' } : {};
+    // appProfile MUST be set on every connection so that PipelineHookBrokerService
+    // can resolve the correct application shard (e.g. quickbooks/online,
+    // salesforce/revenova). Without it the broker falls back to '<appName>/standard',
+    // which has no shard, and prepareUpdate silently returns the raw payload.
+    const profiles: Record<string, string> = {
+      salesforce: 'revenova',
+      quickbooks: 'online',
+    };
+    const appProfile = profiles[appName] ?? 'standard';
+    return { appProfile };
   }
 
   /**
@@ -796,7 +805,10 @@ export class DatabaseManager {
    * Ensures client.end() in a finally block.
    */
   private async withSchemaMgr<T>(
-    cb: (mgr: import('@nexiom/dbmanager').TenantDatabaseManager) => Promise<T>,
+    cb: (
+      mgr: import('@nexiom/dbmanager').TenantDatabaseManager,
+      db: import('@nexiom/database').DrizzleDb,
+    ) => Promise<T>,
   ): Promise<T> {
     const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
     const { getDomainProvisioner } = await import('@nexiom/piece-framework');
@@ -816,8 +828,11 @@ export class DatabaseManager {
           const parsedEnv = new URL(dbUrl);
           const parsedHost = new URL(hostIdentifier);
 
-          // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
-          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+          // Build full DSN: credentials from DATABASE_URL, host+path from hostIdentifier.
+          // NOTE: TenantDatabaseManager already appends the tenant DB name to the pathname
+          // before calling this factory, so we must use parsedHost.pathname (not parsedEnv.pathname
+          // which would be the global DB path, e.g. /nexiom_global).
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedHost.pathname}${parsedHost.search}`;
 
           const pool = new Pool({
             connectionString: fullDsn,
@@ -831,7 +846,10 @@ export class DatabaseManager {
         },
         getDomainProvisioner,
       );
-      return await cb(schemaMgr);
+      return await cb(
+        schemaMgr,
+        db as unknown as import('@nexiom/database').DrizzleDb,
+      );
     } finally {
       await client.end();
     }
@@ -1116,11 +1134,26 @@ export class DatabaseManager {
     console.log(`🔧 Applying GATEWAY_ACTIVE to schema: ${schemaName}...\n`);
 
     const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const dbSchema = await import('./schema.js');
+    const { eq } = await import('drizzle-orm');
 
-    await this.withSchemaMgr(async (schemaMgr) => {
-      const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
+    await this.withSchemaMgr(async (schemaMgr, db) => {
+      const connRow = await db
+        .select({ tenantId: dbSchema.appConnections.tenantId })
+        .from(dbSchema.appConnections)
+        .where(eq(dbSchema.appConnections.schemaName, schemaName))
+        .limit(1);
+
+      const tenantId = connRow[0]?.tenantId;
+      if (!tenantId) {
+        throw new Error(
+          `No connection found with schema_name="${schemaName}". ` +
+            `Run 'node scripts/create-stitch.mjs --list' to see available connections.`,
+        );
+      }
+
       await schemaMgr.applyPlan(
-        devTenantId,
+        tenantId,
         schemaName,
         SchemaPlan.GATEWAY_ACTIVE,
       );
@@ -1139,11 +1172,26 @@ export class DatabaseManager {
     console.log(`🔧 Applying OUTBOUND_ACTIVE to schema: ${schemaName}...\n`);
 
     const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const dbSchema = await import('./schema.js');
+    const { eq } = await import('drizzle-orm');
 
-    await this.withSchemaMgr(async (schemaMgr) => {
-      const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
+    await this.withSchemaMgr(async (schemaMgr, db) => {
+      const connRow = await db
+        .select({ tenantId: dbSchema.appConnections.tenantId })
+        .from(dbSchema.appConnections)
+        .where(eq(dbSchema.appConnections.schemaName, schemaName))
+        .limit(1);
+
+      const tenantId = connRow[0]?.tenantId;
+      if (!tenantId) {
+        throw new Error(
+          `No connection found with schema_name="${schemaName}". ` +
+            `Run 'node scripts/create-stitch.mjs --list' to see available connections.`,
+        );
+      }
+
       await schemaMgr.applyPlan(
-        devTenantId,
+        tenantId,
         schemaName,
         SchemaPlan.OUTBOUND_ACTIVE,
       );
@@ -1164,10 +1212,12 @@ export class DatabaseManager {
       '🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...\n',
     );
 
-    await this.withSchemaMgr(async (schemaMgr) => {
+    const dbSchema = await import('./schema.js');
+    const { eq } = await import('drizzle-orm');
+
+    await this.withSchemaMgr(async (schemaMgr, db) => {
       const client = await this.getPgClient();
       try {
-        const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
         const result = await client.query<{ schema_name: string }>(`
           SELECT schema_name
           FROM information_schema.schemata
@@ -1184,7 +1234,20 @@ export class DatabaseManager {
 
         for (const { schema_name } of result.rows) {
           try {
-            await schemaMgr.migrateToOutboundActive(devTenantId, schema_name);
+            const connRow = await db
+              .select({ tenantId: dbSchema.appConnections.tenantId })
+              .from(dbSchema.appConnections)
+              .where(eq(dbSchema.appConnections.schemaName, schema_name))
+              .limit(1);
+
+            const tenantId = connRow[0]?.tenantId;
+            if (!tenantId) {
+              throw new Error(
+                `No connection found for schema "${schema_name}" — skipping migration.`,
+              );
+            }
+
+            await schemaMgr.migrateToOutboundActive(tenantId, schema_name);
             console.log(`  ✓ ${schema_name}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);

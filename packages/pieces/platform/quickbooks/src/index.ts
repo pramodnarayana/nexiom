@@ -339,6 +339,7 @@ export const quickbooks = createPiece({
   name: "quickbooks",
   displayName: "Quickbooks Online",
   auth: quickbooksAuth,
+  defaultAppProfile: 'online',
   minimumSupportedRelease: '0.36.1',
   logoUrl: "https://cdn.activepieces.com/pieces/quickbooks.png",
   authors: [
@@ -376,78 +377,19 @@ export const quickbooks = createPiece({
     const env = resolveEnvironment(vendorParams);
     const useSandbox = env === 'test';
     
-    let url = quickbooksCommon.getApiUrl(realmId, useSandbox);
+    let baseUrl = quickbooksCommon.getApiUrl(realmId, useSandbox);
     if (credentials['base_url']) {
-      url = `${credentials['base_url'] as string}/v3/company/${encodeURIComponent(realmId)}`;
+      baseUrl = `${credentials['base_url'] as string}/v3/company/${encodeURIComponent(realmId)}`;
     }
-    url = `${url}/${objectType.toLowerCase()}`;
+    const url = `${baseUrl}/${objectType.toLowerCase()}`;
 
-    // Reads the sync context injected by the pipeline (L4 FanOut).
-    // `_sync.dest.id`    — the known destination entity ID from the GEM table.
-    // `_sync.dest.state` — the cached replica payload (used to read SyncToken locally).
-    const syncCtx = payload['_sync'] as { dest?: { id?: string; state?: unknown } } | undefined;
-    const destId = syncCtx?.dest?.id;
-    const destState = syncCtx?.dest?.state as Record<string, unknown> | undefined;
-    delete payload['_sync'];
-
-    // Extract the cached SyncToken from the stored replica state.
-    // QuickBooks wraps the entity under the object type key (e.g. body.Vendor.SyncToken).
-    // Use a case-insensitive key search because stitch.targetObject may be stored as
-    // "VENDOR" while the QB API response key is "Vendor" — they must be treated as equivalent.
-    const destStateEntityKey = destState
-      ? Object.keys(destState).find(k => k.toLowerCase() === objectType.toLowerCase())
-      : undefined;
-    const cachedSyncToken =
-      (destStateEntityKey && destState?.[destStateEntityKey] as Record<string, unknown> | undefined)?.['SyncToken'] as string | undefined ??
-      (typeof destState?.['SyncToken'] === 'string' ? destState['SyncToken'] : undefined);
-
-    let reqPayload = payload;
-
-    const fetchCurrentEntity = async (): Promise<string | undefined> => {
-      const getUrl = `${url}/${encodeURIComponent(destId!)}`;
-      try {
-        const getRes = await fetch(getUrl, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          signal: AbortSignal.timeout(10_000),
-        });
-
-        if (getRes.ok) {
-          const getBody = await getRes.json().catch(() => ({})) as Record<string, unknown>;
-          const entity = getBody[objectType] as Record<string, unknown> | undefined;
-          if (entity && typeof entity['SyncToken'] === 'string') {
-            return entity['SyncToken'];
-          }
-        }
-      } catch {
-        // Suppress GET failure — caller handles undefined return.
-      }
-      return undefined;
-    };
-
-    if (destId) {
-      if (cachedSyncToken !== undefined) {
-        // ── OPTIMIZED UPDATE FLOW (Cache Hit) ─────────────────────────────
-        // Use the SyncToken from our local replica cache — zero extra API calls.
-        reqPayload = { ...payload, Id: destId, SyncToken: cachedSyncToken };
-      } else {
-        // ── FALLBACK UPDATE FLOW (Cold Cache) ─────────────────────────────
-        // First update after system start; replica cache not yet populated.
-        const freshToken = await fetchCurrentEntity();
-        if (freshToken) {
-          reqPayload = { ...payload, Id: destId, SyncToken: freshToken };
-        } else {
-          // No sync token available — cannot proceed with update
-          throw new Error(
-            `Cannot update QuickBooks ${objectType} with Id=${destId}: ` +
-            `SyncToken is unavailable (not cached and GET request failed/returned nothing). ` +
-            `This entity may have been deleted or the destId may be stale.`
-          );
-        }
-      }
+    // Strip internal Nexiom pipeline metadata before any API call.
+    // Keys prefixed with `_` (e.g. `_routingEnvelope`) are never valid QB fields and
+    // QB rejects them with ValidationFault code 2010 ("unsupported property").
+    // This is a platform-level guarantee — independent of the application shard.
+    const cleanPayload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(payload)) {
+      if (!k.startsWith('_')) cleanPayload[k] = v;
     }
 
     const executePost = async (payloadData: unknown) => {
@@ -473,24 +415,62 @@ export const quickbooks = createPiece({
       return { res, body };
     };
 
-    let { res, body } = await executePost(reqPayload);
-
-    // ── SMART FALLBACK — Stale Object Recovery ─────────────────────────────
-    // If we used a cached token and QB rejects it (fault code 5010 = stale),
-    // someone manually edited the record in the QB UI since our last cache write.
-    // Fetch the fresh token inline and retry exactly once.
-    if (res.status === 400 && destId && cachedSyncToken !== undefined) {
+    // ── Rule: SyncToken stale auto-refresh ────────────────────────────────────
+    // QB requires the current SyncToken on every update (POST with Id). If it's
+    // stale, QB returns a 400 ValidationFault with code 5010 or a message
+    // containing "SyncToken". On detection: GET the entity to fetch the fresh
+    // SyncToken and retry the update exactly once.
+    const isSyncTokenError = (status: number, body: Record<string, unknown>): boolean => {
+      if (status !== 400 && status !== 409) return false;
       const fault = body['Fault'] as Record<string, unknown> | undefined;
-      const errors = fault?.['Error'] as Array<Record<string, unknown>> | undefined;
-      const isStaleObject = errors?.some(e => String(e['code']) === '5010');
+      const errors = (fault?.['Error'] ?? []) as Array<Record<string, unknown>>;
+      return errors.some(e => {
+        const code = String(e['code'] ?? '');
+        const msg = String(e['Message'] ?? e['Detail'] ?? '').toLowerCase();
+        return code === '5010' || msg.includes('synctoken') || msg.includes('stale token');
+      });
+    };
 
-      if (isStaleObject) {
-        const freshToken = await fetchCurrentEntity();
-        if (freshToken) {
-          const retryResult = await executePost({ ...payload, Id: destId, SyncToken: freshToken });
-          res = retryResult.res;
-          body = retryResult.body;
-        }
+    const fetchLatestEntityRecord = async (entityId: string): Promise<Record<string, unknown> | null> => {
+      try {
+        const getUrl = `${url}/${encodeURIComponent(entityId)}`;
+        const res = await fetch(getUrl, {
+          method: 'GET',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json() as Record<string, unknown>;
+        const matchKey = Object.keys(data).find(k => k.toLowerCase() === objectType.toLowerCase()) ?? objectType;
+        return (data[matchKey] as Record<string, unknown> | undefined) ?? null;
+      } catch {
+        return null;
+      }
+    };
+
+    // Track the payload that was ultimately accepted by QB.
+    // On a clean first-attempt success this is cleanPayload.
+    // On a SyncToken refresh-and-retry this is retryPayload (with fresh SyncToken).
+    // sentPayload is written back to outbound_gateway by DeliveryService so the
+    // customer support team always sees the exact request QB accepted.
+    let sentPayload: Record<string, unknown> = cleanPayload;
+
+    let { res, body } = await executePost(cleanPayload);
+
+    // If the first call fails with a SyncToken error and the payload contains an Id
+    // (i.e. this is an update, not a create), refresh the token and retry once.
+    const payloadId = typeof cleanPayload['Id'] === 'string' ? cleanPayload['Id'] : null;
+
+    if (isSyncTokenError(res.status, body) && payloadId) {
+      const latestEntity = await fetchLatestEntityRecord(payloadId);
+      const freshSyncToken = latestEntity?.['SyncToken'] as string | undefined;
+      if (freshSyncToken) {
+        const retryPayload = { ...cleanPayload, Id: payloadId, SyncToken: freshSyncToken };
+        const retried = await executePost(retryPayload);
+        res = retried.res;
+        body = retried.body;
+        // Update sentPayload to reflect the retried payload that succeeded.
+        sentPayload = retryPayload;
       }
     }
 
@@ -499,10 +479,9 @@ export const quickbooks = createPiece({
     const matchingKey = Object.keys(body).find(k => k.toLowerCase() === objectType.toLowerCase()) ?? objectType;
     const entityObj = body[matchingKey] as Record<string, unknown> | undefined;
     const entityId = (typeof entityObj?.['Id'] === 'string' ? entityObj['Id'] : undefined)
-      ?? (typeof body['Id'] === 'string' ? body['Id'] : undefined)
-      ?? destId;
+      ?? (typeof body['Id'] === 'string' ? body['Id'] : undefined);
 
-    return { statusCode: res.status, body, entityId };
+    return { statusCode: res.status, body, entityId, sentPayload };
   },
   // NOTE: QuickBooks webhook support is intentionally disabled.
   // QB sends all company events to a single app endpoint identified by

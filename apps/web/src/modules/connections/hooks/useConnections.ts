@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/shared/lib/auth/context';
-import { listActiveConnections, exchangeOAuthCode, createOAuthSession, type ActiveConnectionResponse } from '../api/connections.api';
+import { listActiveConnections, exchangeOAuthCode, createOAuthSession, deleteConnection as deleteConnectionAPI, type ActiveConnectionResponse } from '../api/connections.api';
 import { useOAuthPopup } from './useOAuthPopup';
 import { useToast } from '@/shared/hooks/use-toast';
 
@@ -78,15 +78,23 @@ export function useConnections() {
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
                 await refresh();
             } catch (err: unknown) {
+                // Extract the most specific error message available.
+                // Axios wraps HTTP error bodies under err.response.data.
                 let msg = 'Unknown error occurred.';
-                if (err instanceof Error) {
-                    msg = err.message;
-                } else if (typeof err === 'object' && err !== null && 'response' in err) {
-                    const anyErr = err as { response?: { data?: { message?: string } } };
-                    if (anyErr.response?.data?.message) {
-                        msg = anyErr.response.data.message;
+                if (typeof err === 'object' && err !== null && 'response' in err) {
+                    const axiosErr = err as { response?: { data?: { message?: string | string[] } } };
+                    const backendMsg = axiosErr.response?.data?.message;
+                    if (Array.isArray(backendMsg)) {
+                        msg = backendMsg.join('; ');
+                    } else if (typeof backendMsg === 'string' && backendMsg.length > 0) {
+                        msg = backendMsg;
+                    } else if (err instanceof Error) {
+                        msg = err.message;
                     }
+                } else if (err instanceof Error) {
+                    msg = err.message;
                 }
+                console.error('[useConnections] OAuth exchange failed:', err);
                 toast({ title: 'Connection Setup Failed', description: msg, variant: 'destructive' });
             }
         })();
@@ -156,5 +164,20 @@ export function useConnections() {
         [openPopup, closePopup, toast],
     );
 
-    return { connections, loading, refresh, connect };
+    const remove = useCallback(
+        async (connectionId: string): Promise<void> => {
+            try {
+                await deleteConnectionAPI(connectionId);
+                toast({ title: 'Connection deleted', description: 'The connection has been successfully removed.' });
+                await refresh();
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Failed to delete connection';
+                toast({ title: 'Delete failed', description: msg, variant: 'destructive' });
+                throw err;
+            }
+        },
+        [refresh, toast],
+    );
+
+    return { connections, loading, refresh, connect, remove };
 }

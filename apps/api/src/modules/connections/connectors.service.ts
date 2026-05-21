@@ -17,11 +17,10 @@ import type { OAuth2Auth } from '@nexiom/piece-framework';
 import {
   appConnections,
   AppConnectionStatus,
-  buildTenantSchema,
-  assertValidSchemaName,
   DATABASE_CONNECTION,
   globalRegistryOutbox,
   type DrizzleDb,
+  globalEntityMap,
 } from '@nexiom/database';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { SchemaPlan, getWorkspaceSchemaName } from '@nexiom/dbmanager';
@@ -694,30 +693,25 @@ export class ConnectorsService {
       }
     });
 
-    // ── Step 2: Check GEM in the tenant workspace schema ─────────────────────
-    // GEM is data-plane data scoped to the connection's workspace namespace.
-    // We must resolve the schema and use search_path to check it correctly.
+    // ── Step 2: Check GEM in the tenant database ─────────────────────────────
+    // GEM is data-plane data stored in the tenant control-plane public schema.
     try {
-      const schemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
-      assertValidSchemaName(schemaName);
-      const { globalEntityMap } = buildTenantSchema(schemaName);
+      const storageProfile =
+        await this.storageResolver.resolveStorageProfile(connectionId);
+      const tenantId = storageProfile.tenantId;
 
-      const [mapping] = await this.db.transaction(async (tx) => {
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-        );
-        return tx
-          .select({ id: globalEntityMap.id })
-          .from(globalEntityMap)
-          .where(
-            or(
-              eq(globalEntityMap.sourceAppId, connectionId),
-              eq(globalEntityMap.destAppId, connectionId),
-            ),
-          )
-          .limit(1);
-      });
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
+      const [mapping] = await tenantDb
+        .select({ id: globalEntityMap.id })
+        .from(globalEntityMap)
+        .where(
+          or(
+            eq(globalEntityMap.sourceAppId, connectionId),
+            eq(globalEntityMap.destAppId, connectionId),
+          ),
+        )
+        .limit(1);
 
       if (mapping) {
         throw new ConflictException(
@@ -728,14 +722,24 @@ export class ConnectorsService {
       // Re-throw ConflictException; schema not found means no GEM data → safe to proceed
       if (err instanceof ConflictException) throw err;
 
-      // Only swallow "schema does not exist" errors — all other errors should abort deletion
+      // Only swallow "schema does not exist" or "relation does not exist" errors
       const errMsg = err instanceof Error ? err.message : String(err);
+
+      // Drizzle may wrap the Postgres error, so we check both the top-level code and the cause's code
+      const pgCode =
+        (err as { code?: string })?.code ||
+        (err as { cause?: { code?: string } })?.cause?.code;
+
       if (
-        errMsg.includes('schema') &&
-        (errMsg.includes('does not exist') || errMsg.includes('not found'))
+        pgCode === '3F000' || // invalid_schema_name
+        pgCode === '42P01' || // undefined_table
+        (errMsg.includes('schema') &&
+          (errMsg.includes('does not exist') ||
+            errMsg.includes('not found'))) ||
+        (errMsg.includes('relation') && errMsg.includes('does not exist'))
       ) {
         this.logger.warn(
-          `Schema not found for connection ${connectionId} — proceeding with deletion: ${errMsg}`,
+          `Storage not fully provisioned for connection ${connectionId} — proceeding with deletion: ${errMsg}`,
         );
       } else {
         // Transient failures or unexpected errors should abort deletion

@@ -14,10 +14,13 @@ import {
   integrationStitches,
   fieldMappings,
   appConnections,
+  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
   StorageResolverService,
+  ApplicationLoaderService,
+  PipelineHookBrokerService,
   evaluateConditions,
   Condition,
 } from "@nexiom/engine";
@@ -42,7 +45,12 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     private readonly storageResolver: StorageResolverService,
     private readonly targetBuilder: TargetBuilderService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
-  ) {}
+    private readonly applicationLoader: ApplicationLoaderService,
+  ) {
+    this.broker = new PipelineHookBrokerService(this.applicationLoader);
+  }
+
+  private readonly broker: PipelineHookBrokerService;
 
   onModuleInit() {
     this.queueService.consume(QueueName.NormalizedQueue, async (msg) => {
@@ -244,7 +252,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           ? metadata.appProfile.trim()
           : "";
       const appProfile =
-        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
+        trimmedAppProfile !== "" ? trimmedAppProfile : "standard";
 
       // ── Process each stitch concurrently (capped at 5) ────────────────────
       // Using processInChunks instead of a sequential for...of loop to bound
@@ -405,7 +413,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // (e.g. tmsTargetBuilder) to assemble the enriched context from typed
       // per-entity tables, then applies the field mapping rules.
       // appProfile is threaded from processMessage context (read from connection.metadata)
-      const hydratedPayload = await this.targetBuilder.buildPayload(
+      let hydratedPayload = await this.targetBuilder.buildPayload(
         schemaName,
         srcAppName,
         appProfile,
@@ -415,34 +423,68 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         mappingRules,
       );
 
+      // ── Resolve destination connection metadata (always needed for shard dispatch) ──
+      // appName + appProfile determine which application shard to invoke.
+      // appConnections (including metadata.appProfile) lives in the TENANT DB.
+      // The global DB only holds tenantId for routing — never full metadata.
+      const destConnMeta = await tenantDb.query.appConnections.findFirst({
+        where: eq(appConnections.id, stitch.destConnectionId),
+        columns: { tenantId: true, appName: true, metadata: true },
+      });
+      if (!destConnMeta) {
+        throw new Error(
+          `Destination connection ${stitch.destConnectionId} not found`,
+        );
+      }
+      const destAppName = destConnMeta.appName;
+      const destAppProfile = (destConnMeta.metadata as Record<string, any>)
+        ?.appProfile as string | undefined;
+
+      if (!destAppProfile) {
+        throw new Error(
+          `Destination connection ${stitch.destConnectionId} (${destAppName}) is missing 'appProfile' in its metadata. ` +
+            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova').`,
+        );
+      }
+
+      // ── DEBUG: trace shard resolution ──────────────────────────────────────
+      this.logger.log(
+        {
+          event: "l4.debug.shard_resolution",
+          traceId,
+          destConnectionId: stitch.destConnectionId,
+          destAppName,
+          destAppProfile,
+          rawMetadata: destConnMeta.metadata,
+        },
+        `[DEBUG] Shard will be resolved as: ${destAppName}/${destAppProfile}`,
+      );
+
       // ── Lookup GEM destEntityId for Updates ────────────────────────────────
+      // If a GEM mapping exists, this is an UPDATE operation; we fetch the
+      // existing destination entity state so the shard can inject the correct
+      // Id and SyncToken.  If no mapping exists this is a CREATE — destEntityId
+      // and destState remain undefined.
+      let destEntityId: string | undefined;
+      let destState: Record<string, unknown> | undefined;
+
       if (srcVendorId) {
-        const { globalEntityMap } = buildTenantSchema(schemaName);
-        const gemMappings = await tenantDb.transaction(async (tx) => {
-          assertValidSchemaName(schemaName);
-          await tx.execute(
-            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-          );
-          return tx
-            .select()
-            .from(globalEntityMap)
-            .where(
-              sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
-            )
-            .limit(1);
-        });
+        const gemMappings = await tenantDb
+          .select()
+          .from(globalEntityMap)
+          .where(
+            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
+          )
+          .limit(1);
 
         if (gemMappings.length > 0) {
-          const destEntityId = gemMappings[0].destEntityId;
+          destEntityId = gemMappings[0].destEntityId;
+          this.logger.log(
+            { event: "l4.debug.gem_hit", traceId, destEntityId },
+            `[DEBUG] GEM mapping found — update route, destEntityId=${destEntityId}`,
+          );
 
-          // ── Build _sync context envelope ──────────────────────────────────
-          // Injected as a single structured block rather than individual keys
-          // to keep the pipeline-to-piece contract clean and vendor-agnostic.
-          // The Piece reads _sync.dest.id and _sync.dest.state internally.
-          const syncCtx: { dest: { id: string; state?: unknown } } = {
-            dest: { id: destEntityId },
-          };
-
+          // Fetch cached destination state for SyncToken extraction
           try {
             const targetSchemaName =
               await this.storageResolver.resolveSchemaName(
@@ -450,23 +492,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               );
             const { replicaEntity: targetReplicaEntity } =
               buildTenantSchema(targetSchemaName);
-
-            // Fetch destination connection's tenantId to get the correct DB
-            const destConnMeta =
-              await this.globalDb.query.appConnections.findFirst({
-                where: eq(appConnections.id, stitch.destConnectionId),
-                columns: { tenantId: true },
-              });
-            if (!destConnMeta) {
-              throw new Error(
-                `Destination connection ${stitch.destConnectionId} not found`,
-              );
-            }
-
             const destTenantDb = await this.dbManager.getTenantDb(
               destConnMeta.tenantId,
             );
-
             const targetReplica = await destTenantDb
               .select()
               .from(targetReplicaEntity)
@@ -474,30 +502,66 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
                 sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityType} = ${stitch.targetObject} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
               )
               .limit(1);
-
             if (targetReplica.length > 0) {
-              syncCtx.dest.state = targetReplica[0].data;
+              destState = targetReplica[0].data as Record<string, unknown>;
+              this.logger.log(
+                {
+                  event: "l4.debug.dest_state_found",
+                  traceId,
+                  destEntityId,
+                  syncToken:
+                    (destState as { SyncToken?: string })?.SyncToken ??
+                    "not_found",
+                },
+                `[DEBUG] destState loaded — SyncToken=${(destState as { SyncToken?: string })?.SyncToken ?? "not_found"}`,
+              );
+            } else {
+              this.logger.warn(
+                { event: "l4.debug.dest_state_missing", traceId, destEntityId },
+                `[DEBUG] No replicaEntity found for destEntityId=${destEntityId} — SyncToken will be missing`,
+              );
             }
           } catch (err) {
             this.logger.warn(
               { err: sanitizeError(err), traceId, routeId: stitch.id },
-              "Failed to load target replica state for _sync context — omitting dest.state",
+              "Failed to load target replica state for prepareUpdate — omitting destState",
             );
           }
-
-          hydratedPayload["_sync"] = syncCtx;
-          this.logger.debug(
-            {
-              event: "l4.gem_lookup",
-              traceId,
-              routeId: stitch.id,
-              layer: "L4",
-              destEntityId,
-            },
-            "Found existing destination entity mapping (update route)",
+        } else {
+          this.logger.log(
+            { event: "l4.debug.gem_miss", traceId, srcVendorId },
+            `[DEBUG] No GEM mapping found for srcVendorId=${srcVendorId} — create route`,
           );
         }
       }
+
+      // ── Execute Application Shard prepareUpdate hook (always) ────────────────
+      // This hook runs on every route — creates and updates.  The shard decides
+      // what to inject based on whether destEntityId is provided:
+      //   • UPDATE (destEntityId set):  injects Id, SyncToken, sparse, domain
+      //   • CREATE (destEntityId unset): injects only vendor-level defaults (sparse, domain)
+      const payloadBeforePrepare = { ...hydratedPayload };
+      hydratedPayload = await this.broker.prepareUpdate(
+        destAppName,
+        destAppProfile,
+        hydratedPayload,
+        destEntityId,
+        destState,
+      );
+      this.logger.log(
+        {
+          event: "l4.debug.prepare_update_result",
+          traceId,
+          destEntityId,
+          beforeKeys: Object.keys(payloadBeforePrepare),
+          afterKeys: Object.keys(hydratedPayload),
+          hasId: "Id" in hydratedPayload,
+          hasSyncToken: "SyncToken" in hydratedPayload,
+          hasSparse: "sparse" in hydratedPayload,
+          hasDomain: "domain" in hydratedPayload,
+        },
+        `[DEBUG] prepareUpdate result — Id=${"Id" in hydratedPayload}, SyncToken=${"SyncToken" in hydratedPayload}, sparse=${"sparse" in hydratedPayload}, domain=${"domain" in hydratedPayload}`,
+      );
 
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);

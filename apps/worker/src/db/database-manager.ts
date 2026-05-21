@@ -608,6 +608,20 @@ export class DatabaseManager {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Derives metadata object based on appName.
+   * For Salesforce connections, sets appProfile to 'revenova'.
+   * For Quickbooks, sets appProfile to 'online'.
+   */
+  private deriveMetadata(appName: string): Record<string, unknown> {
+    const profiles: Record<string, string> = {
+      salesforce: "revenova",
+      quickbooks: "online",
+    };
+    const appProfile = profiles[appName] ?? "standard";
+    return { appProfile };
+  }
+
+  /**
    * Encrypts a string using AES-256-GCM — same algorithm as LocalCryptoAdapter.
    * Wire format: `<iv_hex>:<authTag_hex>:<ciphertext_hex>`
    */
@@ -699,17 +713,25 @@ export class DatabaseManager {
       const broker = new PipelineHookBrokerService(loaderInstance);
 
       // Build a domainProvisionerResolver function that matches the TenantDatabaseManager interface:
-      //   (appName: string) => ((db, schemaName) => Promise<void>) | undefined
-      const domainProvisionerResolver = (appName: string) => {
+      //   (appName: string, appProfile: string) => ((db, schemaName) => Promise<void>) | undefined
+      const domainProvisionerResolver = (
+        appName: string,
+        appProfile: string,
+      ) => {
         return async (
           tenantDb: import("@nexiom/database").DrizzleDb,
           schemaName: string,
         ) => {
           try {
-            await broker.provisionDomain(appName, tenantDb, schemaName);
+            await broker.provisionDomain(
+              appName,
+              appProfile,
+              tenantDb,
+              schemaName,
+            );
           } catch (provisionErr) {
             console.error(
-              `domainProvisionerResolver: broker.provisionDomain failed for appName=${appName}, schemaName=${schemaName}:`,
+              `domainProvisionerResolver: broker.provisionDomain failed for appName=${appName}/${appProfile}, schemaName=${schemaName}:`,
               provisionErr instanceof Error
                 ? provisionErr.message
                 : String(provisionErr),
@@ -804,11 +826,15 @@ export class DatabaseManager {
               authType: "OAUTH2",
               value: encryptedValue,
               status: "INACTIVE",
+              metadata: this.deriveMetadata(fixture.appName),
             });
           } else {
             await tx
               .update(schema.appConnections)
-              .set({ status: "INACTIVE" })
+              .set({
+                status: "INACTIVE",
+                metadata: this.deriveMetadata(fixture.appName),
+              })
               .where(sql`${schema.appConnections.id} = ${fixture.id}`);
           }
 

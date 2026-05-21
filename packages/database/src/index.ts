@@ -11,6 +11,7 @@ export * from './schema/tenant/stitches.js';
 export * from './schema/tenant/pipeline.js';
 export * from './schema/tenant/chat.js';
 export * from './schema/tenant/connector_object_profiles.js';
+export * from './schema/tenant/gem.js';
 export * from './utils/tenant-guard.js';
 export * from './constants.js';
 export * from './database.module.js';

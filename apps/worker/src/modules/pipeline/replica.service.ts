@@ -84,36 +84,32 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         activeSyncLocks,
       } = buildTenantSchema(schemaName);
 
+      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+
       // Fetch application metadata
-      const connRows = await this.globalDb
-        .select({
-          appName: appConnections.appName,
-          metadata: appConnections.metadata,
-        })
-        .from(appConnections)
-        .where(eq(appConnections.id, connectionId))
-        .limit(1);
+      // appConnections (including metadata.appProfile) lives in the TENANT DB.
+      // The global DB only holds tenantId for routing — never full metadata.
+      const connMeta = await tenantDb.query.appConnections.findFirst({
+        where: eq(appConnections.id, connectionId),
+        columns: { appName: true, metadata: true },
+      });
 
-      const appName = connRows[0]?.appName;
-      const metadata = connRows[0]?.metadata as
-        | Record<string, unknown>
-        | undefined;
-
-      // Runtime validation of appProfile
-      const trimmedAppProfile =
-        typeof metadata?.appProfile === "string"
-          ? metadata.appProfile.trim()
-          : "";
-      const appProfile =
-        trimmedAppProfile !== "" ? trimmedAppProfile : "default";
-
-      if (!appName) {
+      if (!connMeta) {
         throw new Error(
           `Connection ${connectionId} not found in appConnections!`,
         );
       }
 
-      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+      const appName = connMeta.appName;
+      const appProfile = (connMeta.metadata as Record<string, any>)
+        ?.appProfile as string | undefined;
+
+      if (!appProfile) {
+        throw new Error(
+          `Connection ${connectionId} (${appName}) is missing 'appProfile' in its metadata. ` +
+            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova').`,
+        );
+      }
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(

@@ -161,7 +161,7 @@ describe("NormalizationService", () => {
     // Assert that broker.normalize was called
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
-      "default",
+      "standard",
       expect.objectContaining({
         entityType: expect.any(String),
         data: expect.any(Object),
@@ -364,7 +364,7 @@ describe("NormalizationService", () => {
     // Assert broker.normalize was called
     expect(mockBroker.normalize).toHaveBeenCalledWith(
       "test_app",
-      "default",
+      "standard",
       expect.objectContaining({
         entityType: expect.any(String),
         data: expect.any(Object),
@@ -374,7 +374,7 @@ describe("NormalizationService", () => {
     // Assert broker.writeNormalized was called
     expect(mockBroker.writeNormalized).toHaveBeenCalledWith(
       "test_app",
-      "default",
+      "standard",
       expect.anything(), // tx
       expect.anything(), // db
       "ws_1", // schemaName

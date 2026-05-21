@@ -14,6 +14,7 @@ import {
   assertValidSchemaName,
   integrationStitches,
   appConnections,
+  globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import { StorageResolverService } from "@nexiom/engine";
@@ -92,7 +93,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       typeof msg.srcTenantId === "string" ? msg.srcTenantId : "unknown";
     const start = Date.now();
 
-    this.logger.debug(
+    this.logger.log(
       {
         event: "l5.started",
         traceId,
@@ -193,6 +194,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           traceId,
           routeId,
           null, // resPayload
+          null, // sentPayload (MAX_ATTEMPTS reached, nothing sent)
           500, // statusCode
           "FAIL", // finalStatus
           start,
@@ -350,6 +352,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         .select({
           appName: appConnections.appName,
           tenantId: appConnections.tenantId,
+          metadata: appConnections.metadata,
         })
         .from(appConnections)
         .where(eq(appConnections.id, targetConnectionId))
@@ -413,13 +416,20 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         .limit(1);
       const targetObject = stitchDocs[0]?.targetObject ?? "";
 
-      // ── Call piece.executeAction ──────────────────────────────────────────
+      // ── Call prepareUpdate hook & piece.executeAction ──────────────────────────────────────────
       let resPayload: Record<string, unknown> | null = null;
       let respEntityId: string | undefined = undefined;
+      // sentPayload tracks the actual payload sent to the vendor. It starts as
+      // hydratedPayload (prepared by FanOut) and is overwritten with the piece's
+      // resp.sentPayload if the piece performed any internal mutation (e.g. SyncToken retry).
+      let sentPayload: Record<string, unknown> = hydratedPayload;
       let statusCode = 500;
       let finalStatus: "SUCCESS" | "FAIL" | "RETRY" = "FAIL";
 
       try {
+        // The payload from outbound_gateway is already finalized by FanOut's
+        // prepareUpdate hook. It contains the exact fields to be sent.
+
         const resp = await piece.executeAction(
           targetObject,
           hydratedPayload,
@@ -428,6 +438,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         resPayload = resp.body;
         respEntityId = resp.entityId;
         statusCode = resp.statusCode ?? 200;
+        // sentPayload is the exact payload the piece ultimately sent to the vendor.
+        // It may differ from hydratedPayload when the piece performs an internal
+        // retry (e.g. SyncToken refresh). We persist this back to outbound_gateway
+        // so the record reflects truth, not an intermediate prepared state.
+        if (resp.sentPayload) {
+          sentPayload = resp.sentPayload;
+        }
 
         if (statusCode >= 200 && statusCode < 300) {
           finalStatus = "SUCCESS";
@@ -474,6 +491,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         traceId,
         routeId,
         resPayload ?? null,
+        sentPayload,
         statusCode,
         finalStatus,
         start,
@@ -662,6 +680,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       traceId,
       routeId,
       resPayload,
+      null, // sentPayload is unknown during a source-finalization retry
       existingResult[0].statusCode ?? defaultStatusCode,
       finalStatus,
       start,
@@ -686,6 +705,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     traceId: string,
     routeId: string,
     resPayload: Record<string, unknown> | null,
+    sentPayload: Record<string, unknown> | null,
     statusCode: number,
     finalStatus: "SUCCESS" | "FAIL" | "RETRY",
     start: number,
@@ -713,7 +733,12 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
 
       await tx
         .update(outboundGateway)
-        .set({ response: resPayload ?? {}, statusCode, status: finalStatus })
+        .set({
+          response: resPayload ?? {},
+          statusCode,
+          status: finalStatus,
+          ...(sentPayload && { payload: sentPayload }),
+        })
         .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
 
       if (
@@ -757,63 +782,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
         );
 
-        const { syncLog, activeSyncLocks, globalEntityMap } =
-          buildTenantSchema(srcSchemaName);
-
-        if (
-          finalStatus === "SUCCESS" &&
-          srcVendorId &&
-          destVendorId &&
-          targetAppName &&
-          targetTenantId
-        ) {
-          await tx
-            .insert(globalEntityMap)
-            .values({
-              stitchId: routeId,
-              sourceAppName: srcAppName,
-              sourceAppId: connectionId,
-              sourceOrgId: srcTenantId,
-              sourceEntityType: canonicalType,
-              sourceEntityId: srcVendorId,
-              sourceRefLayer: "L2",
-              sourceTraceId: traceId,
-              destAppName: targetAppName,
-              destAppId: targetConnectionId,
-              destOrgId: targetTenantId,
-              destEntityType: canonicalType,
-              destEntityId: destVendorId,
-              destRefLayer: "L6",
-              destTraceId: traceId,
-            })
-            .onConflictDoUpdate({
-              target: [
-                globalEntityMap.stitchId,
-                globalEntityMap.sourceAppId,
-                globalEntityMap.sourceEntityId,
-                globalEntityMap.destAppId,
-                globalEntityMap.destEntityType,
-              ],
-              set: {
-                destEntityId: destVendorId,
-                destTraceId: traceId,
-                lastSyncedAt: sql`NOW()`,
-              },
-            });
-
-          this.logger.log(
-            {
-              event: "gem.mapped",
-              traceId,
-              routeId,
-              sourceAppName: srcAppName,
-              sourceEntityId: srcVendorId,
-              destAppName: targetAppName,
-              destEntityId: destVendorId,
-            },
-            `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
-          );
-        }
+        const { syncLog, activeSyncLocks } = buildTenantSchema(srcSchemaName);
 
         await tx
           .insert(syncLog)
@@ -842,6 +811,62 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         }
       });
       sourceCommitted = true;
+
+      // ── Write GEM (Control Plane) ──────────────────────────────────────────
+      if (
+        finalStatus === "SUCCESS" &&
+        srcVendorId &&
+        destVendorId &&
+        targetAppName &&
+        targetTenantId
+      ) {
+        await tenantDb
+          .insert(globalEntityMap)
+          .values({
+            stitchId: routeId,
+            sourceAppName: srcAppName,
+            sourceAppId: connectionId,
+            sourceOrgId: srcTenantId,
+            sourceEntityType: canonicalType,
+            sourceEntityId: srcVendorId,
+            sourceRefLayer: "L2",
+            sourceTraceId: traceId,
+            destAppName: targetAppName,
+            destAppId: targetConnectionId,
+            destOrgId: targetTenantId,
+            destEntityType: canonicalType,
+            destEntityId: destVendorId,
+            destRefLayer: "L6",
+            destTraceId: traceId,
+          })
+          .onConflictDoUpdate({
+            target: [
+              globalEntityMap.stitchId,
+              globalEntityMap.sourceAppId,
+              globalEntityMap.sourceEntityId,
+              globalEntityMap.destAppId,
+              globalEntityMap.destEntityType,
+            ],
+            set: {
+              destEntityId: destVendorId,
+              destTraceId: traceId,
+              lastSyncedAt: sql`NOW()`,
+            },
+          });
+
+        this.logger.log(
+          {
+            event: "gem.mapped",
+            traceId,
+            routeId,
+            sourceAppName: srcAppName,
+            sourceEntityId: srcVendorId,
+            destAppName: targetAppName,
+            destEntityId: destVendorId,
+          },
+          `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
+        );
+      }
     } catch (err) {
       this.logger.error(
         {
