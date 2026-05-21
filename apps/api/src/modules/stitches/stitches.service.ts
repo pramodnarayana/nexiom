@@ -14,7 +14,7 @@ import {
   integrationStitches,
   fieldMappings,
   uiWorkspaces,
-  appConnections,
+  dataSources,
   schedulerOutbox,
   globalRegistryOutbox,
 } from '@nexiom/database';
@@ -56,18 +56,18 @@ export class StitchesService {
    */
   private async provisionStitchSchemas(
     orgId: string,
-    srcConnectionId: string,
-    destConnectionId: string,
+    srcDataSourceId: string,
+    destDataSourceId: string,
     srcAppName: string,
     destAppName: string,
   ): Promise<void> {
     const pairs = [
-      { connectionId: srcConnectionId, appName: srcAppName },
-      { connectionId: destConnectionId, appName: destAppName },
+      { dataSourceId: srcDataSourceId, appName: srcAppName },
+      { dataSourceId: destDataSourceId, appName: destAppName },
     ];
     await Promise.all(
-      pairs.map(async ({ connectionId, appName }) => {
-        const schemaName = getWorkspaceSchemaName(connectionId, appName);
+      pairs.map(async ({ dataSourceId, appName }) => {
+        const schemaName = getWorkspaceSchemaName(dataSourceId, appName);
         try {
           await this.dbManager.applyPlan(
             orgId,
@@ -100,7 +100,7 @@ export class StitchesService {
       throw new NotFoundException(`Workspace ${body.workspaceId} not found.`);
     }
 
-    if (body.srcConnectionId === body.destConnectionId) {
+    if (body.srcDataSourceId === body.destDataSourceId) {
       throw new BadRequestException(
         'Source and destination connections must be different.',
       );
@@ -108,27 +108,37 @@ export class StitchesService {
 
     // Verify both connections belong to org — run in parallel to halve latency
     const [srcConn, destConn] = await Promise.all([
-      this.db.query.appConnections.findFirst({
-        where: and(
-          eq(appConnections.id, body.srcConnectionId),
-          eq(appConnections.tenantId, orgId),
-        ),
-      }),
-      this.db.query.appConnections.findFirst({
-        where: and(
-          eq(appConnections.id, body.destConnectionId),
-          eq(appConnections.tenantId, orgId),
-        ),
-      }),
+      this.db
+        .select()
+        .from(dataSources)
+        .where(
+          and(
+            eq(dataSources.id, body.srcDataSourceId),
+            eq(dataSources.tenantId, orgId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0]),
+      this.db
+        .select()
+        .from(dataSources)
+        .where(
+          and(
+            eq(dataSources.id, body.destDataSourceId),
+            eq(dataSources.tenantId, orgId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0]),
     ]);
     if (!srcConn) {
       throw new NotFoundException(
-        `Connection ${body.srcConnectionId} not found.`,
+        `Connection ${body.srcDataSourceId} not found.`,
       );
     }
     if (!destConn) {
       throw new NotFoundException(
-        `Connection ${body.destConnectionId} not found.`,
+        `Connection ${body.destDataSourceId} not found.`,
       );
     }
 
@@ -141,8 +151,8 @@ export class StitchesService {
             name: body.name,
             orgId,
             workspaceId: body.workspaceId,
-            srcConnectionId: body.srcConnectionId,
-            destConnectionId: body.destConnectionId,
+            srcDataSourceId: body.srcDataSourceId,
+            destDataSourceId: body.destDataSourceId,
             sourceObject: body.sourceObject,
             targetObject: body.targetObject,
             ...(body.syncCondition !== undefined && {
@@ -270,7 +280,7 @@ export class StitchesService {
 
   /**
    * Mutable fields: name, status, syncCondition, syncIntervalMinutes, scheduleEnabled.
-   * Immutable fields: sourceObject, targetObject, srcConnectionId, destConnectionId,
+   * Immutable fields: sourceObject, targetObject, srcDataSourceId, destDataSourceId,
    * workspaceId — these define the stitch identity. To change them, archive this
    * stitch and create a new one.
    */
@@ -435,8 +445,8 @@ export class StitchesService {
         orgId: true,
         workspaceId: true,
         name: true,
-        srcConnectionId: true,
-        destConnectionId: true,
+        srcDataSourceId: true,
+        destDataSourceId: true,
         sourceObject: true,
         targetObject: true,
         syncCondition: true,

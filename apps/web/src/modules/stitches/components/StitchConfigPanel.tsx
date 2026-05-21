@@ -6,12 +6,12 @@ import { Input } from '@/shared/components/ui/input';
 import { describeConfig, type ConfigOption } from '../api/metadata.api';
 
 interface StitchConfigPanelProps {
-  connectionId: string;
+  dataSourceId: string;
   value: Record<string, unknown>;
   onChange: (value: Record<string, unknown>) => void;
 }
 
-export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfigPanelProps) {
+export function StitchConfigPanel({ dataSourceId, value, onChange }: StitchConfigPanelProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<ConfigOption[]>([]);
@@ -26,7 +26,7 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
       setSchema([]); // Reset schema at start of new load
 
       try {
-        const res = await describeConfig(connectionId);
+        const res = await describeConfig(dataSourceId);
         if (token !== loadTokenRef.current) return;
         
         setSchema(res);
@@ -42,7 +42,7 @@ export function StitchConfigPanel({ connectionId, value, onChange }: StitchConfi
     }
     void load();
      
-  }, [connectionId]);
+  }, [dataSourceId]);
 
   if (loading) {
     return (

@@ -13,7 +13,7 @@ import {
   buildTenantSchema,
   assertValidSchemaName,
   integrationStitches,
-  appConnections,
+  dataSources,
   globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
@@ -77,7 +77,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     }
 
     const traceId = msg.traceId as string;
-    const connectionId = msg.srcConnectionId as string;
+    const dataSourceId = msg.srcConnectionId as string;
     const targetConnectionId = msg.destConnectionId as string;
     const routeId = msg.routeId as string;
     const hydratedPayload = msg.hydratedPayload as Record<string, unknown>;
@@ -97,7 +97,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       {
         event: "l5.started",
         traceId,
-        connectionId,
+        dataSourceId,
         targetConnectionId,
         routeId,
         layer: "L5",
@@ -112,16 +112,16 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       const destSchemaName =
         await this.storageResolver.resolveSchemaName(targetConnectionId);
       const srcSchemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+        await this.storageResolver.resolveSchemaName(dataSourceId);
 
       const { outboundGateway } = buildTenantSchema(destSchemaName);
 
-      const connectionMeta = await this.globalDb.query.appConnections.findFirst(
-        {
-          where: eq(appConnections.id, targetConnectionId),
-          columns: { tenantId: true },
-        },
-      );
+      const connectionMeta = await this.globalDb
+        .select({ tenantId: dataSources.tenantId })
+        .from(dataSources)
+        .where(eq(dataSources.id, targetConnectionId))
+        .limit(1)
+        .then((rows) => rows[0]);
       if (!connectionMeta) {
         throw new Error(
           `Connection ${targetConnectionId} not found in global DB`,
@@ -145,7 +145,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .values({
             traceId,
             routeId,
-            connectionId: targetConnectionId,
+            dataSourceId: targetConnectionId,
             payload: hydratedPayload,
             status: "PENDING",
             attempts: 0,
@@ -190,7 +190,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           destSchemaName,
           srcSchemaName,
           outboundGatewayId,
-          connectionId,
+          dataSourceId,
           traceId,
           routeId,
           null, // resPayload
@@ -244,7 +244,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             outboundGatewayId,
             traceId,
             routeId,
-            connectionId,
+            dataSourceId,
             targetConnectionId,
             "SUCCESS",
             200,
@@ -307,7 +307,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             outboundGatewayId,
             traceId,
             routeId,
-            connectionId,
+            dataSourceId,
             targetConnectionId,
             "FAIL",
             500,
@@ -347,15 +347,15 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       const credentials =
         await this.tokenManagerService.getValidCredentials(targetConnectionId);
 
-      // ── Resolve target piece using typed appConnections query ─────────────
+      // ── Resolve target piece using typed dataSources query ─────────────
       const connRows = await tenantDb
         .select({
-          appName: appConnections.appName,
-          tenantId: appConnections.tenantId,
-          metadata: appConnections.metadata,
+          appName: dataSources.appName,
+          tenantId: dataSources.tenantId,
+          metadata: dataSources.metadata,
         })
-        .from(appConnections)
-        .where(eq(appConnections.id, targetConnectionId))
+        .from(dataSources)
+        .where(eq(dataSources.id, targetConnectionId))
         .limit(1);
 
       if (!connRows.length)
@@ -487,7 +487,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         destSchemaName,
         srcSchemaName,
         outboundGatewayId,
-        connectionId,
+        dataSourceId,
         traceId,
         routeId,
         resPayload ?? null,
@@ -546,7 +546,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           event: "l5.error",
           traceId,
           routeId,
-          connectionId,
+          dataSourceId,
           outboundGatewayId,
           layer: "L5",
           err: sanitized,
@@ -608,7 +608,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     outboundGatewayId: string,
     traceId: string,
     routeId: string,
-    connectionId: string,
+    dataSourceId: string,
     targetConnectionId: string,
     finalStatus: "SUCCESS" | "FAIL",
     defaultStatusCode: number,
@@ -644,11 +644,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     // Need to fetch target metadata for GEM
     const connRows = await tenantDb
       .select({
-        appName: appConnections.appName,
-        tenantId: appConnections.tenantId,
+        appName: dataSources.appName,
+        tenantId: dataSources.tenantId,
       })
-      .from(appConnections)
-      .where(eq(appConnections.id, targetConnectionId))
+      .from(dataSources)
+      .where(eq(dataSources.id, targetConnectionId))
       .limit(1);
 
     const targetAppName = connRows[0]?.appName;
@@ -676,7 +676,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       destSchemaName,
       srcSchemaName,
       outboundGatewayId,
-      connectionId,
+      dataSourceId,
       traceId,
       routeId,
       resPayload,
@@ -701,7 +701,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     destSchemaName: string,
     srcSchemaName: string,
     outboundGatewayId: string,
-    connectionId: string,
+    dataSourceId: string,
     traceId: string,
     routeId: string,
     resPayload: Record<string, unknown> | null,
@@ -751,7 +751,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .insert(replicaEntity)
           .values({
             traceId,
-            connectionId: targetConnectionId,
+            dataSourceId: targetConnectionId,
             entityType: targetObject,
             entityId: destVendorId,
             data: resPayload,
@@ -759,7 +759,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           })
           .onConflictDoUpdate({
             target: [
-              replicaEntity.connectionId,
+              replicaEntity.dataSourceId,
               replicaEntity.entityType,
               replicaEntity.entityId,
             ],
@@ -824,14 +824,14 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .values({
             stitchId: routeId,
             sourceAppName: srcAppName,
-            sourceAppId: connectionId,
+            sourceDataSourceId: dataSourceId,
             sourceOrgId: srcTenantId,
             sourceEntityType: canonicalType,
             sourceEntityId: srcVendorId,
             sourceRefLayer: "L2",
             sourceTraceId: traceId,
             destAppName: targetAppName,
-            destAppId: targetConnectionId,
+            destDataSourceId: targetConnectionId,
             destOrgId: targetTenantId,
             destEntityType: canonicalType,
             destEntityId: destVendorId,
@@ -841,9 +841,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           .onConflictDoUpdate({
             target: [
               globalEntityMap.stitchId,
-              globalEntityMap.sourceAppId,
+              globalEntityMap.sourceDataSourceId,
               globalEntityMap.sourceEntityId,
-              globalEntityMap.destAppId,
+              globalEntityMap.destDataSourceId,
               globalEntityMap.destEntityType,
             ],
             set: {

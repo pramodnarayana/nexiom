@@ -89,7 +89,7 @@ export interface ApplicationShardModule {
    */
   activeFetch?(
     missingDependencies: Array<{ entityType: string; sourceId: string }>,
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<void>;
 
   /**

@@ -24,8 +24,8 @@ describe("DependencySweeperService", () => {
 
     return {
       select: vi.fn().mockImplementation((fields) => {
-        // Simple heuristic: if querying replicaEntity (has connectionId), return replicaRows
-        if (fields && "connectionId" in fields) {
+        // Simple heuristic: if querying replicaEntity (has dataSourceId), return replicaRows
+        if (fields && "dataSourceId" in fields) {
           return {
             from: vi.fn().mockReturnThis(),
             where: vi.fn().mockResolvedValue(replicaRows),
@@ -46,7 +46,7 @@ describe("DependencySweeperService", () => {
 
     tenantDb = buildDb(
       [{ traceId: "trace-1" }],
-      [{ traceId: "trace-1", connectionId: "conn-1" }],
+      [{ traceId: "trace-1", dataSourceId: "conn-1" }],
     );
 
     dbManager = {
@@ -99,7 +99,7 @@ describe("DependencySweeperService", () => {
 
     expect(queueService.send).toHaveBeenCalledWith(QueueName.NormalizedQueue, {
       traceId: "trace-1",
-      connectionId: "conn-1",
+      dataSourceId: "conn-1",
     });
     expect(tenantDb.update).toHaveBeenCalled();
   });
@@ -207,7 +207,7 @@ describe("DependencySweeperService", () => {
     await service.sweepDeferredDependencies();
     expect(queueService.send).toHaveBeenCalledWith(QueueName.NormalizedQueue, {
       traceId: "trace-1",
-      connectionId: "conn-1",
+      dataSourceId: "conn-1",
     });
   });
 

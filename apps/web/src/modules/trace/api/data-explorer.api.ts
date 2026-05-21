@@ -10,7 +10,7 @@ export interface ExplorerPage<T> {
 export interface InboundRow {
   id: string;
   traceId: string;
-  connectionId: string;
+  dataSourceId: string;
   objectType: string | null;
   extReqId: string | null;
   status: string;
@@ -22,7 +22,7 @@ export interface InboundRow {
 export interface ReplicaRow {
   id: string;
   traceId: string;
-  connectionId: string;
+  dataSourceId: string;
   entityType: string;
   sourceId: string;
   data: unknown;

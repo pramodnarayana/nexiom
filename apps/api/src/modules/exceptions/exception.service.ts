@@ -149,7 +149,7 @@ export class ExceptionService {
 
     const stitches = await this.db.query.integrationStitches.findMany({
       where: eq(integrationStitches.orgId, orgId),
-      columns: { id: true, destConnectionId: true },
+      columns: { id: true, destDataSourceId: true },
     });
 
     if (stitches.length === 0) {
@@ -159,9 +159,9 @@ export class ExceptionService {
     // Group stitches by dest connection — one schema query per unique connection
     const byConnection = new Map<string, string[]>();
     for (const s of stitches) {
-      const list = byConnection.get(s.destConnectionId) ?? [];
+      const list = byConnection.get(s.destDataSourceId) ?? [];
       list.push(s.id);
-      byConnection.set(s.destConnectionId, list);
+      byConnection.set(s.destDataSourceId, list);
     }
 
     const allRows: ExceptionItem[] = [];
@@ -306,7 +306,7 @@ export class ExceptionService {
 
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: eq(integrationStitches.id, outboundGatewayRow.routeId),
-      columns: { srcConnectionId: true, destConnectionId: true },
+      columns: { srcDataSourceId: true, destDataSourceId: true },
     });
 
     if (!stitch) {
@@ -349,8 +349,8 @@ export class ExceptionService {
       try {
         await this.queueService.send(QueueName.DeliveryQueue, {
           traceId: row.traceId,
-          srcConnectionId: stitch.srcConnectionId,
-          destConnectionId: stitch.destConnectionId,
+          srcDataSourceId: stitch.srcDataSourceId,
+          destDataSourceId: stitch.destDataSourceId,
           routeId: row.routeId,
           hydratedPayload: row.payload,
         });
@@ -443,7 +443,7 @@ export class ExceptionService {
   }> {
     const stitches = await this.db.query.integrationStitches.findMany({
       where: eq(integrationStitches.orgId, orgId),
-      columns: { id: true, destConnectionId: true },
+      columns: { id: true, destDataSourceId: true },
     });
 
     const stitchIds = stitches.map((s) => s.id);
@@ -453,7 +453,7 @@ export class ExceptionService {
       );
     }
 
-    const destConnIds = [...new Set(stitches.map((s) => s.destConnectionId))];
+    const destConnIds = [...new Set(stitches.map((s) => s.destDataSourceId))];
 
     type SchemaHit =
       | {

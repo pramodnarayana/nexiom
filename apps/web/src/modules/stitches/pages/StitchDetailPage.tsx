@@ -384,8 +384,8 @@ export function StitchDetailPage() {
               {stitch && canonicalMappings.length > 0 && (
                 <MultiObjectMappingEditor
                   key={stitch.id}
-                  srcConnectionId={stitch.srcConnectionId}
-                  destConnectionId={stitch.destConnectionId}
+                  srcDataSourceId={stitch.srcDataSourceId}
+                  destDataSourceId={stitch.destDataSourceId}
                   primaryObject={stitch.sourceObject}
                   targetObject={stitch.targetObject}
                   initialMappings={canonicalMappings}
@@ -416,7 +416,7 @@ export function StitchDetailPage() {
             <CardContent className="p-6">
               {configDraft && (
                 <StitchConfigPanel
-                  connectionId={stitch.srcConnectionId}
+                  dataSourceId={stitch.srcDataSourceId}
                   value={configDraft}
                   onChange={setConfigDraft}
                 />
@@ -437,7 +437,7 @@ export function StitchDetailPage() {
         <div className="md:col-span-4 space-y-8">
           <SchedulePanel stitch={stitch} onUpdated={setStitch} />
           <DependencyList 
-            connectionId={stitch.srcConnectionId}
+            dataSourceId={stitch.srcDataSourceId}
             objectName={stitch.sourceObject}
             selected={(configDraft?.selectedRelatedObjects as string[]) || []}
             onSelectionChange={(selected) => setConfigDraft(prev => ({ ...(prev || {}), selectedRelatedObjects: selected }))}

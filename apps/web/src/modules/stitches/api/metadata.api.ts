@@ -8,7 +8,7 @@ export interface ObjectDescriptor {
 
 /**
  * Mirrors the FieldDescriptor returned by piece.describeFields and the
- * /stitches/metadata/:connectionId/objects/:objectName/fields endpoint.
+ * /stitches/metadata/:dataSourceId/objects/:objectName/fields endpoint.
  * Matches packages/connection-manager/src/framework/piece.ts FieldDescriptor exactly.
  */
 export interface FieldDescriptor {
@@ -38,25 +38,25 @@ function buildRefreshConfig(refresh: boolean): {
 }
 
 export async function listObjects(
-  connectionId: string,
+  dataSourceId: string,
   options?: { refresh?: boolean },
 ): Promise<ObjectDescriptor[]> {
   const config = buildRefreshConfig(options?.refresh ?? false);
   const res = await apiClient.get<ObjectDescriptor[]>(
-    `/stitches/metadata/${connectionId}/objects`,
+    `/stitches/metadata/${dataSourceId}/objects`,
     config,
   );
   return res.data;
 }
 
 export async function listFields(
-  connectionId: string,
+  dataSourceId: string,
   objectName: string,
   refresh = false,
 ): Promise<FieldDescriptor[]> {
   const config = buildRefreshConfig(refresh);
   const res = await apiClient.get<FieldDescriptor[]>(
-    `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/fields`,
+    `/stitches/metadata/${dataSourceId}/objects/${encodeURIComponent(objectName)}/fields`,
     config,
   );
   return res.data;
@@ -71,13 +71,13 @@ export interface RelatedObjectDescriptor {
 }
 
 export async function listRelatedObjects(
-  connectionId: string,
+  dataSourceId: string,
   objectName: string,
   options?: { refresh?: boolean },
 ): Promise<RelatedObjectDescriptor[]> {
   const config = buildRefreshConfig(options?.refresh ?? false);
   const res = await apiClient.get<RelatedObjectDescriptor[]>(
-    `/stitches/metadata/${connectionId}/objects/${encodeURIComponent(objectName)}/related`,
+    `/stitches/metadata/${dataSourceId}/objects/${encodeURIComponent(objectName)}/related`,
     config,
   );
   return res.data;
@@ -93,10 +93,10 @@ export interface ConfigOption {
 }
 
 export async function describeConfig(
-  connectionId: string,
+  dataSourceId: string,
 ): Promise<ConfigOption[]> {
   const res = await apiClient.get<ConfigOption[]>(
-    `/stitches/metadata/${connectionId}/config`,
+    `/stitches/metadata/${dataSourceId}/config`,
   );
   return res.data;
 }

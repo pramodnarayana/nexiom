@@ -3,7 +3,8 @@ import { OAuthRefreshClient, OAuthRefreshError } from './token-manager.service.j
 import { EncryptionService } from '../crypto/encryption.interface.js';
 import { resolveOAuth2Url } from '@nexiom/piece-framework';
 import {
-  appConnections,
+  dataSources,
+  credentials,
   AppConnectionStatus,
   withTenantGuard,
   type DrizzleDb,
@@ -70,9 +71,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
 
   private async getCredentials(tenantId: string, appName: string, externalId: string): Promise<{ clientId: string; clientSecret: string; vendorParams: Record<string, string>; }> {
     try {
-      const [connection] = await this.db.select({ value: appConnections.value }).from(appConnections).where(
-        withTenantGuard(appConnections.tenantId, tenantId, and(eq(appConnections.appName, appName), eq(appConnections.externalId, externalId), eq(appConnections.status, AppConnectionStatus.ACTIVE)))
-      ).orderBy(desc(appConnections.updatedAt), desc(appConnections.id)).limit(1);
+      const [connection] = await this.db.select({ value: credentials.value }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
+        withTenantGuard(dataSources.tenantId, tenantId, and(eq(dataSources.appName, appName), eq(dataSources.externalId, externalId), eq(credentials.status, AppConnectionStatus.ACTIVE)))
+      ).orderBy(desc(dataSources.updatedAt), desc(dataSources.id)).limit(1);
       if (!connection) throw new Error(`No active connection found for ${appName} on tenant ${tenantId}`);
       const rawEncryptedValue: string = connection.value;
       const decryptedValue = await this.crypto.decrypt(rawEncryptedValue);

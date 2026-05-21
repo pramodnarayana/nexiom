@@ -13,7 +13,7 @@ import {
   assertValidSchemaName,
   integrationStitches,
   fieldMappings,
-  appConnections,
+  dataSources,
   globalEntityMap,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
@@ -64,20 +64,20 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     const msg = rawMsg as Record<string, unknown>;
 
     // ── Poison-pill guard ─────────────────────────────────────────────────────
-    if (!isValidPipelineMessage(msg, ["traceId", "connectionId"])) {
+    if (!isValidPipelineMessage(msg, ["traceId", "dataSourceId"])) {
       this.logger.warn(
         {
           event: "l4.invalid_message",
           layer: "L4",
           msg: JSON.stringify(msg).slice(0, 200),
         },
-        "L4: dropping invalid message — missing traceId or connectionId",
+        "L4: dropping invalid message — missing traceId or dataSourceId",
       );
       return;
     }
 
     const traceId = msg.traceId as string;
-    const connectionId = msg.connectionId as string;
+    const dataSourceId = msg.dataSourceId as string;
     const start = Date.now();
 
     this.logger.log(
@@ -85,7 +85,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     );
 
     this.logger.log(
-      { event: "l4.started", traceId, connectionId, layer: "L4" },
+      { event: "l4.started", traceId, dataSourceId, layer: "L4" },
       "L4 fan-out started",
     );
 
@@ -94,21 +94,21 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
     try {
       // ── Resolve schema first to get entityId for potential lock cleanup ────
-      const connectionMeta = await this.globalDb.query.appConnections.findFirst(
-        {
-          where: eq(appConnections.id, connectionId),
-          columns: { tenantId: true },
-        },
-      );
+      const connectionMeta = await this.globalDb
+        .select({ tenantId: dataSources.tenantId })
+        .from(dataSources)
+        .where(eq(dataSources.id, dataSourceId))
+        .limit(1)
+        .then((rows) => rows[0]);
       if (!connectionMeta) {
-        throw new Error(`Connection ${connectionId} not found in global DB`);
+        throw new Error(`Connection ${dataSourceId} not found in global DB`);
       }
 
       const tenantId = connectionMeta.tenantId;
       const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
       const schemaName =
-        await this.storageResolver.resolveSchemaName(connectionId);
+        await this.storageResolver.resolveSchemaName(dataSourceId);
       const { normalizedEntity, replicaEntity, syncLog } =
         buildTenantSchema(schemaName);
 
@@ -189,7 +189,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           {
             event: "l4.superseded",
             traceId,
-            connectionId,
+            dataSourceId,
             layer: "L4",
           },
           "L4: normalized traceId superseded by newer trace — ACK without processing",
@@ -203,19 +203,19 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .select()
         .from(integrationStitches)
         .where(
-          sql`${integrationStitches.srcConnectionId} = ${connectionId} AND ${integrationStitches.status} = 'ACTIVE'`,
+          sql`${integrationStitches.srcDataSourceId} = ${dataSourceId} AND ${integrationStitches.status} = 'ACTIVE'`,
         );
 
       if (stitches.length === 0) {
         this.logger.debug(
-          { event: "l4.no_routes", traceId, connectionId, layer: "L4" },
+          { event: "l4.no_routes", traceId, dataSourceId, layer: "L4" },
           "No active stitches found for source connection",
         );
         // Release lock acquired in L2 — no outbound work will occur
         if (srcVendorId) {
           await this.releaseSyncLock(
             schemaName,
-            connectionId,
+            dataSourceId,
             srcVendorId,
             tenantDb,
           );
@@ -226,17 +226,17 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // ── Resolve source appName for GEM (fetched once, reused per stitch) ──
       const srcConnRows = await tenantDb
         .select({
-          appName: appConnections.appName,
-          tenantId: appConnections.tenantId,
-          metadata: appConnections.metadata,
+          appName: dataSources.appName,
+          tenantId: dataSources.tenantId,
+          metadata: dataSources.metadata,
         })
-        .from(appConnections)
-        .where(eq(appConnections.id, connectionId))
+        .from(dataSources)
+        .where(eq(dataSources.id, dataSourceId))
         .limit(1);
 
       if (!srcConnRows.length) {
         throw new Error(
-          `Source connection record not found for GEM metadata (connectionId=${connectionId}, traceId=${traceId})`,
+          `Source connection record not found for GEM metadata (dataSourceId=${dataSourceId}, traceId=${traceId})`,
         );
       }
       const srcAppName = srcConnRows[0].appName;
@@ -265,7 +265,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           this.processSingleStitch(
             schemaName,
             traceId,
-            connectionId,
+            dataSourceId,
             srcAppName,
             appProfile,
             srcTenantId,
@@ -302,7 +302,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         if (srcVendorId && lockRefCount.count === 0) {
           await this.releaseSyncLock(
             schemaName,
-            connectionId,
+            dataSourceId,
             srcVendorId,
             tenantDb,
           );
@@ -310,7 +310,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.logger.log(
-        { event: "l4.completed", traceId, connectionId, layer: "L4" },
+        { event: "l4.completed", traceId, dataSourceId, layer: "L4" },
         "L4 fan-out completed",
       );
     } catch (err) {
@@ -318,7 +318,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         {
           event: "l4.error",
           traceId,
-          connectionId,
+          dataSourceId,
           layer: "L4",
           err: sanitizeError(err),
         },
@@ -331,7 +331,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
   private async processSingleStitch(
     schemaName: string,
     traceId: string,
-    connectionId: string,
+    dataSourceId: string,
     srcAppName: string,
     appProfile: string,
     srcTenantId: string,
@@ -425,16 +425,22 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
       // ── Resolve destination connection metadata (always needed for shard dispatch) ──
       // appName + appProfile determine which application shard to invoke.
-      // appConnections (including metadata.appProfile) lives in the TENANT DB.
+      // dataSources (including metadata.appProfile) lives in the TENANT DB.
       // The global DB only holds tenantId for routing — never full metadata.
-      const destConnMeta = await tenantDb.query.appConnections.findFirst({
-        where: eq(appConnections.id, stitch.destConnectionId),
-        columns: { tenantId: true, appName: true, metadata: true },
-      });
+      const destConnMeta = await tenantDb
+        .select({
+          tenantId: dataSources.tenantId,
+          appName: dataSources.appName,
+          metadata: dataSources.metadata,
+        })
+        .from(dataSources)
+        .where(eq(dataSources.id, stitch.destDataSourceId))
+        .limit(1)
+        .then((rows) => rows[0]);
       if (!destConnMeta) {
         // Destination connection not found — treat as retryable in case of replication lag
         throw new DependenciesMissingError([
-          { entityType: "connection", sourceId: stitch.destConnectionId },
+          { entityType: "connection", sourceId: stitch.destDataSourceId },
         ]);
       }
       const destAppName = destConnMeta.appName;
@@ -444,7 +450,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       if (!destAppProfile) {
         // Missing appProfile — treat as retryable in case metadata is backfilling
         throw new DependenciesMissingError([
-          { entityType: "appProfile", sourceId: stitch.destConnectionId },
+          { entityType: "appProfile", sourceId: stitch.destDataSourceId },
         ]);
       }
 
@@ -453,7 +459,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         {
           event: "l4.debug.shard_resolution",
           traceId,
-          destConnectionId: stitch.destConnectionId,
+          destDataSourceId: stitch.destDataSourceId,
           destAppName,
           destAppProfile,
           rawMetadata: destConnMeta.metadata,
@@ -474,7 +480,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           .select()
           .from(globalEntityMap)
           .where(
-            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceAppId} = ${connectionId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
+            sql`${globalEntityMap.stitchId} = ${stitch.id} AND ${globalEntityMap.sourceDataSourceId} = ${dataSourceId} AND ${globalEntityMap.sourceEntityId} = ${srcVendorId}`,
           )
           .limit(1);
 
@@ -489,7 +495,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           try {
             const targetSchemaName =
               await this.storageResolver.resolveSchemaName(
-                stitch.destConnectionId,
+                stitch.destDataSourceId,
               );
             const { replicaEntity: targetReplicaEntity } =
               buildTenantSchema(targetSchemaName);
@@ -500,7 +506,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               .select()
               .from(targetReplicaEntity)
               .where(
-                sql`${targetReplicaEntity.connectionId} = ${stitch.destConnectionId} AND ${targetReplicaEntity.entityType} = ${stitch.targetObject} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
+                sql`${targetReplicaEntity.dataSourceId} = ${stitch.destDataSourceId} AND ${targetReplicaEntity.entityType} = ${stitch.targetObject} AND ${targetReplicaEntity.entityId} = ${destEntityId}`,
               )
               .limit(1);
             if (targetReplica.length > 0) {
@@ -574,7 +580,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         // Create outbound_gateway record in destination schema BEFORE sending to
         // DeliveryQueue to ensure delivery can be retried even if send() fails.
         const destSchemaName = await this.storageResolver.resolveSchemaName(
-          stitch.destConnectionId,
+          stitch.destDataSourceId,
         );
         assertValidSchemaName(destSchemaName);
 
@@ -588,8 +594,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
           // Use raw SQL for conditional upsert with RETURNING to detect transitions
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
               payload = ${JSON.stringify(hydratedPayload)},
@@ -613,8 +619,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           try {
             await this.queueService.send(QueueName.DeliveryQueue, {
               traceId,
-              srcConnectionId: connectionId,
-              destConnectionId: stitch.destConnectionId,
+              srcConnectionId: dataSourceId,
+              destDataSourceId: stitch.destDataSourceId,
               routeId: stitch.id,
               srcVendorId: srcVendorId ?? null,
               canonicalType,
@@ -680,7 +686,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
         // Mark route as DEFERRED_DEPENDENCY
         const destSchemaName = await this.storageResolver.resolveSchemaName(
-          stitch.destConnectionId,
+          stitch.destDataSourceId,
         );
         assertValidSchemaName(destSchemaName);
 
@@ -692,8 +698,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
           // Use conditional upsert to only transition if not already DEFERRED_DEPENDENCY or processed
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, connection_id, payload, status, attempts, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${stitch.destConnectionId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
               status = 'DEFERRED_DEPENDENCY',
@@ -715,7 +721,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           try {
             await this.queueService.send(QueueName.ActiveFetchQueue, {
               traceId,
-              connectionId,
+              dataSourceId,
               missingDependencies: missingDeps,
             });
           } catch (queueErr) {
@@ -766,7 +772,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           event: "l4.stitch_error",
           stitchId: stitch.id,
           traceId,
-          connectionId,
+          dataSourceId,
           layer: "L4",
           err: sanitizeError(err),
         },
@@ -826,7 +832,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
    */
   private async releaseSyncLock(
     schemaName: string,
-    connectionId: string,
+    dataSourceId: string,
     entityId: string,
     tenantDb: DrizzleDb,
   ): Promise<void> {
@@ -840,7 +846,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .delete(activeSyncLocks)
         .where(
           and(
-            eq(activeSyncLocks.connectionId, connectionId),
+            eq(activeSyncLocks.dataSourceId, dataSourceId),
             eq(activeSyncLocks.entityId, entityId),
           ),
         );

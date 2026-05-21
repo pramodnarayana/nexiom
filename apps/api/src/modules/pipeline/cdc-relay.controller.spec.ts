@@ -31,12 +31,12 @@ describe('CdcRelayController', () => {
       __schema: 'debezium_metadata_schema',
       schema_name: 'ws_sf_123',
       trace_id: 'trace-1',
-      connection_id: 'conn-1',
+      data_source_id: 'conn-1',
     });
 
     expect(mockQueueService.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
       traceId: 'trace-1',
-      connectionId: 'conn-1',
+      dataSourceId: 'conn-1',
       schemaName: 'ws_sf_123',
     });
   });
@@ -48,12 +48,12 @@ describe('CdcRelayController', () => {
       __schema: 'debezium_metadata_schema',
       schema_name: 'ws_qb_456',
       trace_id: 'trace-2',
-      connection_id: 'conn-2',
+      data_source_id: 'conn-2',
     });
 
     expect(mockQueueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
       traceId: 'trace-2',
-      connectionId: 'conn-2',
+      dataSourceId: 'conn-2',
       schemaName: 'ws_qb_456',
     });
   });
@@ -65,7 +65,7 @@ describe('CdcRelayController', () => {
       __schema: 'ws_sf_123',
       schema_name: 'ws_sf_123',
       trace_id: 'trace-3',
-      connection_id: 'conn-3',
+      data_source_id: 'conn-3',
     });
 
     await controller.relay({
@@ -74,7 +74,7 @@ describe('CdcRelayController', () => {
       __schema: 'ws_qb_456',
       schema_name: 'ws_qb_456',
       trace_id: 'trace-4',
-      connection_id: 'conn-4',
+      data_source_id: 'conn-4',
     });
 
     expect(mockQueueService.send).not.toHaveBeenCalled();
@@ -87,14 +87,14 @@ describe('CdcRelayController', () => {
       __schema: 'debezium_metadata_schema',
       schema_name: 'ws_normalized_123',
       trace_id: 'trace-6',
-      connection_id: 'conn-6',
+      data_source_id: 'conn-6',
     });
 
     expect(mockQueueService.send).toHaveBeenCalledWith(
       QueueName.NormalizedQueue,
       {
         traceId: 'trace-6',
-        connectionId: 'conn-6',
+        dataSourceId: 'conn-6',
         schemaName: 'ws_normalized_123',
       },
     );
@@ -107,7 +107,7 @@ describe('CdcRelayController', () => {
       __schema: 'debezium_metadata_schema',
       schema_name: 'ws_delivery_123',
       trace_id: 'trace-7',
-      connection_id: 'conn-7',
+      data_source_id: 'conn-7',
     });
 
     expect(mockQueueService.send).not.toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe('CdcRelayController', () => {
       __schema: 'public',
       schema_name: 'public',
       trace_id: 'trace-5',
-      connection_id: 'conn-5',
+      data_source_id: 'conn-5',
     });
 
     expect(mockQueueService.send).not.toHaveBeenCalled();

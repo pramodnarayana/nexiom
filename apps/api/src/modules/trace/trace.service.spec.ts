@@ -37,8 +37,8 @@ const WORKSPACE_ID = 'ws-999';
 const MOCK_STITCH = {
   id: STITCH_ID,
   orgId: ORG_ID,
-  srcConnectionId: SRC_CONN,
-  destConnectionId: DEST_CONN,
+  srcDataSourceId: SRC_CONN,
+  destDataSourceId: DEST_CONN,
   workspaceId: WORKSPACE_ID,
 };
 
@@ -371,7 +371,7 @@ describe('TraceService', () => {
           reqPayload: {},
           resPayload: {},
           statusCode: 200,
-          connectionId: SRC_CONN,
+          dataSourceId: SRC_CONN,
         },
       ];
       const outboundRows = [
@@ -380,7 +380,7 @@ describe('TraceService', () => {
           reqPayload: {},
           resPayload: {},
           statusCode: 200,
-          connectionId: DEST_CONN,
+          dataSourceId: DEST_CONN,
         },
       ];
 

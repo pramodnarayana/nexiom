@@ -90,7 +90,7 @@ describe('WorkspaceConnectionsController', () => {
   it('assign — inserts and returns the assignment', async () => {
     const assignment = {
       workspaceId: WS_ID,
-      connectionId: CONN_ID,
+      dataSourceId: CONN_ID,
       assignedAt: new Date(),
     };
     mockService.findOne.mockResolvedValue(WORKSPACE);

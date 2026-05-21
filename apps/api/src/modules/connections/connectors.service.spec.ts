@@ -41,11 +41,15 @@ describe('ConnectorsService', () => {
     delete: ReturnType<typeof vi.fn>;
     transaction: ReturnType<typeof vi.fn>;
     execute: ReturnType<typeof vi.fn>;
+
+    [key: string]: any;
   };
 
   beforeEach(async () => {
     mockDbValues = vi.fn().mockReturnValue({
       onConflictDoNothing: vi.fn(),
+      onConflictDoUpdate: vi.fn(),
+      returning: vi.fn().mockResolvedValue([{ id: 'mock-uuid' }]),
     });
     mockDbUpdate = vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
@@ -60,6 +64,8 @@ describe('ConnectorsService', () => {
     });
     mockDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnValue(
         Object.assign(Promise.resolve([]), {
@@ -509,24 +515,35 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      expect(mockDbInsert).toHaveBeenCalledTimes(3);
+      expect(mockDbInsert).toHaveBeenCalledTimes(4);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const insertedCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
+      const dsCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const insertedValues = insertedCall.values.mock.calls[0]?.[0] as Record<
+      const dsValues = dsCall.values.mock.calls[0]?.[0] as Record<
         string,
         unknown
       >;
-      expect(insertedValues).toMatchObject({
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const credsCall = vi.mocked(mockDbInsert).mock.results[1]?.value;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const credsValues = credsCall.values.mock.calls[0]?.[0] as Record<
+        string,
+        unknown
+      >;
+
+      expect(dsValues).toMatchObject({
         tenantId: 'tenant-123',
         appName: 'mock-piece',
         externalId: 'mock-piece-tms',
         displayName: 'TMS MockPiece',
+        metadata: { env: 'sandbox' },
+      });
+
+      expect(credsValues).toMatchObject({
         authType: 'OAUTH2',
         value: 'encrypted-value-blob',
-        metadata: { env: 'sandbox' },
-        status: 'PROVISIONING',
       });
 
       // At connection setup time, L1→L3 pipeline tables are provisioned so
@@ -566,7 +583,7 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
       expect(mockDb.update).toHaveBeenCalled();
-      expect(mockDbInsert).toHaveBeenCalledTimes(1); // One insert for registry outbox
+      expect(mockDbInsert).toHaveBeenCalledTimes(2); // credentials and outbox
     });
     it('should throw HttpException 409 on displayName conflict when updating', async () => {
       mockDbUpdate.mockReturnValueOnce({
@@ -697,7 +714,7 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(HttpException);
     });
 
-    it('should throw InternalServerErrorException and abort if appConnection insert fails', async () => {
+    it('should throw InternalServerErrorException and abort if dataSource insert fails', async () => {
       mockDb.where = vi.fn().mockReturnValue(
         Object.assign(Promise.resolve([]), {
           limit: vi.fn().mockResolvedValue([]),
@@ -707,7 +724,7 @@ describe('ConnectorsService', () => {
         values: vi.fn().mockReturnValue({
           returning: vi
             .fn()
-            .mockRejectedValue(new Error('appConnection DB write failed')),
+            .mockRejectedValue(new Error('dataSource DB write failed')),
         }),
       });
 
@@ -731,7 +748,7 @@ describe('ConnectorsService', () => {
           limit: vi.fn().mockResolvedValue([]),
         }),
       );
-      // Mock appConnection insert succeeding:
+      // Mock dataSource insert succeeding:
       mockDbInsert.mockReturnValueOnce({
         values: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),

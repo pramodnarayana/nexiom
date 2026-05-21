@@ -6,7 +6,7 @@ import {
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
-  appConnections,
+  dataSources,
   integrationStitches,
 } from "@nexiom/database";
 import { QueueName } from "@nexiom/queue";
@@ -52,20 +52,19 @@ export class NormalizedOutboxWorker {
       // no point scanning its normalized_outbox.
       const allConnections = await this.globalDb
         .selectDistinct({
-          id: appConnections.id,
-          appName: appConnections.appName,
-          tenantId: appConnections.tenantId,
+          id: dataSources.id,
+          appName: dataSources.appName,
+          tenantId: dataSources.tenantId,
         })
-        .from(appConnections)
+        .from(dataSources)
         .innerJoin(
           integrationStitches,
-          eq(integrationStitches.srcConnectionId, appConnections.id),
+          eq(integrationStitches.srcDataSourceId, dataSources.id),
         )
         .where(
           and(
-            eq(appConnections.status, "ACTIVE"),
             eq(integrationStitches.status, "ACTIVE"),
-            sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+            sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
           ),
         );
 
@@ -191,7 +190,7 @@ export class NormalizedOutboxWorker {
     row: {
       id: string;
       traceId: string;
-      connectionId: string;
+      dataSourceId: string;
       attempts: number;
     },
   ): Promise<void> {
@@ -205,7 +204,7 @@ export class NormalizedOutboxWorker {
       // via ON CONFLICT DO NOTHING using this traceId/routeId.
       await this.queueService.send(QueueName.NormalizedQueue, {
         traceId: row.traceId,
-        connectionId: row.connectionId,
+        dataSourceId: row.dataSourceId,
       });
       queueSuccess = true;
     } catch (err) {

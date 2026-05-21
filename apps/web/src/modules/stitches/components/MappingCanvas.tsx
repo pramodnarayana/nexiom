@@ -49,9 +49,9 @@ interface CanvasState {
 }
 
 export interface MappingCanvasProps {
-  srcConnectionId: string;
+  srcDataSourceId: string;
   sourceObject: string;
-  destConnectionId: string;
+  destDataSourceId: string;
   targetObject: string;
   /**
    * Pre-populate mapping rows from saved data (edit flow).
@@ -139,9 +139,9 @@ function reducer(state: ComponentState, action: ComponentAction): ComponentState
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MappingCanvas({
-  srcConnectionId,
+  srcDataSourceId,
   sourceObject,
-  destConnectionId,
+  destDataSourceId,
   targetObject,
   initialRules,
   initialConditions,
@@ -175,8 +175,8 @@ export function MappingCanvas({
     dispatch({ type: 'FETCH_START' });
     let cancelled = false;
     Promise.all([
-      listFields(srcConnectionId, sourceObject, forceRefresh),
-      listFields(destConnectionId, targetObject, forceRefresh),
+      listFields(srcDataSourceId, sourceObject, forceRefresh),
+      listFields(destDataSourceId, targetObject, forceRefresh),
     ])
       .then(([src, dest]) => {
         if (!cancelled) dispatch({ type: 'FETCH_SUCCESS', src, dest });
@@ -187,13 +187,13 @@ export function MappingCanvas({
         }
       });
     return () => { cancelled = true; };
-  }, [srcConnectionId, sourceObject, destConnectionId, targetObject]);
+  }, [srcDataSourceId, sourceObject, destDataSourceId, targetObject]);
 
   useEffect(() => {
     return doFetch(refreshToken > 0);
   // refreshToken being in deps means re-running with forceRefresh=true when user clicks refresh.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcConnectionId, sourceObject, destConnectionId, targetObject, refreshToken]);
+  }, [srcDataSourceId, sourceObject, destDataSourceId, targetObject, refreshToken]);
 
   const handleRefresh = useCallback(() => {
     setRefreshToken((t) => t + 1);

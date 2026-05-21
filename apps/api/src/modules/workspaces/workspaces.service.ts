@@ -13,8 +13,9 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   uiWorkspaces,
-  uiWorkspaceConnections,
-  appConnections,
+  uiWorkspaceDataSources,
+  dataSources,
+  credentials,
   AppConnectionStatus,
 } from '@nexiom/database';
 import type {
@@ -159,36 +160,36 @@ export class WorkspacesService {
     const workspace = await this.findOne(orgId, workspaceId);
 
     const assigned = await this.db
-      .select({ connectionId: uiWorkspaceConnections.connectionId })
-      .from(uiWorkspaceConnections)
-      .where(eq(uiWorkspaceConnections.workspaceId, workspaceId));
+      .select({ dataSourceId: uiWorkspaceDataSources.dataSourceId })
+      .from(uiWorkspaceDataSources)
+      .where(eq(uiWorkspaceDataSources.workspaceId, workspaceId));
 
-    const assignedIds = assigned.map((r) => r.connectionId);
+    const assignedIds = assigned.map((r) => r.dataSourceId);
 
     const conditions = [
-      eq(appConnections.tenantId, orgId),
-      eq(appConnections.status, AppConnectionStatus.ACTIVE),
-      eq(appConnections.envType, workspace.envType),
+      eq(dataSources.tenantId, orgId),
+      eq(credentials.status, AppConnectionStatus.ACTIVE),
+      eq(dataSources.envType, workspace.envType),
     ];
 
     if (assignedIds.length > 0) {
-      conditions.push(notInArray(appConnections.id, assignedIds));
+      conditions.push(notInArray(dataSources.id, assignedIds));
     }
 
-    // Explicit select — never expose the encrypted `value` blob or other sensitive columns.
     return this.db
       .select({
-        id: appConnections.id,
-        appName: appConnections.appName,
-        externalId: appConnections.externalId,
-        displayName: appConnections.displayName,
-        authType: appConnections.authType,
-        status: appConnections.status,
-        envType: appConnections.envType,
+        id: dataSources.id,
+        appName: dataSources.appName,
+        externalId: dataSources.externalId,
+        displayName: dataSources.displayName,
+        authType: credentials.authType,
+        status: credentials.status,
+        envType: dataSources.envType,
       })
-      .from(appConnections)
+      .from(dataSources)
+      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
       .where(and(...conditions))
-      .orderBy(asc(appConnections.displayName));
+      .orderBy(asc(dataSources.displayName));
   }
 
   /** Returns active connections assigned to the workspace, scoped to the org. */
@@ -196,31 +197,37 @@ export class WorkspacesService {
     const rows = await this.db
       .select({
         workspaceId: uiWorkspaces.id,
-        id: appConnections.id,
-        appName: appConnections.appName,
-        externalId: appConnections.externalId,
-        displayName: appConnections.displayName,
-        authType: appConnections.authType,
-        status: appConnections.status,
-        assignedAt: uiWorkspaceConnections.assignedAt,
+        id: dataSources.id,
+        appName: dataSources.appName,
+        externalId: dataSources.externalId,
+        displayName: dataSources.displayName,
+        authType: credentials.authType,
+        status: credentials.status,
+        assignedAt: uiWorkspaceDataSources.assignedAt,
       })
       .from(uiWorkspaces)
       .leftJoin(
-        uiWorkspaceConnections,
-        eq(uiWorkspaces.id, uiWorkspaceConnections.workspaceId),
+        uiWorkspaceDataSources,
+        eq(uiWorkspaces.id, uiWorkspaceDataSources.workspaceId),
       )
       .leftJoin(
-        appConnections,
+        dataSources,
         and(
-          eq(uiWorkspaceConnections.connectionId, appConnections.id),
-          eq(appConnections.tenantId, orgId),
-          eq(appConnections.status, AppConnectionStatus.ACTIVE),
+          eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
+          eq(dataSources.tenantId, orgId),
+        ),
+      )
+      .leftJoin(
+        credentials,
+        and(
+          eq(credentials.dataSourceId, dataSources.id),
+          eq(credentials.status, AppConnectionStatus.ACTIVE),
         ),
       )
       .where(
         and(eq(uiWorkspaces.id, workspaceId), eq(uiWorkspaces.orgId, orgId)),
       )
-      .orderBy(asc(uiWorkspaceConnections.assignedAt));
+      .orderBy(asc(uiWorkspaceDataSources.assignedAt));
 
     if (rows.length === 0) {
       throw new NotFoundException(`Workspace ${workspaceId} not found.`);

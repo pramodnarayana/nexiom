@@ -73,7 +73,7 @@ export function useConnections() {
                     clientId: pending.clientId,
                     ...(pending.clientSecret ? { clientSecret: pending.clientSecret } : {}),
                     displayName: pending.displayName,
-                    connectionId: pending.id,
+                    dataSourceId: pending.id,
                 });
                 toast({ title: `${provider} connected!`, description: 'Your connection is now active.' });
                 await refresh();
@@ -165,9 +165,9 @@ export function useConnections() {
     );
 
     const remove = useCallback(
-        async (connectionId: string): Promise<void> => {
+        async (dataSourceId: string): Promise<void> => {
             try {
-                await deleteConnectionAPI(connectionId);
+                await deleteConnectionAPI(dataSourceId);
                 toast({ title: 'Connection deleted', description: 'The connection has been successfully removed.' });
                 await refresh();
             } catch (err: unknown) {

@@ -74,7 +74,7 @@ describe('ExchangeOAuthCode', () => {
       ...validBase,
       clientId: 'client-id',
       clientSecret: 'client-secret',
-      connectionId: '550e8400-e29b-41d4-a716-446655440000',
+      dataSourceId: '550e8400-e29b-41d4-a716-446655440000',
     });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
@@ -95,13 +95,13 @@ describe('ExchangeOAuthCode', () => {
     expect(errors.some((e) => e.property === 'providerName')).toBe(true);
   });
 
-  it('fails with non-uuid connectionId', async () => {
+  it('fails with non-uuid dataSourceId', async () => {
     const dto = plainToInstance(ExchangeOAuthCode, {
       ...validBase,
-      connectionId: 'not-a-uuid',
+      dataSourceId: 'not-a-uuid',
     });
     const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'connectionId')).toBe(true);
+    expect(errors.some((e) => e.property === 'dataSourceId')).toBe(true);
   });
 });
 

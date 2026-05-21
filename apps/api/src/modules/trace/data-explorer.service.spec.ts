@@ -56,6 +56,8 @@ describe('DataExplorerService', () => {
         },
       },
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockReturnThis(),
@@ -65,6 +67,8 @@ describe('DataExplorerService', () => {
         const tx = {
           execute: vi.fn(),
           select: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
@@ -101,6 +105,8 @@ describe('DataExplorerService', () => {
             const tx = {
               execute: vi.fn(),
               select: vi.fn().mockReturnThis(),
+              innerJoin: vi.fn().mockReturnThis(),
+              leftJoin: vi.fn().mockReturnThis(),
               from: vi.fn().mockReturnThis(),
               where: vi.fn().mockReturnThis(),
               orderBy: vi.fn().mockReturnThis(),
@@ -114,6 +120,8 @@ describe('DataExplorerService', () => {
             const tx = {
               execute: vi.fn(),
               select: vi.fn().mockReturnThis(),
+              innerJoin: vi.fn().mockReturnThis(),
+              leftJoin: vi.fn().mockReturnThis(),
               from: vi.fn().mockReturnThis(),
               where: vi.fn().mockResolvedValue([{ count: 4 }]),
               orderBy: vi.fn().mockReturnThis(),
@@ -154,8 +162,8 @@ describe('DataExplorerService', () => {
     it('should return paginated inbound gateway data', async () => {
       db.query.integrationStitches.findFirst.mockResolvedValue({
         id: 'stitch_1',
-        srcConnectionId: 'c1',
-        destConnectionId: 'c2',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
       });
       mockPageSelect([{ id: 'inbound_1' }], 1, true);
 
@@ -170,8 +178,8 @@ describe('DataExplorerService', () => {
     it('should return paginated replica data', async () => {
       db.query.integrationStitches.findFirst.mockResolvedValue({
         id: 'stitch_1',
-        srcConnectionId: 'c1',
-        destConnectionId: 'c2',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
       });
       mockPageSelect([{ id: 'replica_1' }], 2, true);
 
@@ -185,8 +193,8 @@ describe('DataExplorerService', () => {
     it('should return paginated normalized data', async () => {
       db.query.integrationStitches.findFirst.mockResolvedValue({
         id: 'stitch_1',
-        srcConnectionId: 'c1',
-        destConnectionId: 'c2',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
       });
       mockPageSelect([{ id: 'norm_1' }], 3, false);
 
@@ -207,8 +215,8 @@ describe('DataExplorerService', () => {
     it('should return paginated gem data', async () => {
       db.query.integrationStitches.findFirst.mockResolvedValue({
         id: 'stitch_1',
-        srcConnectionId: 'c1',
-        destConnectionId: 'c2',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
       });
 
       // Provide select mock directly on tenantDb
@@ -248,8 +256,8 @@ describe('DataExplorerService', () => {
     it('should return paginated outbound gateway data', async () => {
       db.query.integrationStitches.findFirst.mockResolvedValue({
         id: 'stitch_1',
-        srcConnectionId: 'c1',
-        destConnectionId: 'c2',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
       });
       mockPageSelect([{ id: 'outbound_1' }], 5, true);
 

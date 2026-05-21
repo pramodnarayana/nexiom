@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service.js';
@@ -42,21 +43,22 @@ function buildMockDb() {
       delete: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({ returning: deleteReturning }),
       }),
-      select: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockImplementation(() => {
-            return Object.assign(Promise.resolve(wherePromise()), {
-              orderBy: selectOrderBy,
-            });
-          }),
-          leftJoin: vi.fn().mockReturnValue({
-            leftJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockReturnValue({
-                orderBy: selectOrderBy,
-              }),
-            }),
-          }),
-        }),
+      select: vi.fn().mockImplementation(() => {
+        const qb: any = {};
+        qb.from = vi.fn().mockReturnValue(qb);
+        qb.leftJoin = vi.fn().mockReturnValue(qb);
+        qb.innerJoin = vi.fn().mockReturnValue(qb);
+        qb.where = vi.fn().mockImplementation(() => {
+          return Object.assign(Promise.resolve(wherePromise()), {
+            orderBy: selectOrderBy,
+          });
+        });
+        // support orderBy without where
+        qb.orderBy = selectOrderBy;
+        // make promise thenable in case it's awaited without where
+        qb.then = (res: any, rej: any) =>
+          Promise.resolve(wherePromise()).then(res, rej);
+        return qb;
       }),
       execute,
     },
@@ -260,7 +262,7 @@ describe('WorkspacesService', () => {
       // Mock workspace exists
       mocks.findFirst.mockResolvedValue(WORKSPACE);
       // Mock assigned connections
-      mocks.wherePromise.mockReturnValueOnce([{ connectionId: 'conn-1' }]);
+      mocks.wherePromise.mockReturnValueOnce([{ dataSourceId: 'conn-1' }]);
       // Mock available connections
       mocks.selectOrderBy.mockResolvedValue([
         { id: 'conn-2', appName: 'salesforce' },
@@ -323,7 +325,7 @@ describe('WorkspacesService', () => {
 
   it('returns empty array when workspace exists but all connection columns are null (left-join sentinel)', async () => {
     // Workspace exists but has no assigned connections — left join produces a sentinel row
-    // with workspaceId present but all appConnections columns null.
+    // with workspaceId present but all dataSources columns null.
     const sentinelRow = {
       workspaceId: WS_ID,
       id: null,

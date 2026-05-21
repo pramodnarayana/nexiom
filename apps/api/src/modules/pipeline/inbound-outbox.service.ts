@@ -6,7 +6,7 @@ import {
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
-  appConnections,
+  dataSources,
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
@@ -44,16 +44,11 @@ export class InboundOutboxService {
               const tenantDb = await this.dbManager.getTenantDb(
                 tenant.tenantId,
               );
-              const { eq, and } = await import('drizzle-orm');
+              const { eq } = await import('drizzle-orm');
               const connections = await this.globalDb
                 .select()
-                .from(appConnections)
-                .where(
-                  and(
-                    eq(appConnections.tenantId, tenant.tenantId),
-                    eq(appConnections.status, 'ACTIVE'),
-                  ),
-                );
+                .from(dataSources)
+                .where(eq(dataSources.tenantId, tenant.tenantId));
 
               for (const connection of connections) {
                 const schemaName = getWorkspaceSchemaName(
@@ -169,7 +164,7 @@ export class InboundOutboxService {
     row: {
       id: string;
       traceId: string;
-      connectionId: string;
+      dataSourceId: string;
       attempts: number;
     },
   ): Promise<void> {
@@ -179,7 +174,7 @@ export class InboundOutboxService {
       // Send to L2 Queue
       await this.queueService.send(QueueName.InboundQueue, {
         traceId: row.traceId,
-        connectionId: row.connectionId,
+        dataSourceId: row.dataSourceId,
       });
 
       // Mark success - only if we still own this claim

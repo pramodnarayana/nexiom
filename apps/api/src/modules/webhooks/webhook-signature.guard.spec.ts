@@ -46,6 +46,8 @@ function makeExecutionContext(
 function makeDbMock(row: Record<string, unknown> | null) {
   return {
     select: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(row ? [row] : []),
@@ -107,7 +109,7 @@ describe('WebhookSignatureGuard', () => {
     await setup({ appName: 'salesforce' }, { name: 'salesforce' });
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       {},
       Buffer.from('body'),
     );
@@ -124,7 +126,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       {},
       Buffer.from('body'),
       { appName: 'salesforce', tenantId: 'tenant-1', metadata: {} },
@@ -152,7 +154,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'x-salesforce-signature': validSig },
       body,
     );
@@ -181,7 +183,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'intuit-signature': validSig },
       body,
     );
@@ -212,7 +214,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'intuit-signature': validSigUppercase },
       body,
     );
@@ -230,7 +232,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       {},
       Buffer.from('body'),
     );
@@ -245,7 +247,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'x-salesforce-signature': 'wrong-signature' },
       Buffer.from('body'),
     );
@@ -260,7 +262,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'x-salesforce-signature': 'some-sig' },
       Buffer.from('body'),
     );
@@ -271,7 +273,7 @@ describe('WebhookSignatureGuard', () => {
     await setup(null);
 
     const ctx = makeExecutionContext(
-      { connectionId: 'missing-conn' },
+      { dataSourceId: 'missing-conn' },
       {},
       Buffer.from('body'),
     );
@@ -285,7 +287,7 @@ describe('WebhookSignatureGuard', () => {
     await setup({ appName: 'unregistered-piece' }, undefined);
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       {},
       Buffer.from('body'),
     );
@@ -301,7 +303,7 @@ describe('WebhookSignatureGuard', () => {
     );
 
     const ctx = makeExecutionContext(
-      { connectionId: 'conn-1' },
+      { dataSourceId: 'conn-1' },
       { 'x-salesforce-signature': 'some-sig' },
       undefined,
     );

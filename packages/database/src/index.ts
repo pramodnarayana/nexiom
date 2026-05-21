@@ -3,6 +3,8 @@ export * from './schema/global/identity.js';
 export * from './schema/global/storage_registry.js';
 export * from './schema/global/pieces.js';
 export * from './schema/global/routing.js';
+export * from './schema/global/data-sources.js';
+export * from './schema/global/credentials.js';
 export * from './schema/global/workspace.js';
 export * from './schema/global/stitches.js';
 export * from './schema/global/registry_outbox.js';

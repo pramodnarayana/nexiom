@@ -50,7 +50,7 @@ export interface FullTrace {
   layers: LayerDetail[];
   inboundGateway: {
     id: string;
-    connectionId: string;
+    dataSourceId: string;
     objectType: string | null;
     request: unknown;
     response: unknown;
@@ -184,14 +184,14 @@ export class TraceService {
             eq(integrationStitches.id, stitchId),
             eq(integrationStitches.orgId, orgId),
           ),
-      columns: { id: true, srcConnectionId: true, workspaceId: true },
+      columns: { id: true, srcDataSourceId: true, workspaceId: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
     const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
     assertValidSchemaName(schemaName);
     const { syncLog } = buildTenantSchema(schemaName);
@@ -275,8 +275,8 @@ export class TraceService {
           ),
       columns: {
         id: true,
-        srcConnectionId: true,
-        destConnectionId: true,
+        srcDataSourceId: true,
+        destDataSourceId: true,
         workspaceId: true,
       },
     });
@@ -285,8 +285,8 @@ export class TraceService {
     }
 
     const [srcSchemaName, destSchemaName] = await Promise.all([
-      this.storageResolver.resolveSchemaName(stitch.srcConnectionId),
-      this.storageResolver.resolveSchemaName(stitch.destConnectionId),
+      this.storageResolver.resolveSchemaName(stitch.srcDataSourceId),
+      this.storageResolver.resolveSchemaName(stitch.destDataSourceId),
     ]);
 
     assertValidSchemaName(srcSchemaName);
@@ -330,14 +330,14 @@ export class TraceService {
             .from(syncLog)
             .where(eq(syncLog.traceId, traceId))
             .orderBy(syncLog.timestamp, syncLog.id),
-          // L1: traceId scope (connectionId = src implied by schema)
+          // L1: traceId scope (dataSourceId = src implied by schema)
           tx
             .select()
             .from(inboundGateway)
             .where(
               and(
                 eq(inboundGateway.traceId, traceId),
-                eq(inboundGateway.connectionId, stitch.srcConnectionId),
+                eq(inboundGateway.dataSourceId, stitch.srcDataSourceId),
               ),
             )
             .limit(1),
@@ -348,7 +348,7 @@ export class TraceService {
             .where(
               and(
                 eq(replicaEntity.traceId, traceId),
-                eq(replicaEntity.connectionId, stitch.srcConnectionId),
+                eq(replicaEntity.dataSourceId, stitch.srcDataSourceId),
               ),
             )
             .limit(1),
@@ -405,7 +405,7 @@ export class TraceService {
       inboundGateway: l1
         ? {
             id: l1.id,
-            connectionId: l1.connectionId,
+            dataSourceId: l1.dataSourceId,
             objectType: l1.objectType,
             request: l1.request,
             response: l1.response,

@@ -107,11 +107,11 @@ export class RegistryReplicationService implements OnModuleInit {
               if (row.entityType === "APP_CONNECTION") {
                 const connData = prepareAppConnectionPayload(data);
                 await tx
-                  .insert(schema.appConnections)
+                  .insert(schema.dataSources)
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                   .values(connData as any)
                   .onConflictDoUpdate({
-                    target: [schema.appConnections.id],
+                    target: [schema.dataSources.id],
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     set: connData as any,
                   });
@@ -142,8 +142,8 @@ export class RegistryReplicationService implements OnModuleInit {
             } else if (row.action === "DELETE") {
               if (row.entityType === "APP_CONNECTION") {
                 await tx
-                  .delete(schema.appConnections)
-                  .where(eq(schema.appConnections.id, row.entityId));
+                  .delete(schema.dataSources)
+                  .where(eq(schema.dataSources.id, row.entityId));
                 operationPerformed = true;
               } else if (row.entityType === "INTEGRATION_STITCH") {
                 await tx

@@ -37,7 +37,7 @@ const PG_UNIQUE_VIOLATION = '23505';
  * Unique constraint names that indicate an idempotency collision on the
  * inbound_gateway table. Only these violations are silently swallowed as 202.
  *
- * - idx_l1_ext_id   : uniqueIndex(connectionId, ext_req_id) — vendor event ID duplicate
+ * - idx_l1_ext_id   : uniqueIndex(dataSourceId, ext_req_id) — vendor event ID duplicate
  */
 const IDEMPOTENCY_CONSTRAINTS = new Set(['idx_l1_ext_id']);
 
@@ -67,7 +67,7 @@ export class WebhooksController {
   ) {}
 
   /**
-   * POST /webhooks/:connectionId
+   * POST /webhooks/:dataSourceId
    *
    * Accepts an incoming webhook payload and writes it as an immutable
    * LAYER 1 (inbound_gateway) record in the connection's tenant schema.
@@ -81,11 +81,11 @@ export class WebhooksController {
    *   x-webhook-id  -- Salesforce / generic event ID
    *   x-event-id    -- QuickBooks event ID
    */
-  @Post(':connectionId')
+  @Post(':dataSourceId')
   @UseGuards(TenantRateLimitGuard, WebhookSignatureGuard)
   @HttpCode(HttpStatus.ACCEPTED)
   async ingest(
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
     @Body() body: unknown,
     @Headers() headers: Record<string, string>,
     @Req() req: RawBodyRequest<Request>,
@@ -98,7 +98,7 @@ export class WebhooksController {
 
     try {
       const { schemaName, tenantId } =
-        await this.storageResolver.resolveStorageProfile(connectionId);
+        await this.storageResolver.resolveStorageProfile(dataSourceId);
       const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
       const inboundGatewayId = randomUUID();
       const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
@@ -165,7 +165,7 @@ export class WebhooksController {
         );
         await tx.insert(inboundGateway).values({
           traceId: inboundGatewayId,
-          connectionId,
+          dataSourceId,
           request: normalizedPayload,
           headers: filteredHeaders,
           extReqId,
@@ -175,11 +175,11 @@ export class WebhooksController {
           .insert(inboundOutbox)
           .values({
             traceId: inboundGatewayId,
-            connectionId,
+            dataSourceId,
             status: 'PENDING',
           })
           .onConflictDoNothing({
-            target: [inboundOutbox.traceId, inboundOutbox.connectionId],
+            target: [inboundOutbox.traceId, inboundOutbox.dataSourceId],
           });
       });
       // Await queue delivery to ensure durability.
@@ -188,7 +188,7 @@ export class WebhooksController {
       // next poll cycle.
       const traceId = inboundGatewayId;
       await this.queueService
-        .send(QueueName.InboundQueue, { traceId, connectionId })
+        .send(QueueName.InboundQueue, { traceId, dataSourceId })
         .catch((err: unknown) => {
           this.logger.error(
             {
@@ -254,7 +254,7 @@ export class WebhooksController {
 
         try {
           const { schemaName, tenantId } =
-            await this.storageResolver.resolveStorageProfile(connectionId);
+            await this.storageResolver.resolveStorageProfile(dataSourceId);
           const { inboundGateway } = buildTenantSchema(schemaName);
           const extReqId = headers['x-webhook-id'] ?? headers['x-event-id'];
 
@@ -279,7 +279,7 @@ export class WebhooksController {
                 })
                 .from(inboundGateway)
                 .where(
-                  sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.connectionId} = ${connectionId}`,
+                  sql`${inboundGateway.extReqId} = ${extReqId} AND ${inboundGateway.dataSourceId} = ${dataSourceId}`,
                 )
                 .limit(1);
 
@@ -297,7 +297,7 @@ export class WebhooksController {
               await this.queueService
                 .send(QueueName.InboundQueue, {
                   traceId: existingTraceIdOutside,
-                  connectionId,
+                  dataSourceId,
                 })
                 .catch((err: unknown) => {
                   this.logger.error(

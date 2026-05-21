@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import {
   DATABASE_CONNECTION,
-  appConnections,
+  dataSources,
   type DrizzleDb,
 } from "@nexiom/database";
 import { PipelineHookBrokerService } from "@nexiom/engine";
@@ -39,7 +39,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
   private async processMessage(rawMsg: unknown): Promise<void> {
     const msg = rawMsg as Record<string, unknown>;
 
-    if (!isValidPipelineMessage(msg, ["traceId", "connectionId"])) {
+    if (!isValidPipelineMessage(msg, ["traceId", "dataSourceId"])) {
       this.logger.warn(
         {
           event: "active_fetch.invalid_message",
@@ -51,7 +51,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
     }
 
     const traceId = msg.traceId as string;
-    const connectionId = msg.connectionId as string;
+    const dataSourceId = msg.dataSourceId as string;
     const missingDependencies = msg.missingDependencies as Array<{
       entityType: string;
       sourceId: string;
@@ -72,23 +72,23 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
       {
         event: "active_fetch.started",
         traceId,
-        connectionId,
+        dataSourceId,
         count: missingDependencies.length,
       },
       "ActiveFetchWorker started",
     );
 
     try {
-      // Select all columns to avoid Vitest ESM resolution TypeError on appConnections keys
+      // Select all columns to avoid Vitest ESM resolution TypeError on dataSources keys
       const connRows = await this.db
         .select()
-        .from(appConnections)
-        .where(eq(appConnections.id, connectionId))
+        .from(dataSources)
+        .where(eq(dataSources.id, dataSourceId))
         .limit(1);
 
       if (!connRows[0]) {
         throw new Error(
-          `Connection ${connectionId} not found in app_connection`,
+          `Connection ${dataSourceId} not found in app_connection`,
         );
       }
 
@@ -106,11 +106,11 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
         connectionAppName,
         appProfile,
         missingDependencies,
-        connectionId,
+        dataSourceId,
       );
 
       this.logger.log(
-        { event: "active_fetch.completed", traceId, connectionId },
+        { event: "active_fetch.completed", traceId, dataSourceId },
         "ActiveFetchWorker completed successfully",
       );
     } catch (err) {
@@ -118,7 +118,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
         {
           event: "active_fetch.error",
           traceId,
-          connectionId,
+          dataSourceId,
           err: sanitizeError(err),
         },
         "ActiveFetchWorker failed",

@@ -25,7 +25,7 @@ const SAFE_TRACE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
  *  - service      : always "nexiom-api"
  *
  * Operational fields added per-request by guards and controllers via PinoLogger.assign():
- *  - connectionId : set by TenantRateLimitGuard after route param is parsed
+ *  - dataSourceId : set by TenantRateLimitGuard after route param is parsed
  *  - layer        : set by pipeline services ("L1", "L2", …)
  *  - durationMs   : set by controllers after the operation completes
  */
@@ -72,8 +72,8 @@ const SAFE_TRACE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
             // Attach request-scoped context fields to every log line emitted
             // during the request lifecycle.
             // NOTE: Express route params (req.params) are NOT available here —
-            // the router hasn't matched the path yet. connectionId is set later
-            // by TenantRateLimitGuard via PinoLogger.assign({ connectionId }).
+            // the router hasn't matched the path yet. dataSourceId is set later
+            // by TenantRateLimitGuard via PinoLogger.assign({ dataSourceId }).
             customProps: (req: IncomingMessage) => ({
               service: 'nexiom-api',
               traceId: (req as IncomingMessage & { id: string }).id,

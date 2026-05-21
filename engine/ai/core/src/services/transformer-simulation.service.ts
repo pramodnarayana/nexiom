@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common';
-import { DATABASE_CONNECTION, appConnections, safeAppConnectionColumns } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
 import { eq, and } from 'drizzle-orm';
 import type { DrizzleDb } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
@@ -37,22 +37,21 @@ export class TransformerSimulationService {
     const startTime = Date.now();
     
     // 1. Resolve Connection
-    const connections = await this.db.select({
-      id: safeAppConnectionColumns.id,
-      appName: safeAppConnectionColumns.appName,
+    const [conn] = await this.db.select({
+      id: dataSources.id,
+      appName: dataSources.appName,
     })
-    .from(appConnections)
+    .from(dataSources)
     .where(
       and(
-        eq(appConnections.id, connectionId),
-        eq(appConnections.tenantId, tenantId)
+        eq(dataSources.id, connectionId),
+        eq(dataSources.tenantId, tenantId)
       )
     );
 
-    if (connections.length === 0) {
+    if (!conn) {
       throw new BadRequestException(`Connection ${connectionId} not found or inactive`);
     }
-    const conn = connections[0];
 
     // 2. Load Tools & Creds
     const piece = this.pieceRegistry.getPiece(conn.appName);

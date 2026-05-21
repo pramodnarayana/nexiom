@@ -6,7 +6,7 @@ import {
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
-  appConnections,
+  dataSources,
 } from '@nexiom/database';
 import { QueueName } from '@nexiom/queue';
 import { QueueService } from '@nexiom/queue';
@@ -39,8 +39,8 @@ export class ReplicaOutboxService {
             const tenantDb = await this.dbManager.getTenantDb(tenant.tenantId);
             const connections = await this.globalDb
               .select()
-              .from(appConnections)
-              .where(eq(appConnections.tenantId, tenant.tenantId));
+              .from(dataSources)
+              .where(eq(dataSources.tenantId, tenant.tenantId));
 
             for (const connection of connections) {
               const schemaName = getWorkspaceSchemaName(
@@ -120,7 +120,7 @@ export class ReplicaOutboxService {
     row: {
       id: string;
       traceId: string;
-      connectionId: string;
+      dataSourceId: string;
       attempts: number;
     },
   ): Promise<void> {
@@ -130,7 +130,7 @@ export class ReplicaOutboxService {
       // Send to L3 Queue
       await this.queueService.send(QueueName.ReplicaQueue, {
         traceId: row.traceId,
-        connectionId: row.connectionId,
+        dataSourceId: row.dataSourceId,
       });
 
       // Mark success

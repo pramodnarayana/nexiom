@@ -23,10 +23,8 @@ import { and, eq } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
-  uiWorkspaceConnections,
-  appConnections,
-  safeAppConnectionColumns,
-  AppConnectionStatus,
+  uiWorkspaceDataSources,
+  dataSources,
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
 import { requireOrgId } from './workspace.utils.js';
@@ -65,13 +63,13 @@ export class WorkspaceConnectionsController {
     );
   }
 
-  @Post(':connectionId')
+  @Post(':dataSourceId')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('workspaces', 'manage')
   async assign(
     @AuthContext() auth: RequestAuthContext,
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
   ) {
     const orgId = requireOrgId(auth);
 
@@ -82,20 +80,16 @@ export class WorkspaceConnectionsController {
     // the encrypted `value` blob.
     const [connection] = await this.db
       .select({
-        id: safeAppConnectionColumns.id,
-        envType: safeAppConnectionColumns.envType,
+        id: dataSources.id,
+        envType: dataSources.envType,
       })
-      .from(appConnections)
+      .from(dataSources)
       .where(
-        and(
-          eq(appConnections.id, connectionId),
-          eq(appConnections.tenantId, orgId),
-          eq(appConnections.status, AppConnectionStatus.ACTIVE),
-        ),
+        and(eq(dataSources.id, dataSourceId), eq(dataSources.tenantId, orgId)),
       )
       .limit(1);
     if (!connection) {
-      throw new NotFoundException(`Connection ${connectionId} not found.`);
+      throw new NotFoundException(`Connection ${dataSourceId} not found.`);
     }
 
     // Enforce env-type parity — sandbox connections may not be assigned to production
@@ -108,8 +102,8 @@ export class WorkspaceConnectionsController {
 
     try {
       const [assignment] = await this.db
-        .insert(uiWorkspaceConnections)
-        .values({ workspaceId, connectionId })
+        .insert(uiWorkspaceDataSources)
+        .values({ workspaceId, dataSourceId })
         .returning();
       return assignment;
     } catch (err: unknown) {
@@ -122,13 +116,13 @@ export class WorkspaceConnectionsController {
     }
   }
 
-  @Delete(':connectionId')
+  @Delete(':dataSourceId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission('workspaces', 'manage')
   async unassign(
     @AuthContext() auth: RequestAuthContext,
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
   ) {
     const orgId = requireOrgId(auth);
 
@@ -136,11 +130,11 @@ export class WorkspaceConnectionsController {
     await this.workspacesService.findOne(orgId, workspaceId);
 
     await this.db
-      .delete(uiWorkspaceConnections)
+      .delete(uiWorkspaceDataSources)
       .where(
         and(
-          eq(uiWorkspaceConnections.workspaceId, workspaceId),
-          eq(uiWorkspaceConnections.connectionId, connectionId),
+          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
+          eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
         ),
       );
   }

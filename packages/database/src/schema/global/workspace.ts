@@ -10,7 +10,8 @@ import {
     unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { appConnections, envTypeEnum } from './routing.js';
+import { envTypeEnum } from './routing.js';
+import { dataSources } from './data-sources.js';
 export { envTypeEnum } from './routing.js';
 // NOTE: No cross-DB FK to organization — tenant isolation enforced by TenantDatabaseManager routing.
 
@@ -50,40 +51,40 @@ export const uiWorkspaces = pgTable('ui_workspace', {
  * A single connection (e.g. "Salesforce Master") can appear in multiple
  * workspaces simultaneously. Deletion of either side cascades cleanly.
  */
-export const uiWorkspaceConnections = pgTable('ui_workspace_connection', {
+export const uiWorkspaceDataSources = pgTable('ui_workspace_data_source', {
     workspaceId: uuid('workspace_id')
         .notNull()
         .references(() => uiWorkspaces.id, { onDelete: 'cascade' }),
-    connectionId: uuid('connection_id')
+    dataSourceId: uuid('data_source_id')
         .notNull()
-        .references(() => appConnections.id, { onDelete: 'cascade' }),
+        .references(() => dataSources.id, { onDelete: 'cascade' }),
     assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-    primaryKey({ columns: [table.workspaceId, table.connectionId] }),
-    index('workspace_connection_conn_idx').on(table.connectionId),
+    primaryKey({ columns: [table.workspaceId, table.dataSourceId] }),
+    index('workspace_data_source_ds_idx').on(table.dataSourceId),
 ]);
 
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 
-// Reverse relation from appConnections → uiWorkspaceConnections.
-// Defined here (not in tenant.ts) to avoid a circular import: tenant ← workspace.
-export const appConnectionRelations = relations(appConnections, ({ many }) => ({
-    workspaceConnections: many(uiWorkspaceConnections),
+// Reverse relation from dataSources → uiWorkspaceDataSources.
+// Defined here (not in data-sources.ts) to avoid a circular import.
+export const dataSourceRelations = relations(dataSources, ({ many }) => ({
+    workspaceDataSources: many(uiWorkspaceDataSources),
 }));
 
 export const uiWorkspaceRelations = relations(uiWorkspaces, ({ many }) => ({
-    connections: many(uiWorkspaceConnections),
+    dataSources: many(uiWorkspaceDataSources),
 }));
 
-export const uiWorkspaceConnectionRelations = relations(uiWorkspaceConnections, ({ one }) => ({
+export const uiWorkspaceDataSourceRelations = relations(uiWorkspaceDataSources, ({ one }) => ({
     workspace: one(uiWorkspaces, {
-        fields: [uiWorkspaceConnections.workspaceId],
+        fields: [uiWorkspaceDataSources.workspaceId],
         references: [uiWorkspaces.id],
     }),
-    connection: one(appConnections, {
-        fields: [uiWorkspaceConnections.connectionId],
-        references: [appConnections.id],
+    dataSource: one(dataSources, {
+        fields: [uiWorkspaceDataSources.dataSourceId],
+        references: [dataSources.id],
     }),
 }));

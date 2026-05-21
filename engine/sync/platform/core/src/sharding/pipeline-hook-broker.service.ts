@@ -242,7 +242,7 @@ export class PipelineHookBrokerService {
     appName: string,
     appProfile: string,
     missingDependencies: Array<{ entityType: string; sourceId: string }>,
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<void> {
     const shard = await this.loader.load(this.shardName(appName, appProfile));
     if (!shard.activeFetch) {
@@ -256,7 +256,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.activeFetch', appName, appProfile, count: missingDependencies.length },
       'Delegating activeFetch to application shard',
     );
-    return shard.activeFetch(missingDependencies, connectionId);
+    return shard.activeFetch(missingDependencies, dataSourceId);
   }
 
   /**

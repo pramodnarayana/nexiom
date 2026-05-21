@@ -59,24 +59,24 @@ describe("pipeline.utils", () => {
   describe("isValidPipelineMessage()", () => {
     it("returns true when all required fields are non-empty strings", () => {
       expect(
-        isValidPipelineMessage({ traceId: "t1", connectionId: "c1" }, [
+        isValidPipelineMessage({ traceId: "t1", dataSourceId: "c1" }, [
           "traceId",
-          "connectionId",
+          "dataSourceId",
         ]),
       ).toBe(true);
     });
 
     it("returns false when a required field is missing", () => {
       expect(
-        isValidPipelineMessage({ traceId: "t1" }, ["traceId", "connectionId"]),
+        isValidPipelineMessage({ traceId: "t1" }, ["traceId", "dataSourceId"]),
       ).toBe(false);
     });
 
     it("returns false when a required field is an empty string", () => {
       expect(
-        isValidPipelineMessage({ traceId: "", connectionId: "c1" }, [
+        isValidPipelineMessage({ traceId: "", dataSourceId: "c1" }, [
           "traceId",
-          "connectionId",
+          "dataSourceId",
         ]),
       ).toBe(false);
     });
@@ -84,11 +84,11 @@ describe("pipeline.utils", () => {
     it("returns false when a required field is not a string", () => {
       expect(
         isValidPipelineMessage(
-          { traceId: 42, connectionId: "c1" } as unknown as Record<
+          { traceId: 42, dataSourceId: "c1" } as unknown as Record<
             string,
             unknown
           >,
-          ["traceId", "connectionId"],
+          ["traceId", "dataSourceId"],
         ),
       ).toBe(false);
     });

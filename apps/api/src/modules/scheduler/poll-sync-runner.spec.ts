@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DATABASE_CONNECTION,
   integrationStitches,
-  appConnections,
+  dataSources,
   syncCursors,
 } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
@@ -26,7 +26,7 @@ const CONN_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
 const STITCH = {
   id: STITCH_ID,
-  srcConnectionId: CONN_ID,
+  srcDataSourceId: CONN_ID,
   sourceObject: 'Account',
   syncIntervalMinutes: 30,
   lastScheduledAt: null,
@@ -83,6 +83,8 @@ function makeDb(
 
   const builder = {
     select: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
     from: vi.fn().mockImplementation((table: unknown) => {
       currentTable = table;
       return builder;
@@ -91,7 +93,7 @@ function makeDb(
     limit: vi.fn().mockImplementation(() => {
       if (currentTable === integrationStitches)
         return Promise.resolve(stitch ? [stitch] : []);
-      if (currentTable === appConnections)
+      if (currentTable === dataSources)
         return Promise.resolve(connection ? [connection] : []);
       if (currentTable === syncCursors)
         return Promise.resolve(stateDoc ? [{ stateDocument: stateDoc }] : []);

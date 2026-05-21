@@ -39,8 +39,8 @@ export class ExchangeOAuthCode {
 
   @IsOptional()
   @IsString()
-  @IsUUID('4', { message: 'connectionId must be a valid UUID v4' })
-  connectionId?: string;
+  @IsUUID('4', { message: 'dataSourceId must be a valid UUID v4' })
+  dataSourceId?: string;
 
   @IsOptional()
   @IsString()

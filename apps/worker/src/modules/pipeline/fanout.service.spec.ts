@@ -26,50 +26,44 @@ describe("FanOutService", () => {
     logs: any[] = [],
   ) => {
     return (args: any) => {
-      if (args && args.appName !== undefined) {
-        return Object.assign(
-          Promise.resolve([
+      const isConnectionQuery = args && Object.keys(args).length > 0;
+      let resultData = isConnectionQuery
+        ? [
             {
               appName: "testApp",
               tenantId: "org_1",
               metadata: { appProfile: "online" },
             },
-          ]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      }
+          ]
+        : stitches;
 
-      return Object.assign(Promise.resolve([]), {
-        from: vi.fn().mockImplementation((table) => {
-          if (
-            table &&
-            "status" in table &&
-            "routeId" in table &&
-            !("destConnectionId" in table)
-          ) {
-            return Object.assign(Promise.resolve(logs), {
-              where: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
-            });
-          }
-          if (table && "mappingRules" in table) {
-            return Object.assign(Promise.resolve(mappings), {
-              where: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
-            });
-          }
-          return Object.assign(Promise.resolve(stitches), {
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          });
-        }),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
+      const qb: any = {};
+      qb.from = vi.fn().mockImplementation((table) => {
+        if (
+          table &&
+          "status" in table &&
+          "routeId" in table &&
+          !("destConnectionId" in table)
+        ) {
+          resultData = logs;
+        } else if (table && "mappingRules" in table) {
+          resultData = mappings;
+        } else if (table && "appName" in table) {
+          resultData = [
+            {
+              appName: "testApp",
+              tenantId: "org_1",
+              metadata: { appProfile: "online" },
+            },
+          ];
+        }
+        return qb;
       });
+      qb.where = vi.fn().mockReturnValue(qb);
+      qb.limit = vi.fn().mockReturnValue(qb);
+      qb.then = (resolve: any, reject?: any) =>
+        Promise.resolve(resultData).then(resolve, reject);
+      return qb;
     };
   };
 
@@ -97,7 +91,7 @@ describe("FanOutService", () => {
 
     db = {
       query: {
-        appConnections: {
+        dataSources: {
           findFirst: vi.fn().mockResolvedValue({
             tenantId: "tenant_1",
             appName: "testApp",
@@ -232,7 +226,7 @@ describe("FanOutService", () => {
     );
 
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     expect(queueService.send).toHaveBeenCalledWith(
       QueueName.DeliveryQueue,
       expect.objectContaining({
@@ -265,54 +259,44 @@ describe("FanOutService", () => {
     );
 
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     expect(mockTxInsert).toHaveBeenCalledTimes(1);
   });
 
   it("should return early if no active stitches are found", async () => {
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      return Object.assign(Promise.resolve([]), {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-      });
-    });
+    db.select.mockImplementation(createDbSelectMock([], []));
 
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     expect(mockTxInsert).not.toHaveBeenCalled();
   });
 
   it("should log and throw error if db operation fails", async () => {
     db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      return Object.assign(Promise.reject(new Error("DB connection failed")), {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-      });
+      const qb: any = {};
+      const isConnectionQuery = args && Object.keys(args).length > 0;
+      qb.from = vi.fn().mockReturnValue(qb);
+      qb.where = vi.fn().mockReturnValue(qb);
+      qb.limit = vi.fn().mockReturnValue(qb);
+      if (isConnectionQuery) {
+        qb.then = (res: any, rej: any) =>
+          Promise.resolve([
+            {
+              appName: "testApp",
+              tenantId: "org_1",
+              metadata: { appProfile: "online" },
+            },
+          ]).then(res, rej);
+      } else {
+        qb.then = (res: any, rej: any) =>
+          Promise.reject(new Error("DB connection failed")).then(res, rej);
+      }
+      return qb;
     });
 
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("DB connection failed");
   });
 
@@ -336,7 +320,7 @@ describe("FanOutService", () => {
     );
 
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
     expect(queueService.send).toHaveBeenCalledWith(
       QueueName.DeliveryQueue,
       expect.objectContaining({
@@ -380,7 +364,7 @@ describe("FanOutService", () => {
     });
 
     const handler = queueService.consume.mock.calls[0][1];
-    await handler({ traceId: "123", connectionId: "456" });
+    await handler({ traceId: "123", dataSourceId: "456" });
 
     // Ensure observable outcomes: a FAIL log is written for the failed stitch,
     // and a SUCCESS log is written for the successful stitch.
@@ -394,27 +378,32 @@ describe("FanOutService", () => {
 
   it("should return gracefully and record failure if source connection record (GEM) is not found", async () => {
     db.select.mockImplementation((args: any) => {
-      // Returns empty array for appConnections, but return a valid stitch
-      if (args && args.appName !== undefined)
-        return Object.assign(Promise.resolve([]), {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        });
-      return Object.assign(
-        Promise.resolve([
-          { id: "stitch_1", syncCondition: [], mappingRules: [] },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
+      const qb: any = {};
+      const keyCount = args ? Object.keys(args).length : 0;
+      let resultData: any[] = [];
+      if (keyCount === 1) {
+        resultData = [
+          {
+            appName: "testApp",
+            tenantId: "org_1",
+            metadata: { appProfile: "online" },
+          },
+        ];
+      } else if (keyCount === 3) {
+        resultData = [];
+      } else {
+        resultData = [{ id: "stitch_1", syncCondition: [], mappingRules: [] }];
+      }
+      qb.from = vi.fn().mockReturnValue(qb);
+      qb.where = vi.fn().mockReturnValue(qb);
+      qb.limit = vi.fn().mockReturnValue(qb);
+      qb.then = (res: any, rej: any) =>
+        Promise.resolve(resultData).then(res, rej);
+      return qb;
     });
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Source connection record not found");
   });
 
@@ -441,36 +430,23 @@ describe("FanOutService", () => {
       return cb(tx);
     });
 
-    db.select.mockImplementation((args: any) => {
-      if (args && args.appName !== undefined)
-        return Object.assign(
-          Promise.resolve([{ appName: "testApp", tenantId: "org_1" }]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      return Object.assign(
-        Promise.resolve([
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
             id: "stitch_1",
             syncCondition: [{ field: "name", op: "eq", value: "hi" }],
             mappingRules: [],
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+        [],
+      ),
+    );
 
     const handler = queueService.consume.mock.calls[0][1];
     // This one actually throws to caller because it is in the root transaction processMessage function
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).rejects.toThrow("Replica record not found");
   });
 
@@ -509,63 +485,29 @@ describe("FanOutService", () => {
       return cb(tx);
     });
 
-    let dbSelectCount = 0;
-    db.select.mockImplementation(() => {
-      dbSelectCount++;
-      // Call 1: integrationStitches
-      if (dbSelectCount === 1) {
-        return Object.assign(
-          Promise.resolve([
-            {
-              id: "stitch_1",
-              syncCondition: [],
-              mappingRules: [],
-            },
-          ]),
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
+            id: "stitch_1",
+            syncCondition: [],
+            mappingRules: [],
           },
-        );
-      }
-      // Call 2: appConnections
-      if (dbSelectCount === 2) {
-        return Object.assign(
-          Promise.resolve([
-            {
-              appName: "testApp",
-              tenantId: "org_1",
-              metadata: { appProfile: "online" },
-            },
-          ]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      }
-      // Call 3: fieldMappings
-      return Object.assign(
-        Promise.resolve([
+        ],
+        [
           {
             mappingRules: [{ src: "$.name", dest: "$.fullName" }],
             sourceCanonical: "RAW",
           },
-        ]),
-        {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-        },
-      );
-    });
+        ],
+      ),
+    );
 
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
 
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).resolves.toBeUndefined();
 
     // Assert that DeliveryQueue.send was NOT called (zero rows = already processed)
@@ -614,49 +556,18 @@ describe("FanOutService", () => {
       return cb(tx);
     });
 
-    let dbSelectCount = 0;
-    db.select.mockImplementation(() => {
-      dbSelectCount++;
-      // Call 1: integrationStitches
-      if (dbSelectCount === 1) {
-        return Object.assign(
-          Promise.resolve([
-            {
-              id: "stitch_1",
-              syncCondition: [],
-              mappingRules: [],
-            },
-          ]),
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
           {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
+            id: "stitch_1",
+            syncCondition: [],
+            mappingRules: [],
           },
-        );
-      }
-      // Call 2: appConnections
-      if (dbSelectCount === 2) {
-        return Object.assign(
-          Promise.resolve([
-            {
-              appName: "testApp",
-              tenantId: "org_1",
-              metadata: { appProfile: "online" },
-            },
-          ]),
-          {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-          },
-        );
-      }
-      // Call 3: fieldMappings
-      return Object.assign(Promise.resolve([]), {
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-      });
-    });
+        ],
+        [],
+      ),
+    );
 
     service.onModuleInit();
     const handler = queueService.consume.mock.calls[0][1];
@@ -665,7 +576,7 @@ describe("FanOutService", () => {
     vi.spyOn(service as any, "writeSyncLog").mockResolvedValue(undefined);
 
     await expect(
-      handler({ traceId: "123", connectionId: "456" }),
+      handler({ traceId: "123", dataSourceId: "456" }),
     ).resolves.toBeUndefined();
 
     expect((service as any).writeSyncLog).toHaveBeenCalledWith(

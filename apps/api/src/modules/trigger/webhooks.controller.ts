@@ -30,7 +30,7 @@ interface ConnectionRow {
 /**
  * Receives inbound webhook pushes from source applications.
  *
- * POST /webhooks/:connectionId
+ * POST /webhooks/:dataSourceId
  *
  * Flow:
  *  1. Resolve the connection → appName, triggerName, auth from DB.
@@ -48,18 +48,18 @@ export class WebhooksController {
     private readonly executor: TriggerExecutorService,
   ) {}
 
-  @Post(':connectionId')
+  @Post(':dataSourceId')
   @HttpCode(HttpStatus.OK)
   async handleWebhook(
-    @Param('connectionId') connectionId: string,
+    @Param('dataSourceId') dataSourceId: string,
     @Headers() headers: Record<string, string>,
     @RawBody() rawBody: Buffer,
   ): Promise<{ received: true }> {
     // 1. Resolve connection
-    const conn = await this.resolveConnection(connectionId);
+    const conn = await this.resolveConnection(dataSourceId);
     if (!conn) {
       throw new NotFoundException(
-        `No active webhook connection found for id: ${connectionId}`,
+        `No active webhook connection found for id: ${dataSourceId}`,
       );
     }
 
@@ -85,7 +85,7 @@ export class WebhooksController {
         propsValue: conn.props_value,
         tenantId: conn.tenant_id,
         workspaceId: conn.workspace_id,
-        connectionId,
+        dataSourceId,
         headers,
         rawBody,
         secret: conn.webhook_secret ?? undefined,
@@ -94,7 +94,7 @@ export class WebhooksController {
       // Re-throw signature errors as 401; anything else surfaces as 500
       if (err instanceof UnauthorizedException) throw err;
       this.logger.error('Webhook processing failed', {
-        connectionId,
+        dataSourceId,
         appName: conn.app_name,
         triggerName: conn.trigger_name,
         error: err instanceof Error ? err.message : String(err),
@@ -106,7 +106,7 @@ export class WebhooksController {
   }
 
   private async resolveConnection(
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<ConnectionRow | null> {
     const result = await this.db.$client.query<ConnectionRow>(
       `SELECT
@@ -122,7 +122,7 @@ export class WebhooksController {
              WHERE ac.id = $1
                AND ac.status = 'active'
              LIMIT 1`,
-      [connectionId],
+      [dataSourceId],
     );
     return result.rows[0] ?? null;
   }

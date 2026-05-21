@@ -11,8 +11,8 @@ export interface StitchResponse {
   orgId: string;
   workspaceId: string;
   name: string;
-  srcConnectionId: string;
-  destConnectionId: string;
+  srcDataSourceId: string;
+  destDataSourceId: string;
   sourceObject: string;
   targetObject: string;
   syncCondition: Array<{
@@ -34,8 +34,8 @@ export interface StitchResponse {
 export interface CreateStitchPayload {
   workspaceId: string;
   name: string;
-  srcConnectionId: string;
-  destConnectionId: string;
+  srcDataSourceId: string;
+  destDataSourceId: string;
   /** Vendor object name on the source connection (e.g. "Contact"). NOT NULL in DB. */
   sourceObject: string;
   /** Vendor object name on the destination connection (e.g. "Customer"). NOT NULL in DB. */

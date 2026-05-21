@@ -11,7 +11,7 @@ import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
-  appConnections,
+  dataSources,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -53,24 +53,24 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
     // ── Poison-pill guard ─────────────────────────────────────────────────────
     // If the message is missing required fields, ACK it (return without throwing)
     // to prevent the SQS message from being redelivered indefinitely.
-    if (!isValidPipelineMessage(msg, ["traceId", "connectionId"])) {
+    if (!isValidPipelineMessage(msg, ["traceId", "dataSourceId"])) {
       this.logger.warn(
         {
           event: "l3.invalid_message",
           layer: "L3",
           msg: JSON.stringify(msg).slice(0, 200),
         },
-        "L3: dropping invalid message — missing traceId or connectionId",
+        "L3: dropping invalid message — missing traceId or dataSourceId",
       );
       return;
     }
 
     const traceId = msg.traceId as string;
-    const connectionId = msg.connectionId as string;
+    const dataSourceId = msg.dataSourceId as string;
     const start = Date.now();
 
     this.logger.debug(
-      { event: "l3.started", traceId, connectionId, layer: "L3" },
+      { event: "l3.started", traceId, dataSourceId, layer: "L3" },
       "L3 normalization started",
     );
 
@@ -83,14 +83,14 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         // Validate syntax
         assertValidSchemaName(passedSchemaName);
 
-        // Verify ownership: passedSchemaName must belong to this connectionId
+        // Verify ownership: passedSchemaName must belong to this dataSourceId
         const profile =
-          await this.storageResolver.resolveStorageProfile(connectionId);
+          await this.storageResolver.resolveStorageProfile(dataSourceId);
         const expectedSchemaName = profile.schemaName;
 
         if (passedSchemaName !== expectedSchemaName) {
           throw new Error(
-            `Schema ownership mismatch: passedSchemaName="${passedSchemaName}" does not belong to connectionId="${connectionId}" (expected="${expectedSchemaName}")`,
+            `Schema ownership mismatch: passedSchemaName="${passedSchemaName}" does not belong to dataSourceId="${dataSourceId}" (expected="${expectedSchemaName}")`,
           );
         }
 
@@ -98,7 +98,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         tenantId = profile.tenantId;
       } else {
         const profile =
-          await this.storageResolver.resolveStorageProfile(connectionId);
+          await this.storageResolver.resolveStorageProfile(dataSourceId);
         schemaName = profile.schemaName;
         tenantId = profile.tenantId;
       }
@@ -113,19 +113,19 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       // ── Resolve piece for this connection ─────────────────────────────────
       // Query the public-schema app_connection table using typed Drizzle columns
       // to get the appName needed for piece resolution. Never use raw sql`` here
-      // — appConnections provides compile-time safety and prevents SQL injection.
+      // — dataSources provides compile-time safety and prevents SQL injection.
       const connRows = await this.globalDb
         .select({
-          appName: appConnections.appName,
-          metadata: appConnections.metadata,
+          appName: dataSources.appName,
+          metadata: dataSources.metadata,
         })
-        .from(appConnections)
-        .where(eq(appConnections.id, connectionId))
+        .from(dataSources)
+        .where(eq(dataSources.id, dataSourceId))
         .limit(1);
 
       if (!connRows[0]) {
         throw new Error(
-          `Connection ${connectionId} not found in app_connection`,
+          `Connection ${dataSourceId} not found in app_connection`,
         );
       }
       const connectionAppName = connRows[0].appName;
@@ -172,14 +172,14 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         //
         // We cannot use entityId here because we don't have it in the queue
         // message — but we can check whether ANY replica_entity row exists
-        // for this connectionId whose traceId differs. If yes, the event is
+        // for this dataSourceId whose traceId differs. If yes, the event is
         // superseded and we ACK it silently.  If none exist, the L2 write
         // never committed — rethrow so the message retries.
         const anyRows = await tx
           .select({ id: replicaEntity.id, traceId: replicaEntity.traceId })
           .from(replicaEntity)
           .where(
-            sql`${replicaEntity.connectionId} = ${connectionId}
+            sql`${replicaEntity.dataSourceId} = ${dataSourceId}
                 AND ${replicaEntity.traceId} != ${traceId}`,
           )
           .limit(1);
@@ -202,7 +202,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           {
             event: "l3.superseded",
             traceId,
-            connectionId,
+            dataSourceId,
             layer: "L3",
           },
           "L3: replica traceId superseded by newer trace — ACK without processing",
@@ -340,7 +340,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               // now that the required child dependency has been written.
               await this.queueService.send(QueueName.NormalizedQueue, {
                 traceId: pTraceId,
-                connectionId,
+                dataSourceId,
               });
               this.logger.debug(
                 {
@@ -368,17 +368,17 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           }
 
           // ── Transactional outbox for L3→L4 handoff ──────────────────────────
-          // The unique constraint idx_normalized_outbox_trace on (traceId, connectionId)
+          // The unique constraint idx_normalized_outbox_trace on (traceId, dataSourceId)
           // ensures the outbox row is not duplicated on replay.
           await tx
             .insert(normalizedOutbox)
             .values({
               traceId,
-              connectionId,
+              dataSourceId,
               status: "PENDING",
             })
             .onConflictDoNothing({
-              target: [normalizedOutbox.traceId, normalizedOutbox.connectionId],
+              target: [normalizedOutbox.traceId, normalizedOutbox.dataSourceId],
             });
 
           // Mark inbound gateway as NORMALIZED (idempotent guard on status)
@@ -423,7 +423,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       try {
         await this.queueService.send(QueueName.NormalizedQueue, {
           traceId,
-          connectionId,
+          dataSourceId,
         });
 
         // Mark outbox row SUCCESS — the event is now in the queue.
@@ -432,11 +432,11 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           .update(normalizedOutbox)
           .set({ status: "SUCCESS" })
           .where(
-            sql`${normalizedOutbox.traceId} = ${traceId} AND ${normalizedOutbox.connectionId} = ${connectionId}`,
+            sql`${normalizedOutbox.traceId} = ${traceId} AND ${normalizedOutbox.dataSourceId} = ${dataSourceId}`,
           );
 
         this.logger.debug(
-          { event: "l3.queue_published", traceId, connectionId, layer: "L3" },
+          { event: "l3.queue_published", traceId, dataSourceId, layer: "L3" },
           "L3→L4: published to NormalizedQueue",
         );
       } catch (publishErr) {
@@ -445,7 +445,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           {
             event: "l3.queue_publish_failed",
             traceId,
-            connectionId,
+            dataSourceId,
             layer: "L3",
             err: sanitizeError(publishErr),
           },
@@ -457,7 +457,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         {
           event: "l3.completed",
           traceId,
-          connectionId,
+          dataSourceId,
           layer: "L3",
           durationMs: Date.now() - start,
         },
@@ -469,7 +469,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         {
           event: "l3.error",
           traceId,
-          connectionId,
+          dataSourceId,
           layer: "L3",
           err: safeErr,
         },
@@ -477,7 +477,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
       );
       try {
         const profile =
-          await this.storageResolver.resolveStorageProfile(connectionId);
+          await this.storageResolver.resolveStorageProfile(dataSourceId);
         const schemaName = profile.schemaName;
         const tenantId = profile.tenantId;
         const { syncLog, inboundGateway } = buildTenantSchema(schemaName);

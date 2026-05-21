@@ -13,7 +13,7 @@ import type { DrizzleDb } from '@nexiom/database';
 import {
   DATABASE_CONNECTION,
   integrationStitches,
-  appConnections,
+  dataSources,
   syncCursors,
 } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
@@ -133,11 +133,11 @@ export class PollSyncRunner extends SyncRunner {
     const stitch = await this.loadStitch(stitchId);
 
     // 2. Load connection (appName drives piece resolution)
-    const connection = await this.loadConnection(stitch.srcConnectionId);
+    const connection = await this.loadConnection(stitch.srcDataSourceId);
 
     // 3. Valid credentials (refreshes OAuth token if expired)
     const credentials = await this.tokenManager.getValidCredentials(
-      stitch.srcConnectionId,
+      stitch.srcDataSourceId,
     );
 
     // 4. Resolve piece
@@ -352,17 +352,17 @@ export class PollSyncRunner extends SyncRunner {
     return stitch;
   }
 
-  private async loadConnection(connectionId: string) {
+  private async loadConnection(dataSourceId: string) {
     const [conn] = await this.db
       .select({
-        id: appConnections.id,
-        appName: appConnections.appName,
+        id: dataSources.id,
+        appName: dataSources.appName,
       })
-      .from(appConnections)
-      .where(eq(appConnections.id, connectionId))
+      .from(dataSources)
+      .where(eq(dataSources.id, dataSourceId))
       .limit(1);
     if (!conn)
-      throw new NotFoundException(`Connection not found: ${connectionId}`);
+      throw new NotFoundException(`Connection not found: ${dataSourceId}`);
     return conn;
   }
 

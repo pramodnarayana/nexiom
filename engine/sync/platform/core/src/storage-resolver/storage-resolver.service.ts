@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
-import { appConnections } from '@nexiom/database';
+import { dataSources } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 
 export type HostContext = {
@@ -34,7 +34,7 @@ const CACHE_MAX_SIZE = 1_000;
  */
 @Injectable()
 export class StorageResolverService {
-  /** LRU cache: connectionId → { schemaName, tenantId }. Entries are never invalidated. */
+  /** LRU cache: dataSourceId → { schemaName, tenantId }. Entries are never invalidated. */
   private readonly cache = new Map<string, { schemaName: string; tenantId: string }>();
 
   constructor(
@@ -42,34 +42,34 @@ export class StorageResolverService {
   ) {}
 
   async resolveStorageProfile(
-    connectionId: string,
+    dataSourceId: string,
   ): Promise<{ schemaName: string; tenantId: string }> {
-    if (!connectionId) {
-      throw new Error('connectionId must be a non-empty string');
+    if (!dataSourceId) {
+      throw new Error('dataSourceId must be a non-empty string');
     }
 
     // ── Fast path: cache hit with LRU update ──────────────────────────────────
-    const cached = this.cache.get(connectionId);
+    const cached = this.cache.get(dataSourceId);
     if (cached) {
       // Update LRU insertion order by removing and re-inserting
-      this.cache.delete(connectionId);
-      this.cache.set(connectionId, cached);
+      this.cache.delete(dataSourceId);
+      this.cache.set(dataSourceId, cached);
       return cached;
     }
 
     // ── Slow path: DB lookup ──────────────────────────────────────────────────
     const [row] = await this.db
       .select({
-        schemaName: appConnections.schemaName,
-        tenantId: appConnections.tenantId,
+        schemaName: dataSources.schemaName,
+        tenantId: dataSources.tenantId,
       })
-      .from(appConnections)
-      .where(eq(appConnections.id, connectionId))
+      .from(dataSources)
+      .where(eq(dataSources.id, dataSourceId))
       .limit(1);
 
     if (!row?.schemaName || !row?.tenantId) {
       throw new NotFoundException(
-        `Cannot resolve storage profile for connection "${connectionId}". ` +
+        `Cannot resolve storage profile for connection "${dataSourceId}". ` +
           `The connection may not exist or schema_name/tenant_id was not set.`,
       );
     }
@@ -78,7 +78,7 @@ export class StorageResolverService {
     const schemaNamePattern = /^[a-z0-9_]+$/i;
     if (!schemaNamePattern.test(row.schemaName)) {
       throw new NotFoundException(
-        `Invalid schema_name format for connection "${connectionId}": "${row.schemaName}". ` +
+        `Invalid schema_name format for connection "${dataSourceId}": "${row.schemaName}". ` +
           `Schema names must contain only alphanumeric characters and underscores.`,
       );
     }
@@ -91,17 +91,17 @@ export class StorageResolverService {
       }
     }
     const profile = { schemaName: row.schemaName, tenantId: row.tenantId };
-    this.cache.set(connectionId, profile);
+    this.cache.set(dataSourceId, profile);
 
     return profile;
   }
 
   /**
-   * Returns the physical PostgreSQL schema name for `connectionId`.
+   * Returns the physical PostgreSQL schema name for `dataSourceId`.
    * Legacy method for callers that only need the schema name.
    */
-  async resolveSchemaName(connectionId: string): Promise<string> {
-    const profile = await this.resolveStorageProfile(connectionId);
+  async resolveSchemaName(dataSourceId: string): Promise<string> {
+    const profile = await this.resolveStorageProfile(dataSourceId);
     return profile.schemaName;
   }
 
@@ -109,10 +109,10 @@ export class StorageResolverService {
    * Retrieves host and region context for the connection.
    * Critical for multi-region routing and residency compliance.
    */
-  async getHostContext(connectionId: string): Promise<HostContext> {
+  async getHostContext(dataSourceId: string): Promise<HostContext> {
     throw new Error(
       `getHostContext not yet implemented for tenant-per-database architecture ` +
-      `(connectionId: ${connectionId}). ` +
+      `(dataSourceId: ${dataSourceId}). ` +
       `Requires resolving tenantId and querying TenantStorageRegistry.`,
     );
   }

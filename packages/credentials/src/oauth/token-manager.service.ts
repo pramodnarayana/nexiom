@@ -1,5 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { appConnections, DATABASE_CONNECTION } from '@nexiom/database';
+import { dataSources, credentials, DATABASE_CONNECTION } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@nexiom/database';
@@ -86,9 +86,20 @@ export class TokenManagerService {
      * Guarantees returning a VALID, unexpired token payload.
      */
     async getValidCredentials(connectionId: string): Promise<OAuthCredentialBlob> {
-        const connection = await this.db.query.appConnections.findFirst({
-            where: eq(appConnections.id, connectionId)
-        });
+        const [connection] = await this.db.select({
+            id: dataSources.id,
+            appName: dataSources.appName,
+            tenantId: dataSources.tenantId,
+            externalId: dataSources.externalId,
+            status: credentials.status,
+            expiresAt: credentials.expiresAt,
+            authType: credentials.authType,
+            value: credentials.value,
+        })
+        .from(dataSources)
+        .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+        .where(eq(dataSources.id, connectionId))
+        .limit(1);
 
         if (!connection) throw new Error(`Connection ${connectionId} not found`);
         if (connection.status === 'REVOKED') throw new Error(`Connection revoked by user/provider`);
@@ -151,9 +162,20 @@ export class TokenManagerService {
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
             await new Promise(resolve => setTimeout(resolve, 1500));
 
-            const freshConnection = await this.db.query.appConnections.findFirst({
-                where: eq(appConnections.id, connection.id)
-            });
+            const [freshConnection] = await this.db.select({
+                id: dataSources.id,
+                appName: dataSources.appName,
+                tenantId: dataSources.tenantId,
+                externalId: dataSources.externalId,
+                status: credentials.status,
+                expiresAt: credentials.expiresAt,
+                authType: credentials.authType,
+                value: credentials.value,
+            })
+            .from(dataSources)
+            .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+            .where(eq(dataSources.id, connection.id as string))
+            .limit(1);
 
             const parsedExpiry = parseExpiresAt(freshConnection?.expiresAt);
 
@@ -168,9 +190,20 @@ export class TokenManagerService {
             const retryLock = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');
             if (retryLock) {
                 // Re-read after acquiring the lock to avoid refreshing stale data
-                const latestConnection = await this.db.query.appConnections.findFirst({
-                    where: eq(appConnections.id, connection.id)
-                });
+                const [latestConnection] = await this.db.select({
+                    id: dataSources.id,
+                    appName: dataSources.appName,
+                    tenantId: dataSources.tenantId,
+                    externalId: dataSources.externalId,
+                    status: credentials.status,
+                    expiresAt: credentials.expiresAt,
+                    authType: credentials.authType,
+                    value: credentials.value,
+                })
+                .from(dataSources)
+                .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+                .where(eq(dataSources.id, connection.id as string))
+                .limit(1);
                 return { connection: latestConnection ?? connection };
             }
 
@@ -245,9 +278,9 @@ export class TokenManagerService {
         const expiresAt = new Date(Date.now() + expiresInMs);
 
         // 7. Save to DB
-        await this.db.update(appConnections)
+        await this.db.update(credentials)
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
-            .where(eq(appConnections.id, connection.id));
+            .where(eq(credentials.dataSourceId, connection.id as string));
 
         return updatedPayload;
     }
@@ -274,9 +307,9 @@ export class TokenManagerService {
         const isRevoked = error.status === 400 || error.status === 401;
         if (!isRevoked) return;
 
-        await this.db.update(appConnections)
+        await this.db.update(credentials)
             .set({ status: 'REVOKED' })
-            .where(eq(appConnections.id, connection.id));
+            .where(eq(credentials.dataSourceId, connection.id as string));
         this.logger.error(`Token refresh rejected. Marked connection as REVOKED.`);
     }
 

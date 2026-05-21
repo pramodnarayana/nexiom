@@ -58,7 +58,7 @@ export async function listActiveConnections(): Promise<ActiveConnectionResponse[
  * NOTE: clientSecret is intentionally never returned — the backend holds it
  * server-side. `hasClientSecret` indicates whether one is stored.
  */
-export async function getConnectionCredentials(connectionId: string): Promise<{
+export async function getConnectionCredentials(dataSourceId: string): Promise<{
     clientId: string;
     hasClientSecret: boolean;
     vendorParams?: VendorParams;
@@ -67,7 +67,7 @@ export async function getConnectionCredentials(connectionId: string): Promise<{
         clientId: string;
         hasClientSecret: boolean;
         vendorParams?: VendorParams;
-    }>(`/connectors/active/${connectionId}/credentials`);
+    }>(`/connectors/active/${dataSourceId}/credentials`);
     return res.data;
 }
 
@@ -95,11 +95,11 @@ export async function exchangeOAuthCode(payload: {
     clientSecret?: string;
     /** Human-readable name for this connection e.g. "TMS Salesforce" */
     displayName: string;
-    connectionId?: string;
+    dataSourceId?: string;
 }): Promise<void> {
     await apiClient.post('/connectors/oauth-exchange', payload);
 }
 
-export async function deleteConnection(connectionId: string): Promise<void> {
-    await apiClient.delete(`/connectors/${connectionId}`);
+export async function deleteConnection(dataSourceId: string): Promise<void> {
+    await apiClient.delete(`/connectors/${dataSourceId}`);
 }

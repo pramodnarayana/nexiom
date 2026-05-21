@@ -858,7 +858,7 @@ export class DatabaseManager {
   /**
    * Provision local dev fixture:
    *   1. Upserts one Salesforce + one QuickBooks connection under the system tenant.
-   *   2. Creates `ws_{connectionId}` schemas (GATEWAY_ACTIVE plan) for each.
+   *   2. Creates `ws_{dataSourceId}` schemas (GATEWAY_ACTIVE plan) for each.
    *
    * Idempotent — safe to run multiple times. Skips connections that already exist.
    */
@@ -1045,37 +1045,49 @@ export class DatabaseManager {
 
         // Write app_connection into the TENANT DB (not global)
         const [inserted] = await tenantDb
-          .insert(dbSchema.appConnections)
+          .insert(dbSchema.dataSources)
           .values({
             id: fixture.id,
             tenantId: devTenantId,
             appName: fixture.appName,
             externalId: fixture.externalId,
             displayName: fixture.displayName,
-            authType: 'OAUTH2',
-            value: encryptedValue,
             metadata: fixture.metadata,
-            status: 'INACTIVE',
           })
           .onConflictDoUpdate({
             target: [
-              dbSchema.appConnections.tenantId,
-              dbSchema.appConnections.externalId,
+              dbSchema.dataSources.tenantId,
+              dbSchema.dataSources.externalId,
             ],
             set: {
-              value: encryptedValue,
               displayName: fixture.displayName,
-              appName: fixture.appName,
-              authType: 'OAUTH2',
               metadata: fixture.metadata,
-              status: sql`CASE
-                WHEN ${dbSchema.appConnections.status} IN ('ACTIVE', 'REVOKED')
-                THEN ${dbSchema.appConnections.status}
-                ELSE 'INACTIVE'
-              END`,
             },
           })
           .returning();
+
+        if (inserted) {
+          await tenantDb
+            .insert(dbSchema.credentials)
+            .values({
+              dataSourceId: inserted.id,
+              authType: 'OAUTH2',
+              value: encryptedValue,
+              status: 'INACTIVE',
+            })
+            .onConflictDoUpdate({
+              target: [dbSchema.credentials.dataSourceId],
+              set: {
+                value: encryptedValue,
+                authType: 'OAUTH2',
+                status: sql`CASE
+                  WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
+                  THEN ${dbSchema.credentials.status}
+                  ELSE 'INACTIVE'
+                END`,
+              },
+            });
+        }
 
         if (!inserted) {
           throw new Error(
@@ -1097,9 +1109,9 @@ export class DatabaseManager {
 
         // Mark connection ACTIVE in the tenant DB
         await tenantDb
-          .update(dbSchema.appConnections)
-          .set({ status: 'ACTIVE' })
-          .where(eq(dbSchema.appConnections.id, inserted.id));
+          .update(dbSchema.dataSources)
+          .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
+          .where(eq(dbSchema.dataSources.id, inserted.id));
 
         console.log(
           `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,
@@ -1139,9 +1151,9 @@ export class DatabaseManager {
 
     await this.withSchemaMgr(async (schemaMgr, db) => {
       const connRow = await db
-        .select({ tenantId: dbSchema.appConnections.tenantId })
-        .from(dbSchema.appConnections)
-        .where(eq(dbSchema.appConnections.schemaName, schemaName))
+        .select({ tenantId: dbSchema.dataSources.tenantId })
+        .from(dbSchema.dataSources)
+        .where(eq(dbSchema.dataSources.schemaName, schemaName))
         .limit(1);
 
       const tenantId = connRow[0]?.tenantId;
@@ -1177,9 +1189,9 @@ export class DatabaseManager {
 
     await this.withSchemaMgr(async (schemaMgr, db) => {
       const connRow = await db
-        .select({ tenantId: dbSchema.appConnections.tenantId })
-        .from(dbSchema.appConnections)
-        .where(eq(dbSchema.appConnections.schemaName, schemaName))
+        .select({ tenantId: dbSchema.dataSources.tenantId })
+        .from(dbSchema.dataSources)
+        .where(eq(dbSchema.dataSources.schemaName, schemaName))
         .limit(1);
 
       const tenantId = connRow[0]?.tenantId;
@@ -1235,9 +1247,9 @@ export class DatabaseManager {
         for (const { schema_name } of result.rows) {
           try {
             const connRow = await db
-              .select({ tenantId: dbSchema.appConnections.tenantId })
-              .from(dbSchema.appConnections)
-              .where(eq(dbSchema.appConnections.schemaName, schema_name))
+              .select({ tenantId: dbSchema.dataSources.tenantId })
+              .from(dbSchema.dataSources)
+              .where(eq(dbSchema.dataSources.schemaName, schema_name))
               .limit(1);
 
             const tenantId = connRow[0]?.tenantId;
@@ -1333,16 +1345,16 @@ export class DatabaseManager {
       // Look up the deterministic fixtures created by provisionLocal()
       const salesforceConn = await db
         .select()
-        .from(schema.appConnections)
+        .from(schema.dataSources)
         .where(
-          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000001'),
+          eq(schema.dataSources.id, '00000000-0000-0000-0000-000000000001'),
         )
         .limit(1);
       const qbConn = await db
         .select()
-        .from(schema.appConnections)
+        .from(schema.dataSources)
         .where(
-          eq(schema.appConnections.id, '00000000-0000-0000-0000-000000000002'),
+          eq(schema.dataSources.id, '00000000-0000-0000-0000-000000000002'),
         )
         .limit(1);
 
@@ -1367,10 +1379,10 @@ export class DatabaseManager {
         .where(
           and(
             eq(
-              schema.integrationStitches.srcConnectionId,
+              schema.integrationStitches.srcDataSourceId,
               salesforceConn[0].id,
             ),
-            eq(schema.integrationStitches.destConnectionId, qbConn[0].id),
+            eq(schema.integrationStitches.destDataSourceId, qbConn[0].id),
           ),
         )
         .limit(1);
@@ -1383,8 +1395,8 @@ export class DatabaseManager {
             name: 'Revenova to QuickBooks Local Sync',
             orgId: workspaces[0].orgId,
             workspaceId: workspaces[0].id,
-            srcConnectionId: salesforceConn[0].id,
-            destConnectionId: qbConn[0].id,
+            srcDataSourceId: salesforceConn[0].id,
+            destDataSourceId: qbConn[0].id,
             sourceObject: 'Account',
             targetObject: 'Vendor',
           })

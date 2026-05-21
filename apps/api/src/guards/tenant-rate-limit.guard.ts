@@ -12,7 +12,7 @@ import {
 import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
-import { DATABASE_CONNECTION, appConnections } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { eq } from 'drizzle-orm';
 
@@ -23,7 +23,7 @@ const MAX_RATE_LIMIT = 10_000;
 /** Window duration in seconds. */
 const WINDOW_SECONDS = 60;
 /**
- * TTL for negative-cache entries that mark a connectionId as not found in DB.
+ * TTL for negative-cache entries that mark a dataSourceId as not found in DB.
  * Repeated probes with the same unknown UUID hit Redis only and skip Postgres.
  */
 const NEG_CACHE_TTL_SECONDS = 60;
@@ -48,7 +48,7 @@ export interface WebhookResolvedConnection {
 /**
  * TenantRateLimitGuard -- fixed-window token bucket per tenant.
  *
- * Redis key: `ratelimit:l1:{tenantId}:{connectionId}` (connection-scoped so
+ * Redis key: `ratelimit:l1:{tenantId}:{dataSourceId}` (connection-scoped so
  * per-connection custom limits do not bleed across connections on the same tenant).
  * TTL: 60 seconds (resets the bucket each minute).
  *
@@ -64,9 +64,9 @@ export interface WebhookResolvedConnection {
  *  - Malformed UUIDs are rejected before hitting the DB; a shared fallback
  *    bucket (`ratelimit:l1:probe`) throttles probe bursts.
  *  - Well-formed but unknown UUIDs: a Redis negative cache
- *    (`ratelimit:l1:neg:{connectionId}`, 60 s TTL) lets repeated probes skip
+ *    (`ratelimit:l1:neg:{dataSourceId}`, 60 s TTL) lets repeated probes skip
  *    Postgres entirely; the per-connection probe bucket
- *    (`ratelimit:l1:probe:{connectionId}`) is applied before the 404.
+ *    (`ratelimit:l1:probe:{dataSourceId}`) is applied before the 404.
  */
 @Injectable()
 export class TenantRateLimitGuard implements CanActivate {
@@ -109,41 +109,41 @@ export class TenantRateLimitGuard implements CanActivate {
         Request & { [WEBHOOK_RESOLVED_CONNECTION]?: WebhookResolvedConnection }
       >();
     const res = context.switchToHttp().getResponse<Response>();
-    const connectionId = req.params['connectionId'];
+    const dataSourceId = req.params['dataSourceId'];
 
     // Bind layer early so all subsequent log calls from this guard and
     // downstream services carry the L1 context.
-    this.logger.assign({ layer: 'L1', connectionId });
+    this.logger.assign({ layer: 'L1', dataSourceId });
 
     // Guards execute before ParseUUIDPipe — validate format here so malformed
     // IDs never reach the database.
-    if (!UUID_REGEX.test(connectionId)) {
+    if (!UUID_REGEX.test(dataSourceId)) {
       await this.applyFallbackRateLimit(res, 'ratelimit:l1:probe');
       // Do not echo the raw value back — it may contain attacker-controlled
-      // content. The connectionId is already in the pino log context via assign().
-      throw new BadRequestException('Invalid connectionId format');
+      // content. The dataSourceId is already in the pino log context via assign().
+      throw new BadRequestException('Invalid dataSourceId format');
     }
 
     // Negative cache: repeated probes with the same unknown UUID skip Postgres
     // and go straight to the per-connection probe bucket.
-    const negCacheKey = `ratelimit:l1:neg:${connectionId}`;
+    const negCacheKey = `ratelimit:l1:neg:${dataSourceId}`;
     const isCachedMiss = await this.redis.exists(negCacheKey);
     if (isCachedMiss === 1) {
       await this.applyFallbackRateLimit(
         res,
-        `ratelimit:l1:probe:${connectionId}`,
+        `ratelimit:l1:probe:${dataSourceId}`,
       );
-      throw new NotFoundException(`Connection ${connectionId} not found`);
+      throw new NotFoundException(`Connection ${dataSourceId} not found`);
     }
 
     const [conn] = await this.db
       .select({
-        tenantId: appConnections.tenantId,
-        appName: appConnections.appName,
-        metadata: appConnections.metadata,
+        tenantId: dataSources.tenantId,
+        appName: dataSources.appName,
+        metadata: dataSources.metadata,
       })
-      .from(appConnections)
-      .where(eq(appConnections.id, connectionId))
+      .from(dataSources)
+      .where(eq(dataSources.id, dataSourceId))
       .limit(1);
 
     if (!conn) {
@@ -153,9 +153,9 @@ export class TenantRateLimitGuard implements CanActivate {
       // without revealing tenant information.
       await this.applyFallbackRateLimit(
         res,
-        `ratelimit:l1:probe:${connectionId}`,
+        `ratelimit:l1:probe:${dataSourceId}`,
       );
-      throw new NotFoundException(`Connection ${connectionId} not found`);
+      throw new NotFoundException(`Connection ${dataSourceId} not found`);
     }
 
     // Cache on the request so WebhookSignatureGuard skips a second DB round-trip.
@@ -171,7 +171,7 @@ export class TenantRateLimitGuard implements CanActivate {
     const limit = resolveLimit(conn.metadata);
     // Connection-scoped key prevents cross-connection interference when
     // connections on the same tenant have different rateLimitPerMin values.
-    const key = `ratelimit:l1:${conn.tenantId}:${connectionId}`;
+    const key = `ratelimit:l1:${conn.tenantId}:${dataSourceId}`;
 
     await this.checkRateLimit(res, key, limit, conn.tenantId);
 

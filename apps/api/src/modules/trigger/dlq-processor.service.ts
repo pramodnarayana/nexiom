@@ -27,7 +27,7 @@ interface DlqJob {
   triggerName: string;
   workspaceId: string;
   tenantId: string;
-  connectionId: string;
+  dataSourceId: string;
   objectType?: string;
   propsValue: Record<string, unknown>;
   auth: unknown;
@@ -242,7 +242,7 @@ export class DlqProcessorService {
       propsValue: job.propsValue,
       tenantId: job.tenantId,
       workspaceId: job.workspaceId,
-      connectionId: job.connectionId,
+      dataSourceId: job.dataSourceId,
     };
 
     try {
@@ -302,7 +302,7 @@ export class DlqProcessorService {
         triggerName: job.triggerName,
         tenantId: job.tenantId,
         workspaceId: job.workspaceId,
-        connectionId: job.connectionId,
+        dataSourceId: job.dataSourceId,
         attempt: nextAttempt,
         exhaustedAt: new Date().toISOString(),
         error: err instanceof Error ? err.message : String(err),
@@ -321,7 +321,7 @@ export class DlqProcessorService {
         triggerName: job.triggerName,
         tenantId: job.tenantId,
         workspaceId: job.workspaceId,
-        connectionId: job.connectionId,
+        dataSourceId: job.dataSourceId,
         objectType: job.objectType,
         propsValue: job.propsValue,
         auth: job.auth,

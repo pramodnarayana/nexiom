@@ -6,7 +6,7 @@ import {
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
-  appConnections,
+  dataSources,
   integrationStitches,
 } from "@nexiom/database";
 import { QueueName, QueueService } from "@nexiom/queue";
@@ -42,21 +42,20 @@ export class DependencySweeperService {
       // exists for a connection, FanOut would drop the re-queued event anyway.
       const allConnections = await this.globalDb
         .selectDistinct({
-          id: appConnections.id,
-          appName: appConnections.appName,
-          tenantId: appConnections.tenantId,
-          schemaName: appConnections.schemaName,
+          id: dataSources.id,
+          appName: dataSources.appName,
+          tenantId: dataSources.tenantId,
+          schemaName: dataSources.schemaName,
         })
-        .from(appConnections)
+        .from(dataSources)
         .innerJoin(
           integrationStitches,
-          eq(integrationStitches.srcConnectionId, appConnections.id),
+          eq(integrationStitches.srcDataSourceId, dataSources.id),
         )
         .where(
           and(
-            eq(appConnections.status, "ACTIVE"),
             eq(integrationStitches.status, "ACTIVE"),
-            sql`${appConnections.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
+            sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
           ),
         );
 
@@ -136,17 +135,17 @@ export class DependencySweeperService {
                 const replicaRows = await tenantDb
                   .select({
                     traceId: replicaEntity.traceId,
-                    connectionId: replicaEntity.connectionId,
+                    dataSourceId: replicaEntity.dataSourceId,
                   })
                   .from(replicaEntity)
                   .where(inArray(replicaEntity.traceId, uniqueTraceIds));
 
                 // Build a map from traceId -> replica row
-                const replicaMap = new Map<string, { connectionId: string }>();
+                const replicaMap = new Map<string, { dataSourceId: string }>();
                 for (const row of replicaRows) {
                   if (!replicaMap.has(row.traceId)) {
                     replicaMap.set(row.traceId, {
-                      connectionId: row.connectionId,
+                      dataSourceId: row.dataSourceId,
                     });
                   }
                 }
@@ -175,7 +174,7 @@ export class DependencySweeperService {
                           QueueName.NormalizedQueue,
                           {
                             traceId: traceId,
-                            connectionId: replicaRow.connectionId,
+                            dataSourceId: replicaRow.dataSourceId,
                           },
                         );
 

@@ -42,8 +42,8 @@ const InitialFieldMapping = z.object({
 export const CreateStitchSchema = z.object({
   name: z.string().trim().min(1).max(255),
   workspaceId: z.string().uuid(),
-  srcConnectionId: z.string().uuid(),
-  destConnectionId: z.string().uuid(),
+  srcDataSourceId: z.string().uuid(),
+  destDataSourceId: z.string().uuid(),
   sourceObject: z.string().trim().max(255).optional().default(''),
   targetObject: z.string().trim().max(255).optional().default(''),
   syncCondition: z.array(SyncConditionRule).optional(),

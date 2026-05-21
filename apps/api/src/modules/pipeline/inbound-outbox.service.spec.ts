@@ -19,6 +19,8 @@ describe('InboundOutboxService', () => {
 
     tenantDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(),
       set: vi.fn().mockReturnThis(),
@@ -33,7 +35,7 @@ describe('InboundOutboxService', () => {
           returning: vi
             .fn()
             .mockResolvedValue([
-              { id: '1', traceId: 't1', connectionId: 'c1', attempts: 1 },
+              { id: '1', traceId: 't1', dataSourceId: 'c1', attempts: 1 },
             ]),
         };
         return cb(tx);
@@ -42,6 +44,8 @@ describe('InboundOutboxService', () => {
 
     globalDb = {
       select: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       from: vi.fn().mockImplementation((table: any) => {
         if (table === tenantStorageRegistry) {
           return Promise.resolve([{ tenantId: 'tenant-1' }]);
@@ -76,7 +80,7 @@ describe('InboundOutboxService', () => {
     // The claimed row is successfully delivered to QueueName.InboundQueue
     expect(queueService.send).toHaveBeenCalledWith(QueueName.InboundQueue, {
       traceId: 't1',
-      connectionId: 'c1',
+      dataSourceId: 'c1',
     });
     expect(tenantDb.update).toHaveBeenCalled();
   });
@@ -112,7 +116,7 @@ describe('InboundOutboxService', () => {
         returning: vi
           .fn()
           .mockResolvedValue([
-            { id: '1', traceId: 't1', connectionId: 'c1', attempts: 6 },
+            { id: '1', traceId: 't1', dataSourceId: 'c1', attempts: 6 },
           ]), // Max attempts hit
       });
     });
@@ -131,7 +135,7 @@ describe('InboundOutboxService', () => {
     // queueService.send should have been called during the claim phase but rejected, not called again for the failed row
     expect(queueService.send).toHaveBeenCalledWith(expect.anything(), {
       traceId: 't1',
-      connectionId: 'c1',
+      dataSourceId: 'c1',
     });
   });
 

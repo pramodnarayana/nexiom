@@ -7,7 +7,7 @@ import { Logger } from '@nestjs/common';
 
 describe('CapacityManagerService', () => {
   let service: CapacityManagerService;
-  let mockDb: { execute: ReturnType<typeof vi.fn> };
+  let mockDb: { execute: ReturnType<typeof vi.fn>; [key: string]: any };
   let mockQueueService: { send: ReturnType<typeof vi.fn> };
   let errorSpy: ReturnType<typeof vi.spyOn>;
 

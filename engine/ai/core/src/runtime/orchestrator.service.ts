@@ -4,7 +4,7 @@ import { google } from '@ai-sdk/google';
 import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, stepCountIs, convertToModelMessages, type UIMessage } from 'ai';
 import { eq, and } from 'drizzle-orm';
-import { DATABASE_CONNECTION, appConnections, safeAppConnectionColumns, AppConnectionStatus } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources, credentials, AppConnectionStatus } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
 import { PieceRegistryService } from '@nexiom/piece-registry';
@@ -131,11 +131,11 @@ export class OrchestratorService {
 
   private async loadActiveConnections(tenantId: string) {
     return this.db.select({
-      id: safeAppConnectionColumns.id,
-      appName: safeAppConnectionColumns.appName,
-      displayName: safeAppConnectionColumns.displayName,
-    }).from(appConnections).where(
-      and(eq(appConnections.tenantId, tenantId), eq(appConnections.status, AppConnectionStatus.ACTIVE))
+      id: dataSources.id,
+      appName: dataSources.appName,
+      displayName: dataSources.displayName,
+    }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
+      and(eq(dataSources.tenantId, tenantId), eq(credentials.status, AppConnectionStatus.ACTIVE))
     );
   }
 }

@@ -7,7 +7,7 @@ import {
     uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { integrationStitches } from '../global/stitches.js';
-import { appConnections } from '../global/routing.js';
+import { dataSources } from '../global/data-sources.js';
 
 /**
  * GLOBAL ENTITY MAP (GEM)
@@ -32,9 +32,9 @@ export const globalEntityMap = pgTable('global_entity_map', {
 
     // ── Source side ──────────────────────────────────────────────────────────
     sourceAppName: varchar('source_app_name', { length: 100 }).notNull(),
-    sourceAppId: uuid('source_app_id')
+    sourceDataSourceId: uuid('source_data_source_id')
         .notNull()
-        .references(() => appConnections.id, { onDelete: 'restrict' }),
+        .references(() => dataSources.id, { onDelete: 'restrict' }),
     sourceOrgId: varchar('source_org_id', { length: 255 }).notNull(),
     sourceOrgName: varchar('source_org_name', { length: 255 }),
     sourceEntityType: varchar('source_entity_type', { length: 100 }).notNull(),  // e.g. 'Invoice'
@@ -44,9 +44,9 @@ export const globalEntityMap = pgTable('global_entity_map', {
 
     // ── Destination side ─────────────────────────────────────────────────────
     destAppName: varchar('dest_app_name', { length: 100 }).notNull(),
-    destAppId: uuid('dest_app_id')
+    destDataSourceId: uuid('dest_data_source_id')
         .notNull()
-        .references(() => appConnections.id, { onDelete: 'restrict' }),
+        .references(() => dataSources.id, { onDelete: 'restrict' }),
     destOrgId: varchar('dest_org_id', { length: 255 }).notNull(),
     destOrgName: varchar('dest_org_name', { length: 255 }),
     destEntityType: varchar('dest_entity_type', { length: 100 }).notNull(),
@@ -60,15 +60,15 @@ export const globalEntityMap = pgTable('global_entity_map', {
     // One mapping per (source record, destination app+type) pair per route
     uniqueIndex('gem_unique_mapping_idx').on(
         table.stitchId,
-        table.sourceAppId,
+        table.sourceDataSourceId,
         table.sourceEntityId,
-        table.destAppId,
+        table.destDataSourceId,
         table.destEntityType,
     ),
-    index('gem_src_lookup_idx').on(table.sourceEntityId, table.sourceAppId),
-    index('gem_dest_lookup_idx').on(table.destEntityId, table.destAppId),
-    index('gem_source_app_idx').on(table.sourceAppId),
-    index('gem_dest_app_idx').on(table.destAppId),
+    index('gem_src_lookup_idx').on(table.sourceEntityId, table.sourceDataSourceId),
+    index('gem_dest_lookup_idx').on(table.destEntityId, table.destDataSourceId),
+    index('gem_source_ds_idx').on(table.sourceDataSourceId),
+    index('gem_dest_ds_idx').on(table.destDataSourceId),
     index('gem_src_trace_idx').on(table.sourceTraceId),
     index('gem_dest_trace_idx').on(table.destTraceId),
     index('gem_stitch_idx').on(table.stitchId),
