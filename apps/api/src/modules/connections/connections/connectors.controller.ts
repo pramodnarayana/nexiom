@@ -342,7 +342,7 @@ export class ConnectorsController {
 
     const whereClause = and(
       eq(appConnections.tenantId, tenantId),
-      eq(appConnections.status, AppConnectionStatus.ACTIVE)
+      eq(appConnections.status, AppConnectionStatus.ACTIVE),
     );
 
     let activeConnections: {

@@ -433,9 +433,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       });
       if (!destConnMeta) {
         // Destination connection not found — treat as retryable in case of replication lag
-        throw new DependenciesMissingError(
-          `Destination connection ${stitch.destConnectionId} not found (may still be replicating)`,
-        );
+        throw new DependenciesMissingError([
+          { entityType: "connection", sourceId: stitch.destConnectionId },
+        ]);
       }
       const destAppName = destConnMeta.appName;
       const destAppProfile = (destConnMeta.metadata as Record<string, any>)
@@ -443,11 +443,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
       if (!destAppProfile) {
         // Missing appProfile — treat as retryable in case metadata is backfilling
-        throw new DependenciesMissingError(
-          `Destination connection ${stitch.destConnectionId} (${destAppName}) is missing 'appProfile' in its metadata. ` +
-            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova'). ` +
-            `This may be transient if the connection is still provisioning.`,
-        );
+        throw new DependenciesMissingError([
+          { entityType: "appProfile", sourceId: stitch.destConnectionId },
+        ]);
       }
 
       // ── DEBUG: trace shard resolution ──────────────────────────────────────

@@ -97,9 +97,9 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       if (!connMeta) {
         // Connection not found — treat as retryable to handle replication lag or backfill scenarios
-        throw new DependenciesMissingError(
-          `Connection ${connectionId} not found in appConnections (may still be replicating)`,
-        );
+        throw new DependenciesMissingError([
+          { entityType: "connection", sourceId: connectionId },
+        ]);
       }
 
       const appName = connMeta.appName;
@@ -108,11 +108,9 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
 
       if (!appProfile) {
         // Missing appProfile — treat as retryable to handle metadata backfill scenarios
-        throw new DependenciesMissingError(
-          `Connection ${connectionId} (${appName}) is missing 'appProfile' in its metadata. ` +
-            `A valid appProfile is required to resolve the correct application shard (e.g., 'online', 'revenova'). ` +
-            `This may be transient if the connection is still provisioning.`,
-        );
+        throw new DependenciesMissingError([
+          { entityType: "appProfile", sourceId: connectionId },
+        ]);
       }
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);

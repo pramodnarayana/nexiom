@@ -173,7 +173,7 @@ describe("FanOutService", () => {
         { provide: StorageResolverService, useValue: storageResolver },
         {
           provide: ApplicationLoaderService,
-          useValue: { loadAppProfile: vi.fn().mockResolvedValue({}) },
+          useValue: { load: vi.fn().mockResolvedValue({}) },
         },
         {
           provide: TargetBuilderService,

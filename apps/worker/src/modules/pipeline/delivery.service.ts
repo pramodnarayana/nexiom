@@ -856,19 +856,18 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // Only mark as committed after all write operations succeed
       sourceCommitted = true;
 
-        this.logger.log(
-          {
-            event: "gem.mapped",
-            traceId,
-            routeId,
-            sourceAppName: srcAppName,
-            sourceEntityId: srcVendorId,
-            destAppName: targetAppName,
-            destEntityId: destVendorId,
-          },
-          `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
-        );
-      }
+      this.logger.log(
+        {
+          event: "gem.mapped",
+          traceId,
+          routeId,
+          sourceAppName: srcAppName,
+          sourceEntityId: srcVendorId,
+          destAppName: targetAppName,
+          destEntityId: destVendorId,
+        },
+        `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
+      );
     } catch (err) {
       this.logger.error(
         {

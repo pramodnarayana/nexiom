@@ -704,8 +704,8 @@ export class ConnectorsService {
       if (storageProfile.tenantId !== tenantId) {
         throw new ForbiddenException(
           `Connection ${connectionId} belongs to tenant ${storageProfile.tenantId}, ` +
-          `but was accessed in the context of tenant ${tenantId}. ` +
-          `Cross-tenant access is not permitted.`
+            `but was accessed in the context of tenant ${tenantId}. ` +
+            `Cross-tenant access is not permitted.`,
         );
       }
 
