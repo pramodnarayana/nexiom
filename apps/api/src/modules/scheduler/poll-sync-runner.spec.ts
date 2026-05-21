@@ -439,13 +439,13 @@ describe('PollSyncRunner', () => {
     );
   });
 
-  it('throws NotFoundException when the connection does not exist', async () => {
+  it('throws NotFoundException when the data source does not exist', async () => {
     const noConn = makeDb({ connection: null });
     await build({ db: noConn });
 
     await expect(runner.run(STITCH_ID)).rejects.toThrow(NotFoundException);
     await expect(runner.run(STITCH_ID)).rejects.toThrow(
-      `Connection not found: ${CONN_ID}`,
+      `Data source not found: ${CONN_ID}`,
     );
   });
 

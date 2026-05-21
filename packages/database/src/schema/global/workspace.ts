@@ -45,11 +45,11 @@ export const uiWorkspaces = pgTable('ui_workspace', {
 ]);
 
 /**
- * WORKSPACE CONNECTIONS BRIDGE
+ * WORKSPACE DATA SOURCES BRIDGE
  *
- * Selectively assigns global connections into specific workspaces.
- * A single connection (e.g. "Salesforce Master") can appear in multiple
- * workspaces simultaneously. Deletion of either side cascades cleanly.
+ * Selectively assigns global data sources into specific workspaces.
+ * A single global data source can appear in multiple workspaces
+ * simultaneously. Deletion of either side cascades cleanly.
  */
 export const uiWorkspaceDataSources = pgTable('ui_workspace_data_source', {
     workspaceId: uuid('workspace_id')

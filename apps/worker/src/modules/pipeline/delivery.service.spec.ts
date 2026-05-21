@@ -92,8 +92,8 @@ describe("DeliveryService", () => {
 
   const validPayload = {
     traceId: "123",
-    srcConnectionId: "456",
-    destConnectionId: "tgt",
+    srcDataSourceId: "456",
+    destDataSourceId: "tgt",
     routeId: "r",
     hydratedPayload: {},
   };

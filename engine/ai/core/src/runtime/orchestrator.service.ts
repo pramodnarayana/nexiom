@@ -69,14 +69,14 @@ export class OrchestratorService {
         const piece = this.pieceRegistry.getPiece(conn.appName);
         if (!piece) return;
 
-        let credentials: OAuthCredentialBlob;
+        let oauthCredentials: OAuthCredentialBlob;
         try {
-          credentials = await this.tokenManager.getValidCredentials(conn.id);
+          oauthCredentials = await this.tokenManager.getValidCredentials(conn.id);
         } catch {
           return;
         }
 
-        const creds = credentials as unknown as Record<string, unknown>;
+        const creds = oauthCredentials as unknown as Record<string, unknown>;
 
         this.hydratorFactory.buildHydratorTool(tools, piece, conn, creds, traceId, tenantId);
         this.actionFactory.buildActionTools(tools, piece, conn, creds, traceId);

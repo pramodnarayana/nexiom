@@ -69,10 +69,32 @@ export class MetadataDiscoveryService implements OnModuleInit {
       Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_OBJECTS;
   }
 
-  onModuleInit() {
+  async onModuleInit() {
     this.logger.log(
       `MetadataDiscoveryService initialised — MAX_OBJECTS=${this.maxObjects}`,
     );
+    this.cleanupLegacyCacheKeys().catch(err => {
+      this.logger.error('Failed to cleanup legacy metadata cache keys', err);
+    });
+  }
+
+  private async cleanupLegacyCacheKeys(): Promise<void> {
+    const migrationFlag = 'migration:meta_cache_cleanup_datasource_id';
+    const alreadyRun = await this.redis.get(migrationFlag);
+    if (alreadyRun) return;
+
+    this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } while (cursor !== '0');
+    
+    await this.redis.set(migrationFlag, '1');
+    this.logger.log('Legacy metadata cache keys cleared.');
   }
 
   async describeObjects(

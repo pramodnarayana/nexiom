@@ -15,11 +15,11 @@ const CACHE_MAX_SIZE = 1_000;
 /**
  * StorageResolverService
  *
- * Resolves the physical PostgreSQL schema name for a given connection ID.
+ * Resolves the physical PostgreSQL schema name for a given data source ID.
  *
  * Design:
- *   - `schema_name` is a first-class column on `app_connection`, written once
- *     at connection-creation time by `ConnectorsService`. It is immutable.
+ *   - `schema_name` is a first-class column on `dataSources`, written once
+ *     at data-source creation time. It is immutable.
  *   - This service performs a single primary-key-indexed SELECT and caches
  *     the result permanently — schema names never change, so the cache is
  *     always valid for the lifetime of the process.
@@ -69,8 +69,8 @@ export class StorageResolverService {
 
     if (!row?.schemaName || !row?.tenantId) {
       throw new NotFoundException(
-        `Cannot resolve storage profile for connection "${dataSourceId}". ` +
-          `The connection may not exist or schema_name/tenant_id was not set.`,
+        `Cannot resolve storage profile for data source "${dataSourceId}". ` +
+          `The data source may not exist or schema_name/tenant_id was not set.`,
       );
     }
 
@@ -78,7 +78,7 @@ export class StorageResolverService {
     const schemaNamePattern = /^[a-z0-9_]+$/i;
     if (!schemaNamePattern.test(row.schemaName)) {
       throw new NotFoundException(
-        `Invalid schema_name format for connection "${dataSourceId}": "${row.schemaName}". ` +
+        `Invalid schema_name format for data source "${dataSourceId}": "${row.schemaName}". ` +
           `Schema names must contain only alphanumeric characters and underscores.`,
       );
     }

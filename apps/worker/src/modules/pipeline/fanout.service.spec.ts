@@ -231,7 +231,7 @@ describe("FanOutService", () => {
       QueueName.DeliveryQueue,
       expect.objectContaining({
         traceId: "123",
-        srcConnectionId: "456",
+        srcDataSourceId: "456",
         routeId: "stitch_1",
       }),
     );

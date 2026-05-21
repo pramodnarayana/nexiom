@@ -7,7 +7,7 @@ import type { DrizzleDb } from '@nexiom/database';
 import { EncryptionService } from '../crypto/encryption.interface.js';
 
 /**
- * Shape of the decrypted credential blob stored in app_connection.value.
+ * Shape of the decrypted credential blob stored in credentials.value.
  * Returned by getValidCredentials() so callers have a typed, narrow interface
  * without resorting to double casts or knowledge of the encryption layer.
  */
@@ -185,8 +185,8 @@ export class TokenManagerService {
                 new Date(parsedExpiry.getTime() - 5 * 60000) > new Date()) {
                 // Token was refreshed by another worker — decrypt and validate
                 // shape via the shared helper so malformed stored data fails fast.
-                const credentials = await this.decryptAndValidate(freshConnection!);
-                return { credentials, connection };
+                const oauthCredentials = await this.decryptAndValidate(freshConnection!);
+                return { credentials: oauthCredentials, connection };
             }
 
             const retryLock = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');

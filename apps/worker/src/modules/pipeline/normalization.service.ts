@@ -124,9 +124,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         .limit(1);
 
       if (!connRows[0]) {
-        throw new Error(
-          `Connection ${dataSourceId} not found in dataSources`,
-        );
+        throw new Error(`Connection ${dataSourceId} not found in dataSources`);
       }
       const connectionAppName = connRows[0].appName;
       const metadata = connRows[0].metadata as Record<string, unknown> | null;

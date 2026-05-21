@@ -39,7 +39,7 @@ export type {
   AbacConditions,
 } from "@nexiom/database";
 
-// Engine schema — connection table (single-table Activepieces model)
+// Engine schema — decoupled model (separate dataSources and credentials tables/entities)
 export { dataSources, credentials } from "@nexiom/database";
 
 // Piece registry

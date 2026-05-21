@@ -562,6 +562,26 @@ export class ConnectorsService {
                 .where(eq(dataSources.id, existingFailed.id))
                 .returning({ id: dataSources.id });
 
+              await tx
+                .insert(credentials)
+                .values({
+                  dataSourceId: updated.id,
+                  authType,
+                  value,
+                  expiresAt,
+                  status: AppConnectionStatus.PROVISIONING,
+                })
+                .onConflictDoUpdate({
+                  target: [credentials.dataSourceId],
+                  set: {
+                    authType,
+                    value,
+                    expiresAt,
+                    status: AppConnectionStatus.PROVISIONING,
+                    updatedAt: new Date(),
+                  },
+                });
+
               connection = updated;
             } else {
               this.throwOnDuplicateConnection(pgErr, displayName, externalId);

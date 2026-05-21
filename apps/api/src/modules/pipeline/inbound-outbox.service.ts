@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and, inArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -47,7 +47,12 @@ export class InboundOutboxService {
               const connections = await this.globalDb
                 .select()
                 .from(dataSources)
-                .where(eq(dataSources.tenantId, tenant.tenantId));
+                .where(
+                  and(
+                    eq(dataSources.tenantId, tenant.tenantId),
+                    inArray(dataSources.schemaPlan, ['OUTBOUND_ACTIVE']),
+                  ),
+                );
 
               for (const connection of connections) {
                 const schemaName = getWorkspaceSchemaName(

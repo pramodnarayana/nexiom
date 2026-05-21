@@ -86,9 +86,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
         .limit(1);
 
       if (!connRows[0]) {
-        throw new Error(
-          `Data source ${dataSourceId} not found in dataSources`,
-        );
+        throw new Error(`Data source ${dataSourceId} not found in dataSources`);
       }
 
       const connectionAppName = connRows[0].appName;

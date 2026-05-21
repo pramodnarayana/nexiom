@@ -70,7 +70,7 @@ export class WebhooksController {
    * POST /webhooks/:dataSourceId
    *
    * Accepts an incoming webhook payload and writes it as an immutable
-   * LAYER 1 (inbound_gateway) record in the connection's tenant schema.
+   * LAYER 1 (inbound_gateway) record in the data source's tenant schema.
    *
    * Returns 202 Accepted:
    *   - On successful insert.

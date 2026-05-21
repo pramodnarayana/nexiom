@@ -921,7 +921,7 @@ export class DatabaseManager {
       console.log("\n✅ Local dev fixtures provisioned.");
       console.log(
         "   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n" +
-          "   and update app_connection.value with the resulting ciphertext.\n" +
+          "   and update credentials.value with the resulting ciphertext.\n" +
           "   Do NOT edit the value column manually — it holds AES-GCM ciphertext.",
       );
     } finally {

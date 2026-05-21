@@ -24,8 +24,8 @@ export class TenantOffboardingService {
    * reconciliation by a cleanup job.
    *
    * Note: KMS alias cleanup is delegated to a separate cleanup job and is not
-   * performed here. However, deletion of app_connection rows cryptographically
-   * renders encrypted vault values unusable.
+   * performed here. However, deletion of dataSources/credentials rows cryptographically
+   * renders encrypted vault values unusable, as the encrypted secret blobs are stored in the credentials table.
    */
   async offboardTenant(tenantId: string): Promise<void> {
     this.logger.log(`Initiating full GDPR deletion for tenant: ${tenantId}`);
@@ -84,8 +84,8 @@ export class TenantOffboardingService {
       }
 
       // Technically KMS alias keys should be wiped here via KMS Provider but
-      // since the physical encrypted value blobs are stored in app_connection.value,
-      // deleting the row cryptographically renders the vault unusable.
+      // since the physical encrypted value blobs are stored in the credentials table,
+      // deleting the dataSources/credentials cryptographically renders the vault unusable.
       await tx.delete(organization).where(eq(organization.id, tenantId));
     });
 

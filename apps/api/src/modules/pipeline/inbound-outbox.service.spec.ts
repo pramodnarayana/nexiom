@@ -155,4 +155,43 @@ describe('InboundOutboxService', () => {
       ),
     ).toBe(true);
   });
+
+  it('processOutbox should catch and log global DB errors', async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, 'error');
+    globalDb.select.mockImplementationOnce(() => {
+      throw new Error('global db disconnected');
+    });
+
+    await service.processOutbox();
+
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    expect(
+      loggerErrorSpy.mock.calls.some(
+        (call: any[]) =>
+          typeof call[0] === 'string' &&
+          call[0].includes('Failed to query global tenant registry'),
+      ),
+    ).toBe(true);
+  });
+
+  it('should log unexpected rejections if the retry update fails', async () => {
+    const loggerErrorSpy = vi.spyOn((service as any).logger, 'error');
+    queueService.send.mockRejectedValue(new Error('Queue down'));
+    tenantDb.update.mockReturnValueOnce({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockRejectedValue(new Error('DB completely dead')),
+      }),
+    });
+
+    await service.processOutbox();
+
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    expect(
+      loggerErrorSpy.mock.calls.some(
+        (call: any[]) =>
+          typeof call[0] === 'string' &&
+          call[0].includes('Unexpected processOutboxRow failure'),
+      ),
+    ).toBe(true);
+  });
 });

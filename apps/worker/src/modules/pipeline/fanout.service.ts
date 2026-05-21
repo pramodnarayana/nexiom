@@ -619,7 +619,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           try {
             await this.queueService.send(QueueName.DeliveryQueue, {
               traceId,
-              srcConnectionId: dataSourceId,
+              srcDataSourceId: dataSourceId,
               destDataSourceId: stitch.destDataSourceId,
               routeId: stitch.id,
               srcVendorId: srcVendorId ?? null,

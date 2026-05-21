@@ -1066,34 +1066,32 @@ export class DatabaseManager {
           })
           .returning();
 
-        if (inserted) {
-          await tenantDb
-            .insert(dbSchema.credentials)
-            .values({
-              dataSourceId: inserted.id,
-              authType: 'OAUTH2',
-              value: encryptedValue,
-              status: 'INACTIVE',
-            })
-            .onConflictDoUpdate({
-              target: [dbSchema.credentials.dataSourceId],
-              set: {
-                value: encryptedValue,
-                authType: 'OAUTH2',
-                status: sql`CASE
-                  WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
-                  THEN ${dbSchema.credentials.status}
-                  ELSE 'INACTIVE'
-                END`,
-              },
-            });
-        }
-
         if (!inserted) {
           throw new Error(
             `Upsert returned no row for externalId=${fixture.externalId}`,
           );
         }
+
+        await tenantDb
+          .insert(dbSchema.credentials)
+          .values({
+            dataSourceId: inserted.id,
+            authType: 'OAUTH2',
+            value: encryptedValue,
+            status: 'INACTIVE',
+          })
+          .onConflictDoUpdate({
+            target: [dbSchema.credentials.dataSourceId],
+            set: {
+              value: encryptedValue,
+              authType: 'OAUTH2',
+              status: sql`CASE
+                WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
+                THEN ${dbSchema.credentials.status}
+                ELSE 'INACTIVE'
+              END`,
+            },
+          });
 
         const schemaName = getWorkspaceSchemaName(
           inserted.id,

@@ -59,8 +59,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     if (
       !isValidPipelineMessage(msg, [
         "traceId",
-        "srcConnectionId",
-        "destConnectionId",
+        "srcDataSourceId",
+        "destDataSourceId",
         "routeId",
       ]) ||
       !msg.hydratedPayload
@@ -77,8 +77,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     }
 
     const traceId = msg.traceId as string;
-    const dataSourceId = msg.srcConnectionId as string;
-    const targetConnectionId = msg.destConnectionId as string;
+    const dataSourceId = msg.srcDataSourceId as string;
+    const targetConnectionId = msg.destDataSourceId as string;
     const routeId = msg.routeId as string;
     const hydratedPayload = msg.hydratedPayload as Record<string, unknown>;
 

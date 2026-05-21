@@ -76,7 +76,7 @@ describe("ActiveFetchWorker", () => {
         dataSourceId: "c1",
         missingDependencies: [],
       }),
-    ).rejects.toThrow(/Connection c1 not found/);
+    ).rejects.toThrow(/Data source c1 not found/);
   });
 
   it("should call hookBroker.activeFetch when message is valid", async () => {

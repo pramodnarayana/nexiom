@@ -43,7 +43,7 @@ export type OutboxStatus = (typeof OutboxStatus)[number];
 // ---------------------------------------------------------------------------
 // Tenant Schema Builder
 //
-// Data-plane tables live in isolated per-connection Postgres schemas
+// Data-plane tables live in isolated per-data-source Postgres schemas
 // (e.g. ws_sf_101, ws_qb_us_202) provisioned by the DBManager.
 //
 // `buildTenantSchema(schemaName)` returns typed Drizzle table references
@@ -221,7 +221,7 @@ export function buildTenantSchema(schemaName: string) {
     /**
      * SYNC CURSOR — Polling State
      *
-     * Tracks the high-water mark for each (connection, entityType) pair.
+     * Tracks the high-water mark for each (dataSource, entityType) pair.
      * The Poller advances the cursor only after the DB commit succeeds,
      * guaranteeing at-least-once delivery on restart.
      */
