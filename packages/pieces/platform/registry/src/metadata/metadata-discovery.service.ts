@@ -82,7 +82,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     forceRefresh = false,
   ): Promise<ObjectDescriptor[]> {
     const effectiveLimit = Math.max(1, Math.min(limit, this.maxObjects));
-    const connection = await this.resolveConnection(orgId, dataSourceId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:objects:${dataSourceId}`;
@@ -149,13 +149,13 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
     const credentials = await this.resolveCredentials(dataSourceId);
-    const objects = await this.fetchObjects(connection.appName, credentials);
+    const objects = await this.fetchObjects(dataSource.appName, credentials);
 
     // Emit a warning when the discovered count approaches the configured cap
     // (> 75%) so operators can raise METADATA_MAX_OBJECTS before objects are silently truncated.
     if (objects.length > this.maxObjects * 0.75) {
       this.logger.warn(
-        `describeObjects: connector "${connection.appName}" returned ${objects.length} objects — ` +
+        `describeObjects: connector "${dataSource.appName}" returned ${objects.length} objects — ` +
           `exceeds 75% of MAX_OBJECTS limit (${this.maxObjects}). ` +
           `Raise METADATA_MAX_OBJECTS env var if truncation is undesirable.`,
       );
@@ -227,7 +227,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     objectName: string,
     forceRefresh = false,
   ): Promise<FieldDescriptor[]> {
-    const connection = await this.resolveConnection(orgId, dataSourceId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:fields:${dataSourceId}:${objectName}`;
@@ -277,13 +277,13 @@ export class MetadataDiscoveryService implements OnModuleInit {
     // ── 3. Live fetch (piece → Prism fallback) ───────────────────────────────
     const credentials = await this.resolveCredentials(dataSourceId);
     const fields = await this.fetchFields(
-      connection.appName,
+      dataSource.appName,
       objectName,
       credentials,
     );
 
     this.logger.debug(
-      `[describeFields] ${connection.appName}:${objectName} → ${fields.length} fields: ` +
+      `[describeFields] ${dataSource.appName}:${objectName} → ${fields.length} fields: ` +
       fields.slice(0, 8).map((f) => f.name).join(', ') +
       (fields.length > 8 ? ` … (+${fields.length - 8} more)` : ''),
     );
@@ -321,7 +321,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     objectName: string,
     forceRefresh = false,
   ): Promise<RelatedObjectDescriptor[]> {
-    const connection = await this.resolveConnection(orgId, dataSourceId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:related:${dataSourceId}:${objectName}`;
@@ -335,7 +335,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 2. Live fetch (piece) ───────────────────────────────
-    const piece = this.pieceRegistry.getPiece(connection.appName);
+    const piece = this.pieceRegistry.getPiece(dataSource.appName);
     if (!piece?.describeRelatedObjects) {
       return [];
     }
@@ -345,7 +345,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     let related: RelatedObjectDescriptor[] = [];
     try {
       related = await piece.describeRelatedObjects(credentials, objectName);
-      
+
       // Hydrate object labels using the cached describeObjects registry to avoid
       // individual piece connectors having to perform N+1 queries.
       try {
@@ -371,7 +371,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
       );
     } catch (e) {
       this.logger.warn(
-        `Connector ${connection.appName} failed to describe related objects: ${String(e)}`,
+        `Connector ${dataSource.appName} failed to describe related objects: ${String(e)}`,
       );
     }
     return related;
@@ -381,7 +381,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
     orgId: string,
     dataSourceId: string,
   ): Promise<ConfigOption[]> {
-    const connection = await this.resolveConnection(orgId, dataSourceId);
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
 
     // ── 1. Redis cache ───────────────────────────────────────────────────────
     const redisKey = `meta:config:${dataSourceId}`;
@@ -391,10 +391,10 @@ export class MetadataDiscoveryService implements OnModuleInit {
     }
 
     // ── 2. Live fetch ───────────────────────────────
-    const piece = this.pieceRegistry.getPiece(connection.appName);
+    const piece = this.pieceRegistry.getPiece(dataSource.appName);
     if (!piece) {
       throw new NotFoundException(
-        `Connector "${connection.appName}" not found.`,
+        `Connector "${dataSource.appName}" not found.`,
       );
     }
 
@@ -406,7 +406,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         config = await piece.describeConfig(credentials);
       } catch (e) {
         this.logger.warn(
-          `Connector ${connection.appName} failed to describe config: ${String(e)}`,
+          `Connector ${dataSource.appName} failed to describe config: ${String(e)}`,
         );
         return config; // Return empty on describe failure
       }
@@ -419,7 +419,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         );
       } catch (e) {
         this.logger.warn(
-          `Failed to cache config for ${connection.appName}: ${String(e)}`,
+          `Failed to cache config for ${dataSource.appName}: ${String(e)}`,
         );
       }
     }
@@ -431,9 +431,9 @@ export class MetadataDiscoveryService implements OnModuleInit {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /** Fetches the connection row, enforcing org ownership. */
-  private async resolveConnection(orgId: string, dataSourceId: string) {
-    const [connection] = await this.db
+  /** Fetches the data source row, enforcing org ownership. */
+  private async resolveDataSource(orgId: string, dataSourceId: string) {
+    const [dataSource] = await this.db
       .select({ appName: dataSources.appName })
       .from(dataSources)
       .where(
@@ -444,10 +444,10 @@ export class MetadataDiscoveryService implements OnModuleInit {
       )
       .limit(1);
 
-    if (!connection) {
-      throw new NotFoundException(`Connection ${dataSourceId} not found.`);
+    if (!dataSource) {
+      throw new NotFoundException(`Data source ${dataSourceId} not found.`);
     }
-    return connection;
+    return dataSource;
   }
 
   /**

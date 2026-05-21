@@ -386,7 +386,11 @@ export class ConnectorsController {
           .limit(limit)
           .offset(offset),
 
-        this.db.select({ count: count() }).from(dataSources).where(whereClause),
+        this.db
+          .select({ count: count() })
+          .from(dataSources)
+          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+          .where(whereClause),
       ]);
     } catch (error) {
       const msg = `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`;

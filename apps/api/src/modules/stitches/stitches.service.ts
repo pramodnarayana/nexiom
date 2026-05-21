@@ -102,7 +102,7 @@ export class StitchesService {
 
     if (body.srcDataSourceId === body.destDataSourceId) {
       throw new BadRequestException(
-        'Source and destination connections must be different.',
+        'Source and destination data sources must be different.',
       );
     }
 
@@ -133,12 +133,12 @@ export class StitchesService {
     ]);
     if (!srcConn) {
       throw new NotFoundException(
-        `Connection ${body.srcDataSourceId} not found.`,
+        `Data source ${body.srcDataSourceId} not found.`,
       );
     }
     if (!destConn) {
       throw new NotFoundException(
-        `Connection ${body.destDataSourceId} not found.`,
+        `Data source ${body.destDataSourceId} not found.`,
       );
     }
 

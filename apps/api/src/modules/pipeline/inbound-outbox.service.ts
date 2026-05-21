@@ -1,6 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -44,7 +44,6 @@ export class InboundOutboxService {
               const tenantDb = await this.dbManager.getTenantDb(
                 tenant.tenantId,
               );
-              const { eq } = await import('drizzle-orm');
               const connections = await this.globalDb
                 .select()
                 .from(dataSources)

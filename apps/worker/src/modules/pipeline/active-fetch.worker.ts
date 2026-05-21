@@ -79,7 +79,6 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
     );
 
     try {
-      // Select all columns to avoid Vitest ESM resolution TypeError on dataSources keys
       const connRows = await this.db
         .select()
         .from(dataSources)
@@ -88,7 +87,7 @@ export class ActiveFetchWorker implements OnModuleInit, OnModuleDestroy {
 
       if (!connRows[0]) {
         throw new Error(
-          `Connection ${dataSourceId} not found in app_connection`,
+          `Data source ${dataSourceId} not found in dataSources`,
         );
       }
 

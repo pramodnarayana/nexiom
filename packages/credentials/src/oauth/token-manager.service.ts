@@ -88,6 +88,7 @@ export class TokenManagerService {
     async getValidCredentials(connectionId: string): Promise<OAuthCredentialBlob> {
         const [connection] = await this.db.select({
             id: dataSources.id,
+            credentialId: credentials.id,
             appName: dataSources.appName,
             tenantId: dataSources.tenantId,
             externalId: dataSources.externalId,
@@ -164,6 +165,7 @@ export class TokenManagerService {
 
             const [freshConnection] = await this.db.select({
                 id: dataSources.id,
+                credentialId: credentials.id,
                 appName: dataSources.appName,
                 tenantId: dataSources.tenantId,
                 externalId: dataSources.externalId,
@@ -192,6 +194,7 @@ export class TokenManagerService {
                 // Re-read after acquiring the lock to avoid refreshing stale data
                 const [latestConnection] = await this.db.select({
                     id: dataSources.id,
+                    credentialId: credentials.id,
                     appName: dataSources.appName,
                     tenantId: dataSources.tenantId,
                     externalId: dataSources.externalId,
@@ -277,10 +280,10 @@ export class TokenManagerService {
             : 3600 * 1000; // default 1-hour fallback
         const expiresAt = new Date(Date.now() + expiresInMs);
 
-        // 7. Save to DB
+        // 7. Save to DB using the specific credential ID
         await this.db.update(credentials)
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
-            .where(eq(credentials.dataSourceId, connection.id as string));
+            .where(eq(credentials.id, connection.credentialId as string));
 
         return updatedPayload;
     }
@@ -309,7 +312,7 @@ export class TokenManagerService {
 
         await this.db.update(credentials)
             .set({ status: 'REVOKED' })
-            .where(eq(credentials.dataSourceId, connection.id as string));
+            .where(eq(credentials.id, connection.credentialId as string));
         this.logger.error(`Token refresh rejected. Marked connection as REVOKED.`);
     }
 

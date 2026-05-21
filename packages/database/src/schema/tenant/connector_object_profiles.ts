@@ -26,6 +26,4 @@ export const connectorObjectProfiles = pgTable('connector_object_profiles', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     primaryKey({ columns: [table.dataSourceId, table.objectName] }),
-    // Allows MetadataDiscoveryService to list all cached objects for a connection
-    index('cop_data_source_idx').on(table.dataSourceId),
 ]);

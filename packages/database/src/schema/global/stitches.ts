@@ -88,7 +88,7 @@ export const integrationStitches = pgTable('integration_stitch', {
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
         name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
-    // Cascade deletes when either the source or destination connection is removed
+    // Cascade deletes when either the source or destination data source is removed
     foreignKey({
         columns: [table.srcDataSourceId],
         foreignColumns: [dataSources.id],

@@ -362,7 +362,7 @@ export class PollSyncRunner extends SyncRunner {
       .where(eq(dataSources.id, dataSourceId))
       .limit(1);
     if (!conn)
-      throw new NotFoundException(`Connection not found: ${dataSourceId}`);
+      throw new NotFoundException(`Data source not found: ${dataSourceId}`);
     return conn;
   }
 

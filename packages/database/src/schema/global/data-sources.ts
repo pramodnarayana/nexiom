@@ -29,7 +29,7 @@ export const dataSources = pgTable('data_source', {
     vendorTenantId: varchar('vendor_tenant_id', { length: 255 }),
 
     // Plain-text metadata (e.g., instance_url, appProfile, environment labels)
-    metadata: jsonb('metadata').default({}),
+    metadata: jsonb('metadata').default({}).notNull(),
 
     schemaPlan: varchar('schema_plan', { length: 64 }).notNull().default('NAMESPACE_ONLY'),
 
@@ -39,7 +39,6 @@ export const dataSources = pgTable('data_source', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
-    index('ds_app_name_idx').on(table.appName),
     index('ds_tenant_idx').on(table.tenantId),
     uniqueIndex('ds_tenant_external_id_idx').on(table.tenantId, table.externalId),
     uniqueIndex('ds_tenant_app_display_name_lower_idx').on(table.tenantId, table.appName, sql`lower(${table.displayName})`),
