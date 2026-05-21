@@ -465,14 +465,17 @@ export class ConnectorsService {
 
             if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
               // displayName is the blocking duplicate — query only by displayName.
+              // Only consider FAILED rows for re-provisioning.
               const rows = await tx
-                .select({ id: dataSources.id })
+                .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
+                .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
                     eq(dataSources.appName, providerName),
                     sql`lower(${dataSources.displayName}) = lower(${displayName})`,
+                    eq(credentials.status, AppConnectionStatus.FAILED),
                   ),
                 )
                 .limit(1);
@@ -506,14 +509,17 @@ export class ConnectorsService {
               externalId
             ) {
               // externalId is the blocking duplicate — query only by externalId.
+              // Only consider FAILED rows for re-provisioning.
               const rows = await tx
-                .select({ id: dataSources.id })
+                .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
+                .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
                     eq(dataSources.appName, providerName),
                     eq(dataSources.externalId, externalId),
+                    eq(credentials.status, AppConnectionStatus.FAILED),
                   ),
                 )
                 .limit(1);
