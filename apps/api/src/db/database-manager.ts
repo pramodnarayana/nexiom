@@ -1043,8 +1043,8 @@ export class DatabaseManager {
           encryptionKey,
         );
 
-        // Write app_connection into the TENANT DB (not global)
-        const [inserted] = await tenantDb
+        // Write app_connection into the GLOBAL DB
+        const [inserted] = await globalDb
           .insert(dbSchema.dataSources)
           .values({
             id: fixture.id,
@@ -1072,19 +1072,25 @@ export class DatabaseManager {
           );
         }
 
-        await tenantDb
+        // Set expiresAt to 1 year from now so TokenManagerService/ConnectorsService treat this as live
+        const futureExpiresAt = new Date();
+        futureExpiresAt.setFullYear(futureExpiresAt.getFullYear() + 1);
+
+        await globalDb
           .insert(dbSchema.credentials)
           .values({
             dataSourceId: inserted.id,
             authType: 'OAUTH2',
             value: encryptedValue,
             status: 'INACTIVE',
+            expiresAt: futureExpiresAt,
           })
           .onConflictDoUpdate({
             target: [dbSchema.credentials.dataSourceId],
             set: {
               value: encryptedValue,
               authType: 'OAUTH2',
+              expiresAt: futureExpiresAt,
               status: sql`CASE
                 WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
                 THEN ${dbSchema.credentials.status}

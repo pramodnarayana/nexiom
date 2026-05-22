@@ -80,21 +80,33 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   private async cleanupLegacyCacheKeys(): Promise<void> {
     const migrationFlag = 'migration:meta_cache_cleanup_datasource_id';
-    const alreadyRun = await this.redis.get(migrationFlag);
-    if (alreadyRun) return;
 
-    this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
-    let cursor = '0';
-    do {
-      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
-      cursor = nextCursor;
-      if (keys.length > 0) {
-        await this.redis.del(...keys);
-      }
-    } while (cursor !== '0');
-    
-    await this.redis.set(migrationFlag, '1');
-    this.logger.log('Legacy metadata cache keys cleared.');
+    // Atomically claim the migration with a 60-second timeout
+    const claimed = await this.redis.set(migrationFlag, '1', 'EX', 60, 'NX');
+    if (!claimed) {
+      // Another instance is running or has completed the migration
+      return;
+    }
+
+    try {
+      this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+      } while (cursor !== '0');
+
+      // Persist the flag without expiration to mark completion
+      await this.redis.set(migrationFlag, '1');
+      this.logger.log('Legacy metadata cache keys cleared.');
+    } catch (err) {
+      // On failure, delete the claim so another instance can retry
+      await this.redis.del(migrationFlag);
+      throw err;
+    }
   }
 
   async describeObjects(
