@@ -58,7 +58,7 @@ export interface DatabaseManager {
      * Idempotently bring the schema up to the desired plan level.
      * If the schema already exceeds the plan, it does nothing.
      */
-    applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan): Promise<void>;
+    applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void>;
 
     /**
      * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.

@@ -10,4 +10,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     WHERE NOT EXISTS (
         SELECT FROM pg_database WHERE datname = 'windmill'
     )\gexec
+
+    SELECT 'CREATE DATABASE nexiom_global'
+    WHERE NOT EXISTS (
+        SELECT FROM pg_database WHERE datname = 'nexiom_global'
+    )\gexec
+
+    SELECT 'CREATE DATABASE nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53'
+    WHERE NOT EXISTS (
+        SELECT FROM pg_database WHERE datname = 'nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53'
+    )\gexec
 EOSQL

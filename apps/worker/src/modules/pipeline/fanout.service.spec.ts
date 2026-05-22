@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
@@ -588,6 +588,251 @@ describe("FanOutService", () => {
       expect.any(Number),
       expect.anything(),
       expect.anything(),
+    );
+  });
+
+  it("should release sync lock if no active stitches are processed", async () => {
+    // Configure transaction to return replica
+    let txCount = 0;
+    db.transaction.mockImplementation(async (cb: any) => {
+      txCount++;
+      const isFirstTx = txCount === 1; // getReplicaAndStitches
+
+      const tx = Object.assign(Promise.resolve([]), {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          if (isFirstTx) {
+            return Promise.resolve([
+              {
+                id: "outbound_1",
+                data: { name: "hi" },
+                canonicalType: "RAW",
+                reqPayload: {},
+                entityId: "src_vendor",
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+        delete: vi.fn().mockReturnThis(),
+        insert: mockTxInsert,
+        execute: vi.fn().mockResolvedValue([]),
+      });
+      return cb(tx);
+    });
+
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
+          {
+            id: "stitch_2",
+            status: "ARCHIVED",
+            syncCondition: [],
+            mappingRules: [],
+          },
+        ],
+        [],
+      ),
+    );
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    vi.spyOn(service as any, "releaseSyncLock");
+
+    await handler({ traceId: "123", dataSourceId: "456" });
+
+    expect((service as any).releaseSyncLock).toHaveBeenCalledWith(
+      "ws_1",
+      "456",
+      "src_vendor",
+      expect.anything(),
+    );
+  });
+
+  it("should handle error when queue publish fails and decrement lock ref count", async () => {
+    db.transaction.mockImplementation(async (cb: any) => {
+      const tx = Object.assign(Promise.resolve([]), {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          return Promise.resolve([
+            {
+              id: "outbound_1",
+              data: { name: "hi" },
+              canonicalType: "RAW",
+              reqPayload: {},
+              entityId: "src_vendor",
+            },
+          ]);
+        }),
+        delete: vi.fn().mockReturnThis(),
+        insert: mockTxInsert,
+        execute: vi.fn().mockResolvedValue([]),
+      });
+      return cb(tx);
+    });
+
+    db.select.mockImplementation(
+      createDbSelectMock(
+        [
+          {
+            id: "stitch_2",
+            status: "ACTIVE",
+            syncCondition: [],
+            mappingRules: [],
+          },
+        ],
+        [
+          {
+            mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+            sourceCanonical: "RAW",
+          },
+        ],
+      ),
+    );
+
+    queueService.send.mockRejectedValueOnce(new Error("Send failed"));
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    vi.spyOn(service as any, "releaseSyncLock");
+    vi.spyOn(service as any, "writeSyncLog").mockResolvedValue(undefined);
+
+    await handler({ traceId: "123", dataSourceId: "456" });
+
+    // Should call writeSyncLog with FAIL
+    expect((service as any).writeSyncLog).toHaveBeenCalledWith(
+      expect.anything(),
+      "123",
+      "stitch_2",
+      "L4",
+      "FAIL",
+      expect.any(Number),
+      expect.anything(),
+      expect.anything(),
+    );
+    // Should call releaseSyncLock because ref count decremented to 0
+    expect((service as any).releaseSyncLock).toHaveBeenCalled();
+  });
+
+  it("should load nested SyncToken from destState if gemLink and targetReplica exist", async () => {
+    // Configure transaction to return gemLinkage and targetReplica
+    let txCount = 0;
+    db.transaction.mockImplementation(async (cb: any) => {
+      txCount++;
+      const isFirstTx = txCount === 1; // getReplicaAndStitches
+      const isSecondTx = txCount === 2; // lock check
+
+      let secondTxCall = 0;
+      const tx = Object.assign(Promise.resolve([]), {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockImplementation(() => {
+          if (isFirstTx) {
+            return Promise.resolve([
+              {
+                id: "outbound_1",
+                data: { name: "hi" },
+                canonicalType: "RAW",
+                reqPayload: {},
+                entityId: "src_vendor",
+              },
+            ]);
+          }
+          if (isSecondTx) {
+            secondTxCall++;
+            if (secondTxCall === 1) return Promise.resolve([]); // sync lock
+            if (secondTxCall === 2)
+              return Promise.resolve([{ destEntityId: "ext_123" }]); // gem link
+            if (secondTxCall === 3)
+              return Promise.resolve([
+                { data: { time: "now", Vendor: { SyncToken: "999" } } },
+              ]); // target replica
+          }
+          return Promise.resolve([]);
+        }),
+        insert: mockTxInsert,
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "PENDING", was_insert: true }],
+        }),
+      });
+      return cb(tx);
+    });
+
+    db.select.mockImplementation(() => {
+      let resultData: any[] = [];
+      const qb: any = {};
+      qb.from = vi.fn().mockImplementation((table) => {
+        const tableName = table ? table[Symbol.for("drizzle:Name")] : undefined;
+        console.log("MOCK FROM CALLED", {
+          tableName,
+          keys: table ? Object.keys(table) : [],
+        });
+        if (
+          tableName === "field_mapping" ||
+          (table && "mappingRules" in table)
+        ) {
+          resultData = [
+            {
+              mappingRules: [{ src: "$.name", dest: "$.fullName" }],
+              sourceCanonical: "RAW",
+            },
+          ];
+        } else if (
+          tableName === "data_source" ||
+          (table && "appName" in table)
+        ) {
+          resultData = [
+            {
+              appName: "testApp",
+              tenantId: "org_1",
+              metadata: { appProfile: "online" },
+            },
+          ];
+        } else if (
+          tableName === "global_entity_map" ||
+          (table && "destEntityId" in table)
+        ) {
+          resultData = [{ destEntityId: "ext_123" }]; // globalEntityMap
+        } else if (
+          tableName === "outbound_gateway" ||
+          (table && "data" in table)
+        ) {
+          resultData = [
+            { data: { time: "now", Vendor: { SyncToken: "999" } } },
+          ]; // replicaEntity
+        } else {
+          resultData = [
+            { id: "stitch_1", syncCondition: [], mappingRules: [] },
+          ]; // stitches
+        }
+        return qb;
+      });
+      qb.where = vi.fn().mockReturnValue(qb);
+      qb.limit = vi.fn().mockReturnValue(qb);
+      qb.then = (resolve: any, reject?: any) =>
+        Promise.resolve(resultData).then(resolve, reject);
+      return qb;
+    });
+
+    service.onModuleInit();
+    const handler = queueService.consume.mock.calls[0][1];
+
+    vi.spyOn((service as any).logger, "log");
+
+    await handler({ traceId: "123", dataSourceId: "456" });
+
+    // Assert that the debug log successfully extracted the nested SyncToken "999"
+    expect((service as any).logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({ syncToken: "999" }),
+      expect.stringContaining("SyncToken=999"),
     );
   });
 });

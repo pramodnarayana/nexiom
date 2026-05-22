@@ -114,9 +114,10 @@ function parseArgs() {
 async function listConnections() {
   try {
     const res = await pool.query(`
-      SELECT id, app_name, display_name, tenant_id, status, env_type 
-      FROM public.app_connection 
-      ORDER BY app_name, display_name
+      SELECT d.id, d.app_name, d.display_name, d.tenant_id, c.status, d.env_type 
+      FROM public.data_source d
+      LEFT JOIN public.credential c ON c.data_source_id = d.id
+      ORDER BY d.app_name, d.display_name
     `);
     
     if (res.rows.length === 0) {
@@ -124,7 +125,7 @@ async function listConnections() {
       return;
     }
 
-    console.log("\n\x1b[1;32mAvailable Connections in Global Database:\x1b[0m");
+    console.log("\n\x1b[1;32mAvailable Data Sources in Global Database:\x1b[0m");
     console.table(res.rows.map(r => ({
       ID: r.id,
       App: r.app_name,
@@ -171,7 +172,7 @@ async function run() {
   try {
     // 1. Validate connections exist and belong to the same tenant (or identify target tenant)
     const { rows: connections } = await pool.query(
-      "SELECT * FROM public.app_connection WHERE id IN ($1, $2)",
+      "SELECT * FROM public.data_source WHERE id IN ($1, $2)",
       [opts.srcConn, opts.destConn]
     );
 
@@ -204,6 +205,7 @@ async function run() {
     // 2. Resolve Workspace
     let workspaceId = opts.workspace;
     let orgId = tenantId;
+    let workspaceRow;
 
     if (!workspaceId) {
       // Find workspace for this tenant
@@ -213,9 +215,10 @@ async function run() {
       );
 
       if (workspaces.length > 0) {
-        workspaceId = workspaces[0].id;
-        orgId = workspaces[0].org_id;
-        console.log(`\x1b[32m✔ Resolved existing UI Workspace:\x1b[0m ${workspaces[0].name} (${workspaceId})`);
+        workspaceRow = workspaces[0];
+        workspaceId = workspaceRow.id;
+        orgId = workspaceRow.org_id;
+        console.log(`\x1b[32m✔ Resolved existing UI Workspace:\x1b[0m ${workspaceRow.name} (${workspaceId})`);
       } else {
         // Create workspace
         const newWs = await pool.query(
@@ -224,8 +227,9 @@ async function run() {
            RETURNING *`,
           ["Default Workspace", tenantId]
         );
-        workspaceId = newWs.rows[0].id;
-        orgId = newWs.rows[0].org_id;
+        workspaceRow = newWs.rows[0];
+        workspaceId = workspaceRow.id;
+        orgId = workspaceRow.org_id;
         console.log(`\x1b[33m✔ Created Default Workspace:\x1b[0m ${workspaceId}`);
       }
     } else {
@@ -238,7 +242,8 @@ async function run() {
         console.error(`\x1b[31mError: Workspace ${workspaceId} not found for organization/tenant ${tenantId}\x1b[0m`);
         process.exit(1);
       }
-      orgId = workspaces[0].org_id;
+      workspaceRow = workspaces[0];
+      orgId = workspaceRow.org_id;
     }
 
     // 3-6. Link Connections, Create/Update Stitch, Field Mapping, and Outbox — all in a transaction
@@ -247,13 +252,13 @@ async function run() {
     try {
       await client.query('BEGIN');
 
-      // 3. Link Connections to Workspace
-      for (const connId of [opts.srcConn, opts.destConn]) {
+      // 3. Link Data Sources to Workspace
+      for (const dsId of [opts.srcConn, opts.destConn]) {
         await client.query(
-          `INSERT INTO public.ui_workspace_connection (workspace_id, connection_id)
+          `INSERT INTO public.ui_workspace_data_source (workspace_id, data_source_id)
            VALUES ($1, $2)
-           ON CONFLICT (workspace_id, connection_id) DO NOTHING`,
-          [workspaceId, connId]
+           ON CONFLICT (workspace_id, data_source_id) DO NOTHING`,
+          [workspaceId, dsId]
         );
       }
       console.log(`\x1b[32m✔ Linked connections to Workspace ${workspaceId}\x1b[0m`);
@@ -264,7 +269,7 @@ async function run() {
       // Check for existing stitch
       const { rows: existingStitches } = await client.query(
         `SELECT * FROM public.integration_stitch
-         WHERE workspace_id = $1 AND src_connection_id = $2 AND dest_connection_id = $3
+         WHERE workspace_id = $1 AND src_data_source_id = $2 AND dest_data_source_id = $3
            AND source_object = $4 AND target_object = $5`,
         [workspaceId, opts.srcConn, opts.destConn, opts.srcObj, opts.destObj]
       );
@@ -283,7 +288,7 @@ async function run() {
       } else {
         const res = await client.query(
           `INSERT INTO public.integration_stitch (
-            name, org_id, workspace_id, src_connection_id, dest_connection_id,
+            name, org_id, workspace_id, src_data_source_id, dest_data_source_id,
             source_object, target_object, sync_interval_minutes
            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            RETURNING *`,
@@ -322,21 +327,27 @@ async function run() {
       }
 
       // 6. Push to global_registry_outbox for Tenant DB Replication
+      // Order matters: UI_WORKSPACE must arrive before INTEGRATION_STITCH (FK dependency).
+      // Each is inserted with a staggered next_retry_at to ensure ordering even under
+      // concurrent batch processing by the outbox worker.
       console.log(`\n\x1b[33mReplicating registry configurations to Tenant DB...\x1b[0m`);
 
+      const now = new Date();
       const entries = [
-        { entityType: "INTEGRATION_STITCH", entityId: stitch.id, payload: toCamel(stitch) },
-        { entityType: "FIELD_MAPPING", entityId: mapping.id, payload: toCamel(mapping) }
+        { entityType: "UI_WORKSPACE",       entityId: workspaceRow.id, payload: toCamel(workspaceRow), delayMs: 0    },
+        { entityType: "INTEGRATION_STITCH", entityId: stitch.id,        payload: toCamel(stitch),       delayMs: 1000 },
+        { entityType: "FIELD_MAPPING",      entityId: mapping.id,       payload: toCamel(mapping),      delayMs: 2000 },
       ];
 
       for (const e of entries) {
+        const nextRetryAt = new Date(now.getTime() + e.delayMs);
         await client.query(
           `INSERT INTO public.global_registry_outbox (
-            id, tenant_id, entity_type, entity_id, action, payload, status
-           ) VALUES (gen_random_uuid(), $1, $2, $3, 'UPSERT', $4::jsonb, 'PENDING')`,
-          [tenantId, e.entityType, e.entityId, JSON.stringify(e.payload)]
+            id, tenant_id, entity_type, entity_id, action, payload, status, next_retry_at
+           ) VALUES (gen_random_uuid(), $1, $2, $3, 'UPSERT', $4::jsonb, 'PENDING', $5)`,
+          [tenantId, e.entityType, e.entityId, JSON.stringify(e.payload), nextRetryAt]
         );
-        console.log(`  + Queued replication: ${e.entityType} (${e.entityId})`);
+        console.log(`  + Queued replication: ${e.entityType} (${e.entityId})${e.delayMs > 0 ? ` [delayed ${e.delayMs}ms]` : ''}`);
       }
 
       await client.query('COMMIT');

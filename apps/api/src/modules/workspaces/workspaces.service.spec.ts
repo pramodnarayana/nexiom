@@ -96,55 +96,16 @@ describe('WorkspacesService', () => {
 
   // ── create ────────────────────────────────────────────────────────────────
 
-  it('creates a workspace and claims a WARM database if org has none', async () => {
-    // 1st execute: SELECT existing active tenant -> no rows
-    mocks.execute.mockResolvedValueOnce({ rowCount: 0 });
-    // 2nd execute: UPDATE to claim WARM -> 1 row claimed
-    mocks.execute.mockResolvedValueOnce({
-      rowCount: 1,
-      rows: [{ tenant_id: ORG_ID }],
-    });
+  it('creates a workspace', async () => {
     mocks.returningInsert.mockResolvedValue([WORKSPACE]);
 
     const result = await service.create(ORG_ID, { name: 'Logistics' });
 
     expect(result).toEqual(WORKSPACE);
-    expect(mocks.execute).toHaveBeenCalledTimes(2);
     expect(mocks.db.insert).toHaveBeenCalled();
-  });
-
-  it('skips claiming WARM database if org already has an ACTIVE one', async () => {
-    // 1st execute: SELECT existing active tenant -> 1 row found
-    mocks.execute.mockResolvedValueOnce({
-      rowCount: 1,
-      rows: [{ tenant_id: ORG_ID }],
-    });
-    mocks.returningInsert.mockResolvedValue([WORKSPACE]);
-
-    const result = await service.create(ORG_ID, { name: 'Logistics' });
-
-    expect(result).toEqual(WORKSPACE);
-    expect(mocks.execute).toHaveBeenCalledTimes(1); // the update execute is NOT called
-    expect(mocks.db.insert).toHaveBeenCalled();
-  });
-
-  it('throws ServiceUnavailableException when claiming WARM database fails (pool empty)', async () => {
-    // 1st execute: SELECT existing active tenant -> no rows
-    mocks.execute.mockResolvedValueOnce({ rowCount: 0 });
-    // 2nd execute: UPDATE to claim WARM -> 0 rows claimed (pool is empty)
-    mocks.execute.mockResolvedValueOnce({ rowCount: 0, rows: [] });
-
-    await expect(service.create(ORG_ID, { name: 'Logistics' })).rejects.toThrow(
-      'Workspace infrastructure is being provisioned. Please try again in a few seconds.',
-    );
   });
 
   it('throws ConflictException when DB raises a unique-violation (23505)', async () => {
-    // 1st execute: SELECT existing active tenant -> 1 row found
-    mocks.execute.mockResolvedValueOnce({
-      rowCount: 1,
-      rows: [{ tenant_id: ORG_ID }],
-    });
     const pgUniqueError = Object.assign(new Error('unique'), { code: '23505' });
     mocks.returningInsert.mockRejectedValue(pgUniqueError);
 

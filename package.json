@@ -13,6 +13,7 @@
 		"prepare": "husky",
 		"db:migrate": "pnpm --filter @nexiom/database db:migrate",
 		"db:generate": "pnpm --filter @nexiom/database db:generate",
+		"db:fresh": "pnpm --filter api exec tsx src/db/db-cli.ts fresh",
 		"db:studio": "pnpm --filter @nexiom/database db:studio",
 		"db:studio:tenant": "pnpm --filter @nexiom/database db:studio:tenant",
 		"db:seed": "pnpm --filter api db:seed",

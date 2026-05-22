@@ -2,7 +2,7 @@ import type { DatabaseManager } from '../interfaces.js';
 import { SchemaPlan } from '../interfaces.js';
 import type { DrizzleDb } from '@nexiom/database';
 import { tenantStorageRegistry } from '@nexiom/database';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { SqlDatabaseManager } from './sql-database-manager.js';
 
 interface Logger {
@@ -77,14 +77,46 @@ export class TenantDatabaseManager implements DatabaseManager {
         // Start creation and store the Promise
         const creationPromise = (async () => {
             try {
-                const registryInfo = await this.globalDb
+                let registryInfo = await this.globalDb
                     .select()
                     .from(tenantStorageRegistry)
                     .where(eq(tenantStorageRegistry.tenantId, tenantId))
                     .limit(1);
 
                 if (registryInfo.length === 0) {
-                    throw new Error(`[TenantDatabaseManager] No physical database found in registry for tenant ${tenantId}`);
+                    this.logger.debug(`No active database found for tenant ${tenantId}. Attempting JIT provisioning...`);
+                    
+                    // JIT Provisioning: Claim an available WARM database for this tenant.
+                    // The NOT EXISTS clause ensures we don't accidentally claim a second DB
+                    // if another concurrent request just successfully claimed one for this tenant.
+                    await this.globalDb.execute(sql`
+                        UPDATE tenant_storage_registry
+                        SET tenant_id = ${tenantId}, status = 'ACTIVE', updated_at = NOW()
+                        WHERE tenant_id = (
+                            SELECT tenant_id FROM tenant_storage_registry
+                            WHERE status = 'WARM'
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM tenant_storage_registry
+                                  WHERE tenant_id = ${tenantId} AND status = 'ACTIVE'
+                              )
+                            LIMIT 1
+                            FOR UPDATE SKIP LOCKED
+                        )
+                    `);
+                    
+                    // Re-query to get the assigned DB (whether assigned by this execution or a concurrent one)
+                    registryInfo = await this.globalDb
+                        .select()
+                        .from(tenantStorageRegistry)
+                        .where(eq(tenantStorageRegistry.tenantId, tenantId))
+                        .limit(1);
+                        
+                    if (registryInfo.length === 0) {
+                        throw new Error(
+                            `[TenantDatabaseManager] Workspace infrastructure is being provisioned or the pool is empty. ` +
+                            `Please try again in a few seconds. (Tenant: ${tenantId})`
+                        );
+                    }
                 }
 
                 const { databaseName, databaseHostUrl } = registryInfo[0];
@@ -130,19 +162,19 @@ export class TenantDatabaseManager implements DatabaseManager {
     /**
      * Idempotently bring the schema up to the desired plan level.
      */
-    async applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan): Promise<void> {
+    async applyPlan(tenantId: string, schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void> {
         const tenantDb = await this.getTenantDb(tenantId);
         const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
-        await sqlManager.applyPlan(schemaName, plan);
+        await sqlManager.applyPlan(schemaName, plan, context);
     }
 
     /**
      * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
      */
-    async migrateToOutboundActive(tenantId: string, schemaName: string): Promise<void> {
+    async migrateToOutboundActive(tenantId: string, schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
         const tenantDb = await this.getTenantDb(tenantId);
         const sqlManager = new SqlDatabaseManager(tenantDb, this.logger, this.domainProvisionerResolver);
-        await sqlManager.migrateToOutboundActive(schemaName);
+        await sqlManager.migrateToOutboundActive(schemaName, context);
     }
 
     /**

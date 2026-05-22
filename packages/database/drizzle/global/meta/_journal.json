@@ -33,15 +33,22 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1778329742536,
-      "tag": "0005_stiff_nicolaos",
+      "when": 1779426593230,
+      "tag": "0005_icy_vision",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
-      "when": 1778484824533,
-      "tag": "0006_sturdy_scourge",
+      "when": 1779433105031,
+      "tag": "0006_little_shinobi_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779444095848,
+      "tag": "0007_dapper_reaper",
       "breakpoints": true
     }
   ]

@@ -46,7 +46,6 @@ export class RegistryOutboxWorker {
             sql`${globalRegistryOutbox.id} IN (
               SELECT id FROM ${globalRegistryOutbox}
               WHERE (status = 'PENDING' AND next_retry_at <= NOW())
-                 OR (status = 'RETRY' AND next_retry_at <= NOW())
                  OR (status = 'PROCESSING' AND next_retry_at <= NOW())
               ORDER BY next_retry_at ASC
               LIMIT ${BATCH_SIZE}

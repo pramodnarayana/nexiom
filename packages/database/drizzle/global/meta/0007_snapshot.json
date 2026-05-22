@@ -1,6 +1,6 @@
 {
-  "id": "090ee6a1-2bf2-4f00-a8ff-48935c2614e9",
-  "prevId": "c0b493ab-f2f7-4f72-b437-8d51f422ec73",
+  "id": "0793b371-9e79-4265-9aaa-d32df26a3f1f",
+  "prevId": "5bc6f039-06b5-49ff-8071-8718aecada73",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -238,7 +238,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -2413,6 +2413,7 @@
       "schema": "public",
       "values": [
         "APP_CONNECTION",
+        "UI_WORKSPACE",
         "INTEGRATION_STITCH",
         "FIELD_MAPPING"
       ]

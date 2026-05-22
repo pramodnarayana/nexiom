@@ -22,6 +22,27 @@
       "when": 1746683311000,
       "tag": "0002_app_connection_schema_name",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779431779848,
+      "tag": "0003_medical_juggernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779435629848,
+      "tag": "0004_drop_stitch_workspace_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779437449848,
+      "tag": "0005_add_ui_workspace_replica",
+      "breakpoints": true
     }
   ]
 }

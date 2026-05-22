@@ -463,7 +463,7 @@ export class ConnectorsService {
             // caller's identifiers but not the other.
             let existingFailed: { id: string } | undefined;
 
-            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+            if (pgErr.constraint === 'ds_tenant_app_display_name_lower_idx') {
               // displayName is the blocking duplicate — query only by displayName.
               const rows = await tx
                 .select({ id: dataSources.id })
@@ -502,7 +502,7 @@ export class ConnectorsService {
                 }
               }
             } else if (
-              pgErr.constraint === 'tenant_external_id_unique_idx' &&
+              pgErr.constraint === 'ds_tenant_external_id_idx' &&
               externalId
             ) {
               // externalId is the blocking duplicate — query only by externalId.
@@ -844,13 +844,13 @@ export class ConnectorsService {
     externalId: string,
   ): void {
     if (pgErr?.code !== PG_UNIQUE_VIOLATION) return;
-    if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+    if (pgErr.constraint === 'ds_tenant_app_display_name_lower_idx') {
       throw new HttpException(
         `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
         409,
       );
     }
-    if (pgErr.constraint === 'tenant_external_id_unique_idx') {
+    if (pgErr.constraint === 'ds_tenant_external_id_idx') {
       throw new HttpException(
         `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
         409,
