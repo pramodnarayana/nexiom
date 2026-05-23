@@ -142,7 +142,7 @@ const statements = [
   
   // global_registry_outbox - must match migration 0005_icy_vision.sql
   `DO $$ BEGIN CREATE TYPE "public"."registry_outbox_action_enum" AS ENUM('UPSERT', 'DELETE'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
-  `DO $$ BEGIN CREATE TYPE "public"."registry_outbox_entity_enum" AS ENUM('APP_CONNECTION', 'INTEGRATION_STITCH', 'FIELD_MAPPING'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN CREATE TYPE "public"."registry_outbox_entity_enum" AS ENUM('APP_CONNECTION', 'INTEGRATION_STITCH', 'FIELD_MAPPING', 'UI_WORKSPACE'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "public"."registry_outbox_status_enum" AS ENUM('PENDING', 'PROCESSING', 'SUCCESS', 'FAILED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `CREATE TABLE IF NOT EXISTS "global_registry_outbox" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

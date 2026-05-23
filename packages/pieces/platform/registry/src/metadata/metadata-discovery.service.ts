@@ -109,8 +109,7 @@ export class MetadataDiscoveryService implements OnModuleInit {
         }
       } while (cursor !== '0');
 
-      // Persist the flag without expiration to mark completion, using our token
-      await this.redis.eval(compareAndDelete, 1, migrationFlag, token);
+      // Persist the flag without expiration to mark completion
       await this.redis.set(migrationFlag, '1');
       this.logger.log('Legacy metadata cache keys cleared.');
     } catch (err) {

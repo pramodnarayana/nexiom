@@ -14,7 +14,7 @@ pool.query(\"SELECT id FROM data_source WHERE app_name = 'salesforce' LIMIT 1\")
     return pool.end();
   })
   .catch(err => {
-    console.error('');
+    console.error('DB error:', err);
     pool.end();
     process.exit(1);
   });
@@ -31,7 +31,7 @@ pool.query(\"SELECT id FROM data_source WHERE app_name = 'quickbooks' LIMIT 1\")
     return pool.end();
   })
   .catch(err => {
-    console.error('');
+    console.error('DB error:', err);
     pool.end();
     process.exit(1);
   });
