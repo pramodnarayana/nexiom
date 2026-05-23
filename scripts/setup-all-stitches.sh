@@ -4,25 +4,37 @@ set -e
 # Automatically find the first Salesforce and QuickBooks connections in the global DB
 echo "Finding active connections..."
 SF_ID=$(node -e "
-import pg from 'pg';
-import dotenv from 'dotenv';
+const pg = require('pg');
+const dotenv = require('dotenv');
 dotenv.config();
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-pool.query(\"SELECT id FROM data_source WHERE app_name = 'salesforce' LIMIT 1\").then(res => {
-  console.log(res.rows[0]?.id || '');
-  pool.end();
-});
+pool.query(\"SELECT id FROM data_source WHERE app_name = 'salesforce' LIMIT 1\")
+  .then(res => {
+    console.log(res.rows[0]?.id || '');
+    return pool.end();
+  })
+  .catch(err => {
+    console.error('');
+    pool.end();
+    process.exit(1);
+  });
 ")
 
 QB_ID=$(node -e "
-import pg from 'pg';
-import dotenv from 'dotenv';
+const pg = require('pg');
+const dotenv = require('dotenv');
 dotenv.config();
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-pool.query(\"SELECT id FROM data_source WHERE app_name = 'quickbooks' LIMIT 1\").then(res => {
-  console.log(res.rows[0]?.id || '');
-  pool.end();
-});
+pool.query(\"SELECT id FROM data_source WHERE app_name = 'quickbooks' LIMIT 1\")
+  .then(res => {
+    console.log(res.rows[0]?.id || '');
+    return pool.end();
+  })
+  .catch(err => {
+    console.error('');
+    pool.end();
+    process.exit(1);
+  });
 ")
 
 if [ -z "$SF_ID" ] || [ -z "$QB_ID" ]; then

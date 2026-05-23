@@ -771,10 +771,6 @@ describe("FanOutService", () => {
       const qb: any = {};
       qb.from = vi.fn().mockImplementation((table) => {
         const tableName = table ? table[Symbol.for("drizzle:Name")] : undefined;
-        console.log("MOCK FROM CALLED", {
-          tableName,
-          keys: table ? Object.keys(table) : [],
-        });
         if (
           tableName === "field_mapping" ||
           (table && "mappingRules" in table)

@@ -5,6 +5,9 @@
 # already exists, so re-running postgres with existing data is safe.
 set -e
 
+# Configurable tenant database name with fallback
+TENANT_DB_NAME="${TENANT_DB_NAME:-nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53}"
+
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     SELECT 'CREATE DATABASE windmill'
     WHERE NOT EXISTS (
@@ -16,8 +19,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
         SELECT FROM pg_database WHERE datname = 'nexiom_global'
     )\gexec
 
-    SELECT 'CREATE DATABASE nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53'
+    SELECT 'CREATE DATABASE $TENANT_DB_NAME'
     WHERE NOT EXISTS (
-        SELECT FROM pg_database WHERE datname = 'nexiom_tenant_9d8efd73_3cf1_4e71_b4b0_a47dc08e1a53'
+        SELECT FROM pg_database WHERE datname = '$TENANT_DB_NAME'
     )\gexec
 EOSQL

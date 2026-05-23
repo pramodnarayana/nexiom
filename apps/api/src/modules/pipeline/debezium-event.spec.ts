@@ -19,37 +19,52 @@ describe('DebeziumUnwrappedEvent', () => {
 
   it('should fail validation when trace_id is not a UUID', async () => {
     const event = new DebeziumUnwrappedEvent();
-    event.trace_id = 'not-a-uuid';
+    event.trace_id = uuidv4();
+    event.data_source_id = uuidv4();
+    event.schema_name = 'public';
     event.__table = 'inbound_outbox';
     event.__schema = 'public';
     event.__op = 'c';
+    // Now mutate only the target field
+    event.trace_id = 'not-a-uuid';
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].property).toBe('trace_id');
+    const errorProperties = errors.map(e => e.property);
+    expect(errorProperties).toContain('trace_id');
   });
 
   it('should fail validation on invalid table name', async () => {
     const event = new DebeziumUnwrappedEvent();
     event.trace_id = uuidv4();
-    (event as any).__table = 'invalid_table';
+    event.data_source_id = uuidv4();
+    event.schema_name = 'public';
+    event.__table = 'inbound_outbox';
     event.__schema = 'public';
     event.__op = 'c';
+    // Now mutate only the target field
+    (event as any).__table = 'invalid_table';
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].property).toBe('__table');
+    const errorProperties = errors.map(e => e.property);
+    expect(errorProperties).toContain('__table');
   });
 
   it('should fail validation on invalid operation', async () => {
     const event = new DebeziumUnwrappedEvent();
     event.trace_id = uuidv4();
+    event.data_source_id = uuidv4();
+    event.schema_name = 'public';
     event.__table = 'inbound_outbox';
     event.__schema = 'public';
+    event.__op = 'c';
+    // Now mutate only the target field
     (event as any).__op = 'invalid_op';
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].property).toBe('__op');
+    const errorProperties = errors.map(e => e.property);
+    expect(errorProperties).toContain('__op');
   });
 });

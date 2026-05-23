@@ -54,6 +54,7 @@ ALTER TABLE "global_entity_map" ADD CONSTRAINT "global_entity_map_source_data_so
 ALTER TABLE "global_entity_map" ADD CONSTRAINT "global_entity_map_dest_data_source_id_data_source_id_fk" FOREIGN KEY ("dest_data_source_id") REFERENCES "public"."data_source"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration_stitch" ADD CONSTRAINT "stitch_src_data_source_fk" FOREIGN KEY ("src_data_source_id") REFERENCES "public"."data_source"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration_stitch" ADD CONSTRAINT "stitch_dest_data_source_fk" FOREIGN KEY ("dest_data_source_id") REFERENCES "public"."data_source"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sync_cursors" ADD CONSTRAINT "sync_cursors_stitch_fk" FOREIGN KEY ("stitch_id") REFERENCES "public"."integration_stitch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "canonical_mapping_tenant_idx" ON "canonical_mappings" USING btree ("tenant_id","app_name","category","entity","view_mode","version") WHERE "canonical_mappings"."tenant_id" IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "canonical_mapping_global_idx" ON "canonical_mappings" USING btree ("app_name","category","entity","view_mode","version") WHERE "canonical_mappings"."tenant_id" IS NULL;--> statement-breakpoint
 CREATE INDEX "gem_source_ds_idx" ON "global_entity_map" USING btree ("source_data_source_id");--> statement-breakpoint

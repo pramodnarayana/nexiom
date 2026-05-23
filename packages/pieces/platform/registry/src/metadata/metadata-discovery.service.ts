@@ -80,13 +80,23 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   private async cleanupLegacyCacheKeys(): Promise<void> {
     const migrationFlag = 'migration:meta_cache_cleanup_datasource_id';
+    const token = `${Date.now()}-${Math.random()}`;
 
-    // Atomically claim the migration with a 60-second timeout
-    const claimed = await this.redis.set(migrationFlag, '1', 'EX', 60, 'NX');
+    // Atomically claim the migration with a 60-second timeout using a unique token
+    const claimed = await this.redis.set(migrationFlag, token, 'EX', 60, 'NX');
     if (!claimed) {
       // Another instance is running or has completed the migration
       return;
     }
+
+    // Lua script for compare-and-delete
+    const compareAndDelete = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
 
     try {
       this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
@@ -99,12 +109,13 @@ export class MetadataDiscoveryService implements OnModuleInit {
         }
       } while (cursor !== '0');
 
-      // Persist the flag without expiration to mark completion
+      // Persist the flag without expiration to mark completion, using our token
+      await this.redis.eval(compareAndDelete, 1, migrationFlag, token);
       await this.redis.set(migrationFlag, '1');
       this.logger.log('Legacy metadata cache keys cleared.');
     } catch (err) {
-      // On failure, delete the claim so another instance can retry
-      await this.redis.del(migrationFlag);
+      // On failure, only delete the claim if we still own it
+      await this.redis.eval(compareAndDelete, 1, migrationFlag, token);
       throw err;
     }
   }

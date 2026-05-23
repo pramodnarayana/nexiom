@@ -18,7 +18,9 @@ async function resetDb() {
     const schemas = await pool.query("SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'ws_%'");
     for (const s of schemas.rows) {
       console.log(`Dropping schema ${s.schema_name}...`);
-      await pool.query(`DROP SCHEMA IF EXISTS "${s.schema_name}" CASCADE`);
+      // Escape identifier: replace " with ""
+      const escapedSchemaName = s.schema_name.replace(/"/g, '""');
+      await pool.query(`DROP SCHEMA IF EXISTS "${escapedSchemaName}" CASCADE`);
     }
 
     console.log('Dropping public schema...');
