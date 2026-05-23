@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { authTypeEnum, connectionStatusEnum } from './routing.js';
 import { dataSources } from './data-sources.js';
@@ -23,7 +23,7 @@ export const credentials = pgTable('credential', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
-    index('cred_data_source_idx').on(table.dataSourceId),
+    uniqueIndex('cred_data_source_idx').on(table.dataSourceId),
     index('cred_status_idx').on(table.status),
     index('cred_expires_at_idx').on(table.expiresAt).where(sql`${table.expiresAt} IS NOT NULL`),
 ]);

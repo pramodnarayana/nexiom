@@ -467,4 +467,55 @@ describe('StitchesService', () => {
       service.updateScheduleAdmin(STITCH_ID, { scheduleEnabled: false }),
     ).rejects.toThrow(NotFoundException);
   });
+
+  // ── listAdmin ──────────────────────────────────────────────────────────
+
+  it('lists admin stitches without org scoping', async () => {
+    const findManySpy = vi.spyOn(
+      mocks.db.query.integrationStitches,
+      'findMany',
+    );
+    findManySpy.mockResolvedValue([STITCH]);
+
+    const result = await service.listAdmin();
+
+    expect(result).toEqual([STITCH]);
+    expect(findManySpy).toHaveBeenCalled();
+  });
+
+  // ── bulkUpdateScheduleByOrg ─────────────────────────────────────────────
+
+  it('bulkUpdateScheduleByOrg — updates multiple stitches and returns count', async () => {
+    const updatedStitch1 = {
+      ...STITCH,
+      id: 'stitch-1',
+      syncIntervalMinutes: 60,
+    };
+    const updatedStitch2 = {
+      ...STITCH,
+      id: 'stitch-2',
+      syncIntervalMinutes: 60,
+    };
+    mocks.returningUpdate.mockResolvedValue([updatedStitch1, updatedStitch2]);
+
+    const result = await service.bulkUpdateScheduleByOrg(ORG_ID, {
+      syncIntervalMinutes: 60,
+    });
+
+    expect(result.count).toBe(2);
+    expect(result.updated).toEqual([updatedStitch1, updatedStitch2]);
+    expect(mocks.db.transaction).toHaveBeenCalled();
+  });
+
+  it('bulkUpdateScheduleByOrg — returns 0 count if no stitches are found', async () => {
+    mocks.returningUpdate.mockResolvedValue([]);
+
+    const result = await service.bulkUpdateScheduleByOrg(ORG_ID, {
+      scheduleEnabled: false,
+    });
+
+    expect(result.count).toBe(0);
+    expect(result.updated).toEqual([]);
+    expect(mocks.db.transaction).toHaveBeenCalled();
+  });
 });

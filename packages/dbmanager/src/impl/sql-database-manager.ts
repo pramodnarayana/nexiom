@@ -2,6 +2,7 @@ import type { DatabaseManager } from '../interfaces.js';
 import { SchemaPlan } from '../interfaces.js';
 import type { DrizzleDb } from '@nexiom/database';
 import { createHash } from 'node:crypto';
+import { getWorkspaceSchemaName } from '../schema-utils.js';
 
 const SAFE_SCHEMA_NAME_RE = /^ws_[a-z0-9_]+$/;
 
@@ -37,7 +38,7 @@ export class SqlDatabaseManager {
         }
     }
 
-    async applyPlan(schemaName: string, plan: SchemaPlan): Promise<void> {
+    async applyPlan(schemaName: string, plan: SchemaPlan, context?: { appName: string, appProfile: string }): Promise<void> {
         this.validateSchemaName(schemaName);
 
         // 1. Always ensure namespace exists (minimum baseline for all plans)
@@ -71,7 +72,7 @@ export class SqlDatabaseManager {
         }
 
         // 4.5. Ensure Canonical Tables exist
-        await this.provisionCanonicalTables(schemaName);
+        await this.provisionCanonicalTables(schemaName, context);
 
         if (plan === SchemaPlan.CANONICAL_ACTIVE) {
             return;
@@ -102,27 +103,55 @@ export class SqlDatabaseManager {
      * - sync_log partial indexes (from provisionOutboundTables)
      * All DDL is idempotent so this is safe to run on live schemas.
      */
-    async migrateToOutboundActive(schemaName: string): Promise<void> {
+    async migrateToOutboundActive(schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
         this.validateSchemaName(schemaName);
         await this.provisionGatewayTables(schemaName);
         await this.provisionReplicaTables(schemaName);
         await this.provisionNormalizeTables(schemaName);
-        await this.provisionCanonicalTables(schemaName);
+        await this.provisionCanonicalTables(schemaName, context);
         await this.provisionOutboundTables(schemaName);
     }
 
+    private async renameConnectionIdToDataSourceId(schemaName: string, tables: string[]): Promise<void> {
+        const SAFE_TABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+        for (const table of tables) {
+            // Validate table name to prevent SQL injection
+            if (!SAFE_TABLE_NAME_RE.test(table)) {
+                throw new Error(
+                    `Invalid table name: ${table} — expected format: must start with letter or underscore, followed by letters, digits, or underscores only.`
+                );
+            }
+
+            await this.db.$client.query(`
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                         WHERE table_schema = '${schemaName}'
+                           AND table_name   = '${table}'
+                           AND column_name  = 'connection_id'
+                    ) THEN
+                        EXECUTE format('ALTER TABLE %I.%I RENAME COLUMN connection_id TO data_source_id', '${schemaName}', '${table}');
+                    END IF;
+                END $$;
+            `);
+        }
+    }
+
     private async provisionGatewayTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['inbound_gateway', 'inbound_outbox', 'active_sync_locks']);
+
         // ── LAYER 1 — INBOUND GATEWAY ────────────────────────────────────────
         // Must match pipeline.ts buildTenantSchema > inboundGateway exactly.
         // Uses TEXT + CHECK instead of public.pipeline_status_enum so that
         // tenant schemas have no cross-schema type dependency.
         await this.db.$client.query(`
             CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_gateway (
-                id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                trace_id      UUID         NOT NULL UNIQUE,
-                connection_id UUID         NOT NULL,
-                object_type   VARCHAR(100),
-                request       JSONB        NOT NULL,
+                id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                trace_id       UUID         NOT NULL UNIQUE,
+                data_source_id UUID         NOT NULL,
+                object_type    VARCHAR(100),
+                request        JSONB        NOT NULL,
                 response      JSONB,
                 headers       JSONB,
                 ext_req_id    VARCHAR(255),
@@ -158,7 +187,7 @@ export class SqlDatabaseManager {
         // vendor events from being ingested twice.
         await this.db.$client.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_l1_ext_id
-                ON "${schemaName}".inbound_gateway (connection_id, ext_req_id)
+                ON "${schemaName}".inbound_gateway (data_source_id, ext_req_id)
                 WHERE ext_req_id IS NOT NULL;
         `);
 
@@ -189,10 +218,10 @@ export class SqlDatabaseManager {
         // a process crash between DB commit and SQS publish cannot lose events.
         await this.db.$client.query(`
             CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_outbox (
-                id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                trace_id      UUID         NOT NULL,
-                connection_id UUID         NOT NULL,
-                schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
+                id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                trace_id       UUID         NOT NULL,
+                data_source_id UUID         NOT NULL,
+                schema_name    VARCHAR(128) NOT NULL DEFAULT current_schema(),
                 status        TEXT         NOT NULL DEFAULT 'PENDING'
                               CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
                 attempts      INTEGER      NOT NULL DEFAULT 0,
@@ -211,7 +240,7 @@ export class SqlDatabaseManager {
         await this.db.$client.query(`
             DO $$ BEGIN
                 ALTER TABLE "${schemaName}".inbound_outbox
-                    ADD CONSTRAINT idx_inbound_outbox_trace UNIQUE (trace_id, connection_id);
+                    ADD CONSTRAINT idx_inbound_outbox_trace UNIQUE (trace_id, data_source_id);
             EXCEPTION WHEN duplicate_table THEN NULL;
                       WHEN duplicate_object THEN NULL;
             END $$;
@@ -221,12 +250,12 @@ export class SqlDatabaseManager {
         await this.db.$client.query(`
             CREATE TABLE IF NOT EXISTS "${schemaName}".active_sync_locks (
                 id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                connection_id      UUID         NOT NULL,
+                data_source_id     UUID         NOT NULL,
                 entity_id          VARCHAR(255) NOT NULL,
                 locked_by_trace_id UUID         NOT NULL,
                 expires_at         TIMESTAMPTZ  NOT NULL,
                 created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                CONSTRAINT uq_sync_lock UNIQUE (connection_id, entity_id)
+                CONSTRAINT uq_sync_lock UNIQUE (data_source_id, entity_id)
             );
         `);
 
@@ -292,18 +321,20 @@ export class SqlDatabaseManager {
     }
 
     private async provisionReplicaTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['replica_entity', 'sync_cursor', 'replica_outbox']);
+
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
-            id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-            connection_id UUID         NOT NULL,
-            trace_id      UUID         NOT NULL,
-            entity_id     VARCHAR(255) NOT NULL,
-            entity_type   VARCHAR(100) NOT NULL,
-            data          JSONB        NOT NULL,
-            version       INTEGER      NOT NULL DEFAULT 1,
-            created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-            updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_l2_entity UNIQUE (connection_id, entity_type, entity_id)
+            id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            data_source_id UUID         NOT NULL,
+            trace_id       UUID         NOT NULL,
+            entity_id      VARCHAR(255) NOT NULL,
+            entity_type    VARCHAR(100) NOT NULL,
+            data           JSONB        NOT NULL,
+            version        INTEGER      NOT NULL DEFAULT 1,
+            created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+            CONSTRAINT uq_l2_entity UNIQUE (data_source_id, entity_type, entity_id)
         );
     `);
 
@@ -319,12 +350,12 @@ export class SqlDatabaseManager {
 
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".sync_cursor (
-            id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            connection_id         UUID        NOT NULL,
+            id                    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            data_source_id        UUID         NOT NULL,
             entity_type           VARCHAR(100) NOT NULL,
             last_sync_timestamp   VARCHAR(255) NOT NULL,
             updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_cursor UNIQUE (connection_id, entity_type)
+            CONSTRAINT uq_cursor UNIQUE (data_source_id, entity_type)
         );
     `);
 
@@ -333,7 +364,7 @@ export class SqlDatabaseManager {
         CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
             id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
             trace_id      UUID         NOT NULL,
-            connection_id UUID         NOT NULL,
+            data_source_id UUID        NOT NULL,
             schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
             status        TEXT         NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
@@ -351,16 +382,18 @@ export class SqlDatabaseManager {
     `);
 
         await this.db.$client.query(`
-        DO $$ BEGIN
-            ALTER TABLE "${schemaName}".replica_outbox
-                ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id);
-        EXCEPTION WHEN duplicate_table THEN NULL;
-                  WHEN duplicate_object THEN NULL;
-        END $$;
+            DO $$ BEGIN
+                ALTER TABLE "${schemaName}".replica_outbox
+                    ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, data_source_id);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+                      WHEN duplicate_object THEN NULL;
+            END $$;
     `);
     }
 
     private async provisionNormalizeTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['normalized_outbox']);
+
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_entity (
             id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -399,10 +432,10 @@ export class SqlDatabaseManager {
 
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_outbox (
-            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            trace_id      UUID        NOT NULL,
-            connection_id UUID        NOT NULL,
-            schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
+            id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id       UUID        NOT NULL,
+            data_source_id UUID        NOT NULL,
+            schema_name    VARCHAR(128) NOT NULL DEFAULT current_schema(),
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
@@ -428,30 +461,33 @@ export class SqlDatabaseManager {
         await this.db.$client.query(`
         DO $$ BEGIN
             ALTER TABLE "${schemaName}".normalized_outbox
-                ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, connection_id);
+                ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, data_source_id);
         EXCEPTION WHEN duplicate_table THEN NULL;
                   WHEN duplicate_object THEN NULL;
         END $$;
         `);
     }
 
-    private async provisionCanonicalTables(schemaName: string): Promise<void> {
+    private async provisionCanonicalTables(schemaName: string, context?: { appName: string, appProfile: string }): Promise<void> {
         try {
-            // Find appName by deriving connection_id from schemaName (e.g. ws_{connection_id_with_underscores})
-            const connectionIdCandidate = schemaName.startsWith('ws_') ? schemaName.slice(3).replace(/_/g, '-') : null;
-            const isUuid = connectionIdCandidate && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(connectionIdCandidate);
-            
-            let appName: string | undefined;
-            let appProfile: string | undefined;
-            if (isUuid) {
+            let appName: string | undefined = context?.appName;
+            let appProfile: string | undefined = context?.appProfile;
+
+            // Fallback: If context is missing (e.g. called from tests or CLI), look it up via hash-matching
+            if (!appName) {
                 const res = await this.db.$client.query(`
-                    SELECT app_name, metadata->>'appProfile' as app_profile 
-                    FROM public.app_connection
-                    WHERE id = $1
-                `, [connectionIdCandidate]);
-                appName = res.rows[0]?.app_name as string | undefined;
-                // Default to 'standard' if the connection doesn't have an explicit profile yet
-                appProfile = (res.rows[0]?.app_profile as string | undefined) || 'standard';
+                    SELECT id, app_name, metadata->>'appProfile' as app_profile 
+                    FROM public.data_source
+                `);
+
+                for (const row of res.rows) {
+                    const computed = getWorkspaceSchemaName(row.id, row.app_name);
+                    if (computed === schemaName) {
+                        appName = row.app_name;
+                        appProfile = row.app_profile || 'standard';
+                        break;
+                    }
+                }
             }
             
             if (appName && appProfile && this.domainProvisionerResolver) {
@@ -476,12 +512,12 @@ export class SqlDatabaseManager {
     private async provisionOutboundTables(schemaName: string): Promise<void> {
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".outbound_gateway (
-            id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-            trace_id      UUID        NOT NULL,
-            route_id      UUID        NOT NULL,
-            connection_id UUID        NOT NULL,
-            payload       JSONB       NOT NULL,
-            response      JSONB,
+            id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+            trace_id       UUID        NOT NULL,
+            route_id       UUID        NOT NULL,
+            data_source_id UUID        NOT NULL,
+            payload        JSONB       NOT NULL,
+            response       JSONB,
             status_code   INTEGER,
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),

@@ -1,9 +1,13 @@
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION, globalRegistryOutbox } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+import {
+  DB_MANAGER,
+  SchemaPlan,
+  getWorkspaceSchemaName,
+} from "@nexiom/dbmanager";
 import type { DatabaseManager } from "@nexiom/dbmanager";
 import * as schema from "../../db/schema.js";
 
@@ -94,8 +98,12 @@ export class RegistryReplicationService implements OnModuleInit {
 
       let operationPerformed = false;
       let attempts = 0;
-      const maxAttempts = 3;
-      const retryDelayMs = 1000;
+      // FIELD_MAPPING has a FK dependency on INTEGRATION_STITCH. When both are
+      // queued at the same time (e.g. from create-stitch script), the stitch
+      // replication message may still be in-flight when the mapping arrives.
+      // Give it more retries with a longer backoff to let the parent arrive.
+      const maxAttempts = row.entityType === "FIELD_MAPPING" ? 10 : 3;
+      const retryDelayMs = row.entityType === "FIELD_MAPPING" ? 2000 : 1000;
 
       while (attempts < maxAttempts) {
         try {
@@ -114,6 +122,17 @@ export class RegistryReplicationService implements OnModuleInit {
                     target: [schema.dataSources.id],
                     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     set: connData as any,
+                  });
+                operationPerformed = true;
+              } else if (row.entityType === "UI_WORKSPACE") {
+                await tx
+                  .insert(schema.uiWorkspaces)
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                  .values(data as any)
+                  .onConflictDoUpdate({
+                    target: [schema.uiWorkspaces.id],
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                    set: data as any,
                   });
                 operationPerformed = true;
               } else if (row.entityType === "INTEGRATION_STITCH") {
@@ -144,6 +163,11 @@ export class RegistryReplicationService implements OnModuleInit {
                 await tx
                   .delete(schema.dataSources)
                   .where(eq(schema.dataSources.id, row.entityId));
+                operationPerformed = true;
+              } else if (row.entityType === "UI_WORKSPACE") {
+                await tx
+                  .delete(schema.uiWorkspaces)
+                  .where(eq(schema.uiWorkspaces.id, row.entityId));
                 operationPerformed = true;
               } else if (row.entityType === "INTEGRATION_STITCH") {
                 await tx
@@ -184,7 +208,72 @@ export class RegistryReplicationService implements OnModuleInit {
         );
       }
 
-      // Mark outbox as success
+      // --- Trigger schema provisioning if an INTEGRATION_STITCH was replicated ---
+      // This MUST happen before marking the outbox as SUCCESS so that if provisioning fails,
+      // the entire message is retried. Both replication and provisioning are idempotent.
+      if (row.entityType === "INTEGRATION_STITCH" && row.action === "UPSERT") {
+        const stitch = row.payload as {
+          srcDataSourceId: string;
+          destDataSourceId: string;
+        };
+
+        // Get appNames and metadata for the connections from the local replica to compute schema names
+        const dataSources = await tenantDb
+          .select({
+            id: schema.dataSources.id,
+            appName: schema.dataSources.appName,
+            metadata: schema.dataSources.metadata,
+          })
+          .from(schema.dataSources)
+          .where(
+            inArray(schema.dataSources.id, [
+              stitch.srcDataSourceId,
+              stitch.destDataSourceId,
+            ]),
+          );
+
+        // Ensure both stitch data sources are present before provisioning
+        const dataSourceIds = new Set(dataSources.map((ds) => ds.id));
+        if (
+          !dataSourceIds.has(stitch.srcDataSourceId) ||
+          !dataSourceIds.has(stitch.destDataSourceId)
+        ) {
+          throw new Error(
+            `Stitch data sources not yet replicated: srcDataSourceId=${stitch.srcDataSourceId}, destDataSourceId=${stitch.destDataSourceId}. Retrying.`,
+          );
+        }
+
+        for (const ds of dataSources) {
+          const schemaName = getWorkspaceSchemaName(ds.id, ds.appName);
+
+          // Pass context explicitly to bypass the O(N) hash-matching loop in SqlDatabaseManager
+          const rawAppProfile =
+            ds.metadata &&
+            typeof ds.metadata === "object" &&
+            "appProfile" in ds.metadata
+              ? (ds.metadata.appProfile as string)
+              : "";
+          const appProfile =
+            typeof rawAppProfile === "string" && rawAppProfile.trim() !== ""
+              ? rawAppProfile.trim()
+              : "standard";
+
+          await this.dbManager.applyPlan(
+            row.tenantId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+            {
+              appName: ds.appName,
+              appProfile,
+            },
+          );
+          this.logger.debug(
+            `Provisioned schema ${schemaName} to OUTBOUND_ACTIVE in tenant ${row.tenantId}`,
+          );
+        }
+      }
+
+      // Mark outbox as success ONLY after everything (including provisioning) succeeds
       await this.globalDb
         .update(globalRegistryOutbox)
         .set({ status: "SUCCESS" })

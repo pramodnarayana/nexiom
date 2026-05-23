@@ -262,38 +262,35 @@ export const salesforce = createPiece({
                     accessToken,
                 ),
                 sfFetch<{ records: Array<{ SubscriberPackageName: string }> }>(
-                    `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${encodeURIComponent('SELECT SubscriberPackageName FROM InstalledSubscriberPackage')}`,
+                    `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query?q=${encodeURIComponent('SELECT SubscriberPackageName FROM InstalledSubscriberPackage')}`,
                     accessToken,
                 ),
             ]);
 
-            // Check if either probe failed — treat as an access/verification error, not "not installed"
+            // Check if either probe failed, but don't hard fail if it's just an unsupported object
+            // as some orgs do not allow querying InstalledSubscriberPackage via REST API.
             if (pkgRes.status === 'rejected') {
                 const pkgError = pkgRes.reason instanceof Error ? pkgRes.reason.message : String(pkgRes.reason);
-                console.error(`[salesforce.validateConnection] Failed to query PackageLicense: ${pkgError}`);
-                throw new Error(
-                    `Failed to verify Revenova installation: Could not query PackageLicense. ` +
-                    `This may indicate insufficient permissions or an API error. Details: ${pkgError}`
-                );
+                console.warn(`[salesforce.validateConnection] Failed to query PackageLicense: ${pkgError}`);
             }
             if (installedRes.status === 'rejected') {
                 const installedError = installedRes.reason instanceof Error ? installedRes.reason.message : String(installedRes.reason);
-                console.error(`[salesforce.validateConnection] Failed to query InstalledSubscriberPackage: ${installedError}`);
-                throw new Error(
-                    `Failed to verify Revenova installation: Could not query InstalledSubscriberPackage. ` +
-                    `This may indicate insufficient permissions or an API error. Details: ${installedError}`
-                );
+                console.warn(`[salesforce.validateConnection] Failed to query InstalledSubscriberPackage: ${installedError}`);
             }
 
             // Both probes succeeded — now check results
             const namespaces = new Set<string>();
             const packageNames = new Set<string>();
 
-            for (const r of pkgRes.value.records) {
-                if (r.NamespacePrefix) namespaces.add(r.NamespacePrefix.toLowerCase());
+            if (pkgRes.status === 'fulfilled') {
+                for (const r of pkgRes.value.records) {
+                    if (r.NamespacePrefix) namespaces.add(r.NamespacePrefix.toLowerCase());
+                }
             }
-            for (const r of installedRes.value.records) {
-                if (r.SubscriberPackageName) packageNames.add(r.SubscriberPackageName.toLowerCase());
+            if (installedRes.status === 'fulfilled') {
+                for (const r of installedRes.value.records) {
+                    if (r.SubscriberPackageName) packageNames.add(r.SubscriberPackageName.toLowerCase());
+                }
             }
 
             const hasRtmsNamespace = namespaces.has('rtms');
@@ -306,6 +303,11 @@ export const salesforce = createPiece({
             );
 
             if (!hasRtmsNamespace && !hasRevenovaPackage) {
+                if (pkgRes.status === 'rejected' || installedRes.status === 'rejected') {
+                    const msg = 'Could not verify Revenova TMS installation due to API errors or insufficient permissions. Please ensure the connected user can query PackageLicense and InstalledSubscriberPackage.';
+                    console.error(`[salesforce.validateConnection] ${msg}`);
+                    throw new Error(msg);
+                }
                 const msg =
                     `Connection rejected: Revenova TMS is not installed in this Salesforce organization. ` +
                     `Detected namespaces: [${[...namespaces].join(', ') || 'none'}]. ` +

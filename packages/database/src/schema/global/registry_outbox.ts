@@ -17,6 +17,7 @@ export const registryOutboxActionEnum = pgEnum('registry_outbox_action_enum', [
 
 export const registryOutboxEntityEnum = pgEnum('registry_outbox_entity_enum', [
     'APP_CONNECTION',
+    'UI_WORKSPACE',
     'INTEGRATION_STITCH',
     'FIELD_MAPPING',
 ]);

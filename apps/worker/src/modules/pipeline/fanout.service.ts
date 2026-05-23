@@ -510,17 +510,29 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               )
               .limit(1);
             if (targetReplica.length > 0) {
-              destState = targetReplica[0].data as Record<string, unknown>;
+              const state = targetReplica[0].data as Record<string, unknown>;
+              destState = state;
+              // Try to find SyncToken at root or nested under an entity key (e.g. { Vendor: { SyncToken: "1" } })
+              let debugSyncToken = (state as { SyncToken?: string })?.SyncToken;
+              if (!debugSyncToken) {
+                const entityKey = Object.keys(state).find(
+                  (k) =>
+                    k !== "time" &&
+                    typeof state[k] === "object" &&
+                    state[k] !== null,
+                );
+                if (entityKey)
+                  debugSyncToken = (state[entityKey] as { SyncToken?: string })
+                    ?.SyncToken;
+              }
               this.logger.log(
                 {
                   event: "l4.debug.dest_state_found",
                   traceId,
                   destEntityId,
-                  syncToken:
-                    (destState as { SyncToken?: string })?.SyncToken ??
-                    "not_found",
+                  syncToken: debugSyncToken ?? "not_found",
                 },
-                `[DEBUG] destState loaded — SyncToken=${(destState as { SyncToken?: string })?.SyncToken ?? "not_found"}`,
+                `[DEBUG] destState loaded — SyncToken=${debugSyncToken ?? "not_found"}`,
               );
             } else {
               this.logger.warn(

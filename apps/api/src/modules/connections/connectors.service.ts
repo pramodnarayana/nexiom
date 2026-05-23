@@ -463,16 +463,22 @@ export class ConnectorsService {
             // caller's identifiers but not the other.
             let existingFailed: { id: string } | undefined;
 
-            if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+            if (pgErr.constraint === 'ds_tenant_app_display_name_lower_idx') {
               // displayName is the blocking duplicate — query only by displayName.
+              // Only consider FAILED rows for re-provisioning.
               const rows = await tx
-                .select({ id: dataSources.id })
+                .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
+                .innerJoin(
+                  credentials,
+                  eq(credentials.dataSourceId, dataSources.id),
+                )
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
                     eq(dataSources.appName, providerName),
                     sql`lower(${dataSources.displayName}) = lower(${displayName})`,
+                    eq(credentials.status, AppConnectionStatus.FAILED),
                   ),
                 )
                 .limit(1);
@@ -502,18 +508,24 @@ export class ConnectorsService {
                 }
               }
             } else if (
-              pgErr.constraint === 'tenant_external_id_unique_idx' &&
+              pgErr.constraint === 'ds_tenant_external_id_idx' &&
               externalId
             ) {
               // externalId is the blocking duplicate — query only by externalId.
+              // Only consider FAILED rows for re-provisioning.
               const rows = await tx
-                .select({ id: dataSources.id })
+                .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
+                .innerJoin(
+                  credentials,
+                  eq(credentials.dataSourceId, dataSources.id),
+                )
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
                     eq(dataSources.appName, providerName),
                     eq(dataSources.externalId, externalId),
+                    eq(credentials.status, AppConnectionStatus.FAILED),
                   ),
                 )
                 .limit(1);
@@ -552,6 +564,8 @@ export class ConnectorsService {
               const [updated] = await tx
                 .update(dataSources)
                 .set({
+                  displayName,
+                  externalId,
                   metadata,
                   envType: envType ?? 'PRODUCTION',
                   // Re-persist schemaName on recovery — guards against rows that
@@ -844,13 +858,13 @@ export class ConnectorsService {
     externalId: string,
   ): void {
     if (pgErr?.code !== PG_UNIQUE_VIOLATION) return;
-    if (pgErr.constraint === 'tenant_app_display_name_lower_idx') {
+    if (pgErr.constraint === 'ds_tenant_app_display_name_lower_idx') {
       throw new HttpException(
         `A connection named "${displayName}" already exists for this provider. Please choose a unique name.`,
         409,
       );
     }
-    if (pgErr.constraint === 'tenant_external_id_unique_idx') {
+    if (pgErr.constraint === 'ds_tenant_external_id_idx') {
       throw new HttpException(
         `A connection with identifier "${externalId}" already exists in this organization. Please choose a unique name.`,
         409,

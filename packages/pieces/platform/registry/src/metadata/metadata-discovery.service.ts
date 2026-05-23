@@ -80,21 +80,43 @@ export class MetadataDiscoveryService implements OnModuleInit {
 
   private async cleanupLegacyCacheKeys(): Promise<void> {
     const migrationFlag = 'migration:meta_cache_cleanup_datasource_id';
-    const alreadyRun = await this.redis.get(migrationFlag);
-    if (alreadyRun) return;
+    const token = `${Date.now()}-${Math.random()}`;
 
-    this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
-    let cursor = '0';
-    do {
-      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
-      cursor = nextCursor;
-      if (keys.length > 0) {
-        await this.redis.del(...keys);
-      }
-    } while (cursor !== '0');
-    
-    await this.redis.set(migrationFlag, '1');
-    this.logger.log('Legacy metadata cache keys cleared.');
+    // Atomically claim the migration with a 60-second timeout using a unique token
+    const claimed = await this.redis.set(migrationFlag, token, 'EX', 60, 'NX');
+    if (!claimed) {
+      // Another instance is running or has completed the migration
+      return;
+    }
+
+    // Lua script for compare-and-delete
+    const compareAndDelete = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
+
+    try {
+      this.logger.log('One-time init: clearing legacy connectionId-based cache keys (meta:*)');
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'meta:*', 'COUNT', 100);
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+      } while (cursor !== '0');
+
+      // Persist the flag without expiration to mark completion
+      await this.redis.set(migrationFlag, '1');
+      this.logger.log('Legacy metadata cache keys cleared.');
+    } catch (err) {
+      // On failure, only delete the claim if we still own it
+      await this.redis.eval(compareAndDelete, 1, migrationFlag, token);
+      throw err;
+    }
   }
 
   async describeObjects(

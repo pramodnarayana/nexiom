@@ -1043,8 +1043,8 @@ export class DatabaseManager {
           encryptionKey,
         );
 
-        // Write app_connection into the TENANT DB (not global)
-        const [inserted] = await tenantDb
+        // Write app_connection into the GLOBAL DB
+        const [inserted] = await globalDb
           .insert(dbSchema.dataSources)
           .values({
             id: fixture.id,
@@ -1072,19 +1072,25 @@ export class DatabaseManager {
           );
         }
 
-        await tenantDb
+        // Set expiresAt to 1 year from now so TokenManagerService/ConnectorsService treat this as live
+        const futureExpiresAt = new Date();
+        futureExpiresAt.setFullYear(futureExpiresAt.getFullYear() + 1);
+
+        await globalDb
           .insert(dbSchema.credentials)
           .values({
             dataSourceId: inserted.id,
             authType: 'OAUTH2',
             value: encryptedValue,
             status: 'INACTIVE',
+            expiresAt: futureExpiresAt,
           })
           .onConflictDoUpdate({
             target: [dbSchema.credentials.dataSourceId],
             set: {
               value: encryptedValue,
               authType: 'OAUTH2',
+              expiresAt: futureExpiresAt,
               status: sql`CASE
                 WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
                 THEN ${dbSchema.credentials.status}
@@ -1105,11 +1111,34 @@ export class DatabaseManager {
           SchemaPlan.OUTBOUND_ACTIVE,
         );
 
-        // Mark connection ACTIVE in the tenant DB
+        // Activate credential globally
+        await globalDb
+          .update(dbSchema.credentials)
+          .set({ status: 'ACTIVE' })
+          .where(eq(dbSchema.credentials.dataSourceId, inserted.id));
+
+        // Mark connection ACTIVE in the tenant DB (upserting replica)
         await tenantDb
-          .update(dbSchema.dataSources)
-          .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-          .where(eq(dbSchema.dataSources.id, inserted.id));
+          .insert(dbSchema.dataSources)
+          .values({
+            id: inserted.id,
+            tenantId: inserted.tenantId,
+            appName: inserted.appName,
+            externalId: inserted.externalId,
+            displayName: inserted.displayName,
+            metadata: inserted.metadata,
+            schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+          })
+          .onConflictDoUpdate({
+            target: [dbSchema.dataSources.id],
+            set: {
+              appName: inserted.appName,
+              externalId: inserted.externalId,
+              displayName: inserted.displayName,
+              metadata: inserted.metadata,
+              schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+            },
+          });
 
         console.log(
           `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,

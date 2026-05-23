@@ -1,0 +1,16 @@
+[
+  { "src": "displayName", "dest": "DisplayName" },
+  { "src": "displayName", "dest": "CompanyName" },
+  { "src": "billingStreet", "dest": "BillAddr.Line1" },
+  { "src": "billingCity", "dest": "BillAddr.City" },
+  { "src": "billingState", "dest": "BillAddr.CountrySubDivisionCode" },
+  { "src": "billingPostalCode", "dest": "BillAddr.PostalCode" },
+  { "src": "billingCountry", "dest": "BillAddr.Country" },
+  { "src": "billingStreet", "dest": "ShipAddr.Line1" },
+  { "src": "billingCity", "dest": "ShipAddr.City" },
+  { "src": "billingState", "dest": "ShipAddr.CountrySubDivisionCode" },
+  { "src": "billingPostalCode", "dest": "ShipAddr.PostalCode" },
+  { "src": "billingCountry", "dest": "ShipAddr.Country" },
+  { "src": "phone", "dest": "PrimaryPhone.FreeFormNumber" },
+  { "src": "fax", "dest": "Fax.FreeFormNumber" }
+]
