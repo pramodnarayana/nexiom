@@ -30,7 +30,7 @@ describe('DebeziumUnwrappedEvent', () => {
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    const errorProperties = errors.map(e => e.property);
+    const errorProperties = errors.map((e) => e.property);
     expect(errorProperties).toContain('trace_id');
   });
 
@@ -47,7 +47,7 @@ describe('DebeziumUnwrappedEvent', () => {
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    const errorProperties = errors.map(e => e.property);
+    const errorProperties = errors.map((e) => e.property);
     expect(errorProperties).toContain('__table');
   });
 
@@ -64,7 +64,7 @@ describe('DebeziumUnwrappedEvent', () => {
 
     const errors = await validate(event);
     expect(errors.length).toBeGreaterThan(0);
-    const errorProperties = errors.map(e => e.property);
+    const errorProperties = errors.map((e) => e.property);
     expect(errorProperties).toContain('__op');
   });
 });

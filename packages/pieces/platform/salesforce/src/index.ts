@@ -303,6 +303,11 @@ export const salesforce = createPiece({
             );
 
             if (!hasRtmsNamespace && !hasRevenovaPackage) {
+                if (pkgRes.status === 'rejected' || installedRes.status === 'rejected') {
+                    const msg = 'Could not verify Revenova TMS installation due to API errors or insufficient permissions. Please ensure the connected user can query PackageLicense and InstalledSubscriberPackage.';
+                    console.error(`[salesforce.validateConnection] ${msg}`);
+                    throw new Error(msg);
+                }
                 const msg =
                     `Connection rejected: Revenova TMS is not installed in this Salesforce organization. ` +
                     `Detected namespaces: [${[...namespaces].join(', ') || 'none'}]. ` +

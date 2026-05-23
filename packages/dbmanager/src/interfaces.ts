@@ -63,5 +63,5 @@ export interface DatabaseManager {
     /**
      * Migrates an existing tenant schema to OUTBOUND_ACTIVE state.
      */
-    migrateToOutboundActive?(tenantId: string, schemaName: string): Promise<void>;
+    migrateToOutboundActive?(tenantId: string, schemaName: string, context?: { appName: string, appProfile: string }): Promise<void>;
 }

@@ -1111,11 +1111,34 @@ export class DatabaseManager {
           SchemaPlan.OUTBOUND_ACTIVE,
         );
 
-        // Mark connection ACTIVE in the tenant DB
+        // Activate credential globally
+        await globalDb
+          .update(dbSchema.credentials)
+          .set({ status: 'ACTIVE' })
+          .where(eq(dbSchema.credentials.dataSourceId, inserted.id));
+
+        // Mark connection ACTIVE in the tenant DB (upserting replica)
         await tenantDb
-          .update(dbSchema.dataSources)
-          .set({ schemaPlan: SchemaPlan.OUTBOUND_ACTIVE })
-          .where(eq(dbSchema.dataSources.id, inserted.id));
+          .insert(dbSchema.dataSources)
+          .values({
+            id: inserted.id,
+            tenantId: inserted.tenantId,
+            appName: inserted.appName,
+            externalId: inserted.externalId,
+            displayName: inserted.displayName,
+            metadata: inserted.metadata,
+            schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+          })
+          .onConflictDoUpdate({
+            target: [dbSchema.dataSources.id],
+            set: {
+              appName: inserted.appName,
+              externalId: inserted.externalId,
+              displayName: inserted.displayName,
+              metadata: inserted.metadata,
+              schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+            },
+          });
 
         console.log(
           `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,

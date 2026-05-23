@@ -100,7 +100,13 @@ function parseArgs() {
     else if (arg === "--canonical" || arg === "-c") options.canonical = args[++i];
     else if (arg === "--rules" || arg === "-r") options.rules = args[++i];
     else if (arg === "--rules-file" || arg === "-f") options.rulesFile = args[++i];
-    else if (arg === "--interval" || arg === "-i") options.interval = parseInt(args[++i], 10);
+    else if (arg === "--interval" || arg === "-i") {
+      options.interval = parseInt(args[++i], 10);
+      if (isNaN(options.interval) || options.interval <= 0) {
+        console.error("\x1b[31mError: --interval must be a positive integer.\x1b[0m");
+        process.exit(1);
+      }
+    }
     else if (arg === "--workspace" || arg === "-w") options.workspace = args[++i];
     else if (arg === "--help" || arg === "-h") {
       printUsage();
@@ -147,6 +153,11 @@ async function run() {
     console.error("\x1b[31mError: Missing required parameters.\x1b[0m");
     printUsage();
     await listConnections();
+    process.exit(1);
+  }
+
+  if (isNaN(opts.interval) || opts.interval <= 0) {
+    console.error("\x1b[31mError: --interval must be a positive integer.\x1b[0m");
     process.exit(1);
   }
 

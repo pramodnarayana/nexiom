@@ -51,12 +51,28 @@ for (const conn of connections) {
     // 1. Ensure schema exists
     await client.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
 
+    // 1.5. Rename connection_id to data_source_id idempotently for existing schemas
+    for (const table of ['inbound_gateway', 'inbound_outbox', 'active_sync_locks', 'replica_entity', 'sync_cursor', 'replica_outbox', 'normalized_outbox']) {
+      await client.query(`
+        DO $$ BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = '${schemaName}'
+               AND table_name   = '${table}'
+               AND column_name  = 'connection_id'
+          ) THEN
+            EXECUTE 'ALTER TABLE "' || '${schemaName}' || '"."' || '${table}' || '" RENAME COLUMN connection_id TO data_source_id';
+          END IF;
+        END $$;
+      `);
+    }
+
     // 2. L1 — inbound_gateway
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_gateway (
         id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
         trace_id      UUID         NOT NULL UNIQUE,
-        connection_id UUID         NOT NULL,
+        data_source_id UUID         NOT NULL,
         object_type   VARCHAR(100),
         request       JSONB        NOT NULL,
         response      JSONB,
@@ -67,7 +83,7 @@ for (const conn of connections) {
         created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
       )
     `);
-    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_l1_ext_id ON "${schemaName}".inbound_gateway (connection_id, ext_req_id) WHERE ext_req_id IS NOT NULL`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_l1_ext_id ON "${schemaName}".inbound_gateway (data_source_id, ext_req_id) WHERE ext_req_id IS NOT NULL`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_l1_status ON "${schemaName}".inbound_gateway (status)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_l1_request_gin ON "${schemaName}".inbound_gateway USING gin (request)`);
     await client.query(`ALTER TABLE "${schemaName}".inbound_gateway ADD COLUMN IF NOT EXISTS response JSONB`);
@@ -101,7 +117,7 @@ for (const conn of connections) {
       CREATE TABLE IF NOT EXISTS "${schemaName}".inbound_outbox (
         id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
         trace_id      UUID         NOT NULL,
-        connection_id UUID         NOT NULL,
+        data_source_id UUID         NOT NULL,
         schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
         status        TEXT         NOT NULL DEFAULT 'PENDING'
                       CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
@@ -112,18 +128,18 @@ for (const conn of connections) {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_inbound_outbox_claim ON "${schemaName}".inbound_outbox (status, next_retry_at ASC) WHERE status IN ('PENDING', 'PROCESSING', 'RETRY')`);
-    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".inbound_outbox ADD CONSTRAINT idx_inbound_outbox_trace UNIQUE (trace_id, connection_id); EXCEPTION WHEN others THEN NULL; END $$`);
+    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".inbound_outbox ADD CONSTRAINT idx_inbound_outbox_trace UNIQUE (trace_id, data_source_id); EXCEPTION WHEN others THEN NULL; END $$`);
 
     // 4. L1 — active_sync_locks
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}".active_sync_locks (
         id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-        connection_id      UUID         NOT NULL,
+        data_source_id      UUID         NOT NULL,
         entity_id          VARCHAR(255) NOT NULL,
         locked_by_trace_id UUID         NOT NULL,
         expires_at         TIMESTAMPTZ  NOT NULL,
         created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        CONSTRAINT uq_sync_lock UNIQUE (connection_id, entity_id)
+        CONSTRAINT uq_sync_lock UNIQUE (data_source_id, entity_id)
       )
     `);
 
@@ -131,7 +147,7 @@ for (const conn of connections) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
         id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-        connection_id UUID         NOT NULL,
+        data_source_id UUID         NOT NULL,
         trace_id      UUID         NOT NULL,
         entity_id     VARCHAR(255) NOT NULL,
         entity_type   VARCHAR(100) NOT NULL,
@@ -139,7 +155,7 @@ for (const conn of connections) {
         version       INTEGER      NOT NULL DEFAULT 1,
         created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
         updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        CONSTRAINT uq_l2_entity UNIQUE (connection_id, entity_type, entity_id)
+        CONSTRAINT uq_l2_entity UNIQUE (data_source_id, entity_type, entity_id)
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_l2_trace ON "${schemaName}".replica_entity (trace_id)`);
@@ -148,11 +164,11 @@ for (const conn of connections) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "${schemaName}".sync_cursor (
         id                  UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-        connection_id       UUID         NOT NULL,
+        data_source_id       UUID         NOT NULL,
         entity_type         VARCHAR(100) NOT NULL,
         last_sync_timestamp VARCHAR(255) NOT NULL,
         updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        CONSTRAINT uq_cursor UNIQUE (connection_id, entity_type)
+        CONSTRAINT uq_cursor UNIQUE (data_source_id, entity_type)
       )
     `);
 
@@ -160,7 +176,7 @@ for (const conn of connections) {
       CREATE TABLE IF NOT EXISTS "${schemaName}".replica_outbox (
         id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
         trace_id      UUID         NOT NULL,
-        connection_id UUID         NOT NULL,
+        data_source_id UUID         NOT NULL,
         schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
         status        TEXT         NOT NULL DEFAULT 'PENDING'
                       CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
@@ -171,7 +187,7 @@ for (const conn of connections) {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim ON "${schemaName}".replica_outbox (status, next_retry_at ASC) WHERE status IN ('PENDING', 'PROCESSING', 'RETRY')`);
-    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".replica_outbox ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, connection_id); EXCEPTION WHEN others THEN NULL; END $$`);
+    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".replica_outbox ADD CONSTRAINT idx_replica_outbox_trace UNIQUE (trace_id, data_source_id); EXCEPTION WHEN others THEN NULL; END $$`);
 
     // 6. L3 — normalized_entity + normalized_outbox
     await client.query(`
@@ -194,7 +210,7 @@ for (const conn of connections) {
       CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_outbox (
         id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
         trace_id      UUID         NOT NULL,
-        connection_id UUID         NOT NULL,
+        data_source_id UUID         NOT NULL,
         schema_name   VARCHAR(128) NOT NULL DEFAULT current_schema(),
         status        TEXT         NOT NULL DEFAULT 'PENDING'
                       CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
@@ -206,7 +222,7 @@ for (const conn of connections) {
     `);
     await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".normalized_outbox ADD COLUMN IF NOT EXISTS schema_name VARCHAR(128) NOT NULL DEFAULT current_schema(); EXCEPTION WHEN others THEN NULL; END $$`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_normalized_outbox_claim ON "${schemaName}".normalized_outbox (status, next_retry_at ASC) WHERE status IN ('PENDING', 'PROCESSING', 'RETRY')`);
-    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".normalized_outbox ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, connection_id); EXCEPTION WHEN others THEN NULL; END $$`);
+    await client.query(`DO $$ BEGIN ALTER TABLE "${schemaName}".normalized_outbox ADD CONSTRAINT idx_normalized_outbox_trace UNIQUE (trace_id, data_source_id); EXCEPTION WHEN others THEN NULL; END $$`);
 
     // 7. L6 — global_entity_map (GEM — belongs in tenant schema)
     await client.query(`

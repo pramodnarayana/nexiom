@@ -112,7 +112,26 @@ export class SqlDatabaseManager {
         await this.provisionOutboundTables(schemaName);
     }
 
+    private async renameConnectionIdToDataSourceId(schemaName: string, tables: string[]): Promise<void> {
+        for (const table of tables) {
+            await this.db.$client.query(`
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                         WHERE table_schema = '${schemaName}'
+                           AND table_name   = '${table}'
+                           AND column_name  = 'connection_id'
+                    ) THEN
+                        EXECUTE 'ALTER TABLE "' || '${schemaName}' || '"."' || '${table}' || '" RENAME COLUMN connection_id TO data_source_id';
+                    END IF;
+                END $$;
+            `);
+        }
+    }
+
     private async provisionGatewayTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['inbound_gateway', 'inbound_outbox', 'active_sync_locks']);
+
         // ── LAYER 1 — INBOUND GATEWAY ────────────────────────────────────────
         // Must match pipeline.ts buildTenantSchema > inboundGateway exactly.
         // Uses TEXT + CHECK instead of public.pipeline_status_enum so that
@@ -293,6 +312,8 @@ export class SqlDatabaseManager {
     }
 
     private async provisionReplicaTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['replica_entity', 'sync_cursor', 'replica_outbox']);
+
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".replica_entity (
             id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -362,6 +383,8 @@ export class SqlDatabaseManager {
     }
 
     private async provisionNormalizeTables(schemaName: string): Promise<void> {
+        await this.renameConnectionIdToDataSourceId(schemaName, ['normalized_outbox']);
+
         await this.db.$client.query(`
         CREATE TABLE IF NOT EXISTS "${schemaName}".normalized_entity (
             id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

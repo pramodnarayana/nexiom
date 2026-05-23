@@ -469,7 +469,10 @@ export class ConnectorsService {
               const rows = await tx
                 .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
-                .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+                .innerJoin(
+                  credentials,
+                  eq(credentials.dataSourceId, dataSources.id),
+                )
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
@@ -513,7 +516,10 @@ export class ConnectorsService {
               const rows = await tx
                 .select({ id: dataSources.id, status: credentials.status })
                 .from(dataSources)
-                .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
+                .innerJoin(
+                  credentials,
+                  eq(credentials.dataSourceId, dataSources.id),
+                )
                 .where(
                   and(
                     eq(dataSources.tenantId, tenantId),
@@ -558,6 +564,8 @@ export class ConnectorsService {
               const [updated] = await tx
                 .update(dataSources)
                 .set({
+                  displayName,
+                  externalId,
                   metadata,
                   envType: envType ?? 'PRODUCTION',
                   // Re-persist schemaName on recovery — guards against rows that

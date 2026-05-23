@@ -233,10 +233,13 @@ export class RegistryReplicationService implements OnModuleInit {
           );
 
         // Ensure both stitch data sources are present before provisioning
-        const dataSourceIds = new Set(dataSources.map(ds => ds.id));
-        if (!dataSourceIds.has(stitch.srcDataSourceId) || !dataSourceIds.has(stitch.destDataSourceId)) {
+        const dataSourceIds = new Set(dataSources.map((ds) => ds.id));
+        if (
+          !dataSourceIds.has(stitch.srcDataSourceId) ||
+          !dataSourceIds.has(stitch.destDataSourceId)
+        ) {
           throw new Error(
-            `Stitch data sources not yet replicated: srcDataSourceId=${stitch.srcDataSourceId}, destDataSourceId=${stitch.destDataSourceId}. Retrying.`
+            `Stitch data sources not yet replicated: srcDataSourceId=${stitch.srcDataSourceId}, destDataSourceId=${stitch.destDataSourceId}. Retrying.`,
           );
         }
 
@@ -250,9 +253,10 @@ export class RegistryReplicationService implements OnModuleInit {
             "appProfile" in ds.metadata
               ? (ds.metadata.appProfile as string)
               : "";
-          const appProfile = typeof rawAppProfile === "string" && rawAppProfile.trim() !== ""
-            ? rawAppProfile.trim()
-            : "standard";
+          const appProfile =
+            typeof rawAppProfile === "string" && rawAppProfile.trim() !== ""
+              ? rawAppProfile.trim()
+              : "standard";
 
           await this.dbManager.applyPlan(
             row.tenantId,
