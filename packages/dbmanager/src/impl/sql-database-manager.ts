@@ -113,7 +113,16 @@ export class SqlDatabaseManager {
     }
 
     private async renameConnectionIdToDataSourceId(schemaName: string, tables: string[]): Promise<void> {
+        const SAFE_TABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
         for (const table of tables) {
+            // Validate table name to prevent SQL injection
+            if (!SAFE_TABLE_NAME_RE.test(table)) {
+                throw new Error(
+                    `Invalid table name: ${table} — expected format: must start with letter or underscore, followed by letters, digits, or underscores only.`
+                );
+            }
+
             await this.db.$client.query(`
                 DO $$ BEGIN
                     IF EXISTS (
@@ -122,7 +131,7 @@ export class SqlDatabaseManager {
                            AND table_name   = '${table}'
                            AND column_name  = 'connection_id'
                     ) THEN
-                        EXECUTE 'ALTER TABLE "' || '${schemaName}' || '"."' || '${table}' || '" RENAME COLUMN connection_id TO data_source_id';
+                        EXECUTE format('ALTER TABLE %I.%I RENAME COLUMN connection_id TO data_source_id', '${schemaName}', '${table}');
                     END IF;
                 END $$;
             `);

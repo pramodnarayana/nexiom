@@ -156,11 +156,6 @@ async function run() {
     process.exit(1);
   }
 
-  if (isNaN(opts.interval) || opts.interval <= 0) {
-    console.error("\x1b[31mError: --interval must be a positive integer.\x1b[0m");
-    process.exit(1);
-  }
-
   // Parse mapping rules
   let mappingRules = defaultMapping;
   if (opts.rulesFile) {
