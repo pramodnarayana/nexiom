@@ -202,6 +202,7 @@ export class DataExplorerService {
     const srcProfile = await this.storageResolver.resolveStorageProfile(
       stitch.srcDataSourceId,
     );
+    assertValidSchemaName(srcProfile.schemaName);
     const srcDb = await this.dbManager.getTenantDb(srcProfile.tenantId);
     const srcSchema = buildTenantSchema(srcProfile.schemaName);
 
@@ -209,6 +210,7 @@ export class DataExplorerService {
     const destProfile = await this.storageResolver.resolveStorageProfile(
       stitch.destDataSourceId,
     );
+    assertValidSchemaName(destProfile.schemaName);
     const destDb = await this.dbManager.getTenantDb(destProfile.tenantId);
     const destSchema = buildTenantSchema(destProfile.schemaName);
 
@@ -256,27 +258,10 @@ export class DataExplorerService {
     const l3Row = l3[0] || null;
 
     // Attach trace statuses from sync_log so the UI panel shows the correct badges
-    if (l1Row)
-      await this.attachTraceStatuses(
-        srcDb,
-        [l1Row],
-        stitchId,
-        srcSchema.syncLog,
-      );
-    if (l2Row)
-      await this.attachTraceStatuses(
-        srcDb,
-        [l2Row],
-        stitchId,
-        srcSchema.syncLog,
-      );
-    if (l3Row)
-      await this.attachTraceStatuses(
-        srcDb,
-        [l3Row],
-        stitchId,
-        srcSchema.syncLog,
-      );
+    const rows = [l1Row, l2Row, l3Row].filter(Boolean);
+    if (rows.length > 0) {
+      await this.attachTraceStatuses(srcDb, rows, stitchId, srcSchema.syncLog);
+    }
 
     return {
       traceId,
@@ -528,7 +513,12 @@ export class DataExplorerService {
       const validTraces = tenantDb
         .select({ traceId: schema.syncLog.traceId })
         .from(schema.syncLog)
-        .where(eq(schema.syncLog.routeId, stitchId));
+        .where(
+          and(
+            eq(schema.syncLog.routeId, stitchId),
+            ne(schema.syncLog.status, 'SKIPPED'),
+          ),
+        );
       const rows = await tenantDb
         .selectDistinct({ type: schema.inboundGateway.objectType })
         .from(schema.inboundGateway)
@@ -539,7 +529,12 @@ export class DataExplorerService {
       const validTraces = tenantDb
         .select({ traceId: schema.syncLog.traceId })
         .from(schema.syncLog)
-        .where(eq(schema.syncLog.routeId, stitchId));
+        .where(
+          and(
+            eq(schema.syncLog.routeId, stitchId),
+            ne(schema.syncLog.status, 'SKIPPED'),
+          ),
+        );
       const rows = await tenantDb
         .selectDistinct({ type: schema.replicaEntity.entityType })
         .from(schema.replicaEntity)
@@ -550,7 +545,12 @@ export class DataExplorerService {
       const validTraces = tenantDb
         .select({ traceId: schema.syncLog.traceId })
         .from(schema.syncLog)
-        .where(eq(schema.syncLog.routeId, stitchId));
+        .where(
+          and(
+            eq(schema.syncLog.routeId, stitchId),
+            ne(schema.syncLog.status, 'SKIPPED'),
+          ),
+        );
       const rows = await tenantDb
         .selectDistinct({ type: schema.normalizedEntity.canonicalType })
         .from(schema.normalizedEntity)

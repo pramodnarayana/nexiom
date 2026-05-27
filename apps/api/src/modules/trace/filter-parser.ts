@@ -82,12 +82,20 @@ export function buildDrizzleFilter(
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const jsonbCol = table[baseColName] as Column | undefined;
     if (!jsonbCol) return undefined;
-    const pathArgs = parts
-      .slice(1)
-      .map((p) => `'${p}'`)
-      .join(', ');
+
+    // Validate path segments to prevent SQL injection
+    const pathSegments = parts.slice(1);
+    const allowedPathRegex = /^[A-Za-z0-9_-]+$/;
+    for (const segment of pathSegments) {
+      if (!allowedPathRegex.test(segment)) {
+        return undefined; // Reject invalid path segments
+      }
+    }
+
+    // Use parameterized SQL fragments for safe ARRAY construction
+    const pathFragments = pathSegments.map((p) => sql`${p}`);
     // We cast the jsonb extraction to text so we can compare it easily
-    fieldExpr = sql`${jsonbCol}#>>ARRAY[${sql.raw(pathArgs)}]`;
+    fieldExpr = sql`${jsonbCol}#>>ARRAY[${sql.join(pathFragments, sql`, `)}]`;
   } else {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const col = table[baseColName] as Column | undefined;

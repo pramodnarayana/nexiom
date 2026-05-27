@@ -28,6 +28,10 @@ const OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: 'in', label: 'In List' },
 ];
 
+function isFilterGroup(node: FilterRule | FilterGroup): node is FilterGroup {
+  return 'logic' in node;
+}
+
 export function QueryBuilder({ 
   filters, 
   columns,
@@ -51,8 +55,12 @@ export function QueryBuilder({
 
   const handleUpdateRule = (index: number, rule: Partial<FilterRule>) => {
     const newRules = [...filters.rules];
-    newRules[index] = { ...(newRules[index] as FilterRule), ...rule };
-    onChange({ ...filters, rules: newRules });
+    const currentRule = newRules[index];
+    // Only update if it's a FilterRule, preserve FilterGroup structure
+    if (currentRule && !isFilterGroup(currentRule)) {
+      newRules[index] = { ...currentRule, ...rule };
+      onChange({ ...filters, rules: newRules });
+    }
   };
 
   const handleRemoveRule = (index: number) => {
@@ -65,12 +73,16 @@ export function QueryBuilder({
     <div className="bg-muted/10 border border-border p-3 rounded-lg mb-4">
       <div className="space-y-2">
         {filters.rules.map((rule, i) => {
-          const r = rule as FilterRule;
+          // Skip nested FilterGroup nodes - only render FilterRule entries
+          if (isFilterGroup(rule)) {
+            return null;
+          }
+          const r = rule;
           return (
             <div key={i} className="flex items-center gap-2">
               {columns && columns.length > 0 ? (
                 <div className="w-[250px]">
-                  <Combobox 
+                  <Combobox
                     options={columnOptions}
                     value={r.field}
                     onValueChange={(val) => handleUpdateRule(i, { field: val })}
@@ -79,23 +91,23 @@ export function QueryBuilder({
                   />
                 </div>
               ) : (
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Field (e.g. status, amount)"
                   className="text-sm bg-background border border-border rounded px-3 py-1.5 flex-1 max-w-[250px]"
                   value={r.field}
                   onChange={(e) => handleUpdateRule(i, { field: e.target.value })}
                 />
               )}
-              <select 
+              <select
                 className="text-sm bg-background border border-border rounded px-3 py-1.5 min-w-[120px]"
                 value={r.operator}
                 onChange={(e) => handleUpdateRule(i, { operator: e.target.value as FilterOperator })}
               >
                 {OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
               </select>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Value..."
                 className="text-sm bg-background border border-border rounded px-3 py-1.5 flex-1 max-w-[250px]"
                 value={String(r.value ?? '')}

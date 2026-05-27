@@ -35,7 +35,7 @@ export class DataExplorerController {
   }
 
   @Get(':tab')
-  listByTab(
+  async listByTab(
     @AuthContext() ctx: RequestAuthContext,
     @Param('stitchId', ParseUUIDPipe) stitchId: string,
     @Param('tab') tab: string,
@@ -54,9 +54,12 @@ export class DataExplorerController {
       undefined;
     if (filters) {
       try {
-        parsedFilters = JSON.parse(
-          filters,
-        ) as import('./filter-parser.js').FilterGroup;
+        const parsed = JSON.parse(filters);
+        const { isFilterGroup } = await import('./filter-parser.js');
+        if (!isFilterGroup(parsed)) {
+          throw new BadRequestException('Invalid filters format');
+        }
+        parsedFilters = parsed;
       } catch (_e) {
         throw new BadRequestException('Invalid filters format');
       }
@@ -115,7 +118,7 @@ export class DataExplorerController {
     return this.explorer.getTrace(orgId, stitchId, traceId, workspaceId);
   }
 
-  @Get('stitches/:stitchId/explorer/:tab/objects')
+  @Get(':tab/objects')
   async listObjectsByStitch(
     @AuthContext() ctx: RequestAuthContext,
     @Param('stitchId', ParseUUIDPipe) stitchId: string,

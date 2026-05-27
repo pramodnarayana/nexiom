@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/shared/components/ui/button';
-import { X, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/shared/components/ui/dialog';
 
 export function JsonEditorModal({
   initialData,
@@ -17,6 +24,26 @@ export function JsonEditorModal({
   const [jsonString, setJsonString] = useState(() => JSON.stringify(initialData, null, 2));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Set initial focus to the editor container when opened
+    const timer = setTimeout(() => {
+      editorRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Handle Escape key to close
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleSave = async () => {
     setError(null);
@@ -40,14 +67,13 @@ export function JsonEditorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-background border border-border rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold">{title}</h3>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-4 h-4" /></Button>
-        </div>
-        
-        <div className="flex-1 p-0 overflow-hidden flex flex-col min-h-[400px] border-y border-border relative">
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+
+        <div ref={editorRef} className="flex-1 p-0 overflow-hidden flex flex-col min-h-[400px] border border-border rounded-md relative" tabIndex={-1}>
           <Editor
             height="100%"
             defaultLanguage="json"
@@ -63,16 +89,16 @@ export function JsonEditorModal({
               padding: { top: 16, bottom: 16 }
             }}
           />
-          {error && <div className="text-destructive text-sm mt-2">{error}</div>}
+          {error && <div className="text-destructive text-sm mt-2 px-2">{error}</div>}
         </div>
 
-        <div className="p-4 border-t border-border flex justify-end gap-2 bg-muted/5">
+        <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="default" onClick={handleSave} disabled={saving}>
             <Save className="w-4 h-4 mr-2" /> {saving ? 'Saving...' : 'Save Changes'}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

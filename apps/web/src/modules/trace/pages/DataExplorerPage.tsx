@@ -127,6 +127,27 @@ function safeStringify(obj: unknown): { pretty: string; compact: string } {
 const JSON_KEYS = new Set(['payload', 'headers', 'data', 'reqPayload', 'resPayload', 'request', 'response']);
 const READONLY_FIELDS = new Set(['id', 'createdAt', 'updatedAt']);
 
+function coerceValue(originalValue: unknown, stringValue: string): unknown {
+  // If original was boolean, map "true"/"false" strings
+  if (typeof originalValue === 'boolean') {
+    if (stringValue === 'true') return true;
+    if (stringValue === 'false') return false;
+    return originalValue; // Keep original if invalid
+  }
+
+  // If original was a number, parse to Number
+  if (typeof originalValue === 'number') {
+    const parsed = Number(stringValue);
+    return Number.isNaN(parsed) ? originalValue : parsed;
+  }
+
+  // For empty string, preserve as empty string
+  if (stringValue === '') return '';
+
+  // Otherwise return the string value
+  return stringValue;
+}
+
 function DataTableRow<T extends Record<string, unknown>>({ 
   row, 
   onDelete,
@@ -165,11 +186,11 @@ function DataTableRow<T extends Record<string, unknown>>({
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
-            {Boolean((rowData as Record<string, unknown>).traceId || (rowData as Record<string, unknown>).trace_id) && (
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-7 w-7 text-primary hover:bg-primary/10 shadow-sm" 
+            {Boolean((rowData as Record<string, unknown>).traceId ?? (rowData as Record<string, unknown>).trace_id) && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7 text-primary hover:bg-primary/10 shadow-sm"
                 onClick={(e) => { e.stopPropagation(); onViewTrace(rowData); }}
                 title="View Trace"
               >
@@ -189,7 +210,7 @@ function DataTableRow<T extends Record<string, unknown>>({
                   <Button variant="destructive" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(rowData); }} className="h-7 text-xs">
                     <Trash2 className="w-3 h-3 mr-1" /> Delete
                   </Button>
-                  {Boolean((rowData as Record<string, unknown>).traceId || (rowData as Record<string, unknown>).trace_id) && (
+                  {Boolean((rowData as Record<string, unknown>).traceId ?? (rowData as Record<string, unknown>).trace_id) && (
                     <Button variant="default" size="sm" onClick={(e) => { e.stopPropagation(); onViewTrace(rowData); }} className="h-7 text-xs ml-2 shadow-sm">
                       <Layers className="w-3 h-3 mr-1" /> View Trace
                     </Button>
@@ -208,9 +229,9 @@ function DataTableRow<T extends Record<string, unknown>>({
                         </div>
                       ) : (
                         <div className="bg-muted/5 rounded-md border border-border/50 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
-                          <EditableCell 
-                            initialValue={String(val ?? '')} 
-                            onSave={(newValue) => onUpdateCell(rowData, key, newValue)}
+                          <EditableCell
+                            initialValue={String(val ?? '')}
+                            onSave={(newValue) => onUpdateCell(rowData, key, coerceValue(val, newValue))}
                           />
                         </div>
                       )}
@@ -549,8 +570,9 @@ function TabPanel({
 
 
   const handleViewTrace = (row: Record<string, unknown>) => {
-    if (row.traceId) {
-      setTraceToView(String(row.traceId));
+    const traceId = row.traceId ?? row.trace_id;
+    if (traceId) {
+      setTraceToView(String(traceId));
     } else {
       alert('This record does not have a traceId.');
     }

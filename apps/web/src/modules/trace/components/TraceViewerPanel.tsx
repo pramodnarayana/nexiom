@@ -24,7 +24,7 @@ function StatusBadge({ status }: { status?: string }) {
 }
 
 function JsonViewer({ data }: { data: unknown }) {
-  if (!data) return <span className="text-muted-foreground italic text-xs">No data</span>;
+  if (data == null) return <span className="text-muted-foreground italic text-xs">No data</span>;
   return (
     <div className="bg-muted/30 p-2 rounded-md border border-border mt-2 overflow-x-auto max-h-64 overflow-y-auto custom-scrollbar json-view-wrapper text-xs">
       <JsonView data={data} shouldExpandNode={(level) => level < 2} style={defaultStyles} />
@@ -166,7 +166,7 @@ export function TraceViewerPanel({
                 </div>
                 {data.layers.l6 ? (
                   <div className="text-xs text-muted-foreground space-y-2">
-                    <div>Status Code: <span className="font-mono text-foreground">{data.layers.l6.statusCode || 'N/A'}</span></div>
+                    <div>Status Code: <span className="font-mono text-foreground">{data.layers.l6.statusCode ?? 'N/A'}</span></div>
                     {data.layers.l6.lastError && (
                       <div className="text-destructive">Error: <span className="font-mono">{data.layers.l6.lastError}</span></div>
                     )}
