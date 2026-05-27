@@ -105,9 +105,13 @@ export function QueryBuilder({
                 onChange={(e) => {
                   const op = e.target.value as FilterOperator;
                   let val = r.value;
-                  if (op === 'in' && typeof val === 'string') {
-                    val = val.split(/[,\s]+/).filter(Boolean);
-                  } else if (op !== 'in' && Array.isArray(val)) {
+                  if (op === 'in') {
+                    if (typeof val === 'string') {
+                      val = val.split(/[,\s]+/).filter(Boolean);
+                    } else if (!Array.isArray(val)) {
+                      val = [val];
+                    }
+                  } else if (Array.isArray(val)) {
                     val = val.join(', ');
                   }
                   handleUpdateRule(i, { operator: op, value: val });

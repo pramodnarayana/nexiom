@@ -24,6 +24,19 @@ const GLOBAL_DATABASE_URL = process.env.DATABASE_URL;
 const TENANT_DATABASE_URL = process.env.TENANT_DATABASE_URL || GLOBAL_DATABASE_URL;
 
 if (!GLOBAL_DATABASE_URL) { console.error('DATABASE_URL not set'); process.exit(1); }
+if (!TENANT_DATABASE_URL) { console.error('TENANT_DATABASE_URL not set'); process.exit(1); }
+
+try {
+  const globalUrl = new URL(GLOBAL_DATABASE_URL);
+  const tenantUrl = new URL(TENANT_DATABASE_URL);
+  if (globalUrl.hostname !== tenantUrl.hostname || globalUrl.port !== tenantUrl.port || globalUrl.pathname !== tenantUrl.pathname) {
+    console.error('ERROR: GLOBAL_DATABASE_URL and TENANT_DATABASE_URL must point to the same database (host/port/db). Mismatch detected!');
+    process.exit(1);
+  }
+} catch (e) {
+  console.error('Failed to parse database URLs', e);
+  process.exit(1);
+}
 
 // Connect to the TENANT DB to find connections and provision workspace schemas
 const client = new pg.Client({ connectionString: TENANT_DATABASE_URL });

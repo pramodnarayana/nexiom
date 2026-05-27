@@ -470,6 +470,7 @@ function TabPanel({
   // Advanced Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterGroup>({ logic: 'and', rules: [] });
+  const [appliedFilters, setAppliedFilters] = useState<FilterGroup>({ logic: 'and', rules: [] });
   
   // JSON editing logic (cell specific)
   const [editingJson, setEditingJson] = useState<{ row: Record<string, unknown>, field: string, value: unknown } | null>(null);
@@ -480,12 +481,14 @@ function TabPanel({
   // Canonical Object / Entity Type Selector
   const [objectTypes, setObjectTypes] = useState<string[]>([]);
   const [objectType, setObjectType] = useState<string>('');
+  const [objectTypeInitialized, setObjectTypeInitialized] = useState(false);
   const { toast } = useToast();
 
   const getDataSourceId = useCallback(() => tabId === 'outbound' ? stitch.destDataSourceId : stitch.srcDataSourceId, [tabId, stitch.destDataSourceId, stitch.srcDataSourceId]);
 
   useEffect(() => {
     let mounted = true;
+    setObjectTypeInitialized(false);
     if (tabId === 'normalized' || tabId === 'replica' || tabId === 'inbound') {
       listObjectsByStitch(stitch.id, tabId, workspaceId)
         .then(types => {
@@ -496,12 +499,14 @@ function TabPanel({
               if (!prev || !types.includes(prev)) return types[0] ?? '';
               return prev;
             });
+            setObjectTypeInitialized(true);
           }
         })
         .catch(console.error);
     } else {
       setObjectTypes([]);
       setObjectType('');
+      setObjectTypeInitialized(true);
     }
     return () => { mounted = false; };
   }, [tabId, workspaceId, getDataSourceId, stitch.id]);
@@ -522,16 +527,15 @@ function TabPanel({
   }, [tabId, stitch.id, workspaceId]);
 
   useEffect(() => { 
-    if (objectTypes.length > 0 && !objectType) return; // Wait for initial objectType
+    if (!objectTypeInitialized) return; // Wait for initial objectType
     setPage(1); 
-    void load(1, filters, objectType); 
-  }, [load, objectType, filters]); // Reload when objectType or filters change
+    void load(1, appliedFilters, objectType); 
+  }, [load, objectType, appliedFilters, objectTypeInitialized]); 
 
-  const handlePage = (p: number) => { setPage(p); void load(p, filters, objectType); };
+  const handlePage = (p: number) => { setPage(p); void load(p, appliedFilters, objectType); };
   
   const handleApplyFilters = () => {
-    setPage(1);
-    void load(1, filters, objectType);
+    setAppliedFilters(filters);
   };
 
   const handleUpdateCell = async (row: Record<string, unknown>, field: string, value: unknown) => {
@@ -649,7 +653,7 @@ function TabPanel({
           >
             <Filter className="h-3 w-3" /> Filters {filters.rules.length > 0 && `(${filters.rules.length})`}
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => void load(page, filters, objectType)}>
+          <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={() => void load(page, appliedFilters, objectType)}>
             <RefreshCw className="h-3 w-3" /> Refresh
           </Button>
         </div>
