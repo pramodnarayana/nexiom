@@ -22,15 +22,41 @@ export interface FilterGroup {
   rules: (FilterRule | FilterGroup)[];
 }
 
-export function isFilterGroup(ast: unknown): ast is FilterGroup {
-  return !!(
-    ast &&
-    typeof ast === 'object' &&
-    'logic' in ast &&
-    typeof (ast as Record<string, unknown>).logic === 'string' &&
-    'rules' in ast &&
-    Array.isArray((ast as Record<string, unknown>).rules)
-  );
+export function isFilterGroup(obj: unknown): obj is FilterGroup {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const g = obj as FilterGroup;
+  return (g.logic === 'and' || g.logic === 'or') && Array.isArray(g.rules);
+}
+
+export function validateFilterGroup(obj: unknown): boolean {
+  if (!isFilterGroup(obj)) return false;
+  for (const rule of obj.rules) {
+    if (isFilterGroup(rule)) {
+      if (!validateFilterGroup(rule)) return false;
+    } else {
+      if (!rule || typeof rule !== 'object') return false;
+      const r = rule as unknown as Record<string, unknown>;
+      if (typeof r.field !== 'string' || !r.field) return false;
+      const op = r.operator;
+      if (
+        typeof op !== 'string' ||
+        ![
+          'eq',
+          'neq',
+          'gt',
+          'gte',
+          'lt',
+          'lte',
+          'in',
+          'contains',
+          'startsWith',
+        ].includes(op)
+      )
+        return false;
+      if (op === 'in' && !Array.isArray(r.value)) return false;
+    }
+  }
+  return true;
 }
 
 export function buildDrizzleFilter(
@@ -72,6 +98,7 @@ export function buildDrizzleFilter(
   const baseColName = parts[0];
 
   let fieldExpr: SQL | Column;
+  let isJsonb = false;
 
   if (
     (baseColName === 'data' ||
@@ -96,6 +123,7 @@ export function buildDrizzleFilter(
     const pathFragments = pathSegments.map((p) => sql`${p}`);
     // We cast the jsonb extraction to text so we can compare it easily
     fieldExpr = sql`${jsonbCol}#>>ARRAY[${sql.join(pathFragments, sql`, `)}]`;
+    isJsonb = true;
   } else {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const col = table[baseColName] as Column | undefined;
@@ -104,19 +132,28 @@ export function buildDrizzleFilter(
   }
 
   const val = rule.value;
+  let cmpExpr = fieldExpr;
+  if (isJsonb && ['gt', 'gte', 'lt', 'lte'].includes(rule.operator)) {
+    if (typeof val === 'number') {
+      cmpExpr = sql`(${fieldExpr})::numeric`;
+    } else if (typeof val === 'string' && /^\\d{4}-\\d{2}-\\d{2}T/.test(val)) {
+      cmpExpr = sql`(${fieldExpr})::timestamptz`;
+    }
+  }
+
   switch (rule.operator) {
     case 'eq':
       return sql`${fieldExpr} = ${val}`;
     case 'neq':
       return sql`${fieldExpr} != ${val}`;
     case 'gt':
-      return sql`${fieldExpr} > ${val}`;
+      return sql`${cmpExpr} > ${val}`;
     case 'gte':
-      return sql`${fieldExpr} >= ${val}`;
+      return sql`${cmpExpr} >= ${val}`;
     case 'lt':
-      return sql`${fieldExpr} < ${val}`;
+      return sql`${cmpExpr} < ${val}`;
     case 'lte':
-      return sql`${fieldExpr} <= ${val}`;
+      return sql`${cmpExpr} <= ${val}`;
     case 'in':
       if (!Array.isArray(val) || val.length === 0) return sql`false`;
       return sql`${fieldExpr} IN (${sql.join(

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
 import { DataExplorerService } from './data-explorer.service.js';
+import { validateFilterGroup } from './filter-parser.js';
 
 const ALLOWED_TABS = [
   'inbound',
@@ -54,12 +55,12 @@ export class DataExplorerController {
       undefined;
     if (filters) {
       try {
-        const parsed = JSON.parse(filters);
-        const { isFilterGroup } = await import('./filter-parser.js');
-        if (!isFilterGroup(parsed)) {
+        parsedFilters = JSON.parse(
+          filters,
+        ) as import('./filter-parser.js').FilterGroup;
+        if (!validateFilterGroup(parsedFilters)) {
           throw new BadRequestException('Invalid filters format');
         }
-        parsedFilters = parsed;
       } catch (_e) {
         throw new BadRequestException('Invalid filters format');
       }

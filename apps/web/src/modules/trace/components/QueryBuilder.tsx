@@ -102,7 +102,16 @@ export function QueryBuilder({
               <select
                 className="text-sm bg-background border border-border rounded px-3 py-1.5 min-w-[120px]"
                 value={r.operator}
-                onChange={(e) => handleUpdateRule(i, { operator: e.target.value as FilterOperator })}
+                onChange={(e) => {
+                  const op = e.target.value as FilterOperator;
+                  let val = r.value;
+                  if (op === 'in' && typeof val === 'string') {
+                    val = val.split(/[,\s]+/).filter(Boolean);
+                  } else if (op !== 'in' && Array.isArray(val)) {
+                    val = val.join(', ');
+                  }
+                  handleUpdateRule(i, { operator: op, value: val });
+                }}
               >
                 {OPERATORS.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
               </select>
@@ -111,7 +120,13 @@ export function QueryBuilder({
                 placeholder="Value..."
                 className="text-sm bg-background border border-border rounded px-3 py-1.5 flex-1 max-w-[250px]"
                 value={String(r.value ?? '')}
-                onChange={(e) => handleUpdateRule(i, { value: e.target.value })}
+                onChange={(e) => {
+                  let val: unknown = e.target.value;
+                  if (r.operator === 'in') {
+                    val = e.target.value.split(/[,\s]+/).filter(Boolean);
+                  }
+                  handleUpdateRule(i, { value: val });
+                }}
               />
               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveRule(i)}>
                 <X className="w-4 h-4" />

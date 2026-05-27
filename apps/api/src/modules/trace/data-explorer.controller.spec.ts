@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataExplorerController } from './data-explorer.controller.js';
 import { DataExplorerService } from './data-explorer.service.js';
@@ -40,9 +40,9 @@ describe('DataExplorerController', () => {
   const mockNoOrgCtx = {} as RequestAuthContext;
 
   it('should throw BadRequestException if org is missing', async () => {
-    expect(() =>
+    await expect(
       controller.listByTab(mockNoOrgCtx, 's1', 'inbound', 1, 10),
-    ).toThrow(BadRequestException);
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('listByTab(inbound) should delegate to service.listInbound', async () => {

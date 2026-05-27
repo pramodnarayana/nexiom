@@ -34,16 +34,7 @@ export function JsonEditorModal({
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    // Handle Escape key to close
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+
 
   const handleSave = async () => {
     setError(null);
@@ -68,7 +59,15 @@ export function JsonEditorModal({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent 
+        className="max-w-3xl max-h-[90vh] flex flex-col"
+        onEscapeKeyDown={(e) => {
+          // Don't close if they press escape inside the code editor
+          if ((e.target as HTMLElement).closest('.monaco-editor')) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

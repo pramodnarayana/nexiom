@@ -94,13 +94,13 @@ export function TraceViewerPanel({
                     <div>Object Type: <span className="font-mono text-foreground">{data.layers.l1.objectType || 'Unknown'}</span></div>
                     <div className="mt-4 mb-1 font-semibold text-foreground">Request</div>
                     <JsonViewer data={data.layers.l1.request} />
-                    {!!data.layers.l1.response && (
+                    {data.layers.l1.response != null && (
                       <>
                         <div className="mt-4 mb-1 font-semibold text-foreground">Response</div>
                         <JsonViewer data={data.layers.l1.response} />
                       </>
                     )}
-                    {!!data.layers.l1.headers && (
+                    {data.layers.l1.headers != null && (
                       <>
                         <div className="mt-4 mb-1 font-semibold text-foreground">Headers</div>
                         <JsonViewer data={data.layers.l1.headers} />
@@ -172,7 +172,7 @@ export function TraceViewerPanel({
                     )}
                     <div className="mt-4 mb-1 font-semibold text-foreground">Payload</div>
                     <JsonViewer data={data.layers.l6.payload} />
-                    {!!data.layers.l6.response && (
+                    {data.layers.l6.response != null && (
                       <>
                         <div className="mt-4 mb-1 font-semibold text-foreground">Response</div>
                         <JsonViewer data={data.layers.l6.response} />

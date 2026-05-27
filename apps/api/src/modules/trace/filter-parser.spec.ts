@@ -1,6 +1,7 @@
 import {
   buildDrizzleFilter,
   isFilterGroup,
+  validateFilterGroup,
   type FilterRule,
   type FilterGroup,
   type FilterOperator,
@@ -35,6 +36,39 @@ describe('filter-parser', () => {
       expect(isFilterGroup({ field: 'id', operator: 'eq', value: 1 })).toBe(
         false,
       ); // is FilterRule
+    });
+  });
+
+  describe('validateFilterGroup', () => {
+    it('should validate valid nested groups and rules', () => {
+      expect(
+        validateFilterGroup({
+          logic: 'and',
+          rules: [{ field: 'id', operator: 'eq', value: 1 }],
+        }),
+      ).toBe(true);
+    });
+
+    it('should reject invalid rules', () => {
+      expect(
+        validateFilterGroup({
+          logic: 'and',
+          rules: [{ field: 123, operator: 'eq', value: 1 }],
+        }),
+      ).toBe(false);
+      expect(
+        validateFilterGroup({
+          logic: 'and',
+          rules: [{ field: 'id', operator: 'unknown', value: 1 }],
+        }),
+      ).toBe(false);
+      expect(
+        validateFilterGroup({
+          logic: 'and',
+          rules: [{ field: 'id', operator: 'in', value: 'not-array' }],
+        }),
+      ).toBe(false);
+      expect(validateFilterGroup({ logic: 'and', rules: [null] })).toBe(false);
     });
   });
 
@@ -171,6 +205,32 @@ describe('filter-parser', () => {
       const ast: FilterGroup = { logic: 'and', rules: [] };
       const result = buildDrizzleFilter(ast, mockTable);
       expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for invalid path segments in jsonb column', () => {
+      const ast: FilterRule = {
+        field: 'payload.invalid"segment',
+        operator: 'eq',
+        value: '1',
+      };
+      const result = buildDrizzleFilter(ast, mockTable);
+      expect(result).toBeUndefined();
+    });
+
+    it('should cast numeric and date values for jsonb', () => {
+      let ast: FilterRule = {
+        field: 'payload.amount',
+        operator: 'gt',
+        value: 100,
+      };
+      expect(buildDrizzleFilter(ast, mockTable)).toBeDefined();
+
+      ast = {
+        field: 'payload.date',
+        operator: 'gt',
+        value: '2024-01-01T00:00:00Z',
+      };
+      expect(buildDrizzleFilter(ast, mockTable)).toBeDefined();
     });
   });
 });

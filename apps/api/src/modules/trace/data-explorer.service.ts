@@ -102,7 +102,11 @@ export class DataExplorerService {
           inArray(syncLogTable.traceId, traceIds),
           eq(syncLogTable.routeId, stitchId),
         ),
-      )) as { traceId: string; status: string }[];
+      )
+      .orderBy(desc(syncLogTable.timestamp))) as {
+      traceId: string;
+      status: string;
+    }[];
 
     const statusMap = new Map<string, string>();
     for (const s of statuses) {

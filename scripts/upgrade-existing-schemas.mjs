@@ -30,8 +30,11 @@ const client = new pg.Client({ connectionString: TENANT_DATABASE_URL });
 await client.connect();
 console.log(`Running against: ${TENANT_DATABASE_URL?.replace(/:[^:@]*@/, ':***@')}`);
 
+const catalogClient = new pg.Client({ connectionString: GLOBAL_DATABASE_URL });
+await catalogClient.connect();
+
 // Fetch all connections that need upgrading
-const { rows: connections } = await client.query(
+const { rows: connections } = await catalogClient.query(
   `SELECT id, app_name, schema_name, schema_plan FROM data_source WHERE schema_plan = ANY($1)`,
   [['NAMESPACE_ONLY', 'NORMALIZE_ACTIVE']]
 );
@@ -303,7 +306,7 @@ for (const conn of connections) {
     await client.query(pgFormat(`CREATE INDEX IF NOT EXISTS idx_outbound_outbox_claim ON %I.outbound_outbox (status, next_retry_at ASC) WHERE status IN ('PENDING','PROCESSING','RETRY')`, schemaName));
 
     // 8. Update schemaPlan in data_source
-    await client.query(
+    await catalogClient.query(
       `UPDATE data_source SET schema_plan = 'OUTBOUND_ACTIVE' WHERE id = $1`,
       [id]
     );
@@ -315,4 +318,5 @@ for (const conn of connections) {
 }
 
 await client.end();
+await catalogClient.end();
 console.log('\nDone.');

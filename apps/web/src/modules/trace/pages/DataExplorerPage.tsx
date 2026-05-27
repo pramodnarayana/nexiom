@@ -491,9 +491,11 @@ function TabPanel({
         .then(types => {
           if (mounted) {
             setObjectTypes(types);
-            if (types.length > 0 && !objectType) {
-              setObjectType(types[0]); // We will update this default logic later based on Primary Object
-            }
+            setObjectType(prev => {
+              if (types.length === 0) return '';
+              if (!prev || !types.includes(prev)) return types[0] ?? '';
+              return prev;
+            });
           }
         })
         .catch(console.error);
@@ -523,7 +525,7 @@ function TabPanel({
     if (objectTypes.length > 0 && !objectType) return; // Wait for initial objectType
     setPage(1); 
     void load(1, filters, objectType); 
-  }, [load, objectType]); // Reload when objectType changes
+  }, [load, objectType, filters]); // Reload when objectType or filters change
 
   const handlePage = (p: number) => { setPage(p); void load(p, filters, objectType); };
   
