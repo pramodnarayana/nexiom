@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, Navigate } from 'react-router-dom';
 import { Refine } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { LayoutDashboard, Users, Settings, Blocks, Plug2 } from 'lucide-react';
@@ -25,7 +25,10 @@ import { CreateStitchPage } from '../../modules/stitches/pages/CreateStitchPage'
 import { StitchDetailPage } from '../../modules/stitches/pages/StitchDetailPage';
 import { ExceptionCenterPage } from '../../modules/exceptions/pages/ExceptionCenterPage';
 import { PipelineTracePage } from '../../modules/trace/pages/PipelineTracePage';
-import { TraceExplorerPage } from '../../modules/trace/pages/TraceExplorerPage';
+import { TraceLayout } from '../../modules/trace/pages/TraceLayout';
+import { DataExplorerPage } from '../../modules/trace/pages/DataExplorerPage';
+import { TraceTimelinePage } from '../../modules/trace/pages/TraceTimelinePage';
+import { GemPage } from '../../modules/trace/pages/GemPage';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { AiPage } from '../../modules/ai/pages/AiPage';
 import { AiChat } from '../../modules/ai/components/chat/AiChat';
@@ -106,7 +109,12 @@ export function TenantRoutes() {
                             <Route path="workspaces/:id/stitches/new" element={<CreateStitchPage />} />
                             <Route path="workspaces/:id/stitches/:stitchId" element={<StitchDetailPage />} />
                             <Route path="workspaces/:id/stitches/:stitchId/traces" element={<PipelineTracePage />} />
-                            <Route path="workspaces/:id/trace" element={<TraceExplorerPage />} />
+                            <Route path="workspaces/:id/data-hub" element={<TraceLayout />}>
+                                <Route index element={<Navigate to="explorer" replace />} />
+                                <Route path="explorer" element={<DataExplorerPage />} />
+                                <Route path="trace" element={<TraceTimelinePage />} />
+                                <Route path="gem" element={<GemPage />} />
+                            </Route>
                             <Route path="exceptions" element={<ExceptionCenterPage />} />
                             <Route path="ai" element={<AiPage />}>
                                 <Route index element={<AiChatContainer />} />

@@ -115,8 +115,8 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                 {(() => {
                                     const stitchesHref = `${wsHref}/stitches`;
                                     const isStitchesActive = location.pathname === stitchesHref || location.pathname.startsWith(`${stitchesHref}/`);
-                                    const traceHref = `${wsHref}/trace`;
-                                    const isTraceActive = location.pathname === traceHref || location.pathname.startsWith(`${traceHref}/`);
+                                    const dataHubHref = `${wsHref}/data-hub`;
+                                    const isDataHubActive = location.pathname === dataHubHref || location.pathname.startsWith(`${dataHubHref}/`);
                                     return (
                                         <>
                                             <Link
@@ -132,16 +132,16 @@ export function WorkspaceExplorer({ workspaces }: Readonly<WorkspaceExplorerProp
                                                 Stitches
                                             </Link>
                                             <Link
-                                                to={traceHref}
-                                                aria-current={isTraceActive ? 'page' : undefined}
+                                                to={dataHubHref}
+                                                aria-current={isDataHubActive ? 'page' : undefined}
                                                 className={cn(
                                                     'block text-xs py-1 px-2 rounded',
-                                                    isTraceActive
+                                                    isDataHubActive
                                                         ? 'text-primary bg-primary/10 font-medium'
                                                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                                                 )}
                                             >
-                                                Trace
+                                                Data Hub
                                             </Link>
                                         </>
                                     );

@@ -31,7 +31,7 @@ console.log(`Running against: ${TENANT_DATABASE_URL?.replace(/:[^:@]*@/, ':***@'
 
 // Fetch all connections that need upgrading
 const { rows: connections } = await client.query(
-  `SELECT id, app_name, schema_name, schema_plan FROM app_connection`
+  `SELECT id, app_name, schema_name, schema_plan FROM data_source`
 );
 
 if (connections.length === 0) {
@@ -253,9 +253,50 @@ for (const conn of connections) {
     await client.query(`CREATE INDEX IF NOT EXISTS gem_src_lookup_idx ON "${schemaName}".global_entity_map (source_entity_id, source_app_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS gem_dest_lookup_idx ON "${schemaName}".global_entity_map (dest_entity_id, dest_app_id)`);
 
-    // 8. Update schemaPlan in app_connection
+    // 7.5 L5 — outbound_gateway + outbound_outbox
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}".outbound_gateway (
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        trace_id       UUID        NOT NULL,
+        route_id       UUID        NOT NULL,
+        data_source_id  UUID        NOT NULL,
+        payload        JSONB       NOT NULL,
+        response       JSONB,
+        status_code    INTEGER,
+        status         TEXT        NOT NULL DEFAULT 'PENDING'
+                       CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
+        attempts       INTEGER     NOT NULL DEFAULT 0,
+        last_error     TEXT,
+        next_retry_at  TIMESTAMPTZ,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_outbound_trace_route UNIQUE (trace_id, route_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_l5_trace ON "${schemaName}".outbound_gateway (trace_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_l5_route ON "${schemaName}".outbound_gateway (route_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_l5_status ON "${schemaName}".outbound_gateway (status)`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "${schemaName}".outbound_outbox (
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        trace_id       UUID        NOT NULL,
+        route_id       UUID        NOT NULL,
+        data_source_id  UUID        NOT NULL,
+        status         TEXT        NOT NULL DEFAULT 'PENDING'
+                       CONSTRAINT ck_outbound_outbox_status CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
+        attempts       INTEGER     NOT NULL DEFAULT 0,
+        last_error     TEXT,
+        next_retry_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_outbound_outbox_trace UNIQUE (trace_id, route_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_outbound_outbox_claim ON "${schemaName}".outbound_outbox (status, next_retry_at ASC) WHERE status IN ('PENDING','PROCESSING','RETRY')`);
+
+    // 8. Update schemaPlan in data_source
     await client.query(
-      `UPDATE app_connection SET schema_plan = 'NORMALIZE_ACTIVE' WHERE id = $1`,
+      `UPDATE data_source SET schema_plan = 'OUTBOUND_ACTIVE' WHERE id = $1`,
       [id]
     );
 

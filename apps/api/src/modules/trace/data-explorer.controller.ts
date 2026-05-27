@@ -43,19 +43,57 @@ export class DataExplorerController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
     workspaceId?: string,
+    @Query('filters') filters?: string,
+    @Query('objectType') objectType?: string,
   ) {
     if (!ALLOWED_TABS.includes(tab as TabName)) {
       throw new NotFoundException(`Tab "${tab}" not found`);
     }
 
+    let parsedFilters: import('./filter-parser.js').FilterGroup | undefined =
+      undefined;
+    if (filters) {
+      try {
+        parsedFilters = JSON.parse(
+          filters,
+        ) as import('./filter-parser.js').FilterGroup;
+      } catch (_e) {
+        throw new BadRequestException('Invalid filters format');
+      }
+    }
+
     const orgId = this.requireOrg(ctx);
     const dispatchMap: Record<TabName, () => Promise<unknown>> = {
       inbound: () =>
-        this.explorer.listInbound(orgId, stitchId, page, limit, workspaceId),
+        this.explorer.listInbound(
+          orgId,
+          stitchId,
+          page,
+          limit,
+          workspaceId,
+          objectType,
+          parsedFilters,
+        ),
       replica: () =>
-        this.explorer.listReplica(orgId, stitchId, page, limit, workspaceId),
+        this.explorer.listReplica(
+          orgId,
+          stitchId,
+          page,
+          limit,
+          workspaceId,
+          objectType,
+          parsedFilters,
+        ),
       normalized: () =>
-        this.explorer.listNormalized(orgId, stitchId, page, limit, workspaceId),
+        this.explorer.listNormalized(
+          orgId,
+          stitchId,
+          page,
+          limit,
+          workspaceId,
+          objectType,
+          parsedFilters,
+        ),
       'entity-map': () =>
         this.explorer.listEntityMap(orgId, stitchId, page, limit, workspaceId),
       outbound: () =>
@@ -63,5 +101,32 @@ export class DataExplorerController {
     };
 
     return dispatchMap[tab as TabName]();
+  }
+
+  @Get('traces/:traceId')
+  async getTrace(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('traceId', ParseUUIDPipe) traceId: string,
+    @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
+    workspaceId?: string,
+  ) {
+    const orgId = this.requireOrg(ctx);
+    return this.explorer.getTrace(orgId, stitchId, traceId, workspaceId);
+  }
+
+  @Get('stitches/:stitchId/explorer/:tab/objects')
+  async listObjectsByStitch(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('tab') tab: string,
+    @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
+    workspaceId?: string,
+  ) {
+    if (!ALLOWED_TABS.includes(tab as TabName)) {
+      throw new NotFoundException(`Tab "${tab}" not found`);
+    }
+    const orgId = this.requireOrg(ctx);
+    return this.explorer.listObjectsByStitch(orgId, stitchId, tab, workspaceId);
   }
 }

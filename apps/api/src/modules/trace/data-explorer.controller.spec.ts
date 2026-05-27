@@ -18,6 +18,8 @@ describe('DataExplorerController', () => {
       listNormalized: vi.fn(),
       listEntityMap: vi.fn(),
       listOutbound: vi.fn(),
+      listObjectsByStitch: vi.fn(),
+      getTrace: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -54,6 +56,8 @@ describe('DataExplorerController', () => {
       1,
       10,
       'ws1',
+      undefined,
+      undefined,
     );
   });
 
@@ -68,6 +72,8 @@ describe('DataExplorerController', () => {
       1,
       10,
       'ws1',
+      undefined,
+      undefined,
     );
   });
 
@@ -82,6 +88,8 @@ describe('DataExplorerController', () => {
       1,
       10,
       'ws1',
+      undefined,
+      undefined,
     );
   });
 
@@ -111,5 +119,24 @@ describe('DataExplorerController', () => {
       10,
       'ws1',
     );
+  });
+
+  it('listObjectsByStitch should delegate to service.listObjectsByStitch', async () => {
+    service.listObjectsByStitch.mockResolvedValue('res');
+    expect(
+      await controller.listObjectsByStitch(mockCtx, 's1', 'entity-map', 'ws1'),
+    ).toBe('res');
+    expect(service.listObjectsByStitch).toHaveBeenCalledWith(
+      'org_1',
+      's1',
+      'entity-map',
+      'ws1',
+    );
+  });
+
+  it('getTrace should delegate to service.getTrace', async () => {
+    service.getTrace = vi.fn().mockResolvedValue('trace');
+    expect(await controller.getTrace(mockCtx, 's1', 't1', 'ws1')).toBe('trace');
+    expect(service.getTrace).toHaveBeenCalledWith('org_1', 's1', 't1', 'ws1');
   });
 });

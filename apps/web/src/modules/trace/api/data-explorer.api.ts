@@ -14,7 +14,8 @@ export interface InboundRow {
   objectType: string | null;
   extReqId: string | null;
   status: string;
-  payload: unknown;
+  request: unknown;
+  response: unknown;
   headers: unknown;
   createdAt: string;
 }
@@ -57,19 +58,22 @@ export interface OutboundRow {
   status: string;
   statusCode: number | null;
   attemptCount: number;
-  reqPayload: unknown;
-  resPayload: unknown;
+  payload: unknown;
+  response: unknown;
+  lastError: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-interface Params { page?: number; limit?: number; workspaceId?: string; }
+interface Params { page?: number; limit?: number; workspaceId?: string; filters?: unknown; objectType?: string; }
 
 async function listExplorer<T>(stitchId: string, params: Params, segment: string): Promise<ExplorerPage<T>> {
   const q = new URLSearchParams();
   if (params.workspaceId) q.set('workspaceId', params.workspaceId);
   if (params.page !== undefined) q.set('page', String(params.page));
   if (params.limit !== undefined) q.set('limit', String(params.limit));
+  if (params.filters) q.set('filters', JSON.stringify(params.filters));
+  if (params.objectType) q.set('objectType', params.objectType);
   const url = `/stitches/${encodeURIComponent(stitchId)}/explorer/${segment}?${q}`;
   const res = await apiClient.get<ExplorerPage<T>>(url);
   return res.data;
@@ -93,4 +97,41 @@ export async function listEntityMap(stitchId: string, params: Params = {}): Prom
 
 export async function listOutbound(stitchId: string, params: Params = {}): Promise<ExplorerPage<OutboundRow>> {
   return listExplorer<OutboundRow>(stitchId, params, 'outbound');
+}
+
+export async function listObjectsByStitch(stitchId: string, tab: string, workspaceId?: string): Promise<string[]> {
+  const q = new URLSearchParams();
+  if (workspaceId) q.set('workspaceId', workspaceId);
+  const url = `/stitches/${encodeURIComponent(stitchId)}/explorer/${encodeURIComponent(tab)}/objects?${q}`;
+  const res = await apiClient.get<string[]>(url);
+  return res.data;
+}
+
+export async function updateRecord(workspaceId: string, dataSourceId: string, tab: string, recordId: string, payload: unknown): Promise<void> {
+  const url = `/workspaces/${encodeURIComponent(workspaceId)}/data-hub/${encodeURIComponent(dataSourceId)}/${encodeURIComponent(tab)}/${encodeURIComponent(recordId)}`;
+  await apiClient.put(url, payload);
+}
+
+export async function deleteRecord(workspaceId: string, dataSourceId: string, tab: string, recordId: string): Promise<void> {
+  const url = `/workspaces/${encodeURIComponent(workspaceId)}/data-hub/${encodeURIComponent(dataSourceId)}/${encodeURIComponent(tab)}/${encodeURIComponent(recordId)}`;
+  await apiClient.delete(url);
+}
+
+export interface TraceData {
+  traceId: string;
+  stitchId: string;
+  layers: {
+    l1: InboundRow | null;
+    l2: ReplicaRow | null;
+    l3: NormalizedRow | null;
+    l6: OutboundRow | null;
+  };
+}
+
+export async function getTrace(stitchId: string, traceId: string, workspaceId?: string): Promise<TraceData> {
+  const q = new URLSearchParams();
+  if (workspaceId) q.set('workspaceId', workspaceId);
+  const url = `/stitches/${encodeURIComponent(stitchId)}/explorer/traces/${encodeURIComponent(traceId)}?${q}`;
+  const res = await apiClient.get<TraceData>(url);
+  return res.data;
 }
