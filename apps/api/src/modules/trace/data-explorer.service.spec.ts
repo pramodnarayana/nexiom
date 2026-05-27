@@ -15,34 +15,39 @@ describe('DataExplorerService', () => {
   let logger: any;
   let dbManager: any;
 
-  // Helper to mock db.select() for paginated queries
   const mockPageSelect = (rows: any[], count: number, hasWhere: boolean) => {
     let callCount = 0;
-    db.select = vi.fn().mockImplementation((args?: any) => {
+    const selectMock = vi.fn().mockImplementation((args?: any) => {
       callCount++;
       const isCountQuery = args && args.count !== undefined;
+      const isStatusQuery = args && args.status !== undefined;
+
+      const chain: any = {
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue(rows),
+        getSQL: vi.fn().mockReturnValue({ sql: '', params: [] }), // for Drizzle subqueries
+      };
+
       if (isCountQuery) {
-        // Count query path
-        const chain = {
-          from: vi.fn().mockReturnThis(),
-        };
         if (hasWhere) {
-          (chain as any).where = vi.fn().mockResolvedValue([{ count }]);
-          return chain;
+          chain.where = vi.fn().mockResolvedValue([{ count }]);
         } else {
-          (chain as any).from = vi.fn().mockResolvedValue([{ count }]);
-          return chain;
+          chain.from = vi.fn().mockResolvedValue([{ count }]);
         }
-      } else {
-        // Data query path
-        return {
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockReturnThis(),
-          offset: vi.fn().mockResolvedValue(rows),
-        };
+      } else if (isStatusQuery) {
+        chain.where = vi
+          .fn()
+          .mockResolvedValue([{ traceId: 'dummy', status: 'SUCCESS' }]);
       }
+
+      return chain;
+    });
+
+    dbManager.getTenantDb.mockResolvedValue({
+      select: selectMock,
     });
   };
 
@@ -196,7 +201,7 @@ describe('DataExplorerService', () => {
         srcDataSourceId: 'c1',
         destDataSourceId: 'c2',
       });
-      mockPageSelect([{ id: 'norm_1' }], 3, false);
+      mockPageSelect([{ id: 'norm_1' }], 3, true);
 
       const res = await service.listNormalized(
         'org_1',
@@ -264,6 +269,149 @@ describe('DataExplorerService', () => {
       const res = await service.listOutbound('org_1', 'stitch_1', 1, 50); // no workspaceId
       expect(res.data).toEqual([{ id: 'outbound_1' }]);
       expect(res.total).toBe(5);
+    });
+  });
+
+  describe('getTrace', () => {
+    it('should return a trace by id', async () => {
+      db.query.integrationStitches.findFirst.mockResolvedValue({
+        id: 'stitch_1',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
+      });
+
+      vi.spyOn(service as any, 'attachTraceStatuses').mockResolvedValue(
+        undefined,
+      );
+
+      const tracePayload = {
+        inbound: { traceId: 't1', status: 'SUCCESS' },
+        replica: { traceId: 't1', status: 'SUCCESS' },
+        normalized: { traceId: 't1', status: 'SUCCESS' },
+        gem: { traceId: 't1', status: 'SUCCESS' },
+        outbound: { traceId: 't1', status: 'SUCCESS' },
+      };
+
+      // We don't have to perfectly mock the physical multi-tenancy chained calls
+      // because getTrace runs numerous subqueries, we'll just mock the main transaction
+      // and ensure the mock structure doesn't crash the method and returns the final mapped output.
+      dbManager.getTenantDb.mockResolvedValue({
+        select: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ traceId: 't1', status: 'SUCCESS' }]),
+        })),
+        transaction: vi.fn().mockImplementation(async (cb) => {
+          const tx = {
+            select: vi.fn().mockImplementation(() => {
+              return {
+                from: vi.fn().mockReturnThis(),
+                where: vi.fn().mockReturnThis(),
+                leftJoin: vi.fn().mockReturnThis(),
+                limit: vi
+                  .fn()
+                  .mockResolvedValue([{ traceId: 't1', status: 'SUCCESS' }]),
+              };
+            }),
+          };
+          return cb(tx);
+        }),
+      });
+
+      const res = await service.getTrace('org_1', 'stitch_1', 't1');
+      expect(res).toBeDefined();
+      expect(res.layers).toBeDefined();
+      expect(res.layers.l1).toBeDefined();
+      expect(res.layers.l1?.traceId).toBe('t1');
+      expect(res.layers.l1?.status).toBe('SUCCESS');
+    });
+  });
+
+  describe('listObjectsByStitch', () => {
+    it('should list specific object types', async () => {
+      db.query.integrationStitches.findFirst.mockResolvedValue({
+        id: 'stitch_1',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
+      });
+
+      // Mock db returns objectTypes natively via distinct query
+      const distinctChain: any = {
+        where: vi.fn().mockResolvedValue([{ type: 'Account' }]),
+      };
+      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
+
+      const selectChain: any = {
+        where: vi.fn().mockReturnThis(),
+        getSQL: vi.fn().mockReturnValue({ sql: '', params: [] }),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue([]),
+      };
+      selectChain.from = vi.fn().mockReturnValue(selectChain);
+
+      dbManager.getTenantDb.mockResolvedValue({
+        select: vi.fn().mockReturnValue(selectChain),
+        selectDistinct: vi.fn().mockReturnValue(distinctChain),
+      });
+
+      const res = await service.listObjectsByStitch(
+        'org_1',
+        'stitch_1',
+        'normalized',
+      );
+      expect(res).toEqual(['Account']);
+    });
+
+    it('should list specific object types for outbound tab', async () => {
+      db.query.integrationStitches.findFirst.mockResolvedValue({
+        id: 'stitch_1',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
+      });
+      const distinctChain: any = {
+        where: vi.fn().mockResolvedValue([{ type: 'Contact' }]),
+      };
+      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
+
+      dbManager.getTenantDb.mockResolvedValue({
+        selectDistinct: vi.fn().mockReturnValue(distinctChain),
+      });
+
+      const res = await service.listObjectsByStitch(
+        'org_1',
+        'stitch_1',
+        'outbound',
+      );
+      expect(res).toEqual([]);
+    });
+
+    it('should list specific object types for entity-map tab', async () => {
+      db.query.integrationStitches.findFirst.mockResolvedValue({
+        id: 'stitch_1',
+        srcDataSourceId: 'c1',
+        destDataSourceId: 'c2',
+      });
+      const distinctChain: any = {
+        where: vi.fn().mockResolvedValue([{ type: 'Lead' }]),
+      };
+      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
+
+      dbManager.getTenantDb.mockResolvedValue({
+        selectDistinct: vi.fn().mockReturnValue(distinctChain),
+      });
+
+      const res = await service.listObjectsByStitch(
+        'org_1',
+        'stitch_1',
+        'entity-map',
+      );
+      expect(res).toEqual(['Lead']);
     });
   });
 });
