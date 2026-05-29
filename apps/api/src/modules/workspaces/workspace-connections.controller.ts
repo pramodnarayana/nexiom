@@ -162,14 +162,22 @@ export class WorkspaceConnectionsController {
       );
     }
 
-    // Verify the dataSourceId belongs to this org (IDOR protection)
+    // Verify the dataSourceId belongs to this org and is assigned to the workspace
     const [connection] = await this.db
       .select({
         id: dataSources.id,
       })
       .from(dataSources)
+      .innerJoin(
+        uiWorkspaceDataSources,
+        eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
+      )
       .where(
-        and(eq(dataSources.id, dataSourceId), eq(dataSources.tenantId, orgId)),
+        and(
+          eq(dataSources.id, dataSourceId),
+          eq(dataSources.tenantId, orgId),
+          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
+        ),
       )
       .limit(1);
     if (!connection) {
