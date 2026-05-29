@@ -1,10 +1,10 @@
 import type { StreamResult } from '@nexiom/engine';
 
 /**
- * SyncResult — outcome of a single stitch execution attempt.
+ * SyncResult — outcome of a single connection sync execution attempt.
  */
 export interface SyncResult {
-  stitchId: string;
+  connectionId: string;
   /** 'succeeded' = all streams polled; 'skipped' = lock contention; 'failed' = stream error. */
   status: 'started' | 'succeeded' | 'skipped' | 'failed';
   /** Per-stream outcomes. Present when the poll run sequence completes inline. */
@@ -16,10 +16,10 @@ export interface SyncResult {
  *
  * Implementations:
  *   - StubSyncRunner  — no-op placeholder used in tests / when poll is disabled
- *   - PollSyncRunner  — real Singer-style poll pipeline (T030)
+ *   - ConnectionSyncRunner  — real Singer-style poll pipeline per connection
  *
  * Injected into SchedulerService to decouple execution from scheduling.
  */
 export abstract class SyncRunner {
-  abstract run(stitchId: string): Promise<SyncResult>;
+  abstract run(connectionId: string, objectType?: string): Promise<SyncResult>;
 }

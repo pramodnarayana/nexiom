@@ -27,6 +27,23 @@ export function sanitizeError(err: unknown): string {
   return stripped.length > 500 ? `${stripped.slice(0, 500)}…` : stripped;
 }
 
+/**
+ * Returns a cloned Error object with a sanitized message, preserving the stack trace.
+ * This is designed to be passed to structured loggers (like Pino) so they can
+ * serialize the full error stack while keeping credentials redacted.
+ */
+export function sanitizeErrorObject(err: unknown): Error {
+  const safeMsg = sanitizeError(err);
+  const cloned = new Error(safeMsg);
+  if (err instanceof Error) {
+    cloned.name = err.name;
+    if (err.stack) {
+      cloned.stack = err.stack.replaceAll(/\/\/[^@\s]*@/g, "//[REDACTED]@");
+    }
+  }
+  return cloned;
+}
+
 // ---------------------------------------------------------------------------
 // HTTP retry classification
 // ---------------------------------------------------------------------------

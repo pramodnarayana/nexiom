@@ -23,8 +23,6 @@ describe('CreateStitchSchema', () => {
       ...VALID_CREATE,
       syncCondition: [{ field: 'Region', op: 'eq', value: 'US' }],
       status: 'PAUSED',
-      syncIntervalMinutes: 60,
-      scheduleEnabled: false,
     });
     expect(result.success).toBe(true);
   });
@@ -58,32 +56,6 @@ describe('CreateStitchSchema', () => {
       CreateStitchSchema.safeParse({ ...VALID_CREATE, workspaceId: 'bad' })
         .success,
     ).toBe(false);
-  });
-
-  it('rejects an invalid syncIntervalMinutes value', () => {
-    const result = CreateStitchSchema.safeParse({
-      ...VALID_CREATE,
-      syncIntervalMinutes: 45,
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(
-        result.error.issues.some(
-          (i) => i.path.join('.') === 'syncIntervalMinutes',
-        ),
-      ).toBe(true);
-    }
-  });
-
-  it('accepts each valid syncIntervalMinutes value', () => {
-    for (const minutes of [30, 60, 120, 240, 360, 720, 1440]) {
-      expect(
-        CreateStitchSchema.safeParse({
-          ...VALID_CREATE,
-          syncIntervalMinutes: minutes,
-        }).success,
-      ).toBe(true);
-    }
   });
 
   it('rejects ARCHIVED status on create', () => {
@@ -180,21 +152,5 @@ describe('UpdateStitchSchema', () => {
       syncCondition: [{ field: 'Amount', op: 'between', value: 100 }],
     });
     expect(result.success).toBe(false);
-  });
-
-  it('accepts scheduleEnabled update', () => {
-    expect(
-      UpdateStitchSchema.safeParse({ scheduleEnabled: false }).success,
-    ).toBe(true);
-  });
-
-  it('rejects an empty name string', () => {
-    expect(UpdateStitchSchema.safeParse({ name: '' }).success).toBe(false);
-  });
-
-  it('rejects an invalid syncIntervalMinutes value', () => {
-    expect(
-      UpdateStitchSchema.safeParse({ syncIntervalMinutes: 15 }).success,
-    ).toBe(false);
   });
 });

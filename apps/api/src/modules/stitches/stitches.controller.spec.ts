@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotImplementedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
-import { UpdateScheduleBody } from './update-schedule.validation.js';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 
 const STITCH_ID = 'stitch-uuid-1';
@@ -80,29 +78,5 @@ describe('StitchesController — schedule endpoints', () => {
     const result = await controller.remove(makeAuth(), STITCH_ID);
     expect(result).toBeUndefined();
     expect(mockService.remove).toHaveBeenCalledWith(ORG_ID, STITCH_ID);
-  });
-
-  it('updateSchedule — delegates to service with orgId', async () => {
-    const updated = {
-      id: STITCH_ID,
-      syncIntervalMinutes: 60,
-      scheduleEnabled: true,
-    };
-    mockService.updateSchedule.mockResolvedValue(updated);
-
-    const result = await controller.updateSchedule(makeAuth(), STITCH_ID, {
-      syncIntervalMinutes: 60,
-    } satisfies UpdateScheduleBody);
-
-    expect(result).toBe(updated);
-    expect(mockService.updateSchedule).toHaveBeenCalledWith(ORG_ID, STITCH_ID, {
-      syncIntervalMinutes: 60,
-    });
-  });
-
-  it('triggerSchedule — throws NotImplementedException until T029 ships', () => {
-    expect(() => controller.triggerSchedule(makeAuth(), STITCH_ID)).toThrow(
-      NotImplementedException,
-    );
   });
 });

@@ -27,6 +27,7 @@ import {
   dataSources,
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
+import { ConnectionSyncRunner } from '../scheduler/connection-sync-runner.js';
 import { requireOrgId } from './workspace.utils.js';
 import { isUniqueViolation } from '../../shared/db.utils.js';
 
@@ -36,6 +37,7 @@ export class WorkspaceConnectionsController {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly workspacesService: WorkspacesService,
+    private readonly connectionSyncRunner: ConnectionSyncRunner,
   ) {}
 
   @Get()
@@ -137,5 +139,26 @@ export class WorkspaceConnectionsController {
           eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
         ),
       );
+  }
+
+  @Post(':dataSourceId/sync/:objectType')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('workspaces', 'manage')
+  async sync(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
+    @Param('objectType') objectType: string,
+  ) {
+    const orgId = requireOrgId(auth);
+    // Verify workspace belongs to this org
+    await this.workspacesService.findOne(orgId, workspaceId);
+
+    // Initial Manual Sync
+    const result = await this.connectionSyncRunner.run(
+      dataSourceId,
+      objectType,
+    );
+    return result;
   }
 }

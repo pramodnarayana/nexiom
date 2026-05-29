@@ -147,11 +147,7 @@ describe("ReplicaService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     await handler({ traceId: "123", dataSourceId: "456" });
 
-    // Best-effort enqueue to L3 bypasses CDC pooling delay — verify it fired
-    expect(queueService.send).toHaveBeenCalledWith(QueueName.ReplicaQueue, {
-      traceId: "123",
-      dataSourceId: "456",
-    });
+    // Best-effort enqueue to L3 was removed to rely purely on CDC relay
     // The main transaction must have run
     expect(db.transaction).toHaveBeenCalledTimes(1);
     // The replicaOutbox insert must have been called with PENDING status
@@ -404,7 +400,7 @@ describe("ReplicaService", () => {
     await handler({ traceId: "123", dataSourceId: "456" });
     // Extractor/insert should not be called (mockExecute only called for SET search_path)
     expect(mockExecute).toHaveBeenCalledTimes(1);
-    expect(queueService.send).toHaveBeenCalled();
+    expect(queueService.send).not.toHaveBeenCalled();
   });
 
   it("should throw a FIFO error if activeSyncLocks insert fails due to unique constraint", async () => {

@@ -1,7 +1,11 @@
 import { Module, type Type } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { CursorManagerService } from '@nexiom/engine';
+import {
+  CursorManagerService,
+  StorageResolverModule,
+  StorageResolverService,
+} from '@nexiom/engine';
 import { PiecesModule, PieceRegistryService } from '@nexiom/piece-registry';
 import { TokenManagerService } from '@nexiom/credentials';
 import { REDIS_CLIENT } from '@nexiom/cache';
@@ -13,7 +17,7 @@ import { WindmillClient } from './windmill.client.js';
 import { HttpWindmillClient } from './http-windmill.client.js';
 import { StubWindmillClient } from './stub-windmill.client.js';
 import { SyncRunner } from './sync-runner.js';
-import { PollSyncRunner } from './poll-sync-runner.js';
+import { ConnectionSyncRunner } from './connection-sync-runner.js';
 import { StubSyncRunner } from './stub-sync-runner.js';
 import { SchedulerService } from './scheduler.service.js';
 import { SchedulerController } from './scheduler.controller.js';
@@ -32,7 +36,7 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
   : [SchedulerController];
 
 @Module({
-  imports: [DbModule, ConnectionsModule, PiecesModule],
+  imports: [DbModule, ConnectionsModule, PiecesModule, StorageResolverModule],
   controllers: schedulerControllers,
   providers: [
     {
@@ -60,7 +64,7 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
       inject: [ConfigService, ModuleRef],
       useFactory: (config: ConfigService, moduleRef: ModuleRef): SyncRunner => {
         if (config.get<string>('WINDMILL_ENABLED') === 'true') {
-          return new PollSyncRunner(
+          return new ConnectionSyncRunner(
             moduleRef.get(DATABASE_CONNECTION, { strict: false }),
             moduleRef.get(DB_MANAGER, { strict: false }),
             moduleRef.get(REDIS_CLIENT, { strict: false }),
@@ -68,15 +72,18 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
             moduleRef.get(TokenManagerService, { strict: false }),
             moduleRef.get(PieceRegistryService, { strict: false }),
             moduleRef.get(CursorManagerService, { strict: false }),
+            moduleRef.get(StorageResolverService, { strict: false }),
           );
         }
         return new StubSyncRunner();
       },
     },
     SchedulerService,
+    ConnectionSyncRunner,
+    StubSyncRunner,
     InternalSchedulerGuard,
     OutboxWorkerService,
   ],
-  exports: [SchedulerService],
+  exports: [SchedulerService, OutboxWorkerService, ConnectionSyncRunner],
 })
 export class SchedulerModule {}

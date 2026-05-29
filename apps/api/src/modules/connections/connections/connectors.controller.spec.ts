@@ -13,6 +13,7 @@ import {
   NotFoundException,
   UnauthorizedException,
   HttpException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PieceRegistryService, PIECES } from '@nexiom/piece-registry';
 import {
@@ -67,6 +68,7 @@ describe('ConnectorsController', () => {
       getAuthorizationUrl: vi.fn(),
       exchangeCodeForTokens: vi.fn(),
       storeOAuthConnection: vi.fn(),
+      deleteConnection: vi.fn(),
       // Returns null so vendorParams validation is skipped (no schema to validate against).
       getProviderDefinition: vi.fn().mockReturnValue(null),
     } as unknown as Mocked<ConnectorsService>;
@@ -124,6 +126,110 @@ describe('ConnectorsController', () => {
       .compile();
 
     controller = module.get<ConnectorsController>(ConnectorsController);
+  });
+
+  describe('createOAuthSession', () => {
+    it('should create an OAuth session and return sessionId', async () => {
+      mockPieceRegistry.resolveBasePieceName.mockReturnValue(
+        'resolved-provider',
+      );
+      mockConnectorsService.getProviderDefinition.mockReturnValue({
+        auth: {
+          type: 'OAUTH2',
+          props: { domain: { type: 'SHORT_TEXT', required: true } },
+        },
+      } as unknown as Piece);
+      mockOauthStateService.createPreFlightSession.mockResolvedValue(
+        'mock-session-id',
+      );
+
+      const body = {
+        providerName: 'mock-provider',
+        clientId: 'client-123',
+        vendorParams: { domain: 'test' },
+      };
+
+      const result = await controller.createOAuthSession(
+        mockCtx,
+        'mock-provider',
+        body,
+      );
+
+      expect(result).toEqual({ sessionId: 'mock-session-id' });
+      expect(mockPieceRegistry.resolveBasePieceName).toHaveBeenCalledWith(
+        'mock-provider',
+      );
+      expect(mockOauthStateService.createPreFlightSession).toHaveBeenCalledWith(
+        'tenant-123',
+        'user-123',
+        'resolved-provider',
+        'client-123',
+        { domain: 'test' },
+        {},
+      );
+    });
+
+    it('should throw BadRequestException if tenant or userId is missing', async () => {
+      await expect(
+        controller.createOAuthSession(missingTenantCtx, 'provider', {
+          providerName: 'provider',
+          clientId: '123',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if path param and body providerName do not match', async () => {
+      await expect(
+        controller.createOAuthSession(mockCtx, 'provider-a', {
+          providerName: 'provider-b',
+          clientId: '123',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should inject appProfile if provider is an alias', async () => {
+      mockPieceRegistry.resolveBasePieceName.mockReturnValue(
+        'resolved-provider',
+      );
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'resolved-provider',
+        aliases: [{ name: 'alias-provider', appProfile: 'custom-profile' }],
+      } as unknown as Piece);
+      mockConnectorsService.getProviderDefinition.mockReturnValue({
+        auth: { type: 'OAUTH2' },
+      } as unknown as Piece);
+      mockOauthStateService.createPreFlightSession.mockResolvedValue('session');
+
+      const result = await controller.createOAuthSession(
+        mockCtx,
+        'alias-provider',
+        {
+          providerName: 'alias-provider',
+          clientId: '123',
+        },
+      );
+
+      expect(result).toEqual({ sessionId: 'session' });
+      expect(mockOauthStateService.createPreFlightSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        expect.any(Object),
+        { appProfile: 'custom-profile' },
+      );
+    });
+
+    it('should throw BadRequestException if provider definition is not found', async () => {
+      mockConnectorsService.getProviderDefinition.mockReturnValue(null);
+
+      await expect(
+        controller.createOAuthSession(mockCtx, 'provider', {
+          providerName: 'provider',
+          clientId: '123',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('initiateOAuth', () => {
@@ -733,6 +839,80 @@ describe('ConnectorsController', () => {
       expect(mockRedis.del).toHaveBeenCalledWith(
         `oauth:idempotency:tenant-123:create:${validBody.code}`,
       );
+    });
+  });
+
+  describe('deleteConnection', () => {
+    it('should delete a connection if user is admin', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockConnectorsService.deleteConnection.mockResolvedValueOnce(undefined);
+
+      await controller.deleteConnection(mockCtx, 'mock-data-source-id');
+
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockConnectorsService.deleteConnection).toHaveBeenCalledWith(
+        'tenant-123',
+        'mock-data-source-id',
+      );
+    });
+
+    it('should delete a connection if user is owner', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'owner' }]),
+      });
+      mockConnectorsService.deleteConnection.mockResolvedValueOnce(undefined);
+
+      await controller.deleteConnection(mockCtx, 'mock-data-source-id');
+
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(mockConnectorsService.deleteConnection).toHaveBeenCalledWith(
+        'tenant-123',
+        'mock-data-source-id',
+      );
+    });
+
+    it('should throw ForbiddenException if user is not admin or owner', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'member' }]),
+      });
+
+      await expect(
+        controller.deleteConnection(mockCtx, 'mock-data-source-id'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw BadRequestException if tenant is missing', async () => {
+      await expect(
+        controller.deleteConnection(missingTenantCtx, 'mock-data-source-id'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should propagate HttpException from deleteConnection', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockConnectorsService.deleteConnection.mockRejectedValueOnce(
+        new NotFoundException('Connection not found'),
+      );
+
+      await expect(
+        controller.deleteConnection(mockCtx, 'mock-data-source-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should wrap generic error in InternalServerErrorException', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockConnectorsService.deleteConnection.mockRejectedValueOnce(
+        new Error('Generic error'),
+      );
+
+      await expect(
+        controller.deleteConnection(mockCtx, 'mock-data-source-id'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 });

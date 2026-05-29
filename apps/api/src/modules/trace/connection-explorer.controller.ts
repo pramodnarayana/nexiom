@@ -23,9 +23,9 @@ const ALLOWED_TABS = [
 ] as const;
 type TabName = (typeof ALLOWED_TABS)[number];
 
-@Controller('stitches/:stitchId/explorer')
+@Controller('connections/:connectionId/explorer')
 @UseGuards(AuthGuard)
-export class DataExplorerController {
+export class ConnectionExplorerController {
   constructor(private readonly explorer: DataExplorerService) {}
 
   private requireOrg(ctx: RequestAuthContext): string {
@@ -38,7 +38,7 @@ export class DataExplorerController {
   @Get(':tab')
   async listByTab(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Param('tab') tab: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
@@ -69,9 +69,9 @@ export class DataExplorerController {
     const orgId = this.requireOrg(ctx);
     const dispatchMap: Record<TabName, () => Promise<unknown>> = {
       inbound: () =>
-        this.explorer.listInbound(
+        this.explorer.listConnectionInbound(
           orgId,
-          stitchId,
+          connectionId,
           page,
           limit,
           workspaceId,
@@ -79,9 +79,9 @@ export class DataExplorerController {
           parsedFilters,
         ),
       replica: () =>
-        this.explorer.listReplica(
+        this.explorer.listConnectionReplica(
           orgId,
-          stitchId,
+          connectionId,
           page,
           limit,
           workspaceId,
@@ -89,40 +89,57 @@ export class DataExplorerController {
           parsedFilters,
         ),
       normalized: () =>
-        this.explorer.listNormalized(
+        this.explorer.listConnectionNormalized(
           orgId,
-          stitchId,
+          connectionId,
           page,
           limit,
           workspaceId,
           objectType,
           parsedFilters,
         ),
-      'entity-map': () =>
-        this.explorer.listEntityMap(orgId, stitchId, page, limit, workspaceId),
+      'entity-map': () => {
+        throw new BadRequestException(
+          'Entity Map is not available in Connection Explorer',
+        );
+      },
       outbound: () =>
-        this.explorer.listOutbound(orgId, stitchId, page, limit, workspaceId),
+        this.explorer.listConnectionOutbound(
+          orgId,
+          connectionId,
+          page,
+          limit,
+          workspaceId,
+        ),
     };
 
     return dispatchMap[tab as TabName]();
   }
 
   @Get('traces/:traceId')
-  async getTrace(
+  async getConnectionTrace(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Param('traceId', ParseUUIDPipe) traceId: string,
-    @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
-    workspaceId?: string,
   ) {
     const orgId = this.requireOrg(ctx);
-    return this.explorer.getTrace(orgId, stitchId, traceId, workspaceId);
+    return this.explorer.getConnectionTrace(orgId, connectionId, traceId);
+  }
+
+  @Get('traces/:traceId/routes')
+  async listTraceRoutes(
+    @AuthContext() ctx: RequestAuthContext,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('traceId', ParseUUIDPipe) traceId: string,
+  ) {
+    const orgId = this.requireOrg(ctx);
+    return this.explorer.listTraceRoutes(orgId, connectionId, traceId);
   }
 
   @Get(':tab/objects')
-  async listObjectsByStitch(
+  async listObjectsByConnection(
     @AuthContext() ctx: RequestAuthContext,
-    @Param('stitchId', ParseUUIDPipe) stitchId: string,
+    @Param('connectionId', ParseUUIDPipe) connectionId: string,
     @Param('tab') tab: string,
     @Query('workspaceId', new ParseUUIDPipe({ optional: true }))
     workspaceId?: string,
@@ -131,6 +148,11 @@ export class DataExplorerController {
       throw new NotFoundException(`Tab "${tab}" not found`);
     }
     const orgId = this.requireOrg(ctx);
-    return this.explorer.listObjectsByStitch(orgId, stitchId, tab, workspaceId);
+    return this.explorer.listObjectsByConnection(
+      orgId,
+      connectionId,
+      tab,
+      workspaceId,
+    );
   }
 }

@@ -8,6 +8,9 @@ import {
     type VendorResponse,
     type ConfigOption,
     type RelatedObjectDescriptor,
+    type StreamDescriptor,
+    type PollWindow,
+    type PollPage,
 } from '@nexiom/piece-framework';
 
 
@@ -195,6 +198,79 @@ async function describeConfig(
     ];
 }
 
+async function countRecords(
+    credentials: Record<string, unknown>,
+    objectName: string,
+): Promise<number> {
+    const instanceUrl = getInstanceUrl(credentials);
+    const accessToken = getAccessToken(credentials);
+    const q = encodeURIComponent(`SELECT COUNT() FROM ${objectName}`);
+    const url = `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${q}`;
+
+    interface SfQueryResponse { totalSize: number }
+    const data = await sfFetch<SfQueryResponse>(url, accessToken);
+    return data.totalSize;
+}
+
+async function describeStreams(
+    credentials: Record<string, unknown>,
+): Promise<StreamDescriptor[]> {
+    const objects = await describeObjects(credentials);
+    return objects.map((o) => ({
+        streamName: o.name,
+        // Using FULL_TABLE since not all custom objects support SystemModstamp filtering.
+        // Full table pagination is sufficient for the manual initial sync.
+        replicationMethod: 'FULL_TABLE',
+        keyProperties: ['Id'],
+    }));
+}
+
+async function poll(
+    credentials: Record<string, unknown>,
+    streamName: string,
+    _window: PollWindow,
+    nextPageCursor?: Record<string, unknown>,
+): Promise<PollPage> {
+    const instanceUrl = getInstanceUrl(credentials);
+    const accessToken = getAccessToken(credentials);
+
+    let url: string;
+    let soql = `SELECT FIELDS(ALL) FROM ${streamName}`;
+    
+    if (nextPageCursor && typeof nextPageCursor.lastId === 'string') {
+        soql += ` WHERE Id > '${nextPageCursor.lastId}' ORDER BY Id ASC LIMIT 200`;
+    } else {
+        soql += ` ORDER BY Id ASC LIMIT 200`;
+    }
+    
+    const q = encodeURIComponent(soql);
+    url = `${instanceUrl}/services/data/${SF_API_VERSION}/query?q=${q}`;
+
+    interface SfQueryResponse {
+        done: boolean;
+        records: Record<string, unknown>[];
+    }
+
+    const data = await sfFetch<SfQueryResponse>(url, accessToken);
+
+    const done = data.records.length < 200;
+    let nextCursor: Record<string, unknown> | undefined;
+    if (!done && data.records.length > 0) {
+        const lastRecord = data.records[data.records.length - 1];
+        nextCursor = { lastId: lastRecord['Id'] };
+    }
+
+    return {
+        streamName,
+        records: data.records.map((r) => ({
+            data: r,
+            replicationKey: 'Id',
+            replicationKeyValue: String(r['Id'] || ''),
+        })),
+        nextPageCursor: nextCursor,
+    };
+}
+
 const customApiAction = createCustomApiCallAction({
     baseUrl: (auth) => (auth).data['instance_url'],
     auth: salesforceAuth,
@@ -240,6 +316,9 @@ export const salesforce = createPiece({
     describeFields,
     describeRelatedObjects,
     describeConfig,
+    countRecords,
+    describeStreams,
+    poll,
     validateConnection: async (tokenResponse: Record<string, unknown>, _vendorParams: Record<string, unknown>, requestedAppProfile: string | undefined): Promise<void> => {
         if (!requestedAppProfile || requestedAppProfile === 'default') {
             return; // No specific managed package required for standard Salesforce

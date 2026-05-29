@@ -61,6 +61,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.1",
+    "fast-json-stable-stringify": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
     "nestjs-pino": "^4.6.1",
     "nestjs-zod": "^5.0.1",

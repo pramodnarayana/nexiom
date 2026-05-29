@@ -155,7 +155,8 @@ export class SqlDatabaseManager {
                 response      JSONB,
                 headers       JSONB,
                 ext_req_id    VARCHAR(255),
-                status        TEXT         NOT NULL DEFAULT 'RECEIVED'
+                status        TEXT         NOT NULL DEFAULT 'RECEIVED',
+                error_message TEXT
                               CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED',
                                                 'NORMALIZED','SKIPPED','PENDING',
                                                 'SUCCESS','FAIL','RETRY','DISMISSED')),
@@ -181,6 +182,12 @@ export class SqlDatabaseManager {
         await this.db.$client.query(`
             ALTER TABLE "${schemaName}".inbound_gateway
                 ADD COLUMN IF NOT EXISTS response JSONB;
+        `);
+
+        // Idempotently add error_message column
+        await this.db.$client.query(`
+            ALTER TABLE "${schemaName}".inbound_gateway
+                ADD COLUMN IF NOT EXISTS error_message TEXT;
         `);
 
         // Idempotency: unique (connection_id, ext_req_id) prevents duplicate
@@ -225,10 +232,23 @@ export class SqlDatabaseManager {
                 status        TEXT         NOT NULL DEFAULT 'PENDING'
                               CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
                 attempts      INTEGER      NOT NULL DEFAULT 0,
-                last_error    VARCHAR(500),
+                error_message    VARCHAR(500),
                 next_retry_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
                 created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
             );
+        `);
+
+        await this.db.$client.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = '${schemaName}'
+                       AND table_name   = 'inbound_outbox'
+                       AND column_name  = 'last_error'
+                ) THEN
+                    ALTER TABLE "${schemaName}".inbound_outbox RENAME COLUMN last_error TO error_message;
+                END IF;
+            END $$;
         `);
 
         await this.db.$client.query(`
@@ -267,6 +287,7 @@ export class SqlDatabaseManager {
             layer       TEXT        NOT NULL CHECK (layer IN ('L1','L2','L3','L4','L5','L6')),
             status      TEXT        NOT NULL CHECK (status IN ('RECEIVED','PROCESSING','REPLICATED','NORMALIZED','SKIPPED','PENDING','SUCCESS','FAIL','RETRY','DISMISSED')),
             duration_ms INTEGER,
+            error_message TEXT,
             timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
     `);
@@ -293,6 +314,8 @@ export class SqlDatabaseManager {
 
         // Create the modern routed/unrouted partial unique indexes
         await this.db.$client.query(`
+        ALTER TABLE "${schemaName}".sync_log ADD COLUMN IF NOT EXISTS error_message TEXT;
+
         CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_log_routed
             ON "${schemaName}".sync_log (trace_id, route_id, layer, status)
             WHERE route_id IS NOT NULL;
@@ -369,14 +392,27 @@ export class SqlDatabaseManager {
             status        TEXT         NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER      NOT NULL DEFAULT 0,
-            last_error    VARCHAR(500),
+            error_message    VARCHAR(500),
             next_retry_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         );
     `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = '${schemaName}'
+                       AND table_name   = 'replica_outbox'
+                       AND column_name  = 'last_error'
+                ) THEN
+                    ALTER TABLE "${schemaName}".replica_outbox RENAME COLUMN last_error TO error_message;
+                END IF;
+            END $$;
+        `);
+
+        await this.db.$client.query(`
+            CREATE INDEX IF NOT EXISTS idx_replica_outbox_claim
             ON "${schemaName}".replica_outbox (status, next_retry_at ASC)
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
@@ -439,7 +475,7 @@ export class SqlDatabaseManager {
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
-            last_error    VARCHAR(500),
+            error_message    VARCHAR(500),
             next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
@@ -453,7 +489,20 @@ export class SqlDatabaseManager {
     `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_normalized_outbox_claim
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = '${schemaName}'
+                       AND table_name   = 'normalized_outbox'
+                       AND column_name  = 'last_error'
+                ) THEN
+                    ALTER TABLE "${schemaName}".normalized_outbox RENAME COLUMN last_error TO error_message;
+                END IF;
+            END $$;
+        `);
+
+        await this.db.$client.query(`
+            CREATE INDEX IF NOT EXISTS idx_normalized_outbox_claim
             ON "${schemaName}".normalized_outbox (status, next_retry_at ASC)
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);
@@ -522,7 +571,7 @@ export class SqlDatabaseManager {
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CONSTRAINT ck_outbound_status CHECK (status IN ('PENDING','SUCCESS','FAIL','RETRY','PROCESSING','DISMISSED')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
-            last_error    TEXT,
+            error_message    TEXT,
             next_retry_at TIMESTAMPTZ,
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -607,7 +656,7 @@ export class SqlDatabaseManager {
             status        TEXT        NOT NULL DEFAULT 'PENDING'
                           CHECK (status IN ('PENDING','PROCESSING','SUCCESS','FAIL','RETRY')),
             attempts      INTEGER     NOT NULL DEFAULT 0,
-            last_error    VARCHAR(500),
+            error_message    VARCHAR(500),
             next_retry_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_outbound_outbox UNIQUE (trace_id, route_id, outbound_gateway_id)
@@ -621,7 +670,7 @@ export class SqlDatabaseManager {
 
             -- Step 2: add new columns nullable first (safe on existing rows)
             ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS attempts      INTEGER     DEFAULT 0;
-            ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS last_error    VARCHAR(500);
+            ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS error_message    VARCHAR(500);
             ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ DEFAULT NOW();
             ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS trace_id             UUID;
             ALTER TABLE "${schemaName}".outbound_outbox ADD COLUMN IF NOT EXISTS route_id             UUID;
@@ -679,7 +728,20 @@ export class SqlDatabaseManager {
         `);
 
         await this.db.$client.query(`
-        CREATE INDEX IF NOT EXISTS idx_outbound_outbox_claim
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                     WHERE table_schema = '${schemaName}'
+                       AND table_name   = 'outbound_outbox'
+                       AND column_name  = 'last_error'
+                ) THEN
+                    ALTER TABLE "${schemaName}".outbound_outbox RENAME COLUMN last_error TO error_message;
+                END IF;
+            END $$;
+        `);
+
+        await this.db.$client.query(`
+            CREATE INDEX IF NOT EXISTS idx_outbound_outbox_claim
             ON "${schemaName}".outbound_outbox (status, next_retry_at ASC)
             WHERE status IN ('PENDING', 'PROCESSING', 'RETRY');
     `);

@@ -586,8 +586,8 @@ describe("FanOutService", () => {
       "L4",
       "SKIPPED",
       expect.any(Number),
-      expect.anything(),
-      expect.anything(),
+      expect.anything(), // syncLog
+      expect.anything(), // tenantDb
     );
   });
 
@@ -653,25 +653,34 @@ describe("FanOutService", () => {
   });
 
   it("should handle error when queue publish fails and decrement lock ref count", async () => {
+    let txCount = 0;
     db.transaction.mockImplementation(async (cb: any) => {
+      txCount++;
+      const isFirstTx = txCount === 1; // getReplicaAndStitches
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
-          return Promise.resolve([
-            {
-              id: "outbound_1",
-              data: { name: "hi" },
-              canonicalType: "RAW",
-              reqPayload: {},
-              entityId: "src_vendor",
-            },
-          ]);
+          if (isFirstTx) {
+            return Promise.resolve([
+              {
+                id: "outbound_1",
+                data: { name: "hi" },
+                canonicalType: "RAW",
+                reqPayload: {},
+                entityId: "src_vendor",
+              },
+            ]);
+          }
+          return Promise.resolve([]);
         }),
         delete: vi.fn().mockReturnThis(),
         insert: mockTxInsert,
-        execute: vi.fn().mockResolvedValue([]),
+        execute: vi.fn().mockResolvedValue({
+          rowCount: 1,
+          rows: [{ status: "PENDING", was_insert: true }],
+        }),
       });
       return cb(tx);
     });
@@ -713,8 +722,9 @@ describe("FanOutService", () => {
       "L4",
       "FAIL",
       expect.any(Number),
-      expect.anything(),
-      expect.anything(),
+      expect.anything(), // syncLog
+      expect.anything(), // tenantDb
+      "Send failed",
     );
     // Should call releaseSyncLock because ref count decremented to 0
     expect((service as any).releaseSyncLock).toHaveBeenCalled();

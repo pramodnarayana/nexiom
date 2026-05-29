@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PiecesModule } from "@nexiom/piece-registry";
 import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
 import { CacheModule } from "@nexiom/cache";
+import { ObservabilityModule } from "./modules/observability/observability.module.js";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { CacheModule } from "@nexiom/cache";
       isGlobal: true,
       envFilePath: [".env.local", ".env", "../../.env"],
     }),
+    ObservabilityModule,
     PiecesModule.forRoot({ anchorUrl: import.meta.url }),
     ScheduleModule.forRoot(),
     QueueModule.forRootAsync({

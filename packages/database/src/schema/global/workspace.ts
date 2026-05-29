@@ -36,12 +36,12 @@ export const uiWorkspaces = pgTable('ui_workspace', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
     // Case-insensitive uniqueness per env — same name allowed in PRODUCTION vs SANDBOX
-    uniqueIndex('ui_workspace_org_name_lower_unique_idx').on(table.orgId, table.envType, sql`lower(${table.name})`),
+    uniqueIndex('ui_ws_org_name_lower_unique_idx').on(table.orgId, table.envType, sql`lower(${table.name})`),
     // Composite unique on (id, orgId) — required target for the composite FK
     // in integration_stitch that enforces workspace ↔ org co-ownership.
-    unique('ui_workspace_id_org_unique_idx').on(table.id, table.orgId),
-    index('ui_workspace_org_idx').on(table.orgId),
-    index('ui_workspace_env_idx').on(table.orgId, table.envType),
+    unique('ui_ws_id_org_unique_idx').on(table.id, table.orgId),
+    index('ui_ws_org_idx').on(table.orgId),
+    index('ui_ws_env_idx').on(table.orgId, table.envType),
 ]);
 
 /**

@@ -50,7 +50,7 @@ export class DependencySweeperService {
         .from(dataSources)
         .innerJoin(
           integrationStitches,
-          eq(integrationStitches.srcDataSourceId, dataSources.id),
+          eq(integrationStitches.destDataSourceId, dataSources.id),
         )
         .where(
           and(

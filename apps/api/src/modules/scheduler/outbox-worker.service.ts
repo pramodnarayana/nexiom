@@ -5,7 +5,7 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   schedulerOutbox,
-  integrationStitches,
+  dataSources,
 } from '@nexiom/database';
 import { SchedulerService } from './scheduler.service.js';
 
@@ -85,33 +85,33 @@ export class OutboxWorkerService {
   ): Promise<void> {
     try {
       if (record.action === 'DELETED') {
-        await this.scheduler.onStitchDeleted(record.stitchId);
+        await this.scheduler.onConnectionDeleted(record.dataSourceId);
       } else {
-        // Re-read stitch to get current state before calling Windmill.
-        const stitch = await this.db.query.integrationStitches.findFirst({
-          where: eq(integrationStitches.id, record.stitchId),
+        // Re-read data source to get current state before calling Windmill.
+        const dataSource = await this.db.query.dataSources.findFirst({
+          where: eq(dataSources.id, record.dataSourceId),
         });
 
-        if (!stitch || stitch.status === 'ARCHIVED') {
-          // Stitch is gone or archived — the separate 'deleted' outbox record
-          // (inserted by remove()) will clean up the Windmill schedule.
+        if (!dataSource) {
+          // Data source is gone — the separate 'deleted' outbox record
+          // will clean up the Windmill schedule.
           this.logger.debug(
-            `Outbox record ${record.id}: stitch ${record.stitchId} is absent/archived — skipping ${record.action}`,
+            `Outbox record ${record.id}: dataSource ${record.dataSourceId} is absent — skipping ${record.action}`,
           );
           await this.markSucceeded(record.id);
           return;
         }
 
         if (record.action === 'CREATED') {
-          await this.scheduler.onStitchCreated(stitch);
+          await this.scheduler.onConnectionCreated(dataSource);
         } else {
-          await this.scheduler.onStitchUpdated(stitch);
+          await this.scheduler.onConnectionUpdated(dataSource);
         }
       }
 
       await this.markSucceeded(record.id);
       this.logger.debug(
-        `Outbox record succeeded: id=${record.id} action=${record.action} stitchId=${record.stitchId} attempts=${record.attempts}`,
+        `Outbox record succeeded: id=${record.id} action=${record.action} dataSourceId=${record.dataSourceId} attempts=${record.attempts}`,
       );
     } catch (err) {
       await this.handleFailure(record, err);
@@ -132,18 +132,18 @@ export class OutboxWorkerService {
     // Sanitize before persisting or logging — raw vendor error messages may
     // contain OAuth tokens, connection strings, or other sensitive material.
     const rawError = err instanceof Error ? err.message : String(err);
-    const lastError = sanitizeError(rawError);
+    const errorMessage = sanitizeError(rawError);
 
     if (record.attempts >= MAX_OUTBOX_ATTEMPTS) {
       // Permanently failed — mark for alerting/human review.
       await this.db
         .update(schedulerOutbox)
-        .set({ status: 'FAILED', lastError, processedAt: new Date() })
+        .set({ status: 'FAILED', errorMessage, processedAt: new Date() })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.error(
         `Outbox record permanently failed: id=${record.id} action=${record.action} ` +
-          `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `error="${lastError}"`,
+          `dataSourceId=${record.dataSourceId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
+          `error="${errorMessage}"`,
       );
     } else {
       // Exponential back-off between attempts: 2s, 4s, 8s, 16s, 32s.
@@ -151,12 +151,12 @@ export class OutboxWorkerService {
       const nextRetryAt = new Date(Date.now() + delayMs);
       await this.db
         .update(schedulerOutbox)
-        .set({ status: 'PENDING', lastError, nextRetryAt })
+        .set({ status: 'PENDING', errorMessage, nextRetryAt })
         .where(eq(schedulerOutbox.id, record.id));
       this.logger.warn(
         `Outbox record will retry: id=${record.id} action=${record.action} ` +
-          `stitchId=${record.stitchId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
-          `nextRetryAt=${nextRetryAt.toISOString()} error="${lastError}"`,
+          `dataSourceId=${record.dataSourceId} attempts=${record.attempts}/${MAX_OUTBOX_ATTEMPTS} ` +
+          `nextRetryAt=${nextRetryAt.toISOString()} error="${errorMessage}"`,
       );
     }
   }

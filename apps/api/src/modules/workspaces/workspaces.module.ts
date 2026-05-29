@@ -5,9 +5,10 @@ import { WorkspacesService } from './workspaces.service.js';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { CapacityManagerService } from './capacity-manager.service.js';
 import { QueueModule } from '@nexiom/queue';
+import { SchedulerModule } from '../scheduler/scheduler.module.js';
 
 @Module({
-  imports: [DbModule, QueueModule],
+  imports: [DbModule, QueueModule, SchedulerModule],
   controllers: [WorkspacesController, WorkspaceConnectionsController],
   providers: [WorkspacesService, CapacityManagerService],
   exports: [WorkspacesService],

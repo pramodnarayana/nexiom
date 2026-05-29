@@ -7,7 +7,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { eq, and, asc, notInArray } from 'drizzle-orm';
+import { eq, and, asc, notInArray, inArray } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -131,7 +131,14 @@ export class WorkspacesService {
 
     const conditions = [
       eq(dataSources.tenantId, orgId),
-      eq(credentials.status, AppConnectionStatus.ACTIVE),
+      // Do not filter strictly by ACTIVE, otherwise REVOKED connections become invisible orphans
+      // that users cannot delete or re-authenticate.
+      inArray(credentials.status, [
+        AppConnectionStatus.ACTIVE,
+        AppConnectionStatus.REVOKED,
+        AppConnectionStatus.EXPIRED,
+        AppConnectionStatus.FAILED,
+      ]),
       eq(dataSources.envType, workspace.envType),
     ];
 
@@ -184,7 +191,12 @@ export class WorkspacesService {
         credentials,
         and(
           eq(credentials.dataSourceId, dataSources.id),
-          eq(credentials.status, AppConnectionStatus.ACTIVE),
+          inArray(credentials.status, [
+            AppConnectionStatus.ACTIVE,
+            AppConnectionStatus.REVOKED,
+            AppConnectionStatus.EXPIRED,
+            AppConnectionStatus.FAILED,
+          ]),
         ),
       )
       .where(

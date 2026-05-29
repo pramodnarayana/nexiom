@@ -3,30 +3,30 @@ import { ConfigService } from '@nestjs/config';
 import {
   WindmillClient,
   schedulePathFor,
-  STITCH_RUNNER_PATH,
+  CONNECTION_RUNNER_PATH,
 } from './windmill.client.js';
 
 /** Timeout for all Windmill API calls. Prevents indefinite hangs on network issues. */
 const REQUEST_TIMEOUT_MS = 10_000;
 
-/** Deno TypeScript stitch-runner script deployed to Windmill workers. */
-const STITCH_RUNNER_CONTENT = (apiUrl: string, secret: string) =>
+/** Deno TypeScript connection-runner script deployed to Windmill workers. */
+const CONNECTION_RUNNER_CONTENT = (apiUrl: string, secret: string) =>
   `
 import * as wmill from "npm:windmill-client@1";
 
-export async function main(stitchId: string): Promise<object> {
-  const response = await fetch(${JSON.stringify(apiUrl + '/api/internal/scheduler/execute-stitch')}, {
+export async function main(dataSourceId: string): Promise<object> {
+  const response = await fetch(${JSON.stringify(apiUrl + '/api/internal/scheduler/execute-connection')}, {
     method: "POST",
     headers: {
       "Authorization": ${JSON.stringify('Bearer ' + secret)},
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ stitchId }),
+    body: JSON.stringify({ dataSourceId }),
   });
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(\`Stitch execution failed [\${response.status}]: \${body}\`);
+    throw new Error(\`Connection sync execution failed [\${response.status}]: \${body}\`);
   }
 
   return await response.json();
@@ -56,37 +56,37 @@ export class HttpWindmillClient extends WindmillClient {
     );
   }
 
-  async ensureStitchScript(): Promise<void> {
+  async ensureConnectionScript(): Promise<void> {
     const res = await this.rawRequest('POST', `/scripts/create`, {
-      path: STITCH_RUNNER_PATH,
-      summary: 'Stitch Runner',
+      path: CONNECTION_RUNNER_PATH,
+      summary: 'Connection Runner',
       description:
-        'Shared Windmill script that triggers a Nexiom stitch sync via the internal scheduler API.',
-      content: STITCH_RUNNER_CONTENT(this.callbackUrl, this.internalSecret),
+        'Shared Windmill script that triggers a Nexiom connection sync via the internal scheduler API.',
+      content: CONNECTION_RUNNER_CONTENT(this.callbackUrl, this.internalSecret),
       language: 'deno',
       schema: {
         $schema: 'https://json-schema.org/draft/2020-12/schema',
         type: 'object',
         properties: {
-          stitchId: {
+          dataSourceId: {
             type: 'string',
-            description: 'The UUID of the stitch to execute.',
+            description: 'The UUID of the connection/data source to execute.',
           },
         },
-        required: ['stitchId'],
+        required: ['dataSourceId'],
       },
     });
 
     if (res.ok) {
       await res.body?.cancel();
       this.logger.debug(
-        `Deployed stitch-runner script at ${STITCH_RUNNER_PATH}`,
+        `Deployed connection-runner script at ${CONNECTION_RUNNER_PATH}`,
       );
       return;
     }
     if (res.status === 409) {
       // Windmill returns 409 when an identical content hash already exists at this
-      // path (truly idempotent).  If STITCH_RUNNER_CONTENT changed since the last
+      // path (truly idempotent).  If CONNECTION_RUNNER_CONTENT changed since the last
       // deploy, the hash differs and Windmill creates a new version (200).
       // A persistent 409 after a content change indicates the Windmill workspace
       // needs a manual redeploy (delete the script at the path and redeploy).
@@ -99,7 +99,7 @@ export class HttpWindmillClient extends WindmillClient {
         // Ignore body-read errors — the 409 itself is sufficient signal.
       }
       this.logger.warn(
-        `Stitch-runner script at ${STITCH_RUNNER_PATH} returned 409 — ` +
+        `Connection-runner script at ${CONNECTION_RUNNER_PATH} returned 409 — ` +
           `script content matches an existing version or a manual redeploy is needed` +
           (snippet ? `. Response: ${snippet}` : '.'),
       );
@@ -112,17 +112,17 @@ export class HttpWindmillClient extends WindmillClient {
   }
 
   async createSchedule(
-    stitchId: string,
+    connectionId: string,
     cron: string,
     enabled: boolean,
   ): Promise<void> {
     await this.requestVoid('POST', '/schedules/create', {
-      path: schedulePathFor(stitchId),
+      path: schedulePathFor(connectionId),
       schedule: cron,
       timezone: 'UTC',
-      script_path: STITCH_RUNNER_PATH,
+      script_path: CONNECTION_RUNNER_PATH,
       is_flow: false,
-      args: { stitchId },
+      args: { dataSourceId: connectionId },
       enabled,
     });
   }
@@ -133,17 +133,17 @@ export class HttpWindmillClient extends WindmillClient {
    * Throws on any other non-OK response.
    */
   async updateSchedule(
-    stitchId: string,
+    connectionId: string,
     cron: string,
     enabled: boolean,
   ): Promise<boolean> {
-    const path = schedulePathFor(stitchId);
+    const path = schedulePathFor(connectionId);
     const res = await this.rawRequest('POST', `/schedules/update/${path}`, {
       schedule: cron,
       timezone: 'UTC',
-      script_path: STITCH_RUNNER_PATH,
+      script_path: CONNECTION_RUNNER_PATH,
       is_flow: false,
-      args: { stitchId },
+      args: { dataSourceId: connectionId },
       enabled,
     });
 
@@ -161,22 +161,27 @@ export class HttpWindmillClient extends WindmillClient {
     return true;
   }
 
-  async setScheduleEnabled(stitchId: string, enabled: boolean): Promise<void> {
-    const path = schedulePathFor(stitchId);
+  async setScheduleEnabled(
+    connectionId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const path = schedulePathFor(connectionId);
     await this.requestVoid('POST', `/schedules/setenabled/${path}`, {
       enabled,
     });
-    this.logger.debug(`Set schedule enabled=${enabled} for stitch ${stitchId}`);
+    this.logger.debug(
+      `Set schedule enabled=${enabled} for connection ${connectionId}`,
+    );
   }
 
-  async scheduleExists(stitchId: string): Promise<boolean> {
-    const path = schedulePathFor(stitchId);
+  async scheduleExists(connectionId: string): Promise<boolean> {
+    const path = schedulePathFor(connectionId);
     const res = await this.rawRequest('GET', `/schedules/get/${path}`);
     return this.existsOrThrow(res);
   }
 
-  async deleteSchedule(stitchId: string): Promise<void> {
-    const path = schedulePathFor(stitchId);
+  async deleteSchedule(connectionId: string): Promise<void> {
+    const path = schedulePathFor(connectionId);
     const res = await this.rawRequest('DELETE', `/schedules/delete/${path}`);
     if (!res.ok && res.status !== 404) {
       const body = await res.text();
@@ -187,12 +192,12 @@ export class HttpWindmillClient extends WindmillClient {
     await res.body?.cancel();
   }
 
-  async triggerOnce(stitchId: string): Promise<string> {
+  async triggerOnce(connectionId: string): Promise<string> {
     // Windmill POST /jobs/run/p/{path} returns the new job UUID as plain text.
     const res = await this.rawRequest(
       'POST',
-      `/jobs/run/p/${STITCH_RUNNER_PATH}`,
-      { stitchId },
+      `/jobs/run/p/${CONNECTION_RUNNER_PATH}`,
+      { dataSourceId: connectionId },
     );
     if (!res.ok) {
       const text = await res.text();

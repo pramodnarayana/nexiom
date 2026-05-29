@@ -94,6 +94,7 @@ export function buildTenantSchema(schemaName: string) {
         // Vendor batch/event ID — used for idempotency
         extReqId: varchar('ext_req_id', { length: 255 }),
         status: pipelineStatusEnum('status').notNull().default('RECEIVED'),
+        errorMessage: text('error_message'),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
         uniqueIndex('idx_l1_ext_id').on(table.dataSourceId, table.extReqId),
@@ -179,12 +180,13 @@ export function buildTenantSchema(schemaName: string) {
         traceId: uuid('trace_id').notNull(),
         routeId: uuid('route_id').notNull(),
         dataSourceId: uuid('data_source_id').notNull(),
+        srcDataSourceId: uuid('src_data_source_id').notNull(),
         payload: jsonb('payload').notNull(),
         response: jsonb('response'),
         statusCode: integer('status_code'),
         status: text('status').$type<OutboundGatewayStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
-        lastError: text('last_error'),
+        errorMessage: text('error_message'),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
@@ -209,6 +211,9 @@ export function buildTenantSchema(schemaName: string) {
         layer: pipelineLayerEnum('layer').notNull(),
         status: pipelineStatusEnum('status').notNull(),
         durationMs: integer('duration_ms'),
+        // Populated on FAIL — the human-readable error message from the layer that failed.
+        // Visible to support teams via the Trace UI. Not a stack trace (use Pino logs for that).
+        errorMessage: text('error_message'),
         timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
         index('idx_log_trace').on(table.traceId),
@@ -249,7 +254,7 @@ export function buildTenantSchema(schemaName: string) {
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
-        lastError: varchar('last_error', { length: 500 }),
+        errorMessage: varchar('error_message', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
@@ -272,7 +277,7 @@ export function buildTenantSchema(schemaName: string) {
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
-        lastError: varchar('last_error', { length: 500 }),
+        errorMessage: varchar('error_message', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
@@ -295,7 +300,7 @@ export function buildTenantSchema(schemaName: string) {
         schemaName: varchar('schema_name', { length: 128 }).notNull().default(sql`current_schema()`),
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
-        lastError: varchar('last_error', { length: 500 }),
+        errorMessage: varchar('error_message', { length: 500 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [

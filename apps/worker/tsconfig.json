@@ -30,6 +30,7 @@
     "test/vitest-e2e.config.mts"
   ],
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "vitest.setup.ts"
   ]
 }

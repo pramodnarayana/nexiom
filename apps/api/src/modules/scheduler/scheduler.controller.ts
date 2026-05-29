@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 import { SchedulerService } from './scheduler.service.js';
-import { ExecuteStitchBody } from './execute-stitch.validation.js';
+import { ExecuteConnectionBody } from './execute-connection.validation.js';
 
 /**
  * Internal scheduler endpoints — called exclusively by Windmill workers.
@@ -22,21 +22,25 @@ export class SchedulerController {
   constructor(private readonly schedulerService: SchedulerService) {}
 
   /**
-   * POST /internal/scheduler/execute-stitch
+   * POST /internal/scheduler/execute-connection
    *
-   * Invoked by the Windmill stitch-runner script to execute a sync job.
+   * Invoked by the Windmill connection-runner script to execute a sync job.
    * Returns 200 immediately with the execution result.
    */
-  @Post('execute-stitch')
+  @Post('execute-connection')
   @HttpCode(HttpStatus.OK)
-  async executeStitch(@Body() body: ExecuteStitchBody) {
+  async executeConnection(@Body() body: ExecuteConnectionBody) {
     // Wrap the entire call so that raw internal errors (DB connection strings,
     // vendor tokens, stack traces) are never surfaced in the HTTP response body
     // seen by Windmill workers.
     try {
-      const result = await this.schedulerService.executeStitch(body.stitchId);
+      const result = await this.schedulerService.executeConnection(
+        body.dataSourceId,
+      );
       if (result.status === 'failed') {
-        throw new InternalServerErrorException('Stitch execution failed');
+        throw new InternalServerErrorException(
+          'Connection sync execution failed',
+        );
       }
       return result;
     } catch (err) {
@@ -44,7 +48,9 @@ export class SchedulerController {
       // etc.) unchanged so domain errors surface as the correct 4xx status.
       // Only wrap truly unexpected errors as 500 to avoid leaking internals.
       if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Stitch execution failed');
+      throw new InternalServerErrorException(
+        'Connection sync execution failed',
+      );
     }
   }
 }

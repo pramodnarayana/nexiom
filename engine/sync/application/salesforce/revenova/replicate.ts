@@ -5,15 +5,41 @@
 export async function ReplicateRevenovaObject(payload: unknown): Promise<{ entityType: string; entityId: string; data: Record<string, unknown> } | null> {
     // The inbound_gateway stores payloads as { raw: string, contentType: string }.
     // Unwrap the envelope before parsing.
-    let body: string;
+    let body: string | undefined;
     if (typeof payload === 'string') {
         body = payload;
-    } else if (payload !== null && typeof payload === 'object' && typeof (payload as Record<string, unknown>)['raw'] === 'string') {
-        body = (payload as Record<string, unknown>)['raw'] as string;
+    } else if (payload !== null && typeof payload === 'object') {
+        const p = payload as Record<string, unknown>;
+        if (typeof p['raw'] === 'string') {
+            body = p['raw'];
+        } else if (p['attributes'] && typeof (p['attributes'] as Record<string, unknown>)['type'] === 'string' && p['Id']) {
+            // It's a JSON REST API payload from polling!
+            const entityType = (p['attributes'] as Record<string, unknown>)['type'] as string;
+            const entityId = p['Id'] as string;
+            
+            // Normalize keys to lowercase to match the XML extraction behavior downstream
+            const data: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(p)) {
+                if (key !== 'attributes') {
+                    // Stringify values if they are objects (though standard SF fields are primitives)
+                    data[key.toLowerCase()] = value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value);
+                }
+            }
+            return {
+                entityType,
+                entityId,
+                data,
+            };
+        } else {
+            return null;
+        }
     } else {
         return null;
     }
 
+    if (!body) {
+        return null;
+    }
     // Salesforce Outbound Message usually looks like:
     // <sObject xsi:type="sf:Account" xmlns:sf="urn:sobject.enterprise.soap.sforce.com">
     //   <sf:Id>001xx000003DGb2AAG</sf:Id>

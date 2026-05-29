@@ -9,8 +9,10 @@ import { SyncRunner, type SyncResult } from './sync-runner.js';
 export class StubSyncRunner extends SyncRunner {
   private readonly logger = new Logger(StubSyncRunner.name);
 
-  run(stitchId: string): Promise<SyncResult> {
-    this.logger.debug(`StubSyncRunner: run stitchId=${stitchId} (no-op)`);
-    return Promise.resolve({ stitchId, status: 'succeeded' });
+  run(connectionId: string, _objectType?: string): Promise<SyncResult> {
+    this.logger.debug(
+      `StubSyncRunner: run connectionId=${connectionId} (no-op)`,
+    );
+    return Promise.resolve({ connectionId, status: 'succeeded' });
   }
 }

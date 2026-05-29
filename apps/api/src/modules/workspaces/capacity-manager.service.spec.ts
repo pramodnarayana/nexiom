@@ -10,6 +10,7 @@ describe('CapacityManagerService', () => {
   let mockDb: { execute: ReturnType<typeof vi.fn> };
   let mockQueueService: { send: ReturnType<typeof vi.fn> };
   let errorSpy: ReturnType<typeof vi.spyOn>;
+  let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     mockDb = {
@@ -20,7 +21,7 @@ describe('CapacityManagerService', () => {
       send: vi.fn().mockResolvedValue(undefined),
     };
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         CapacityManagerService,
         { provide: DATABASE_CONNECTION, useValue: mockDb },
@@ -37,6 +38,12 @@ describe('CapacityManagerService', () => {
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 
     process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/testdb';
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   describe('replenishPool', () => {

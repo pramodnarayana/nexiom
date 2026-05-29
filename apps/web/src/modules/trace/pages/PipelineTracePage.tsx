@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { AlertCircle, Activity, ChevronRight, FileJson } from 'lucide-react';
+import { AlertCircle, Activity, ChevronRight, FileJson, AlertTriangle } from 'lucide-react';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -108,8 +108,33 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
       </div>
     );
   } else if (details) {
+    // Extract error message from inbound_gateway.response if FAIL
+    const gwResponse = details.inboundGateway?.response as Record<string, unknown> | null | undefined;
+    const failureError = details.inboundGateway?.status === 'FAIL' && gwResponse?.error
+      ? String(gwResponse.error)
+      : null;
+    const failureStack = failureError && gwResponse?.stack ? String(gwResponse.stack) : null;
+
     expandedContent = (
       <>
+        {/* ── Error Panel (shown only on FAIL) ── */}
+        {failureError && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span className="text-sm font-semibold">Pipeline Failure</span>
+              <Badge variant="destructive" className="ml-auto text-[10px]">FAIL</Badge>
+            </div>
+            <p className="text-sm font-mono text-destructive/90 break-all">{failureError}</p>
+            {failureStack && (
+              <details className="mt-1">
+                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">Show stack trace</summary>
+                <pre className="mt-2 text-[10px] font-mono text-muted-foreground leading-relaxed overflow-auto max-h-48 bg-muted/30 rounded-lg p-3">{failureStack}</pre>
+              </details>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-4 py-4 px-2 overflow-x-auto snap-x hidden-scrollbar">
           {details.layers.map((l, i) => (
             <div key={`${l.layer}-${i}`} className="flex items-center gap-4 shrink-0 snap-center">
@@ -126,7 +151,7 @@ function TraceRow({ summary, stitchId, workspaceId }: Readonly<{ summary: TraceS
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <JsonViewer title="L1 Inbound Request (Raw)" data={details.inboundGateway?.request} />
           {details.inboundGateway?.response != null && (
-            <JsonViewer title="L1 App Response (Sync)" data={details.inboundGateway?.response} />
+            <JsonViewer title="L1 App Response / Error" data={details.inboundGateway?.response} />
           )}
           <JsonViewer title="L2 Replica Data" data={details.replicaEntity?.data} />
           <JsonViewer title="L3 Normalized Canonical" data={details.normalizedEntity?.data} />

@@ -27,6 +27,7 @@ import type { DatabaseManager } from "@nexiom/dbmanager";
 import {
   sanitizeError,
   isValidPipelineMessage,
+  sanitizeErrorObject,
 } from "../../shared/pipeline.utils.js";
 
 /** Maximum number of executeAction attempts before permanently failing. */
@@ -146,6 +147,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             traceId,
             routeId,
             dataSourceId: targetConnectionId,
+            srcDataSourceId: dataSourceId,
             payload: hydratedPayload,
             status: "PENDING",
             attempts: 0,
@@ -291,14 +293,16 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           );
           return; // Safely acknowledge duplicate message
         } else {
-          this.logger.warn(
+          this.logger.error(
             {
-              event: "l5.partial_fail",
+              event: "l5.delivery_error",
               traceId,
               routeId,
-              layer: "L5",
+              err: sanitizeErrorObject(
+                new Error("Delivery failed but source-side incomplete"),
+              ),
             },
-            "Delivery failed but source-side incomplete — retrying finalization only",
+            `L5 routing delivery failed: Delivery failed but source-side incomplete`,
           );
 
           sourceFinalized = await this.retrySourceFinalization(
@@ -540,7 +544,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         );
       }
     } catch (err: unknown) {
-      const sanitized = sanitizeError(err);
+      const sanitizedStr = sanitizeError(err);
       this.logger.error(
         {
           event: "l5.error",
@@ -549,9 +553,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           dataSourceId,
           outboundGatewayId,
           layer: "L5",
-          err: sanitized,
+          err: sanitizeErrorObject(err),
         },
-        "DeliveryService encountered an error",
+        `DeliveryService encountered an error: ${sanitizedStr}`,
       );
       throw err; // SQS will natively retry
     }
@@ -590,9 +594,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           traceId,
           routeId,
           layer: "L5",
-          err: sanitizeError(err),
+          err: sanitizeErrorObject(err),
         },
-        "Failed to check source finalization status — assuming incomplete",
+        `Failed to check source finalization status — assuming incomplete: ${sanitizeError(err)}`,
       );
       return false;
     }

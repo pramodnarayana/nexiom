@@ -1,10 +1,11 @@
 import { Loader2, Server, Database, Layers, ArrowRight, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/shared/components/ui/sheet';
 import { Badge } from '@/shared/components/ui/badge';
-import { getTrace } from '../api/data-explorer.api';
+import { getTrace, getConnectionTrace, listTraceRoutes } from '../api/data-explorer.api';
 import { useQuery } from '@tanstack/react-query';
 import { JsonView, defaultStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import { useState, useEffect } from 'react';
 
 function StatusBadge({ status }: { status?: string }) {
   if (!status) return null;
@@ -34,18 +35,38 @@ function JsonViewer({ data }: { data: unknown }) {
 
 export function TraceViewerPanel({
   stitchId,
+  connectionId,
   traceId,
   workspaceId,
   onClose
 }: {
-  stitchId: string;
+  stitchId?: string;
+  connectionId?: string;
   traceId: string;
   workspaceId: string;
   onClose: () => void;
 }) {
+  const [routes, setRoutes] = useState<Array<{ id: string, name: string }>>([]);
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(stitchId || null);
+
+  useEffect(() => {
+    if (connectionId && !stitchId) {
+      listTraceRoutes(connectionId, traceId).then(res => {
+        setRoutes(res);
+        if (res.length > 0) {
+          setActiveRouteId(res[0].id);
+        }
+      }).catch(console.error);
+    }
+  }, [connectionId, stitchId, traceId]);
+
   const { data, isLoading: loading, error: queryError } = useQuery({
-    queryKey: ['trace', stitchId, traceId, workspaceId],
-    queryFn: () => getTrace(stitchId, traceId, workspaceId),
+    queryKey: ['trace', activeRouteId, connectionId, traceId, workspaceId],
+    queryFn: () => {
+      if (activeRouteId) return getTrace(activeRouteId, traceId, workspaceId);
+      if (connectionId) return getConnectionTrace(connectionId, traceId, workspaceId);
+      throw new Error('Missing stitchId or connectionId');
+    },
     retry: 1,
   });
   
@@ -61,6 +82,23 @@ export function TraceViewerPanel({
           <SheetDescription className="text-xs break-all">
             ID: {traceId}
           </SheetDescription>
+          {routes.length > 0 && (
+            <div className="mt-4 bg-muted/30 p-3 rounded-lg border border-border">
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Target Destination</label>
+              <select 
+                className="w-full h-8 bg-background border border-border rounded text-sm px-2 focus:ring-1 focus:ring-primary outline-none transition-all"
+                value={activeRouteId || ''}
+                onChange={e => setActiveRouteId(e.target.value)}
+              >
+                {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+          )}
+          {connectionId && !stitchId && routes.length === 0 && !loading && !error && (
+            <div className="mt-4 bg-muted/50 p-3 rounded-lg border border-border text-xs text-muted-foreground italic">
+              This record was not routed to any outbound stitches.
+            </div>
+          )}
         </SheetHeader>
 
         {loading && (

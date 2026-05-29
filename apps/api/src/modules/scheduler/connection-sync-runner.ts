@@ -6,22 +6,24 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { eq, and } from 'drizzle-orm';
+import stringify from 'fast-json-stable-stringify';
+import { eq, and, sql } from 'drizzle-orm';
 import type { DrizzleDb } from '@nexiom/database';
 import {
   DATABASE_CONNECTION,
-  integrationStitches,
   dataSources,
   syncCursors,
 } from '@nexiom/database';
+import { buildTenantSchema, assertValidSchemaName } from '@nexiom/database';
 import { TokenManagerService } from '@nexiom/credentials';
 import type { OAuthCredentialBlob } from '@nexiom/credentials';
 import type { Piece } from '@nexiom/piece-framework';
 import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
 import {
+  StorageResolverService,
   CursorManagerService,
   type StreamBookmark,
   type SyncStateDocument,
@@ -29,7 +31,7 @@ import {
   type StreamResult,
 } from '@nexiom/engine';
 import { PieceRegistryService } from '@nexiom/piece-registry';
-import { SyncRunner, type SyncResult } from './sync-runner.js';
+import type { SyncResult } from './sync-runner.js';
 import { pollLockKey } from './lock-keys.js';
 
 // ---------------------------------------------------------------------------
@@ -111,8 +113,8 @@ function safeHwm(hwm: string, keyType: string): string {
  *   9. Update integration_stitch.last_scheduled_at.
  */
 @Injectable()
-export class PollSyncRunner extends SyncRunner {
-  private readonly logger = new Logger(PollSyncRunner.name);
+export class ConnectionSyncRunner {
+  private readonly logger = new Logger(ConnectionSyncRunner.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
@@ -122,63 +124,62 @@ export class PollSyncRunner extends SyncRunner {
     private readonly tokenManager: TokenManagerService,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly cursorManager: CursorManagerService,
-  ) {
-    super();
-  }
+    private readonly storageResolver: StorageResolverService,
+  ) {}
 
   // ── Public entry point ────────────────────────────────────────────────────
 
-  async run(stitchId: string): Promise<SyncResult> {
-    // 1. Load stitch
-    const stitch = await this.loadStitch(stitchId);
+  async run(connectionId: string, objectType?: string): Promise<SyncResult> {
+    const conn = await this.loadConnection(connectionId);
 
-    // 2. Load connection (appName drives piece resolution)
-    const connection = await this.loadConnection(stitch.srcDataSourceId);
+    // Using a fake "stitch" object that just holds connectionId as id so we can reuse the poll loop
+    // that uses stitch.id for locks and cursors.
+    const fakeStitch = { id: connectionId, orgId: conn.orgId };
 
-    // 3. Valid credentials (refreshes OAuth token if expired)
-    const credentials = await this.tokenManager.getValidCredentials(
-      stitch.srcDataSourceId,
-    );
+    // Obtain valid credentials for the connection
+    const credentials =
+      await this.tokenManager.getValidCredentials(connectionId);
 
-    // 4. Resolve piece
-    const piece = this.resolvePiece(connection.appName);
+    // Resolve the piece
+    const piece = this.resolvePiece(conn.appName);
 
-    // 5. Describe streams — find the descriptor for the configured sourceObject
-    const descriptor = await this.resolveDescriptor(
-      piece,
-      stitch.sourceObject,
-      credentials,
-    );
-
-    // 6. Poll the single stream
-    const streamResult = await this.pollStream(
-      stitch,
-      stitch.syncIntervalMinutes,
-      descriptor,
-      piece,
-      credentials,
-    );
-
-    // 7. Update last_scheduled_at only when the stream was actually polled to completion.
-    //    Skip and failed outcomes do not count as a completed sync.
-    if (streamResult.status === 'succeeded') {
-      await this.db
-        .update(integrationStitches)
-        .set({ lastScheduledAt: new Date() })
-        .where(eq(integrationStitches.id, stitchId));
+    // Get ALL streams for the connection if objectType is not provided
+    let streams: StreamDescriptor[] = [];
+    if (objectType) {
+      streams = [await this.resolveDescriptor(piece, objectType, credentials)];
+    } else {
+      if (typeof piece.describeStreams === 'function') {
+        streams = await piece.describeStreams(toCredentialsRecord(credentials));
+      } else {
+        // If describeStreams is not supported, we can't reliably sync "all" streams.
+        // But we can fallback to an empty array or throw.
+        this.logger.warn(
+          `piece ${conn.appName} does not support describeStreams`,
+        );
+      }
     }
 
-    const topStatus =
-      streamResult.status === 'failed'
-        ? 'failed'
-        : streamResult.status === 'skipped'
-          ? 'skipped'
-          : 'succeeded';
+    const streamResults: StreamResult[] = [];
+    let hasFailures = false;
+
+    // Run poll loop for all streams sequentially or in parallel
+    // For now, sequential to avoid hammering the API
+    for (const descriptor of streams) {
+      const result = await this.pollStream(
+        fakeStitch,
+        60,
+        descriptor,
+        piece,
+        credentials,
+      );
+      streamResults.push(result);
+      if (result.status === 'failed') hasFailures = true;
+    }
 
     return {
-      stitchId,
-      status: topStatus,
-      streamResults: [streamResult],
+      connectionId,
+      status: hasFailures ? 'failed' : 'succeeded',
+      streamResults,
     };
   }
 
@@ -222,7 +223,9 @@ export class PollSyncRunner extends SyncRunner {
         ttlMs,
       );
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
+      const error =
+        err instanceof Error ? err.stack || err.message : String(err);
+      console.error('FULL ERROR:', err);
       this.logger.error(
         `Poll loop failed for stream "${descriptor.streamName}" on stitch ${stitchId}: ${error}`,
       );
@@ -302,7 +305,23 @@ export class PollSyncRunner extends SyncRunner {
 
       if (page.records.length > 0) {
         hwm = this.cursorManager.trackHighWaterMark(page.records, hwm, keyType);
-        recordsIngested += page.records.length;
+
+        // Insert records into inbound_gateway
+        for (const record of page.records) {
+          try {
+            await this.insertGatewayRow(
+              tenantDb,
+              stitchId,
+              streamName,
+              record.data,
+              String(record.replicationKeyValue),
+            );
+            recordsIngested++;
+          } catch (e) {
+            this.logger.error(`Failed to insert record: ${e}`);
+            throw e; // Bubble up the actual insertion error to the UI
+          }
+        }
       }
 
       pageCount++;
@@ -342,21 +361,12 @@ export class PollSyncRunner extends SyncRunner {
 
   // ── DB helpers ────────────────────────────────────────────────────────────
 
-  private async loadStitch(stitchId: string) {
-    const [stitch] = await this.db
-      .select()
-      .from(integrationStitches)
-      .where(eq(integrationStitches.id, stitchId))
-      .limit(1);
-    if (!stitch) throw new NotFoundException(`Stitch not found: ${stitchId}`);
-    return stitch;
-  }
-
   private async loadConnection(dataSourceId: string) {
     const [conn] = await this.db
       .select({
         id: dataSources.id,
         appName: dataSources.appName,
+        orgId: dataSources.tenantId,
       })
       .from(dataSources)
       .where(eq(dataSources.id, dataSourceId))
@@ -547,5 +557,90 @@ export class PollSyncRunner extends SyncRunner {
       'end',
     ].join('\n');
     await this.redis.eval(lua, 1, key, token);
+  }
+
+  private async insertGatewayRow(
+    tenantDb: DrizzleDb,
+    dataSourceId: string,
+    objectType: string,
+    payload: unknown,
+    cursorValue: string,
+  ): Promise<boolean> {
+    const schemaName =
+      await this.storageResolver.resolveSchemaName(dataSourceId);
+    assertValidSchemaName(schemaName);
+
+    let didInsert = false;
+    const { inboundGateway, inboundOutbox } = buildTenantSchema(schemaName);
+
+    // Extract the primary identifier of the record (e.g. Salesforce Id)
+    const recordId =
+      cursorValue ||
+      this.extractRecordCursor(payload) ||
+      `${Date.now()}-${Math.random()}`;
+
+    // Hash the payload. This ensures that:
+    // 1. Identical polls (overlapping pages) have the exact same extReqId and are dropped as duplicates.
+    // 2. Updated records have the same recordId but a different hash, generating a new L1 trace.
+    const payloadHash = createHash('sha256')
+      .update(
+        typeof payload === 'object' && payload !== null
+          ? stringify(payload)
+          : String(payload),
+      )
+      .digest('hex');
+
+    const extReqId = `${recordId}-${payloadHash}`;
+
+    await tenantDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+
+      const result = await tx
+        .insert(inboundGateway)
+        .values({
+          traceId: randomUUID(),
+          dataSourceId,
+          extReqId,
+          objectType,
+          request: payload,
+        })
+        .onConflictDoNothing({
+          target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
+        })
+        .returning({ traceId: inboundGateway.traceId });
+
+      if (result.length > 0) {
+        await tx
+          .insert(inboundOutbox)
+          .values({
+            traceId: result[0].traceId,
+            dataSourceId,
+          })
+          .onConflictDoNothing({
+            target: [inboundOutbox.traceId, inboundOutbox.dataSourceId],
+          });
+        didInsert = true;
+      }
+    });
+
+    return didInsert;
+  }
+
+  private extractRecordCursor(record: unknown): string {
+    if (record !== null && typeof record === 'object') {
+      const r = record as Record<string, unknown>;
+      for (const key of [
+        'Id',
+        'id',
+        'LastModifiedDate',
+        '_cursor',
+        'CreatedDate',
+      ]) {
+        if (typeof r[key] === 'string' && r[key]) return r[key];
+      }
+    }
+    return ''; // Return empty string so the caller can fallback
   }
 }

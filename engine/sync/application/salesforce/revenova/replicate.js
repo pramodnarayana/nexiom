@@ -8,10 +8,37 @@ export async function ReplicateRevenovaObject(payload) {
     if (typeof payload === 'string') {
         body = payload;
     }
-    else if (payload !== null && typeof payload === 'object' && typeof payload['raw'] === 'string') {
-        body = payload['raw'];
+    else if (payload !== null && typeof payload === 'object') {
+        const p = payload;
+        if (typeof p['raw'] === 'string') {
+            body = p['raw'];
+        }
+        else if (p['attributes'] && typeof p['attributes']['type'] === 'string' && p['Id']) {
+            // It's a JSON REST API payload from polling!
+            const entityType = p['attributes']['type'];
+            const entityId = p['Id'];
+            // Normalize keys to lowercase to match the XML extraction behavior downstream
+            const data = {};
+            for (const [key, value] of Object.entries(p)) {
+                if (key !== 'attributes') {
+                    // Stringify values if they are objects (though standard SF fields are primitives)
+                    data[key.toLowerCase()] = value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value);
+                }
+            }
+            return {
+                entityType,
+                entityId,
+                data,
+            };
+        }
+        else {
+            return null;
+        }
     }
     else {
+        return null;
+    }
+    if (!body) {
         return null;
     }
     // Salesforce Outbound Message usually looks like:

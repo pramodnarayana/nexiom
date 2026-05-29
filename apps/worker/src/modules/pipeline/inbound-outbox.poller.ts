@@ -1,26 +1,26 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { sql, eq, and, inArray } from 'drizzle-orm';
+import { Injectable, Inject, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { sql, eq, and, inArray } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
   dataSources,
-} from '@nexiom/database';
-import { QueueName } from '@nexiom/queue';
-import { QueueService } from '@nexiom/queue';
-import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+} from "@nexiom/database";
+import { QueueName } from "@nexiom/queue";
+import { QueueService } from "@nexiom/queue";
+import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
+import type { DatabaseManager } from "@nexiom/dbmanager";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 const DEFAULT_TENANT_CONCURRENCY = 5;
 
 @Injectable()
-export class InboundOutboxService {
-  private readonly logger = new Logger(InboundOutboxService.name);
+export class InboundOutboxPoller {
+  private readonly logger = new Logger(InboundOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
@@ -50,7 +50,7 @@ export class InboundOutboxService {
                 .where(
                   and(
                     eq(dataSources.tenantId, tenant.tenantId),
-                    inArray(dataSources.schemaPlan, ['OUTBOUND_ACTIVE']),
+                    inArray(dataSources.schemaPlan, ["OUTBOUND_ACTIVE"]),
                   ),
                 );
 
@@ -102,7 +102,7 @@ export class InboundOutboxService {
       return tx
         .update(inboundOutbox)
         .set({
-          status: 'PROCESSING',
+          status: "PROCESSING",
           attempts: sql`${inboundOutbox.attempts} + 1`,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
@@ -145,17 +145,17 @@ export class InboundOutboxService {
     // Log and handle any rejections (unexpected failures not already caught in processOutboxRow)
     const rejections = results
       .map((r, idx) => ({ result: r, row: claimed[idx] }))
-      .filter(({ result }) => result.status === 'rejected');
+      .filter(({ result }) => result.status === "rejected");
 
     if (rejections.length > 0) {
       rejections.forEach(({ result, row }) => {
         this.logger.error(
           `[${schemaName}] Unexpected processOutboxRow failure for traceId=${row.traceId}, id=${row.id}: ${
-            result.status === 'rejected'
+            result.status === "rejected"
               ? result.reason instanceof Error
                 ? result.reason.message
                 : String(result.reason)
-              : 'unknown'
+              : "unknown"
           }`,
         );
       });
@@ -184,7 +184,7 @@ export class InboundOutboxService {
       // Mark success - only if we still own this claim
       await tenantDb
         .update(inboundOutbox)
-        .set({ status: 'SUCCESS', lastError: null })
+        .set({ status: "SUCCESS", errorMessage: null })
         .where(
           sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
         );
@@ -198,7 +198,7 @@ export class InboundOutboxService {
       if (row.attempts >= MAX_ATTEMPTS) {
         await tenantDb
           .update(inboundOutbox)
-          .set({ status: 'FAIL', lastError: errorMessage })
+          .set({ status: "FAIL", errorMessage: errorMessage })
           .where(
             sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
           );
@@ -211,7 +211,7 @@ export class InboundOutboxService {
 
         await tenantDb
           .update(inboundOutbox)
-          .set({ status: 'RETRY', nextRetryAt, lastError: errorMessage })
+          .set({ status: "RETRY", nextRetryAt, errorMessage: errorMessage })
           .where(
             sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
           );

@@ -3,35 +3,30 @@ import { Test } from '@nestjs/testing';
 import { SchedulerService } from './scheduler.service.js';
 import { WindmillClient } from './windmill.client.js';
 import { SyncRunner } from './sync-runner.js';
+import type { InferSelectModel } from 'drizzle-orm';
+import { dataSources } from '@nexiom/database';
 
-const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
-const STITCH_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+type DataSource = InferSelectModel<typeof dataSources>;
 
-const STITCH = {
-  id: STITCH_ID,
-  name: 'Test Stitch',
-  orgId: 'org-1',
-  workspaceId: 'ws-1',
-  srcDataSourceId: 'conn-1',
-  destDataSourceId: 'conn-2',
-  sourceObject: 'Lead',
-  targetObject: 'Contact',
-  syncCondition: [],
-  status: 'ACTIVE' as const,
-  syncIntervalMinutes: 30,
+const CONNECTION_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const CONNECTION_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+const CONNECTION = {
+  id: CONNECTION_ID,
+  appName: 'test-app',
+  tenantId: 'org-1',
   scheduleEnabled: true,
-  lastScheduledAt: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  syncIntervalMinutes: 30,
 };
 
 describe('SchedulerService', () => {
   let service: SchedulerService;
   let windmill: Record<string, ReturnType<typeof vi.fn>>;
+  let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     windmill = {
-      ensureStitchScript: vi.fn().mockResolvedValue(undefined),
+      ensureConnectionScript: vi.fn().mockResolvedValue(undefined),
       createSchedule: vi.fn().mockResolvedValue(undefined),
       updateSchedule: vi.fn().mockResolvedValue(true),
       deleteSchedule: vi.fn().mockResolvedValue(undefined),
@@ -41,12 +36,13 @@ describe('SchedulerService', () => {
     };
 
     const mockSyncRunner = {
-      run: vi
-        .fn()
-        .mockResolvedValue({ stitchId: STITCH_ID, status: 'succeeded' }),
+      run: vi.fn().mockResolvedValue({
+        connectionId: CONNECTION_ID,
+        status: 'succeeded',
+      }),
     };
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         SchedulerService,
         { provide: WindmillClient, useValue: windmill },
@@ -57,57 +53,69 @@ describe('SchedulerService', () => {
     service = module.get(SchedulerService);
   });
 
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
+  });
+
   // ── onModuleInit ────────────────────────────────────────────────────────
 
   describe('onModuleInit', () => {
-    it('calls ensureStitchScript on startup', async () => {
+    it('calls ensureConnectionScript on startup', async () => {
       await service.onModuleInit();
-      expect(windmill.ensureStitchScript).toHaveBeenCalledTimes(1);
+      expect(windmill.ensureConnectionScript).toHaveBeenCalledTimes(1);
     });
 
-    it('does not throw if ensureStitchScript fails (boot resilience)', async () => {
-      windmill.ensureStitchScript.mockRejectedValue(
+    it('does not throw if ensureConnectionScript fails (boot resilience)', async () => {
+      windmill.ensureConnectionScript.mockRejectedValue(
         new Error('Windmill unreachable'),
       );
       await expect(service.onModuleInit()).resolves.toBeUndefined();
     });
   });
 
-  // ── onStitchCreated ─────────────────────────────────────────────────────
+  // ── onConnectionCreated ─────────────────────────────────────────────────────
 
-  describe('onStitchCreated', () => {
+  describe('onConnectionCreated', () => {
     it('creates a schedule with the correct cron when scheduleEnabled=true', async () => {
-      await service.onStitchCreated(STITCH);
+      await service.onConnectionCreated(CONNECTION as any as DataSource);
       expect(windmill.createSchedule).toHaveBeenCalledWith(
-        STITCH_ID,
+        CONNECTION_ID,
         '0 0/30 * * * *',
         true,
       );
     });
 
     it('skips schedule creation when scheduleEnabled=false', async () => {
-      await service.onStitchCreated({ ...STITCH, scheduleEnabled: false });
+      await service.onConnectionCreated({
+        ...CONNECTION,
+        scheduleEnabled: false,
+      } as any as DataSource);
       expect(windmill.createSchedule).not.toHaveBeenCalled();
     });
 
     it('skips and does not throw when syncIntervalMinutes is an unrecognised value', async () => {
       await expect(
-        service.onStitchCreated({ ...STITCH, syncIntervalMinutes: 999 }),
+        service.onConnectionCreated({
+          ...CONNECTION,
+          syncIntervalMinutes: 999,
+        } as any as DataSource),
       ).resolves.toBeUndefined();
       expect(windmill.createSchedule).not.toHaveBeenCalled();
     });
   });
 
-  // ── onStitchUpdated ─────────────────────────────────────────────────────
+  // ── onConnectionUpdated ─────────────────────────────────────────────────────
 
-  describe('onStitchUpdated', () => {
+  describe('onConnectionUpdated', () => {
     it('updates the existing schedule when Windmill reports it exists (returns true)', async () => {
       windmill.updateSchedule.mockResolvedValue(true);
 
-      await service.onStitchUpdated(STITCH);
+      await service.onConnectionUpdated(CONNECTION as any as DataSource);
 
       expect(windmill.updateSchedule).toHaveBeenCalledWith(
-        STITCH_ID,
+        CONNECTION_ID,
         '0 0/30 * * * *',
         true,
       );
@@ -117,11 +125,11 @@ describe('SchedulerService', () => {
     it('creates a new schedule when updateSchedule returns false (schedule not found)', async () => {
       windmill.updateSchedule.mockResolvedValue(false);
 
-      await service.onStitchUpdated(STITCH);
+      await service.onConnectionUpdated(CONNECTION as any as DataSource);
 
       expect(windmill.updateSchedule).toHaveBeenCalled();
       expect(windmill.createSchedule).toHaveBeenCalledWith(
-        STITCH_ID,
+        CONNECTION_ID,
         '0 0/30 * * * *',
         true,
       );
@@ -130,10 +138,13 @@ describe('SchedulerService', () => {
     it('passes enabled=false when scheduleEnabled is false', async () => {
       windmill.updateSchedule.mockResolvedValue(true);
 
-      await service.onStitchUpdated({ ...STITCH, scheduleEnabled: false });
+      await service.onConnectionUpdated({
+        ...CONNECTION,
+        scheduleEnabled: false,
+      } as any as DataSource);
 
       expect(windmill.updateSchedule).toHaveBeenCalledWith(
-        STITCH_ID,
+        CONNECTION_ID,
         expect.any(String),
         false,
       );
@@ -141,7 +152,10 @@ describe('SchedulerService', () => {
 
     it('skips when syncIntervalMinutes is an unrecognised value', async () => {
       await expect(
-        service.onStitchUpdated({ ...STITCH, syncIntervalMinutes: 0 }),
+        service.onConnectionUpdated({
+          ...CONNECTION,
+          syncIntervalMinutes: 0,
+        } as any as DataSource),
       ).resolves.toBeUndefined();
       expect(windmill.updateSchedule).not.toHaveBeenCalled();
     });
@@ -154,12 +168,12 @@ describe('SchedulerService', () => {
       ];
       for (const [minutes, expectedCron] of cases) {
         windmill.updateSchedule.mockResolvedValue(true);
-        await service.onStitchUpdated({
-          ...STITCH,
+        await service.onConnectionUpdated({
+          ...CONNECTION,
           syncIntervalMinutes: minutes,
-        });
+        } as any as DataSource);
         expect(windmill.updateSchedule).toHaveBeenCalledWith(
-          STITCH_ID,
+          CONNECTION_ID,
           expectedCron,
           true,
         );
@@ -168,23 +182,23 @@ describe('SchedulerService', () => {
     });
   });
 
-  // ── onStitchDeleted ─────────────────────────────────────────────────────
+  // ── onConnectionDeleted ─────────────────────────────────────────────────────
 
-  describe('onStitchDeleted', () => {
+  describe('onConnectionDeleted', () => {
     it('delegates to windmill.deleteSchedule', async () => {
-      await service.onStitchDeleted(STITCH_ID);
-      expect(windmill.deleteSchedule).toHaveBeenCalledWith(STITCH_ID);
+      await service.onConnectionDeleted(CONNECTION_ID);
+      expect(windmill.deleteSchedule).toHaveBeenCalledWith(CONNECTION_ID);
     });
   });
 
   // ── deleteOrgSchedules ──────────────────────────────────────────────────
 
   describe('deleteOrgSchedules', () => {
-    it('deletes schedules for all provided stitch IDs', async () => {
-      await service.deleteOrgSchedules([STITCH_ID, STITCH_ID_2]);
+    it('deletes schedules for all provided connection IDs', async () => {
+      await service.deleteOrgSchedules([CONNECTION_ID, CONNECTION_ID_2]);
       expect(windmill.deleteSchedule).toHaveBeenCalledTimes(2);
-      expect(windmill.deleteSchedule).toHaveBeenCalledWith(STITCH_ID);
-      expect(windmill.deleteSchedule).toHaveBeenCalledWith(STITCH_ID_2);
+      expect(windmill.deleteSchedule).toHaveBeenCalledWith(CONNECTION_ID);
+      expect(windmill.deleteSchedule).toHaveBeenCalledWith(CONNECTION_ID_2);
     });
 
     it('resolves even when some deletions fail (logs individually)', async () => {
@@ -193,7 +207,7 @@ describe('SchedulerService', () => {
         .mockResolvedValueOnce(undefined);
 
       await expect(
-        service.deleteOrgSchedules([STITCH_ID, STITCH_ID_2]),
+        service.deleteOrgSchedules([CONNECTION_ID, CONNECTION_ID_2]),
       ).resolves.toBeUndefined();
 
       expect(windmill.deleteSchedule).toHaveBeenCalledTimes(2);
@@ -209,18 +223,21 @@ describe('SchedulerService', () => {
 
   describe('triggerOnce', () => {
     it('returns the Windmill job ID', async () => {
-      const jobId = await service.triggerOnce(STITCH_ID);
+      const jobId = await service.triggerOnce(CONNECTION_ID);
       expect(jobId).toBe('job-abc');
-      expect(windmill.triggerOnce).toHaveBeenCalledWith(STITCH_ID);
+      expect(windmill.triggerOnce).toHaveBeenCalledWith(CONNECTION_ID);
     });
   });
 
-  // ── executeStitch ───────────────────────────────────────────────────────
+  // ── executeConnection ───────────────────────────────────────────────────────
 
-  describe('executeStitch', () => {
+  describe('executeConnection', () => {
     it('delegates to SyncRunner and returns the result', async () => {
-      const result = await service.executeStitch(STITCH_ID);
-      expect(result).toEqual({ stitchId: STITCH_ID, status: 'succeeded' });
+      const result = await service.executeConnection(CONNECTION_ID);
+      expect(result).toEqual({
+        connectionId: CONNECTION_ID,
+        status: 'succeeded',
+      });
     });
   });
 });

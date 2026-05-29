@@ -18,7 +18,7 @@ import { SystemAdminGuard } from '../identity/auth/system-admin.guard.js';
 import {
   DATABASE_CONNECTION,
   syncCursors,
-  integrationStitches,
+  dataSources,
 } from '@nexiom/database';
 import type { DrizzleDb } from '@nexiom/database';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
@@ -109,17 +109,17 @@ export class CursorResetController {
 
   @Get(':id/cursors')
   async listCursors(@Param('id', ParseUUIDPipe) id: string) {
-    const [stitch] = await this.db
+    const [connection] = await this.db
       .select({
-        syncIntervalMinutes: integrationStitches.syncIntervalMinutes,
-        scheduleEnabled: integrationStitches.scheduleEnabled,
+        syncIntervalMinutes: dataSources.syncIntervalMinutes,
+        scheduleEnabled: dataSources.scheduleEnabled,
       })
-      .from(integrationStitches)
-      .where(eq(integrationStitches.id, id))
+      .from(dataSources)
+      .where(eq(dataSources.id, id))
       .limit(1);
 
-    if (!stitch) {
-      throw new NotFoundException(`Stitch not found: ${id}`);
+    if (!connection) {
+      throw new NotFoundException(`Connection not found: ${id}`);
     }
 
     // Select only safe, non-sensitive columns.  stateDocument is intentionally
@@ -137,14 +137,14 @@ export class CursorResetController {
 
     const now = Date.now();
     const staleThresholdMs =
-      stitch.syncIntervalMinutes > 0
-        ? 2 * stitch.syncIntervalMinutes * 60_000
+      connection.syncIntervalMinutes > 0
+        ? 2 * connection.syncIntervalMinutes * 60_000
         : Number.POSITIVE_INFINITY;
 
     return rows.map((row) => {
       const ageMs = now - row.updatedAt.getTime();
-      // Paused stitches are never stale — cursors are not expected to advance.
-      const paused = !stitch.scheduleEnabled;
+      // Paused connections are never stale — cursors are not expected to advance.
+      const paused = !connection.scheduleEnabled;
       // Explicitly enumerate fields rather than spreading — stateDocument is
       // intentionally absent and must never appear in the HTTP response.
       return {

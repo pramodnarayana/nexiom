@@ -1,20 +1,28 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
-import { Logger } from "@nestjs/common";
+import { Logger } from "nestjs-pino";
 
 async function bootstrap() {
   try {
+    // Create app with default logger disabled so Pino can take over immediately
     const app = await NestFactory.createApplicationContext(AppModule, {
-      logger: ["error", "warn", "log", "debug", "verbose"],
+      bufferLogs: true,
     });
+
+    // Use Pino Logger
+    const logger = app.get(Logger);
+    app.useLogger(logger);
 
     app.enableShutdownHooks();
 
-    const logger = new Logger("WorkerBootstrap");
-    logger.log("Nexiom Worker application started and listening to queues...");
+    logger.log(`Nexiom Worker application started and listening to queues...`);
+    if (process.env.WORKER_LOG_FILE) {
+      logger.log(
+        `Logging output is also being redirected to ${process.env.WORKER_LOG_FILE}`,
+      );
+    }
   } catch (err: unknown) {
-    const logger = new Logger("WorkerBootstrap");
-    logger.error(
+    console.error(
       "Failed to bootstrap Worker application",
       err instanceof Error ? err.stack : err,
     );

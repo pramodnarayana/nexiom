@@ -54,8 +54,8 @@ export class CdcRelayController {
         dataSourceId: data_source_id,
         schemaName: resolvedSchema,
       });
-      this.logger.debug(
-        `Relayed L1->L2 event for trace=${trace_id} (schema=${resolvedSchema}) to ${QueueName.InboundQueue}`,
+      this.logger.log(
+        `[CDC Relay] Relayed L1->L2 event for trace=${trace_id} (schema=${resolvedSchema}) to ${QueueName.InboundQueue}`,
       );
     } else if (__table === 'replica_outbox') {
       await this.queueService.send(QueueName.ReplicaQueue, {
@@ -63,8 +63,8 @@ export class CdcRelayController {
         dataSourceId: data_source_id,
         schemaName: resolvedSchema,
       });
-      this.logger.debug(
-        `Relayed L2->L3 event for trace=${trace_id} (schema=${resolvedSchema}) to ${QueueName.ReplicaQueue}`,
+      this.logger.log(
+        `[CDC Relay] Relayed L2->L3 event for trace=${trace_id} (schema=${resolvedSchema}) to ${QueueName.ReplicaQueue}`,
       );
     } else if (__table === 'normalized_outbox') {
       await this.queueService.send(QueueName.NormalizedQueue, {

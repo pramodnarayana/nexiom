@@ -6,11 +6,11 @@ import { ObservabilityModule } from '../observability/observability.module.js';
 import { TraceService } from './trace.service.js';
 import { TraceController } from './trace.controller.js';
 import { DataExplorerService } from './data-explorer.service.js';
-import { DataExplorerController } from './data-explorer.controller.js';
+import { ConnectionExplorerController } from './connection-explorer.controller.js';
 
 @Module({
   imports: [DbModule, AuthModule, StorageResolverModule, ObservabilityModule],
-  controllers: [TraceController, DataExplorerController],
+  controllers: [TraceController, ConnectionExplorerController],
   providers: [TraceService, DataExplorerService],
   exports: [TraceService],
 })

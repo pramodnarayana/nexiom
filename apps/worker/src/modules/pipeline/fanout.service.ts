@@ -33,6 +33,7 @@ import { processInChunks } from "./outbox.utils.js";
 import {
   sanitizeError,
   isValidPipelineMessage,
+  sanitizeErrorObject,
 } from "../../shared/pipeline.utils.js";
 import { TargetBuilderService } from "./target-builder.service.js";
 
@@ -203,7 +204,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         .select()
         .from(integrationStitches)
         .where(
-          sql`${integrationStitches.srcDataSourceId} = ${dataSourceId} AND ${integrationStitches.status} = 'ACTIVE'`,
+          sql`${integrationStitches.canonicalObject} = ${canonicalType} AND ${integrationStitches.status} = 'ACTIVE'`,
         );
 
       if (stitches.length === 0) {
@@ -284,13 +285,12 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           if (result.status === "rejected") {
             this.logger.error(
               {
-                event: "l4.stitch_chunk_error",
-                stitchId: stitches[idx].id,
+                event: "l4.stitch_resolution_failed",
                 traceId,
-                layer: "L4",
-                err: sanitizeError(result.reason),
+                routeId: stitches[idx].id,
+                err: sanitizeErrorObject(result.reason),
               },
-              "L4 stitch processInChunks rejection (already logged per stitch)",
+              `Stitch resolution partially failed (best-effort skipped): ${sanitizeError(result.reason)}`,
             );
           }
         });
@@ -314,15 +314,17 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         "L4 fan-out completed",
       );
     } catch (err) {
+      const safeErrStr = sanitizeError(err);
+      const safeErrObj = sanitizeErrorObject(err);
       this.logger.error(
         {
           event: "l4.error",
           traceId,
           dataSourceId,
           layer: "L4",
-          err: sanitizeError(err),
+          err: safeErrObj,
         },
-        "L4 fan-out failed",
+        `L4 fan-out failed: ${safeErrStr}`,
       );
       throw err;
     }
@@ -541,9 +543,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
               );
             }
           } catch (err) {
-            this.logger.warn(
-              { err: sanitizeError(err), traceId, routeId: stitch.id },
-              "Failed to load target replica state for prepareUpdate — omitting destState",
+            this.logger.error(
+              { err: sanitizeErrorObject(err), traceId, routeId: stitch.id },
+              `L4→L5: failed to publish stitch routing envelope: ${sanitizeError(err)}`,
             );
           }
         } else {
@@ -606,8 +608,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
           // Use raw SQL for conditional upsert with RETURNING to detect transitions
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, payload, status, attempts, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, src_data_source_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${dataSourceId}, ${JSON.stringify(hydratedPayload)}, 'PENDING', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
               payload = ${JSON.stringify(hydratedPayload)},
@@ -643,13 +645,12 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           } catch (sendErr) {
             this.logger.error(
               {
-                event: "l4.queue_send_failed",
+                event: "l4.publish_outbox_failed",
                 traceId,
                 routeId: stitch.id,
-                layer: "L4",
-                err: sanitizeError(sendErr),
+                err: sanitizeErrorObject(sendErr),
               },
-              "Failed to publish to DeliveryQueue — outbound_gateway persisted, will retry",
+              `Failed best-effort MQ publish: ${sanitizeError(sendErr)}`,
             );
             // Rethrow to mark L4/FAIL and trigger retry of normalized message
             throw sendErr;
@@ -710,8 +711,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
 
           // Use conditional upsert to only transition if not already DEFERRED_DEPENDENCY or processed
           const result = await destTx.execute<{ status: string }>(sql`
-            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, payload, status, attempts, created_at, updated_at)
-            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
+            INSERT INTO outbound_gateway (trace_id, route_id, data_source_id, src_data_source_id, payload, status, attempts, created_at, updated_at)
+            VALUES (${traceId}, ${stitch.id}, ${stitch.destDataSourceId}, ${dataSourceId}, ${JSON.stringify({})}, 'DEFERRED_DEPENDENCY', 0, NOW(), NOW())
             ON CONFLICT (trace_id, route_id)
             DO UPDATE SET
               status = 'DEFERRED_DEPENDENCY',
@@ -743,9 +744,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
                 traceId,
                 routeId: stitch.id,
                 layer: "L4",
-                err: sanitizeError(queueErr),
+                err: sanitizeErrorObject(queueErr),
               },
-              "Failed to publish to ActiveFetchQueue — DependencySweeperService will retry",
+              `Failed to publish to ActiveFetchQueue — DependencySweeperService will retry: ${sanitizeError(queueErr)}`,
             );
             // Continue to cleanup (writeSyncLog + releaseSyncLock) despite queue failure
           }
@@ -779,6 +780,8 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      const safeErrStr = sanitizeError(err);
+      const safeErrObj = sanitizeErrorObject(err);
       this.logger.error(
         {
           event: "l4.stitch_error",
@@ -786,9 +789,9 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           traceId,
           dataSourceId,
           layer: "L4",
-          err: sanitizeError(err),
+          err: safeErrObj,
         },
-        "L4 stitch fan-out failed — recording failure and continuing to next route",
+        `L4 stitch fan-out failed — recording failure and continuing to next route: ${safeErrStr}`,
       );
       await this.writeSyncLog(
         schemaName,
@@ -799,6 +802,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
         Date.now() - start,
         syncLog,
         tenantDb,
+        err instanceof Error ? err.message : String(err),
       );
       // Decrement refcount on error
       if (srcVendorId) {
@@ -816,6 +820,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
     durationMs: number,
     syncLog: ReturnType<typeof buildTenantSchema>["syncLog"],
     tenantDb: DrizzleDb,
+    errorMessage?: string,
   ) {
     await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
@@ -832,6 +837,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           layer,
           status,
           durationMs,
+          errorMessage,
         })
         .onConflictDoNothing();
     });

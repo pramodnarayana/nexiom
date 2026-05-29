@@ -8,25 +8,15 @@ import { SchedulerService } from './scheduler.service.js';
 // Shared fixtures
 // ---------------------------------------------------------------------------
 
-const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const CONNECTION_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const RECORD_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 
-const STITCH = {
-  id: STITCH_ID,
-  name: 'Test Stitch',
-  orgId: 'org-1',
-  workspaceId: 'ws-1',
-  srcDataSourceId: 'conn-1',
-  destDataSourceId: 'conn-2',
-  sourceObject: 'Lead',
-  targetObject: 'Contact',
-  syncCondition: [],
-  status: 'ACTIVE' as const,
-  syncIntervalMinutes: 30,
+const CONNECTION = {
+  id: CONNECTION_ID,
+  appName: 'test-app',
+  tenantId: 'org-1',
   scheduleEnabled: true,
-  lastScheduledAt: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  syncIntervalMinutes: 30,
 };
 
 function makeRecord(
@@ -35,12 +25,12 @@ function makeRecord(
 ): typeof import('@nexiom/database').schedulerOutbox.$inferSelect {
   return {
     id: RECORD_ID,
-    stitchId: STITCH_ID,
+    dataSourceId: CONNECTION_ID,
     action,
     status: 'PROCESSING' as const,
     attempts,
     nextRetryAt: new Date(),
-    lastError: null,
+    errorMessage: null,
     processedAt: null,
     createdAt: new Date(),
   };
@@ -52,7 +42,7 @@ function makeRecord(
 
 function buildMockDb() {
   const returningClaim = vi.fn();
-  const findFirstStitch = vi.fn();
+  const findFirstDataSource = vi.fn();
 
   const markChain = {
     set: vi.fn().mockReturnThis(),
@@ -61,7 +51,7 @@ function buildMockDb() {
 
   const db = {
     query: {
-      integrationStitches: { findFirst: findFirstStitch },
+      dataSources: { findFirst: findFirstDataSource },
     },
     transaction: vi
       .fn()
@@ -78,7 +68,7 @@ function buildMockDb() {
     update: vi.fn().mockReturnValue(markChain),
   };
 
-  return { db, returningClaim, findFirstStitch, markChain };
+  return { db, returningClaim, findFirstDataSource, markChain };
 }
 
 // ---------------------------------------------------------------------------
@@ -89,17 +79,18 @@ describe('OutboxWorkerService', () => {
   let service: OutboxWorkerService;
   let scheduler: Record<string, ReturnType<typeof vi.fn>>;
   let mocks: ReturnType<typeof buildMockDb>;
+  let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     mocks = buildMockDb();
 
     scheduler = {
-      onStitchCreated: vi.fn().mockResolvedValue(undefined),
-      onStitchUpdated: vi.fn().mockResolvedValue(undefined),
-      onStitchDeleted: vi.fn().mockResolvedValue(undefined),
+      onConnectionCreated: vi.fn().mockResolvedValue(undefined),
+      onConnectionUpdated: vi.fn().mockResolvedValue(undefined),
+      onConnectionDeleted: vi.fn().mockResolvedValue(undefined),
     };
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         OutboxWorkerService,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
@@ -110,6 +101,12 @@ describe('OutboxWorkerService', () => {
     service = module.get(OutboxWorkerService);
   });
 
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
+  });
+
   // ── processOutbox ────────────────────────────────────────────────────────
 
   describe('processOutbox', () => {
@@ -118,67 +115,51 @@ describe('OutboxWorkerService', () => {
 
       await service.processOutbox();
 
-      expect(scheduler.onStitchCreated).not.toHaveBeenCalled();
-      expect(scheduler.onStitchUpdated).not.toHaveBeenCalled();
-      expect(scheduler.onStitchDeleted).not.toHaveBeenCalled();
+      expect(scheduler.onConnectionCreated).not.toHaveBeenCalled();
+      expect(scheduler.onConnectionUpdated).not.toHaveBeenCalled();
+      expect(scheduler.onConnectionDeleted).not.toHaveBeenCalled();
     });
 
-    it('calls onStitchDeleted for a deleted record without reading the stitch', async () => {
+    it('calls onConnectionDeleted for a deleted record without reading the connection', async () => {
       const record = makeRecord('DELETED');
       mocks.returningClaim.mockResolvedValue([record]);
 
       await service.processOutbox();
 
-      expect(scheduler.onStitchDeleted).toHaveBeenCalledWith(STITCH_ID);
-      expect(
-        mocks.db.query.integrationStitches.findFirst,
-      ).not.toHaveBeenCalled();
+      expect(scheduler.onConnectionDeleted).toHaveBeenCalledWith(CONNECTION_ID);
+      expect(mocks.db.query.dataSources.findFirst).not.toHaveBeenCalled();
     });
 
-    it('calls onStitchCreated after re-reading the active stitch', async () => {
+    it('calls onConnectionCreated after re-reading the active connection', async () => {
       const record = makeRecord('CREATED');
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(STITCH);
+      mocks.findFirstDataSource.mockResolvedValue(CONNECTION);
 
       await service.processOutbox();
 
-      expect(mocks.db.query.integrationStitches.findFirst).toHaveBeenCalled();
-      expect(scheduler.onStitchCreated).toHaveBeenCalledWith(STITCH);
+      expect(mocks.db.query.dataSources.findFirst).toHaveBeenCalled();
+      expect(scheduler.onConnectionCreated).toHaveBeenCalledWith(CONNECTION);
     });
 
-    it('calls onStitchUpdated after re-reading the active stitch', async () => {
+    it('calls onConnectionUpdated after re-reading the active connection', async () => {
       const record = makeRecord('UPDATED');
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(STITCH);
+      mocks.findFirstDataSource.mockResolvedValue(CONNECTION);
 
       await service.processOutbox();
 
-      expect(scheduler.onStitchUpdated).toHaveBeenCalledWith(STITCH);
+      expect(scheduler.onConnectionUpdated).toHaveBeenCalledWith(CONNECTION);
     });
 
-    it('skips and marks succeeded when stitch is absent for created/updated', async () => {
+    it('skips and marks succeeded when connection is absent for created/updated', async () => {
       const record = makeRecord('CREATED');
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(null);
+      mocks.findFirstDataSource.mockResolvedValue(null);
 
       await service.processOutbox();
 
-      expect(scheduler.onStitchCreated).not.toHaveBeenCalled();
+      expect(scheduler.onConnectionCreated).not.toHaveBeenCalled();
       // markSucceeded updates the record to 'succeeded'
-      expect(mocks.db.update).toHaveBeenCalled();
-    });
-
-    it('skips and marks succeeded when stitch is ARCHIVED for updated', async () => {
-      const record = makeRecord('UPDATED');
-      mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue({
-        ...STITCH,
-        status: 'ARCHIVED' as const,
-      });
-
-      await service.processOutbox();
-
-      expect(scheduler.onStitchUpdated).not.toHaveBeenCalled();
       expect(mocks.db.update).toHaveBeenCalled();
     });
   });
@@ -189,17 +170,19 @@ describe('OutboxWorkerService', () => {
     it('re-queues the record with pending status on transient failure', async () => {
       const record = makeRecord('CREATED', 1);
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(STITCH);
-      scheduler.onStitchCreated.mockRejectedValue(new Error('Windmill down'));
+      mocks.findFirstDataSource.mockResolvedValue(CONNECTION);
+      scheduler.onConnectionCreated.mockRejectedValue(
+        new Error('Windmill down'),
+      );
 
       await service.processOutbox();
 
       const setCall = mocks.markChain.set.mock.calls[0][0] as {
         status: string;
-        lastError: string;
+        errorMessage: string;
       };
       expect(setCall.status).toBe('PENDING');
-      expect(setCall.lastError).toContain('Windmill down');
+      expect(setCall.errorMessage).toContain('Windmill down');
     });
 
     it('retries with 32s delay when attempts=5 (5th attempt, not yet exhausted)', async () => {
@@ -207,8 +190,8 @@ describe('OutboxWorkerService', () => {
       // Back-off delay = 2^5 * 1000 = 32 000 ms.
       const record = makeRecord('CREATED', 5);
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(STITCH);
-      scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));
+      mocks.findFirstDataSource.mockResolvedValue(CONNECTION);
+      scheduler.onConnectionCreated.mockRejectedValue(new Error('still down'));
 
       await service.processOutbox();
 
@@ -226,40 +209,40 @@ describe('OutboxWorkerService', () => {
     it('permanently fails when attempts=6 (all 6 attempts exhausted)', async () => {
       const record = makeRecord('CREATED', 6);
       mocks.returningClaim.mockResolvedValue([record]);
-      mocks.findFirstStitch.mockResolvedValue(STITCH);
-      scheduler.onStitchCreated.mockRejectedValue(new Error('still down'));
+      mocks.findFirstDataSource.mockResolvedValue(CONNECTION);
+      scheduler.onConnectionCreated.mockRejectedValue(new Error('still down'));
 
       await service.processOutbox();
 
       const setCall = mocks.markChain.set.mock.calls[0][0] as {
         status: string;
-        lastError: string;
+        errorMessage: string;
         processedAt: Date;
       };
       expect(setCall.status).toBe('FAILED');
-      expect(setCall.lastError).toContain('still down');
+      expect(setCall.errorMessage).toContain('still down');
       expect(setCall.processedAt).toBeInstanceOf(Date);
     });
 
     it('continues processing remaining records even when one fails', async () => {
       const RECORD_ID_2 = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
-      const STITCH_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+      const CONNECTION_ID_2 = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
       const record1 = makeRecord('DELETED');
       const record2 = {
         ...makeRecord('DELETED'),
         id: RECORD_ID_2,
-        stitchId: STITCH_ID_2,
+        dataSourceId: CONNECTION_ID_2,
       };
       mocks.returningClaim.mockResolvedValue([record1, record2]);
 
-      scheduler.onStitchDeleted
+      scheduler.onConnectionDeleted
         .mockRejectedValueOnce(new Error('transient'))
         .mockResolvedValueOnce(undefined);
 
       await expect(service.processOutbox()).resolves.toBeUndefined();
 
-      expect(scheduler.onStitchDeleted).toHaveBeenCalledTimes(2);
+      expect(scheduler.onConnectionDeleted).toHaveBeenCalledTimes(2);
     });
   });
 });
