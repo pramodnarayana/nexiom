@@ -1,13 +1,20 @@
 import { Test } from "@nestjs/testing";
 import { afterEach } from "vitest";
-import type { TestingModuleBuilder, TestingModule, TestingModuleOptions } from "@nestjs/testing";
+import type {
+  TestingModuleBuilder,
+  TestingModule,
+  TestingModuleOptions,
+} from "@nestjs/testing";
 import type { ModuleMetadata } from "@nestjs/common";
 
 const originalCreateTestingModule = Test.createTestingModule.bind(Test);
 const createdModules = new Set<TestingModule>();
 
 // Patching nestjs/testing
-Test.createTestingModule = (metadata: ModuleMetadata, options?: TestingModuleOptions): TestingModuleBuilder => {
+Test.createTestingModule = (
+  metadata: ModuleMetadata,
+  options?: TestingModuleOptions,
+): TestingModuleBuilder => {
   const moduleBuilder = originalCreateTestingModule(metadata, options);
   const originalCompile = moduleBuilder.compile.bind(
     moduleBuilder,

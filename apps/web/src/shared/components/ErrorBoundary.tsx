@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
             An unexpected error occurred in this component.
           </p>
           <div className="bg-muted/50 p-4 rounded-lg border border-border text-left w-full max-w-2xl overflow-auto text-xs font-mono text-muted-foreground whitespace-pre-wrap">
-            {process.env.NODE_ENV === 'development'
+            {import.meta.env.DEV
               ? (this.state.error?.stack || this.state.error?.message || 'Unknown error')
               : (this.state.error?.message || 'An unexpected error occurred')}
           </div>

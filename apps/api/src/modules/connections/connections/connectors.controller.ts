@@ -37,7 +37,7 @@ import {
   type DrizzleDb,
   member,
 } from '@nexiom/database';
-import { eq, and, count, desc, inArray } from 'drizzle-orm';
+import { eq, and, count, desc } from 'drizzle-orm';
 import { PieceRegistryService } from '@nexiom/piece-registry';
 import type { ConnectionValueBlob } from '../connectors.service.js';
 import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
@@ -343,12 +343,7 @@ export class ConnectorsController {
 
     const whereClause = and(
       eq(dataSources.tenantId, tenantId),
-      inArray(credentials.status, [
-        AppConnectionStatus.ACTIVE,
-        AppConnectionStatus.REVOKED,
-        AppConnectionStatus.EXPIRED,
-        AppConnectionStatus.FAILED,
-      ]),
+      eq(credentials.status, AppConnectionStatus.ACTIVE),
     );
 
     let activeConnections: {

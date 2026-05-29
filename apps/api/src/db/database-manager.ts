@@ -1407,6 +1407,7 @@ export class DatabaseManager {
           and(
             eq(schema.integrationStitches.canonicalObject, 'TMS_CARRIER'),
             eq(schema.integrationStitches.destDataSourceId, qbConn[0].id),
+            eq(schema.integrationStitches.workspaceId, workspaces[0].id),
           ),
         )
         .limit(1);

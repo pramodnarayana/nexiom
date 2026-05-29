@@ -179,10 +179,7 @@ export class WorkspaceConnectionsController {
     }
 
     // Initial Manual Sync
-    const result = await this.syncRunner.run(
-      dataSourceId,
-      objectType,
-    );
+    const result = await this.syncRunner.run(dataSourceId, objectType);
     return result;
   }
 }

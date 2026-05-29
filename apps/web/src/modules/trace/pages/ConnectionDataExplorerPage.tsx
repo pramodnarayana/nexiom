@@ -20,7 +20,8 @@ import {
   type ExplorerPage,
 } from '../api/data-explorer.api';
 import { listObjects } from '../../stitches/api/metadata.api';
-import { listActiveConnections, type ActiveConnectionResponse as ConnectionResponse } from '@/modules/connections/api/connections.api';
+import { type ActiveConnectionResponse as ConnectionResponse } from '@/modules/connections/api/connections.api';
+import { listWorkspaceConnections } from '@/modules/workspaces/api/workspaces.api';
 import { QueryBuilder, type FilterGroup } from '../components/QueryBuilder';
 import { JsonEditorModal } from '../components/JsonEditorModal';
 import { Combobox } from '@/shared/components/ui/combobox';
@@ -677,7 +678,7 @@ function ConnectionSelector({ workspaceId, value, onChange }: {
   const [connections, setConnections] = useState<ConnectionResponse[]>([]);
   
   useEffect(() => {
-    void listActiveConnections().then(setConnections).catch(console.error);
+    void listWorkspaceConnections(workspaceId).then(data => setConnections(data as unknown as ConnectionResponse[])).catch(console.error);
   }, [workspaceId]);
 
   return (

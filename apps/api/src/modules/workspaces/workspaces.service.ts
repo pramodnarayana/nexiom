@@ -131,14 +131,7 @@ export class WorkspacesService {
 
     const conditions = [
       eq(dataSources.tenantId, orgId),
-      // Do not filter strictly by ACTIVE, otherwise REVOKED connections become invisible orphans
-      // that users cannot delete or re-authenticate.
-      inArray(credentials.status, [
-        AppConnectionStatus.ACTIVE,
-        AppConnectionStatus.REVOKED,
-        AppConnectionStatus.EXPIRED,
-        AppConnectionStatus.FAILED,
-      ]),
+      eq(credentials.status, AppConnectionStatus.ACTIVE),
       eq(dataSources.envType, workspace.envType),
     ];
 

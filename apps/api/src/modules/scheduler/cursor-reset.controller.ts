@@ -32,6 +32,9 @@ import { pollLockKey } from './lock-keys.js';
 // after we acquire the lock cannot complete and reacquire before we release.
 const ADMIN_RESET_LOCK_TTL_MS = 5 * 60_000;
 
+// The legacy "stitches" URLs (admin/stitches/:id/cursor/:streamName and admin/stitches/:id/cursors)
+// are intentionally preserved for backward compatibility. The underlying implementation
+// operates on dataSources/connections and these routes remain unchanged to avoid breaking existing clients.
 @UseGuards(AuthGuard, SystemAdminGuard)
 @Controller('admin/stitches')
 export class CursorResetController {

@@ -33,7 +33,7 @@ export class NormalizedOutboxPoller {
   // failed (queue unavailable, process crash, etc.).
   // The happy path is fully event-driven: NormalizationService publishes directly
   // to NormalizedQueue after the transaction commits.
-  @Cron(CronExpression.EVERY_5_SECONDS)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async processOutbox(): Promise<void> {
     try {
       // Only process tenants with fully provisioned databases — skip WARM/INITIALIZING warm pool entries

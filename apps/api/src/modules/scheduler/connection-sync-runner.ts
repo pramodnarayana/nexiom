@@ -600,7 +600,7 @@ export class ConnectionSyncRunner {
 
     await tenantDb.transaction(async (tx) => {
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
 
       const result = await tx

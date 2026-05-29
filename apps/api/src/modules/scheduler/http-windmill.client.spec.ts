@@ -109,7 +109,7 @@ describe('HttpWindmillClient', () => {
       expect(init.method).toBe('POST');
       const body = JSON.parse(init.body as string) as {
         enabled: boolean;
-        args: { stitchId: string };
+        args: { dataSourceId: string };
       };
       expect(body.enabled).toBe(true);
       expect(body.args).toEqual({ dataSourceId: STITCH_ID });

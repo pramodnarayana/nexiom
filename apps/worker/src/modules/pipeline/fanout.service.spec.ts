@@ -25,30 +25,28 @@ describe("FanOutService", () => {
     mappings: any[],
     logs: any[] = [],
   ) => {
-    return (args: any) => {
-      const isConnectionQuery = args && Object.keys(args).length > 0;
-      let resultData = isConnectionQuery
-        ? [
-            {
-              appName: "testApp",
-              tenantId: "org_1",
-              metadata: { appProfile: "online" },
-            },
-          ]
-        : stitches;
-
+    return (_args: any) => {
+      let resultData: any[] = [];
       const qb: any = {};
       qb.from = vi.fn().mockImplementation((table) => {
+        const tableName = table ? table[Symbol.for("drizzle:Name")] : undefined;
         if (
-          table &&
-          "status" in table &&
-          "routeId" in table &&
-          !("destConnectionId" in table)
+          tableName === "sync_log" ||
+          (table &&
+            "status" in table &&
+            "routeId" in table &&
+            !("destConnectionId" in table))
         ) {
           resultData = logs;
-        } else if (table && "mappingRules" in table) {
+        } else if (
+          tableName === "field_mapping" ||
+          (table && "mappingRules" in table)
+        ) {
           resultData = mappings;
-        } else if (table && "appName" in table) {
+        } else if (
+          tableName === "data_source" ||
+          (table && "appName" in table)
+        ) {
           resultData = [
             {
               appName: "testApp",
@@ -56,9 +54,12 @@ describe("FanOutService", () => {
               metadata: { appProfile: "online" },
             },
           ];
+        } else {
+          resultData = stitches;
         }
         return qb;
       });
+      qb.innerJoin = vi.fn().mockReturnValue(qb);
       qb.where = vi.fn().mockReturnValue(qb);
       qb.limit = vi.fn().mockReturnValue(qb);
       qb.then = (resolve: any, reject?: any) =>
@@ -126,6 +127,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue(
           isFirstTx
@@ -272,25 +274,35 @@ describe("FanOutService", () => {
   });
 
   it("should log and throw error if db operation fails", async () => {
-    db.select.mockImplementation((args: any) => {
+    db.select.mockImplementation((_args: any) => {
       const qb: any = {};
-      const isConnectionQuery = args && Object.keys(args).length > 0;
-      qb.from = vi.fn().mockReturnValue(qb);
+      let shouldReject = true;
+      qb.from = vi.fn().mockImplementation((table) => {
+        const tableName = table ? table[Symbol.for("drizzle:Name")] : undefined;
+        if (tableName === "data_source" || (table && "appName" in table)) {
+          shouldReject = false;
+        }
+        return qb;
+      });
+      qb.innerJoin = vi.fn().mockReturnValue(qb);
       qb.where = vi.fn().mockReturnValue(qb);
       qb.limit = vi.fn().mockReturnValue(qb);
-      if (isConnectionQuery) {
-        qb.then = (res: any, rej: any) =>
-          Promise.resolve([
+      qb.then = (res: any, rej: any) => {
+        if (!shouldReject) {
+          return Promise.resolve([
             {
               appName: "testApp",
               tenantId: "org_1",
               metadata: { appProfile: "online" },
             },
           ]).then(res, rej);
-      } else {
-        qb.then = (res: any, rej: any) =>
-          Promise.reject(new Error("DB connection failed")).then(res, rej);
-      }
+        } else {
+          return Promise.reject(new Error("DB connection failed")).then(
+            res,
+            rej,
+          );
+        }
+      };
       return qb;
     });
 
@@ -395,6 +407,7 @@ describe("FanOutService", () => {
         resultData = [{ id: "stitch_1", syncCondition: [], mappingRules: [] }];
       }
       qb.from = vi.fn().mockReturnValue(qb);
+      qb.innerJoin = vi.fn().mockReturnValue(qb);
       qb.where = vi.fn().mockReturnValue(qb);
       qb.limit = vi.fn().mockReturnValue(qb);
       qb.then = (res: any, rej: any) =>
@@ -414,6 +427,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           limitCalls++;
@@ -464,6 +478,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           if (isFirstTx) {
@@ -528,6 +543,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           if (isFirstTx) {
@@ -601,6 +617,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           if (isFirstTx) {
@@ -660,6 +677,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           if (isFirstTx) {
@@ -742,6 +760,7 @@ describe("FanOutService", () => {
       const tx = Object.assign(Promise.resolve([]), {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockImplementation(() => {
           if (isFirstTx) {
@@ -822,6 +841,7 @@ describe("FanOutService", () => {
         return qb;
       });
       qb.where = vi.fn().mockReturnValue(qb);
+      qb.innerJoin = vi.fn().mockReturnValue(qb);
       qb.limit = vi.fn().mockReturnValue(qb);
       qb.then = (resolve: any, reject?: any) =>
         Promise.resolve(resultData).then(resolve, reject);

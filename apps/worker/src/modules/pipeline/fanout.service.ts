@@ -15,6 +15,7 @@ import {
   fieldMappings,
   dataSources,
   globalEntityMap,
+  uiWorkspaceDataSources,
 } from "@nexiom/database";
 import type { DrizzleDb } from "@nexiom/database";
 import {
@@ -201,8 +202,30 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
       // ── Find active stitches for this source connection ───────────────────
       // We read stitches from the tenant DB, enforcing the cell-based isolation
       const stitches = await tenantDb
-        .select()
+        .select({
+          id: integrationStitches.id,
+          name: integrationStitches.name,
+          orgId: integrationStitches.orgId,
+          workspaceId: integrationStitches.workspaceId,
+          destDataSourceId: integrationStitches.destDataSourceId,
+          canonicalObject: integrationStitches.canonicalObject,
+          targetObject: integrationStitches.targetObject,
+          syncCondition: integrationStitches.syncCondition,
+          status: integrationStitches.status,
+          createdAt: integrationStitches.createdAt,
+          updatedAt: integrationStitches.updatedAt,
+        })
         .from(integrationStitches)
+        .innerJoin(
+          uiWorkspaceDataSources,
+          and(
+            eq(
+              integrationStitches.workspaceId,
+              uiWorkspaceDataSources.workspaceId,
+            ),
+            eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
+          ),
+        )
         .where(
           sql`${integrationStitches.canonicalObject} = ${canonicalType} AND ${integrationStitches.status} = 'ACTIVE'`,
         );

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { CapacityManagerService } from './capacity-manager.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';

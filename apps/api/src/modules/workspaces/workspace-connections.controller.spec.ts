@@ -5,7 +5,7 @@ import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { ConnectionSyncRunner } from '../scheduler/connection-sync-runner.js';
+import { SyncRunner } from '../scheduler/sync-runner.js';
 import { ORG_ID, WS_ID, CONN_ID, makeAuth } from './workspace-test-fixtures.js';
 
 const WORKSPACE = {
@@ -64,7 +64,7 @@ describe('WorkspaceConnectionsController', () => {
       providers: [
         { provide: WorkspacesService, useValue: mockService },
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
-        { provide: ConnectionSyncRunner, useValue: { scheduleSync: vi.fn() } },
+        { provide: SyncRunner, useValue: { run: vi.fn() } },
       ],
     })
       .overrideGuard(AuthGuard)
