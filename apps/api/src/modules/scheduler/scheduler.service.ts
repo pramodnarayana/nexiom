@@ -43,7 +43,12 @@ export class SchedulerService implements OnModuleInit {
       return;
     }
     const cron = this.toCron(connection);
-    if (!cron) return;
+    if (!cron) {
+      this.logger.warn(
+        `Cannot create schedule for connection ${connection.id} (invalid sync interval)`,
+      );
+      return;
+    }
     await this.windmill.createSchedule(connection.id, cron, true);
     this.logger.log(
       `Schedule created for connection ${connection.id} (${cron})`,
@@ -58,7 +63,14 @@ export class SchedulerService implements OnModuleInit {
   async onConnectionUpdated(connection: DataSource): Promise<void> {
     const { id, scheduleEnabled: enabled } = connection;
     const cron = this.toCron(connection);
-    if (!cron) return;
+    if (!cron) {
+      // If toCron returns null, delete any existing schedule
+      await this.windmill.deleteSchedule(id);
+      this.logger.log(
+        `Deleted schedule for connection ${id} (invalid sync interval)`,
+      );
+      return;
+    }
 
     const wasUpdated = await this.windmill.updateSchedule(id, cron, enabled);
     if (wasUpdated) {

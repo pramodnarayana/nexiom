@@ -167,7 +167,7 @@ export class TraceService {
     // 1. Try to find the most recent outbound_gateway record for this stitch
     const obRecords = await tenantDb.transaction(async (tx) => {
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(destSchemaName)}`,
       );
       return tx
         .select({ srcDataSourceId: outboundGateway.srcDataSourceId })
@@ -268,7 +268,7 @@ export class TraceService {
     const rows = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
       return (
         tx
@@ -362,7 +362,7 @@ export class TraceService {
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.identifier(srcSchemaName)}`,
         );
 
         // 1. Existence check: trace must have at least one route-bound sync_log entry for this stitch
@@ -427,7 +427,7 @@ export class TraceService {
       this.db.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.identifier(destSchemaName)}`,
         );
         return tx
           .select()

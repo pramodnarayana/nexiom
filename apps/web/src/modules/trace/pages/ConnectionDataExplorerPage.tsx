@@ -35,7 +35,8 @@ const TABS = [
   { id: 'inbound',    label: 'Inbound',           icon: Inbox,    description: 'Raw payloads received from source app (L1)' },
   { id: 'replica',    label: 'Replica',            icon: Database, description: 'Vendor objects stored in replica layer (L2)' },
   { id: 'normalized', label: 'Normalization',      icon: Layers,   description: 'Canonical entities in normalized form (L3)' },
-  { id: 'entity-map', label: 'Entity Map',         icon: Layers,   description: 'Cross-system source to target ID linkages (L4)' },
+  // Entity Map tab removed until real data fetcher exists
+  // { id: 'entity-map', label: 'Entity Map',         icon: Layers,   description: 'Cross-system source to target ID linkages (L4)' },
   { id: 'outbound',   label: 'Outbound',           icon: Database, description: 'Payloads sent to the destination app (L5/L6)' },
 ] as const;
 
@@ -457,7 +458,6 @@ const FETCHERS: Record<TabId, FetchFn> = {
   'inbound':    listConnectionInbound    as unknown as FetchFn,
   'replica':    listConnectionReplica    as unknown as FetchFn,
   'normalized': listConnectionNormalized as unknown as FetchFn,
-  'entity-map': (async () => ({ data: [], total: 0, page: 1, limit: 20 })) as unknown as FetchFn,
   'outbound':   listConnectionOutbound   as unknown as FetchFn,
 };
 

@@ -21,8 +21,12 @@ export async function ReplicateRevenovaObject(payload: unknown): Promise<{ entit
             const data: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(p)) {
                 if (key !== 'attributes') {
+                    // Skip null/undefined values
+                    if (value === null || value === undefined) {
+                        continue;
+                    }
                     // Stringify values if they are objects (though standard SF fields are primitives)
-                    data[key.toLowerCase()] = value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value);
+                    data[key.toLowerCase()] = typeof value === 'object' ? JSON.stringify(value) : String(value);
                 }
             }
             return {

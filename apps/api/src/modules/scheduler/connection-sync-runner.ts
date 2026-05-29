@@ -152,10 +152,15 @@ export class ConnectionSyncRunner {
         streams = await piece.describeStreams(toCredentialsRecord(credentials));
       } else {
         // If describeStreams is not supported, we can't reliably sync "all" streams.
-        // But we can fallback to an empty array or throw.
-        this.logger.warn(
-          `piece ${conn.appName} does not support describeStreams`,
+        this.logger.error(
+          `piece ${conn.appName} does not support describeStreams and no objectType was provided`,
+          { connectionId, appName: conn.appName },
         );
+        return {
+          connectionId,
+          status: 'failed',
+          streamResults: [],
+        };
       }
     }
 
@@ -225,7 +230,6 @@ export class ConnectionSyncRunner {
     } catch (err) {
       const error =
         err instanceof Error ? err.stack || err.message : String(err);
-      console.error('FULL ERROR:', err);
       this.logger.error(
         `Poll loop failed for stream "${descriptor.streamName}" on stitch ${stitchId}: ${error}`,
       );
@@ -309,14 +313,16 @@ export class ConnectionSyncRunner {
         // Insert records into inbound_gateway
         for (const record of page.records) {
           try {
-            await this.insertGatewayRow(
+            const inserted = await this.insertGatewayRow(
               tenantDb,
               stitchId,
               streamName,
               record.data,
               String(record.replicationKeyValue),
             );
-            recordsIngested++;
+            if (inserted) {
+              recordsIngested++;
+            }
           } catch (e) {
             this.logger.error(`Failed to insert record: ${e}`);
             throw e; // Bubble up the actual insertion error to the UI

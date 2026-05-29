@@ -4,7 +4,7 @@ import { NormalizedOutboxPoller } from "./normalized-outbox.poller.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { DB_MANAGER } from "@nexiom/dbmanager";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const MAX_ATTEMPTS = 6; // mirrors the constant in the worker
 

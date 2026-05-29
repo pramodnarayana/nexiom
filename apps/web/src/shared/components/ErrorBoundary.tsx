@@ -1,4 +1,4 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { AlertCircle } from 'lucide-react';
 
 interface Props {
@@ -21,7 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
@@ -40,7 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
             An unexpected error occurred in this component.
           </p>
           <div className="bg-muted/50 p-4 rounded-lg border border-border text-left w-full max-w-2xl overflow-auto text-xs font-mono text-muted-foreground whitespace-pre-wrap">
-            {this.state.error?.stack || this.state.error?.message || 'Unknown error'}
+            {process.env.NODE_ENV === 'development'
+              ? (this.state.error?.stack || this.state.error?.message || 'Unknown error')
+              : (this.state.error?.message || 'An unexpected error occurred')}
           </div>
           <button 
             onClick={() => this.setState({ hasError: false, error: null })}

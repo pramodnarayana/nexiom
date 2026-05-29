@@ -51,12 +51,24 @@ export function TraceViewerPanel({
 
   useEffect(() => {
     if (connectionId && !stitchId) {
-      listTraceRoutes(connectionId, traceId).then(res => {
-        setRoutes(res);
-        if (res.length > 0) {
-          setActiveRouteId(res[0].id);
-        }
-      }).catch(console.error);
+      let mounted = true;
+      listTraceRoutes(connectionId, traceId)
+        .then(res => {
+          if (mounted) {
+            setRoutes(res);
+            if (res.length > 0) {
+              setActiveRouteId(res[0].id);
+            }
+          }
+        })
+        .catch(err => {
+          if (mounted) {
+            console.error('Failed to load trace routes:', err);
+          }
+        });
+      return () => {
+        mounted = false;
+      };
     }
   }, [connectionId, stitchId, traceId]);
 

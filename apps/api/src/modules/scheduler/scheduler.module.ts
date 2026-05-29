@@ -79,11 +79,9 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
       },
     },
     SchedulerService,
-    ConnectionSyncRunner,
-    StubSyncRunner,
     InternalSchedulerGuard,
     OutboxWorkerService,
   ],
-  exports: [SchedulerService, OutboxWorkerService, ConnectionSyncRunner],
+  exports: [SchedulerService, OutboxWorkerService, SyncRunner],
 })
 export class SchedulerModule {}
