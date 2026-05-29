@@ -20,13 +20,17 @@ import { NormalizationService } from "./normalization.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
 import { FanOutService } from "./fanout.service.js";
 import { DeliveryService } from "./delivery.service.js";
-import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
-import { RegistryOutboxWorker } from "./registry-outbox.worker.js";
 import { RegistryReplicationService } from "./registry-replication.service.js";
 
 import { ActiveFetchWorker } from "./active-fetch.worker.js";
 import { DependencySweeperService } from "./dependency-sweeper.service.js";
+
+// Outbox Pollers
+import { InboundOutboxPoller } from "./inbound-outbox.poller.js";
+import { ReplicaOutboxPoller } from "./replica-outbox.poller.js";
+import { NormalizedOutboxPoller } from "./normalized-outbox.poller.js";
+import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
 
 @Module({
   imports: [
@@ -44,12 +48,16 @@ import { DependencySweeperService } from "./dependency-sweeper.service.js";
     TargetBuilderService, // SQL JOIN enrichment for target payload assembly
     FanOutService,
     DeliveryService,
-    NormalizedOutboxWorker,
     GitopsSyncWorker,
     ActiveFetchWorker,
     DependencySweeperService,
-    RegistryOutboxWorker,
     RegistryReplicationService,
+
+    // Outbox Pollers
+    InboundOutboxPoller,
+    ReplicaOutboxPoller,
+    NormalizedOutboxPoller,
+    RegistryOutboxPoller,
 
     {
       provide: EncryptionService,

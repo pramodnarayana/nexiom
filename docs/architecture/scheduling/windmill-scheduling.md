@@ -76,7 +76,7 @@ The Windmill worker executes a TypeScript Deno script. It is thin by design — 
 
 ```typescript
 // Windmill script path: f/stitch-runner/main
-// Stored in Windmill's database; pushed via WindmillClient.ensureStitchScript() on service init.
+// Stored in Windmill's database; pushed via WindmillClient.ensureConnectionScript() on service init.
 // Runs inside a Deno sandbox on Windmill workers.
 
 import * as wmill from "npm:windmill-client@1";
@@ -200,7 +200,7 @@ NestJS  SchedulerWorker
 
 ## 3. Windmill Lifecycle — Stitch CRUD
 
-Every stitch create/update/delete operation is mirrored to Windmill via the `WindmillClient`. The stitch-runner script (`f/stitch-runner/main`) is provisioned once during service init (`WindmillClient.ensureStitchScript()`) and shared across all stitches.
+Every stitch create/update/delete operation is mirrored to Windmill via the `WindmillClient`. The stitch-runner script (`f/stitch-runner/main`) is provisioned once during service init (`WindmillClient.ensureConnectionScript()`) and shared across all stitches.
 
 **No per-org project concept:** Each stitch's schedule is addressed directly by path. The org-to-stitch relationship is enforced by Nexiom's own DB (via `integration_stitch.orgId`), not by Windmill workspace partitioning.
 
@@ -463,7 +463,7 @@ export abstract class WindmillClient {
    * Called once at SchedulerModule init via onModuleInit().
    * Idempotent — safe to call on every server startup.
    */
-  abstract ensureStitchScript(): Promise<void>;
+  abstract ensureConnectionScript(): Promise<void>;
 
   /**
    * Create a Windmill schedule for a stitch.
@@ -569,7 +569,7 @@ If the NestJS endpoint returns non-2xx, the Deno script throws and Windmill mark
 
 ### 10.7 Schedule Bootstrap on Service Start
 
-`WindmillClient.ensureStitchScript()` is called during `SchedulerModule.onModuleInit()`. If the stitch-runner script is missing (e.g. fresh Windmill instance), it is created idempotently. This prevents a failed deploy from leaving schedules without a backing script.
+`WindmillClient.ensureConnectionScript()` is called during `SchedulerModule.onModuleInit()`. If the stitch-runner script is missing (e.g. fresh Windmill instance), it is created idempotently. This prevents a failed deploy from leaving schedules without a backing script.
 
 ---
 

@@ -15,7 +15,6 @@ import {
   fieldMappings,
   uiWorkspaces,
   dataSources,
-  schedulerOutbox,
   globalRegistryOutbox,
 } from '@nexiom/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
@@ -56,15 +55,10 @@ export class StitchesService {
    */
   private async provisionStitchSchemas(
     orgId: string,
-    srcDataSourceId: string,
     destDataSourceId: string,
-    srcAppName: string,
     destAppName: string,
   ): Promise<void> {
-    const pairs = [
-      { dataSourceId: srcDataSourceId, appName: srcAppName },
-      { dataSourceId: destDataSourceId, appName: destAppName },
-    ];
+    const pairs = [{ dataSourceId: destDataSourceId, appName: destAppName }];
     await Promise.all(
       pairs.map(async ({ dataSourceId, appName }) => {
         const schemaName = getWorkspaceSchemaName(dataSourceId, appName);
@@ -100,42 +94,19 @@ export class StitchesService {
       throw new NotFoundException(`Workspace ${body.workspaceId} not found.`);
     }
 
-    if (body.srcDataSourceId === body.destDataSourceId) {
-      throw new BadRequestException(
-        'Source and destination data sources must be different.',
-      );
-    }
+    // Verify destination connection belongs to org
+    const destConn = await this.db
+      .select()
+      .from(dataSources)
+      .where(
+        and(
+          eq(dataSources.id, body.destDataSourceId),
+          eq(dataSources.tenantId, orgId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
 
-    // Verify both connections belong to org — run in parallel to halve latency
-    const [srcConn, destConn] = await Promise.all([
-      this.db
-        .select()
-        .from(dataSources)
-        .where(
-          and(
-            eq(dataSources.id, body.srcDataSourceId),
-            eq(dataSources.tenantId, orgId),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows[0]),
-      this.db
-        .select()
-        .from(dataSources)
-        .where(
-          and(
-            eq(dataSources.id, body.destDataSourceId),
-            eq(dataSources.tenantId, orgId),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows[0]),
-    ]);
-    if (!srcConn) {
-      throw new NotFoundException(
-        `Data source ${body.srcDataSourceId} not found.`,
-      );
-    }
     if (!destConn) {
       throw new NotFoundException(
         `Data source ${body.destDataSourceId} not found.`,
@@ -151,20 +122,13 @@ export class StitchesService {
             name: body.name,
             orgId,
             workspaceId: body.workspaceId,
-            srcDataSourceId: body.srcDataSourceId,
             destDataSourceId: body.destDataSourceId,
-            sourceObject: body.sourceObject,
+            canonicalObject: body.canonicalObject,
             targetObject: body.targetObject,
             ...(body.syncCondition !== undefined && {
               syncCondition: body.syncCondition,
             }),
             ...(body.status !== undefined && { status: body.status }),
-            ...(body.syncIntervalMinutes !== undefined && {
-              syncIntervalMinutes: body.syncIntervalMinutes,
-            }),
-            ...(body.scheduleEnabled !== undefined && {
-              scheduleEnabled: body.scheduleEnabled,
-            }),
           })
           .returning();
 
@@ -200,10 +164,6 @@ export class StitchesService {
           );
         }
 
-        await tx
-          .insert(schedulerOutbox)
-          .values({ stitchId: row.id, action: 'CREATED' });
-
         await tx.insert(globalRegistryOutbox).values({
           tenantId: orgId,
           entityType: 'INTEGRATION_STITCH',
@@ -238,13 +198,7 @@ export class StitchesService {
     // Must happen AFTER the stitch row exists (not inside the TX) so that
     // the provisioner can reference the committed connection rows.
     // All DDL is idempotent — safe to re-run if the schemas already exist.
-    await this.provisionStitchSchemas(
-      orgId,
-      srcConn.id,
-      destConn.id,
-      srcConn.appName,
-      destConn.appName,
-    );
+    await this.provisionStitchSchemas(orgId, destConn.id, destConn.appName);
 
     return stitch;
   }
@@ -288,17 +242,11 @@ export class StitchesService {
     const hasChanges =
       body.name !== undefined ||
       body.status !== undefined ||
-      body.syncCondition !== undefined ||
-      body.syncIntervalMinutes !== undefined ||
-      body.scheduleEnabled !== undefined;
+      body.syncCondition !== undefined;
 
     if (!hasChanges) {
       throw new BadRequestException('No updatable fields provided.');
     }
-
-    const scheduleFieldsChanged =
-      body.syncIntervalMinutes !== undefined ||
-      body.scheduleEnabled !== undefined;
 
     try {
       const updated = await this.db.transaction(async (tx) => {
@@ -309,12 +257,6 @@ export class StitchesService {
             ...(body.status !== undefined && { status: body.status }),
             ...(body.syncCondition !== undefined && {
               syncCondition: body.syncCondition,
-            }),
-            ...(body.syncIntervalMinutes !== undefined && {
-              syncIntervalMinutes: body.syncIntervalMinutes,
-            }),
-            ...(body.scheduleEnabled !== undefined && {
-              scheduleEnabled: body.scheduleEnabled,
             }),
             updatedAt: new Date(),
           })
@@ -328,12 +270,6 @@ export class StitchesService {
 
         if (!row) {
           throw new NotFoundException(`Stitch ${id} not found.`);
-        }
-
-        if (scheduleFieldsChanged) {
-          await tx
-            .insert(schedulerOutbox)
-            .values({ stitchId: row.id, action: 'UPDATED' });
         }
 
         await tx.insert(globalRegistryOutbox).values({
@@ -358,158 +294,6 @@ export class StitchesService {
     }
   }
 
-  async updateSchedule(
-    orgId: string,
-    id: string,
-    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
-  ) {
-    const updated = await this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(integrationStitches)
-        .set(this.buildScheduleSet(body))
-        .where(
-          and(
-            eq(integrationStitches.id, id),
-            eq(integrationStitches.orgId, orgId),
-          ),
-        )
-        .returning();
-
-      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
-
-      await tx
-        .insert(schedulerOutbox)
-        .values({ stitchId: row.id, action: 'UPDATED' });
-
-      return row;
-    });
-
-    return updated;
-  }
-
-  async updateScheduleAdmin(
-    id: string,
-    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
-  ) {
-    // No org scoping — admin/support use only. Caller must be a SystemAdmin.
-    const updated = await this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(integrationStitches)
-        .set(this.buildScheduleSet(body))
-        .where(eq(integrationStitches.id, id))
-        .returning();
-
-      if (!row) throw new NotFoundException(`Stitch ${id} not found.`);
-
-      await tx
-        .insert(schedulerOutbox)
-        .values({ stitchId: row.id, action: 'UPDATED' });
-
-      return row;
-    });
-
-    return updated;
-  }
-
-  /**
-   * Builds the Drizzle `.set()` payload for schedule updates.
-   * Throws BadRequestException when neither field is provided.
-   */
-  private buildScheduleSet(body: {
-    syncIntervalMinutes?: number;
-    scheduleEnabled?: boolean;
-  }) {
-    if (
-      body.syncIntervalMinutes === undefined &&
-      body.scheduleEnabled === undefined
-    ) {
-      throw new BadRequestException('No schedule fields provided.');
-    }
-    return {
-      ...(body.syncIntervalMinutes !== undefined && {
-        syncIntervalMinutes: body.syncIntervalMinutes,
-      }),
-      ...(body.scheduleEnabled !== undefined && {
-        scheduleEnabled: body.scheduleEnabled,
-      }),
-      updatedAt: new Date(),
-    };
-  }
-
-  async listAdmin() {
-    // Explicit column allowlist guards against future sensitive columns being
-    // inadvertently returned by a wildcard select after schema additions.
-    return this.db.query.integrationStitches.findMany({
-      columns: {
-        id: true,
-        orgId: true,
-        workspaceId: true,
-        name: true,
-        srcDataSourceId: true,
-        destDataSourceId: true,
-        sourceObject: true,
-        targetObject: true,
-        syncCondition: true,
-        status: true,
-        syncIntervalMinutes: true,
-        scheduleEnabled: true,
-        lastScheduledAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: [
-        asc(integrationStitches.orgId),
-        asc(integrationStitches.createdAt),
-      ],
-    });
-  }
-
-  async bulkUpdateScheduleByOrg(
-    orgId: string,
-    body: { syncIntervalMinutes?: number; scheduleEnabled?: boolean },
-  ) {
-    const { updated, count } = await this.db.transaction(async (tx) => {
-      const rows = await tx
-        .update(integrationStitches)
-        .set(this.buildScheduleSet(body))
-        .where(
-          and(
-            eq(integrationStitches.orgId, orgId),
-            ne(integrationStitches.status, 'ARCHIVED'),
-          ),
-        )
-        .returning();
-
-      if (rows.length > 0) {
-        await tx
-          .insert(schedulerOutbox)
-          .values(
-            rows.map((r) => ({ stitchId: r.id, action: 'UPDATED' as const })),
-          );
-
-        await tx.insert(globalRegistryOutbox).values(
-          rows.map((r) => ({
-            tenantId: orgId,
-            entityType: 'INTEGRATION_STITCH' as const,
-            entityId: r.id,
-            action: 'UPSERT' as const,
-            payload: r,
-          })),
-        );
-      }
-
-      return { updated: rows, count: rows.length };
-    });
-
-    if (count === 0) {
-      this.logger.warn(
-        `bulkUpdateScheduleByOrg: no non-archived stitches found for org ${orgId}`,
-      );
-    }
-
-    return { updated, count };
-  }
-
   async remove(orgId: string, id: string) {
     await this.db.transaction(async (tx) => {
       const [archived] = await tx
@@ -526,10 +310,6 @@ export class StitchesService {
       if (!archived) {
         throw new NotFoundException(`Stitch ${id} not found.`);
       }
-
-      await tx
-        .insert(schedulerOutbox)
-        .values({ stitchId: id, action: 'DELETED' });
 
       await tx.insert(globalRegistryOutbox).values({
         tenantId: orgId,

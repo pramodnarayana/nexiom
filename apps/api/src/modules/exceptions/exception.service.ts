@@ -306,7 +306,7 @@ export class ExceptionService {
 
     const stitch = await this.db.query.integrationStitches.findFirst({
       where: eq(integrationStitches.id, outboundGatewayRow.routeId),
-      columns: { srcDataSourceId: true, destDataSourceId: true },
+      columns: { destDataSourceId: true },
     });
 
     if (!stitch) {
@@ -349,7 +349,7 @@ export class ExceptionService {
       try {
         await this.queueService.send(QueueName.DeliveryQueue, {
           traceId: row.traceId,
-          srcDataSourceId: stitch.srcDataSourceId,
+          srcDataSourceId: outboundGatewayRow.srcDataSourceId,
           destDataSourceId: stitch.destDataSourceId,
           routeId: row.routeId,
           hydratedPayload: row.payload,
@@ -438,7 +438,11 @@ export class ExceptionService {
     orgId: string,
     outboundGatewayId: string,
   ): Promise<{
-    outboundGatewayRow: { traceId: string; routeId: string };
+    outboundGatewayRow: {
+      traceId: string;
+      routeId: string;
+      srcDataSourceId: string;
+    };
     schemaName: string;
   }> {
     const stitches = await this.db.query.integrationStitches.findMany({
@@ -457,7 +461,11 @@ export class ExceptionService {
 
     type SchemaHit =
       | {
-          outboundGatewayRow: { traceId: string; routeId: string };
+          outboundGatewayRow: {
+            traceId: string;
+            routeId: string;
+            srcDataSourceId: string;
+          };
           schemaName: string;
         }
       | { outboundGatewayRow: null; schemaName: string };
@@ -480,6 +488,7 @@ export class ExceptionService {
               id: outboundGateway.id,
               traceId: outboundGateway.traceId,
               routeId: outboundGateway.routeId,
+              srcDataSourceId: outboundGateway.srcDataSourceId,
             })
             .from(outboundGateway)
             .where(
@@ -519,7 +528,11 @@ export class ExceptionService {
         result.value.outboundGatewayRow !== null
       ) {
         return result.value as {
-          outboundGatewayRow: { traceId: string; routeId: string };
+          outboundGatewayRow: {
+            traceId: string;
+            routeId: string;
+            srcDataSourceId: string;
+          };
           schemaName: string;
         };
       }

@@ -1,25 +1,25 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { eq, sql } from 'drizzle-orm';
+import { Injectable, Inject, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { eq, sql } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
   dataSources,
-} from '@nexiom/database';
-import { QueueName } from '@nexiom/queue';
-import { QueueService } from '@nexiom/queue';
-import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+} from "@nexiom/database";
+import { QueueName } from "@nexiom/queue";
+import { QueueService } from "@nexiom/queue";
+import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
+import type { DatabaseManager } from "@nexiom/dbmanager";
+import { DB_MANAGER } from "@nexiom/dbmanager";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 
 @Injectable()
-export class ReplicaOutboxService {
-  private readonly logger = new Logger(ReplicaOutboxService.name);
+export class ReplicaOutboxPoller {
+  private readonly logger = new Logger(ReplicaOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
@@ -84,7 +84,7 @@ export class ReplicaOutboxService {
       return tx
         .update(replicaOutbox)
         .set({
-          status: 'PROCESSING',
+          status: "PROCESSING",
           attempts: sql`${replicaOutbox.attempts} + 1`,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
@@ -136,22 +136,22 @@ export class ReplicaOutboxService {
       // Mark success
       await tenantDb
         .update(replicaOutbox)
-        .set({ status: 'SUCCESS' })
+        .set({ status: "SUCCESS" })
         .where(eq(replicaOutbox.id, row.id));
 
       this.logger.debug(
         `[${schemaName}] Delivered L2->L3 trace=${row.traceId}`,
       );
     } catch (err) {
-      const lastError = err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
 
       if (row.attempts >= MAX_ATTEMPTS) {
         await tenantDb
           .update(replicaOutbox)
-          .set({ status: 'FAIL', lastError })
+          .set({ status: "FAIL", errorMessage })
           .where(eq(replicaOutbox.id, row.id));
         this.logger.error(
-          `[${schemaName}] ReplicaOutbox delivery permanently failed for traceId=${row.traceId}: ${lastError}`,
+          `[${schemaName}] ReplicaOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
         );
       } else {
         const delayMs = Math.pow(2, row.attempts) * 1_000;
@@ -159,10 +159,10 @@ export class ReplicaOutboxService {
 
         await tenantDb
           .update(replicaOutbox)
-          .set({ status: 'RETRY', lastError, nextRetryAt })
+          .set({ status: "RETRY", errorMessage, nextRetryAt })
           .where(eq(replicaOutbox.id, row.id));
         this.logger.warn(
-          `[${schemaName}] ReplicaOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${lastError}`,
+          `[${schemaName}] ReplicaOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,
         );
       }
     }

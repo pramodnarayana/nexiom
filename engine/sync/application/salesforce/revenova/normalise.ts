@@ -55,8 +55,8 @@ const normalizeTransportationProfile: NormalizeHandler = (data) => {
 // Handlers dictionary for O(1) lookup and clean scaling
 const handlers: Record<string, NormalizeHandler> = {
     'Account': normalizeAccount,
-    'Transportation_Profile__c': normalizeTransportationProfile,
-    'rtms__Transportation_Profile__c': normalizeTransportationProfile, // Aliased for safety
+    'TransportationProfile__c': normalizeTransportationProfile,
+    'rtms__TransportationProfile__c': normalizeTransportationProfile,
 };
 
 export const NormaliseRevenovaObject = async (

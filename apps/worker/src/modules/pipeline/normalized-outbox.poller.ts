@@ -1,13 +1,12 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   buildTenantSchema,
   tenantStorageRegistry,
   dataSources,
-  integrationStitches,
 } from "@nexiom/database";
 import { QueueName } from "@nexiom/queue";
 import { QueueService } from "@nexiom/queue";
@@ -20,8 +19,8 @@ const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 
 @Injectable()
-export class NormalizedOutboxWorker {
-  private readonly logger = new Logger(NormalizedOutboxWorker.name);
+export class NormalizedOutboxPoller {
+  private readonly logger = new Logger(NormalizedOutboxPoller.name);
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
@@ -57,15 +56,8 @@ export class NormalizedOutboxWorker {
           tenantId: dataSources.tenantId,
         })
         .from(dataSources)
-        .innerJoin(
-          integrationStitches,
-          eq(integrationStitches.srcDataSourceId, dataSources.id),
-        )
         .where(
-          and(
-            eq(integrationStitches.status, "ACTIVE"),
-            sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
-          ),
+          sql`${dataSources.schemaPlan} IN ('OUTBOUND_ACTIVE', 'GATEWAY_ACTIVE', 'NORMALIZE_ACTIVE')`,
         );
 
       if (allConnections.length === 0) {
@@ -208,25 +200,25 @@ export class NormalizedOutboxWorker {
       });
       queueSuccess = true;
     } catch (err) {
-      const lastError = err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
       try {
         if (row.attempts >= MAX_ATTEMPTS) {
           await tenantDb
             .update(normalizedOutbox)
-            .set({ status: "FAIL", lastError })
+            .set({ status: "FAIL", errorMessage })
             .where(eq(normalizedOutbox.id, row.id));
           this.logger.error(
-            `[${schemaName}] NormalizedOutbox delivery permanently failed for traceId=${row.traceId}: ${lastError}`,
+            `[${schemaName}] NormalizedOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
           );
         } else {
           const delayMs = Math.pow(2, row.attempts) * 1_000;
           const nextRetryAt = new Date(Date.now() + delayMs);
           await tenantDb
             .update(normalizedOutbox)
-            .set({ status: "RETRY", lastError, nextRetryAt })
+            .set({ status: "RETRY", errorMessage, nextRetryAt })
             .where(eq(normalizedOutbox.id, row.id));
           this.logger.warn(
-            `[${schemaName}] NormalizedOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${lastError}`,
+            `[${schemaName}] NormalizedOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,
           );
         }
       } catch (dbErr) {

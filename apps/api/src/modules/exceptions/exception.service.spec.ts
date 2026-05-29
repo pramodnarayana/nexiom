@@ -64,6 +64,7 @@ const MOCK_OUTBOUND_ROW = {
   createdAt: new Date('2026-01-01'),
   updatedAt: UPDATED_AT,
   updatedAtRaw: String(UPDATED_AT.getTime() / 1000),
+  srcDataSourceId: SRC_CONN,
 };
 
 function buildCountChain(count: number) {
@@ -151,6 +152,7 @@ describe('ExceptionService', () => {
   let mockDb: ReturnType<typeof buildMockDb>;
   let mockResolver: ReturnType<typeof buildMockResolver>;
   let mockQueue: ReturnType<typeof buildMockQueue>;
+  let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -158,7 +160,7 @@ describe('ExceptionService', () => {
     mockResolver = buildMockResolver();
     mockQueue = buildMockQueue();
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         ExceptionService,
         { provide: DATABASE_CONNECTION, useValue: mockDb },
@@ -169,6 +171,12 @@ describe('ExceptionService', () => {
     }).compile();
 
     service = module.get(ExceptionService);
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   describe('listExceptions()', () => {

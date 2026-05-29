@@ -7,7 +7,7 @@ describe('StubSyncRunner', () => {
     const result = await runner.run('stitch-123');
 
     expect(result).toEqual({
-      stitchId: 'stitch-123',
+      connectionId: 'stitch-123',
       status: 'succeeded',
     });
   });

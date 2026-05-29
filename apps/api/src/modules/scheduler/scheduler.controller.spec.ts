@@ -8,14 +8,14 @@ import { SchedulerController } from './scheduler.controller.js';
 import { SchedulerService } from './scheduler.service.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
 
-const STITCH_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const CONN_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 describe('SchedulerController', () => {
   let controller: SchedulerController;
-  let service: { executeStitch: ReturnType<typeof vi.fn> };
+  let service: { executeConnection: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
-    service = { executeStitch: vi.fn() };
+    service = { executeConnection: vi.fn() };
 
     const module = await Test.createTestingModule({
       controllers: [SchedulerController],
@@ -30,29 +30,29 @@ describe('SchedulerController', () => {
 
   it('returns the result when status is succeeded', async () => {
     const result = {
-      stitchId: STITCH_ID,
+      connectionId: CONN_ID,
       status: 'succeeded' as const,
       streamResults: [],
     };
-    service.executeStitch.mockResolvedValue(result);
+    service.executeConnection.mockResolvedValue(result);
 
     await expect(
-      controller.executeStitch({ stitchId: STITCH_ID }),
+      controller.executeConnection({ dataSourceId: CONN_ID }),
     ).resolves.toEqual(result);
   });
 
   it('returns the result when status is skipped', async () => {
-    const result = { stitchId: STITCH_ID, status: 'skipped' as const };
-    service.executeStitch.mockResolvedValue(result);
+    const result = { connectionId: CONN_ID, status: 'skipped' as const };
+    service.executeConnection.mockResolvedValue(result);
 
     await expect(
-      controller.executeStitch({ stitchId: STITCH_ID }),
+      controller.executeConnection({ dataSourceId: CONN_ID }),
     ).resolves.toEqual(result);
   });
 
   it('throws InternalServerErrorException when status is failed', async () => {
-    service.executeStitch.mockResolvedValue({
-      stitchId: STITCH_ID,
+    service.executeConnection.mockResolvedValue({
+      connectionId: CONN_ID,
       status: 'failed' as const,
       streamResults: [
         {
@@ -65,35 +65,35 @@ describe('SchedulerController', () => {
     });
 
     await expect(
-      controller.executeStitch({ stitchId: STITCH_ID }),
+      controller.executeConnection({ dataSourceId: CONN_ID }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
   it('propagates NotFoundException from service as 404 (not wrapped as 500)', async () => {
-    service.executeStitch.mockRejectedValue(
-      new NotFoundException('Stitch not found: ' + STITCH_ID),
+    service.executeConnection.mockRejectedValue(
+      new NotFoundException('Connection not found: ' + CONN_ID),
     );
 
     await expect(
-      controller.executeStitch({ stitchId: STITCH_ID }),
+      controller.executeConnection({ dataSourceId: CONN_ID }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('wraps unexpected service throws in InternalServerErrorException to prevent raw error leakage', async () => {
     // Raw errors (e.g. DB connection strings, vendor tokens) must never reach
     // the Windmill worker response body.
-    service.executeStitch.mockRejectedValue(
+    service.executeConnection.mockRejectedValue(
       new Error(`DB connection string: postgres://secret@host/db`),
     );
 
-    const err = await controller
-      .executeStitch({ stitchId: STITCH_ID })
-      .catch((e: unknown) => e);
-
-    expect(err).toBeInstanceOf(InternalServerErrorException);
-    // The raw message must not be forwarded.
-    expect((err as InternalServerErrorException).message).not.toContain(
-      'postgres://',
-    );
+    try {
+      await controller.executeConnection({ dataSourceId: 'conn-1' });
+      expect.fail('Should have thrown InternalServerErrorException');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(InternalServerErrorException);
+      expect((err as InternalServerErrorException).message).not.toContain(
+        'postgres://',
+      );
+    }
   });
 });

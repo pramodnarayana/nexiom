@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nexiom/auth';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { integrationStitches, syncCursors } from '@nexiom/database';
 import { REDIS_CLIENT } from '@nexiom/cache';
 import { SystemAdminGuard } from '../identity/auth/system-admin.guard.js';
 import { CursorResetController } from './cursor-reset.controller.js';
@@ -187,29 +186,23 @@ describe('CursorResetController', () => {
     const now = Date.now();
     const sixtyOneMinutesAgo = new Date(now - 61 * 60_000);
 
-    mockDb.from.mockImplementation((table: unknown) => {
-      if (table === integrationStitches) {
-        mockDb.where.mockReturnValueOnce(mockDb);
-        mockDb.limit.mockResolvedValueOnce([
-          { syncIntervalMinutes: 30, scheduleEnabled: true },
-        ]);
-      } else if (table === syncCursors) {
-        // Include stateDocument in the raw DB row to prove the controller strips it.
-        mockDb.where.mockResolvedValueOnce([
-          {
-            id: 'c1',
-            stitchId: STITCH_ID,
-            streamName: STREAM_NAME,
-            stateDocument: {
-              bookmarks: { Account: { replication_key_value: 'secret-token' } },
-            },
-            createdAt: sixtyOneMinutesAgo,
-            updatedAt: sixtyOneMinutesAgo,
-          },
-        ]);
-      }
-      return mockDb;
-    });
+    mockDb.where.mockReturnValueOnce(mockDb);
+    mockDb.limit.mockResolvedValueOnce([
+      { syncIntervalMinutes: 30, scheduleEnabled: true },
+    ]);
+    // The second query uses .where() to fetch cursors
+    mockDb.where.mockResolvedValueOnce([
+      {
+        id: 'c1',
+        stitchId: STITCH_ID,
+        streamName: STREAM_NAME,
+        stateDocument: {
+          bookmarks: { Account: { replication_key_value: 'secret-token' } },
+        },
+        createdAt: sixtyOneMinutesAgo,
+        updatedAt: sixtyOneMinutesAgo,
+      },
+    ]);
 
     const result = await controller.listCursors(STITCH_ID);
 
@@ -225,25 +218,19 @@ describe('CursorResetController', () => {
     const now = Date.now();
     const fiveMinutesAgo = new Date(now - 5 * 60_000);
 
-    mockDb.from.mockImplementation((table: unknown) => {
-      if (table === integrationStitches) {
-        mockDb.where.mockReturnValueOnce(mockDb);
-        mockDb.limit.mockResolvedValueOnce([
-          { syncIntervalMinutes: 30, scheduleEnabled: true },
-        ]);
-      } else if (table === syncCursors) {
-        mockDb.where.mockResolvedValueOnce([
-          {
-            id: 'c1',
-            stitchId: STITCH_ID,
-            streamName: STREAM_NAME,
-            createdAt: fiveMinutesAgo,
-            updatedAt: fiveMinutesAgo,
-          },
-        ]);
-      }
-      return mockDb;
-    });
+    mockDb.where.mockReturnValueOnce(mockDb);
+    mockDb.limit.mockResolvedValueOnce([
+      { syncIntervalMinutes: 30, scheduleEnabled: true },
+    ]);
+    mockDb.where.mockResolvedValueOnce([
+      {
+        id: 'c1',
+        stitchId: STITCH_ID,
+        streamName: STREAM_NAME,
+        createdAt: fiveMinutesAgo,
+        updatedAt: fiveMinutesAgo,
+      },
+    ]);
 
     const result = await controller.listCursors(STITCH_ID);
 
@@ -257,25 +244,19 @@ describe('CursorResetController', () => {
     const now = Date.now();
     const twoHoursAgo = new Date(now - 120 * 60_000);
 
-    mockDb.from.mockImplementation((table: unknown) => {
-      if (table === integrationStitches) {
-        mockDb.where.mockReturnValueOnce(mockDb);
-        mockDb.limit.mockResolvedValueOnce([
-          { syncIntervalMinutes: 30, scheduleEnabled: false },
-        ]);
-      } else if (table === syncCursors) {
-        mockDb.where.mockResolvedValueOnce([
-          {
-            id: 'c1',
-            stitchId: STITCH_ID,
-            streamName: STREAM_NAME,
-            createdAt: twoHoursAgo,
-            updatedAt: twoHoursAgo,
-          },
-        ]);
-      }
-      return mockDb;
-    });
+    mockDb.where.mockReturnValueOnce(mockDb);
+    mockDb.limit.mockResolvedValueOnce([
+      { syncIntervalMinutes: 30, scheduleEnabled: false },
+    ]);
+    mockDb.where.mockResolvedValueOnce([
+      {
+        id: 'c1',
+        stitchId: STITCH_ID,
+        streamName: STREAM_NAME,
+        createdAt: twoHoursAgo,
+        updatedAt: twoHoursAgo,
+      },
+    ]);
 
     const result = await controller.listCursors(STITCH_ID);
 
@@ -286,17 +267,11 @@ describe('CursorResetController', () => {
   });
 
   it('GET returns empty array when stitch has no cursors', async () => {
-    mockDb.from.mockImplementation((table: unknown) => {
-      if (table === integrationStitches) {
-        mockDb.where.mockReturnValueOnce(mockDb);
-        mockDb.limit.mockResolvedValueOnce([
-          { syncIntervalMinutes: 30, scheduleEnabled: true },
-        ]);
-      } else if (table === syncCursors) {
-        mockDb.where.mockResolvedValueOnce([]);
-      }
-      return mockDb;
-    });
+    mockDb.where.mockReturnValueOnce(mockDb);
+    mockDb.limit.mockResolvedValueOnce([
+      { syncIntervalMinutes: 30, scheduleEnabled: true },
+    ]);
+    mockDb.where.mockResolvedValueOnce([]);
 
     const result = await controller.listCursors(STITCH_ID);
 

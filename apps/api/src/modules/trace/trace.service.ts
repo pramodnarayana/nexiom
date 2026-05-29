@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { eq, and, desc, lt, or, sql } from 'drizzle-orm';
+import { eq, and, desc, lt, or, sql, ne } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
@@ -14,6 +14,7 @@ import {
   assertValidSchemaName,
 } from '@nexiom/database';
 import { StorageResolverService } from '@nexiom/engine';
+import type { DatabaseManager } from '@nexiom/dbmanager';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,8 +147,59 @@ export class TraceService {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
+    @Inject('DB_MANAGER') private readonly dbManager: DatabaseManager,
   ) {
     this.logger.setContext(TraceService.name);
+  }
+
+  public async resolveSourceConnectionForStitch(
+    orgId: string,
+    stitchId: string,
+    destDataSourceId: string,
+  ): Promise<string> {
+    const destSchemaName =
+      await this.storageResolver.resolveSchemaName(destDataSourceId);
+    assertValidSchemaName(destSchemaName);
+
+    const tenantDb = await this.dbManager.getTenantDb(orgId);
+    const { outboundGateway } = buildTenantSchema(destSchemaName);
+
+    // 1. Try to find the most recent outbound_gateway record for this stitch
+    const obRecords = await tenantDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.identifier(destSchemaName)}`,
+      );
+      return tx
+        .select({ srcDataSourceId: outboundGateway.srcDataSourceId })
+        .from(outboundGateway)
+        .where(eq(outboundGateway.routeId, stitchId))
+        .limit(1);
+    });
+
+    if (obRecords.length > 0 && obRecords[0].srcDataSourceId) {
+      return obRecords[0].srcDataSourceId;
+    }
+
+    // 2. Fallback: Find the first connection in the workspace that is not the destination connection
+    const { dataSources } = await import('@nexiom/database');
+    const sources = await this.db
+      .select({ id: dataSources.id })
+      .from(dataSources)
+      .where(
+        and(
+          eq(dataSources.tenantId, orgId),
+          ne(dataSources.id, destDataSourceId),
+        ),
+      )
+      .limit(1);
+
+    if (sources.length > 0) {
+      return sources[0].id;
+    }
+
+    throw new NotFoundException(
+      `Could not resolve source connection for stitch ${stitchId}`,
+    );
   }
 
   /**
@@ -184,15 +236,20 @@ export class TraceService {
             eq(integrationStitches.id, stitchId),
             eq(integrationStitches.orgId, orgId),
           ),
-      columns: { id: true, srcDataSourceId: true, workspaceId: true },
+      columns: { id: true, workspaceId: true, destDataSourceId: true },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
-    const schemaName = await this.storageResolver.resolveSchemaName(
-      stitch.srcDataSourceId,
+    const srcDataSourceId = await this.resolveSourceConnectionForStitch(
+      orgId,
+      stitchId,
+      stitch.destDataSourceId,
     );
+
+    const schemaName =
+      await this.storageResolver.resolveSchemaName(srcDataSourceId);
     assertValidSchemaName(schemaName);
     const { syncLog } = buildTenantSchema(schemaName);
 
@@ -211,7 +268,7 @@ export class TraceService {
     const rows = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
       return (
         tx
@@ -275,17 +332,21 @@ export class TraceService {
           ),
       columns: {
         id: true,
-        srcDataSourceId: true,
         destDataSourceId: true,
-        workspaceId: true,
       },
     });
     if (!stitch) {
       throw new NotFoundException(`Stitch ${stitchId} not found`);
     }
 
+    const srcDataSourceId = await this.resolveSourceConnectionForStitch(
+      orgId,
+      stitchId,
+      stitch.destDataSourceId,
+    );
+
     const [srcSchemaName, destSchemaName] = await Promise.all([
-      this.storageResolver.resolveSchemaName(stitch.srcDataSourceId),
+      this.storageResolver.resolveSchemaName(srcDataSourceId),
       this.storageResolver.resolveSchemaName(stitch.destDataSourceId),
     ]);
 
@@ -301,7 +362,7 @@ export class TraceService {
       this.db.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.identifier(srcSchemaName)}`,
         );
 
         // 1. Existence check: trace must have at least one route-bound sync_log entry for this stitch
@@ -337,7 +398,7 @@ export class TraceService {
             .where(
               and(
                 eq(inboundGateway.traceId, traceId),
-                eq(inboundGateway.dataSourceId, stitch.srcDataSourceId),
+                eq(inboundGateway.dataSourceId, srcDataSourceId),
               ),
             )
             .limit(1),
@@ -348,7 +409,7 @@ export class TraceService {
             .where(
               and(
                 eq(replicaEntity.traceId, traceId),
-                eq(replicaEntity.dataSourceId, stitch.srcDataSourceId),
+                eq(replicaEntity.dataSourceId, srcDataSourceId),
               ),
             )
             .limit(1),
@@ -366,7 +427,7 @@ export class TraceService {
       this.db.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
         await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+          sql`SET LOCAL search_path TO ${sql.identifier(destSchemaName)}`,
         );
         return tx
           .select()

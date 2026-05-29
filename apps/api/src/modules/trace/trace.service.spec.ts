@@ -6,6 +6,7 @@ import { DATABASE_CONNECTION } from '@nexiom/database';
 import { getTableName } from 'drizzle-orm';
 import { StorageResolverService } from '@nexiom/engine';
 import { PinoLogger } from 'nestjs-pino';
+import { DB_MANAGER } from '@nexiom/dbmanager';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -98,6 +99,7 @@ function buildMockDb(stitchRow: unknown = MOCK_STITCH, txRows: unknown[] = []) {
         findFirst: vi.fn().mockResolvedValue(stitchRow),
       },
     },
+    select: vi.fn().mockReturnValue(buildSelectChain([{ id: SRC_CONN }])),
     transaction: vi
       .fn()
       .mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(listTx)),
@@ -119,22 +121,36 @@ describe('TraceService', () => {
   let service: TraceService;
   let mockDb: ReturnType<typeof buildMockDb>;
   let mockResolver: ReturnType<typeof buildMockStorageResolver>;
+  let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDb = buildMockDb();
     mockResolver = buildMockStorageResolver();
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         TraceService,
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: StorageResolverService, useValue: mockResolver },
         { provide: PinoLogger, useValue: loggerMock },
+        {
+          provide: DB_MANAGER,
+          useValue: {
+            applyPlan: vi.fn(),
+            getTenantDb: vi.fn().mockResolvedValue(mockDb),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(TraceService);
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   describe('listTraces()', () => {
@@ -256,14 +272,14 @@ describe('TraceService', () => {
 
       // Assert SQL predicates — use Drizzle getTableName() to avoid circular JSON.stringify
 
-      const tableNameFromArg = getTableName(
-        capture.fromArgs[0] as Parameters<typeof getTableName>[0],
+      const fromTables = capture.fromArgs.map((f: unknown) =>
+        getTableName(f as Parameters<typeof getTableName>[0]),
       );
-      expect(tableNameFromArg).toBe('sync_log');
+      expect(fromTables).toContain('sync_log');
 
       // Recursive value-finder: avoids circular refs from PgTable column objects
       function findValue(obj: unknown, target: string, depth = 0): boolean {
-        if (depth > 20) return false;
+        if (depth > 5) return false;
         if (obj === null || obj === undefined) return false;
         if (typeof obj === 'string') return obj.includes(target);
         if (
@@ -343,7 +359,6 @@ describe('TraceService', () => {
       await expect(
         service.getTrace(ORG_ID, STITCH_ID, TRACE_ID, undefined),
       ).rejects.toThrow();
-      expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(SRC_CONN);
       expect(mockResolver.resolveSchemaName).toHaveBeenCalledWith(DEST_CONN);
     });
 
@@ -444,7 +459,7 @@ describe('TraceService', () => {
       const whereFlat = capture.whereArgs.flat();
       // Use a recursive value-finder to avoid circular JSON issues
       function findValue(obj: unknown, target: string, depth = 0): boolean {
-        if (depth > 20) return false;
+        if (depth > 5) return false;
         if (typeof obj === 'string') return obj.includes(target);
         if (
           typeof obj === 'number' ||

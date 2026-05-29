@@ -3,7 +3,8 @@ import { Pool } from 'pg';
 import * as identitySchema from './schema/global/identity.js';
 import * as routingSchema from './schema/global/routing.js';
 import * as registrySchema from './schema/global/storage_registry.js';
-import * as profileSchema from './schema/tenant/connector_object_profiles.js';
+import * as profileSchema from './schema/global/connector_object_profiles.js';
+import * as dataSourcesSchema from './schema/global/data-sources.js';
 import * as piecesSchema from './schema/global/pieces.js';
 import * as workspaceSchema from './schema/global/workspace.js';
 import * as globalStitchesSchema from './schema/global/stitches.js';
@@ -16,6 +17,7 @@ const schemaBundle = {
     ...routingSchema,
     ...registrySchema,
     ...profileSchema,
+    ...dataSourcesSchema,
     ...piecesSchema,
     ...workspaceSchema,
     ...globalStitchesSchema,

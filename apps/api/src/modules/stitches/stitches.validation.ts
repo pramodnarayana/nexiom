@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { SYNC_INTERVAL_OPTIONS } from '@nexiom/database';
 
 /**
  * A single filter rule evaluated at L4 (Fan-Out Decision layer).
@@ -13,14 +12,6 @@ export const SyncConditionRule = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]),
   logic: z.enum(['AND', 'OR']).optional(),
 });
-
-const syncIntervalMinutes = z
-  .number()
-  .int()
-  .refine((v) => (SYNC_INTERVAL_OPTIONS as readonly number[]).includes(v), {
-    message: `Must be one of: ${SYNC_INTERVAL_OPTIONS.join(', ')}`,
-  })
-  .optional();
 
 /**
  * Inline field-mapping rule — mirrors UpsertFieldMappingSchema.
@@ -42,14 +33,11 @@ const InitialFieldMapping = z.object({
 export const CreateStitchSchema = z.object({
   name: z.string().trim().min(1).max(255),
   workspaceId: z.string().uuid(),
-  srcDataSourceId: z.string().uuid(),
   destDataSourceId: z.string().uuid(),
-  sourceObject: z.string().trim().max(255).optional().default(''),
+  canonicalObject: z.string().trim().max(255).optional().default(''),
   targetObject: z.string().trim().max(255).optional().default(''),
   syncCondition: z.array(SyncConditionRule).optional(),
   status: z.enum(['ACTIVE', 'PAUSED']).optional(),
-  syncIntervalMinutes,
-  scheduleEnabled: z.boolean().optional(),
   /**
    * Optional field mappings to create atomically with the stitch.
    * Prevents orphaned stitch rows when the mapping save step would otherwise
@@ -62,8 +50,6 @@ export const UpdateStitchSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   status: z.enum(['ACTIVE', 'PAUSED', 'ARCHIVED']).optional(),
   syncCondition: z.array(SyncConditionRule).optional(),
-  syncIntervalMinutes,
-  scheduleEnabled: z.boolean().optional(),
 });
 
 export class CreateStitch extends createZodDto(CreateStitchSchema) {}

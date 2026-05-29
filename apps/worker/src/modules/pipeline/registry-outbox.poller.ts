@@ -14,8 +14,8 @@ const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;
 
 @Injectable()
-export class RegistryOutboxWorker {
-  private readonly logger = new Logger(RegistryOutboxWorker.name);
+export class RegistryOutboxPoller {
+  private readonly logger = new Logger(RegistryOutboxPoller.name);
   private isProcessing = false;
 
   constructor(
@@ -96,25 +96,25 @@ export class RegistryOutboxWorker {
       });
       queueSuccess = true;
     } catch (err) {
-      const lastError = err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
       try {
         if (row.attempts >= MAX_ATTEMPTS) {
           await this.globalDb
             .update(globalRegistryOutbox)
-            .set({ status: "FAILED", lastError })
+            .set({ status: "FAILED", errorMessage })
             .where(eq(globalRegistryOutbox.id, row.id));
           this.logger.error(
-            `RegistryOutbox delivery permanently failed for outboxId=${row.id}: ${lastError}`,
+            `RegistryOutbox delivery permanently failed for outboxId=${row.id}: ${errorMessage}`,
           );
         } else {
           const delayMs = Math.pow(2, row.attempts) * 1_000;
           const nextRetryAt = new Date(Date.now() + delayMs);
           await this.globalDb
             .update(globalRegistryOutbox)
-            .set({ status: "PENDING", lastError, nextRetryAt }) // Use PENDING for retry, there's no RETRY enum
+            .set({ status: "PENDING", errorMessage, nextRetryAt }) // Use PENDING for retry, there's no RETRY enum
             .where(eq(globalRegistryOutbox.id, row.id));
           this.logger.warn(
-            `RegistryOutbox delivery delayed for outboxId=${row.id} (attempt ${row.attempts}): ${lastError}`,
+            `RegistryOutbox delivery delayed for outboxId=${row.id} (attempt ${row.attempts}): ${errorMessage}`,
           );
         }
       } catch (dbErr) {

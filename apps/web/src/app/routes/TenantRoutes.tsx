@@ -29,6 +29,7 @@ import { TraceLayout } from '../../modules/trace/pages/TraceLayout';
 import { DataExplorerPage } from '../../modules/trace/pages/DataExplorerPage';
 import { TraceTimelinePage } from '../../modules/trace/pages/TraceTimelinePage';
 import { GemPage } from '../../modules/trace/pages/GemPage';
+import { ConnectionDataExplorerPage } from '../../modules/trace/pages/ConnectionDataExplorerPage';
 import { AlertTriangle, Sparkles } from 'lucide-react';
 import { AiPage } from '../../modules/ai/pages/AiPage';
 import { AiChat } from '../../modules/ai/components/chat/AiChat';
@@ -112,6 +113,7 @@ export function TenantRoutes() {
                             <Route path="workspaces/:id/data-hub" element={<TraceLayout />}>
                                 <Route index element={<Navigate to="explorer" replace />} />
                                 <Route path="explorer" element={<DataExplorerPage />} />
+                                <Route path="connections" element={<ConnectionDataExplorerPage />} />
                                 <Route path="trace" element={<TraceTimelinePage />} />
                                 <Route path="gem" element={<GemPage />} />
                             </Route>

@@ -92,7 +92,6 @@ describe('StitchesService', () => {
   const ORG_ID = 'org-1';
   const WS_ID = '11111111-1111-1111-1111-111111111111';
   const STITCH_ID = '44444444-4444-4444-4444-444444444444';
-  const SRC_CONN_ID = '22222222-2222-2222-2222-222222222222';
   const DEST_CONN_ID = '33333333-3333-3333-3333-333333333333';
 
   const STITCH = {
@@ -100,15 +99,12 @@ describe('StitchesService', () => {
     name: 'SF Loads → QB Invoices',
     orgId: ORG_ID,
     workspaceId: WS_ID,
-    srcDataSourceId: SRC_CONN_ID,
     destDataSourceId: DEST_CONN_ID,
-    sourceObject: 'rtms__Load__c',
+    canonicalObject: 'mock-canonical',
     targetObject: 'Invoice',
     syncCondition: [],
     status: 'ACTIVE' as const,
-    syncIntervalMinutes: 30,
-    scheduleEnabled: true,
-    lastScheduledAt: null,
+
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -116,9 +112,8 @@ describe('StitchesService', () => {
   const CREATE_BODY = {
     name: 'SF Loads → QB Invoices',
     workspaceId: WS_ID,
-    srcDataSourceId: SRC_CONN_ID,
     destDataSourceId: DEST_CONN_ID,
-    sourceObject: 'rtms__Load__c',
+    canonicalObject: 'mock-canonical',
     targetObject: 'Invoice',
   };
 
@@ -148,25 +143,18 @@ describe('StitchesService', () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
     // Return distinct objects for each parallel lookup so the test catches
     // any ID-mixing bug (e.g. both checks accidentally using srcDataSourceId)
-    mocks.findFirstConnections
-      .mockResolvedValueOnce({
-        id: SRC_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'salesforce',
-      })
-      .mockResolvedValueOnce({
-        id: DEST_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'quickbooks',
-      });
+    mocks.findFirstConnections.mockResolvedValueOnce({
+      id: DEST_CONN_ID,
+      tenantId: ORG_ID,
+      appName: 'quickbooks',
+    });
     mocks.returningInsert.mockResolvedValue([STITCH]);
 
     const result = await service.create(ORG_ID, CREATE_BODY);
 
     expect(result).toEqual(STITCH);
     expect(mocks.findFirstWorkspaces).toHaveBeenCalled();
-    // Both connection checks run (in parallel)
-    expect(mocks.findFirstConnections).toHaveBeenCalledTimes(2);
+    expect(mocks.findFirstConnections).toHaveBeenCalledTimes(1);
   });
 
   it('throws NotFoundException when workspace does not belong to org', async () => {
@@ -177,53 +165,22 @@ describe('StitchesService', () => {
     );
   });
 
-  it('throws NotFoundException when srcConnection does not belong to org', async () => {
-    mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: DEST_CONN_ID, tenantId: ORG_ID });
-
-    await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
-      NotFoundException,
-    );
-  });
-
   it('throws NotFoundException when destConnection does not belong to org', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections
-      .mockResolvedValueOnce({ id: SRC_CONN_ID, tenantId: ORG_ID })
-      .mockResolvedValueOnce(null);
+    mocks.findFirstConnections.mockResolvedValueOnce(null);
 
     await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
       NotFoundException,
     );
-  });
-
-  it('throws BadRequestException when src and dest connections are the same', async () => {
-    mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-
-    // Same-connection guard fires before the DB lookup, so no connection mock needed
-    await expect(
-      service.create(ORG_ID, {
-        ...CREATE_BODY,
-        destDataSourceId: SRC_CONN_ID,
-      }),
-    ).rejects.toThrow(BadRequestException);
   });
 
   it('throws InternalServerErrorException if insert returns no row', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections
-      .mockResolvedValueOnce({
-        id: SRC_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'salesforce',
-      })
-      .mockResolvedValueOnce({
-        id: DEST_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'quickbooks',
-      });
+    mocks.findFirstConnections.mockResolvedValueOnce({
+      id: DEST_CONN_ID,
+      tenantId: ORG_ID,
+      appName: 'quickbooks',
+    });
     mocks.returningInsert.mockResolvedValue([]);
 
     await expect(service.create(ORG_ID, CREATE_BODY)).rejects.toThrow(
@@ -233,17 +190,11 @@ describe('StitchesService', () => {
 
   it('throws ConflictException on duplicate stitch name (stitch_name_workspace_unique_idx)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections
-      .mockResolvedValueOnce({
-        id: SRC_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'salesforce',
-      })
-      .mockResolvedValueOnce({
-        id: DEST_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'quickbooks',
-      });
+    mocks.findFirstConnections.mockResolvedValueOnce({
+      id: DEST_CONN_ID,
+      tenantId: ORG_ID,
+      appName: 'quickbooks',
+    });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
       constraint: 'stitch_name_workspace_unique_idx',
@@ -257,17 +208,11 @@ describe('StitchesService', () => {
 
   it('throws ConflictException on duplicate field mapping (field_mapping_stitch_canonical_unique_idx)', async () => {
     mocks.findFirstWorkspaces.mockResolvedValue({ id: WS_ID, orgId: ORG_ID });
-    mocks.findFirstConnections
-      .mockResolvedValueOnce({
-        id: SRC_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'salesforce',
-      })
-      .mockResolvedValueOnce({
-        id: DEST_CONN_ID,
-        tenantId: ORG_ID,
-        appName: 'quickbooks',
-      });
+    mocks.findFirstConnections.mockResolvedValueOnce({
+      id: DEST_CONN_ID,
+      tenantId: ORG_ID,
+      appName: 'quickbooks',
+    });
     const pgUniqueError = Object.assign(new Error('unique violation'), {
       code: '23505',
       constraint: 'field_mapping_stitch_canonical_unique_idx',
@@ -389,7 +334,11 @@ describe('StitchesService', () => {
       values: ReturnType<typeof vi.fn>;
     };
     expect(insertCallChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({ stitchId: STITCH_ID, action: 'DELETED' }),
+      expect.objectContaining({
+        entityId: STITCH_ID,
+        entityType: 'INTEGRATION_STITCH',
+        action: 'DELETE',
+      }),
     );
   });
 
@@ -399,123 +348,5 @@ describe('StitchesService', () => {
     await expect(service.remove(ORG_ID, STITCH_ID)).rejects.toThrow(
       NotFoundException,
     );
-  });
-
-  // ── updateSchedule ──────────────────────────────────────────────────────
-
-  it('updateSchedule — updates syncIntervalMinutes', async () => {
-    const updated = { ...STITCH, syncIntervalMinutes: 60 };
-    mocks.returningUpdate.mockResolvedValue([updated]);
-
-    const result = await service.updateSchedule(ORG_ID, STITCH_ID, {
-      syncIntervalMinutes: 60,
-    });
-
-    expect(result).toEqual(updated);
-    expect(mocks.db.transaction).toHaveBeenCalled();
-  });
-
-  it('updateSchedule — updates scheduleEnabled from true to false', async () => {
-    const updated = { ...STITCH, scheduleEnabled: false };
-    mocks.returningUpdate.mockResolvedValue([updated]);
-
-    const result = await service.updateSchedule(ORG_ID, STITCH_ID, {
-      scheduleEnabled: false,
-    });
-
-    expect(result.scheduleEnabled).toBe(false);
-    expect(mocks.db.transaction).toHaveBeenCalled();
-  });
-
-  it('updateSchedule — throws BadRequestException when no fields provided', async () => {
-    await expect(service.updateSchedule(ORG_ID, STITCH_ID, {})).rejects.toThrow(
-      BadRequestException,
-    );
-  });
-
-  it('updateSchedule — throws NotFoundException when stitch not found', async () => {
-    mocks.returningUpdate.mockResolvedValue([]);
-
-    await expect(
-      service.updateSchedule(ORG_ID, STITCH_ID, { syncIntervalMinutes: 60 }),
-    ).rejects.toThrow(NotFoundException);
-  });
-
-  // ── updateScheduleAdmin ────────────────────────────────────────────────
-
-  it('updateScheduleAdmin — updates without org scoping', async () => {
-    const updated = { ...STITCH, syncIntervalMinutes: 15 };
-    mocks.returningUpdate.mockResolvedValue([updated]);
-
-    const result = await service.updateScheduleAdmin(STITCH_ID, {
-      syncIntervalMinutes: 15,
-    });
-
-    expect(result).toEqual(updated);
-  });
-
-  it('updateScheduleAdmin — throws BadRequestException when no fields provided', async () => {
-    await expect(service.updateScheduleAdmin(STITCH_ID, {})).rejects.toThrow(
-      BadRequestException,
-    );
-  });
-
-  it('updateScheduleAdmin — throws NotFoundException when stitch not found', async () => {
-    mocks.returningUpdate.mockResolvedValue([]);
-
-    await expect(
-      service.updateScheduleAdmin(STITCH_ID, { scheduleEnabled: false }),
-    ).rejects.toThrow(NotFoundException);
-  });
-
-  // ── listAdmin ──────────────────────────────────────────────────────────
-
-  it('lists admin stitches without org scoping', async () => {
-    const findManySpy = vi.spyOn(
-      mocks.db.query.integrationStitches,
-      'findMany',
-    );
-    findManySpy.mockResolvedValue([STITCH]);
-
-    const result = await service.listAdmin();
-
-    expect(result).toEqual([STITCH]);
-    expect(findManySpy).toHaveBeenCalled();
-  });
-
-  // ── bulkUpdateScheduleByOrg ─────────────────────────────────────────────
-
-  it('bulkUpdateScheduleByOrg — updates multiple stitches and returns count', async () => {
-    const updatedStitch1 = {
-      ...STITCH,
-      id: 'stitch-1',
-      syncIntervalMinutes: 60,
-    };
-    const updatedStitch2 = {
-      ...STITCH,
-      id: 'stitch-2',
-      syncIntervalMinutes: 60,
-    };
-    mocks.returningUpdate.mockResolvedValue([updatedStitch1, updatedStitch2]);
-
-    const result = await service.bulkUpdateScheduleByOrg(ORG_ID, {
-      syncIntervalMinutes: 60,
-    });
-
-    expect(result.count).toBe(2);
-    expect(result.updated).toEqual([updatedStitch1, updatedStitch2]);
-    expect(mocks.db.transaction).toHaveBeenCalled();
-  });
-
-  it('bulkUpdateScheduleByOrg — returns 0 count if no stitches are found', async () => {
-    mocks.returningUpdate.mockResolvedValue([]);
-
-    const result = await service.bulkUpdateScheduleByOrg(ORG_ID, {
-      scheduleEnabled: false,
-    });
-
-    expect(result.count).toBe(0);
-    expect(result.updated).toEqual([]);
-    expect(mocks.db.transaction).toHaveBeenCalled();
   });
 });

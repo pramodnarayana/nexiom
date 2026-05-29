@@ -471,6 +471,29 @@ export class MetadataDiscoveryService implements OnModuleInit {
     return config;
   }
 
+  async countRecords(
+    orgId: string,
+    dataSourceId: string,
+    objectName: string,
+  ): Promise<number | null> {
+    const dataSource = await this.resolveDataSource(orgId, dataSourceId);
+    const piece = this.pieceRegistry.getPiece(dataSource.appName);
+
+    if (!piece?.countRecords) {
+      return null;
+    }
+
+    const credentials = await this.resolveCredentials(dataSourceId);
+    try {
+      return await piece.countRecords(credentials, objectName);
+    } catch (e) {
+      this.logger.warn(
+        `Connector ${dataSource.appName} failed to count records for ${objectName}: ${String(e)}`,
+      );
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------

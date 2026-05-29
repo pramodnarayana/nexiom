@@ -94,7 +94,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   // NOTE: NestJS built-in app.enableShutdownHooks() is intentionally NOT called.
   // ShutdownService provides the same functionality with an additional 30-second
   // hard-deadline guard. Calling both would result in double app.close() invocations.

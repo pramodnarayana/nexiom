@@ -283,7 +283,7 @@ describe("NormalizationService", () => {
     const handler = queueService.consume.mock.calls[0][1];
     await expect(
       handler({ traceId: "123", dataSourceId: "456" }),
-    ).rejects.toThrow("Replica record for traceId 123 not found");
+    ).rejects.toThrow("InboundGateway row missing for traceId 123");
   });
 
   it("should destroy module", () => {

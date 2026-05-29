@@ -20,6 +20,7 @@ import {
 import { DependenciesMissingError } from "@nexiom/piece-framework";
 import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
 import { sql, eq, and } from "drizzle-orm";
+import { sanitizeErrorObject } from "../../shared/pipeline.utils.js";
 
 @Injectable()
 export class ReplicaService implements OnModuleInit, OnModuleDestroy {
@@ -137,7 +138,11 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           throw new Error(`Inbound record for traceId ${traceId} not found`);
         }
 
-        if (inbound.status !== "RECEIVED" && inbound.status !== "PENDING") {
+        if (
+          inbound.status !== "RECEIVED" &&
+          inbound.status !== "PENDING" &&
+          inbound.status !== "FAIL"
+        ) {
           this.logger.debug(
             { traceId, status: inbound.status },
             "L2 already processed this trace (idempotent redelivery). Skipping.",
@@ -274,21 +279,6 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
           });
       });
 
-      // Best-effort enqueue to L3 bypassing CDC pooling delays and
-      // fragile Debezium Docker setups in local dev. Safe due to L3 idempotency.
-      await this.queueService
-        .send(QueueName.ReplicaQueue, { traceId, dataSourceId })
-        .catch((err: unknown) => {
-          this.logger.warn(
-            {
-              event: "l2.enqueue_failed",
-              traceId,
-              err: err instanceof Error ? err.message : String(err),
-            },
-            "Failed to best-effort enqueue ReplicaQueue event — relying on CDC",
-          );
-        });
-
       this.logger.log(
         { event: "l2.completed", traceId, durationMs: Date.now() - start },
         "L2 replication completed",
@@ -313,13 +303,15 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
         throw err;
       }
 
+      const safeErrStr = err instanceof Error ? err.message : String(err);
+      const safeErrObj = sanitizeErrorObject(err);
       this.logger.error(
         {
           event: "l2.error",
           traceId,
-          err: err instanceof Error ? err.message : String(err),
+          err: safeErrObj,
         },
-        "L2 replication failed",
+        `L2 replication failed: ${safeErrStr}`,
       );
 
       try {
@@ -333,6 +325,7 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
 
+          const errorMessage = err instanceof Error ? err.message : String(err);
           await tx
             .insert(syncLog)
             .values({
@@ -340,12 +333,26 @@ export class ReplicaService implements OnModuleInit, OnModuleDestroy {
               layer: "L2",
               status: "FAIL",
               durationMs: Date.now() - start,
+              errorMessage,
             })
-            .onConflictDoNothing();
+            .onConflictDoUpdate({
+              target: [syncLog.traceId, syncLog.layer, syncLog.status],
+              set: {
+                errorMessage,
+                durationMs: Date.now() - start,
+              },
+              where: sql`${syncLog.routeId} IS NULL`,
+            });
 
           await tx
             .update(inboundGateway)
-            .set({ status: "FAIL" })
+            .set({
+              status: "FAIL",
+              errorMessage:
+                err instanceof Error
+                  ? `${errorMessage}\n${err.stack}`
+                  : errorMessage,
+            })
             .where(sql`${inboundGateway.traceId} = ${traceId}`);
         });
       } catch (error_) {

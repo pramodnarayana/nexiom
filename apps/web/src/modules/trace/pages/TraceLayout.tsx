@@ -22,7 +22,17 @@ export function TraceLayout() {
             }`
           }
         >
-          <Database className="h-4 w-4" /> Data Explorer
+          <Database className="h-4 w-4" /> Stitch Explorer
+        </NavLink>
+        <NavLink
+          to={`/dashboard/workspaces/${workspaceId}/data-hub/connections`}
+          className={({ isActive }) =>
+            `flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-150 ${
+              isActive ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+            }`
+          }
+        >
+          <Database className="h-4 w-4" /> Connection Explorer
         </NavLink>
         <NavLink
           to={`/dashboard/workspaces/${workspaceId}/data-hub/trace`}

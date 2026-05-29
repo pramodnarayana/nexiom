@@ -56,7 +56,7 @@ export const globalRegistryOutbox = pgTable('global_registry_outbox', {
     nextRetryAt: timestamp('next_retry_at', { withTimezone: true })
         .notNull()
         .default(sql`now()`),
-    lastError: varchar('last_error', { length: 1000 }),
+    errorMessage: varchar('error_message', { length: 1000 }),
     
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

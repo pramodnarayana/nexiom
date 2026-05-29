@@ -1,14 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from "@nestjs/testing";
-import { RegistryOutboxWorker } from "./registry-outbox.worker.js";
+import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-describe("RegistryOutboxWorker", () => {
-  let worker: RegistryOutboxWorker;
+describe("RegistryOutboxPoller", () => {
+  let worker: RegistryOutboxPoller;
   let queueService: any;
   let globalDb: any;
+  let module: TestingModule;
 
   beforeEach(async () => {
     queueService = {
@@ -35,15 +36,21 @@ describe("RegistryOutboxWorker", () => {
       where: vi.fn().mockReturnThis(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
-        RegistryOutboxWorker,
+        RegistryOutboxPoller,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: globalDb },
       ],
     }).compile();
 
-    worker = module.get<RegistryOutboxWorker>(RegistryOutboxWorker);
+    worker = module.get<RegistryOutboxPoller>(RegistryOutboxPoller);
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   it("should be defined", () => {
@@ -92,7 +99,7 @@ describe("RegistryOutboxWorker", () => {
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "PENDING",
-        lastError: "Queue error",
+        errorMessage: "Queue error",
         nextRetryAt: expect.any(Date),
       }),
     );
@@ -122,7 +129,7 @@ describe("RegistryOutboxWorker", () => {
     expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "FAILED",
-        lastError: "Permanent failure",
+        errorMessage: "Permanent failure",
       }),
     );
   });

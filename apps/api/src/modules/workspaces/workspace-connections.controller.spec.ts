@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { DATABASE_CONNECTION } from '@nexiom/database';
+import { SyncRunner } from '../scheduler/sync-runner.js';
 import { ORG_ID, WS_ID, CONN_ID, makeAuth } from './workspace-test-fixtures.js';
 
 const WORKSPACE = {
@@ -47,6 +48,7 @@ function buildMockDb() {
 describe('WorkspaceConnectionsController', () => {
   let controller: WorkspaceConnectionsController;
   let mocks: ReturnType<typeof buildMockDb>;
+  let module: import('@nestjs/testing').TestingModule;
 
   const mockService = {
     findOne: vi.fn(),
@@ -57,11 +59,12 @@ describe('WorkspaceConnectionsController', () => {
   beforeEach(async () => {
     mocks = buildMockDb();
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       controllers: [WorkspaceConnectionsController],
       providers: [
         { provide: WorkspacesService, useValue: mockService },
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
+        { provide: SyncRunner, useValue: { run: vi.fn() } },
       ],
     })
       .overrideGuard(AuthGuard)
@@ -72,6 +75,12 @@ describe('WorkspaceConnectionsController', () => {
 
     controller = module.get(WorkspaceConnectionsController);
     vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   // ── listConnections ───────────────────────────────────────────────────────

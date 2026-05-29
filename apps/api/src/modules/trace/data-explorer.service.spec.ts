@@ -5,6 +5,7 @@ import { PinoLogger } from 'nestjs-pino';
 import { DATABASE_CONNECTION } from '@nexiom/database';
 import { DB_MANAGER } from '@nexiom/dbmanager';
 import { StorageResolverService } from '@nexiom/engine';
+import { TraceService } from './trace.service.js';
 import { NotFoundException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -14,6 +15,7 @@ describe('DataExplorerService', () => {
   let storageResolver: any;
   let logger: any;
   let dbManager: any;
+  let module: TestingModule;
 
   const mockPageSelect = (rows: any[], count: number, hasWhere: boolean) => {
     let callCount = 0;
@@ -138,7 +140,7 @@ describe('DataExplorerService', () => {
       }),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         DataExplorerService,
         { provide: PinoLogger, useValue: logger },
@@ -148,270 +150,144 @@ describe('DataExplorerService', () => {
           provide: DB_MANAGER,
           useValue: dbManager,
         },
+        {
+          provide: TraceService,
+          useValue: {
+            getTrace: vi.fn(),
+            listTraces: vi.fn(),
+            resolveSourceConnectionForStitch: vi.fn().mockResolvedValue('c1'),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<DataExplorerService>(DataExplorerService);
   });
 
-  describe('resolveStitch', () => {
-    it('should throw NotFoundException if stitch is missing', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue(null);
-      await expect(
-        service.listInbound('org_1', 'stitch_1', 1, 10),
-      ).rejects.toThrow(NotFoundException);
-    });
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
-
-  describe('listInbound', () => {
-    it('should return paginated inbound gateway data', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
+  describe('listConnectionInbound', () => {
+    it('should return paginated inbound data for a connection', async () => {
       mockPageSelect([{ id: 'inbound_1' }], 1, true);
-
-      const res = await service.listInbound('org_1', 'stitch_1', 1, 50, 'ws_1');
+      const res = await service.listConnectionInbound('org_1', 'conn_1', 1, 50);
       expect(res.data).toEqual([{ id: 'inbound_1' }]);
       expect(res.total).toBe(1);
-      expect(res.page).toBe(1);
     });
   });
 
-  describe('listReplica', () => {
-    it('should return paginated replica data', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
+  describe('listConnectionReplica', () => {
+    it('should return paginated replica data for a connection', async () => {
       mockPageSelect([{ id: 'replica_1' }], 2, true);
-
-      const res = await service.listReplica('org_1', 'stitch_1', 1, 50, 'ws_1');
+      const res = await service.listConnectionReplica('org_1', 'conn_1', 1, 50);
       expect(res.data).toEqual([{ id: 'replica_1' }]);
       expect(res.total).toBe(2);
     });
   });
 
-  describe('listNormalized', () => {
-    it('should return paginated normalized data', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
+  describe('listConnectionNormalized', () => {
+    it('should return paginated normalized data for a connection', async () => {
       mockPageSelect([{ id: 'norm_1' }], 3, true);
-
-      const res = await service.listNormalized(
+      const res = await service.listConnectionNormalized(
         'org_1',
-        'stitch_1',
-        2,
+        'conn_1',
+        1,
         50,
-        'ws_1',
       );
       expect(res.data).toEqual([{ id: 'norm_1' }]);
       expect(res.total).toBe(3);
-      expect(res.page).toBe(2);
     });
   });
 
-  describe('listEntityMap', () => {
-    it('should return paginated gem data', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-
-      // Provide select mock directly on tenantDb
-      dbManager.getTenantDb.mockResolvedValue({
-        select: vi.fn().mockImplementation((args?: any) => {
-          const isCount = args && args.count !== undefined;
-          if (isCount) {
-            return {
-              from: vi.fn().mockReturnThis(),
-              where: vi.fn().mockResolvedValue([{ count: 4 }]),
-            };
-          }
-          return {
-            from: vi.fn().mockReturnThis(),
-            where: vi.fn().mockReturnThis(),
-            orderBy: vi.fn().mockReturnThis(),
-            limit: vi.fn().mockReturnThis(),
-            offset: vi.fn().mockResolvedValue([{ id: 'gem_1' }]),
-          };
-        }),
-      });
-
-      const res = await service.listEntityMap(
+  describe('listConnectionOutbound', () => {
+    it('should return paginated outbound data for a connection', async () => {
+      mockPageSelect([{ id: 'outbound_1' }], 4, true);
+      const res = await service.listConnectionOutbound(
         'org_1',
-        'stitch_1',
+        'conn_1',
         1,
         50,
-        'ws_1',
       );
-      expect(Array.isArray(res.data)).toBe(true);
-      expect(typeof res.total).toBe('number');
-      expect(res.page).toBe(1);
-    });
-  });
-
-  describe('listOutbound', () => {
-    it('should return paginated outbound gateway data', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-      mockPageSelect([{ id: 'outbound_1' }], 5, true);
-
-      const res = await service.listOutbound('org_1', 'stitch_1', 1, 50); // no workspaceId
       expect(res.data).toEqual([{ id: 'outbound_1' }]);
-      expect(res.total).toBe(5);
+      expect(res.total).toBe(4);
     });
   });
 
-  describe('getTrace', () => {
-    it('should return a trace by id', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-
-      vi.spyOn(service as any, 'attachTraceStatuses').mockResolvedValue(
-        undefined,
-      );
-
-      const tracePayload = {
-        inbound: { traceId: 't1', status: 'SUCCESS' },
-        replica: { traceId: 't1', status: 'SUCCESS' },
-        normalized: { traceId: 't1', status: 'SUCCESS' },
-        gem: { traceId: 't1', status: 'SUCCESS' },
-        outbound: { traceId: 't1', status: 'SUCCESS' },
-      };
-
-      // We don't have to perfectly mock the physical multi-tenancy chained calls
-      // because getTrace runs numerous subqueries, we'll just mock the main transaction
-      // and ensure the mock structure doesn't crash the method and returns the final mapped output.
+  describe('getConnectionTrace', () => {
+    it('should return a connection trace', async () => {
       dbManager.getTenantDb.mockResolvedValue({
         select: vi.fn().mockImplementation(() => ({
           from: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          leftJoin: vi.fn().mockReturnThis(),
-          innerJoin: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockReturnThis(),
-          limit: vi
-            .fn()
-            .mockResolvedValue([{ traceId: 't1', status: 'SUCCESS' }]),
+          limit: vi.fn().mockResolvedValue([{ id: 't1' }]),
         })),
-        transaction: vi.fn().mockImplementation(async (cb) => {
-          const tx = {
-            select: vi.fn().mockImplementation(() => {
-              return {
-                from: vi.fn().mockReturnThis(),
-                where: vi.fn().mockReturnThis(),
-                leftJoin: vi.fn().mockReturnThis(),
-                limit: vi
-                  .fn()
-                  .mockResolvedValue([{ traceId: 't1', status: 'SUCCESS' }]),
-              };
-            }),
-          };
-          return cb(tx);
-        }),
       });
 
-      const res = await service.getTrace('org_1', 'stitch_1', 't1');
-      expect(res).toBeDefined();
-      expect(res.layers).toBeDefined();
-      expect(res.layers.l1).toBeDefined();
-      expect(res.layers.l1?.traceId).toBe('t1');
-      expect(res.layers.l1?.status).toBe('SUCCESS');
+      const res = await service.getConnectionTrace('org_1', 'conn_1', 't1');
+      expect(res.inbound).toBeDefined();
+      expect(res.replica).toBeDefined();
+      expect(res.normalized).toBeDefined();
+      expect(res.outbound).toBeDefined();
     });
   });
 
-  describe('listObjectsByStitch', () => {
-    it('should list specific object types', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-
-      // Mock db returns objectTypes natively via distinct query
-      const distinctChain: any = {
-        where: vi.fn().mockResolvedValue([{ type: 'Account' }]),
-      };
-      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
-
-      const selectChain: any = {
-        where: vi.fn().mockReturnThis(),
-        getSQL: vi.fn().mockReturnValue({ sql: '', params: [] }),
-        orderBy: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        offset: vi.fn().mockResolvedValue([]),
-      };
-      selectChain.from = vi.fn().mockReturnValue(selectChain);
-
+  describe('listTraceRoutes', () => {
+    it('should return routes for a trace', async () => {
       dbManager.getTenantDb.mockResolvedValue({
-        select: vi.fn().mockReturnValue(selectChain),
-        selectDistinct: vi.fn().mockReturnValue(distinctChain),
+        select: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([{ routeId: 'route_1' }]),
+        })),
       });
 
-      const res = await service.listObjectsByStitch(
+      const res = await service.listTraceRoutes('org_1', 'conn_1', 't1');
+      expect(res).toEqual(['route_1']);
+    });
+  });
+
+  describe('listObjectsByConnection', () => {
+    it('should list object types for a tab', async () => {
+      dbManager.getTenantDb.mockResolvedValue({
+        selectDistinct: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([{ type: 'Account' }]),
+        })),
+      });
+
+      const res = await service.listObjectsByConnection(
         'org_1',
-        'stitch_1',
-        'normalized',
+        'conn_1',
+        'inbound',
       );
       expect(res).toEqual(['Account']);
-    });
 
-    it('should list specific object types for outbound tab', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-      const distinctChain: any = {
-        where: vi.fn().mockResolvedValue([{ type: 'Contact' }]),
-      };
-      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
+      const resReplica = await service.listObjectsByConnection(
+        'org_1',
+        'conn_1',
+        'replica',
+      );
+      expect(resReplica).toEqual(['Account']);
 
       dbManager.getTenantDb.mockResolvedValue({
-        selectDistinct: vi.fn().mockReturnValue(distinctChain),
+        selectDistinct: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockResolvedValue([{ type: 'Contact' }]),
+        })),
       });
-
-      const res = await service.listObjectsByStitch(
+      const resNorm = await service.listObjectsByConnection(
         'org_1',
-        'stitch_1',
-        'outbound',
+        'conn_1',
+        'normalized',
       );
-      expect(res).toEqual([]);
-    });
+      expect(resNorm).toEqual(['Contact']);
 
-    it('should list specific object types for entity-map tab', async () => {
-      db.query.integrationStitches.findFirst.mockResolvedValue({
-        id: 'stitch_1',
-        srcDataSourceId: 'c1',
-        destDataSourceId: 'c2',
-      });
-      const distinctChain: any = {
-        where: vi.fn().mockResolvedValue([{ type: 'Lead' }]),
-      };
-      distinctChain.from = vi.fn().mockReturnValue(distinctChain);
-
-      dbManager.getTenantDb.mockResolvedValue({
-        selectDistinct: vi.fn().mockReturnValue(distinctChain),
-      });
-
-      const res = await service.listObjectsByStitch(
+      const resEmpty = await service.listObjectsByConnection(
         'org_1',
-        'stitch_1',
-        'entity-map',
+        'conn_1',
+        'invalid',
       );
-      expect(res).toEqual(['Lead']);
+      expect(resEmpty).toEqual([]);
     });
   });
 });

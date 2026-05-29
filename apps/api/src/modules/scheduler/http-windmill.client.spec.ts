@@ -69,12 +69,12 @@ describe('HttpWindmillClient', () => {
     vi.unstubAllGlobals();
   });
 
-  // ── ensureStitchScript ──────────────────────────────────────────────────
+  // ── ensureConnectionScript ──────────────────────────────────────────────────
 
-  describe('ensureStitchScript', () => {
+  describe('ensureConnectionScript', () => {
     it('deploys the script when Windmill responds 200', async () => {
       fetchSpy.mockResolvedValue(mockResponse(200, ''));
-      await expect(client.ensureStitchScript()).resolves.toBeUndefined();
+      await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(getCallInit(fetchSpy, 0).method).toBe('POST');
     });
@@ -83,12 +83,12 @@ describe('HttpWindmillClient', () => {
       // Windmill returns 409 when the exact same content hash exists at the path.
       // A new STITCH_RUNNER_CONTENT hash would produce 200 (new version created).
       fetchSpy.mockResolvedValue(mockResponse(409, 'conflict'));
-      await expect(client.ensureStitchScript()).resolves.toBeUndefined();
+      await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
     });
 
     it('throws for non-409 errors', async () => {
       fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
-      await expect(client.ensureStitchScript()).rejects.toThrow('500');
+      await expect(client.ensureConnectionScript()).rejects.toThrow('500');
     });
   });
 
@@ -109,10 +109,10 @@ describe('HttpWindmillClient', () => {
       expect(init.method).toBe('POST');
       const body = JSON.parse(init.body as string) as {
         enabled: boolean;
-        args: { stitchId: string };
+        args: { dataSourceId: string };
       };
       expect(body.enabled).toBe(true);
-      expect(body.args).toEqual({ stitchId: STITCH_ID });
+      expect(body.args).toEqual({ dataSourceId: STITCH_ID });
     });
 
     it('throws on non-OK response', async () => {

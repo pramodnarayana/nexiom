@@ -137,4 +137,24 @@ export class StitchesMetadataController {
       dataSourceId,
     );
   }
+
+  /**
+   * GET /stitches/metadata/:dataSourceId/objects/:objectName/count
+   * Returns the total record count for the given object.
+   * Returns null if the connector does not support counting.
+   */
+  @Get(':dataSourceId/objects/:objectName/count')
+  @RequirePermission('stitches', 'read')
+  async countRecords(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
+    @Param('objectName', ValidateObjectNamePipe) objectName: string,
+  ) {
+    const count = await this.metadataDiscovery.countRecords(
+      requireOrgId(auth),
+      dataSourceId,
+      objectName,
+    );
+    return { count };
+  }
 }

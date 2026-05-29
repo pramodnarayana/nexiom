@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
     root: path.resolve(__dirname),
     test: {
+        setupFiles: ['./vitest.setup.ts'],
         globals: true,
         environment: 'node',
         alias: {
@@ -49,6 +50,9 @@ export default defineConfig({
                 '**/*.e2e-spec.ts',
                 'src/**/index.ts',
                 '**/*.config.*',
+                'scratch_*.cjs',
+                'scratch_*.ts',
+                '*.cjs',
             ],
             reporter: ['text', 'json', 'html'],
             thresholds: {

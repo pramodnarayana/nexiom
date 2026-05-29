@@ -5,7 +5,7 @@ describe('StubWindmillClient', () => {
   it('implements no-op methods and returns expected stub values', async () => {
     const client = new StubWindmillClient();
 
-    await expect(client.ensureStitchScript()).resolves.toBeUndefined();
+    await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
     await expect(
       client.createSchedule('stitch-1', '0 0 * * *', true),
     ).resolves.toBeUndefined();

@@ -284,6 +284,7 @@ for (const conn of connections) {
         trace_id       UUID        NOT NULL,
         route_id       UUID        NOT NULL,
         data_source_id  UUID        NOT NULL,
+        src_data_source_id UUID        NOT NULL,
         payload        JSONB       NOT NULL,
         response       JSONB,
         status_code    INTEGER,
@@ -297,6 +298,7 @@ for (const conn of connections) {
         CONSTRAINT uq_outbound_trace_route UNIQUE (trace_id, route_id)
       )
     `);
+    await client.query(pgFormat(`DO $$ BEGIN ALTER TABLE %I.outbound_gateway ADD COLUMN IF NOT EXISTS src_data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'; EXCEPTION WHEN others THEN NULL; END $$`, schemaName));
     await client.query(pgFormat(`CREATE INDEX IF NOT EXISTS idx_l5_trace ON %I.outbound_gateway (trace_id)`, schemaName));
     await client.query(pgFormat(`CREATE INDEX IF NOT EXISTS idx_l5_route ON %I.outbound_gateway (route_id)`, schemaName));
     await client.query(pgFormat(`CREATE INDEX IF NOT EXISTS idx_l5_status ON %I.outbound_gateway (status)`, schemaName));

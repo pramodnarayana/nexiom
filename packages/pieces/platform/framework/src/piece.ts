@@ -212,6 +212,8 @@ export interface Piece {
     describeRelatedObjects?(credentials: Record<string, unknown>, objectName: string): Promise<RelatedObjectDescriptor[]>;
     /** Returns the configuration options available for this piece. */
     describeConfig?(credentials: Record<string, unknown>): Promise<ConfigOption[]>;
+    /** Executes a COUNT query against the vendor API to return the total records for the given object. */
+    countRecords?(credentials: Record<string, unknown>, objectName: string): Promise<number>;
     /**
      * Returns the Singer-style catalog for all streams this piece supports.
      * Called by SchedulerWorker before the first poll run to determine replication
@@ -351,6 +353,7 @@ export interface CreatePieceParams {
     describeFields?(credentials: Record<string, unknown>, objectName: string): Promise<FieldDescriptor[]>;
     describeRelatedObjects?(credentials: Record<string, unknown>, objectName: string): Promise<RelatedObjectDescriptor[]>;
     describeConfig?(credentials: Record<string, unknown>): Promise<ConfigOption[]>;
+    countRecords?(credentials: Record<string, unknown>, objectName: string): Promise<number>;
     /** @see Piece.describeStreams */
     describeStreams?(credentials: Record<string, unknown>): Promise<StreamDescriptor[]>;
     /** @see Piece.normalize */
@@ -485,6 +488,7 @@ export function createPiece(params: CreatePieceParams): Piece {
         ...(params.describeFields && { describeFields: params.describeFields }),
         ...(params.describeRelatedObjects && { describeRelatedObjects: params.describeRelatedObjects }),
         ...(params.describeConfig && { describeConfig: params.describeConfig }),
+        ...(params.countRecords && { countRecords: params.countRecords }),
         ...(params.describeStreams && { describeStreams: params.describeStreams }),
         ...(params.normalize && { normalize: params.normalize }),
         ...(params.executeAction && { executeAction: params.executeAction }),

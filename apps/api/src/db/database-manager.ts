@@ -1405,11 +1405,9 @@ export class DatabaseManager {
         .from(schema.integrationStitches)
         .where(
           and(
-            eq(
-              schema.integrationStitches.srcDataSourceId,
-              salesforceConn[0].id,
-            ),
+            eq(schema.integrationStitches.canonicalObject, 'TMS_CARRIER'),
             eq(schema.integrationStitches.destDataSourceId, qbConn[0].id),
+            eq(schema.integrationStitches.workspaceId, workspaces[0].id),
           ),
         )
         .limit(1);
@@ -1422,9 +1420,8 @@ export class DatabaseManager {
             name: 'Revenova to QuickBooks Local Sync',
             orgId: workspaces[0].orgId,
             workspaceId: workspaces[0].id,
-            srcDataSourceId: salesforceConn[0].id,
             destDataSourceId: qbConn[0].id,
-            sourceObject: 'Account',
+            canonicalObject: 'TMS_CARRIER',
             targetObject: 'Vendor',
           })
           .returning();

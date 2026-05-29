@@ -283,9 +283,9 @@ export class RegistryReplicationService implements OnModuleInit {
         `Successfully replicated ${row.entityType} ${row.entityId} to tenant ${row.tenantId}`,
       );
     } catch (err) {
-      const lastError = err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Failed to replicate ${row.entityType} ${row.entityId} to tenant ${row.tenantId}: ${lastError}`,
+        `Failed to replicate ${row.entityType} ${row.entityId} to tenant ${row.tenantId}: ${errorMessage}`,
       );
 
       // We don't mark the outbox as FAILED here because the BullMQ retry mechanism will re-queue it,

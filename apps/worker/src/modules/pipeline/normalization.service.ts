@@ -24,6 +24,7 @@ import { sql } from "drizzle-orm";
 import {
   sanitizeError,
   isValidPipelineMessage,
+  sanitizeErrorObject,
 } from "../../shared/pipeline.utils.js";
 
 @Injectable()
@@ -168,16 +169,39 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         //      overwrote traceId with a newer trace.
         //   2. SQS redelivers the old message after a worker crash/restart.
         //
-        // We cannot use entityId here because we don't have it in the queue
-        // message — but we can check whether ANY replica_entity row exists
-        // for this dataSourceId whose traceId differs. If yes, the event is
-        // superseded and we ACK it silently.  If none exist, the L2 write
-        // never committed — rethrow so the message retries.
+        // To correctly determine if THIS trace's entity was superseded, we must
+        // know the entityId. Since it's not in the queue payload, we fetch the
+        // original payload from inboundGateway and extract it.
+        const inboundRows = await tx
+          .select({ request: inboundGateway.request })
+          .from(inboundGateway)
+          .where(sql`${inboundGateway.traceId} = ${traceId}`)
+          .limit(1);
+
+        if (!inboundRows[0]) {
+          throw new Error(`InboundGateway row missing for traceId ${traceId}`);
+        }
+
+        const extracted = await this.hookBroker.extractReplica(
+          connectionAppName,
+          appProfile,
+          inboundRows[0].request as Record<string, unknown>,
+        );
+
+        if (!extracted) {
+          throw new Error(
+            `Failed to extract replica from inbound gateway request for traceId ${traceId}`,
+          );
+        }
+
+        const { entityId } = extracted;
+
         const anyRows = await tx
           .select({ id: replicaEntity.id, traceId: replicaEntity.traceId })
           .from(replicaEntity)
           .where(
             sql`${replicaEntity.dataSourceId} = ${dataSourceId}
+                AND ${replicaEntity.entityId} = ${entityId}
                 AND ${replicaEntity.traceId} != ${traceId}`,
           )
           .limit(1);
@@ -221,19 +245,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
           data: replica.data as Record<string, unknown>,
         })
         .catch((err) => {
-          // Log the error for operational visibility, then fall through to piece.normalize
-          this.logger.warn(
-            {
-              event: "l3.shard_normalize_failed",
-              connectionAppName,
-              appProfile,
-              entityType: replica.entityType,
-              err: err instanceof Error ? err.message : String(err),
-              stack: err instanceof Error ? err.stack : undefined,
-            },
-            "Shard normalize failed — falling back to piece.normalize",
-          );
-          return null;
+          throw err;
         }); // shard may not exist yet — fall through to piece.normalize
 
       if (normalizedFromShard) {
@@ -359,9 +371,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
                 event: "l3.normalized_writer_hook_failed",
                 traceId,
                 normalizedEntityType: canonicalType,
-                err: sanitizeError(hookErr),
+                err: sanitizeErrorObject(hookErr),
               },
-              "App normalized writer hook failed — typed table write skipped",
+              `Hook failure: ${sanitizeError(hookErr)}`,
             );
           }
 
@@ -378,14 +390,6 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             .onConflictDoNothing({
               target: [normalizedOutbox.traceId, normalizedOutbox.dataSourceId],
             });
-
-          // Mark inbound gateway as NORMALIZED (idempotent guard on status)
-          await tx
-            .update(inboundGateway)
-            .set({ status: "NORMALIZED" })
-            .where(
-              sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED'`,
-            );
 
           const durationMs = Date.now() - start;
           // onConflictDoNothing on (traceId, layer, status) prevents duplicate audit
@@ -445,9 +449,9 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             traceId,
             dataSourceId,
             layer: "L3",
-            err: sanitizeError(publishErr),
+            err: sanitizeErrorObject(publishErr),
           },
-          "L3→L4: failed to publish to NormalizedQueue — outbox recovery will retry",
+          `Failed to publish entity state change for routing: ${sanitizeError(publishErr)}`,
         );
       }
 
@@ -462,23 +466,24 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
         "L3 normalization completed",
       );
     } catch (err) {
-      const safeErr = sanitizeError(err);
+      const safeErrStr = sanitizeError(err);
+      const safeErrObj = sanitizeErrorObject(err);
       this.logger.error(
         {
           event: "l3.error",
           traceId,
           dataSourceId,
           layer: "L3",
-          err: safeErr,
+          err: safeErrObj,
         },
-        "L3 normalization failed",
+        `L3 normalization failed: ${safeErrStr}`,
       );
       try {
         const profile =
           await this.storageResolver.resolveStorageProfile(dataSourceId);
         const schemaName = profile.schemaName;
         const tenantId = profile.tenantId;
-        const { syncLog, inboundGateway } = buildTenantSchema(schemaName);
+        const { syncLog } = buildTenantSchema(schemaName);
         const tenantDb = await this.dbManager.getTenantDb(tenantId);
         await tenantDb.transaction(async (tx) => {
           assertValidSchemaName(schemaName);
@@ -486,17 +491,10 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
             sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
           );
 
-          // Only mark FAIL if not already in a terminal state
-          // (NORMALIZED means the happy path already won — do not overwrite)
-          await tx
-            .update(inboundGateway)
-            .set({ status: "FAIL" })
-            .where(
-              sql`${inboundGateway.traceId} = ${traceId} AND ${inboundGateway.status} != 'NORMALIZED' AND ${inboundGateway.status} != 'FAIL'`,
-            );
-
+          // Removed mutation of inboundGateway status to decouple L3 from L1/L2 bounded context.
           // onConflictDoNothing prevents uq_sync_log_trace_layer_status violations on
           // replay — if a FAIL row for this trace/layer already exists, skip silently.
+          const errorMessage = err instanceof Error ? err.message : String(err);
           await tx
             .insert(syncLog)
             .values({
@@ -504,6 +502,7 @@ export class NormalizationService implements OnModuleInit, OnModuleDestroy {
               layer: "L3",
               status: "FAIL",
               durationMs: Date.now() - start,
+              errorMessage,
             })
             .onConflictDoNothing({
               // uq_sync_log_unrouted covers (traceId, layer, status) where routeId IS NULL

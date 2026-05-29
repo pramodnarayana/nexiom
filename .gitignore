@@ -14,6 +14,7 @@ dist-ssr
 .turbo
 .nx/
 *.timestamp-*.mjs
+*.sqlite
 
 # Editor directories and files
 .vscode/*

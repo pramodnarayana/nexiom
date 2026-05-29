@@ -58,25 +58,13 @@ export const integrationStitches = pgTable('integration_stitch', {
     // workspace with an org that doesn't own it.
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
-    // FKs to dataSources are defined as explicit named foreignKey() constraints
-    // below (stitch_src_connection_fk / stitch_dest_connection_fk) — no inline
-    // .references() here to avoid duplicate constraints on the same columns.
-    srcDataSourceId: uuid('src_data_source_id').notNull(),
     destDataSourceId: uuid('dest_data_source_id').notNull(),
     // Vendor object names resolved at stitch-creation time via describe API
-    sourceObject: varchar('source_object', { length: 255 }).notNull(),
+    canonicalObject: varchar('canonical_object', { length: 255 }).notNull(),
     targetObject: varchar('target_object', { length: 255 }).notNull(),
     // Array of filter rules evaluated at L4 (Fan-Out Decision)
     syncCondition: jsonb('sync_condition').notNull().default([]),
     status: stitchStatusEnum('status').notNull().default('ACTIVE'),
-    // Scheduler — how often the poller fires for this stitch.
-    // Default: 30 minutes. Support team configurable via admin API.
-    // DB enforces > 0 via CHECK constraint; application code should also
-    // validate before writing (throw when syncIntervalMinutes <= 0).
-    syncIntervalMinutes: integer('sync_interval_minutes').notNull().default(30),
-    scheduleEnabled: boolean('schedule_enabled').notNull().default(true),
-    // Timestamp of the last scheduled execution (set by SchedulerService)
-    lastScheduledAt: timestamp('last_scheduled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
@@ -88,24 +76,16 @@ export const integrationStitches = pgTable('integration_stitch', {
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
         name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
-    // Cascade deletes when either the source or destination data source is removed
-    foreignKey({
-        columns: [table.srcDataSourceId],
-        foreignColumns: [dataSources.id],
-        name: 'stitch_src_data_source_fk',
-    }).onDelete('cascade'),
+    // Cascade deletes when the destination data source is removed
     foreignKey({
         columns: [table.destDataSourceId],
         foreignColumns: [dataSources.id],
         name: 'stitch_dest_data_source_fk',
     }).onDelete('cascade'),
-    // Reject zero/negative intervals at the DB layer
-    check('sync_interval_minutes_positive', sql`${table.syncIntervalMinutes} > 0`),
     // Case-insensitive uniqueness per workspace — same name allowed across workspaces
     uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
-    index('stitch_src_ds_idx').on(table.srcDataSourceId),
     index('stitch_dest_ds_idx').on(table.destDataSourceId),
     index('stitch_status_idx').on(table.orgId, table.status),
 ]);
@@ -178,19 +158,11 @@ export const schedulerOutboxStatusEnum = pgEnum('scheduler_outbox_status_enum', 
 export const schedulerOutbox = pgTable('scheduler_outbox', {
   id: uuid('id').defaultRandom().primaryKey(),
   /**
-   * The stitch whose Windmill schedule should be synced.
-   * No inline .references() — FK is declared as an explicit named foreignKey()
-   * in the table constraints below (scheduler_outbox_stitch_fk) to keep the
-   * constraint name stable across schema regenerations.
-   *
-   * ON DELETE CASCADE: hard-deletes of a stitch (rare; normal removal is a
-   * soft-archive to status='ARCHIVED') auto-clean orphaned outbox rows.
-   * The remove() method always soft-archives, so this only fires if a stitch
-   * row is forcibly deleted directly in the DB or via a cascade from a
-   * workspace/connection delete.
+   * The data source whose Windmill schedule should be synced.
+   * ON DELETE CASCADE: hard-deletes of a data source auto-clean orphaned outbox rows.
    */
-  stitchId: uuid('stitch_id').notNull(),
-  /** What the scheduler should do for this stitch. */
+  dataSourceId: uuid('data_source_id').notNull(),
+  /** What the scheduler should do for this connection. */
   action: schedulerOutboxActionEnum('action').notNull(),
   /** Lifecycle state managed by OutboxWorkerService. */
   status: schedulerOutboxStatusEnum('status').notNull().default('PENDING'),
@@ -204,15 +176,15 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
     .notNull()
     .default(sql`now()`),
   /** Last error message recorded on failure. */
-  lastError: text('last_error'),
+  errorMessage: text('error_message'),
   /** Timestamp of final processing (succeeded or permanently failed). */
   processedAt: timestamp('processed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   foreignKey({
-    columns: [table.stitchId],
-    foreignColumns: [integrationStitches.id],
-    name: 'scheduler_outbox_stitch_fk',
+    columns: [table.dataSourceId],
+    foreignColumns: [dataSources.id],
+    name: 'scheduler_outbox_data_source_fk',
   }).onDelete('cascade'),
   // Partial index covering only pending rows — excludes the large succeeded/failed
   // population so the poll query (WHERE status='PENDING' AND next_retry_at<=NOW())
@@ -220,7 +192,7 @@ export const schedulerOutbox = pgTable('scheduler_outbox', {
   index('scheduler_outbox_poll_idx')
     .on(table.nextRetryAt)
     .where(sql`status = 'PENDING'`),
-  index('scheduler_outbox_stitch_idx').on(table.stitchId),
+  index('scheduler_outbox_data_source_idx').on(table.dataSourceId),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -231,11 +203,6 @@ export const integrationStitchesRelations = relations(integrationStitches, ({ on
     workspace: one(uiWorkspaces, {
         fields: [integrationStitches.workspaceId],
         references: [uiWorkspaces.id],
-    }),
-    srcDataSource: one(dataSources, {
-        fields: [integrationStitches.srcDataSourceId],
-        references: [dataSources.id],
-        relationName: 'stitch_src_data_source',
     }),
     destDataSource: one(dataSources, {
         fields: [integrationStitches.destDataSourceId],

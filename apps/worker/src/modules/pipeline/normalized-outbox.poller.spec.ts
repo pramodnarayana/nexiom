@@ -1,19 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
-import { NormalizedOutboxWorker } from "./normalized-outbox.worker.js";
+import { NormalizedOutboxPoller } from "./normalized-outbox.poller.js";
 import { QueueService, QueueName } from "@nexiom/queue";
 import { DATABASE_CONNECTION } from "@nexiom/database";
 import { DB_MANAGER } from "@nexiom/dbmanager";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const MAX_ATTEMPTS = 6; // mirrors the constant in the worker
 
-describe("NormalizedOutboxWorker", () => {
-  let worker: NormalizedOutboxWorker;
+describe("NormalizedOutboxPoller", () => {
+  let worker: NormalizedOutboxPoller;
   let queueService: any;
   let globalDb: any;
   let tenantDb: any;
   let dbManager: any;
+  let module: TestingModule;
 
   // Helper: builds a mock db where transaction claims `rows`
   function buildDb(rows: any[]) {
@@ -66,16 +67,22 @@ describe("NormalizedOutboxWorker", () => {
       getTenantDb: vi.fn().mockResolvedValue(tenantDb),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
-        NormalizedOutboxWorker,
+        NormalizedOutboxPoller,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: globalDb },
         { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
 
-    worker = module.get<NormalizedOutboxWorker>(NormalizedOutboxWorker);
+    worker = module.get<NormalizedOutboxPoller>(NormalizedOutboxPoller);
+  });
+
+  afterEach(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   it("should claim and process pending outbox rows successfully", async () => {
@@ -133,15 +140,15 @@ describe("NormalizedOutboxWorker", () => {
     ]);
     dbManager.getTenantDb.mockResolvedValue(tenantDb);
 
-    const module = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
-        NormalizedOutboxWorker,
+        NormalizedOutboxPoller,
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: globalDb },
         { provide: DB_MANAGER, useValue: dbManager },
       ],
     }).compile();
-    worker = module.get<NormalizedOutboxWorker>(NormalizedOutboxWorker);
+    worker = module.get<NormalizedOutboxPoller>(NormalizedOutboxPoller);
 
     await worker.processOutbox();
 
@@ -153,7 +160,7 @@ describe("NormalizedOutboxWorker", () => {
     const failArg = setCalls.find((args: any[]) => args[0]?.status === "FAIL");
     expect(failArg).toBeDefined();
     // Must also record the error message
-    expect(typeof failArg![0].lastError).toBe("string");
+    expect(typeof failArg![0].errorMessage).toBe("string");
   });
 
   it("should do nothing if no rows are claimed", async () => {

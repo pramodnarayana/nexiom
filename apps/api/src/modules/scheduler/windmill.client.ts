@@ -2,21 +2,21 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Windmill schedule path for a given stitch.
- * All stitch schedules live under f/stitches/ in the nexiom workspace.
- * Validates that stitchId is a UUID to prevent path traversal in the Windmill API URL.
+ * Windmill schedule path for a given connection.
+ * All connection schedules live under f/connections/ in the nexiom workspace.
+ * Validates that connectionId is a UUID to prevent path traversal in the Windmill API URL.
  */
-export function schedulePathFor(stitchId: string): string {
-  if (!UUID_RE.test(stitchId)) {
+export function schedulePathFor(connectionId: string): string {
+  if (!UUID_RE.test(connectionId)) {
     throw new Error(
-      `Invalid stitchId: expected a UUID, got "${stitchId.slice(0, 50)}"`,
+      `Invalid connectionId: expected a UUID, got "${connectionId.slice(0, 50)}"`,
     );
   }
-  return `f/stitches/${stitchId}`;
+  return `f/connections/${connectionId}`;
 }
 
-/** Windmill script path for the shared stitch-runner. */
-export const STITCH_RUNNER_PATH = 'f/stitch-runner/main';
+/** Windmill script path for the shared connection-runner. */
+export const CONNECTION_RUNNER_PATH = 'f/connection-runner/main';
 
 /**
  * Abstract WindmillClient.
@@ -25,22 +25,22 @@ export const STITCH_RUNNER_PATH = 'f/stitch-runner/main';
  *   - HttpWindmillClient  — calls the live Windmill REST API
  *   - StubWindmillClient  — in-memory no-op used when WINDMILL_ENABLED=false
  *
- * All schedule paths use the `f/stitches/{stitchId}` convention.
- * The shared script lives at `f/stitch-runner/main` and accepts { stitchId }.
+ * All schedule paths use the `f/connections/{connectionId}` convention.
+ * The shared script lives at `f/connection-runner/main` and accepts { connectionId }.
  */
 export abstract class WindmillClient {
   /**
-   * Ensures the shared stitch-runner Deno script exists in the Windmill workspace.
+   * Ensures the shared connection-runner Deno script exists in the Windmill workspace.
    * Idempotent — safe to call on every bootstrap.
    */
-  abstract ensureStitchScript(): Promise<void>;
+  abstract ensureConnectionScript(): Promise<void>;
 
   /**
-   * Creates a new schedule for the given stitch.
+   * Creates a new schedule for the given connection.
    * Throws if the schedule already exists (use updateSchedule to modify).
    */
   abstract createSchedule(
-    stitchId: string,
+    connectionId: string,
     cron: string,
     enabled: boolean,
   ): Promise<void>;
@@ -51,7 +51,7 @@ export abstract class WindmillClient {
    * Throws on any other error.
    */
   abstract updateSchedule(
-    stitchId: string,
+    connectionId: string,
     cron: string,
     enabled: boolean,
   ): Promise<boolean>;
@@ -60,24 +60,24 @@ export abstract class WindmillClient {
    * Enables or disables an existing schedule without changing the cron expression.
    */
   abstract setScheduleEnabled(
-    stitchId: string,
+    connectionId: string,
     enabled: boolean,
   ): Promise<void>;
 
   /**
-   * Returns true if a schedule exists for the given stitch.
+   * Returns true if a schedule exists for the given connection.
    */
-  abstract scheduleExists(stitchId: string): Promise<boolean>;
+  abstract scheduleExists(connectionId: string): Promise<boolean>;
 
   /**
-   * Deletes the schedule for the given stitch.
+   * Deletes the schedule for the given connection.
    * No-op if the schedule does not exist.
    */
-  abstract deleteSchedule(stitchId: string): Promise<void>;
+  abstract deleteSchedule(connectionId: string): Promise<void>;
 
   /**
-   * Triggers an immediate one-off run of the stitch-runner script.
+   * Triggers an immediate one-off run of the connection-runner script.
    * Returns the Windmill job ID.
    */
-  abstract triggerOnce(stitchId: string): Promise<string>;
+  abstract triggerOnce(connectionId: string): Promise<string>;
 }

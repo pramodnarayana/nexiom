@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, jsonb, index, uniqueIndex, integer, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { envTypeEnum } from './routing.js';
 
@@ -35,6 +35,13 @@ export const dataSources = pgTable('data_source', {
 
     // The physical PostgreSQL schema name for this data source's tenant workspace.
     schemaName: varchar('schema_name', { length: 100 }),
+
+    // Scheduler — how often the poller fires for this connection.
+    // Default: 30 minutes. Support team configurable via admin API.
+    syncIntervalMinutes: integer('sync_interval_minutes').notNull().default(30),
+    scheduleEnabled: boolean('schedule_enabled').notNull().default(true),
+    // Timestamp of the last scheduled execution (set by SchedulerService)
+    lastScheduledAt: timestamp('last_scheduled_at', { withTimezone: true }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),

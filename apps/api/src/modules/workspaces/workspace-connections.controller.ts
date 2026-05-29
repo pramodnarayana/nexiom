@@ -9,6 +9,7 @@ import {
   HttpStatus,
   UseGuards,
   NotFoundException,
+  BadRequestException,
   ConflictException,
   Inject,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import {
   dataSources,
 } from '@nexiom/database';
 import { WorkspacesService } from './workspaces.service.js';
+import { SyncRunner } from '../scheduler/sync-runner.js';
 import { requireOrgId } from './workspace.utils.js';
 import { isUniqueViolation } from '../../shared/db.utils.js';
 
@@ -36,6 +38,7 @@ export class WorkspaceConnectionsController {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly workspacesService: WorkspacesService,
+    private readonly syncRunner: SyncRunner,
   ) {}
 
   @Get()
@@ -137,5 +140,54 @@ export class WorkspaceConnectionsController {
           eq(uiWorkspaceDataSources.dataSourceId, dataSourceId),
         ),
       );
+  }
+
+  @Post(':dataSourceId/sync/:objectType')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('workspaces', 'manage')
+  async sync(
+    @AuthContext() auth: RequestAuthContext,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('dataSourceId', ParseUUIDPipe) dataSourceId: string,
+    @Param('objectType') objectType: string,
+  ) {
+    const orgId = requireOrgId(auth);
+    // Verify workspace belongs to this org
+    await this.workspacesService.findOne(orgId, workspaceId);
+
+    // Validate objectType (alphanumeric + -/_ only, max 200 chars)
+    if (!/^[\w.-]{1,200}$/.test(objectType)) {
+      throw new BadRequestException(
+        'Invalid objectType: must be alphanumeric with -/_ only, max 200 characters',
+      );
+    }
+
+    // Verify the dataSourceId belongs to this org and is assigned to the workspace
+    const [connection] = await this.db
+      .select({
+        id: dataSources.id,
+      })
+      .from(dataSources)
+      .innerJoin(
+        uiWorkspaceDataSources,
+        eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
+      )
+      .where(
+        and(
+          eq(dataSources.id, dataSourceId),
+          eq(dataSources.tenantId, orgId),
+          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!connection) {
+      throw new NotFoundException(
+        `Connection ${dataSourceId} not found or not accessible`,
+      );
+    }
+
+    // Initial Manual Sync
+    const result = await this.syncRunner.run(dataSourceId, objectType);
+    return result;
   }
 }
