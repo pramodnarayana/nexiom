@@ -1028,10 +1028,7 @@ export class DatabaseManager {
         process.env.DATABASE_URL ||
           'postgresql://user:password@localhost:5432/platform_global',
       );
-      const auth = parsedUrl.username
-        ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
-        : '';
-      hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      hostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
     } catch (err) {
       const redactedUrl = process.env.DATABASE_URL
         ? process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***:***@')
@@ -1039,7 +1036,7 @@ export class DatabaseManager {
       console.warn(
         `⚠️  Failed to parse DATABASE_URL: ${redactedUrl}. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to default.`,
       );
-      hostUrl = 'postgresql://user:password@localhost:5432';
+      hostUrl = 'postgresql://localhost:5432';
     }
 
     // ── Step 2: CREATE DATABASE platform_shard_1 + run tenant migrations ─

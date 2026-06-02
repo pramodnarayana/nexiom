@@ -621,7 +621,9 @@ describe('DatabaseManager', () => {
           'getPgClient',
         ).mockResolvedValue(mockClient);
         vi.spyOn(
-          manager as unknown as { createTenantDatabase: () => Promise<unknown> },
+          manager as unknown as {
+            createTenantDatabase: () => Promise<unknown>;
+          },
           'createTenantDatabase',
         ).mockResolvedValue(undefined);
 
