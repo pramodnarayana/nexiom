@@ -744,13 +744,18 @@ export class DatabaseManager {
       const schemaMgr = new TenantDatabaseManager(
         db as unknown as import("@nexiom/database").DrizzleDb,
         (hostIdentifier: string) => {
-          // Rehydrate credentials from DATABASE_URL
-          // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
           const parsedEnv = new URL(dbUrl);
           const parsedHost = new URL(hostIdentifier);
 
           // Build full DSN with credentials from DATABASE_URL and host from hostIdentifier
-          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${parsedEnv.pathname}${parsedEnv.search}`;
+          const pathname =
+            parsedHost.pathname !== "/" && parsedHost.pathname !== ""
+              ? parsedHost.pathname
+              : parsedEnv.pathname;
+          const search = parsedHost.search
+            ? parsedHost.search
+            : parsedEnv.search;
+          const fullDsn = `${parsedHost.protocol}//${parsedEnv.username}:${parsedEnv.password}@${parsedHost.host}${pathname}${search}`;
 
           const pool = new Pool({
             connectionString: fullDsn,

@@ -106,7 +106,15 @@ describe('ConnectorsService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
-        { provide: DB_MANAGER, useValue: { applyPlan: vi.fn() } },
+        {
+          provide: DB_MANAGER,
+          useValue: {
+            applyPlan: vi.fn(),
+            getTenantDb: vi
+              .fn()
+              .mockResolvedValue({ execute: vi.fn().mockResolvedValue(true) }),
+          },
+        },
         {
           provide: StorageResolverService,
           useValue: { resolveSchemaName: vi.fn().mockResolvedValue('ws_test') },

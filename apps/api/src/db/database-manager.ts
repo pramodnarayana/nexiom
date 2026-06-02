@@ -811,7 +811,9 @@ export class DatabaseManager {
               const quotedTables = validTables
                 .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
                 .join(', ');
-              await shardClient.query(`TRUNCATE TABLE ${quotedTables} CASCADE;`);
+              await shardClient.query(
+                `TRUNCATE TABLE ${quotedTables} CASCADE;`,
+              );
               console.log(
                 `  ✓ Truncated ${validTables.length} tables in shard`,
               );
@@ -1089,6 +1091,12 @@ export class DatabaseManager {
       console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
     }
 
+    // Query the actual number of tenants currently assigned to this shard
+    const [{ count }] = await globalDb
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(dbSchema.tenantStorageRegistry)
+      .where(eq(dbSchema.tenantStorageRegistry.databaseName, tenantDbName));
+
     // Always upsert shard_registry — runs whether org was created or already existed
     // Note: Do NOT reset currentTenants on conflict to preserve accurate capacity tracking
     await globalDb
@@ -1099,7 +1107,7 @@ export class DatabaseManager {
         databaseHostUrl: hostUrl,
         regionContext: 'local',
         maxTenants: 1000,
-        currentTenants: 0,
+        currentTenants: count,
         status: 'ACTIVE',
       })
       .onConflictDoUpdate({
@@ -1111,7 +1119,9 @@ export class DatabaseManager {
           // currentTenants is intentionally NOT updated here to preserve capacity tracking
         },
       });
-    console.log(`  ✓ Upserted shard_registry: shard_1 → ${tenantDbName}`);
+    console.log(
+      `  ✓ Upserted shard_registry: shard_1 → ${tenantDbName} (tenants: ${count})`,
+    );
 
     // ── Drop stale ws_* schemas from platform_shard_1 ────────────────────────
     // REMOVED: provision should not drop anything. db:reset handles cleanup.

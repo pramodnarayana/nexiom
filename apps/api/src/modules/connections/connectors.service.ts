@@ -641,9 +641,15 @@ export class ConnectorsService {
         // Register outbox tables in the CDC publication so Debezium picks up the inserts
         // from inbound_gateway (L1) -> inbound_outbox (L2).
         // Split into separate statements so duplicate_object on one table doesn't abort adding others
-        const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox', 'outbound_outbox'];
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        const tables = [
+          'inbound_outbox',
+          'replica_outbox',
+          'normalized_outbox',
+          'outbound_outbox',
+        ];
         for (const table of tables) {
-          await this.db.execute(sql`
+          await tenantDb.execute(sql`
             DO $$
             BEGIN
               BEGIN
@@ -723,7 +729,8 @@ export class ConnectorsService {
 
         if (workspaceProvisionInfo.schemaName) {
           try {
-            await this.db.execute(
+            const tenantDb = await this.dbManager.getTenantDb(tenantId);
+            await tenantDb.execute(
               sql`DROP SCHEMA IF EXISTS ${sql.identifier(workspaceProvisionInfo.schemaName)} CASCADE`,
             );
           } catch (dropError) {

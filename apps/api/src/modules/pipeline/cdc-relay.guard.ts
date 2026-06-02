@@ -14,9 +14,13 @@ export class CdcRelayGuard implements CanActivate {
 
   constructor(private readonly config: ConfigService) {
     // Explicit opt-in flag for disabling auth (replaces NODE_ENV check)
-    this.disableAuth = this.config.get<boolean>('CDC_RELAY_DISABLE_AUTH', false);
+    const rawDisableAuth = this.config.get<string>('CDC_RELAY_DISABLE_AUTH');
+    this.disableAuth =
+      rawDisableAuth?.toLowerCase() === 'true' || rawDisableAuth === '1';
     if (this.disableAuth) {
-      this.logger.warn('CDC_RELAY_DISABLE_AUTH is enabled - authentication bypass is active');
+      this.logger.warn(
+        'CDC_RELAY_DISABLE_AUTH is enabled - authentication bypass is active',
+      );
     }
   }
 
@@ -44,9 +48,9 @@ export class CdcRelayGuard implements CanActivate {
       customHeader !== expectedSecret
     ) {
       // Log failure without exposing the secret
-      this.logger.error('CDC Relay Auth failed:', {
-        authHeader,
-        customHeader,
+      this.logger.error('CDC Relay Auth failed', {
+        hasAuthorization: Boolean(authHeader),
+        hasDebeziumHeader: Boolean(customHeader),
       });
       throw new UnauthorizedException('Invalid CDC relay authorization');
     }

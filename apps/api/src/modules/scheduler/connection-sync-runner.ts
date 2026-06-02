@@ -613,7 +613,7 @@ export class ConnectionSyncRunner {
         })
         .onConflictDoNothing({
           target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
-          targetWhere: sql`ext_req_id IS NOT NULL`,
+          where: sql`ext_req_id IS NOT NULL`,
         })
         .returning({ traceId: inboundGateway.traceId });
 
