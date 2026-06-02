@@ -43,7 +43,7 @@ export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string
     const CONTACT = `phone VARCHAR(50), fax VARCHAR(50), email VARCHAR(255)`;
 
     // Wrap all DDL in a single drizzle transaction for atomicity
-    await db.transaction(async (tx: any) => {
+    await db.transaction(async (tx) => {
         // Create the trigger function first
         await tx.execute(sql.raw(TRIGGER_FUNCTION));
 

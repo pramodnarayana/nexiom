@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApplicationLoaderService } from './application-loader.service.js';
-import type { ApplicationShardModule } from '@nexiom/piece-framework';
+import type { ApplicationShardModule, AppsConnectorDb } from '@nexiom/piece-framework';
 
 // ---------------------------------------------------------------------------
 // PipelineHookBrokerService
@@ -70,7 +70,7 @@ export class PipelineHookBrokerService {
     appName: string,
     appProfile: string,
     tx: unknown,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     replicaId: string,
     entityId: string,
@@ -86,7 +86,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.writeNormalized', appName, appProfile, normalizedEntityType },
       'Delegating writeNormalized to application shard',
     );
-    return shard.writeNormalized(tx, db as any, schemaName, replicaId, entityId, traceId, normalizedEntityType, data);
+    return shard.writeNormalized(tx, db, schemaName, replicaId, entityId, traceId, normalizedEntityType, data);
   }
 
   /**
@@ -96,7 +96,7 @@ export class PipelineHookBrokerService {
   async buildTarget(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     srcEntityId: string,
@@ -109,7 +109,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.buildTarget', appName, appProfile, normalizedEntityType },
       'Delegating buildTarget to application shard',
     );
-    return shard.buildTarget(db as any, schemaName, normalizedEntityType, srcEntityId);
+    return shard.buildTarget(db, schemaName, normalizedEntityType, srcEntityId);
   }
 
   /**
@@ -119,7 +119,7 @@ export class PipelineHookBrokerService {
   async provisionDomain(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
   ): Promise<void> {
     const shard = await this.loader.load(this.shardName(appName, appProfile));
@@ -130,7 +130,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.provisionDomain', appName, appProfile, schemaName },
       'Delegating provisionDomain to application shard',
     );
-    return shard.provisionDomain(db as any, schemaName);
+    return shard.provisionDomain(db, schemaName);
   }
 
   /**
@@ -268,7 +268,7 @@ export class PipelineHookBrokerService {
   async reverseLookup(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     entityId: string,
@@ -281,6 +281,6 @@ export class PipelineHookBrokerService {
       { event: 'hook.reverseLookup', appName, appProfile, normalizedEntityType },
       'Delegating reverseLookup to application shard',
     );
-    return shard.reverseLookup(db as any, schemaName, normalizedEntityType, entityId);
+    return shard.reverseLookup(db, schemaName, normalizedEntityType, entityId);
   }
 }

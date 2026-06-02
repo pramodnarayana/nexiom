@@ -932,9 +932,6 @@ importers:
       '@nexiom/domain-tms':
         specifier: workspace:*
         version: link:../../../../../packages/domain/tms
-      '@nexiom/engine':
-        specifier: workspace:*
-        version: link:../../../platform/core
       '@nexiom/piece-framework':
         specifier: workspace:*
         version: link:../../../../../packages/pieces/platform/framework
@@ -1131,9 +1128,6 @@ importers:
 
   packages/domain/tms:
     dependencies:
-      '@nexiom/database':
-        specifier: workspace:*
-        version: link:../../database
       '@nexiom/metadata-engine':
         specifier: workspace:*
         version: link:../../metadata-engine
@@ -1343,9 +1337,6 @@ importers:
 
   packages/pieces/application/salesforce/revenova:
     dependencies:
-      '@nexiom/database':
-        specifier: workspace:*
-        version: link:../../../../database
       '@nexiom/domain-tms':
         specifier: workspace:*
         version: link:../../../../domain/tms
@@ -5237,6 +5228,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@vercel/oidc@3.1.0':
     resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
