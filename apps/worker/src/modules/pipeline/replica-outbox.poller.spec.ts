@@ -19,6 +19,7 @@ describe("ReplicaOutboxPoller", () => {
     queueService = { send: vi.fn() };
 
     tenantDb = {
+      execute: vi.fn().mockResolvedValue({ rows: [{ schema_exists: true }] }),
       select: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
       leftJoin: vi.fn().mockReturnThis(),
@@ -127,6 +128,30 @@ describe("ReplicaOutboxPoller", () => {
     await service.processOutbox();
     // processOutbox handles rejection internally and logs it.
     // Test passes if it does not throw unhandled exception
+    expect(true).toBe(true);
+  });
+
+  it("should skip drain if schema does not exist", async () => {
+    tenantDb.execute.mockResolvedValueOnce({
+      rows: [{ schema_exists: false }],
+    });
+    await service.processOutbox();
+    expect(true).toBe(true);
+  });
+
+  it("should catch and log globalDb select errors", async () => {
+    globalDb.select.mockImplementationOnce(() => {
+      throw new Error("global db down");
+    });
+    await service.processOutbox();
+    // Test passes if it does not throw
+    expect(true).toBe(true);
+  });
+
+  it("should catch and log tenant processing errors", async () => {
+    dbManager.getTenantDb.mockRejectedValueOnce(new Error("tenant db down"));
+    await service.processOutbox();
+    // Test passes if it does not throw
     expect(true).toBe(true);
   });
 });

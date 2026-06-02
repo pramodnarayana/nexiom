@@ -85,7 +85,7 @@ export class CursorResetController {
         .delete(syncCursors)
         .where(
           and(
-            eq(syncCursors.stitchId, id),
+            eq(syncCursors.dataSourceId, id),
             eq(syncCursors.streamName, streamName),
           ),
         );
@@ -106,7 +106,7 @@ export class CursorResetController {
     // Use the stable internal principal ID rather than email (PII) in service
     // logs.  Audit trails that require email belong in a dedicated secure sink.
     this.logger.log(
-      `Cursor reset: stitchId=${id}, streamName=${JSON.stringify(streamName)}, actorId=${ctx.user.id ?? '[unknown]'}`,
+      `Cursor reset: dataSourceId=${id}, streamName=${JSON.stringify(streamName)}, actorId=${ctx.user.id ?? '[unknown]'}`,
     );
   }
 
@@ -130,13 +130,13 @@ export class CursorResetController {
     const rows = await this.db
       .select({
         id: syncCursors.id,
-        stitchId: syncCursors.stitchId,
+        dataSourceId: syncCursors.dataSourceId,
         streamName: syncCursors.streamName,
         createdAt: syncCursors.createdAt,
         updatedAt: syncCursors.updatedAt,
       })
       .from(syncCursors)
-      .where(eq(syncCursors.stitchId, id));
+      .where(eq(syncCursors.dataSourceId, id));
 
     const now = Date.now();
     const staleThresholdMs =
@@ -152,7 +152,7 @@ export class CursorResetController {
       // intentionally absent and must never appear in the HTTP response.
       return {
         id: row.id,
-        stitchId: row.stitchId,
+        dataSourceId: row.dataSourceId,
         streamName: row.streamName,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,

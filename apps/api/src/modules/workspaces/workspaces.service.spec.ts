@@ -254,10 +254,9 @@ describe('WorkspacesService', () => {
   // ── listConnections ───────────────────────────────────────────────────────
 
   it('returns connections assigned to the workspace', async () => {
+    mocks.findFirst.mockResolvedValue(WORKSPACE);
     const assignedAt = new Date();
-    // Raw row includes workspaceId (selected for the exists-check); service strips it
     const rawRow = {
-      workspaceId: WS_ID,
       id: CONN_ID,
       appName: 'salesforce',
       externalId: 'sf-slug',
@@ -270,37 +269,16 @@ describe('WorkspacesService', () => {
 
     const result = await service.listConnections(ORG_ID, WS_ID);
 
-    // workspaceId is stripped from returned objects
-    const { workspaceId: _ws, ...expectedRow } = rawRow;
-    expect(result).toEqual([expectedRow]);
+    expect(result).toEqual([rawRow]);
     expect(mocks.db.select).toHaveBeenCalled();
   });
 
   it('throws NotFoundException when listing connections for a non-existent workspace', async () => {
+    mocks.findFirst.mockResolvedValue(null);
     mocks.selectOrderBy.mockResolvedValue([]);
 
     await expect(service.listConnections(ORG_ID, WS_ID)).rejects.toThrow(
       NotFoundException,
     );
-  });
-
-  it('returns empty array when workspace exists but all connection columns are null (left-join sentinel)', async () => {
-    // Workspace exists but has no assigned connections — left join produces a sentinel row
-    // with workspaceId present but all dataSources columns null.
-    const sentinelRow = {
-      workspaceId: WS_ID,
-      id: null,
-      appName: null,
-      externalId: null,
-      displayName: null,
-      authType: null,
-      status: null,
-      assignedAt: new Date(),
-    };
-    mocks.selectOrderBy.mockResolvedValue([sentinelRow]);
-
-    const result = await service.listConnections(ORG_ID, WS_ID);
-
-    expect(result).toEqual([]);
   });
 });

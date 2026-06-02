@@ -159,17 +159,29 @@ export class TriggerExecutorService {
       );
       assertValidSchemaName(resolvedSchemaName);
 
+      const ds = await this.db.query.dataSources.findFirst({
+        where: eq(dataSources.id, params.dataSourceId),
+        columns: { metadata: true },
+      });
+      const appProfile =
+        ds?.metadata &&
+        typeof ds.metadata === 'object' &&
+        'appProfile' in ds.metadata
+          ? (ds.metadata.appProfile as string)
+          : 'standard';
+
       // 1. Ensure all pipeline tables are provisioned lazily
       await this.dbManager.applyPlan(
         params.tenantId,
         resolvedSchemaName,
         SchemaPlan.OUTBOUND_ACTIVE,
+        { appName: params.appName, appProfile },
       );
       await this.db.execute(sql`
         DO $$
         BEGIN
           BEGIN
-            ALTER PUBLICATION nexiom_cdc
+            ALTER PUBLICATION platform_cdc
               ADD TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
                         ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
                         ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,
@@ -236,7 +248,7 @@ export class TriggerExecutorService {
             DO $$
             BEGIN
               BEGIN
-                ALTER PUBLICATION nexiom_cdc
+                ALTER PUBLICATION platform_cdc
                   DROP TABLE ${sql.raw('"' + resolvedSchemaName + '"')}.inbound_outbox,
                              ${sql.raw('"' + resolvedSchemaName + '"')}.replica_outbox,
                              ${sql.raw('"' + resolvedSchemaName + '"')}.normalized_outbox,

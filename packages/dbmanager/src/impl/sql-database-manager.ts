@@ -522,23 +522,11 @@ export class SqlDatabaseManager {
             let appName: string | undefined = context?.appName;
             let appProfile: string | undefined = context?.appProfile;
 
-            // Fallback: If context is missing (e.g. called from tests or CLI), look it up via hash-matching
-            if (!appName) {
-                const res = await this.db.$client.query(`
-                    SELECT id, app_name, metadata->>'appProfile' as app_profile 
-                    FROM public.data_source
-                `);
-
-                for (const row of res.rows) {
-                    const computed = getWorkspaceSchemaName(row.id, row.app_name);
-                    if (computed === schemaName) {
-                        appName = row.app_name;
-                        appProfile = row.app_profile || 'standard';
-                        break;
-                    }
-                }
+            // Fallback removed: explicitly require context for canonical provisioning
+            if (!appName || !appProfile) {
+                throw new Error('context.appName and context.appProfile are required for canonical table provisioning.');
             }
-            
+
             if (appName && appProfile && this.domainProvisionerResolver) {
                 const provisioner = this.domainProvisionerResolver(appName, appProfile);
                 if (provisioner) {

@@ -140,18 +140,19 @@ export function buildTmsSchema(schemaName: string) {
     // ── tms_tp ────────────────────────────────────────────────────────────────
     const tmsTp = schema.table('tms_tp', {
         ...common,
-        mcNumber:            varchar('mc_number', { length: 50 }),
-        scac:                varchar('scac', { length: 20 }),
-        federalTaxId:        varchar('federal_tax_id', { length: 50 }),
-        usdot:               varchar('usdot', { length: 50 }),
-        remitToSourceId:     varchar('remit_to_source_id', { length: 255 }),
+        invoiceTerms:        varchar('invoice_terms', { length: 100 }),
+        paymentTerms:        varchar('payment_terms', { length: 100 }),
+        carrierPaymentTerms: varchar('carrier_payment_terms', { length: 100 }),
+        carrierRemitTo:      varchar('carrier_remit_to', { length: 255 }),
+        companyType:         varchar('company_type', { length: 100 }),
+        creditLimit:         varchar('credit_limit', { length: 50 }),
         remitToOption:       varchar('remit_to_option', { length: 100 }),
-        carrierOperation:    varchar('carrier_operation', { length: 100 }),
-        agreementStatus:     varchar('agreement_status', { length: 100 }),
-        carrierReviewStatus: varchar('carrier_review_status', { length: 100 }),
+        mcNumber:            varchar('mc_number', { length: 50 }),
+        stateDotNumber:      varchar('state_dot_number', { length: 50 }),
+        usDotNumber:         varchar('us_dot_number', { length: 50 }),
     }, (t) => [
         uniqueIndex('uq_tms_tp_source_id').on(t.sourceId),
-        index('idx_tms_tp_remit_to').on(t.remitToSourceId).where(sql`${t.remitToSourceId} IS NOT NULL`),
+        index('idx_tms_tp_remit_to').on(t.carrierRemitTo).where(sql`${t.carrierRemitTo} IS NOT NULL`),
         index('idx_tms_tp_trace').on(t.traceId),
     ]);
 

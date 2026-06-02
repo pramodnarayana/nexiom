@@ -631,15 +631,43 @@ export class ConnectorsService {
         await this.dbManager.applyPlan(
           tenantId,
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.NORMALIZE_ACTIVE,
+          SchemaPlan.CANONICAL_ACTIVE,
+          {
+            appName: providerName,
+            appProfile: (metadata?.appProfile as string) || 'standard',
+          },
         );
+
+        // Register outbox tables in the CDC publication so Debezium picks up the inserts
+        // from inbound_gateway (L1) -> inbound_outbox (L2).
+        // Split into separate statements so duplicate_object on one table doesn't abort adding others
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        const tables = [
+          'inbound_outbox',
+          'replica_outbox',
+          'normalized_outbox',
+          'outbound_outbox',
+        ];
+        for (const table of tables) {
+          await tenantDb.execute(sql`
+            DO $$
+            BEGIN
+              BEGIN
+                ALTER PUBLICATION platform_cdc
+                  ADD TABLE ${sql.identifier(workspaceProvisionInfo.schemaName)}.${sql.identifier(table)};
+              EXCEPTION WHEN duplicate_object THEN
+                -- Ignore gracefully if the table is already in the publication
+              END;
+            END $$;
+          `);
+        }
 
         // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {
           const [activeConn] = await tx
             .update(dataSources)
             .set({
-              schemaPlan: SchemaPlan.NORMALIZE_ACTIVE,
+              schemaPlan: SchemaPlan.CANONICAL_ACTIVE,
             })
             .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
             .returning();
@@ -701,7 +729,8 @@ export class ConnectorsService {
 
         if (workspaceProvisionInfo.schemaName) {
           try {
-            await this.db.execute(
+            const tenantDb = await this.dbManager.getTenantDb(tenantId);
+            await tenantDb.execute(
               sql`DROP SCHEMA IF EXISTS ${sql.identifier(workspaceProvisionInfo.schemaName)} CASCADE`,
             );
           } catch (dropError) {

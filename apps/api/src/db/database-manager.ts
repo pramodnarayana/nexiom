@@ -197,8 +197,9 @@ export class DatabaseManager {
     });
     await adminClient.connect();
     try {
+      // Drop legacy nexiom_tenant_* DBs, new platform_shard_* and tenant_* DBs
       const result = await adminClient.query<{ datname: string }>(
-        `SELECT datname FROM pg_database WHERE datname LIKE 'nexiom_tenant_%'`,
+        `SELECT datname FROM pg_database WHERE datname LIKE 'nexiom_tenant_%' OR datname LIKE 'platform_shard_%' OR datname LIKE 'tenant_%'`,
       );
       for (const row of result.rows) {
         await this.dropTenantDatabaseIfExists(row.datname);
@@ -703,21 +704,127 @@ export class DatabaseManager {
       );
 
       if (tables.length === 0) {
-        console.log('  ℹ️  No tables found in public schema to truncate');
-        return;
+        console.log(
+          '  ℹ️  No tables found in public schema to truncate in global db',
+        );
+      } else {
+        const quotedTables = tables
+          .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+          .join(', ');
+        const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
+        await this.execSql(sql, client);
+        console.log(`  ✓ Truncated ${tables.length} tables in global db`);
       }
-
-      const quotedTables = tables
-        .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
-        .join(', ');
-      const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
-      await this.execSql(sql, client);
-      console.log(`  ✓ Truncated ${tables.length} tables`);
     } catch (error) {
-      console.log(`  ⚠️  Truncate failed: ${String(error)}`);
+      console.log(`  ⚠️  Global Truncate failed: ${String(error)}`);
       throw error;
     } finally {
       await client.end();
+    }
+
+    // Also clean up platform_shard_1
+    const globalUrl = process.env.DATABASE_URL || '';
+    if (globalUrl) {
+      // Parse and validate the shard URL to ensure replacement succeeded
+      let shardUrl: string;
+      try {
+        const parsedGlobal = new URL(globalUrl);
+        const globalDbName = parsedGlobal.pathname.replace(/^\/+/, '');
+        if (!globalDbName || globalDbName !== 'platform_global') {
+          console.log(
+            `  ℹ️  Skipping shard cleanup: DATABASE_URL does not point to platform_global (found: ${globalDbName})`,
+          );
+          return;
+        }
+        // Build shard URL by replacing only the database name component
+        parsedGlobal.pathname = '/platform_shard_1';
+        shardUrl = parsedGlobal.toString();
+
+        // Verify the shard URL is different from global URL
+        if (shardUrl === globalUrl) {
+          console.log(
+            `  ⚠️  Skipping shard cleanup: shardUrl equals globalUrl (replacement failed)`,
+          );
+          return;
+        }
+
+        // Verify the resulting DB name
+        const parsedShard = new URL(shardUrl);
+        const shardDbName = parsedShard.pathname.replace(/^\/+/, '');
+        if (shardDbName !== 'platform_shard_1') {
+          console.log(
+            `  ⚠️  Skipping shard cleanup: resulting DB name is not platform_shard_1 (found: ${shardDbName})`,
+          );
+          return;
+        }
+      } catch (parseErr) {
+        console.log(
+          `  ⚠️  Skipping shard cleanup: failed to parse DATABASE_URL: ${String(parseErr)}`,
+        );
+        return;
+      }
+
+      try {
+        const pg = await import('pg');
+        const shardClient = new pg.Client({ connectionString: shardUrl });
+        await shardClient.connect();
+        try {
+          // Drop all workspace schemas
+          const allSchemas = await shardClient.query<{ schema_name: string }>(`
+            SELECT schema_name
+            FROM information_schema.schemata
+            WHERE schema_name LIKE 'ws_%';
+          `);
+          // Validate schema names before dropping
+          const schemaNameRegex = /^ws_[a-z0-9_]+$/i;
+          for (const { schema_name } of allSchemas.rows) {
+            if (!schemaNameRegex.test(schema_name)) {
+              console.log(
+                `  ⚠️  Skipping invalid schema name: ${schema_name} (does not match /^ws_[a-z0-9_]+$/i)`,
+              );
+              continue;
+            }
+            await shardClient.query(
+              `DROP SCHEMA IF EXISTS "${schema_name}" CASCADE;`,
+            );
+            console.log(`  ✓ Dropped schema: ${schema_name} from shard`);
+          }
+
+          // Truncate any public tables in the shard (except drizzle metadata)
+          const shardTables = await shardClient.query<{ table_name: string }>(`
+            SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name != 'drizzle_migrations';
+          `);
+          if (shardTables.rows.length > 0) {
+            // Validate table names before truncating
+            const tableNameRegex = /^[a-z0-9_]+$/i;
+            const validTables = shardTables.rows.filter((t) => {
+              if (!tableNameRegex.test(t.table_name)) {
+                console.log(
+                  `  ⚠️  Skipping invalid table name: ${t.table_name} (does not match /^[a-z0-9_]+$/i)`,
+                );
+                return false;
+              }
+              return true;
+            });
+
+            if (validTables.length > 0) {
+              const quotedTables = validTables
+                .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+                .join(', ');
+              await shardClient.query(
+                `TRUNCATE TABLE ${quotedTables} CASCADE;`,
+              );
+              console.log(
+                `  ✓ Truncated ${validTables.length} tables in shard`,
+              );
+            }
+          }
+        } finally {
+          await shardClient.end();
+        }
+      } catch (err) {
+        console.log(`  ⚠️  Could not clean up shard_1: ${String(err)}`);
+      }
     }
   }
 
@@ -911,17 +1018,17 @@ export class DatabaseManager {
     const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
 
     // ── Step 1: Derive host URL + tenant DB name ────────────────────────────
+    // Hybrid Tenancy: Standard tenants (including local dev) route to a shared
+    // shard database. This allows a single Debezium container to monitor all
+    // standard tenant schemas via one publication + replication slot.
     let hostUrl: string;
-    const tenantDbName = `nexiom_tenant_${devTenantId.replace(/-/g, '_')}`;
+    const tenantDbName = 'platform_shard_1';
     try {
       const parsedUrl = new URL(
         process.env.DATABASE_URL ||
-          'postgresql://user:password@localhost:5432/nexiom_global',
+          'postgresql://user:password@localhost:5432/platform_global',
       );
-      const auth = parsedUrl.username
-        ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
-        : '';
-      hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      hostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
     } catch (err) {
       const redactedUrl = process.env.DATABASE_URL
         ? process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***:***@')
@@ -929,10 +1036,10 @@ export class DatabaseManager {
       console.warn(
         `⚠️  Failed to parse DATABASE_URL: ${redactedUrl}. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to default.`,
       );
-      hostUrl = 'postgresql://user:password@localhost:5432';
+      hostUrl = 'postgresql://localhost:5432';
     }
 
-    // ── Step 2: CREATE DATABASE nexiom_tenant_system + run tenant migrations ─
+    // ── Step 2: CREATE DATABASE platform_shard_1 + run tenant migrations ─
     console.log(`\n📦 Provisioning tenant database: ${tenantDbName}`);
     await this.createTenantDatabase(tenantDbName, hostUrl);
 
@@ -941,220 +1048,275 @@ export class DatabaseManager {
     const { Pool } = await import('pg');
     const dbSchema = await import('./schema.js');
     const globalClient = await this.getPgClient();
-    const globalDb = drizzle(globalClient, { schema: dbSchema });
-
-    // Register in global tenant_storage_registry
-    const existReg = await globalDb
-      .select()
-      .from(dbSchema.tenantStorageRegistry)
-      .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId))
-      .limit(1);
-
-    if (!existReg[0]) {
-      // First, create the mock Customer Organization
-      await globalDb
-        .insert(dbSchema.organization)
-        .values({
-          id: devTenantId,
-          name: 'Edlewis Trucking (Local Dev)',
-          slug: 'edlewis-trucking-dev',
-          isSystem: false,
-        })
-        .onConflictDoNothing();
-      console.log(
-        `  ✓ Created mock customer org: Edlewis Trucking (${devTenantId})`,
-      );
-
-      await globalDb.insert(dbSchema.tenantStorageRegistry).values({
-        tenantId: devTenantId,
-        databaseName: tenantDbName,
-        databaseHostUrl: hostUrl,
-        regionContext: 'local',
-      });
-      console.log(`  ✓ Registered ${tenantDbName} in tenant_storage_registry`);
-    } else {
-      // Update host URL in case credentials changed
-      await globalDb
-        .update(dbSchema.tenantStorageRegistry)
-        .set({ databaseName: tenantDbName, databaseHostUrl: hostUrl })
-        .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId));
-      console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
-    }
-
-    // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
-    const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
-    let tenantPool: Pool | undefined;
-
     try {
-      tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
-      const tenantDb = drizzle(tenantPool, { schema: dbSchema });
+      const globalDb = drizzle(globalClient, { schema: dbSchema });
 
-      const { SchemaPlan } = await import('@nexiom/dbmanager');
-      const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
-      const { getDomainProvisioner } = await import('@nexiom/piece-framework');
+      // Register in global tenant_storage_registry
+      const existReg = await globalDb
+        .select()
+        .from(dbSchema.tenantStorageRegistry)
+        .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId))
+        .limit(1);
 
-      const schemaMgr = new TenantDatabaseManager(
-        globalDb as unknown as import('@nexiom/database').DrizzleDb,
-        (_hostIdentifier: string) => {
-          const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
-          return drizzle(pool2, {
-            schema: dbSchema,
-          }) as unknown as import('@nexiom/database').DrizzleDb;
-        },
-        getDomainProvisioner,
-      );
-
-      const fixtures = [
-        {
-          id: '00000000-0000-0000-0000-000000000001',
-          appName: 'salesforce',
-          externalId: 'dev-salesforce',
-          displayName: 'Dev Salesforce',
-          metadata: this.deriveMetadata('salesforce'),
-          credentials: {
-            clientId: 'dev-sf-client-id',
-            clientSecret: 'dev-sf-client-secret',
-            accessToken: 'dev-sf-access-token',
-            refreshToken: 'dev-sf-refresh-token',
-            data: { instance_url: 'https://test.salesforce.com' },
-          },
-        },
-        {
-          id: '00000000-0000-0000-0000-000000000002',
-          appName: 'quickbooks',
-          externalId: 'dev-quickbooks',
-          displayName: 'Dev QuickBooks',
-          metadata: this.deriveMetadata('quickbooks'),
-          credentials: {
-            clientId: 'dev-qb-client-id',
-            clientSecret: 'dev-qb-client-secret',
-            accessToken: 'dev-qb-access-token',
-            refreshToken: 'dev-qb-refresh-token',
-            data: { realmId: 'dev-realm-id' },
-          },
-        },
-      ] as const;
-
-      const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
-
-      for (const fixture of fixtures) {
-        const encryptedValue = this.encryptFixture(
-          JSON.stringify(fixture.credentials),
-          encryptionKey,
+      if (!existReg[0]) {
+        // First, create the mock Customer Organization
+        await globalDb
+          .insert(dbSchema.organization)
+          .values({
+            id: devTenantId,
+            name: 'Edlewis Trucking (Local Dev)',
+            slug: 'edlewis-trucking-dev',
+            isSystem: false,
+          })
+          .onConflictDoNothing();
+        console.log(
+          `  ✓ Created mock customer org: Edlewis Trucking (${devTenantId})`,
         );
 
-        // Write app_connection into the GLOBAL DB
-        const [inserted] = await globalDb
-          .insert(dbSchema.dataSources)
-          .values({
-            id: fixture.id,
-            tenantId: devTenantId,
-            appName: fixture.appName,
-            externalId: fixture.externalId,
-            displayName: fixture.displayName,
-            metadata: fixture.metadata,
-          })
-          .onConflictDoUpdate({
-            target: [
-              dbSchema.dataSources.tenantId,
-              dbSchema.dataSources.externalId,
-            ],
-            set: {
+        await globalDb.insert(dbSchema.tenantStorageRegistry).values({
+          tenantId: devTenantId,
+          databaseName: tenantDbName,
+          databaseHostUrl: hostUrl,
+          regionContext: 'local',
+        });
+        console.log(
+          `  ✓ Registered ${tenantDbName} in tenant_storage_registry`,
+        );
+      } else {
+        // Update host URL in case credentials changed
+        await globalDb
+          .update(dbSchema.tenantStorageRegistry)
+          .set({ databaseName: tenantDbName, databaseHostUrl: hostUrl })
+          .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId));
+        console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
+      }
+
+      // Query the actual number of tenants currently assigned to this shard
+      const [{ count }] = await globalDb
+        .select({ count: sql<number>`cast(count(*) as integer)` })
+        .from(dbSchema.tenantStorageRegistry)
+        .where(eq(dbSchema.tenantStorageRegistry.databaseName, tenantDbName));
+
+      // Always upsert shard_registry — runs whether org was created or already existed
+      // Note: Do NOT reset currentTenants on conflict to preserve accurate capacity tracking
+      await globalDb
+        .insert(dbSchema.shardRegistry)
+        .values({
+          id: 'shard_1',
+          databaseName: tenantDbName,
+          databaseHostUrl: hostUrl,
+          regionContext: 'local',
+          maxTenants: 1000,
+          currentTenants: count,
+          status: 'ACTIVE',
+        })
+        .onConflictDoUpdate({
+          target: [dbSchema.shardRegistry.id],
+          set: {
+            databaseName: tenantDbName,
+            databaseHostUrl: hostUrl,
+            status: 'ACTIVE',
+            currentTenants: count,
+          },
+        });
+      console.log(
+        `  ✓ Upserted shard_registry: shard_1 → ${tenantDbName} (tenants: ${count})`,
+      );
+
+      // ── Drop stale ws_* schemas from platform_shard_1 ────────────────────────
+      // REMOVED: provision should not drop anything. db:reset handles cleanup.
+
+      // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
+      const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
+      let tenantPool: Pool | undefined;
+
+      try {
+        tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
+        const tenantDb = drizzle(tenantPool, { schema: dbSchema });
+
+        const { SchemaPlan } = await import('@nexiom/dbmanager');
+        const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
+        const { getDomainProvisioner } =
+          await import('@nexiom/piece-framework');
+
+        const schemaMgr = new TenantDatabaseManager(
+          globalDb as unknown as import('@nexiom/database').DrizzleDb,
+          (_hostIdentifier: string) => {
+            const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+            return drizzle(pool2, {
+              schema: dbSchema,
+            }) as unknown as import('@nexiom/database').DrizzleDb;
+          },
+          getDomainProvisioner,
+        );
+
+        interface Fixture {
+          id: string;
+          appName: string;
+          externalId: string;
+          displayName: string;
+          metadata: Record<string, unknown>;
+          credentials: Record<string, unknown>;
+        }
+        const fixtures: Fixture[] = [
+          {
+            id: '00000000-0000-0000-0000-000000000001',
+            appName: 'salesforce',
+            externalId: 'dev-salesforce',
+            displayName: 'Dev Salesforce',
+            metadata: this.deriveMetadata('salesforce'),
+            credentials: {
+              clientId: 'dev-sf-client-id',
+              clientSecret: 'dev-sf-client-secret',
+              accessToken: 'dev-sf-access-token',
+              refreshToken: 'dev-sf-refresh-token',
+              data: { instance_url: 'https://test.salesforce.com' },
+            },
+          },
+          {
+            id: '00000000-0000-0000-0000-000000000002',
+            appName: 'quickbooks',
+            externalId: 'dev-quickbooks',
+            displayName: 'Dev QuickBooks',
+            metadata: this.deriveMetadata('quickbooks'),
+            credentials: {
+              clientId: 'dev-qb-client-id',
+              clientSecret: 'dev-qb-client-secret',
+              accessToken: 'dev-qb-access-token',
+              refreshToken: 'dev-qb-refresh-token',
+              data: { realmId: 'dev-realm-id' },
+            },
+          },
+        ];
+
+        const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+
+        for (const fixture of fixtures) {
+          const encryptedValue = this.encryptFixture(
+            JSON.stringify(fixture.credentials),
+            encryptionKey,
+          );
+
+          // Write app_connection into the GLOBAL DB
+          const [inserted] = await globalDb
+            .insert(dbSchema.dataSources)
+            .values({
+              id: fixture.id,
+              tenantId: devTenantId,
+              appName: fixture.appName,
+              externalId: fixture.externalId,
               displayName: fixture.displayName,
               metadata: fixture.metadata,
-            },
-          })
-          .returning();
+            })
+            .onConflictDoUpdate({
+              target: [
+                dbSchema.dataSources.tenantId,
+                dbSchema.dataSources.externalId,
+              ],
+              set: {
+                displayName: fixture.displayName,
+                metadata: fixture.metadata,
+              },
+            })
+            .returning();
 
-        if (!inserted) {
-          throw new Error(
-            `Upsert returned no row for externalId=${fixture.externalId}`,
-          );
-        }
+          if (!inserted) {
+            throw new Error(
+              `Upsert returned no row for externalId=${fixture.externalId}`,
+            );
+          }
 
-        // Set expiresAt to 1 year from now so TokenManagerService/ConnectorsService treat this as live
-        const futureExpiresAt = new Date();
-        futureExpiresAt.setFullYear(futureExpiresAt.getFullYear() + 1);
+          // Set expiresAt to 1 year from now so TokenManagerService/ConnectorsService treat this as live
+          const futureExpiresAt = new Date();
+          futureExpiresAt.setFullYear(futureExpiresAt.getFullYear() + 1);
 
-        await globalDb
-          .insert(dbSchema.credentials)
-          .values({
-            dataSourceId: inserted.id,
-            authType: 'OAUTH2',
-            value: encryptedValue,
-            status: 'INACTIVE',
-            expiresAt: futureExpiresAt,
-          })
-          .onConflictDoUpdate({
-            target: [dbSchema.credentials.dataSourceId],
-            set: {
-              value: encryptedValue,
+          await globalDb
+            .insert(dbSchema.credentials)
+            .values({
+              dataSourceId: inserted.id,
               authType: 'OAUTH2',
+              value: encryptedValue,
+              status: 'INACTIVE',
               expiresAt: futureExpiresAt,
-              status: sql`CASE
+            })
+            .onConflictDoUpdate({
+              target: [dbSchema.credentials.dataSourceId],
+              set: {
+                value: encryptedValue,
+                authType: 'OAUTH2',
+                expiresAt: futureExpiresAt,
+                status: sql`CASE
                 WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
                 THEN ${dbSchema.credentials.status}
                 ELSE 'INACTIVE'
               END`,
+              },
+            });
+
+          const schemaName = getWorkspaceSchemaName(
+            inserted.id,
+            inserted.appName,
+          );
+
+          // Provision workspace pipeline schemas inside the tenant DB
+          await schemaMgr.applyPlan(
+            devTenantId,
+            schemaName,
+            SchemaPlan.OUTBOUND_ACTIVE,
+            {
+              appName: inserted.appName,
+              appProfile:
+                (inserted.metadata as Record<string, string>)?.appProfile ||
+                'standard',
             },
-          });
+          );
 
-        const schemaName = getWorkspaceSchemaName(
-          inserted.id,
-          inserted.appName,
-        );
+          // Activate credential globally
+          await globalDb
+            .update(dbSchema.credentials)
+            .set({ status: 'ACTIVE' })
+            .where(eq(dbSchema.credentials.dataSourceId, inserted.id));
 
-        // Provision workspace pipeline schemas inside the tenant DB
-        await schemaMgr.applyPlan(
-          devTenantId,
-          schemaName,
-          SchemaPlan.OUTBOUND_ACTIVE,
-        );
-
-        // Activate credential globally
-        await globalDb
-          .update(dbSchema.credentials)
-          .set({ status: 'ACTIVE' })
-          .where(eq(dbSchema.credentials.dataSourceId, inserted.id));
-
-        // Mark connection ACTIVE in the tenant DB (upserting replica)
-        await tenantDb
-          .insert(dbSchema.dataSources)
-          .values({
-            id: inserted.id,
-            tenantId: inserted.tenantId,
-            appName: inserted.appName,
-            externalId: inserted.externalId,
-            displayName: inserted.displayName,
-            metadata: inserted.metadata,
-            schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
-          })
-          .onConflictDoUpdate({
-            target: [dbSchema.dataSources.id],
-            set: {
+          // Mark connection ACTIVE in the tenant DB (upserting replica)
+          await tenantDb
+            .insert(dbSchema.dataSources)
+            .values({
+              id: inserted.id,
+              tenantId: inserted.tenantId,
               appName: inserted.appName,
               externalId: inserted.externalId,
               displayName: inserted.displayName,
               metadata: inserted.metadata,
               schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
-            },
-          });
+            })
+            .onConflictDoUpdate({
+              target: [dbSchema.dataSources.id],
+              set: {
+                appName: inserted.appName,
+                externalId: inserted.externalId,
+                displayName: inserted.displayName,
+                metadata: inserted.metadata,
+                schemaPlan: SchemaPlan.OUTBOUND_ACTIVE,
+              },
+            });
 
+          console.log(
+            `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,
+          );
+        }
+
+        console.log('\n✅ Local dev fixtures provisioned.');
         console.log(
-          `  ✓ ${inserted.displayName} → ${inserted.id} (schema: ${schemaName})`,
+          '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
+            '   and update app_connection.value with the resulting ciphertext.\n' +
+            '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
         );
+      } finally {
+        if (tenantPool) {
+          await tenantPool.end();
+        }
       }
-
-      console.log('\n✅ Local dev fixtures provisioned.');
-      console.log(
-        '   To replace credentials, use the encrypt CLI helper (e.g. pnpm db:encrypt-credential)\n' +
-          '   and update app_connection.value with the resulting ciphertext.\n' +
-          '   Do NOT edit the value column manually — it holds AES-GCM ciphertext.',
-      );
     } finally {
-      if (tenantPool) {
-        await tenantPool.end();
-      }
       await globalClient.end();
     }
   }

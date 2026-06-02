@@ -18,8 +18,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nexiom/piece-framework": "workspace:*",
     "@nexiom/database": "workspace:*",
-    "@nexiom/domain-tms": "workspace:*"
+    "@nexiom/domain-tms": "workspace:*",
+    "@nexiom/piece-framework": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }

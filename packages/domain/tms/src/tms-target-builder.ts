@@ -53,14 +53,19 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
         if (tpRows[0]) {
             const r = tpRows[0];
             tp = {
-                mcNumber: r.mcNumber, scac: r.scac, federalTaxId: r.federalTaxId,
-                usdot: r.usdot, remitToOption: r.remitToOption,
-                carrierOperation: r.carrierOperation, agreementStatus: r.agreementStatus,
-                carrierReviewStatus: r.carrierReviewStatus,
+                invoiceTerms: r.invoiceTerms,
+                paymentTerms: r.paymentTerms,
+                carrierPaymentTerms: r.carrierPaymentTerms,
+                companyType: r.companyType,
+                creditLimit: r.creditLimit,
+                remitToOption: r.remitToOption,
+                mcNumber: r.mcNumber,
+                stateDotNumber: r.stateDotNumber,
+                usDotNumber: r.usDotNumber,
             };
             
             // To be resolved below
-            (account as any)._tpRemitToSourceId = r.remitToSourceId;
+            (account as any)._tpRemitToSourceId = r.carrierRemitTo;
         } else {
             missingDependencies.push({ entityType: 'TMS_TP', sourceId: account.tpSourceId as string });
         }

@@ -152,8 +152,7 @@ export class WorkspaceConnectionsController {
     @Param('objectType') objectType: string,
   ) {
     const orgId = requireOrgId(auth);
-    // Verify workspace belongs to this org
-    await this.workspacesService.findOne(orgId, workspaceId);
+    const workspace = await this.workspacesService.findOne(orgId, workspaceId);
 
     // Validate objectType (alphanumeric + -/_ only, max 200 chars)
     if (!/^[\w.-]{1,200}$/.test(objectType)) {
@@ -162,27 +161,23 @@ export class WorkspaceConnectionsController {
       );
     }
 
-    // Verify the dataSourceId belongs to this org and is assigned to the workspace
+    // Verify the dataSourceId belongs to this org and implicitly matches workspace envType
     const [connection] = await this.db
       .select({
         id: dataSources.id,
       })
       .from(dataSources)
-      .innerJoin(
-        uiWorkspaceDataSources,
-        eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
-      )
       .where(
         and(
           eq(dataSources.id, dataSourceId),
           eq(dataSources.tenantId, orgId),
-          eq(uiWorkspaceDataSources.workspaceId, workspaceId),
+          eq(dataSources.envType, workspace.envType),
         ),
       )
       .limit(1);
     if (!connection) {
       throw new NotFoundException(
-        `Connection ${dataSourceId} not found or not accessible`,
+        `Connection ${dataSourceId} not found or not accessible in this environment`,
       );
     }
 

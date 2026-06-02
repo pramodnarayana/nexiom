@@ -106,7 +106,15 @@ describe('ConnectorsService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
-        { provide: DB_MANAGER, useValue: { applyPlan: vi.fn() } },
+        {
+          provide: DB_MANAGER,
+          useValue: {
+            applyPlan: vi.fn(),
+            getTenantDb: vi
+              .fn()
+              .mockResolvedValue({ execute: vi.fn().mockResolvedValue(true) }),
+          },
+        },
         {
           provide: StorageResolverService,
           useValue: { resolveSchemaName: vi.fn().mockResolvedValue('ws_test') },
@@ -554,7 +562,11 @@ describe('ConnectorsService', () => {
       expect(applyPlan).toHaveBeenCalledWith(
         'tenant-123',
         expect.stringMatching(/^ws_/),
-        SchemaPlan.NORMALIZE_ACTIVE,
+        SchemaPlan.CANONICAL_ACTIVE,
+        expect.objectContaining({
+          appName: 'mock-piece',
+          appProfile: 'standard',
+        }),
       );
 
       // Verify the final transition to ACTIVE
@@ -568,6 +580,22 @@ describe('ConnectorsService', () => {
       expect(updateCall!.value.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'ACTIVE' }),
       );
+
+      // Verify CDC registrations: getTenantDb().execute should be called 4 times
+      // for platform_cdc publication (inbound_outbox, replica_outbox, normalized_outbox, outbound_outbox)
+      const { getTenantDb } = service['dbManager'] as unknown as {
+        getTenantDb: ReturnType<typeof vi.fn>;
+      };
+      expect(getTenantDb).toHaveBeenCalledWith('tenant-123');
+      const tenantDbMock = (await getTenantDb.mock.results[0]?.value) as {
+        execute: ReturnType<typeof vi.fn>;
+      };
+      expect(tenantDbMock.execute).toHaveBeenCalledTimes(4);
+      // Verify each call registers a table with platform_cdc
+      for (let i = 0; i < 4; i++) {
+        const callArg = tenantDbMock.execute.mock.calls[i]?.[0] as unknown;
+        expect(JSON.stringify(callArg)).toContain('platform_cdc');
+      }
     });
 
     it('should update an existing connection explicitly using an ID', async () => {

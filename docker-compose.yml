@@ -5,15 +5,15 @@ version: '3.8'
 x-db-vars: &db-vars
   POSTGRES_USER: ${POSTGRES_USER:-user}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-  POSTGRES_DB: ${POSTGRES_DB:-nexiom_local}
+  POSTGRES_DB: ${POSTGRES_DB:-platform_global}
 
 x-windmill-env: &windmill-env
   DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/windmill
   BASE_URL: ${WINDMILL_BASE_URL:-http://localhost:8000}
 
 x-common-env: &common-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-nexiom_local}
-  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/nexiom_global
+  DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-platform_global}
+  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/${POSTGRES_DB:-platform_global}
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 
@@ -188,8 +188,7 @@ services:
         condition: service_completed_successfully
       localstack:
         condition: service_healthy
-      windmill_server:
-        condition: service_healthy
+
     networks:
       - nexiom-network
 
@@ -271,6 +270,7 @@ services:
   # memory. Requires `privileged: true` on the worker container.
   windmill_server:
     image: ghcr.io/windmill-labs/windmill:1.672.0
+    profiles: ["disabled"]
     restart: unless-stopped
     environment:
       <<: *windmill-env
@@ -291,6 +291,7 @@ services:
 
   windmill_worker:
     image: ghcr.io/windmill-labs/windmill:1.672.0
+    profiles: ["disabled"]
     restart: unless-stopped
     # privileged required for ENABLE_UNSHARE_PID
     privileged: true
@@ -301,9 +302,7 @@ services:
       MODE: worker
       WORKER_GROUP: default
       ENABLE_UNSHARE_PID: "true"
-    depends_on:
-      windmill_server:
-        condition: service_healthy
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

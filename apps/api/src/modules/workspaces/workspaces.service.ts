@@ -155,31 +155,21 @@ export class WorkspacesService {
       .orderBy(asc(dataSources.displayName));
   }
 
-  /** Returns active connections assigned to the workspace, scoped to the org. */
+  /** Returns active connections automatically matched to the workspace's envType. */
   async listConnections(orgId: string, workspaceId: string) {
+    const workspace = await this.findOne(orgId, workspaceId);
+
     const rows = await this.db
       .select({
-        workspaceId: uiWorkspaces.id,
         id: dataSources.id,
         appName: dataSources.appName,
         externalId: dataSources.externalId,
         displayName: dataSources.displayName,
         authType: credentials.authType,
         status: credentials.status,
-        assignedAt: uiWorkspaceDataSources.assignedAt,
+        assignedAt: dataSources.createdAt,
       })
-      .from(uiWorkspaces)
-      .leftJoin(
-        uiWorkspaceDataSources,
-        eq(uiWorkspaces.id, uiWorkspaceDataSources.workspaceId),
-      )
-      .leftJoin(
-        dataSources,
-        and(
-          eq(uiWorkspaceDataSources.dataSourceId, dataSources.id),
-          eq(dataSources.tenantId, orgId),
-        ),
-      )
+      .from(dataSources)
       .leftJoin(
         credentials,
         and(
@@ -193,17 +183,13 @@ export class WorkspacesService {
         ),
       )
       .where(
-        and(eq(uiWorkspaces.id, workspaceId), eq(uiWorkspaces.orgId, orgId)),
+        and(
+          eq(dataSources.tenantId, orgId),
+          eq(dataSources.envType, workspace.envType),
+        ),
       )
-      .orderBy(asc(uiWorkspaceDataSources.assignedAt));
+      .orderBy(asc(dataSources.createdAt));
 
-    if (rows.length === 0) {
-      throw new NotFoundException(`Workspace ${workspaceId} not found.`);
-    }
-
-    // Filter out the sentinel row produced when no connections are assigned
-    return rows
-      .filter((r) => r.id !== null)
-      .map(({ workspaceId: _ws, ...rest }) => rest);
+    return rows;
   }
 }

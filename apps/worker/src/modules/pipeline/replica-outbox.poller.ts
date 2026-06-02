@@ -73,6 +73,25 @@ export class ReplicaOutboxPoller {
     tenantDb: DrizzleDb,
     schemaName: string,
   ): Promise<void> {
+    // Guard: check the schema exists before attempting to query it.
+    // A ws_* schema may be absent when:
+    //   - The connection was just created and not yet activated/provisioned.
+    //   - The schema was dropped during a local dev reset.
+    // Skipping is the correct behaviour; the next poll cycle will retry.
+    const existsResult = await tenantDb.execute<{ schema_exists: boolean }>(
+      sql`SELECT EXISTS (
+            SELECT 1 FROM information_schema.schemata
+            WHERE schema_name = ${schemaName}
+          ) AS schema_exists`,
+    );
+    const schemaExists = existsResult.rows[0]?.schema_exists ?? false;
+    if (!schemaExists) {
+      this.logger.debug(
+        `[${schemaName}] Schema not provisioned yet — skipping outbox drain`,
+      );
+      return;
+    }
+
     const { replicaOutbox } = buildTenantSchema(schemaName);
 
     // Atomically claim rows

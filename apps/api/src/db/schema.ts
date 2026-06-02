@@ -46,7 +46,7 @@ export { dataSources, credentials } from '@nexiom/database';
 export { pieces } from '@nexiom/database';
 
 // Infrastructure registry — maps tenant IDs to physical DB location
-export { tenantStorageRegistry } from '@nexiom/database';
+export { tenantStorageRegistry, shardRegistry } from '@nexiom/database';
 
 // Workspaces — logical folders grouping connections per team/environment
 export {
@@ -65,7 +65,8 @@ export {
   fieldMappingsRelations,
 } from '@nexiom/database';
 
-// Scheduler — Singer-style polling cursors (control-plane, public schema)
+// Scheduler — Singer-style polling cursors
+// syncCursors: connection-level (keyed by data_source_id)
 export { syncCursors } from '@nexiom/database';
 
 // Scheduler outbox — durable transactional outbox for Windmill schedule sync

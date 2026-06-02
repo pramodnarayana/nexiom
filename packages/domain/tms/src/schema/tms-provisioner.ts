@@ -90,11 +90,12 @@ export async function provisionTmsTables(db: DrizzleDb, schemaName: string): Pro
         await tx.execute(sql.raw(`CREATE TRIGGER trg_refresh_updated_at BEFORE UPDATE ON "${schemaName}".tms_address FOR EACH ROW EXECUTE FUNCTION "${schemaName}".refresh_updated_at();`));
 
         await tx.execute(sql.raw(`CREATE TABLE IF NOT EXISTS "${schemaName}".tms_tp (
-            ${COMMON}, mc_number VARCHAR(50), scac VARCHAR(20), federal_tax_id VARCHAR(50),
-            usdot VARCHAR(50), remit_to_source_id VARCHAR(255), remit_to_option VARCHAR(100),
-            carrier_operation VARCHAR(100), agreement_status VARCHAR(100), carrier_review_status VARCHAR(100),
+            ${COMMON}, invoice_terms VARCHAR(100), payment_terms VARCHAR(100),
+            carrier_payment_terms VARCHAR(100), carrier_remit_to VARCHAR(255),
+            company_type VARCHAR(100), credit_limit VARCHAR(50), remit_to_option VARCHAR(100),
+            mc_number VARCHAR(50), state_dot_number VARCHAR(50), us_dot_number VARCHAR(50),
             CONSTRAINT uq_tms_tp_source_id UNIQUE (source_id));`));
-        await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_tp_remit_to ON "${schemaName}".tms_tp (remit_to_source_id) WHERE remit_to_source_id IS NOT NULL;`));
+        await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_tp_remit_to ON "${schemaName}".tms_tp (carrier_remit_to) WHERE carrier_remit_to IS NOT NULL;`));
         await tx.execute(sql.raw(`CREATE INDEX IF NOT EXISTS idx_tms_tp_trace    ON "${schemaName}".tms_tp (trace_id);`));
         await tx.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_refresh_updated_at ON "${schemaName}".tms_tp;`));
         await tx.execute(sql.raw(`CREATE TRIGGER trg_refresh_updated_at BEFORE UPDATE ON "${schemaName}".tms_tp FOR EACH ROW EXECUTE FUNCTION "${schemaName}".refresh_updated_at();`));

@@ -50,6 +50,7 @@ describe('ConnectionSyncRunner', () => {
               insert: vi.fn().mockReturnThis(),
               values: vi.fn().mockReturnThis(),
               onConflictDoNothing: vi.fn().mockReturnThis(),
+              onConflictDoUpdate: vi.fn().mockReturnThis(),
               returning: vi.fn().mockResolvedValue([{ traceId: 'trace-1' }]),
             };
             return await cb(tx);

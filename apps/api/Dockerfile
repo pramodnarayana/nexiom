@@ -8,6 +8,7 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY tsconfig.base.json ./
 COPY packages/identity ./packages/identity
 COPY apps/api ./apps/api
 
@@ -29,6 +30,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy only production dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json ./
 COPY apps/api/package.json ./apps/api/
 # Ignore scripts to skip 'husky install' (prepare) which fails in prod
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
