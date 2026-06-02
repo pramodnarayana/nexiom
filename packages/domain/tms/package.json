@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@nexiom/database": "workspace:*",
+    "@nexiom/metadata-engine": "workspace:*",
     "@nexiom/piece-framework": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },

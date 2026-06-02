@@ -1,6 +1,6 @@
 import type { AppNormalizedWriterFn } from '@nexiom/piece-framework';
 import type { DrizzleDb } from '@nexiom/database';
-import { buildTmsSchema } from './schema/tms-schema.js';
+import { DynamicSchemaBuilder } from '@nexiom/metadata-engine';
 import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
 
 // ---------------------------------------------------------------------------
@@ -41,23 +41,16 @@ function commonFields(data: Record<string, unknown>) {
 }
 
 // Generic upsert helper for TMS entities
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function upsert(
     tx: DrizzleTransaction,
-    table: any,
+    schemaName: string,
+    tableName: string,
     base: { traceId: string; replicaId: string; sourceId: string },
     extras: Record<string, unknown>
 ) {
     const values = { ...base, ...extras };
-    const updateSet = { traceId: base.traceId, replicaId: base.replicaId, updatedAt: new Date(), ...extras };
-
-    await tx
-        .insert(table as never)
-        .values(values as never)
-        .onConflictDoUpdate({
-            target: table.sourceId as never,
-            set: updateSet as never,
-        });
+    const query = DynamicSchemaBuilder.buildUpsert(schemaName, tableName, 'sourceId', values);
+    await tx.execute(query);
 }
 
 export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
@@ -75,13 +68,10 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
 
     const txTyped = tx as DrizzleTransaction;
 
-    const { tmsCarrier, tmsVendor, tmsCustomer, tmsFactoring, tmsAddress, tmsTp } =
-        buildTmsSchema(schemaName);
-
     const base = { traceId, replicaId, sourceId: entityId };
 
     if (normalizedEntityType === 'TMS_CARRIER') {
-        await upsert(txTyped, tmsCarrier, base, {
+        await upsert(txTyped, schemaName, 'tms_carrier', base, {
             ...commonFields(data),
             tpSourceId: str(data['tpSourceId']),
             remitToSourceId: str(data['remitToSourceId']),
@@ -92,7 +82,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     }
 
     if (normalizedEntityType === 'TMS_VENDOR') {
-        await upsert(txTyped, tmsVendor, base, {
+        await upsert(txTyped, schemaName, 'tms_vendor', base, {
             ...commonFields(data),
             tpSourceId: str(data['tpSourceId']),
             isVendor: str(data['isVendor']),
@@ -101,7 +91,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     }
 
     if (normalizedEntityType === 'TMS_CUSTOMER') {
-        await upsert(txTyped, tmsCustomer, base, {
+        await upsert(txTyped, schemaName, 'tms_customer', base, {
             ...commonFields(data),
             creditLimit: str(data['creditLimit']),
             paymentTerms: str(data['paymentTerms']),
@@ -110,14 +100,14 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     }
 
     if (normalizedEntityType === 'TMS_FACTORING') {
-        await upsert(txTyped, tmsFactoring, base, {
+        await upsert(txTyped, schemaName, 'tms_factoring', base, {
             ...commonFields(data),
         });
         return;
     }
 
     if (normalizedEntityType === 'TMS_ADDRESS') {
-        await upsert(txTyped, tmsAddress, base, {
+        await upsert(txTyped, schemaName, 'tms_address', base, {
             ...commonFields(data),
             isPickup: str(data['isPickup']),
             isDelivery: str(data['isDelivery']),
@@ -126,7 +116,7 @@ export const tmsNormalizedWriter: AppNormalizedWriterFn = async (
     }
 
     if (normalizedEntityType === 'TMS_TP') {
-        await upsert(txTyped, tmsTp, base, {
+        await upsert(txTyped, schemaName, 'tms_tp', base, {
             mcNumber: str(data['mcNumber']),
             scac: str(data['scac']),
             federalTaxId: str(data['federalTaxId']),
