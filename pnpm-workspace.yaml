@@ -7,6 +7,7 @@ packages:
   - 'engine/ai/*'
   - 'packages/pieces/platform/*'
   - 'packages/pieces/application/*'
+  - 'packages/pieces/application/*/*'
   - 'packages/domain/*'
 
 onlyBuiltDependencies:

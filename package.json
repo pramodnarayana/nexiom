@@ -60,5 +60,8 @@
 			"axios": "1.13.2",
 			"esbuild": "0.25.12"
 		}
+	},
+	"dependencies": {
+		"jsonata": "^2.1.0"
 	}
 }

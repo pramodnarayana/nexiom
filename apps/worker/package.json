@@ -38,7 +38,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.1.1",
     "@nexiom/ai-engine": "workspace:*",
-    "@nexiom/application-revenova": "workspace:*",
+    "@nexiom/application-salesforce-revenova": "workspace:*",
     "@nexiom/auth": "workspace:*",
     "@nexiom/cache": "workspace:*",
     "@nexiom/credentials": "workspace:*",
