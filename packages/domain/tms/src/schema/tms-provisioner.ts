@@ -1,6 +1,7 @@
-import type { DrizzleDb } from '@nexiom/database';
+
 import { sql } from 'drizzle-orm';
 import { validateTmsIdentifier } from './tms-identifier-validator.js';
+import type { AppsConnectorDb, AppDomainProvisionerFn } from '@nexiom/piece-framework';
 
 /**
  * provisionTmsTables(db, schemaName)
@@ -9,7 +10,7 @@ import { validateTmsIdentifier } from './tms-identifier-validator.js';
  * Shared by ALL TMS connectors. Called when a TMS connector stitch is
  * first activated for a tenant schema.
  */
-export async function provisionTmsTables(db: DrizzleDb, schemaName: string): Promise<void> {
+export async function provisionTmsTables(db: AppsConnectorDb, schemaName: string): Promise<void> {
     // Validate schemaName against SQL injection and Postgres limits
     validateTmsIdentifier(schemaName);
 
@@ -42,7 +43,7 @@ export async function provisionTmsTables(db: DrizzleDb, schemaName: string): Pro
     const CONTACT = `phone VARCHAR(50), fax VARCHAR(50), email VARCHAR(255)`;
 
     // Wrap all DDL in a single drizzle transaction for atomicity
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
         // Create the trigger function first
         await tx.execute(sql.raw(TRIGGER_FUNCTION));
 

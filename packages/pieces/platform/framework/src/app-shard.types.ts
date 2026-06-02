@@ -1,13 +1,14 @@
-import type { NormalizedRecord } from '@nexiom/piece-framework';
+import type { NormalizedRecord } from './canonical/index.js';
+import type { AppsConnectorDb } from './db.types.js';
 
 // ---------------------------------------------------------------------------
 // ApplicationShardModule — the contract every application shard must satisfy.
 //
-// @deprecated
-// This interface has been extracted to @nexiom/piece-framework to fix an
-// abstraction leak. Do not delete this file yet! It remains here temporarily
-// to ensure backward compatibility for the platform core until end-to-end
-// testing of the new app-connectors repository is complete.
+// This is the ONLY shared type between the platform and application code.
+// It has no implementation — pure TypeScript interface, no platform imports.
+//
+// Every shard loaded by ApplicationLoaderService must export these named
+// functions. Optional hooks (getWebhookResponse) may be omitted.
 // ---------------------------------------------------------------------------
 
 export type WebhookResponseShape = {
@@ -43,7 +44,7 @@ export interface ApplicationShardModule {
    */
   writeNormalized?(
     tx: unknown,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     replicaId: string,
     entityId: string,
@@ -58,7 +59,7 @@ export interface ApplicationShardModule {
    * context object merged with normalizedData before rules are applied.
    */
   buildTarget?(
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     srcEntityId: string,
@@ -69,7 +70,7 @@ export interface ApplicationShardModule {
    * Called once per tenant schema when a stitch for this app is first activated.
    * All DDL inside MUST use IF NOT EXISTS.
    */
-  provisionDomain?(db: unknown, schemaName: string): Promise<void>;
+  provisionDomain?(db: AppsConnectorDb, schemaName: string): Promise<void>;
 
   /**
    * Optional — Return a custom HTTP response for vendor-specific webhook
@@ -100,7 +101,7 @@ export interface ApplicationShardModule {
    * Returns an array of parent traceIds to be re-triggered.
    */
   reverseLookup?(
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     entityId: string,

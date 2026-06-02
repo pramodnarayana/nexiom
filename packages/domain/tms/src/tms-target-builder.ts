@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { AppTargetBuilderFn } from '@nexiom/piece-framework';
-import type { DrizzleDb } from '@nexiom/database';
+import type { AppTargetBuilderFn, AppsConnectorDb } from '@nexiom/piece-framework';
 import { buildTmsSchema } from './schema/tms-schema.js';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +22,7 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
 ): Promise<Record<string, unknown>> => {
     if (!CARRIER_TYPES.has(normalizedEntityType)) return {};
 
-    const dbTyped = db as DrizzleDb;
+    const dbTyped = db as AppsConnectorDb;
     const { tmsCarrier, tmsVendor, tmsTp, tmsFactoring } = buildTmsSchema(schemaName);
 
     // ── 1. Source account ─────────────────────────────────────────────────────

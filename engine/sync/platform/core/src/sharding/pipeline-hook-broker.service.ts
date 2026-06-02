@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApplicationLoaderService } from './application-loader.service.js';
-import type { ApplicationShardModule } from './application-shard.types.js';
+import type { ApplicationShardModule } from '@nexiom/piece-framework';
 
 // ---------------------------------------------------------------------------
 // PipelineHookBrokerService
@@ -86,7 +86,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.writeNormalized', appName, appProfile, normalizedEntityType },
       'Delegating writeNormalized to application shard',
     );
-    return shard.writeNormalized(tx, db, schemaName, replicaId, entityId, traceId, normalizedEntityType, data);
+    return shard.writeNormalized(tx, db as any, schemaName, replicaId, entityId, traceId, normalizedEntityType, data);
   }
 
   /**
@@ -109,7 +109,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.buildTarget', appName, appProfile, normalizedEntityType },
       'Delegating buildTarget to application shard',
     );
-    return shard.buildTarget(db, schemaName, normalizedEntityType, srcEntityId);
+    return shard.buildTarget(db as any, schemaName, normalizedEntityType, srcEntityId);
   }
 
   /**
@@ -130,7 +130,7 @@ export class PipelineHookBrokerService {
       { event: 'hook.provisionDomain', appName, appProfile, schemaName },
       'Delegating provisionDomain to application shard',
     );
-    return shard.provisionDomain(db, schemaName);
+    return shard.provisionDomain(db as any, schemaName);
   }
 
   /**
@@ -281,6 +281,6 @@ export class PipelineHookBrokerService {
       { event: 'hook.reverseLookup', appName, appProfile, normalizedEntityType },
       'Delegating reverseLookup to application shard',
     );
-    return shard.reverseLookup(db, schemaName, normalizedEntityType, entityId);
+    return shard.reverseLookup(db as any, schemaName, normalizedEntityType, entityId);
   }
 }

@@ -2,7 +2,7 @@ import { registerReplicaExtractor, registerNormalizer, registerAppWebhookRespons
 import { upsertRevenovaObject } from './upsertRevenovaObject.js';
 import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
 import { tmsNormalizedWriter, tmsTargetBuilder, provisionTmsTables } from '@nexiom/domain-tms';
-import type { DrizzleDb } from '@nexiom/database';
+import type { AppsConnectorDb } from '@nexiom/piece-framework';
 
 const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -18,7 +18,7 @@ export function initializeRevenovaApplicationRegistry() {
     registerNormalizedWriter('salesforce', 'revenova', tmsNormalizedWriter);
     registerTargetBuilder('salesforce', 'revenova', tmsTargetBuilder);
     registerDomainProvisioner('salesforce', (db, schemaName) =>
-        provisionTmsTables(db as DrizzleDb, schemaName)
+        provisionTmsTables(db as AppsConnectorDb, schemaName)
     );
 
     registerAppWebhookResponse((body, headers) => {

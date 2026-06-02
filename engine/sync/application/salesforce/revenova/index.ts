@@ -1,4 +1,4 @@
-import type { ApplicationShardModule } from '@nexiom/engine';
+import type { ApplicationShardModule } from '@nexiom/piece-framework';
 import { ReplicateRevenovaObject } from './replicate.js';
 import { NormaliseRevenovaObject } from './normalise.js';
 import { WriteRevenovaNormalisedObject } from './write-normalised.js';

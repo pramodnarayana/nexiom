@@ -1,5 +1,5 @@
-import type { AppNormalizedWriterFn } from '@nexiom/piece-framework';
-import type { DrizzleDb } from '@nexiom/database';
+import type { AppNormalizedWriterFn, AppsConnectorDb } from '@nexiom/piece-framework';
+
 import { DynamicSchemaBuilder } from '@nexiom/metadata-engine';
 import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
 
@@ -15,7 +15,7 @@ import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
 // appropriate typed tms_* table based on normalizedEntityType.
 // ---------------------------------------------------------------------------
 
-type DrizzleTransaction = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
+type DrizzleTransaction = Parameters<Parameters<AppsConnectorDb['transaction']>[0]>[0];
 
 // Helper to convert unknown values to nullable strings
 const str = (v: unknown) => {
