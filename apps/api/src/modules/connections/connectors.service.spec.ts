@@ -580,6 +580,22 @@ describe('ConnectorsService', () => {
       expect(updateCall!.value.set).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'ACTIVE' }),
       );
+
+      // Verify CDC registrations: getTenantDb().execute should be called 4 times
+      // for platform_cdc publication (inbound_outbox, replica_outbox, normalized_outbox, outbound_outbox)
+      const { getTenantDb } = service['dbManager'] as unknown as {
+        getTenantDb: ReturnType<typeof vi.fn>;
+      };
+      expect(getTenantDb).toHaveBeenCalledWith('tenant-123');
+      const tenantDbMock = await getTenantDb.mock.results[0]?.value as {
+        execute: ReturnType<typeof vi.fn>;
+      };
+      expect(tenantDbMock.execute).toHaveBeenCalledTimes(4);
+      // Verify each call registers a table with platform_cdc
+      for (let i = 0; i < 4; i++) {
+        const callArg = tenantDbMock.execute.mock.calls[i]?.[0];
+        expect(String(callArg)).toContain('platform_cdc');
+      }
     });
 
     it('should update an existing connection explicitly using an ID', async () => {
