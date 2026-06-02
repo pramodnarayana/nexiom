@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApplicationLoaderService } from './application-loader.service.js';
-import type { ApplicationShardModule } from './application-shard.types.js';
+import type { ApplicationShardModule, AppsConnectorDb } from '@nexiom/piece-framework';
 
 // ---------------------------------------------------------------------------
 // PipelineHookBrokerService
@@ -70,7 +70,7 @@ export class PipelineHookBrokerService {
     appName: string,
     appProfile: string,
     tx: unknown,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     replicaId: string,
     entityId: string,
@@ -96,7 +96,7 @@ export class PipelineHookBrokerService {
   async buildTarget(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     srcEntityId: string,
@@ -119,7 +119,7 @@ export class PipelineHookBrokerService {
   async provisionDomain(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
   ): Promise<void> {
     const shard = await this.loader.load(this.shardName(appName, appProfile));
@@ -268,7 +268,7 @@ export class PipelineHookBrokerService {
   async reverseLookup(
     appName: string,
     appProfile: string,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     entityId: string,

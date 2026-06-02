@@ -1,3 +1,5 @@
+import type { AppsConnectorDb } from './db.types.js';
+
 // ---------------------------------------------------------------------------
 // Application Hook Registries
 //
@@ -18,14 +20,11 @@
  * write. The application implementation writes into its typed per-entity tables
  * (e.g. tms_carrier, tms_tp) inside the same transaction.
  *
- * tx and db are typed as `unknown` so @nexiom/piece-framework stays
- * database-agnostic. Domain packages cast them to DrizzleDb.
- *
  * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppNormalizedWriterFn = (
     tx: unknown,
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     replicaId: string,
     entityId: string,
@@ -38,12 +37,10 @@ export type AppNormalizedWriterFn = (
  * Called by TargetBuilderService to assemble the enriched context from the
  * application's typed normalized tables before field mapping is applied.
  *
- * db is typed as `unknown` so the framework stays database-agnostic.
- *
  * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppTargetBuilderFn = (
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
     normalizedEntityType: string,
     srcEntityId: string,
@@ -58,12 +55,10 @@ export type AppTargetBuilderFn = (
  * The application domain package (e.g. @nexiom/domain-tms) creates its typed
  * per-entity tables (tms_carrier, tms_tp, etc.) using IF NOT EXISTS DDL.
  *
- * db is typed as `unknown` so the framework stays database-agnostic.
- *
  * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release
  */
 export type AppDomainProvisionerFn = (
-    db: unknown,
+    db: AppsConnectorDb,
     schemaName: string,
 ) => Promise<void>;
 

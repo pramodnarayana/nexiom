@@ -9,7 +9,6 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@nexiom/engine": "workspace:*",
     "@nexiom/domain-tms": "workspace:*",
     "@nexiom/piece-framework": "workspace:*"
   },
