@@ -9,7 +9,7 @@ export * from './schema/global/workspace.js';
 export * from './schema/global/stitches.js';
 export * from './schema/global/registry_outbox.js';
 export * from './schema/tenant/canonical_mappings.js';
-export * from './schema/tenant/stitches.js';
+export * from './schema/tenant/sync-cursors.js';
 export * from './schema/tenant/pipeline.js';
 export * from './schema/tenant/chat.js';
 export * from './schema/global/connector_object_profiles.js';

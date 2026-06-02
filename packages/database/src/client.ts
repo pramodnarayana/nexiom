@@ -8,7 +8,7 @@ import * as dataSourcesSchema from './schema/global/data-sources.js';
 import * as piecesSchema from './schema/global/pieces.js';
 import * as workspaceSchema from './schema/global/workspace.js';
 import * as globalStitchesSchema from './schema/global/stitches.js';
-import * as tenantStitchesSchema from './schema/tenant/stitches.js';
+import * as tenantSyncCursorsSchema from './schema/tenant/sync-cursors.js';
 import * as gemSchema from './schema/tenant/gem.js';
 import * as pipelineSchema from './schema/tenant/pipeline.js';
 
@@ -21,7 +21,7 @@ const schemaBundle = {
     ...piecesSchema,
     ...workspaceSchema,
     ...globalStitchesSchema,
-    ...tenantStitchesSchema,
+    ...tenantSyncCursorsSchema,
     ...gemSchema,
     ...pipelineSchema,
 };

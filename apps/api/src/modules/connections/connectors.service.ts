@@ -631,15 +631,36 @@ export class ConnectorsService {
         await this.dbManager.applyPlan(
           tenantId,
           workspaceProvisionInfo.schemaName,
-          SchemaPlan.NORMALIZE_ACTIVE,
+          SchemaPlan.CANONICAL_ACTIVE,
+          {
+            appName: providerName,
+            appProfile: (metadata?.appProfile as string) || 'standard',
+          },
         );
+
+        // Register outbox tables in the CDC publication so Debezium picks up the inserts
+        // from inbound_gateway (L1) -> inbound_outbox (L2).
+        await this.db.execute(sql`
+          DO $$
+          BEGIN
+            BEGIN
+              ALTER PUBLICATION platform_cdc
+                ADD TABLE ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.inbound_outbox,
+                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.replica_outbox,
+                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.normalized_outbox,
+                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.outbound_outbox;
+            EXCEPTION WHEN duplicate_object THEN
+              -- Ignore gracefully if the table is already in the publication
+            END;
+          END $$;
+        `);
 
         // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {
           const [activeConn] = await tx
             .update(dataSources)
             .set({
-              schemaPlan: SchemaPlan.NORMALIZE_ACTIVE,
+              schemaPlan: SchemaPlan.CANONICAL_ACTIVE,
             })
             .where(eq(dataSources.id, workspaceProvisionInfo.dataSourceId))
             .returning();

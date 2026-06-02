@@ -23,6 +23,9 @@ function makeMockDb() {
     $client: {
       query: vi.fn(),
     },
+    query: {
+      dataSources: { findFirst: vi.fn().mockResolvedValue({ metadata: {} }) },
+    },
     execute: vi.fn().mockResolvedValue({}),
     update,
     insert,

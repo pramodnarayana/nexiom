@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@nexiom/database';
-import { OutboxWorkerService } from './outbox-worker.service.js';
+import { SchedulerOutboxPoller } from './scheduler-outbox.poller.js';
 import { SchedulerService } from './scheduler.service.js';
 
 // ---------------------------------------------------------------------------
@@ -75,8 +75,8 @@ function buildMockDb() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('OutboxWorkerService', () => {
-  let service: OutboxWorkerService;
+describe('SchedulerOutboxPoller', () => {
+  let service: SchedulerOutboxPoller;
   let scheduler: Record<string, ReturnType<typeof vi.fn>>;
   let mocks: ReturnType<typeof buildMockDb>;
   let module: import('@nestjs/testing').TestingModule;
@@ -92,13 +92,13 @@ describe('OutboxWorkerService', () => {
 
     module = await Test.createTestingModule({
       providers: [
-        OutboxWorkerService,
+        SchedulerOutboxPoller,
         { provide: DATABASE_CONNECTION, useValue: mocks.db },
         { provide: SchedulerService, useValue: scheduler },
       ],
     }).compile();
 
-    service = module.get(OutboxWorkerService);
+    service = module.get(SchedulerOutboxPoller);
   });
 
   afterEach(async () => {

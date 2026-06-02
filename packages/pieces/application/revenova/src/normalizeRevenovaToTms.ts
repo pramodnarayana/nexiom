@@ -127,16 +127,16 @@ export const normalizeRevenovaToTms: NormalizerFn = ({ entityType, data }) => {
         return {
             canonicalType: 'TMS_TP',
             data: {
-                mcNumber:            data['rtms__mc_number__c'],
-                scac:                data['rtms__scac__c'],
-                federalTaxId:        data['rtms__federal_tax_id__c'],
-                usdot:               data['rtms__usdot_number__c'],
-                // Remit-To Account Source ID — FK to tms_carrier or tms_factoring
-                remitToSourceId:     data['rtms__carrier_remit_to__c'],
+                invoiceTerms:        data['rtms__invoice_terms__c'],
+                paymentTerms:        data['rtms__payment_terms__c'],
+                carrierPaymentTerms: data['rtms__carrier_payment_terms__c'],
+                carrierRemitTo:      data['rtms__carrier_remit_to__c'],
+                companyType:         data['rtms__company_type__c'],
+                creditLimit:         data['rtms__credit_limit__c'],
                 remitToOption:       data['rtms__remit_to_option__c'],
-                carrierOperation:    data['rtms__carrier_operation__c'],
-                agreementStatus:     data['rtms__agreement_status__c'],
-                carrierReviewStatus: data['rtms__carrier_review_status__c'],
+                mcNumber:            data['rtms__mc_number__c'],
+                stateDotNumber:      data['rtms__state_dot_number__c'],
+                usDotNumber:         data['rtms__usdot_number__c'],
             },
         };
     }

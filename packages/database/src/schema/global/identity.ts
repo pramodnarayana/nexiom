@@ -250,6 +250,13 @@ export const organization = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /**
+     * Organization metadata (JSON).
+     * Supported schema:
+     * {
+     *   tier: 'standard' | 'enterprise'
+     * }
+     */
     metadata: text("metadata"),
     status: organizationStatusEnum("status").default("active").notNull(),
     isSystem: boolean("isSystem").default(false).notNull(),

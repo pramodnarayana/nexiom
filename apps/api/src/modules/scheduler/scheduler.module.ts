@@ -1,5 +1,4 @@
 import { Module, type Type } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import {
   CursorManagerService,
@@ -9,8 +8,9 @@ import {
 import { PiecesModule, PieceRegistryService } from '@nexiom/piece-registry';
 import { TokenManagerService } from '@nexiom/credentials';
 import { REDIS_CLIENT } from '@nexiom/cache';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+import { DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
+import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
+import type { Redis } from 'ioredis';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
 import { WindmillClient } from './windmill.client.js';
@@ -18,12 +18,11 @@ import { HttpWindmillClient } from './http-windmill.client.js';
 import { StubWindmillClient } from './stub-windmill.client.js';
 import { SyncRunner } from './sync-runner.js';
 import { ConnectionSyncRunner } from './connection-sync-runner.js';
-import { StubSyncRunner } from './stub-sync-runner.js';
 import { SchedulerService } from './scheduler.service.js';
 import { SchedulerController } from './scheduler.controller.js';
 import { CursorResetController } from './cursor-reset.controller.js';
 import { InternalSchedulerGuard } from './internal-scheduler.guard.js';
-import { OutboxWorkerService } from './outbox-worker.service.js';
+import { SchedulerOutboxPoller } from './scheduler-outbox.poller.js';
 
 // Evaluated once at module load time — env vars are set before app bootstrap.
 const WINDMILL_ENABLED = process.env['WINDMILL_ENABLED'] === 'true';
@@ -51,37 +50,43 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
     },
     CursorManagerService,
     {
-      // Only instantiate the full PollSyncRunner (with its Redis + token deps)
-      // when Windmill is enabled.  In local dev (WINDMILL_ENABLED=false) the
-      // stub is returned so a missing Redis or credential provider does not
-      // crash the process on startup.
-      //
-      // Heavy dependencies (Redis, DB, TokenManager, etc.) are resolved lazily
-      // via ModuleRef so NestJS does not eagerly instantiate them when
-      // WINDMILL_ENABLED=false — prevents startup failures in environments where
-      // those providers are absent.
       provide: SyncRunner,
-      inject: [ConfigService, ModuleRef],
-      useFactory: (config: ConfigService, moduleRef: ModuleRef): SyncRunner => {
-        if (config.get<string>('WINDMILL_ENABLED') === 'true') {
-          return new ConnectionSyncRunner(
-            moduleRef.get(DATABASE_CONNECTION, { strict: false }),
-            moduleRef.get(DB_MANAGER, { strict: false }),
-            moduleRef.get(REDIS_CLIENT, { strict: false }),
-            config,
-            moduleRef.get(TokenManagerService, { strict: false }),
-            moduleRef.get(PieceRegistryService, { strict: false }),
-            moduleRef.get(CursorManagerService, { strict: false }),
-            moduleRef.get(StorageResolverService, { strict: false }),
-          );
-        }
-        return new StubSyncRunner();
+      inject: [
+        ConfigService,
+        DATABASE_CONNECTION,
+        DB_MANAGER,
+        REDIS_CLIENT,
+        TokenManagerService,
+        PieceRegistryService,
+        CursorManagerService,
+        StorageResolverService,
+      ],
+      useFactory: (
+        _config: ConfigService,
+        db: DrizzleDb,
+        dbManager: DatabaseManager,
+        redis: Redis,
+        tokenManager: TokenManagerService,
+        pieceRegistry: PieceRegistryService,
+        cursorManager: CursorManagerService,
+        storageResolver: StorageResolverService,
+      ): SyncRunner => {
+        return new ConnectionSyncRunner(
+          db,
+          dbManager,
+          redis,
+          _config,
+          tokenManager,
+          pieceRegistry,
+          cursorManager,
+          storageResolver,
+        );
       },
     },
     SchedulerService,
     InternalSchedulerGuard,
-    OutboxWorkerService,
+    SchedulerOutboxPoller,
   ],
-  exports: [SchedulerService, OutboxWorkerService, SyncRunner],
+  exports: [SchedulerService, SchedulerOutboxPoller, SyncRunner],
 })
 export class SchedulerModule {}

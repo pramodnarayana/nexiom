@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CdcRelayGuard } from './cdc-relay.guard.js';
@@ -10,6 +10,7 @@ describe('CdcRelayGuard', () => {
   let mockRequest: { headers: Record<string, string> };
 
   beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'production');
     mockConfigService = {
       get: vi.fn().mockImplementation((key: string) => {
         if (key === 'DEBEZIUM_SECRET') return 'test-secret';
@@ -28,6 +29,10 @@ describe('CdcRelayGuard', () => {
     };
 
     guard = new CdcRelayGuard(mockConfigService as ConfigService);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('allows access when authorization header matches Bearer secret', () => {

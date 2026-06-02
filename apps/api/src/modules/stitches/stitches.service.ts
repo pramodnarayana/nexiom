@@ -57,6 +57,7 @@ export class StitchesService {
     orgId: string,
     destDataSourceId: string,
     destAppName: string,
+    destAppProfile?: string,
   ): Promise<void> {
     const pairs = [{ dataSourceId: destDataSourceId, appName: destAppName }];
     await Promise.all(
@@ -67,6 +68,7 @@ export class StitchesService {
             orgId,
             schemaName,
             SchemaPlan.OUTBOUND_ACTIVE,
+            { appName, appProfile: destAppProfile || 'standard' },
           );
           this.logger.debug(
             `Provisioned schema ${schemaName} to OUTBOUND_ACTIVE`,
@@ -198,7 +200,18 @@ export class StitchesService {
     // Must happen AFTER the stitch row exists (not inside the TX) so that
     // the provisioner can reference the committed connection rows.
     // All DDL is idempotent — safe to re-run if the schemas already exist.
-    await this.provisionStitchSchemas(orgId, destConn.id, destConn.appName);
+    const destAppProfile =
+      destConn.metadata &&
+      typeof destConn.metadata === 'object' &&
+      'appProfile' in destConn.metadata
+        ? (destConn.metadata.appProfile as string)
+        : undefined;
+    await this.provisionStitchSchemas(
+      orgId,
+      destConn.id,
+      destConn.appName,
+      destAppProfile,
+    );
 
     return stitch;
   }

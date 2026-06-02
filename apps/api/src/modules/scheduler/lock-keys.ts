@@ -7,6 +7,6 @@
  */
 
 /** Redis key that guards per-stream poll execution. */
-export function pollLockKey(stitchId: string, streamName: string): string {
-  return `lock:poll:${stitchId}:${streamName}`;
+export function pollLockKey(dataSourceId: string, streamName: string): string {
+  return `lock:poll:${dataSourceId}:${streamName}`;
 }

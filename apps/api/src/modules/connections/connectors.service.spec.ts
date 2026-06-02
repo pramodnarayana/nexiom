@@ -554,7 +554,11 @@ describe('ConnectorsService', () => {
       expect(applyPlan).toHaveBeenCalledWith(
         'tenant-123',
         expect.stringMatching(/^ws_/),
-        SchemaPlan.NORMALIZE_ACTIVE,
+        SchemaPlan.CANONICAL_ACTIVE,
+        expect.objectContaining({
+          appName: 'mock-piece',
+          appProfile: 'standard',
+        }),
       );
 
       // Verify the final transition to ACTIVE

@@ -1,19 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "[init-postgres-cdc] Setting up logical replication for Debezium..."
+echo "[init-postgres-cdc] Setting up logical replication for Debezium on platform_shard_1..."
 
-# The default max_replication_slots is 10 in PG15, but we set it to 5 in docker-compose.
-# Create the replication slot using pgoutput (standard logical replication output plugin).
-# Provide idempotent creation:
+# Ensure platform_shard_1 exists before creating CDC artifacts on it
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+  SELECT 'CREATE DATABASE platform_shard_1'
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'platform_shard_1')\\gexec
+EOSQL
+
+# Create the replication slot and publication on platform_shard_1
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "platform_shard_1" <<-EOSQL
   DO \$\$
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'nexiom_slot') THEN
-      PERFORM pg_create_logical_replication_slot('nexiom_slot', 'pgoutput');
-      RAISE NOTICE 'Created logical replication slot: nexiom_slot';
+    IF NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'platform_slot') THEN
+      PERFORM pg_create_logical_replication_slot('platform_slot', 'pgoutput');
+      RAISE NOTICE 'Created logical replication slot: platform_slot on platform_shard_1';
     ELSE
-      RAISE NOTICE 'Logical replication slot nexiom_slot already exists.';
+      RAISE NOTICE 'Logical replication slot platform_slot already exists on platform_shard_1.';
     END IF;
   END
   \$\$;
@@ -23,11 +27,11 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
   -- when their connection properties are provisioned.
   DO \$\$
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'nexiom_cdc') THEN
-      CREATE PUBLICATION nexiom_cdc FOR TABLES IN SCHEMA public;
-      RAISE NOTICE 'Created publication: nexiom_cdc';
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'platform_cdc') THEN
+      CREATE PUBLICATION platform_cdc FOR TABLES IN SCHEMA public;
+      RAISE NOTICE 'Created publication: platform_cdc on platform_shard_1';
     ELSE
-      RAISE NOTICE 'Publication nexiom_cdc already exists.';
+      RAISE NOTICE 'Publication platform_cdc already exists on platform_shard_1.';
     END IF;
   END
   \$\$;

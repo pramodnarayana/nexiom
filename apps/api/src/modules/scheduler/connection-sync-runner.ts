@@ -74,9 +74,9 @@ const StreamBookmarkSchema = z.object({
 });
 
 const SyncStateDocumentSchema = z.object({
-  bookmarks: z.record(z.string(), StreamBookmarkSchema),
-  versions: z.record(z.string(), z.number()),
-  currently_syncing: z.string().nullable(),
+  bookmarks: z.record(z.string(), StreamBookmarkSchema).default({}),
+  versions: z.record(z.string(), z.number()).default({}),
+  currently_syncing: z.string().nullable().default(null),
 });
 
 // ---------------------------------------------------------------------------
@@ -132,10 +132,6 @@ export class ConnectionSyncRunner {
   async run(connectionId: string, objectType?: string): Promise<SyncResult> {
     const conn = await this.loadConnection(connectionId);
 
-    // Using a fake "stitch" object that just holds connectionId as id so we can reuse the poll loop
-    // that uses stitch.id for locks and cursors.
-    const fakeStitch = { id: connectionId, orgId: conn.orgId };
-
     // Obtain valid credentials for the connection
     const credentials =
       await this.tokenManager.getValidCredentials(connectionId);
@@ -167,11 +163,11 @@ export class ConnectionSyncRunner {
     const streamResults: StreamResult[] = [];
     let hasFailures = false;
 
-    // Run poll loop for all streams sequentially or in parallel
-    // For now, sequential to avoid hammering the API
+    // Run poll loop for all streams sequentially to avoid hammering the vendor API
     for (const descriptor of streams) {
       const result = await this.pollStream(
-        fakeStitch,
+        connectionId,
+        conn.orgId,
         60,
         descriptor,
         piece,
@@ -191,14 +187,14 @@ export class ConnectionSyncRunner {
   // ── Per-stream poll ───────────────────────────────────────────────────────
 
   private async pollStream(
-    stitch: { id: string; orgId: string },
+    connectionId: string,
+    orgId: string,
     syncIntervalMinutes: number,
     descriptor: StreamDescriptor,
     piece: Piece,
     credentials: OAuthCredentialBlob,
   ): Promise<StreamResult> {
-    const stitchId = stitch.id;
-    const key = pollLockKey(stitchId, descriptor.streamName);
+    const key = pollLockKey(connectionId, descriptor.streamName);
     // Use 2× the sync interval as the lock TTL so that a slow poll run that
     // approaches the full interval does not lose the lock mid-pagination.
     // Floor at 5 minutes to protect very short intervals.
@@ -208,7 +204,7 @@ export class ConnectionSyncRunner {
     const lockToken = await this.acquireLock(key, ttlMs);
     if (!lockToken) {
       this.logger.debug(
-        `Lock unavailable for stream "${descriptor.streamName}" on stitch ${stitchId} — skipping`,
+        `Lock unavailable for stream "${descriptor.streamName}" on connection ${connectionId} — skipping`,
       );
       return {
         streamName: descriptor.streamName,
@@ -219,7 +215,8 @@ export class ConnectionSyncRunner {
 
     try {
       return await this.runPollLoop(
-        stitch,
+        connectionId,
+        orgId,
         descriptor,
         piece,
         credentials,
@@ -231,7 +228,7 @@ export class ConnectionSyncRunner {
       const error =
         err instanceof Error ? err.stack || err.message : String(err);
       this.logger.error(
-        `Poll loop failed for stream "${descriptor.streamName}" on stitch ${stitchId}: ${error}`,
+        `Poll loop failed for stream "${descriptor.streamName}" on connection ${connectionId}: ${error}`,
       );
       return {
         streamName: descriptor.streamName,
@@ -247,7 +244,8 @@ export class ConnectionSyncRunner {
   // ── Poll loop (lock already held) ────────────────────────────────────────
 
   private async runPollLoop(
-    stitch: { id: string; orgId: string },
+    connectionId: string,
+    orgId: string,
     descriptor: StreamDescriptor,
     piece: Piece,
     credentials: OAuthCredentialBlob,
@@ -255,15 +253,14 @@ export class ConnectionSyncRunner {
     lockToken: string,
     ttlMs: number,
   ): Promise<StreamResult> {
-    const stitchId = stitch.id;
     const { streamName } = descriptor;
 
-    const tenantDb = await this.dbManager.getTenantDb(stitch.orgId);
+    const tenantDb = await this.dbManager.getTenantDb(orgId);
 
     // Read or initialise the Singer-style state document for this stream.
     const stateDoc = await this.readOrCreateStateDoc(
       tenantDb,
-      stitchId,
+      connectionId,
       streamName,
     );
     const bookmark = stateDoc.bookmarks[streamName];
@@ -272,13 +269,13 @@ export class ConnectionSyncRunner {
     // writing at least one intermediate checkpoint — resume from bookmark.offset.
     if (stateDoc.currently_syncing === streamName && bookmark?.offset) {
       this.logger.warn(
-        `Crash-resume detected for stream "${streamName}" on stitch ${stitchId} — resuming from page offset`,
+        `Crash-resume detected for stream "${streamName}" on connection ${connectionId} — resuming from page offset`,
       );
     }
 
     // Mark run as in-progress before the first page so a crash is detectable.
     stateDoc.currently_syncing = streamName;
-    await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
+    await this.writeStateDoc(tenantDb, connectionId, streamName, stateDoc);
 
     const window = this.cursorManager.calculateWindow(bookmark, descriptor);
     const keyType = descriptor.replicationKeyType ?? 'opaque';
@@ -292,11 +289,11 @@ export class ConnectionSyncRunner {
       // Renew the lock before each page so a slow multi-page run does not lose
       // ownership mid-pagination. Abort immediately if another worker has taken
       // the lock (renewal returns false), which prevents concurrent writes to
-      // sync_cursors for the same stream.
+      // connection_sync_cursors for the same stream.
       const renewed = await this.renewLock(lockKey, lockToken, ttlMs);
       if (!renewed) {
         throw new Error(
-          `Lock stolen for stream "${streamName}" on stitch ${stitchId} — aborting to prevent concurrent writes`,
+          `Lock stolen for stream "${streamName}" on connection ${connectionId} — aborting to prevent concurrent writes`,
         );
       }
 
@@ -315,7 +312,7 @@ export class ConnectionSyncRunner {
           try {
             const inserted = await this.insertGatewayRow(
               tenantDb,
-              stitchId,
+              connectionId,
               streamName,
               record.data,
               String(record.replicationKeyValue),
@@ -340,7 +337,7 @@ export class ConnectionSyncRunner {
           hwm,
           nextCursor,
         );
-        await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
+        await this.writeStateDoc(tenantDb, connectionId, streamName, stateDoc);
         this.logger.debug(
           `Intermediate checkpoint at page ${pageCount} for stream "${streamName}" (hwm=${safeHwm(hwm, keyType)})`,
         );
@@ -356,7 +353,7 @@ export class ConnectionSyncRunner {
       undefined,
     );
     stateDoc.currently_syncing = null;
-    await this.writeStateDoc(tenantDb, stitchId, streamName, stateDoc);
+    await this.writeStateDoc(tenantDb, connectionId, streamName, stateDoc);
 
     this.logger.log(
       `Stream "${streamName}" completed: ${recordsIngested} records ingested over ${pageCount} page(s), hwm=${safeHwm(hwm, keyType)}`,
@@ -384,7 +381,7 @@ export class ConnectionSyncRunner {
 
   private async readOrCreateStateDoc(
     tenantDb: DrizzleDb,
-    stitchId: string,
+    connectionId: string,
     streamName: string,
   ): Promise<SyncStateDocument> {
     const [row] = await tenantDb
@@ -392,7 +389,7 @@ export class ConnectionSyncRunner {
       .from(syncCursors)
       .where(
         and(
-          eq(syncCursors.stitchId, stitchId),
+          eq(syncCursors.dataSourceId, connectionId),
           eq(syncCursors.streamName, streamName),
         ),
       )
@@ -402,7 +399,7 @@ export class ConnectionSyncRunner {
       const parsed = SyncStateDocumentSchema.safeParse(row.stateDocument);
       if (!parsed.success) {
         this.logger.warn(
-          `Corrupt state document for stitch ${stitchId} / stream "${streamName}" — resetting to default. ` +
+          `Corrupt state document for connection ${connectionId} / stream "${streamName}" — resetting to default. ` +
             `Validation errors: ${parsed.error.message}`,
         );
         return { bookmarks: {}, versions: {}, currently_syncing: null };
@@ -416,19 +413,19 @@ export class ConnectionSyncRunner {
 
   private async writeStateDoc(
     tenantDb: DrizzleDb,
-    stitchId: string,
+    connectionId: string,
     streamName: string,
     stateDoc: SyncStateDocument,
   ): Promise<void> {
     await tenantDb
       .insert(syncCursors)
       .values({
-        stitchId,
+        dataSourceId: connectionId,
         streamName,
         stateDocument: stateDoc,
       })
       .onConflictDoUpdate({
-        target: [syncCursors.stitchId, syncCursors.streamName],
+        target: [syncCursors.dataSourceId, syncCursors.streamName],
         set: { stateDocument: stateDoc, updatedAt: new Date() },
       });
   }
@@ -612,8 +609,10 @@ export class ConnectionSyncRunner {
           objectType,
           request: payload,
         })
-        .onConflictDoNothing({
+        .onConflictDoUpdate({
           target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
+          targetWhere: sql`ext_req_id IS NOT NULL`,
+          set: { traceId: sql`EXCLUDED.trace_id` },
         })
         .returning({ traceId: inboundGateway.traceId });
 

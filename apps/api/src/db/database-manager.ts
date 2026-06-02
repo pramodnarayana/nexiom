@@ -197,8 +197,9 @@ export class DatabaseManager {
     });
     await adminClient.connect();
     try {
+      // Drop legacy nexiom_tenant_* DBs, new platform_shard_* and tenant_* DBs
       const result = await adminClient.query<{ datname: string }>(
-        `SELECT datname FROM pg_database WHERE datname LIKE 'nexiom_tenant_%'`,
+        `SELECT datname FROM pg_database WHERE datname LIKE 'nexiom_tenant_%' OR datname LIKE 'platform_shard_%' OR datname LIKE 'tenant_%'`,
       );
       for (const row of result.rows) {
         await this.dropTenantDatabaseIfExists(row.datname);
@@ -703,21 +704,65 @@ export class DatabaseManager {
       );
 
       if (tables.length === 0) {
-        console.log('  ℹ️  No tables found in public schema to truncate');
-        return;
+        console.log(
+          '  ℹ️  No tables found in public schema to truncate in global db',
+        );
+      } else {
+        const quotedTables = tables
+          .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+          .join(', ');
+        const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
+        await this.execSql(sql, client);
+        console.log(`  ✓ Truncated ${tables.length} tables in global db`);
       }
-
-      const quotedTables = tables
-        .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
-        .join(', ');
-      const sql = `TRUNCATE TABLE ${quotedTables} CASCADE;`;
-      await this.execSql(sql, client);
-      console.log(`  ✓ Truncated ${tables.length} tables`);
     } catch (error) {
-      console.log(`  ⚠️  Truncate failed: ${String(error)}`);
+      console.log(`  ⚠️  Global Truncate failed: ${String(error)}`);
       throw error;
     } finally {
       await client.end();
+    }
+
+    // Also clean up platform_shard_1
+    const globalUrl = process.env.DATABASE_URL || '';
+    if (globalUrl) {
+      const shardUrl = globalUrl.replace('platform_global', 'platform_shard_1');
+      try {
+        const pg = await import('pg');
+        const shardClient = new pg.Client({ connectionString: shardUrl });
+        await shardClient.connect();
+        try {
+          // Drop all workspace schemas
+          const allSchemas = await shardClient.query<{ schema_name: string }>(`
+            SELECT schema_name
+            FROM information_schema.schemata
+            WHERE schema_name LIKE 'ws_%';
+          `);
+          for (const { schema_name } of allSchemas.rows) {
+            await shardClient.query(
+              `DROP SCHEMA IF EXISTS "${schema_name}" CASCADE;`,
+            );
+            console.log(`  ✓ Dropped schema: ${schema_name} from shard`);
+          }
+
+          // Truncate any public tables in the shard (except drizzle metadata)
+          const shardTables = await shardClient.query<{ table_name: string }>(`
+            SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name != 'drizzle_migrations';
+          `);
+          if (shardTables.rows.length > 0) {
+            const quotedTables = shardTables.rows
+              .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+              .join(', ');
+            await shardClient.query(`TRUNCATE TABLE ${quotedTables} CASCADE;`);
+            console.log(
+              `  ✓ Truncated ${shardTables.rows.length} tables in shard`,
+            );
+          }
+        } finally {
+          await shardClient.end();
+        }
+      } catch (err) {
+        console.log(`  ⚠️  Could not clean up shard_1: ${String(err)}`);
+      }
     }
   }
 
@@ -911,12 +956,15 @@ export class DatabaseManager {
     const devTenantId = 'e2b3c4d5-6a7b-8c9d-0e1f-2a3b4c5d6e7f';
 
     // ── Step 1: Derive host URL + tenant DB name ────────────────────────────
+    // Hybrid Tenancy: Standard tenants (including local dev) route to a shared
+    // shard database. This allows a single Debezium container to monitor all
+    // standard tenant schemas via one publication + replication slot.
     let hostUrl: string;
-    const tenantDbName = `nexiom_tenant_${devTenantId.replace(/-/g, '_')}`;
+    const tenantDbName = 'platform_shard_1';
     try {
       const parsedUrl = new URL(
         process.env.DATABASE_URL ||
-          'postgresql://user:password@localhost:5432/nexiom_global',
+          'postgresql://user:password@localhost:5432/platform_global',
       );
       const auth = parsedUrl.username
         ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
@@ -932,7 +980,7 @@ export class DatabaseManager {
       hostUrl = 'postgresql://user:password@localhost:5432';
     }
 
-    // ── Step 2: CREATE DATABASE nexiom_tenant_system + run tenant migrations ─
+    // ── Step 2: CREATE DATABASE platform_shard_1 + run tenant migrations ─
     console.log(`\n📦 Provisioning tenant database: ${tenantDbName}`);
     await this.createTenantDatabase(tenantDbName, hostUrl);
 
@@ -981,6 +1029,32 @@ export class DatabaseManager {
       console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
     }
 
+    // Always upsert shard_registry — runs whether org was created or already existed
+    await globalDb
+      .insert(dbSchema.shardRegistry)
+      .values({
+        id: 'shard_1',
+        databaseName: tenantDbName,
+        databaseHostUrl: hostUrl,
+        regionContext: 'local',
+        maxTenants: 1000,
+        currentTenants: 0,
+        status: 'ACTIVE',
+      })
+      .onConflictDoUpdate({
+        target: [dbSchema.shardRegistry.id],
+        set: {
+          databaseName: tenantDbName,
+          databaseHostUrl: hostUrl,
+          currentTenants: 0,
+          status: 'ACTIVE',
+        },
+      });
+    console.log(`  ✓ Upserted shard_registry: shard_1 → ${tenantDbName}`);
+
+    // ── Drop stale ws_* schemas from platform_shard_1 ────────────────────────
+    // REMOVED: provision should not drop anything. db:reset handles cleanup.
+
     // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
     const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
     let tenantPool: Pool | undefined;
@@ -1004,36 +1078,15 @@ export class DatabaseManager {
         getDomainProvisioner,
       );
 
-      const fixtures = [
-        {
-          id: '00000000-0000-0000-0000-000000000001',
-          appName: 'salesforce',
-          externalId: 'dev-salesforce',
-          displayName: 'Dev Salesforce',
-          metadata: this.deriveMetadata('salesforce'),
-          credentials: {
-            clientId: 'dev-sf-client-id',
-            clientSecret: 'dev-sf-client-secret',
-            accessToken: 'dev-sf-access-token',
-            refreshToken: 'dev-sf-refresh-token',
-            data: { instance_url: 'https://test.salesforce.com' },
-          },
-        },
-        {
-          id: '00000000-0000-0000-0000-000000000002',
-          appName: 'quickbooks',
-          externalId: 'dev-quickbooks',
-          displayName: 'Dev QuickBooks',
-          metadata: this.deriveMetadata('quickbooks'),
-          credentials: {
-            clientId: 'dev-qb-client-id',
-            clientSecret: 'dev-qb-client-secret',
-            accessToken: 'dev-qb-access-token',
-            refreshToken: 'dev-qb-refresh-token',
-            data: { realmId: 'dev-realm-id' },
-          },
-        },
-      ] as const;
+      interface Fixture {
+        id: string;
+        appName: string;
+        externalId: string;
+        displayName: string;
+        metadata: Record<string, unknown>;
+        credentials: Record<string, unknown>;
+      }
+      const fixtures: Fixture[] = [];
 
       const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
 
@@ -1109,6 +1162,12 @@ export class DatabaseManager {
           devTenantId,
           schemaName,
           SchemaPlan.OUTBOUND_ACTIVE,
+          {
+            appName: inserted.appName,
+            appProfile:
+              (inserted.metadata as Record<string, string>)?.appProfile ||
+              'standard',
+          },
         );
 
         // Activate credential globally

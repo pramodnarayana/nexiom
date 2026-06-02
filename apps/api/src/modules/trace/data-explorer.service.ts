@@ -162,14 +162,12 @@ export class DataExplorerService {
     const schemaName =
       await this.storageResolver.resolveSchemaName(connectionId);
     assertValidSchemaName(schemaName);
-    const { normalizedEntity } = buildTenantSchema(schemaName);
+    const { normalizedEntity, replicaEntity } = buildTenantSchema(schemaName);
 
     const filterWhere = buildDrizzleFilter(filters, normalizedEntity);
     const finalWhere = and(
-      // Normalized entity table doesn't have dataSourceId directly, but we only list normalized entities
-      // where canonicalType matches. In connection centric view, we show ALL normalized entities
-      // in this tenant, optionally filtered.
-      objectType ? eq(normalizedEntity.canonicalType, objectType) : undefined,
+      eq(replicaEntity.dataSourceId, connectionId),
+      objectType ? eq(replicaEntity.entityType, objectType) : undefined,
       filterWhere,
     );
 
@@ -177,10 +175,25 @@ export class DataExplorerService {
       tenantDb
         .select({ count: sql`count(*)` })
         .from(normalizedEntity)
+        .innerJoin(
+          replicaEntity,
+          eq(normalizedEntity.replicaId, replicaEntity.id),
+        )
         .where(finalWhere),
       tenantDb
-        .select()
+        .select({
+          id: normalizedEntity.id,
+          traceId: normalizedEntity.traceId,
+          replicaId: normalizedEntity.replicaId,
+          canonicalType: normalizedEntity.canonicalType,
+          data: normalizedEntity.data,
+          createdAt: normalizedEntity.createdAt,
+        })
         .from(normalizedEntity)
+        .innerJoin(
+          replicaEntity,
+          eq(normalizedEntity.replicaId, replicaEntity.id),
+        )
         .where(finalWhere)
         .orderBy(desc(normalizedEntity.createdAt))
         .limit(safeLimit)

@@ -859,7 +859,7 @@ export class DatabaseManager {
           // Seed the tenant_storage_registry to map the tenant to its physical database.
           // In a real environment, this is created when the tenant signs up.
           // For local dev, we derive a sanitized host identifier (protocol-qualified) and avoid persisting credentials.
-          let dbName = "nexiom_local";
+          let dbName = "platform";
           let hostIdentifier = "postgresql://localhost:5432";
           if (process.env.DATABASE_URL) {
             try {
@@ -874,7 +874,7 @@ export class DatabaseManager {
               hostIdentifier = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ":" + parsedUrl.port : ""}`;
             } catch {
               // Fallback to safe default for invalid/Unix-socket-style URLs
-              dbName = "nexiom_local";
+              dbName = "platform";
               hostIdentifier = "postgresql://localhost:5432";
             }
           }

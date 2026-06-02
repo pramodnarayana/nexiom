@@ -1,7 +1,7 @@
 import type { DatabaseManager } from '../interfaces.js';
 import { SchemaPlan } from '../interfaces.js';
 import type { DrizzleDb } from '@nexiom/database';
-import { tenantStorageRegistry } from '@nexiom/database';
+import { tenantStorageRegistry, shardRegistry, organization } from '@nexiom/database';
 import { eq, sql } from 'drizzle-orm';
 import { SqlDatabaseManager } from './sql-database-manager.js';
 
@@ -84,27 +84,72 @@ export class TenantDatabaseManager implements DatabaseManager {
                     .limit(1);
 
                 if (registryInfo.length === 0) {
-                    this.logger.debug(`No active database found for tenant ${tenantId}. Attempting JIT provisioning...`);
+                    this.logger.debug(`No active database found for tenant ${tenantId}. Determining routing tier...`);
                     
-                    // JIT Provisioning: Claim an available WARM database for this tenant.
-                    // The NOT EXISTS clause ensures we don't accidentally claim a second DB
-                    // if another concurrent request just successfully claimed one for this tenant.
-                    await this.globalDb.execute(sql`
-                        UPDATE tenant_storage_registry
-                        SET tenant_id = ${tenantId}, status = 'ACTIVE', updated_at = NOW()
-                        WHERE tenant_id = (
-                            SELECT tenant_id FROM tenant_storage_registry
-                            WHERE status = 'WARM'
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM tenant_storage_registry
-                                  WHERE tenant_id = ${tenantId} AND status = 'ACTIVE'
-                              )
-                            LIMIT 1
-                            FOR UPDATE SKIP LOCKED
-                        )
-                    `);
+                    // 1. Fetch organization tier
+                    const orgInfo = await this.globalDb
+                        .select({ metadata: organization.metadata })
+                        .from(organization)
+                        .where(eq(organization.id, tenantId))
+                        .limit(1);
+
+                    let isEnterprise = false;
+                    if (orgInfo.length > 0 && orgInfo[0].metadata) {
+                        try {
+                            const metadataObj = typeof orgInfo[0].metadata === 'string' ? JSON.parse(orgInfo[0].metadata) : orgInfo[0].metadata;
+                            if (metadataObj.tier === 'enterprise') {
+                                isEnterprise = true;
+                            }
+                        } catch (e) {
+                            // ignore parse error
+                        }
+                    }
+
+                    if (isEnterprise) {
+                        this.logger.debug(`Tenant ${tenantId} is ENTERPRISE tier. Claiming from warm pool...`);
+                        await this.globalDb.execute(sql`
+                            UPDATE tenant_storage_registry
+                            SET tenant_id = ${tenantId}, status = 'ACTIVE', updated_at = NOW()
+                            WHERE tenant_id = (
+                                SELECT tenant_id FROM tenant_storage_registry
+                                WHERE status = 'WARM'
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM tenant_storage_registry
+                                      WHERE tenant_id = ${tenantId} AND status = 'ACTIVE'
+                                  )
+                                LIMIT 1
+                                FOR UPDATE SKIP LOCKED
+                            )
+                        `);
+                    } else {
+                        this.logger.debug(`Tenant ${tenantId} is STANDARD tier. Assigning to a shard...`);
+                        
+                        // JIT Provisioning for Standard Shards: Find least loaded shard
+                        await this.globalDb.execute(sql`
+                            WITH selected_shard AS (
+                                SELECT id, database_name, database_host_url, region_context
+                                FROM shard_registry
+                                WHERE status = 'ACTIVE' AND current_tenants < max_tenants
+                                ORDER BY current_tenants ASC
+                                LIMIT 1
+                            )
+                            INSERT INTO tenant_storage_registry (tenant_id, database_name, database_host_url, region_context, status, created_at, updated_at)
+                            SELECT ${tenantId}, database_name, database_host_url, region_context, 'ACTIVE', NOW(), NOW()
+                            FROM selected_shard
+                            ON CONFLICT (tenant_id) DO NOTHING
+                        `);
+
+                        // Increment shard tenant count
+                        await this.globalDb.execute(sql`
+                            UPDATE shard_registry
+                            SET current_tenants = current_tenants + 1
+                            WHERE database_name = (
+                                SELECT database_name FROM tenant_storage_registry WHERE tenant_id = ${tenantId}
+                            )
+                        `);
+                    }
                     
-                    // Re-query to get the assigned DB (whether assigned by this execution or a concurrent one)
+                    // Re-query to get the assigned DB
                     registryInfo = await this.globalDb
                         .select()
                         .from(tenantStorageRegistry)
@@ -113,8 +158,8 @@ export class TenantDatabaseManager implements DatabaseManager {
                         
                     if (registryInfo.length === 0) {
                         throw new Error(
-                            `[TenantDatabaseManager] Workspace infrastructure is being provisioned or the pool is empty. ` +
-                            `Please try again in a few seconds. (Tenant: ${tenantId})`
+                            `[TenantDatabaseManager] Failed to assign tenant ${tenantId}. ` +
+                            (isEnterprise ? `Ensure the warm pool has available capacity.` : `Ensure there is an active shard available.`)
                         );
                     }
                 }

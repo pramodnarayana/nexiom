@@ -9,7 +9,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@nexiom/database": "workspace:*"
+    "@nexiom/database": "workspace:*",
+    "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

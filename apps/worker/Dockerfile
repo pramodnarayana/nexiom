@@ -9,10 +9,13 @@ WORKDIR /app
 
 # Copy lockfile and workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY tsconfig.base.json ./
 # Copy all packages (since worker depends on engine, database, queue, pieces, etc.)
 COPY packages ./packages
+COPY engine ./engine
 COPY apps/worker ./apps/worker
 
+RUN ls -la /app
 RUN pnpm install --frozen-lockfile && \
     pnpm -r --filter "@nexiom/*" build && \
     pnpm --filter worker build
@@ -30,8 +33,10 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json ./
 COPY apps/worker/package.json ./apps/worker/
 COPY packages ./packages
+COPY engine ./engine
 
 # Install production dependencies
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
@@ -39,6 +44,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # Copy built artifacts from builder
 COPY --from=builder --chown=nodejs:nodejs /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder --chown=nodejs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nodejs:nodejs /app/engine ./engine
 
 USER nodejs
 

@@ -5,18 +5,15 @@ import {
     jsonb,
     timestamp,
     index,
-    uniqueIndex,
+    unique,
 } from 'drizzle-orm/pg-core';
 
 /**
  * SYNC CURSORS — Polling State (data-plane, tenant schema)
  *
- * Stores the Singer-style bookmark for each (connection, stream) pair.
+ * Stores the Singer-style bookmark for each (data_source, stream) pair.
  * Written exclusively by the SchedulerWorker; read at the start of every
  * poll run to calculate the safe polling window.
- *
- * Intentionally separate from ws_{id}.sync_cursor (per-tenant workspace
- * schema, written by ReplicaService to track L2→L3 replication state).
  *
  * state_document shape:
  *   {
@@ -31,12 +28,12 @@ import {
  */
 export const syncCursors = pgTable('sync_cursors', {
     id: uuid('id').defaultRandom().primaryKey(),
-    // Keyed per stitch (not per connection) so two stitches that share the same
-    // source connection + stream name maintain independent cursors and do not
-    // advance each other's high-water mark.
-    // NOTE: stitchId refers to the global integration_stitch table.
-    // There is no hard FK here because cross-database FKs are not supported.
-    stitchId: uuid('stitch_id').notNull(),
+    /**
+     * References data_sources.id in the global DB.
+     * Keyed per data source, so a connection maintains a single high-water mark
+     * regardless of how many stitches consume its data.
+     */
+    dataSourceId: uuid('data_source_id').notNull(),
     /** Vendor object / stream name (e.g. 'Account', 'rtms__Load__c') */
     streamName: varchar('stream_name', { length: 200 }).notNull(),
     /**
@@ -50,6 +47,6 @@ export const syncCursors = pgTable('sync_cursors', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 }, (table) => [
-    uniqueIndex('sync_cursors_stitch_stream_unique_idx').on(table.stitchId, table.streamName),
-    index('sync_cursors_stitch_idx').on(table.stitchId),
+    unique('sync_cursors_unique_constraint').on(table.dataSourceId, table.streamName),
+    index('idx_sync_cursors_ds').on(table.dataSourceId),
 ]);
