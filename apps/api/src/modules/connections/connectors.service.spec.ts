@@ -587,14 +587,14 @@ describe('ConnectorsService', () => {
         getTenantDb: ReturnType<typeof vi.fn>;
       };
       expect(getTenantDb).toHaveBeenCalledWith('tenant-123');
-      const tenantDbMock = await getTenantDb.mock.results[0]?.value as {
+      const tenantDbMock = (await getTenantDb.mock.results[0]?.value) as {
         execute: ReturnType<typeof vi.fn>;
       };
       expect(tenantDbMock.execute).toHaveBeenCalledTimes(4);
       // Verify each call registers a table with platform_cdc
       for (let i = 0; i < 4; i++) {
-        const callArg = tenantDbMock.execute.mock.calls[i]?.[0];
-        expect(String(callArg)).toContain('platform_cdc');
+        const callArg = tenantDbMock.execute.mock.calls[i]?.[0] as unknown;
+        expect(JSON.stringify(callArg)).toContain('platform_cdc');
       }
     });
 

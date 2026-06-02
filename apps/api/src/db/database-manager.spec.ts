@@ -58,7 +58,10 @@ vi.mock('pg', () => {
     query: vi.fn().mockResolvedValue({ rows: [] }),
     end: vi.fn(),
   };
-  return { Client: vi.fn(() => mClient) };
+  return {
+    Client: vi.fn(() => mClient),
+    Pool: vi.fn(() => mClient),
+  };
 });
 
 vi.mock('drizzle-orm/node-postgres', () => ({
@@ -604,6 +607,30 @@ describe('DatabaseManager', () => {
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('❌ system_users:create'),
       );
+    });
+  });
+
+  describe('provisionLocal()', () => {
+    it('should clean up globalClient in finally block even on error', async () => {
+      process.env.ENCRYPTION_KEY = '00000000000000000000000000000000';
+      const mockClient = { end: vi.fn(), query: vi.fn() };
+      vi.spyOn(
+        manager as unknown as { getPgClient: () => Promise<unknown> },
+        'getPgClient',
+      ).mockResolvedValue(mockClient);
+      vi.spyOn(
+        manager as unknown as { createTenantDatabase: () => Promise<unknown> },
+        'createTenantDatabase',
+      ).mockResolvedValue(undefined);
+
+      drizzleMocks.select.mockImplementationOnce(() => {
+        throw new Error('Test select error');
+      });
+
+      await expect(manager.provisionLocal()).rejects.toThrow(
+        'Test select error',
+      );
+      expect(mockClient.end).toHaveBeenCalled();
     });
   });
 });

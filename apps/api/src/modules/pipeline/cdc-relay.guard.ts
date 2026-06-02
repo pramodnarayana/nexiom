@@ -14,9 +14,12 @@ export class CdcRelayGuard implements CanActivate {
 
   constructor(private readonly config: ConfigService) {
     // Explicit opt-in flag for disabling auth (replaces NODE_ENV check)
-    const rawDisableAuth = this.config.get<string | boolean | number>('CDC_RELAY_DISABLE_AUTH');
+    const rawDisableAuth = this.config.get<string | boolean | number>(
+      'CDC_RELAY_DISABLE_AUTH',
+    );
     this.disableAuth =
-      (typeof rawDisableAuth === 'string' && rawDisableAuth.toLowerCase() === 'true') ||
+      (typeof rawDisableAuth === 'string' &&
+        rawDisableAuth.toLowerCase() === 'true') ||
       rawDisableAuth === true ||
       rawDisableAuth === 1 ||
       rawDisableAuth === '1';
