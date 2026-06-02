@@ -1161,7 +1161,36 @@ export class DatabaseManager {
           metadata: Record<string, unknown>;
           credentials: Record<string, unknown>;
         }
-        const fixtures: Fixture[] = [];
+        const fixtures: Fixture[] = [
+          {
+            id: '00000000-0000-0000-0000-000000000001',
+            appName: 'salesforce',
+            externalId: 'dev-salesforce',
+            displayName: 'Dev Salesforce',
+            metadata: this.deriveMetadata('salesforce'),
+            credentials: {
+              clientId: 'dev-sf-client-id',
+              clientSecret: 'dev-sf-client-secret',
+              accessToken: 'dev-sf-access-token',
+              refreshToken: 'dev-sf-refresh-token',
+              data: { instance_url: 'https://test.salesforce.com' },
+            },
+          },
+          {
+            id: '00000000-0000-0000-0000-000000000002',
+            appName: 'quickbooks',
+            externalId: 'dev-quickbooks',
+            displayName: 'Dev QuickBooks',
+            metadata: this.deriveMetadata('quickbooks'),
+            credentials: {
+              clientId: 'dev-qb-client-id',
+              clientSecret: 'dev-qb-client-secret',
+              accessToken: 'dev-qb-access-token',
+              refreshToken: 'dev-qb-refresh-token',
+              data: { realmId: 'dev-realm-id' },
+            },
+          },
+        ];
 
         const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
 

@@ -613,24 +613,29 @@ describe('DatabaseManager', () => {
   describe('provisionLocal()', () => {
     it('should clean up globalClient in finally block even on error', async () => {
       process.env.ENCRYPTION_KEY = '00000000000000000000000000000000';
-      const mockClient = { end: vi.fn(), query: vi.fn() };
-      vi.spyOn(
-        manager as unknown as { getPgClient: () => Promise<unknown> },
-        'getPgClient',
-      ).mockResolvedValue(mockClient);
-      vi.spyOn(
-        manager as unknown as { createTenantDatabase: () => Promise<unknown> },
-        'createTenantDatabase',
-      ).mockResolvedValue(undefined);
+      process.env.SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+      try {
+        const mockClient = { end: vi.fn(), query: vi.fn() };
+        vi.spyOn(
+          manager as unknown as { getPgClient: () => Promise<unknown> },
+          'getPgClient',
+        ).mockResolvedValue(mockClient);
+        vi.spyOn(
+          manager as unknown as { createTenantDatabase: () => Promise<unknown> },
+          'createTenantDatabase',
+        ).mockResolvedValue(undefined);
 
-      drizzleMocks.select.mockImplementationOnce(() => {
-        throw new Error('Test select error');
-      });
+        drizzleMocks.select.mockImplementationOnce(() => {
+          throw new Error('Test select error');
+        });
 
-      await expect(manager.provisionLocal()).rejects.toThrow(
-        'Test select error',
-      );
-      expect(mockClient.end).toHaveBeenCalled();
+        await expect(manager.provisionLocal()).rejects.toThrow(
+          'Test select error',
+        );
+        expect(mockClient.end).toHaveBeenCalled();
+      } finally {
+        delete process.env.SYSTEM_TENANT_ID;
+      }
     });
   });
 });
