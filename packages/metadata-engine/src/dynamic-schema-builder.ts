@@ -38,7 +38,8 @@ export class DynamicSchemaBuilder {
         tableName: string,
         uniqueKey: string,
         data: Record<string, unknown>,
-        includeReturning: boolean = true
+        includeReturning: boolean = true,
+        updatedAtColumn: string | null = 'updated_at'
     ): SQL {
         if (!data || Object.keys(data).length === 0) {
             throw new Error('Payload cannot be empty');
@@ -87,9 +88,18 @@ export class DynamicSchemaBuilder {
             sql`, `
         );
 
-        const onConflictClause = updateAssignments.queryChunks.length > 0
-            ? sql`ON CONFLICT ("${sql.raw(uniqueKeySnake)}") DO UPDATE SET ${updateAssignments}, "updated_at" = NOW()`
-            : sql`ON CONFLICT ("${sql.raw(uniqueKeySnake)}") DO NOTHING`;
+        let onConflictClause: SQL;
+        if (updateAssignments.queryChunks.length > 0) {
+            if (updatedAtColumn !== null) {
+                const updatedAtColumnSnake = updatedAtColumn.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                this.validateIdentifier(updatedAtColumnSnake, 'updatedAtColumn');
+                onConflictClause = sql`ON CONFLICT ("${sql.raw(uniqueKeySnake)}") DO UPDATE SET ${updateAssignments}, "${sql.raw(updatedAtColumnSnake)}" = NOW()`;
+            } else {
+                onConflictClause = sql`ON CONFLICT ("${sql.raw(uniqueKeySnake)}") DO UPDATE SET ${updateAssignments}`;
+            }
+        } else {
+            onConflictClause = sql`ON CONFLICT ("${sql.raw(uniqueKeySnake)}") DO NOTHING`;
+        }
 
         const returningClause = includeReturning ? sql`RETURNING *` : sql``;
 
