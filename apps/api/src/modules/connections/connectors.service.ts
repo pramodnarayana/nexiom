@@ -640,20 +640,21 @@ export class ConnectorsService {
 
         // Register outbox tables in the CDC publication so Debezium picks up the inserts
         // from inbound_gateway (L1) -> inbound_outbox (L2).
-        await this.db.execute(sql`
-          DO $$
-          BEGIN
+        // Split into separate statements so duplicate_object on one table doesn't abort adding others
+        const tables = ['inbound_outbox', 'replica_outbox', 'normalized_outbox', 'outbound_outbox'];
+        for (const table of tables) {
+          await this.db.execute(sql`
+            DO $$
             BEGIN
-              ALTER PUBLICATION platform_cdc
-                ADD TABLE ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.inbound_outbox,
-                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.replica_outbox,
-                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.normalized_outbox,
-                          ${sql.raw('"' + workspaceProvisionInfo.schemaName + '"')}.outbound_outbox;
-            EXCEPTION WHEN duplicate_object THEN
-              -- Ignore gracefully if the table is already in the publication
-            END;
-          END $$;
-        `);
+              BEGIN
+                ALTER PUBLICATION platform_cdc
+                  ADD TABLE ${sql.identifier(workspaceProvisionInfo.schemaName)}.${sql.identifier(table)};
+              EXCEPTION WHEN duplicate_object THEN
+                -- Ignore gracefully if the table is already in the publication
+              END;
+            END $$;
+          `);
+        }
 
         // Transition to ACTIVE only after namespace is successfully provisioned
         await this.db.transaction(async (tx) => {

@@ -68,5 +68,10 @@ export const shardRegistry = pgTable(
         currentTenants: integer('current_tenants').notNull().default(0),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
-    }
+    },
+    (table) => [
+        // Composite index for shard selection queries that filter by status and region
+        // and order by available capacity (max_tenants - current_tenants)
+        index('shard_status_region_idx').on(table.status, table.regionContext, table.currentTenants),
+    ],
 );

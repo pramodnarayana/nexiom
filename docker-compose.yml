@@ -13,7 +13,7 @@ x-windmill-env: &windmill-env
 
 x-common-env: &common-env
   DATABASE_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-platform_global}
-  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/nexiom_global
+  DATABASE_POOLED_URL: postgres://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/${POSTGRES_DB:-platform_global}
   REDIS_URL: redis://redis:6379
   NODE_ENV: production
 

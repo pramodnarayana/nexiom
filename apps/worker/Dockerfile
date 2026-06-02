@@ -15,7 +15,6 @@ COPY packages ./packages
 COPY engine ./engine
 COPY apps/worker ./apps/worker
 
-RUN ls -la /app
 RUN pnpm install --frozen-lockfile && \
     pnpm -r --filter "@nexiom/*" build && \
     pnpm --filter worker build

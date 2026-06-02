@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { eq, sql } from 'drizzle-orm';
 import {
@@ -46,7 +47,7 @@ export class SchedulerOutboxPoller {
     private readonly scheduler: SchedulerService,
   ) {}
 
-  // @Cron(CronExpression.EVERY_10_SECONDS)
+  @Cron(CronExpression.EVERY_10_SECONDS)
   async processOutbox(): Promise<void> {
     // Atomically claim pending records using FOR UPDATE SKIP LOCKED so
     // concurrent pods cannot pick up the same record.

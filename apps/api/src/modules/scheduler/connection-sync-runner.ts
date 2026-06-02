@@ -600,6 +600,8 @@ export class ConnectionSyncRunner {
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
       );
 
+      // Use onConflictDoNothing to skip duplicates instead of updating traceId,
+      // which prevents creating duplicate trace entries in the outbox
       const result = await tx
         .insert(inboundGateway)
         .values({
@@ -609,13 +611,13 @@ export class ConnectionSyncRunner {
           objectType,
           request: payload,
         })
-        .onConflictDoUpdate({
+        .onConflictDoNothing({
           target: [inboundGateway.dataSourceId, inboundGateway.extReqId],
           targetWhere: sql`ext_req_id IS NOT NULL`,
-          set: { traceId: sql`EXCLUDED.trace_id` },
         })
         .returning({ traceId: inboundGateway.traceId });
 
+      // Only insert into outbox if a new row was actually inserted (not on conflict)
       if (result.length > 0) {
         await tx
           .insert(inboundOutbox)

@@ -8,6 +8,7 @@ import { SqlDatabaseManager } from './sql-database-manager.js';
 interface Logger {
     debug(msg: string, ...args: unknown[]): void;
     info?(msg: string, ...args: unknown[]): void;
+    warn?(msg: string, ...args: unknown[]): void;
     error?(msg: string, ...args: unknown[]): void;
 }
 
@@ -101,7 +102,10 @@ export class TenantDatabaseManager implements DatabaseManager {
                                 isEnterprise = true;
                             }
                         } catch (e) {
-                            // ignore parse error
+                            // Log parse errors for visibility
+                            this.logger.warn?.(
+                                `Failed to parse organization metadata for tenant ${tenantId}: ${e instanceof Error ? e.message : String(e)}`
+                            );
                         }
                     }
 

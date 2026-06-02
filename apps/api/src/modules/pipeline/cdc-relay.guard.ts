@@ -3,12 +3,22 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class CdcRelayGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  private readonly logger = new Logger(CdcRelayGuard.name);
+  private readonly disableAuth: boolean;
+
+  constructor(private readonly config: ConfigService) {
+    // Explicit opt-in flag for disabling auth (replaces NODE_ENV check)
+    this.disableAuth = this.config.get<boolean>('CDC_RELAY_DISABLE_AUTH', false);
+    if (this.disableAuth) {
+      this.logger.warn('CDC_RELAY_DISABLE_AUTH is enabled - authentication bypass is active');
+    }
+  }
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest<{
@@ -16,8 +26,8 @@ export class CdcRelayGuard implements CanActivate {
     }>();
     const expectedSecret = this.config.get<string>('DEBEZIUM_SECRET');
 
-    // TEMPORARY BYPASS: allow all requests in dev so CDC can flow
-    if (process.env.NODE_ENV !== 'production') {
+    // Explicit opt-in auth bypass (controlled by CDC_RELAY_DISABLE_AUTH flag)
+    if (this.disableAuth) {
       return true;
     }
 
@@ -28,15 +38,15 @@ export class CdcRelayGuard implements CanActivate {
     const authHeader = req.headers.authorization;
     const customHeader = req.headers['x-debezium-auth'];
 
+    // Only accept standard "Bearer <token>" format (with space)
     if (
       authHeader !== `Bearer ${expectedSecret}` &&
-      authHeader !== `Bearer${expectedSecret}` &&
       customHeader !== expectedSecret
     ) {
-      console.error('CDC Relay Auth failed:', {
+      // Log failure without exposing the secret
+      this.logger.error('CDC Relay Auth failed:', {
         authHeader,
         customHeader,
-        expectedSecret,
       });
       throw new UnauthorizedException('Invalid CDC relay authorization');
     }

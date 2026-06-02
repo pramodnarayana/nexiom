@@ -9,3 +9,5 @@ CREATE TABLE "shard_registry" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+--> statement-breakpoint
+CREATE INDEX "shard_status_region_idx" ON "shard_registry" USING btree ("status","region_context","current_tenants");

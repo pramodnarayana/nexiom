@@ -725,7 +725,45 @@ export class DatabaseManager {
     // Also clean up platform_shard_1
     const globalUrl = process.env.DATABASE_URL || '';
     if (globalUrl) {
-      const shardUrl = globalUrl.replace('platform_global', 'platform_shard_1');
+      // Parse and validate the shard URL to ensure replacement succeeded
+      let shardUrl: string;
+      try {
+        const parsedGlobal = new URL(globalUrl);
+        const globalDbName = parsedGlobal.pathname.replace(/^\/+/, '');
+        if (!globalDbName || globalDbName !== 'platform_global') {
+          console.log(
+            `  ℹ️  Skipping shard cleanup: DATABASE_URL does not point to platform_global (found: ${globalDbName})`,
+          );
+          return;
+        }
+        // Build shard URL by replacing only the database name component
+        parsedGlobal.pathname = '/platform_shard_1';
+        shardUrl = parsedGlobal.toString();
+
+        // Verify the shard URL is different from global URL
+        if (shardUrl === globalUrl) {
+          console.log(
+            `  ⚠️  Skipping shard cleanup: shardUrl equals globalUrl (replacement failed)`,
+          );
+          return;
+        }
+
+        // Verify the resulting DB name
+        const parsedShard = new URL(shardUrl);
+        const shardDbName = parsedShard.pathname.replace(/^\/+/, '');
+        if (shardDbName !== 'platform_shard_1') {
+          console.log(
+            `  ⚠️  Skipping shard cleanup: resulting DB name is not platform_shard_1 (found: ${shardDbName})`,
+          );
+          return;
+        }
+      } catch (parseErr) {
+        console.log(
+          `  ⚠️  Skipping shard cleanup: failed to parse DATABASE_URL: ${String(parseErr)}`,
+        );
+        return;
+      }
+
       try {
         const pg = await import('pg');
         const shardClient = new pg.Client({ connectionString: shardUrl });
@@ -737,7 +775,15 @@ export class DatabaseManager {
             FROM information_schema.schemata
             WHERE schema_name LIKE 'ws_%';
           `);
+          // Validate schema names before dropping
+          const schemaNameRegex = /^ws_[a-z0-9_]+$/i;
           for (const { schema_name } of allSchemas.rows) {
+            if (!schemaNameRegex.test(schema_name)) {
+              console.log(
+                `  ⚠️  Skipping invalid schema name: ${schema_name} (does not match /^ws_[a-z0-9_]+$/i)`,
+              );
+              continue;
+            }
             await shardClient.query(
               `DROP SCHEMA IF EXISTS "${schema_name}" CASCADE;`,
             );
@@ -749,13 +795,27 @@ export class DatabaseManager {
             SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name != 'drizzle_migrations';
           `);
           if (shardTables.rows.length > 0) {
-            const quotedTables = shardTables.rows
-              .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
-              .join(', ');
-            await shardClient.query(`TRUNCATE TABLE ${quotedTables} CASCADE;`);
-            console.log(
-              `  ✓ Truncated ${shardTables.rows.length} tables in shard`,
-            );
+            // Validate table names before truncating
+            const tableNameRegex = /^[a-z0-9_]+$/i;
+            const validTables = shardTables.rows.filter((t) => {
+              if (!tableNameRegex.test(t.table_name)) {
+                console.log(
+                  `  ⚠️  Skipping invalid table name: ${t.table_name} (does not match /^[a-z0-9_]+$/i)`,
+                );
+                return false;
+              }
+              return true;
+            });
+
+            if (validTables.length > 0) {
+              const quotedTables = validTables
+                .map((t) => `"${t.table_name.replaceAll('"', '""')}"`)
+                .join(', ');
+              await shardClient.query(`TRUNCATE TABLE ${quotedTables} CASCADE;`);
+              console.log(
+                `  ✓ Truncated ${validTables.length} tables in shard`,
+              );
+            }
           }
         } finally {
           await shardClient.end();
@@ -1030,6 +1090,7 @@ export class DatabaseManager {
     }
 
     // Always upsert shard_registry — runs whether org was created or already existed
+    // Note: Do NOT reset currentTenants on conflict to preserve accurate capacity tracking
     await globalDb
       .insert(dbSchema.shardRegistry)
       .values({
@@ -1046,8 +1107,8 @@ export class DatabaseManager {
         set: {
           databaseName: tenantDbName,
           databaseHostUrl: hostUrl,
-          currentTenants: 0,
           status: 'ACTIVE',
+          // currentTenants is intentionally NOT updated here to preserve capacity tracking
         },
       });
     console.log(`  ✓ Upserted shard_registry: shard_1 → ${tenantDbName}`);
