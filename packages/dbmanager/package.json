@@ -1,6 +1,7 @@
 {
   "name": "@soopa/dbmanager",
   "version": "0.0.1",
+  "private": true,
   "type": "module",
   "description": "Declarative schema manager for Nexiom",
   "main": "dist/index.js",
