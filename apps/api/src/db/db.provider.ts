@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from './schema.js';
 
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 
 const logger = new Logger('DatabaseProvider');
 

@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from "@nestjs/testing";
 import { ReplicaService } from "./replica.service.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
 import {
   StorageResolverService,
   PipelineHookBrokerService,
-} from "@nexiom/engine";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+} from "@soopa/engine";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("ReplicaService", () => {

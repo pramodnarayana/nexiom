@@ -245,7 +245,7 @@ platform    →  application  (NEVER: zero business logic in platform code)
 
 ```typescript
 // packages/pieces/application/revenova/src/normalizers/index.ts
-import { registerNormalizer } from '@nexiom/piece-framework';
+import { registerNormalizer } from '@soopa/piece-framework';
 
 registerNormalizer('salesforce', 'revenova', 'Account',                    normalizeAccount);
 registerNormalizer('salesforce', 'revenova', 'TransportationProfile__c',   normalizeTransportationProfile);
@@ -433,10 +433,10 @@ All piece packages expose a `dev` script running `tsc --watch`. `dev:light` runs
 ```json
 // root package.json
 "dev:light": "dotenv -e .env -- env QUEUE_ENABLED=false pnpm --parallel
-  --filter=api --filter=web --filter=@nexiom/ai-engine
-  --filter=@nexiom/piece-quickbooks
-  --filter=@nexiom/piece-salesforce
-  --filter=@nexiom/piece-registry
+  --filter=api --filter=web --filter=@soopa/ai-engine
+  --filter=@soopa/piece-quickbooks
+  --filter=@soopa/piece-salesforce
+  --filter=@soopa/piece-registry
   dev"
 ```
 

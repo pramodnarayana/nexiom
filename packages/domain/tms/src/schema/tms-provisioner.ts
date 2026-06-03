@@ -1,12 +1,12 @@
 
 import { sql } from 'drizzle-orm';
 import { validateTmsIdentifier } from './tms-identifier-validator.js';
-import type { AppsConnectorDb, AppDomainProvisionerFn } from '@nexiom/piece-framework';
+import type { AppsConnectorDb, AppDomainProvisionerFn } from '@soopa/piece-framework';
 
 /**
  * provisionTmsTables(db, schemaName)
  *
- * Idempotent DDL for TMS domain tables — part of @nexiom/domain-tms.
+ * Idempotent DDL for TMS domain tables — part of @soopa/domain-tms.
  * Shared by ALL TMS connectors. Called when a TMS connector stitch is
  * first activated for a tenant schema.
  */

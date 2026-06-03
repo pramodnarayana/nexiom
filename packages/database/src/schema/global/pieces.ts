@@ -21,7 +21,7 @@ export const pieces = pgTable('pieces', {
     /** CDN URL of the piece's logo for the connection selector UI */
     logoUrl: varchar('logo_url', { length: 1024 }),
 
-    /** npm package name e.g. "@nexiom/piece-quickbooks" */
+    /** npm package name e.g. "@soopa/piece-quickbooks" */
     packageName: varchar('package_name', { length: 255 }).notNull(),
 
     /** Semver string — informational, actual binary is determined by installed package */

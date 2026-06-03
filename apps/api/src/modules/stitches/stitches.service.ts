@@ -16,7 +16,7 @@ import {
   uiWorkspaces,
   dataSources,
   globalRegistryOutbox,
-} from '@nexiom/database';
+} from '@soopa/database';
 import type { CreateStitch, UpdateStitch } from './stitches.validation.js';
 import {
   extractPgError,
@@ -27,8 +27,8 @@ import {
   DB_MANAGER,
   SchemaPlan,
   getWorkspaceSchemaName,
-} from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
+} from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
 
 @Injectable()
 export class StitchesService {

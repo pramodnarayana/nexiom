@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AiStreamController } from './ai-stream.controller.js';
 import { PinoLogger } from 'nestjs-pino';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AuthGuard } from '@nexiom/auth';
+import { AuthGuard } from '@soopa/auth';
 
 describe('AiStreamController', () => {
   let controller: AiStreamController;

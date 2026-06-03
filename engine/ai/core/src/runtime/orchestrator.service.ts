@@ -4,15 +4,15 @@ import { google } from '@ai-sdk/google';
 import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, stepCountIs, convertToModelMessages, type UIMessage } from 'ai';
 import { eq, and } from 'drizzle-orm';
-import { DATABASE_CONNECTION, dataSources, credentials, AppConnectionStatus } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { DATABASE_CONNECTION, dataSources, credentials, AppConnectionStatus } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
+import { TokenManagerService } from '@soopa/credentials';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import { HydratorToolFactory } from '../tools/hydrator-tool.factory.js';
 import { ActionToolFactory } from '../tools/action-tool.factory.js';
 import { IntentClassifierService } from '../planner/intent-classifier.service.js';
 import { AI_COPILOT_SYSTEM_PROMPT, AI_COPILOT_TOOL_INSTRUCTIONS } from '../contracts/prompts.js';
-import type { OAuthCredentialBlob } from '@nexiom/credentials';
+import type { OAuthCredentialBlob } from '@soopa/credentials';
 
 @Injectable()
 export class OrchestratorService {

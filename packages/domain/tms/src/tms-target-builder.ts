@@ -1,9 +1,9 @@
 import { sql } from 'drizzle-orm';
-import type { AppTargetBuilderFn, AppsConnectorDb } from '@nexiom/piece-framework';
+import type { AppTargetBuilderFn, AppsConnectorDb } from '@soopa/piece-framework';
 import { buildTmsSchema } from './schema/tms-schema.js';
 
 // ---------------------------------------------------------------------------
-// TMS Target Builder Hook — @nexiom/domain-tms
+// TMS Target Builder Hook — @soopa/domain-tms
 //
 // Shared by ALL TMS source connectors.
 // Executes SQL lookups on indexed source_id columns:
@@ -99,7 +99,7 @@ export const tmsTargetBuilder: AppTargetBuilderFn = async (
     }
 
     if (missingDependencies.length > 0) {
-        const { DependenciesMissingError } = await import('@nexiom/piece-framework');
+        const { DependenciesMissingError } = await import('@soopa/piece-framework');
         throw new DependenciesMissingError(missingDependencies);
     }
 

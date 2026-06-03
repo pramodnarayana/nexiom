@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("RegistryOutboxPoller", () => {

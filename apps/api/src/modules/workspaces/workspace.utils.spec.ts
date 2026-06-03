@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
 import { requireOrgId } from './workspace.utils.js';
-import type { RequestAuthContext } from '@nexiom/auth';
+import type { RequestAuthContext } from '@soopa/auth';
 
 function makeAuth(organizationId?: string): RequestAuthContext {
   return {

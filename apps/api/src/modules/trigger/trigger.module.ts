@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
 import { DbModule } from '../../db/db.module.js';
-import { REDIS_CLIENT } from '@nexiom/cache';
-import type { Redis } from '@nexiom/cache';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { REDIS_CLIENT } from '@soopa/cache';
+import type { Redis } from '@soopa/cache';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { StorageResolverModule, StorageResolverService } from '@nexiom/engine';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
+import { StorageResolverModule, StorageResolverService } from '@soopa/engine';
 
 /**
  * Wires all trigger-related services.

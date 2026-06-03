@@ -13,12 +13,12 @@ import {
   Delete,
   Logger,
 } from '@nestjs/common';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
-import type { ITenantProvider, IUserProvider, User } from '@nexiom/identity';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
+import type { ITenantProvider, IUserProvider, User } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { CreateUser } from './users.validation.js';
 import { Request } from 'express';
-import { AuthGuard, PermissionsGuard, RequirePermission } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard, RequirePermission } from '@soopa/auth';
 
 // Union type to support both real Users and Pending Invitations in the same list
 export type UserListItem =

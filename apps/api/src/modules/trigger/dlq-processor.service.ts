@@ -6,7 +6,7 @@ import {
   TriggerExecutorService,
   type TriggerRunParams,
 } from './trigger-executor.service.js';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 
 const MAX_ATTEMPTS = 3;
 

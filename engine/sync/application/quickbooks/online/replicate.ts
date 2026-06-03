@@ -1,4 +1,4 @@
-import type { ReplicaEntityPayload } from '@nexiom/piece-framework';
+import type { ReplicaEntityPayload } from '@soopa/piece-framework';
 
 /**
  * Extracts a QuickBooks entity from the webhook payload.

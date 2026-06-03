@@ -3,7 +3,7 @@ import {
   ExecutionContext,
   InternalServerErrorException,
 } from "@nestjs/common";
-import { User, Session } from "@nexiom/identity";
+import { User, Session } from "@soopa/identity";
 import { Request } from "express";
 
 export interface RequestAuthContext {

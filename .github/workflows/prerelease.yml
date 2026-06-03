@@ -1,0 +1,54 @@
+name: Snapshot Release
+
+on:
+  push:
+    branches:
+      - development
+
+jobs:
+  prerelease:
+    name: Build & Publish Snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        run: corepack enable pnpm && corepack prepare --activate
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Packages
+        run: pnpm build
+
+      - name: Create Temporary Changeset
+        run: |
+          cat << 'EOF' > .changeset/snapshot.md
+          ---
+          '@soopa/piece-framework': patch
+          ---
+          
+          Snapshot release for downstream testing.
+          EOF
+
+      - name: Enter Pre mode
+        run: pnpm changeset pre enter dev
+
+      - name: Version Snapshot
+        run: pnpm changeset version
+
+      - name: Publish Snapshot
+        run: pnpm changeset publish --no-git-tag --tag dev
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

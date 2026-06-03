@@ -15,7 +15,7 @@ Refactor the current codebase to align with the "Open Source Package Architectur
 
 ## Why This Matters
 
-**Architecture:** Align with the vision of standalone open-source packages (@nexiom/identity)  
+**Architecture:** Align with the vision of standalone open-source packages (@soopa/identity)  
 **Technical Debt:** Avoid building new security features on a coupled monolith structure  
 **Maintainability:** Clear separation of concerns between API (HTTP) and Core Logic (Packages)  
 

@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { DeliveryService } from "./delivery.service.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
-import { PieceRegistryService } from "@nexiom/piece-registry";
-import { TokenManagerService } from "@nexiom/credentials";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { StorageResolverService } from "@soopa/engine";
+import { PieceRegistryService } from "@soopa/piece-registry";
+import { TokenManagerService } from "@soopa/credentials";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("DeliveryService", () => {
@@ -322,7 +322,7 @@ describe("DeliveryService", () => {
   });
 
   it("should set RETRY status and throw when piece throws RetryableException", async () => {
-    const { RetryableException } = await import("@nexiom/piece-framework");
+    const { RetryableException } = await import("@soopa/piece-framework");
     pieceRegistry
       .getPiece()
       .executeAction.mockRejectedValueOnce(

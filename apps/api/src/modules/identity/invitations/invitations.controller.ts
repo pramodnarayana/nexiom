@@ -4,8 +4,8 @@ import {
   CreateInvitation,
   AcceptInvitation,
 } from './invitations.validation.js';
-import { AuthGuard, AuthContext, type RequestAuthContext } from '@nexiom/auth';
-import type { User } from '@nexiom/identity';
+import { AuthGuard, AuthContext, type RequestAuthContext } from '@soopa/auth';
+import type { User } from '@soopa/identity';
 
 @Controller('invitations')
 export class InvitationsController {

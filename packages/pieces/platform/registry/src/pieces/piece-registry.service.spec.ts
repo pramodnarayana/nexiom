@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Piece } from '@nexiom/piece-framework';
+import type { Piece } from '@soopa/piece-framework';
 import { PieceRegistryService } from '../index.js';
 
 // A minimal mock piece — this service is generic and has no knowledge of real integrations.

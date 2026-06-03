@@ -8,7 +8,7 @@
 
 ## 1. Architectural Context (C4 Model)
 
-The **Identity Module** (`@nexiom/identity`) is the "Security Kernel" of the Nexiom Platform. It is NOT just a user table; it is the **Authority** for:
+The **Identity Module** (`@soopa/identity`) is the "Security Kernel" of the Nexiom Platform. It is NOT just a user table; it is the **Authority** for:
 
 1. **Authentication:** Who are you? (Users/Machines)
 2. **Multitenancy:** Which data silo do you own? (Tenant Resolution)
@@ -26,7 +26,7 @@ C4Context
     
     System_Boundary(nexiom, "Nexiom Platform") {
         System(api, "API Monolith", "NestJS Backend")
-        System(identity, "Identity Kernel", "@nexiom/identity Package")
+        System(identity, "Identity Kernel", "@soopa/identity Package")
         System(db, "Database", "Postgres (Public & Tenant Schemas)")
     }
 
@@ -49,7 +49,7 @@ C4Container
     }
 
     Container_Boundary(libs, "Shared Libraries") {
-        Container(identity_pkg, "Identity Package", "@nexiom/identity", "Interfaces, Adapters, Guards")
+        Container(identity_pkg, "Identity Package", "@soopa/identity", "Interfaces, Adapters, Guards")
     }
 
     ContainerDb(db_users, "Public Schema", "Postgres", "Users, Tenants, Memberships")
@@ -72,7 +72,7 @@ sequenceDiagram
     participant Gateway as Layer 1 (Gateway)
     participant Worker as Layer 2-4 (Pipeline)
     participant Delivery as Layer 5 (Delivery)
-    participant Identity as @nexiom/identity
+    participant Identity as @soopa/identity
     participant DB as Public Schema
 
     Note over Gateway: 1. Ingestion

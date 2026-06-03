@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SalesforceQueryAdapter } from './salesforce-query.adapter.js';
-import type { ObjectSchema } from '@nexiom/piece-framework/discovery';
+import type { ObjectSchema } from '@soopa/piece-framework/discovery';
 
 describe('SalesforceQueryAdapter', () => {
     let adapter: SalesforceQueryAdapter;

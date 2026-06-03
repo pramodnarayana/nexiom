@@ -6,20 +6,20 @@ import {
   Logger,
 } from "@nestjs/common";
 import { eq } from "drizzle-orm";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName } from "@soopa/queue";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
   dataSources,
-} from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
+} from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
   PipelineHookBrokerService,
-} from "@nexiom/engine";
-import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
-import { PieceRegistryService } from "@nexiom/piece-registry";
+} from "@soopa/engine";
+import { DB_MANAGER, type TenantDatabaseManager } from "@soopa/dbmanager";
+import { PieceRegistryService } from "@soopa/piece-registry";
 import { sql } from "drizzle-orm";
 import {
   sanitizeError,

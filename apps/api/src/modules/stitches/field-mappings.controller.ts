@@ -18,14 +18,14 @@ import {
   RequirePermission,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
+} from '@soopa/auth';
 import { and, eq } from 'drizzle-orm';
 import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   fieldMappings,
   integrationStitches,
-} from '@nexiom/database';
+} from '@soopa/database';
 import {
   UpsertFieldMappingBody,
   BulkUpsertAndDeleteBody,

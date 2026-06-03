@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/mcp",
+  "name": "@soopa/mcp",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "zod": "^4.3.5"
   },
   "devDependencies": {

@@ -1,17 +1,17 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import type { Trigger, TriggerContext } from '@nexiom/piece-framework';
-import type { DrizzleDb } from '@nexiom/database';
+import type { Trigger, TriggerContext } from '@soopa/piece-framework';
+import type { DrizzleDb } from '@soopa/database';
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
   dataSources,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { sql, eq } from 'drizzle-orm';
-import { SchemaPlan } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { StorageResolverService } from '@nexiom/engine';
+import { SchemaPlan } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { StorageResolverService } from '@soopa/engine';
 import type { Redis } from 'ioredis';
 import { createHash, randomUUID } from 'node:crypto';
 import { RedisBackedTriggerStore } from './redis-trigger-store.js';

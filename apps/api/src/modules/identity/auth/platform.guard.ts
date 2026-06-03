@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { AuthService, type RequestAuthContext } from '@nexiom/auth';
+import { AuthService, type RequestAuthContext } from '@soopa/auth';
 import { Request } from 'express';
 import { toWebHeaders } from '../../../common/utils/headers.util.js';
 

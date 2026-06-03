@@ -4,7 +4,7 @@ import { ExceptionService } from './exception.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { AuthGuard, type RequestAuthContext } from '@nexiom/auth';
+import { AuthGuard, type RequestAuthContext } from '@soopa/auth';
 
 describe('ExceptionController', () => {
   let controller: ExceptionController;

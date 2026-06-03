@@ -75,7 +75,7 @@ erDiagram
 
 ## 4. Backend Implementation (The Kernel)
 
-The `@nexiom/identity` package explicitly defines the contract.
+The `@soopa/identity` package explicitly defines the contract.
 
 ### Interface
 

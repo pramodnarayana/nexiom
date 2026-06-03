@@ -2,8 +2,8 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { WebhooksController } from './webhooks.controller.js';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { TriggerStrategy } from '@nexiom/piece-framework';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { TriggerStrategy } from '@soopa/piece-framework';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
 
 function makeDb(row: unknown = null) {
@@ -52,7 +52,7 @@ describe('WebhooksController', () => {
 
   it('should return { received: true } on success', async () => {
     const controller = new WebhooksController(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       registry,
       executor,
     );
@@ -70,7 +70,7 @@ describe('WebhooksController', () => {
   it('should throw NotFoundException when connection is not found', async () => {
     const emptyDb = makeDb(null);
     const controller = new WebhooksController(
-      emptyDb as unknown as import('@nexiom/database').DrizzleDb,
+      emptyDb as unknown as import('@soopa/database').DrizzleDb,
       registry,
       executor,
     );
@@ -83,7 +83,7 @@ describe('WebhooksController', () => {
   it('should throw NotFoundException when trigger is not a WEBHOOK type', async () => {
     const pollingRegistry = makeRegistry(TriggerStrategy.POLLING);
     const controller = new WebhooksController(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       pollingRegistry,
       executor,
     );
@@ -99,7 +99,7 @@ describe('WebhooksController', () => {
     );
 
     const controller = new WebhooksController(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       registry,
       executor,
     );
@@ -113,7 +113,7 @@ describe('WebhooksController', () => {
     (executor.runWebhook as Mock).mockRejectedValue(new Error('internal'));
 
     const controller = new WebhooksController(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       registry,
       executor,
     );

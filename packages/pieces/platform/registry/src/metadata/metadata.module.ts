@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { CacheModule } from '@nexiom/cache';
+import { CacheModule } from '@soopa/cache';
 import { PiecesModule } from '../pieces/pieces.module.js';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
 

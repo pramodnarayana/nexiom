@@ -1,5 +1,5 @@
 import { Controller, Param, Sse, UseGuards, Inject } from '@nestjs/common';
-import { AuthGuard } from '@nexiom/auth';
+import { AuthGuard } from '@soopa/auth';
 import type { Redis } from 'ioredis';
 import { Observable } from 'rxjs';
 import { PinoLogger } from 'nestjs-pino';

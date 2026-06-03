@@ -6,13 +6,13 @@ import {
   OnModuleDestroy,
 } from "@nestjs/common";
 import { eq } from "drizzle-orm";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName } from "@soopa/queue";
 import {
   DATABASE_CONNECTION,
   dataSources,
   type DrizzleDb,
-} from "@nexiom/database";
-import { PipelineHookBrokerService } from "@nexiom/engine";
+} from "@soopa/database";
+import { PipelineHookBrokerService } from "@soopa/engine";
 import {
   sanitizeError,
   isValidPipelineMessage,

@@ -1,18 +1,18 @@
 import { Module } from "@nestjs/common";
-import { QueueModule } from "@nexiom/queue";
+import { QueueModule } from "@soopa/queue";
 import { DbModule } from "../../db/db.module.js";
 import { DbManagerModule } from "../dbmanager/dbmanager.module.js";
-import { StorageResolverModule, ApplicationLoaderModule } from "@nexiom/engine";
+import { StorageResolverModule, ApplicationLoaderModule } from "@soopa/engine";
 import {
   TokenManagerService,
   AesEncryptionService,
   EncryptionService,
   OAuthRefreshClient,
-} from "@nexiom/credentials";
+} from "@soopa/credentials";
 import { RegistryOAuthRefreshClient } from "./registry-token-refresh.service.js";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
-import { PiecesModule } from "@nexiom/piece-registry";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
+import { PiecesModule } from "@soopa/piece-registry";
 import type { Redis } from "ioredis";
 
 import { ReplicaService } from "./replica.service.js";

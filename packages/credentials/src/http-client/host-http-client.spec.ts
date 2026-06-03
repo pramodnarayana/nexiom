@@ -7,11 +7,11 @@ import {
     httpClient,
     initializeHttpClient,
     HttpMethod,
-} from '@nexiom/piece-framework';
-import type { NormalizedRecord, VendorResponse } from '@nexiom/piece-framework';
+} from '@soopa/piece-framework';
+import type { NormalizedRecord, VendorResponse } from '@soopa/piece-framework';
 import { HostHttpClient } from './host-http-client.js';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
-import { DrizzleDb } from '@nexiom/database';
+import { DrizzleDb } from '@soopa/database';
 import { Redis } from 'ioredis';
 
 describe('Activepieces Framework Native Shim', () => {

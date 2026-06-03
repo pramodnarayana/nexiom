@@ -1,8 +1,14 @@
 {
-  "name": "@nexiom/piece-framework",
+  "name": "@soopa/piece-framework",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pramodnarayana/nexiom.git"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

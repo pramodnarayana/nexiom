@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { OauthStateService } from './oauth-state.service.js';
 import { UnauthorizedException } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
-import { REDIS_CLIENT } from '@nexiom/cache';
+import { REDIS_CLIENT } from '@soopa/cache';
 
 describe('OauthStateService', () => {
   let service: OauthStateService;

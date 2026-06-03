@@ -4,9 +4,9 @@ export declare const normalize: (replica: {
     entityType: string;
     data: Record<string, unknown>;
 }) => Promise<{
-    canonicalType: import("@nexiom/piece-framework").NormalizedEntityType;
+    canonicalType: import("@soopa/piece-framework").NormalizedEntityType;
     data: Record<string, unknown>;
 } | null>;
-export declare const writeNormalized: import("@nexiom/piece-framework").AppNormalizedWriterFn;
-export declare const buildTarget: import("@nexiom/piece-framework").AppTargetBuilderFn;
-export declare const provisionDomain: typeof import("@nexiom/domain-tms").provisionTmsTables;
+export declare const writeNormalized: import("@soopa/piece-framework").AppNormalizedWriterFn;
+export declare const buildTarget: import("@soopa/piece-framework").AppTargetBuilderFn;
+export declare const provisionDomain: typeof import("@soopa/domain-tms").provisionTmsTables;

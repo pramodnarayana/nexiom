@@ -1,5 +1,5 @@
 /**
- * @nexiom/mapping — Shared types for the Standard Execution Engine.
+ * @soopa/mapping — Shared types for the Standard Execution Engine.
  *
  * These types are the contract between:
  *  - The API (which stores mapping expressions in field_mapping table)

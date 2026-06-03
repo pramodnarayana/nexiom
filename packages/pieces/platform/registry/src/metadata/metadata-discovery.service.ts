@@ -13,17 +13,17 @@ import {
   type DrizzleDb,
   connectorObjectProfiles,
   dataSources,
-} from '@nexiom/database';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
-import { TokenManagerService } from '@nexiom/credentials';
+} from '@soopa/database';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
+import { TokenManagerService } from '@soopa/credentials';
 import { PieceRegistryService } from '../pieces/piece-registry.service.js';
-import type { OAuthCredentialBlob } from '@nexiom/credentials';
+import type { OAuthCredentialBlob } from '@soopa/credentials';
 import type {
   ObjectDescriptor,
   FieldDescriptor,
   ConfigOption,
   RelatedObjectDescriptor,
-} from '@nexiom/piece-framework';
+} from '@soopa/piece-framework';
 
 // Single source of truth for metadata cache TTL.
 const TTL_SECONDS = 5 * 60; // 5 minutes

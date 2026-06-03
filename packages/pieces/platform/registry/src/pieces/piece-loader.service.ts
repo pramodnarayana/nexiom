@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import type { Piece } from '@nexiom/piece-framework';
-import { pieces, type DrizzleDb } from '@nexiom/database';
+import type { Piece } from '@soopa/piece-framework';
+import { pieces, type DrizzleDb } from '@soopa/database';
 
 /**
  * Injection token for the host application's `import.meta.url`.
@@ -48,7 +48,7 @@ export class PieceLoaderService {
       try {
         // Resolve through the host application's module graph so pnpm strict
         // linking doesn't hide pieces that are installed in apps/api but
-        // not declared as explicit deps of @nexiom/engine.
+        // not declared as explicit deps of @soopa/engine.
         //
         // Anchor precedence:
         //   1. PIECE_LOADER_ANCHOR_URL token (set by host via PiecesModule.forRoot)

@@ -23,7 +23,7 @@ export {
   permissionRelations,
   rolePermissionRelations,
   organizationStatusEnum,
-} from "@nexiom/database";
+} from "@soopa/database";
 
 export type {
   User,
@@ -37,23 +37,23 @@ export type {
   Account,
   Verification,
   AbacConditions,
-} from "@nexiom/database";
+} from "@soopa/database";
 
 // Engine schema — decoupled model (separate dataSources and credentials tables/entities)
-export { dataSources, credentials } from "@nexiom/database";
+export { dataSources, credentials } from "@soopa/database";
 
 // Piece registry
-export { pieces } from "@nexiom/database";
+export { pieces } from "@soopa/database";
 
 // Infrastructure registry — maps tenant IDs to physical DB location
-export { tenantStorageRegistry } from "@nexiom/database";
+export { tenantStorageRegistry } from "@soopa/database";
 
 // Workspaces — logical folders grouping connections per team/environment
 export {
   uiWorkspaces,
   uiWorkspaceDataSources,
   envTypeEnum,
-} from "@nexiom/database";
+} from "@soopa/database";
 
 // Stitches — integration sync paths between source and destination connections
 export {
@@ -62,17 +62,17 @@ export {
   stitchStatusEnum,
   integrationStitchesRelations,
   fieldMappingsRelations,
-} from "@nexiom/database";
+} from "@soopa/database";
 
 // Scheduler — Singer-style polling cursors (control-plane, public schema)
-export { syncCursors } from "@nexiom/database";
+export { syncCursors } from "@soopa/database";
 
 // Scheduler outbox — durable transactional outbox for Windmill schedule sync
 export {
   schedulerOutbox,
   schedulerOutboxActionEnum,
   schedulerOutboxStatusEnum,
-} from "@nexiom/database";
+} from "@soopa/database";
 
 // Global Entity Map - maps cross-system records
-export { globalEntityMap } from "@nexiom/database";
+export { globalEntityMap } from "@soopa/database";

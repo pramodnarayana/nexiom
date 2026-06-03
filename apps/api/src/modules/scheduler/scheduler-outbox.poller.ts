@@ -7,7 +7,7 @@ import {
   type DrizzleDb,
   schedulerOutbox,
   dataSources,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { SchedulerService } from './scheduler.service.js';
 
 // 1 initial attempt + 5 retries = 6 total attempts.

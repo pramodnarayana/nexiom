@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/metadata-engine",
+  "name": "@soopa/metadata-engine",
   "version": "0.0.1",
   "type": "module",
   "description": "Unified Metadata-Driven Engine for Nexiom",

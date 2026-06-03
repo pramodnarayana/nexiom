@@ -7,7 +7,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { eq, sql } from "drizzle-orm";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName } from "@soopa/queue";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
@@ -15,14 +15,14 @@ import {
   integrationStitches,
   dataSources,
   globalEntityMap,
-} from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
-import { PieceRegistryService } from "@nexiom/piece-registry";
-import { TokenManagerService } from "@nexiom/credentials";
-import { RetryableException } from "@nexiom/piece-framework";
-import { DB_MANAGER } from "@nexiom/dbmanager";
-import type { DatabaseManager } from "@nexiom/dbmanager";
+} from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
+import { StorageResolverService } from "@soopa/engine";
+import { PieceRegistryService } from "@soopa/piece-registry";
+import { TokenManagerService } from "@soopa/credentials";
+import { RetryableException } from "@soopa/piece-framework";
+import { DB_MANAGER } from "@soopa/dbmanager";
+import type { DatabaseManager } from "@soopa/dbmanager";
 
 import {
   sanitizeError,

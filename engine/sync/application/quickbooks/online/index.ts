@@ -1,4 +1,4 @@
-import type { ApplicationShardModule } from '@nexiom/piece-framework';
+import type { ApplicationShardModule } from '@soopa/piece-framework';
 import { ReplicateQBObject } from './replicate.js';
 import { NormaliseQBObject } from './normalise.js';
 import { PrepareQBUpdatePayload } from './prepare-update.js';

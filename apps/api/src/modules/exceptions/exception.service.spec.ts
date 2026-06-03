@@ -6,17 +6,17 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ExceptionService } from './exception.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { StorageResolverService } from '@nexiom/engine';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { StorageResolverService } from '@soopa/engine';
+import { QueueService, QueueName } from '@soopa/queue';
 import { PinoLogger } from 'nestjs-pino';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@nexiom/database', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@nexiom/database')>();
+vi.mock('@soopa/database', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@soopa/database')>();
   return {
     ...actual,
     buildTenantSchema: vi.fn(() => ({

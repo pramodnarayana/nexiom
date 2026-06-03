@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/application-salesforce-revenova",
+  "name": "@soopa/application-salesforce-revenova",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -18,8 +18,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nexiom/domain-tms": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*"
+    "@soopa/domain-tms": "workspace:*",
+    "@soopa/piece-framework": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

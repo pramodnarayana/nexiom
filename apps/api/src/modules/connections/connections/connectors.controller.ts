@@ -23,10 +23,10 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
-import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
-import { getAdminRoleId, getOwnerRoleId } from '@nexiom/identity/constants';
-import { EncryptionService, AppCredentialError } from '@nexiom/credentials';
-import type { AnyProperty } from '@nexiom/piece-framework';
+import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
+import { getAdminRoleId, getOwnerRoleId } from '@soopa/identity/constants';
+import { EncryptionService, AppCredentialError } from '@soopa/credentials';
+import type { AnyProperty } from '@soopa/piece-framework';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
 import {
@@ -36,11 +36,11 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   member,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { eq, and, count, desc } from 'drizzle-orm';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import type { ConnectionValueBlob } from '../connectors.service.js';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import { CreateOAuthSession } from '../validation/create-oauth-session.js';
 import { ExchangeOAuthCode } from '../validation/exchange-oauth-code.js';
 import { VALID_PROVIDER_NAME_REGEX } from '../validation/constants.js';

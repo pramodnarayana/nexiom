@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/domain-tms",
+  "name": "@soopa/domain-tms",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -18,8 +18,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nexiom/metadata-engine": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/metadata-engine": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {

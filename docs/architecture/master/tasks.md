@@ -268,7 +268,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
   - Step 3: Returns `{ payload, warnings }` — warnings for unmapped fields, missing formula args
   - `FanOutService` (`apps/worker`) updated to call `MappingEngine.build()` in place of legacy `hydratePayload()`
 
-- [x] **`engine/application/mapping/package.json`** — `@nexiom/mapping`, exports `MappingEngine`, types
+- [x] **`engine/application/mapping/package.json`** — `@soopa/mapping`, exports `MappingEngine`, types
 
 - [x] **Unit tests** (`mapping-engine.spec.ts`)
   - Field mapping: src path resolved, dest path set
@@ -465,7 +465,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 - [x] Consumes `Normalized_Queue` via `QueueService.consume`
 - [x] Poison-pill guard — drops messages missing `traceId`/`connectionId` (ACK, no rethrow)
 - [x] Queries `integration_stitch` for active stitches on `src_connection_id`
-- [x] Evaluates `syncCondition` rules in-memory via `evaluateConditions()` from `@nexiom/engine`
+- [x] Evaluates `syncCondition` rules in-memory via `evaluateConditions()` from `@soopa/engine`
 - [x] Per matching stitch: hydrate payload via `field_mapping` rules with `hydratePayload()`
 - [x] **Writes `outbound_gateway` (PENDING) BEFORE `outbound_outbox`** — crash-safe ordering with `onConflictDoUpdate` for idempotency
 - [x] `outbound_outbox.payload` includes: `srcVendorId`, `canonicalType`, `srcAppName`, `srcTenantId` — all fields needed by DeliveryService (L5) to write the Global Entity Map without extra joins
@@ -546,14 +546,14 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 - [x] `sync_cursors` table defined in `packages/database/src/schema/stitches.ts`: `id UUID`, `stitch_id UUID` (FK → `integration_stitch.id` ON DELETE CASCADE), `stream_name VARCHAR(200)`, `state_document JSONB` (default `{"bookmarks":{},"versions":{},"currently_syncing":null}`), `created_at`/`updated_at TIMESTAMPTZ`
 - [x] Unique index on `(stitch_id, stream_name)` — keyed per stitch so two stitches sharing the same source connection maintain independent cursors
-- [x] Exported from `@nexiom/database` and `apps/api/src/db/schema.ts`
+- [x] Exported from `@soopa/database` and `apps/api/src/db/schema.ts`
 - [x] Migration SQL written: `packages/database/drizzle/0004_sync_cursors.sql`; journal updated
 - Files: `packages/database/src/schema/stitches.ts`, `packages/database/drizzle/0004_sync_cursors.sql`, `packages/database/drizzle/meta/_journal.json`
 - Depends: T001
 
 ### T047 · package: `packages/engine/` — `CursorManagerService`
 
-- [x] `cursor-manager.types.ts` — `StreamBookmark`, `SyncStateDocument`, `ExecuteStitchPayload`, `ExecuteStitchResult`, `StreamResult`; re-exports `ReplicationKeyType`, `StreamDescriptor`, `PollWindow`, `PollRecord`, `PollPage` from `@nexiom/connectors/framework`
+- [x] `cursor-manager.types.ts` — `StreamBookmark`, `SyncStateDocument`, `ExecuteStitchPayload`, `ExecuteStitchResult`, `StreamResult`; re-exports `ReplicationKeyType`, `StreamDescriptor`, `PollWindow`, `PollRecord`, `PollPage` from `@soopa/connectors/framework`
 - [x] `cursor-manager.service.ts` — `CursorManagerService`:
   - `calculateWindow(bookmark, catalog)` — timestamp/numeric/opaque; 5-min default safety buffer; epoch / '0' / '' on first run; FULL_TABLE returns opaque empty window
   - `trackHighWaterMark(records, currentMax, type)` — numeric max, lexicographic ISO-8601 max, opaque last-write-wins; returns `currentMax` on empty input
@@ -716,7 +716,7 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
 
 ### T053 · engine: Custom Logic Extension Hook (`isolated-vm`)
 
-- [ ] Add `isolated-vm` dependency to `@nexiom/engine`.
+- [ ] Add `isolated-vm` dependency to `@soopa/engine`.
 - [ ] Implement `LogicResolverService` that checks the local shard directory for a tenant's custom script before falling back to generic pipeline logic.
 - [ ] Run custom scripts within a secure `ivm.Isolate` context with strict memory buffers and timeouts (e.g., 128MB, 1s timeout) to prevent platform DoS.
 - Files: `packages/engine/src/executor/logic-resolver.ts`
@@ -772,18 +772,18 @@ target JSON payload. Uses path utilities from `engine/platform/path-utils/`.
   - **No existing code moves in this phase** — zero disruption
 
 - [x] **Phase 1 — Migrate engine platform primitives**
-  - Move `packages/engine/` → `engine/platform/core/` (`@nexiom/engine` package name unchanged)
+  - Move `packages/engine/` → `engine/platform/core/` (`@soopa/engine` package name unchanged)
   - `CursorManagerService`, `StorageResolver`, `evaluator`, `hydrator`, `path-utils` — all stay, just relocate
   - Update all import paths in `apps/api`, `apps/worker`
   - All tests must pass before merge
 
 - [x] **Phase 2 — Migrate piece framework**
-  - Move `packages/piece-framework/` → `engine/platform/piece-framework/` (`@nexiom/piece-framework` unchanged)
+  - Move `packages/piece-framework/` → `engine/platform/piece-framework/` (`@soopa/piece-framework` unchanged)
   - Generic `Piece`, `Action`, `Trigger`, `Poll` contracts only — no vendor code
 
 - [x] **Phase 3 — Migrate application packages**
-  - Move `packages/connectors/` → `engine/application/connectors/` (`@nexiom/connectors` unchanged)
-  - Move `packages/pieces/` → `engine/application/pieces/` (`@nexiom/pieces` unchanged)
+  - Move `packages/connectors/` → `engine/application/connectors/` (`@soopa/connectors` unchanged)
+  - Move `packages/pieces/` → `engine/application/pieces/` (`@soopa/pieces` unchanged)
   - Salesforce + QuickBooks implementations move with their tests
 
 - [x] **Phase 4 — Verify `packages/` contains only infrastructure**

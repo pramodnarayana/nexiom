@@ -5,9 +5,9 @@ import {
   DATABASE_CONNECTION,
   type DrizzleDb,
   globalRegistryOutbox,
-} from "@nexiom/database";
-import { QueueName } from "@nexiom/queue";
-import { QueueService } from "@nexiom/queue";
+} from "@soopa/database";
+import { QueueName } from "@soopa/queue";
+import { QueueService } from "@soopa/queue";
 import { processInChunks } from "./outbox.utils.js";
 
 const BATCH_SIZE = 50;

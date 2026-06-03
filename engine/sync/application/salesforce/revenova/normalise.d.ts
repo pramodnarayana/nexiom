@@ -1,4 +1,4 @@
-import type { NormalizedEntityType } from '@nexiom/piece-framework';
+import type { NormalizedEntityType } from '@soopa/piece-framework';
 export declare const NormaliseRevenovaObject: (replica: {
     entityType: string;
     data: Record<string, unknown>;

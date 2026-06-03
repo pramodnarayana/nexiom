@@ -1,8 +1,8 @@
 import { Injectable, Inject } from "@nestjs/common";
-import { BaseOAuthRefreshClient, EncryptionService } from "@nexiom/credentials";
-import { PropertyType } from "@nexiom/piece-framework";
-import { DATABASE_CONNECTION, type DrizzleDb } from "@nexiom/database";
-import { PieceRegistryService } from "@nexiom/piece-registry";
+import { BaseOAuthRefreshClient, EncryptionService } from "@soopa/credentials";
+import { PropertyType } from "@soopa/piece-framework";
+import { DATABASE_CONNECTION, type DrizzleDb } from "@soopa/database";
+import { PieceRegistryService } from "@soopa/piece-registry";
 
 @Injectable()
 export class RegistryOAuthRefreshClient extends BaseOAuthRefreshClient {

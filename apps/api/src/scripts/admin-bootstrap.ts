@@ -13,7 +13,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import * as schema from '../db/schema.js';
-import * as identitySchema from '@nexiom/identity/schema';
+import * as identitySchema from '@soopa/identity/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -22,7 +22,7 @@ import {
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
 } from '../constants.js';
-import { seedSystemRbac } from '@nexiom/identity/utils/rbac-seeding';
+import { seedSystemRbac } from '@soopa/identity/utils/rbac-seeding';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];

@@ -16,7 +16,7 @@ import {
   dataSources,
   credentials,
   AppConnectionStatus,
-} from '@nexiom/database';
+} from '@soopa/database';
 import type {
   CreateWorkspace,
   UpdateWorkspace,

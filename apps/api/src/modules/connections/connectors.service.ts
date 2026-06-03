@@ -11,10 +11,10 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppCredentialError } from '@nexiom/credentials';
-import { resolveOAuth2Url, PropertyType } from '@nexiom/piece-framework';
-import type { OAuthCredentialBlob } from '@nexiom/credentials';
-import type { OAuth2Auth } from '@nexiom/piece-framework';
+import { AppCredentialError } from '@soopa/credentials';
+import { resolveOAuth2Url, PropertyType } from '@soopa/piece-framework';
+import type { OAuthCredentialBlob } from '@soopa/credentials';
+import type { OAuth2Auth } from '@soopa/piece-framework';
 import {
   dataSources,
   credentials,
@@ -23,13 +23,13 @@ import {
   globalRegistryOutbox,
   type DrizzleDb,
   globalEntityMap,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { eq, and, or, sql } from 'drizzle-orm';
-import { SchemaPlan, getWorkspaceSchemaName } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { StorageResolverService } from '@nexiom/engine';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { SchemaPlan, getWorkspaceSchemaName } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { StorageResolverService } from '@soopa/engine';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import { extractPgError, PG_UNIQUE_VIOLATION } from '../../shared/db.utils.js';
 
 /**

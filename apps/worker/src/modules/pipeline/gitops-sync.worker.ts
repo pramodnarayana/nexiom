@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, OnModuleInit } from "@nestjs/common";
-import { ApplicationLoaderService } from "@nexiom/engine";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { ApplicationLoaderService } from "@soopa/engine";
+import { QueueService, QueueName } from "@soopa/queue";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";

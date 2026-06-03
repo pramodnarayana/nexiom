@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TriggerExecutorService } from './trigger-executor.service.js';
-import { TriggerStrategy } from '@nexiom/piece-framework';
-import type { Trigger } from '@nexiom/piece-framework';
+import { TriggerStrategy } from '@soopa/piece-framework';
+import type { Trigger } from '@soopa/piece-framework';
 
 function makeMockDb() {
   const where = vi.fn().mockResolvedValue([]);
@@ -68,14 +68,14 @@ describe('TriggerExecutorService', () => {
     db = makeMockDb();
     redis = makeMockRedis();
     service = new TriggerExecutorService(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       redis as unknown as import('ioredis').Redis,
       {
         applyPlan: vi.fn(),
-      } as unknown as import('@nexiom/dbmanager').DatabaseManager,
+      } as unknown as import('@soopa/dbmanager').DatabaseManager,
       {
         resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
-      } as unknown as import('@nexiom/engine').StorageResolverService,
+      } as unknown as import('@soopa/engine').StorageResolverService,
     );
   });
 

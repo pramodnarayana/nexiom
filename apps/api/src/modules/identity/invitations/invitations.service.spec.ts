@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvitationsService } from './invitations.service.js';
-import { AUTH_PROVIDER, IAuthProvider } from '@nexiom/identity';
+import { AUTH_PROVIDER, IAuthProvider } from '@soopa/identity';
 
 describe('InvitationsService', () => {
   let service: InvitationsService;

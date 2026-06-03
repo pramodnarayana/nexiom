@@ -346,7 +346,7 @@ export class DatabaseManager {
     const schema = await import('./schema.js');
     const { eq, sql, notInArray } = await import('drizzle-orm');
     const { seedSystemRbac } =
-      await import('@nexiom/identity/utils/rbac-seeding');
+      await import('@soopa/identity/utils/rbac-seeding');
     const {
       getRequiredOwnerRoleId,
       getRequiredAdminRoleId,
@@ -384,7 +384,7 @@ export class DatabaseManager {
       };
 
       // Create a separate DB instance with identity schema for seedSystemRbac
-      const identitySchema = await import('@nexiom/identity/schema');
+      const identitySchema = await import('@soopa/identity/schema');
       const identityDb = drizzle(client, { schema: identitySchema });
       await seedSystemRbac(identityDb, config, console);
 
@@ -913,12 +913,12 @@ export class DatabaseManager {
    */
   private async withSchemaMgr<T>(
     cb: (
-      mgr: import('@nexiom/dbmanager').TenantDatabaseManager,
-      db: import('@nexiom/database').DrizzleDb,
+      mgr: import('@soopa/dbmanager').TenantDatabaseManager,
+      db: import('@soopa/database').DrizzleDb,
     ) => Promise<T>,
   ): Promise<T> {
-    const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
-    const { getDomainProvisioner } = await import('@nexiom/piece-framework');
+    const { TenantDatabaseManager } = await import('@soopa/dbmanager');
+    const { getDomainProvisioner } = await import('@soopa/piece-framework');
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const { Pool } = await import('pg');
     const dbSchema = await import('./schema.js');
@@ -928,7 +928,7 @@ export class DatabaseManager {
       const db = drizzle(client, { schema: dbSchema });
       const { dbUrl } = await this.resolvePgModule();
       const schemaMgr = new TenantDatabaseManager(
-        db as unknown as import('@nexiom/database').DrizzleDb,
+        db as unknown as import('@soopa/database').DrizzleDb,
         (hostIdentifier: string) => {
           // Rehydrate credentials from DATABASE_URL
           // The hostIdentifier is just protocol://host:port, so we need to merge with credentials
@@ -949,13 +949,13 @@ export class DatabaseManager {
           });
           return drizzle(pool, {
             schema: dbSchema,
-          }) as unknown as import('@nexiom/database').DrizzleDb;
+          }) as unknown as import('@soopa/database').DrizzleDb;
         },
         getDomainProvisioner,
       );
       return await cb(
         schemaMgr,
-        db as unknown as import('@nexiom/database').DrizzleDb,
+        db as unknown as import('@soopa/database').DrizzleDb,
       );
     } finally {
       await client.end();
@@ -1134,18 +1134,17 @@ export class DatabaseManager {
         tenantPool = new Pool({ connectionString: tenantUrl, max: 5 });
         const tenantDb = drizzle(tenantPool, { schema: dbSchema });
 
-        const { SchemaPlan } = await import('@nexiom/dbmanager');
-        const { TenantDatabaseManager } = await import('@nexiom/dbmanager');
-        const { getDomainProvisioner } =
-          await import('@nexiom/piece-framework');
+        const { SchemaPlan } = await import('@soopa/dbmanager');
+        const { TenantDatabaseManager } = await import('@soopa/dbmanager');
+        const { getDomainProvisioner } = await import('@soopa/piece-framework');
 
         const schemaMgr = new TenantDatabaseManager(
-          globalDb as unknown as import('@nexiom/database').DrizzleDb,
+          globalDb as unknown as import('@soopa/database').DrizzleDb,
           (_hostIdentifier: string) => {
             const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
             return drizzle(pool2, {
               schema: dbSchema,
-            }) as unknown as import('@nexiom/database').DrizzleDb;
+            }) as unknown as import('@soopa/database').DrizzleDb;
           },
           getDomainProvisioner,
         );
@@ -1189,7 +1188,7 @@ export class DatabaseManager {
           },
         ];
 
-        const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+        const { getWorkspaceSchemaName } = await import('@soopa/dbmanager');
 
         for (const fixture of fixtures) {
           const encryptedValue = this.encryptFixture(
@@ -1334,7 +1333,7 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log(`🔧 Applying GATEWAY_ACTIVE to schema: ${schemaName}...\n`);
 
-    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const { SchemaPlan } = await import('@soopa/dbmanager');
     const dbSchema = await import('./schema.js');
     const { eq } = await import('drizzle-orm');
 
@@ -1372,7 +1371,7 @@ export class DatabaseManager {
     this.assertSafeEnvironment();
     console.log(`🔧 Applying OUTBOUND_ACTIVE to schema: ${schemaName}...\n`);
 
-    const { SchemaPlan } = await import('@nexiom/dbmanager');
+    const { SchemaPlan } = await import('@soopa/dbmanager');
     const dbSchema = await import('./schema.js');
     const { eq } = await import('drizzle-orm');
 
@@ -1685,7 +1684,7 @@ export class DatabaseManager {
       const allPermissions = new Set<string>();
 
       const { normalizeRole } =
-        await import('@nexiom/identity/utils/role-normalization');
+        await import('@soopa/identity/utils/role-normalization');
 
       // Resolve Member Role Permissions (this is what the app actually uses)
       if (user.members && user.members.length > 0) {

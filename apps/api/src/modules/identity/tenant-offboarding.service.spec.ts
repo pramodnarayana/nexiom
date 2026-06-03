@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TenantOffboardingService } from './tenant-offboarding.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { vi, type Mock } from 'vitest';
 import type { SQL } from 'drizzle-orm';
 
@@ -173,7 +173,7 @@ describe('TenantOffboardingService', () => {
     expect(db.transaction).toHaveBeenCalledTimes(1);
 
     // Import the schema helper to compute the expected normalized schema name
-    const { getWorkspaceSchemaName } = await import('@nexiom/dbmanager');
+    const { getWorkspaceSchemaName } = await import('@soopa/dbmanager');
     const expectedSchemaName = getWorkspaceSchemaName(
       'conn-2',
       'SalesForce-API',

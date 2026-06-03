@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryReplicationService } from "./registry-replication.service.js";
-import { QueueService } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+import { QueueService } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("RegistryReplicationService", () => {

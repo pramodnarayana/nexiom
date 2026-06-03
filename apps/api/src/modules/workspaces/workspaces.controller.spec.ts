@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { ORG_ID, WS_ID, makeAuth } from './workspace-test-fixtures.js';

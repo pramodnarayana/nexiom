@@ -11,16 +11,16 @@ import {
   Req,
   ValidationPipe,
 } from '@nestjs/common';
-import { AuthGuard } from '@nexiom/auth';
+import { AuthGuard } from '@soopa/auth';
 import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiTelemetryInterceptor } from '../interceptors/ai-telemetry.interceptor.js';
 import {
   OrchestratorService,
   ChatRequest,
   ChatPersistenceService,
-} from '@nexiom/ai-engine';
-import { QueueName, QUEUE_SERVICE } from '@nexiom/queue';
-import type { IQueueService } from '@nexiom/queue';
+} from '@soopa/ai-engine';
+import { QueueName, QUEUE_SERVICE } from '@soopa/queue';
+import type { IQueueService } from '@soopa/queue';
 import { PinoLogger } from 'nestjs-pino';
 import { Inject } from '@nestjs/common';
 

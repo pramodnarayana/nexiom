@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { SchedulerOutboxPoller } from './scheduler-outbox.poller.js';
 import { SchedulerService } from './scheduler.service.js';
 
@@ -22,7 +22,7 @@ const CONNECTION = {
 function makeRecord(
   action: 'CREATED' | 'UPDATED' | 'DELETED',
   attempts = 0,
-): typeof import('@nexiom/database').schedulerOutbox.$inferSelect {
+): typeof import('@soopa/database').schedulerOutbox.$inferSelect {
   return {
     id: RECORD_ID,
     dataSourceId: CONNECTION_ID,

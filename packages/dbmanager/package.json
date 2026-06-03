@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/dbmanager",
+  "name": "@soopa/dbmanager",
   "version": "0.0.1",
   "type": "module",
   "description": "Declarative schema manager for Nexiom",
@@ -9,7 +9,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@nexiom/database": "workspace:*",
+    "@soopa/database": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {

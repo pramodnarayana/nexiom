@@ -10,10 +10,10 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
 import { eq } from 'drizzle-orm';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import {
   WEBHOOK_RESOLVED_CONNECTION,
   type WebhookResolvedConnection,

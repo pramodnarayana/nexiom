@@ -154,7 +154,7 @@ async executeAction(objectType: string, payload: Record<string, unknown>, creden
 1. **Replace raw `app_connection` query** with typed `appConnections` Drizzle query:
 
    ```typescript
-   import { appConnections } from '@nexiom/database';
+   import { appConnections } from '@soopa/database';
    // ...
    const connRows = await this.db
      .select({ appName: appConnections.appName })
@@ -253,7 +253,7 @@ Add three new test cases:
 1. **Replace raw `app_connection` query** with typed `appConnections`:
 
    ```typescript
-   import { appConnections, safeAppConnectionColumns } from '@nexiom/database';
+   import { appConnections, safeAppConnectionColumns } from '@soopa/database';
    // ...
    const connRows = await this.db
      .select({ appName: appConnections.appName })
@@ -279,7 +279,7 @@ Add three new test cases:
 4. **Retry classification — `RetryableException` takes priority over status code heuristics**:
 
    ```typescript
-   import { RetryableException } from '@nexiom/connectors';
+   import { RetryableException } from '@soopa/connectors';
    import { isRetryableStatusCode, sanitizeError } from '../../shared/pipeline.utils.js';
 
    // When piece RETURNS a response (success branch):
@@ -307,7 +307,7 @@ Add three new test cases:
 7. **L6 GEM write** — in the SUCCESS branch of the L6 transaction:
 
    ```typescript
-   import { globalEntityMap } from '@nexiom/database';
+   import { globalEntityMap } from '@soopa/database';
 
    const srcVendorId = msg.srcVendorId as string | undefined;
    const destVendorId = extractDestVendorId(resPayload); // see below
@@ -377,7 +377,7 @@ pnpm build
 pnpm --filter worker test:cov
 
 # 3. Connectors package tests (piece stubs)
-pnpm --filter @nexiom/connectors test
+pnpm --filter @soopa/connectors test
 
 # 4. Lint
 pnpm lint

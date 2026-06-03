@@ -4,7 +4,7 @@ import { WorkspacesController } from './workspaces.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { CapacityManagerService } from './capacity-manager.service.js';
-import { QueueModule } from '@nexiom/queue';
+import { QueueModule } from '@soopa/queue';
 import { SchedulerModule } from '../scheduler/scheduler.module.js';
 
 @Module({

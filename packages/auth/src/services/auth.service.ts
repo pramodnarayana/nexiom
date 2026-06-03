@@ -12,7 +12,7 @@ import {
   PERMISSION_PROVIDER,
   IPermissionProvider,
   getSystemTenantId,
-} from "@nexiom/identity";
+} from "@soopa/identity";
 
 @Injectable()
 export class AuthService {

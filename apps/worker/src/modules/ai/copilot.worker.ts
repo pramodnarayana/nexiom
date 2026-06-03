@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit, Logger, Inject } from "@nestjs/common";
-import { QUEUE_SERVICE, QueueName } from "@nexiom/queue";
-import type { IQueueService } from "@nexiom/queue";
-import { OrchestratorService, ChatPersistenceService } from "@nexiom/ai-engine";
+import { QUEUE_SERVICE, QueueName } from "@soopa/queue";
+import type { IQueueService } from "@soopa/queue";
+import { OrchestratorService, ChatPersistenceService } from "@soopa/ai-engine";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import type { Redis } from "ioredis";

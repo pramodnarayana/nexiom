@@ -1,4 +1,4 @@
-import type { RequestAuthContext } from '@nexiom/auth';
+import type { RequestAuthContext } from '@soopa/auth';
 
 export const ORG_ID = 'org-1';
 export const WS_ID = 'ws-uuid-1';

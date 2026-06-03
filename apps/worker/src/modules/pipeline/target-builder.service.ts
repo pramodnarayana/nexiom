@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Inject, Logger } from "@nestjs/common";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
-import { PipelineHookBrokerService } from "@nexiom/engine";
-import type { Rule } from "@nexiom/engine";
-import { hydratePayload } from "@nexiom/engine";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
+import { PipelineHookBrokerService } from "@soopa/engine";
+import type { Rule } from "@soopa/engine";
+import { hydratePayload } from "@soopa/engine";
 
 /**
  * TargetBuilderService — L4 Payload Assembly (Platform-Generic)

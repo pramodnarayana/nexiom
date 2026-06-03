@@ -71,7 +71,7 @@ If we add rate limiting, security, and more features to the current `apps/api` f
 
 1. **Clean Slate:** The codebase is still relatively small. Refactoring now takes days; refactoring later takes weeks/months.
 2. **Security Integration:** The new security features (Task 01) should ideally live in the infrastructure/framework layer or packages, not just hardcoded into one API app.
-3. **Open Source Goal:** You explicitly stated you want `@nexiom/identity` as a standalone package. We cannot achieve that if the code lives in `apps/api/src/modules/identity`.
+3. **Open Source Goal:** You explicitly stated you want `@soopa/identity` as a standalone package. We cannot achieve that if the code lives in `apps/api/src/modules/identity`.
 
 ---
 
@@ -83,7 +83,7 @@ If we add rate limiting, security, and more features to the current `apps/api` f
 2. Create `packages/` directory.
 3. Set up `pnpm-workspace.yaml`.
 
-### Phase 2: Extract `@nexiom/identity`
+### Phase 2: Extract `@soopa/identity`
 
 Move existing logic from `apps/api` to `packages/identity`:
 
@@ -103,7 +103,7 @@ Update `apps/api` to import from the package:
 
 ```typescript
 // apps/api/src/app.module.ts
-import { IdentityModule } from '@nexiom/identity';
+import { IdentityModule } from '@soopa/identity';
 
 @Module({
   imports: [IdentityModule.forRoot({...})]

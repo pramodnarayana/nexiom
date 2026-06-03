@@ -8,11 +8,11 @@ import {
   tenantStorageRegistry,
   dataSources,
   integrationStitches,
-} from "@nexiom/database";
-import { QueueName, QueueService } from "@nexiom/queue";
-import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
-import type { DatabaseManager } from "@nexiom/dbmanager";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+} from "@soopa/database";
+import { QueueName, QueueService } from "@soopa/queue";
+import { getWorkspaceSchemaName } from "@soopa/dbmanager";
+import type { DatabaseManager } from "@soopa/dbmanager";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { processInChunks } from "./outbox.utils.js";
 
 @Injectable()

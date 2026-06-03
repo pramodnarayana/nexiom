@@ -8,11 +8,11 @@ Nexiom's business domain. It uses `engine/platform/` primitives and
 
 | Directory | Package | Status | Description |
 |:---|:---|:---|:---|
-| `mapping/` | `@nexiom/mapping` | **Active (T022B)** | MappingEngine — builds target JSON from Mapping Config + Stitch Config |
-| `pieces/` | `@nexiom/pieces` | Migrating (T055 Ph3) | Salesforce + QuickBooks piece implementations |
-| `parsers/` | `@nexiom/parsers` | Planned (T055 Ph3) | App Parsers — Zod schemas per vendor (L2) |
-| `canonical/` | `@nexiom/canonical` | Planned (T055 Ph3) | Canonical Model schemas (`TMS_VENDOR`, `CONTACT`, `INVOICE`) |
-| `connectors/` | `@nexiom/connectors` | Migrating (T055 Ph3) | OAuth flows, vendor HTTP client, credential crypto |
+| `mapping/` | `@soopa/mapping` | **Active (T022B)** | MappingEngine — builds target JSON from Mapping Config + Stitch Config |
+| `pieces/` | `@soopa/pieces` | Migrating (T055 Ph3) | Salesforce + QuickBooks piece implementations |
+| `parsers/` | `@soopa/parsers` | Planned (T055 Ph3) | App Parsers — Zod schemas per vendor (L2) |
+| `canonical/` | `@soopa/canonical` | Planned (T055 Ph3) | Canonical Model schemas (`TMS_VENDOR`, `CONTACT`, `INVOICE`) |
+| `connectors/` | `@soopa/connectors` | Migrating (T055 Ph3) | OAuth flows, vendor HTTP client, credential crypto |
 
 ## What belongs here
 

@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from "@nestjs/testing";
 import { NormalizationService } from "./normalization.service.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
 import {
   StorageResolverService,
   PipelineHookBrokerService,
-} from "@nexiom/engine";
-import { PieceRegistryService } from "@nexiom/piece-registry";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+} from "@soopa/engine";
+import { PieceRegistryService } from "@soopa/piece-registry";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("NormalizationService", () => {

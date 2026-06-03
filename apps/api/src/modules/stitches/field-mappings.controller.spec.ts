@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { FieldMappingsController } from './field-mappings.controller.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';
 import {
   UpsertFieldMappingSchema,

@@ -120,7 +120,7 @@ async function run() {
     console.log('⏳ Polling for pipeline completion (L2/L3)...');
 
     // Let's check the database schema
-    // TODO: Use canonical StorageResolverService from @nexiom/database instead of
+    // TODO: Use canonical StorageResolverService from @soopa/database instead of
     // hardcoding schema derivation. Import assertValidSchemaName and call it before queries.
     // For now, using manual derivation matching the current convention:
     const schemaName =

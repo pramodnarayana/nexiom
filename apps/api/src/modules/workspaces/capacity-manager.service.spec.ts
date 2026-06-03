@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { CapacityManagerService } from './capacity-manager.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { QueueService, QueueName } from '@soopa/queue';
 import { Logger } from '@nestjs/common';
 
 describe('CapacityManagerService', () => {

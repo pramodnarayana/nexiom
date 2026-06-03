@@ -12,9 +12,9 @@ import {
   integrationStitches,
   buildTenantSchema,
   assertValidSchemaName,
-} from '@nexiom/database';
-import { StorageResolverService } from '@nexiom/engine';
-import type { DatabaseManager } from '@nexiom/dbmanager';
+} from '@soopa/database';
+import { StorageResolverService } from '@soopa/engine';
+import type { DatabaseManager } from '@soopa/dbmanager';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -181,7 +181,7 @@ export class TraceService {
     }
 
     // 2. Fallback: Find the first connection in the workspace that is not the destination connection
-    const { dataSources } = await import('@nexiom/database');
+    const { dataSources } = await import('@soopa/database');
     const sources = await this.db
       .select({ id: dataSources.id })
       .from(dataSources)

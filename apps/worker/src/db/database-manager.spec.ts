@@ -57,7 +57,7 @@ vi.mock("drizzle-orm/node-postgres", () => ({
   })),
 }));
 
-vi.mock("@nexiom/identity/utils/rbac-seeding", () => ({
+vi.mock("@soopa/identity/utils/rbac-seeding", () => ({
   seedSystemRbac: rbacMocks.seedSystemRbac,
 }));
 

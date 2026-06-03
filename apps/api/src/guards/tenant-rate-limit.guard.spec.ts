@@ -7,8 +7,8 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
-import { REDIS_CLIENT } from '@nexiom/cache';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { REDIS_CLIENT } from '@soopa/cache';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { getLoggerToken } from 'nestjs-pino';
 import {
   TenantRateLimitGuard,

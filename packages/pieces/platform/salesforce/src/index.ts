@@ -11,7 +11,7 @@ import {
     type StreamDescriptor,
     type PollWindow,
     type PollPage,
-} from '@nexiom/piece-framework';
+} from '@soopa/piece-framework';
 
 
 import { salesforceUniversalTrigger } from './lib/trigger/universal-trigger.js';

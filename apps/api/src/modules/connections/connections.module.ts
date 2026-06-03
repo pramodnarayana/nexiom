@@ -4,20 +4,20 @@ import {
   TokenManagerService,
   AesEncryptionService,
   OAuthRefreshClient,
-} from '@nexiom/credentials';
+} from '@soopa/credentials';
 import { DbModule } from '../../db/db.module.js';
-import { REDIS_CLIENT } from '@nexiom/cache';
-import type { Redis } from '@nexiom/cache';
+import { REDIS_CLIENT } from '@soopa/cache';
+import type { Redis } from '@soopa/cache';
 import { OAuthCallbackController } from './connections/callback.controller.js';
 import { ConnectorsController } from './connections/connectors.controller.js';
 import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh.service.js';
 import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
-import { PiecesModule } from '@nexiom/piece-registry';
-import { StorageResolverModule } from '@nexiom/engine';
+import { PiecesModule } from '@soopa/piece-registry';
+import { StorageResolverModule } from '@soopa/engine';
 
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { type DrizzleDb } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { type DrizzleDb } from '@soopa/database';
 
 /**
  * Handles OAuth connectivity, credential storage, and token management.

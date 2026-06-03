@@ -12,7 +12,7 @@ import {
   RequiredPermission,
 } from "../decorators/require-permission.decorator.js";
 import { Request } from "express";
-import { User } from "@nexiom/identity";
+import { User } from "@soopa/identity";
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {

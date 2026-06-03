@@ -2,9 +2,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataExplorerService } from './data-explorer.service.js';
 import { PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { StorageResolverService } from '@nexiom/engine';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { StorageResolverService } from '@soopa/engine';
 import { TraceService } from './trace.service.js';
 import { NotFoundException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';

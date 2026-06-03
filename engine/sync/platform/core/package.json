@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/engine",
+  "name": "@soopa/engine",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -19,9 +19,9 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@nexiom/credentials": "workspace:*",
-    "@nexiom/database": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/credentials": "workspace:*",
+    "@soopa/database": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "ai": "^6.0.146",
     "quickjs-emscripten": "^0.32.0",
     "zod": "^4.3.5"

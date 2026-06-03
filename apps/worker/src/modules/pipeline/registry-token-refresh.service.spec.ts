@@ -1,9 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { RegistryOAuthRefreshClient } from "./registry-token-refresh.service.js";
-import { PieceRegistryService } from "@nexiom/piece-registry";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { EncryptionService } from "@nexiom/credentials";
-import { PropertyType, Piece } from "@nexiom/piece-framework";
+import { PieceRegistryService } from "@soopa/piece-registry";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { EncryptionService } from "@soopa/credentials";
+import { PropertyType, Piece } from "@soopa/piece-framework";
 
 describe("RegistryOAuthRefreshClient", () => {
   let service: RegistryOAuthRefreshClient;

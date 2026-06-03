@@ -1,6 +1,6 @@
 import type { DatabaseManager } from '../interfaces.js';
 import { SchemaPlan } from '../interfaces.js';
-import type { DrizzleDb } from '@nexiom/database';
+import type { DrizzleDb } from '@soopa/database';
 import { createHash } from 'node:crypto';
 import { getWorkspaceSchemaName } from '../schema-utils.js';
 

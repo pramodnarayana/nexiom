@@ -6,12 +6,12 @@ import {
     OnModuleInit,
 } from '@nestjs/common';
 import { TokenManagerService } from '../oauth/token-manager.service.js';
-import { DrizzleDb } from '@nexiom/database';
+import { DrizzleDb } from '@soopa/database';
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 
-import type { HttpClient, HttpRequest, HttpResponse } from '@nexiom/piece-framework';
-import { HttpMethod, initializeHttpClient } from '@nexiom/piece-framework';
+import type { HttpClient, HttpRequest, HttpResponse } from '@soopa/piece-framework';
+import { HttpMethod, initializeHttpClient } from '@soopa/piece-framework';
 
 /** How long a trace context is retained before it is treated as expired (5 minutes). */
 const EXECUTION_STATE_TTL_MS = 5 * 60 * 1000;

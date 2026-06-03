@@ -18,7 +18,7 @@ import {
   RequirePermission,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
+} from '@soopa/auth';
 import { StitchesService } from './stitches.service.js';
 import { CreateStitch, UpdateStitch } from './stitches.validation.js';
 

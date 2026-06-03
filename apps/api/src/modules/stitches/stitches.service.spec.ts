@@ -7,8 +7,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { StitchesService } from './stitches.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
 import { Test } from '@nestjs/testing';
 
 // ---------------------------------------------------------------------------

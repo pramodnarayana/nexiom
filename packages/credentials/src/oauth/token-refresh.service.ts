@@ -1,14 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OAuthRefreshClient, OAuthRefreshError } from './token-manager.service.js';
 import { EncryptionService } from '../crypto/encryption.interface.js';
-import { resolveOAuth2Url } from '@nexiom/piece-framework';
+import { resolveOAuth2Url } from '@soopa/piece-framework';
 import {
   dataSources,
   credentials,
   AppConnectionStatus,
   withTenantGuard,
   type DrizzleDb,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { eq, and, desc } from 'drizzle-orm';
 
 @Injectable()

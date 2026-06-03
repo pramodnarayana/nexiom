@@ -1,5 +1,5 @@
 {
-    "name": "@nexiom/eslint-config",
+    "name": "@soopa/eslint-config",
     "version": "1.0.0",
     "private": true,
     "type": "module",

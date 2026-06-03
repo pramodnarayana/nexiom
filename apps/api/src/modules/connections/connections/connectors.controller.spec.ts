@@ -1,12 +1,12 @@
-import type { Piece } from '@nexiom/piece-framework';
+import type { Piece } from '@soopa/piece-framework';
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectorsController } from './connectors.controller.js';
-import { EncryptionService } from '@nexiom/credentials';
+import { EncryptionService } from '@soopa/credentials';
 import { ConnectorsService } from '../connectors.service.js';
 import { OauthStateService } from '../oauth-state.service.js';
-import { AppConnectionStatus, DATABASE_CONNECTION } from '@nexiom/database';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { AppConnectionStatus, DATABASE_CONNECTION } from '@soopa/database';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import {
   BadRequestException,
   InternalServerErrorException,
@@ -15,7 +15,7 @@ import {
   HttpException,
   ForbiddenException,
 } from '@nestjs/common';
-import { PieceRegistryService, PIECES } from '@nexiom/piece-registry';
+import { PieceRegistryService, PIECES } from '@soopa/piece-registry';
 import {
   describe,
   it,
@@ -25,7 +25,7 @@ import {
   type Mocked,
   type Mock,
 } from 'vitest';
-import { AuthGuard, type RequestAuthContext } from '@nexiom/auth';
+import { AuthGuard, type RequestAuthContext } from '@soopa/auth';
 import type { Response } from 'express';
 
 const mockCtx = {

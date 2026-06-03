@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { QueueService, QueueName } from '@soopa/queue';
 import { CdcRelayController } from './cdc-relay.controller.js';
 import { CdcRelayGuard } from './cdc-relay.guard.js';
 

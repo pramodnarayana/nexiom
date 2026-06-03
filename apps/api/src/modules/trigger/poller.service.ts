@@ -1,9 +1,9 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import type { DrizzleDb } from '@nexiom/database';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import type { DrizzleDb } from '@soopa/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { TriggerExecutorService } from './trigger-executor.service.js';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 
 interface ActiveConnection {
   workspace_id: string;

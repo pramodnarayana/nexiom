@@ -1,4 +1,4 @@
-import type { NormalizerFn, NormalizedEntityType, NormalizedRecord } from '@nexiom/piece-framework';
+import type { NormalizerFn, NormalizedEntityType, NormalizedRecord } from '@soopa/piece-framework';
 
 import fs from 'node:fs';
 import path from 'node:path';

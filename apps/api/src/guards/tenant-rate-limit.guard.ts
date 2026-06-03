@@ -11,9 +11,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
-import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
+import { DATABASE_CONNECTION, dataSources } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 
 /** Default request allowance per tenant per 60-second window. */

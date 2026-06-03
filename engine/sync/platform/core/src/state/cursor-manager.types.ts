@@ -1,8 +1,8 @@
-import type { ReplicationKeyType } from '@nexiom/piece-framework';
+import type { ReplicationKeyType } from '@soopa/piece-framework';
 
 /**
  * Re-export connector-framework types used by the cursor engine so consumers
- * only need to import from `@nexiom/engine`.
+ * only need to import from `@soopa/engine`.
  */
 export type {
   ReplicationKeyType,
@@ -10,7 +10,7 @@ export type {
   PollWindow,
   PollRecord,
   PollPage,
-} from '@nexiom/piece-framework';
+} from '@soopa/piece-framework';
 
 // ---------------------------------------------------------------------------
 // Singer-style state document

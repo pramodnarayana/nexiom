@@ -4,8 +4,8 @@ import {
   AuthGuard,
   PermissionsGuard,
   type RequestAuthContext,
-} from '@nexiom/auth';
-import { MetadataDiscoveryService } from '@nexiom/piece-registry';
+} from '@soopa/auth';
+import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { StitchesMetadataController } from './stitches-metadata.controller.js';
 
 const CONNECTION_ID = '550e8400-e29b-41d4-a716-446655440000';

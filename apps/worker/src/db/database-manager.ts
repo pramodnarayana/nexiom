@@ -272,7 +272,7 @@ export class DatabaseManager {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const schema = await import("./schema.js");
     const { seedSystemRbac } =
-      await import("@nexiom/identity/utils/rbac-seeding");
+      await import("@soopa/identity/utils/rbac-seeding");
     const {
       getRequiredOwnerRoleId,
       getRequiredAdminRoleId,
@@ -310,7 +310,7 @@ export class DatabaseManager {
       };
 
       // Create a separate DB instance with identity schema for seedSystemRbac
-      const identitySchema = await import("@nexiom/identity/schema");
+      const identitySchema = await import("@soopa/identity/schema");
       const identityDb = drizzle(client, { schema: identitySchema });
       await seedSystemRbac(identityDb, config, console);
 
@@ -694,8 +694,8 @@ export class DatabaseManager {
     }
 
     const { drizzle } = await import("drizzle-orm/node-postgres");
-    const { TenantDatabaseManager } = await import("@nexiom/dbmanager");
-    const { SchemaPlan } = await import("@nexiom/dbmanager");
+    const { TenantDatabaseManager } = await import("@soopa/dbmanager");
+    const { SchemaPlan } = await import("@soopa/dbmanager");
     const client = await this.getPgClient();
 
     // Track all tenant Pools created by dbFactory so we can close them after provisioning
@@ -705,7 +705,7 @@ export class DatabaseManager {
       const db = drizzle(client, { schema });
       const { Pool } = await import("pg");
       const { ApplicationLoaderService, PipelineHookBrokerService } =
-        await import("@nexiom/engine");
+        await import("@soopa/engine");
 
       // Instantiate the loader directly — this is a CLI script, not in NestJS DI.
       // The loader reads from SHARD_APPLICATION_PATH and caches dynamically imported modules.
@@ -719,7 +719,7 @@ export class DatabaseManager {
         appProfile: string,
       ) => {
         return async (
-          tenantDb: import("@nexiom/database").DrizzleDb,
+          tenantDb: import("@soopa/database").DrizzleDb,
           schemaName: string,
         ) => {
           try {
@@ -742,7 +742,7 @@ export class DatabaseManager {
       };
 
       const schemaMgr = new TenantDatabaseManager(
-        db as unknown as import("@nexiom/database").DrizzleDb,
+        db as unknown as import("@soopa/database").DrizzleDb,
         (hostIdentifier: string) => {
           const parsedEnv = new URL(dbUrl);
           const parsedHost = new URL(hostIdentifier);
@@ -766,7 +766,7 @@ export class DatabaseManager {
           tenantPools.push(pool);
           return drizzle(pool, {
             schema,
-          }) as unknown as import("@nexiom/database").DrizzleDb;
+          }) as unknown as import("@soopa/database").DrizzleDb;
         },
         domainProvisionerResolver,
       );
@@ -810,7 +810,7 @@ export class DatabaseManager {
           `  ℹ️  Provisioning connection ${fixture.appName} (preserving secrets if exists)`,
         );
 
-        const { getWorkspaceSchemaName } = await import("@nexiom/dbmanager");
+        const { getWorkspaceSchemaName } = await import("@soopa/dbmanager");
         const schemaName = getWorkspaceSchemaName(fixture.id, fixture.appName);
 
         await db.transaction(async (tx) => {
@@ -1022,7 +1022,7 @@ export class DatabaseManager {
       const allPermissions = new Set<string>();
 
       const { normalizeRole } =
-        await import("@nexiom/identity/utils/role-normalization");
+        await import("@soopa/identity/utils/role-normalization");
 
       // Resolve Member Role Permissions (this is what the app actually uses)
       if (user.members && user.members.length > 0) {

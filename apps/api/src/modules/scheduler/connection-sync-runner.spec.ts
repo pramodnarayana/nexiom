@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { REDIS_CLIENT } from '@nexiom/cache';
-import { TokenManagerService } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/piece-registry';
-import { CursorManagerService, StorageResolverService } from '@nexiom/engine';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { REDIS_CLIENT } from '@soopa/cache';
+import { TokenManagerService } from '@soopa/credentials';
+import { PieceRegistryService } from '@soopa/piece-registry';
+import { CursorManagerService, StorageResolverService } from '@soopa/engine';
 import { ConnectionSyncRunner } from './connection-sync-runner.js';
 import { BadRequestException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';

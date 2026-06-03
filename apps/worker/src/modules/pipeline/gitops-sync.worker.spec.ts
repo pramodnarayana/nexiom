@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
-import { ApplicationLoaderService } from "@nexiom/engine";
-import { QueueService } from "@nexiom/queue";
+import { ApplicationLoaderService } from "@soopa/engine";
+import { QueueService } from "@soopa/queue";
 import * as fs from "node:fs/promises";
 import type { Dirent, Stats } from "node:fs";
 import { execFile } from "node:child_process";

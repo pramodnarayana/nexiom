@@ -17,7 +17,7 @@ After cloning and examining the `activepieces/packages/pieces` repository, the i
 
 ## The Nexiom Compatibility Layer
 
-To leverage these thousands of open-source actions without having to rewrite or maintain custom fetch logic for each vendor, we will implement a "Compatibility Layer" inside `@nexiom/connections`.
+To leverage these thousands of open-source actions without having to rewrite or maintain custom fetch logic for each vendor, we will implement a "Compatibility Layer" inside `@soopa/connections`.
 
 We do **not** need to run the entire Activepieces Node.js engine. We only need their TypeScript structures.
 

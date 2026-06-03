@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/auth",
+  "name": "@soopa/auth",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,7 +16,7 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@nexiom/identity": "workspace:*",
+    "@soopa/identity": "workspace:*",
     "uuid": "^13.0.0"
   },
   "peerDependencies": {

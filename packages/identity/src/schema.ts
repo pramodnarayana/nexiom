@@ -1,1 +1,1 @@
-export * from "@nexiom/database";
+export * from "@soopa/database";

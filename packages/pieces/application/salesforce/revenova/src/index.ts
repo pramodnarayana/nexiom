@@ -1,8 +1,8 @@
-import { registerReplicaExtractor, registerNormalizer, registerAppWebhookResponse, registerNormalizedWriter, registerTargetBuilder, registerDomainProvisioner } from '@nexiom/piece-framework';
+import { registerReplicaExtractor, registerNormalizer, registerAppWebhookResponse, registerNormalizedWriter, registerTargetBuilder, registerDomainProvisioner } from '@soopa/piece-framework';
 import { upsertRevenovaObject } from './upsertRevenovaObject.js';
 import { normalizeRevenovaToTms } from './normalizeRevenovaToTms.js';
-import { tmsNormalizedWriter, tmsTargetBuilder, provisionTmsTables } from '@nexiom/domain-tms';
-import type { AppsConnectorDb } from '@nexiom/piece-framework';
+import { tmsNormalizedWriter, tmsTargetBuilder, provisionTmsTables } from '@soopa/domain-tms';
+import type { AppsConnectorDb } from '@soopa/piece-framework';
 
 const SALESFORCE_OUTBOUND_ACK = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
