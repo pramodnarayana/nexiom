@@ -1,6 +1,7 @@
 {
   "name": "@soopa/metadata-engine",
   "version": "0.0.1",
+  "private": true,
   "type": "module",
   "description": "Unified Metadata-Driven Engine for Nexiom",
   "main": "dist/index.js",
