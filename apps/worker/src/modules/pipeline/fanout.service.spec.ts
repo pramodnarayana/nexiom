@@ -2,22 +2,22 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { FanOutService } from "./fanout.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { StorageResolverService } from "@nexiom/engine";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { StorageResolverService } from "@soopa/engine";
+import { DB_MANAGER } from "@soopa/dbmanager";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import * as engine from "@nexiom/engine";
+import * as engine from "@soopa/engine";
 
-vi.mock("@nexiom/engine", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nexiom/engine")>();
+vi.mock("@soopa/engine", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@soopa/engine")>();
   return {
     ...actual,
     evaluateConditions: vi.fn(),
   };
 });
 
-import { ApplicationLoaderService } from "@nexiom/engine";
+import { ApplicationLoaderService } from "@soopa/engine";
 
 describe("FanOutService", () => {
   const createDbSelectMock = (

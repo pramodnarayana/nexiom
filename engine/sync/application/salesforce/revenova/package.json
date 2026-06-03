@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/shard-salesforce-revenova",
+  "name": "@soopa/shard-salesforce-revenova",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -9,8 +9,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@nexiom/domain-tms": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*"
+    "@soopa/domain-tms": "workspace:*",
+    "@soopa/piece-framework": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

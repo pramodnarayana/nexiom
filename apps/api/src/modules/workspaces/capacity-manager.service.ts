@@ -1,12 +1,12 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
 import {
   QueueService,
   QueueName,
   type ProvisionDatabaseEvent,
-} from '@nexiom/queue';
+} from '@soopa/queue';
 import { sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 

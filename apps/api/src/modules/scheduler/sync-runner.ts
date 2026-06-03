@@ -1,4 +1,4 @@
-import type { StreamResult } from '@nexiom/engine';
+import type { StreamResult } from '@soopa/engine';
 
 /**
  * SyncResult — outcome of a single connection sync execution attempt.

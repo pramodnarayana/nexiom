@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
-import { AuthService, AuthGuard } from '@nexiom/auth';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import { AuthService, AuthGuard } from '@soopa/auth';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';

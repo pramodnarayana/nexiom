@@ -1,9 +1,9 @@
 /**
- * @nexiom/credentials — public API
+ * @soopa/credentials — public API
  *
  * Entrypoints:
- *   - `@nexiom/credentials`           — runtime services (encryption, token manager)
- *   - `@nexiom/piece-framework` — piece/action/trigger/auth/property definitions
+ *   - `@soopa/credentials`           — runtime services (encryption, token manager)
+ *   - `@soopa/piece-framework` — piece/action/trigger/auth/property definitions
  */
 
 // Crypto utilities

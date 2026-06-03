@@ -69,7 +69,7 @@ We do not use the Activepieces workflow runner. Instead, we use the trigger defi
 
 To make triggers "seamless" like the actions we previously implemented:
 
-1. **Trigger Registry:** Use `getTrigger(appName, triggerName)` from `PieceRegistryService` in `apps/api`. Trigger definitions live in `@nexiom/connections` (under `packages/connections/src/apps/`) and are registered at startup via `REGISTERED_PIECES`.
+1. **Trigger Registry:** Use `getTrigger(appName, triggerName)` from `PieceRegistryService` in `apps/api`. Trigger definitions live in `@soopa/connections` (under `packages/connections/src/apps/`) and are registered at startup via `REGISTERED_PIECES`.
 2. **The Poller Kernel:** `PollerService` in `apps/api/src/modules/trigger/poller.service.ts` handles polling. It:
    - Queries all active connections with a registered Polling trigger (keyset-paginated).
    - Invokes `TriggerExecutorService.runPoll()` which calls the piece's `run()` function.

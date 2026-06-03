@@ -10,7 +10,7 @@ import {
   DefaultValuePipe,
   NotFoundException,
 } from '@nestjs/common';
-import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { DataExplorerService } from './data-explorer.service.js';
 import { validateFilterGroup } from './filter-parser.js';
 

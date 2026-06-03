@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/piece-salesforce",
+  "name": "@soopa/piece-salesforce",
   "version": "0.5.1",
   "type": "module",
   "main": "dist/index.js",
@@ -27,8 +27,8 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@nexiom/credentials": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/credentials": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "dayjs": "^1.11.19"
   }
 }

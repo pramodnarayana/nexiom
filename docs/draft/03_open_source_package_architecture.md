@@ -10,9 +10,9 @@
 
 Nexiom provides **three open-source packages** that solve the boring, repetitive parts of building a SaaS product:
 
-1. **@nexiom/identity** - Authentication, Users, Multi-Tenancy
-2. **@nexiom/notifications** - Email, SMS, In-App, Push Notifications
-3. **@nexiom/billing** - Subscriptions, Usage Tracking, Invoicing
+1. **@soopa/identity** - Authentication, Users, Multi-Tenancy
+2. **@soopa/notifications** - Email, SMS, In-App, Push Notifications
+3. **@soopa/billing** - Subscriptions, Usage Tracking, Invoicing
 
 **Key Innovation:** **Pluggable architecture** - use our defaults (Better-Auth, Novu, Lago) or swap in your own providers (Clerk, Knock, Stripe, or custom).
 
@@ -60,7 +60,7 @@ Week 21+:    FINALLY build your actual product
 ### With Nexiom (1 Day)
 
 ```bash
-npm install @nexiom/identity @nexiom/notifications @nexiom/billing
+npm install @soopa/identity @soopa/notifications @soopa/billing
 # Configure in 30 minutes
 # Start building your product immediately
 ```
@@ -78,9 +78,9 @@ graph TB
     end
     
     subgraph "Nexiom Packages"
-        IDENTITY[@nexiom/identity<br/>Auth + Users + Tenants]
-        NOTIF[@nexiom/notifications<br/>Email + SMS + In-App]
-        BILLING[@nexiom/billing<br/>Subscriptions + Invoices]
+        IDENTITY[@soopa/identity<br/>Auth + Users + Tenants]
+        NOTIF[@soopa/notifications<br/>Email + SMS + In-App]
+        BILLING[@soopa/billing<br/>Subscriptions + Invoices]
     end
     
     subgraph "Pluggable Providers"
@@ -138,7 +138,7 @@ class CustomAuthProvider implements IAuthProvider {
 
 ---
 
-## Package 1: @nexiom/identity
+## Package 1: @soopa/identity
 
 ### What It Provides
 
@@ -175,14 +175,14 @@ class CustomAuthProvider implements IAuthProvider {
 ### Installation & Configuration
 
 ```bash
-npm install @nexiom/identity
+npm install @soopa/identity
 ```
 
 **Option 1: Default (Better-Auth)**
 
 ```typescript
 // app.module.ts
-import { IdentityModule } from '@nexiom/identity';
+import { IdentityModule } from '@soopa/identity';
 
 @Module({
   imports: [
@@ -354,7 +354,7 @@ interface IInvitationProvider {
 
 ---
 
-## Package 2: @nexiom/notifications
+## Package 2: @soopa/notifications
 
 ### What It Provides
 
@@ -385,13 +385,13 @@ interface IInvitationProvider {
 ### Installation & Configuration
 
 ```bash
-npm install @nexiom/notifications
+npm install @soopa/notifications
 ```
 
 **Option 1: Default (Novu)**
 
 ```typescript
-import { NotificationModule } from '@nexiom/notifications';
+import { NotificationModule } from '@soopa/notifications';
 
 @Module({
   imports: [
@@ -493,7 +493,7 @@ interface NotificationResult {
 ### Usage Examples
 
 ```typescript
-import { NotificationService } from '@nexiom/notifications';
+import { NotificationService } from '@soopa/notifications';
 
 // Inject the service
 constructor(private notifications: NotificationService) {}
@@ -543,7 +543,7 @@ const canSendSMS = await this.notifications.checkOptIn('user-123', 'sms');
 
 ---
 
-## Package 3: @nexiom/billing
+## Package 3: @soopa/billing
 
 ### What It Provides
 
@@ -577,13 +577,13 @@ const canSendSMS = await this.notifications.checkOptIn('user-123', 'sms');
 ### Installation & Configuration
 
 ```bash
-npm install @nexiom/billing
+npm install @soopa/billing
 ```
 
 **Option 1: Default (Lago)**
 
 ```typescript
-import { BillingModule } from '@nexiom/billing';
+import { BillingModule } from '@soopa/billing';
 
 @Module({
   imports: [
@@ -720,7 +720,7 @@ interface Invoice {
 ### Usage Examples
 
 ```typescript
-import { BillingService } from '@nexiom/billing';
+import { BillingService } from '@soopa/billing';
 
 constructor(private billing: BillingService) {}
 
@@ -837,9 +837,9 @@ nexiom/
 ### Package Dependencies
 
 ```json
-// @nexiom/identity/package.json
+// @soopa/identity/package.json
 {
-  "name": "@nexiom/identity",
+  "name": "@soopa/identity",
   "version": "1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -866,9 +866,9 @@ nexiom/
 **Goal:** Move existing code into packages
 
 1. Create monorepo structure
-2. Extract auth/user/tenant modules → `@nexiom/identity`
-3. Extract email module → `@nexiom/notifications`
-4. Create billing module → `@nexiom/billing` (new)
+2. Extract auth/user/tenant modules → `@soopa/identity`
+3. Extract email module → `@soopa/notifications`
+4. Create billing module → `@soopa/billing` (new)
 
 ### Phase 2: Abstract Providers (Week 3-4)
 
@@ -916,7 +916,7 @@ nexiom/
 
 ```bash
 # Install packages
-npm install @nexiom/identity @nexiom/notifications @nexiom/billing
+npm install @soopa/identity @soopa/notifications @soopa/billing
 
 # Generate config
 npx nexiom init

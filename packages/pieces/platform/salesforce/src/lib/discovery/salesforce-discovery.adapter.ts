@@ -1,9 +1,9 @@
-import type { TriggerStore } from '@nexiom/piece-framework';
+import type { TriggerStore } from '@soopa/piece-framework';
 import {
     type IDiscoveryAdapter,
     type ObjectSchema,
     IgtLogger,
-} from '@nexiom/piece-framework/discovery';
+} from '@soopa/piece-framework/discovery';
 import { SalesforceAuthError, sfFetch } from '../sf-fetch.js';
 import { SF_API_VERSION } from '../common/index.js';
 import type { SalesforceAuth } from '../salesforce-types.js';

@@ -1,5 +1,5 @@
 // Barrel for the salesforce trigger subpath entry-point.
-// Consumed by `@nexiom/piece-salesforce/trigger`.
+// Consumed by `@soopa/piece-salesforce/trigger`.
 export { salesforceUniversalTrigger } from './universal-trigger.js';
 export {
     runSalesforce,

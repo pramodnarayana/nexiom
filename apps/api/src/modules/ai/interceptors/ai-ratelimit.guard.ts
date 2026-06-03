@@ -8,7 +8,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 
 /** Fixed window: 30 streaming requests per user per 60 seconds. */
 const LIMIT = 30;

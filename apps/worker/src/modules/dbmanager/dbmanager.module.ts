@@ -3,18 +3,18 @@ import {
   TenantDatabaseManager,
   DB_MANAGER,
   type CredentialResolver,
-} from "@nexiom/dbmanager";
+} from "@soopa/dbmanager";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "../../db/schema.js";
 import { DbModule } from "../../db/db.module.js";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
 
 import {
   ApplicationLoaderModule,
   PipelineHookBrokerService,
-} from "@nexiom/engine";
+} from "@soopa/engine";
 
 /**
  * Builds a CredentialResolver from the current process's DATABASE_URL.

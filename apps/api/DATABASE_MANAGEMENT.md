@@ -59,7 +59,7 @@ All destructive operations (`drop`, `fresh`, `reset`) check `NODE_ENV`:
 
 ## Migration Workflow
 
-1. **Update schema** in code (`src/db/schema.ts` or `@nexiom/identity/schema.ts`)
+1. **Update schema** in code (`src/db/schema.ts` or `@soopa/identity/schema.ts`)
 2. **Generate migration**: `pnpm --filter api db:generate`
 3. **Review** generated SQL in `drizzle/*.sql`
 4. **Apply migration**: `pnpm --filter api db:migrate`

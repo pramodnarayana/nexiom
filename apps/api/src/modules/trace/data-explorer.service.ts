@@ -6,11 +6,11 @@ import {
   type DrizzleDb,
   buildTenantSchema,
   assertValidSchemaName,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { buildDrizzleFilter } from './filter-parser.js';
-import { StorageResolverService } from '@nexiom/engine';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
+import { StorageResolverService } from '@soopa/engine';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
 import { TraceService } from './trace.service.js';
 
 export interface ExplorerPage<T> {

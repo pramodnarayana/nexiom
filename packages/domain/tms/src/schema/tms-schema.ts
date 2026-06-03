@@ -12,7 +12,7 @@ import { sql } from 'drizzle-orm';
 /**
  * buildTmsSchema(schemaName)
  *
- * TMS domain schema builder — part of @nexiom/domain-tms.
+ * TMS domain schema builder — part of @soopa/domain-tms.
  *
  * Shared by ALL TMS source connectors (Revenova, McLeod, TMW, etc.).
  * No connector-specific code lives here — only the canonical TMS

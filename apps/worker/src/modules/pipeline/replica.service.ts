@@ -5,20 +5,20 @@ import {
   OnModuleDestroy,
   Logger,
 } from "@nestjs/common";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName } from "@soopa/queue";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
   dataSources,
-} from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
+} from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
   PipelineHookBrokerService,
-} from "@nexiom/engine";
-import { DependenciesMissingError } from "@nexiom/piece-framework";
-import { DB_MANAGER, type TenantDatabaseManager } from "@nexiom/dbmanager";
+} from "@soopa/engine";
+import { DependenciesMissingError } from "@soopa/piece-framework";
+import { DB_MANAGER, type TenantDatabaseManager } from "@soopa/dbmanager";
 import { sql, eq, and } from "drizzle-orm";
 import { sanitizeErrorObject } from "../../shared/pipeline.utils.js";
 

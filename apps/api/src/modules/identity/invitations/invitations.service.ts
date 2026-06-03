@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { AUTH_PROVIDER, Invitation } from '@nexiom/identity';
-import type { IAuthProvider } from '@nexiom/identity';
+import { AUTH_PROVIDER, Invitation } from '@soopa/identity';
+import type { IAuthProvider } from '@soopa/identity';
 import { CreateInvitation } from './invitations.validation.js';
 
 @Injectable()

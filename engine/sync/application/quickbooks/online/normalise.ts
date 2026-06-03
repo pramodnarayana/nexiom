@@ -1,4 +1,4 @@
-import type { NormalizedRecord } from '@nexiom/piece-framework';
+import type { NormalizedRecord } from '@soopa/piece-framework';
 
 /**
  * QuickBooks objects are usually not normalized into a canonical TMS schema.

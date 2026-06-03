@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/piece-registry",
+  "name": "@soopa/piece-registry",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -19,10 +19,10 @@
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
-    "@nexiom/cache": "workspace:*",
-    "@nexiom/credentials": "workspace:*",
-    "@nexiom/database": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/cache": "workspace:*",
+    "@soopa/credentials": "workspace:*",
+    "@soopa/database": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {

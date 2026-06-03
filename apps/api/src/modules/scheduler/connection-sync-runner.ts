@@ -10,18 +10,14 @@ import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import stringify from 'fast-json-stable-stringify';
 import { eq, and, sql } from 'drizzle-orm';
-import type { DrizzleDb } from '@nexiom/database';
-import {
-  DATABASE_CONNECTION,
-  dataSources,
-  syncCursors,
-} from '@nexiom/database';
-import { buildTenantSchema, assertValidSchemaName } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/credentials';
-import type { OAuthCredentialBlob } from '@nexiom/credentials';
-import type { Piece } from '@nexiom/piece-framework';
-import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import type { DrizzleDb } from '@soopa/database';
+import { DATABASE_CONNECTION, dataSources, syncCursors } from '@soopa/database';
+import { buildTenantSchema, assertValidSchemaName } from '@soopa/database';
+import { TokenManagerService } from '@soopa/credentials';
+import type { OAuthCredentialBlob } from '@soopa/credentials';
+import type { Piece } from '@soopa/piece-framework';
+import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import {
   StorageResolverService,
   CursorManagerService,
@@ -29,8 +25,8 @@ import {
   type SyncStateDocument,
   type StreamDescriptor,
   type StreamResult,
-} from '@nexiom/engine';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+} from '@soopa/engine';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import type { SyncResult } from './sync-runner.js';
 import { pollLockKey } from './lock-keys.js';
 

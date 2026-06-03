@@ -1,11 +1,11 @@
-import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@nexiom/piece-framework';
+import { createTrigger, TriggerStrategy, type TriggerContext, type TriggerStore } from '@soopa/piece-framework';
 import { salesforceAuth } from '../auth.js';
 
 import {
     UniversalTrigger,
     optimizationService,
     IgtLogger,
-} from '@nexiom/piece-framework/discovery';
+} from '@soopa/piece-framework/discovery';
 import { sfFetch, checkSalesforceLimits, SalesforceAuthError } from '../sf-fetch.js';
 import { salesforcesCommon, SF_API_VERSION } from '../common/index.js';
 import { assertSafeSalesforceObject } from './salesforce-polling.helper.js';

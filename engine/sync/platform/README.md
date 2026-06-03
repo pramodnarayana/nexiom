@@ -9,14 +9,14 @@ systems — it only knows *how* to execute, not *what* to sync.
 
 | Directory | Package | Status | Description |
 |:---|:---|:---|:---|
-| `core/compositor/` | `@nexiom/engine` | Migrating (T055 Ph1) | Assembles `root_trace_id` rows into Canonical Composite JSON (Fat Object) |
-| `core/evaluator/` | `@nexiom/engine` | Migrating (T055 Ph1) | Evaluates Sync Conditions (filters) — `evaluateConditions()` |
-| `core/enricher/` | `@nexiom/engine` | Migrating (T055 Ph1) | Detects missing parent entities, triggers L5 fetch to resolve graph gaps |
-| `core/cursor-manager/` | `@nexiom/engine` | Migrating (T055 Ph1) | Singer-style incremental cursor state |
-| `core/storage-resolver/` | `@nexiom/engine` | Migrating (T055 Ph1) | Tenant silo routing — `ws_{id}` schema selection |
-| `core/formula-registry/` | `@nexiom/engine` | Migrating (T055 Ph1) | Generic formula execution contract (registry + runner) |
-| `core/path-utils/` | `@nexiom/engine` | Migrating (T055 Ph1) | Proto-safe `getNestedValue` / `setNestedValue` |
-| `piece-framework/` | `@nexiom/piece-framework` | Migrating (T055 Ph2) | Generic `Piece`/`Action`/`Trigger`/`Poll` contracts |
+| `core/compositor/` | `@soopa/engine` | Migrating (T055 Ph1) | Assembles `root_trace_id` rows into Canonical Composite JSON (Fat Object) |
+| `core/evaluator/` | `@soopa/engine` | Migrating (T055 Ph1) | Evaluates Sync Conditions (filters) — `evaluateConditions()` |
+| `core/enricher/` | `@soopa/engine` | Migrating (T055 Ph1) | Detects missing parent entities, triggers L5 fetch to resolve graph gaps |
+| `core/cursor-manager/` | `@soopa/engine` | Migrating (T055 Ph1) | Singer-style incremental cursor state |
+| `core/storage-resolver/` | `@soopa/engine` | Migrating (T055 Ph1) | Tenant silo routing — `ws_{id}` schema selection |
+| `core/formula-registry/` | `@soopa/engine` | Migrating (T055 Ph1) | Generic formula execution contract (registry + runner) |
+| `core/path-utils/` | `@soopa/engine` | Migrating (T055 Ph1) | Proto-safe `getNestedValue` / `setNestedValue` |
+| `piece-framework/` | `@soopa/piece-framework` | Migrating (T055 Ph2) | Generic `Piece`/`Action`/`Trigger`/`Poll` contracts |
 
 ## What belongs here
 

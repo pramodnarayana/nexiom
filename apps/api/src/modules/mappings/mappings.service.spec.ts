@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MappingsService } from './mappings.service.js';
 import { PinoLogger } from 'nestjs-pino';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '@soopa/dbmanager';
 import { CreateMapping, UpdateMapping } from './mappings.validation.js';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { vi } from 'vitest';

@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
-import { AuthService, type RequestAuthContext } from '@nexiom/auth';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
-import type { User, Session } from '@nexiom/identity';
+import { AuthService, type RequestAuthContext } from '@soopa/auth';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
+import type { User, Session } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request, Response } from 'express';
 import { CompleteInvite } from '../users/users.validation.js';

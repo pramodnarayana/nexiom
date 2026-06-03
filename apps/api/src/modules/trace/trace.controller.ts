@@ -10,7 +10,7 @@ import {
   BadRequestException,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { TraceService } from './trace.service.js';
 
 @Controller('stitches/:stitchId/traces')

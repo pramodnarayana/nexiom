@@ -1,4 +1,4 @@
-# Shared Auth Architecture (`@nexiom/auth`)
+# Shared Auth Architecture (`@soopa/auth`)
 
 ## Overview
 
@@ -6,19 +6,19 @@ As the Nexiom monorepo expands to include multiple applications (e.g., the main 
 
 Currently, core authentication components—such as `AuthGuard`, `AuthService`, and session validation logic—reside within the `identity` feature module. This creates tight coupling, forcing other domains (like `connections`) to import files across feature boundaries using fragile relative paths (`../../identity/auth/auth.guard`).
 
-To establish an **Enterprise-Grade** standard, we are extracting all cross-cutting authentication concerns into a dedicated, standalone monorepo package: `@nexiom/auth`.
+To establish an **Enterprise-Grade** standard, we are extracting all cross-cutting authentication concerns into a dedicated, standalone monorepo package: `@soopa/auth`.
 
 ## Why a Dedicated Package?
 
-While moving Auth to a shared directory within the API app (e.g., `apps/api/src/common/auth`) improves organization, a dedicated `@nexiom/auth` package offers strict, physical guarantees:
+While moving Auth to a shared directory within the API app (e.g., `apps/api/src/common/auth`) improves organization, a dedicated `@soopa/auth` package offers strict, physical guarantees:
 
 1. **Strict Dependency Boundaries:** The TypeScript compiler and package manager prevent circular dependencies. The Auth layer cannot accidentally import domain-specific logic from the main application; it remains pure and isolated.
-2. **Universal Portability:** Any future microservice or application within the monorepo can instantly secure its endpoints by running `pnpm add @nexiom/auth` and importing the shared `AuthModule`, ensuring identical security standards system-wide.
-3. **Optimized Build Caching:** In a Turborepo environment, changes to the main API will not trigger a rebuild or re-linting of the Auth package. The `@nexiom/auth` package likely enjoys a very high cache hit rate unless its specific logic is modified, significantly speeding up CI/CD pipelines.
+2. **Universal Portability:** Any future microservice or application within the monorepo can instantly secure its endpoints by running `pnpm add @soopa/auth` and importing the shared `AuthModule`, ensuring identical security standards system-wide.
+3. **Optimized Build Caching:** In a Turborepo environment, changes to the main API will not trigger a rebuild or re-linting of the Auth package. The `@soopa/auth` package likely enjoys a very high cache hit rate unless its specific logic is modified, significantly speeding up CI/CD pipelines.
 
 ## Architecture Implementation
 
-### 1. The `@nexiom/auth` Package Structure
+### 1. The `@soopa/auth` Package Structure
 
 A new package has been scaffolded at `packages/auth` with its own `package.json`, `tsconfig.json`, and standardized exports.
 
@@ -31,12 +31,12 @@ It will encapsulate:
 
 ### 2. Integration with Applications
 
-Applications (like `apps/api`) will declare `@nexiom/auth` as a workspace dependency.
+Applications (like `apps/api`) will declare `@soopa/auth` as a workspace dependency.
 
 Controllers across *any* domain will simply import the guard and decorators from the core namespace:
 
 ```typescript
-import { AuthGuard, CurrentUser } from '@nexiom/auth';
+import { AuthGuard, CurrentUser } from '@soopa/auth';
 
 @UseGuards(AuthGuard)
 @Get('/connections')

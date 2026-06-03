@@ -1,4 +1,4 @@
-# Enterprise Refactor Plan: Identity Module (@nexiom/identity)
+# Enterprise Refactor Plan: Identity Module (@soopa/identity)
 
 **Status:** Refactor Specification  
 **Target:** Transform existing code to enterprise-grade, open source standard  
@@ -13,7 +13,7 @@
 We have working auth, user management, tenant management, and dashboards. Code is functional but not enterprise-grade.
 
 **Goal:**  
-Refactor into production-ready `@nexiom/identity` package that meets:
+Refactor into production-ready `@soopa/identity` package that meets:
 
 - Enterprise security standards
 - Open source quality benchmarks

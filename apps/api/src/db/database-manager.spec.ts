@@ -74,7 +74,7 @@ vi.mock('drizzle-orm/node-postgres', () => ({
   })),
 }));
 
-vi.mock('@nexiom/identity/utils/rbac-seeding', () => ({
+vi.mock('@soopa/identity/utils/rbac-seeding', () => ({
   seedSystemRbac: rbacMocks.seedSystemRbac,
 }));
 
@@ -82,7 +82,7 @@ vi.mock('../constants.js', () => constantMocks);
 
 vi.mock('node:fs/promises', () => fsMocks);
 
-vi.mock('@nexiom/dbmanager', () => ({
+vi.mock('@soopa/dbmanager', () => ({
   TenantDatabaseManager: vi.fn(() => ({
     applyPlan: dbManagerMocks.applyPlan,
     migrateToOutboundActive: dbManagerMocks.migrateToOutboundActive,

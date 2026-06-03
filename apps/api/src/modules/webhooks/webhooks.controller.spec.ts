@@ -1,17 +1,17 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { QueueService, QueueName } from '@soopa/queue';
 import { getLoggerToken } from 'nestjs-pino';
 import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
-import { StorageResolverService } from '@nexiom/engine';
-import { executeAppWebhookResponses } from '@nexiom/piece-framework';
+import { StorageResolverService } from '@soopa/engine';
+import { executeAppWebhookResponses } from '@soopa/piece-framework';
 
-vi.mock('@nexiom/piece-framework', () => ({
+vi.mock('@soopa/piece-framework', () => ({
   executeAppWebhookResponses: vi.fn(),
 }));
 

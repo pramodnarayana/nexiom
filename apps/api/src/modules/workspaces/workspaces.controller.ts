@@ -17,7 +17,7 @@ import {
   RequirePermission,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
+} from '@soopa/auth';
 import { WorkspacesService } from './workspaces.service.js';
 import { CreateWorkspace, UpdateWorkspace } from './workspaces.validation.js';
 import { requireOrgId } from './workspace.utils.js';

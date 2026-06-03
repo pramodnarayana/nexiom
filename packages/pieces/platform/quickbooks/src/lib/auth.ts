@@ -1,4 +1,4 @@
-import { PieceAuth, Property } from '@nexiom/piece-framework';
+import { PieceAuth, Property } from '@soopa/piece-framework';
 
 export const quickbooksAuth = PieceAuth.OAuth2({
     description: 'You can find Company ID under **settings->Additional Info**.',

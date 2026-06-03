@@ -15,8 +15,8 @@ import {
   RequirePermission,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
-import { MetadataDiscoveryService } from '@nexiom/piece-registry';
+} from '@soopa/auth';
+import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { requireOrgId } from '../workspaces/workspace.utils.js';
 
 /**

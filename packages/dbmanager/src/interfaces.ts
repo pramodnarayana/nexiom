@@ -1,4 +1,4 @@
-import type { DrizzleDb } from '@nexiom/database';
+import type { DrizzleDb } from '@soopa/database';
 
 export const DB_MANAGER = 'DB_MANAGER';
 

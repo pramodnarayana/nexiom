@@ -1,4 +1,4 @@
-import type { TriggerStore } from '@nexiom/piece-framework';
+import type { TriggerStore } from '@soopa/piece-framework';
 import type { Redis } from 'ioredis';
 
 /**

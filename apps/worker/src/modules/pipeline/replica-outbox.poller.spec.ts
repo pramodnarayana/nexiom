@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { Test, TestingModule } from "@nestjs/testing";
 import { ReplicaOutboxPoller } from "./replica-outbox.poller.js";
-import { DATABASE_CONNECTION, tenantStorageRegistry } from "@nexiom/database";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { DATABASE_CONNECTION, tenantStorageRegistry } from "@soopa/database";
+import { QueueService, QueueName } from "@soopa/queue";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { DB_MANAGER } from "@nexiom/dbmanager";
+import { DB_MANAGER } from "@soopa/dbmanager";
 
 describe("ReplicaOutboxPoller", () => {
   let service: ReplicaOutboxPoller;

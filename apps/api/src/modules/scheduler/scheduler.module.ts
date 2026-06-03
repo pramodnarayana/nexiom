@@ -4,12 +4,12 @@ import {
   CursorManagerService,
   StorageResolverModule,
   StorageResolverService,
-} from '@nexiom/engine';
-import { PiecesModule, PieceRegistryService } from '@nexiom/piece-registry';
-import { TokenManagerService } from '@nexiom/credentials';
-import { REDIS_CLIENT } from '@nexiom/cache';
-import { DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
-import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
+} from '@soopa/engine';
+import { PiecesModule, PieceRegistryService } from '@soopa/piece-registry';
+import { TokenManagerService } from '@soopa/credentials';
+import { REDIS_CLIENT } from '@soopa/cache';
+import { DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
+import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 import type { Redis } from 'ioredis';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';

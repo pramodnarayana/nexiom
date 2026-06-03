@@ -13,7 +13,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthContext, type RequestAuthContext, AuthGuard } from '@nexiom/auth';
+import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
 import { ExceptionService, type ExceptionStatus } from './exception.service.js';
 
 @Controller('exceptions')

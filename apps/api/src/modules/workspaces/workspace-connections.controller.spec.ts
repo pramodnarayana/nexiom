@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
 import { WorkspacesService } from './workspaces.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { SyncRunner } from '../scheduler/sync-runner.js';
 import { ORG_ID, WS_ID, CONN_ID, makeAuth } from './workspace-test-fixtures.js';
 

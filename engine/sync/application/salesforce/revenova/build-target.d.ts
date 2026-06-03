@@ -1,1 +1,1 @@
-export declare const BuildRevenovaTargetPayload: import("@nexiom/piece-framework").AppTargetBuilderFn;
+export declare const BuildRevenovaTargetPayload: import("@soopa/piece-framework").AppTargetBuilderFn;

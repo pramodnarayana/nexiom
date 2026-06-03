@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GitopsSyncController } from './gitops-sync.controller.js';
 import { GitopsWebhookGuard } from './gitops-webhook.guard.js';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { QueueService, QueueName } from '@soopa/queue';
 
 describe('GitopsSyncController', () => {
   let controller: GitopsSyncController;

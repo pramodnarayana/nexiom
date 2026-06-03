@@ -1,11 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { TargetBuilderService } from "./target-builder.service.js";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { PipelineHookBrokerService } from "@nexiom/engine";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { PipelineHookBrokerService } from "@soopa/engine";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@nexiom/engine", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@nexiom/engine")>();
+vi.mock("@soopa/engine", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@soopa/engine")>();
   return {
     ...actual,
     hydratePayload: vi
@@ -87,7 +87,7 @@ describe("TargetBuilderService", () => {
   });
 
   it("applies field mapping rules via hydratePayload after enrichment", async () => {
-    const { hydratePayload } = await import("@nexiom/engine");
+    const { hydratePayload } = await import("@soopa/engine");
     hookBrokerBuildTarget.mockResolvedValue({ extra: "field" });
 
     await service.buildPayload(

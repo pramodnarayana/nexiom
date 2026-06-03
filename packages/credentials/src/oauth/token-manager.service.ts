@@ -1,8 +1,8 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
-import { dataSources, credentials, DATABASE_CONNECTION } from '@nexiom/database';
+import { dataSources, credentials, DATABASE_CONNECTION } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 import { Redis } from 'ioredis';
-import type { DrizzleDb } from '@nexiom/database';
+import type { DrizzleDb } from '@soopa/database';
 
 import { EncryptionService } from '../crypto/encryption.interface.js';
 

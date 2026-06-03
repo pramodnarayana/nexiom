@@ -2,10 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { dynamicTool } from 'ai';
 import { z } from 'zod';
 import { toAISchema } from './tool-zod.wrapper.js';
-import { MetadataDiscoveryService } from '@nexiom/piece-registry';
+import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { MappingService } from '../categories/mapping.service.js';
-import { TransformationEngine } from '@nexiom/transformer';
-import type { Piece } from '@nexiom/piece-framework';
+import { TransformationEngine } from '@soopa/transformer';
+import type { Piece } from '@soopa/piece-framework';
 
 const MAX_PARALLEL_RELATED_CALLS = 5;
 

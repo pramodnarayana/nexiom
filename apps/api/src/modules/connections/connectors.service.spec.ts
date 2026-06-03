@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
-import { EncryptionService, AppCredentialError } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/piece-registry';
-import type { Piece } from '@nexiom/piece-framework';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import { SchemaPlan } from '@nexiom/dbmanager';
-import { StorageResolverService } from '@nexiom/engine';
+import { EncryptionService, AppCredentialError } from '@soopa/credentials';
+import { PieceRegistryService } from '@soopa/piece-registry';
+import type { Piece } from '@soopa/piece-framework';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import { SchemaPlan } from '@soopa/dbmanager';
+import { StorageResolverService } from '@soopa/engine';
 import {
   InternalServerErrorException,
   NotFoundException,

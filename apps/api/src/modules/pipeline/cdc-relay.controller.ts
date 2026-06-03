@@ -9,7 +9,7 @@ import {
   ValidationPipe,
   BadRequestException,
 } from '@nestjs/common';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { QueueService, QueueName } from '@soopa/queue';
 import { CdcRelayGuard } from './cdc-relay.guard.js';
 import { DebeziumUnwrappedEvent } from './debezium-event.js';
 

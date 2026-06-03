@@ -52,7 +52,7 @@ export type AppTargetBuilderFn = (
 
 /**
  * Called once per tenant schema when a stitch for this appName is first activated.
- * The application domain package (e.g. @nexiom/domain-tms) creates its typed
+ * The application domain package (e.g. @soopa/domain-tms) creates its typed
  * per-entity tables (tms_carrier, tms_tp, etc.) using IF NOT EXISTS DDL.
  *
  * @deprecated Deprecated — superseded by the dynamic shard loading architecture (ApplicationLoaderService + PipelineHookBrokerService); will be removed in the next release

@@ -6,9 +6,9 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { eq, isNull, and } from 'drizzle-orm';
-import { DB_MANAGER } from '@nexiom/dbmanager';
-import type { DatabaseManager } from '@nexiom/dbmanager';
-import { canonicalMappings } from '@nexiom/database';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
+import { canonicalMappings } from '@soopa/database';
 import { PinoLogger } from 'nestjs-pino';
 import type { CreateMapping, UpdateMapping } from './mappings.validation.js';
 

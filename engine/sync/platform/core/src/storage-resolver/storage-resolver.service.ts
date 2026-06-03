@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { dataSources } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
+import { dataSources } from '@soopa/database';
 import { eq } from 'drizzle-orm';
 
 export type HostContext = {

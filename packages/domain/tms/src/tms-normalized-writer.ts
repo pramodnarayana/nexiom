@@ -1,10 +1,10 @@
-import type { AppNormalizedWriterFn, AppsConnectorDb } from '@nexiom/piece-framework';
+import type { AppNormalizedWriterFn, AppsConnectorDb } from '@soopa/piece-framework';
 
-import { DynamicSchemaBuilder } from '@nexiom/metadata-engine';
+import { DynamicSchemaBuilder } from '@soopa/metadata-engine';
 import { validateTmsIdentifier } from './schema/tms-identifier-validator.js';
 
 // ---------------------------------------------------------------------------
-// TMS Normalized Writer Hook — @nexiom/domain-tms
+// TMS Normalized Writer Hook — @soopa/domain-tms
 //
 // Shared by ALL TMS source connectors (Revenova, McLeod, TMW…).
 // Registered by each connector's index.ts:

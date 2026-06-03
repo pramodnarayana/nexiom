@@ -3,7 +3,7 @@ import { intervalToCron } from './interval-to-cron.js';
 import {
   SYNC_INTERVAL_OPTIONS,
   type SyncIntervalMinutes,
-} from '@nexiom/database';
+} from '@soopa/database';
 
 describe('intervalToCron', () => {
   it('maps 30 minutes to every-30-minutes cron', () => {

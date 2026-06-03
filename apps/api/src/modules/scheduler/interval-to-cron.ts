@@ -1,4 +1,4 @@
-import type { SyncIntervalMinutes } from '@nexiom/database';
+import type { SyncIntervalMinutes } from '@soopa/database';
 
 /**
  * Maps a syncIntervalMinutes value to a 6-field Quartz/Windmill cron expression.

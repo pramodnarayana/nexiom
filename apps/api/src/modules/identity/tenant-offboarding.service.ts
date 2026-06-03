@@ -4,9 +4,9 @@ import {
   type DrizzleDb,
   dataSources,
   organization,
-} from '@nexiom/database';
+} from '@soopa/database';
 import { eq, sql } from 'drizzle-orm';
-import { getWorkspaceSchemaName } from '@nexiom/dbmanager';
+import { getWorkspaceSchemaName } from '@soopa/dbmanager';
 
 @Injectable()
 export class TenantOffboardingService {

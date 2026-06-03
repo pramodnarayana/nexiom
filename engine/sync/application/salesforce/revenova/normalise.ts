@@ -1,4 +1,4 @@
-import type { NormalizedEntityType } from '@nexiom/piece-framework';
+import type { NormalizedEntityType } from '@soopa/piece-framework';
 
 type NormalizeHandler = (data: Record<string, unknown>) => { canonicalType: NormalizedEntityType; data: Record<string, unknown> } | null;
 

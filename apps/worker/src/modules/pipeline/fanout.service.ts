@@ -6,7 +6,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { eq, and } from "drizzle-orm";
-import { QueueService, QueueName } from "@nexiom/queue";
+import { QueueService, QueueName } from "@soopa/queue";
 import {
   DATABASE_CONNECTION,
   buildTenantSchema,
@@ -16,19 +16,19 @@ import {
   dataSources,
   globalEntityMap,
   uiWorkspaceDataSources,
-} from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
+} from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
 import {
   StorageResolverService,
   ApplicationLoaderService,
   PipelineHookBrokerService,
   evaluateConditions,
   Condition,
-} from "@nexiom/engine";
-import type { Rule } from "@nexiom/engine";
-import { DB_MANAGER } from "@nexiom/dbmanager";
-import type { DatabaseManager } from "@nexiom/dbmanager";
-import { DependenciesMissingError } from "@nexiom/piece-framework";
+} from "@soopa/engine";
+import type { Rule } from "@soopa/engine";
+import { DB_MANAGER } from "@soopa/dbmanager";
+import type { DatabaseManager } from "@soopa/dbmanager";
+import { DependenciesMissingError } from "@soopa/piece-framework";
 import { sql } from "drizzle-orm";
 import { processInChunks } from "./outbox.utils.js";
 import {

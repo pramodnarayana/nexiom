@@ -1,4 +1,4 @@
-import type { SendEmailOptions } from '@nexiom/identity';
+import type { SendEmailOptions } from '@soopa/identity';
 export type { SendEmailOptions };
 
 export abstract class EmailService {

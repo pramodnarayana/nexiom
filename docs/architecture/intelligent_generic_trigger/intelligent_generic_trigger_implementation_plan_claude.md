@@ -38,7 +38,7 @@ packages/connections/src/intelligence/
 
 **Acceptance criteria:**
 
-- `import { DiscoveryService } from '@nexiom/connections/intelligence'` resolves without TypeScript errors.
+- `import { DiscoveryService } from '@soopa/connections/intelligence'` resolves without TypeScript errors.
 - All five service files export at least their type definitions.
 
 ---

@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
+import { QueueModule, createQueueModuleOptions } from "@soopa/queue";
 import { ProvisionerModule } from "./modules/provisioner/provisioner.module.js";
 
 @Module({

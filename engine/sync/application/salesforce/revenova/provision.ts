@@ -1,3 +1,3 @@
-import { provisionTmsTables } from '@nexiom/domain-tms';
+import { provisionTmsTables } from '@soopa/domain-tms';
 
 export const provisionRevenovaDomain = provisionTmsTables;

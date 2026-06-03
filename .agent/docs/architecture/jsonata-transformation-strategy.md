@@ -53,7 +53,7 @@ We enforce a strict AST-caching mechanism inside the worker modules (`Normalizer
 
 ```typescript
 import jsonata from 'jsonata';
-import type { NormalizerFn, CanonicalType } from '@nexiom/piece-framework';
+import type { NormalizerFn, CanonicalType } from '@soopa/piece-framework';
 
 // In future iterations, this is fetched dynamically from Postgres
 const metadataDictionary: Record<string, { type: CanonicalType; mappingExpr: string }> = {

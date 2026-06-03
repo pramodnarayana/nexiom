@@ -1,7 +1,7 @@
 import { RegistryOAuthRefreshClient } from './registry-token-refresh.service.js';
-import { EncryptionService, OAuthRefreshError } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/piece-registry';
-import type { Piece } from '@nexiom/piece-framework';
+import { EncryptionService, OAuthRefreshError } from '@soopa/credentials';
+import { PieceRegistryService } from '@soopa/piece-registry';
+import type { Piece } from '@soopa/piece-framework';
 import {
   describe,
   it,
@@ -71,7 +71,7 @@ describe('RegistryOAuthRefreshClient', () => {
 
     client = new RegistryOAuthRefreshClient(
       mockPieceRegistry as PieceRegistryService,
-      mockDb as unknown as import('@nexiom/database').DrizzleDb,
+      mockDb as unknown as import('@soopa/database').DrizzleDb,
       mockEncryptionService as unknown as EncryptionService,
     );
 

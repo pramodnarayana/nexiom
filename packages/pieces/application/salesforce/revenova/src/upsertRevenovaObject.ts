@@ -1,4 +1,4 @@
-import type { ReplicaExtractorFn } from '@nexiom/piece-framework';
+import type { ReplicaExtractorFn } from '@soopa/piece-framework';
 
 interface SalesforceEnvelope {
     notification?: {

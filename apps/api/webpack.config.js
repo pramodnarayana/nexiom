@@ -5,7 +5,7 @@ module.exports = function webpack_(options) {
         ...options,
         externals: [
             nodeExternals({
-                allowlist: [/^@nexiom/],
+                allowlist: [/^@soopa/],
             }),
         ],
     };

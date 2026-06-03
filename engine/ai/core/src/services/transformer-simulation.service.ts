@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Injectable, Logger, BadRequestException, Inject } from '@nestjs/common';
-import { DATABASE_CONNECTION, dataSources } from '@nexiom/database';
+import { DATABASE_CONNECTION, dataSources } from '@soopa/database';
 import { eq, and } from 'drizzle-orm';
-import type { DrizzleDb } from '@nexiom/database';
-import { TokenManagerService } from '@nexiom/credentials';
-import { PieceRegistryService } from '@nexiom/piece-registry';
-import { MetadataDiscoveryService } from '@nexiom/piece-registry';
+import type { DrizzleDb } from '@soopa/database';
+import { TokenManagerService } from '@soopa/credentials';
+import { PieceRegistryService } from '@soopa/piece-registry';
+import { MetadataDiscoveryService } from '@soopa/piece-registry';
 import { MappingService } from '../categories/mapping.service.js';
-import { TransformationEngine } from '@nexiom/transformer';
+import { TransformationEngine } from '@soopa/transformer';
 import { optimizePayloadTokens } from '../transformers/token-optimizer.util.js';
 
 @Injectable()

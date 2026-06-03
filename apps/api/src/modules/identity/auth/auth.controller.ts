@@ -15,14 +15,14 @@ import {
   AuthGuard,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+} from '@soopa/auth';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
 import type {
   IUserProvider,
   ITenantProvider,
   Session,
   User,
-} from '@nexiom/identity';
+} from '@soopa/identity';
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import { Signup, CompleteInvite } from '../users/users.validation.js';

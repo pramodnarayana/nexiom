@@ -9,7 +9,7 @@ import {
   getOwnerRoleId,
   getAdminRoleId,
   getMemberRoleId,
-} from '@nexiom/identity/constants';
+} from '@soopa/identity/constants';
 
 export { getSystemTenantId, getOwnerRoleId, getAdminRoleId, getMemberRoleId };
 
@@ -29,9 +29,6 @@ export {
   getOwnerRoleId as getRequiredOwnerRoleId,
   getAdminRoleId as getRequiredAdminRoleId,
   getMemberRoleId as getRequiredMemberRoleId,
-} from '@nexiom/identity/constants';
+} from '@soopa/identity/constants';
 
-export {
-  ALL_PERMISSIONS,
-  isSystemPermission,
-} from '@nexiom/identity/constants';
+export { ALL_PERMISSIONS, isSystemPermission } from '@soopa/identity/constants';

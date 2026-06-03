@@ -2,9 +2,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvitationsController } from './invitations.controller.js';
 import { InvitationsService } from './invitations.service.js';
-import { AuthGuard, type RequestAuthContext } from '@nexiom/auth';
+import { AuthGuard, type RequestAuthContext } from '@soopa/auth';
 import { CreateInvitation } from './invitations.validation.js';
-import type { User } from '@nexiom/identity';
+import type { User } from '@soopa/identity';
 
 describe('InvitationsController', () => {
   let controller: InvitationsController;

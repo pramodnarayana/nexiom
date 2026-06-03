@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { SYNC_INTERVAL_OPTIONS } from '@nexiom/database';
-import type { dataSources, SyncIntervalMinutes } from '@nexiom/database';
+import { SYNC_INTERVAL_OPTIONS } from '@soopa/database';
+import type { dataSources, SyncIntervalMinutes } from '@soopa/database';
 import { WindmillClient } from './windmill.client.js';
 import { intervalToCron } from './interval-to-cron.js';
 import { SyncRunner } from './sync-runner.js';

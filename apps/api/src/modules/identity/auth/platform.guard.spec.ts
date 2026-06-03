@@ -2,13 +2,13 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PlatformGuard } from './platform.guard.js';
-import { AuthService } from '@nexiom/auth';
+import { AuthService } from '@soopa/auth';
 import {
   ForbiddenException,
   UnauthorizedException,
   ExecutionContext,
 } from '@nestjs/common';
-import { PERMISSION_PROVIDER } from '@nexiom/identity';
+import { PERMISSION_PROVIDER } from '@soopa/identity';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 describe('PlatformGuard', () => {

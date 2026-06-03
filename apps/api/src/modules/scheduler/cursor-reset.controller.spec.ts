@@ -5,9 +5,9 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nexiom/auth';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { REDIS_CLIENT } from '@nexiom/cache';
+import { AuthGuard } from '@soopa/auth';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { REDIS_CLIENT } from '@soopa/cache';
 import { SystemAdminGuard } from '../identity/auth/system-admin.guard.js';
 import { CursorResetController } from './cursor-reset.controller.js';
 
@@ -16,7 +16,7 @@ const STREAM_NAME = 'Account';
 
 const mockCtx = {
   user: { id: 'u1', email: 'admin@example.com' },
-} as unknown as import('@nexiom/auth').RequestAuthContext;
+} as unknown as import('@soopa/auth').RequestAuthContext;
 
 function createMockDb() {
   const chain = {

@@ -86,4 +86,4 @@ This document outlines the proposed full unified structure for the Nexiom monore
 
 1. **Batteries Included:** The "Platform" (`apps`, `packages/identity`, `packages/database`, `packages/billing`) provides a working SaaS out of the box.
 2. **Extensible:** Developers add new features by creating a new folder in `/modules` (frontend) and `/modules` (backend), or by adding a new `/integration`.
-3. **Modular:** Core features like Billing or Identity can be swapped out by replacing the respective `@nexiom/billing` or `@nexiom/identity` package implementations while keeping the API contracts (in `/domain`) the same.
+3. **Modular:** Core features like Billing or Identity can be swapped out by replacing the respective `@soopa/billing` or `@soopa/identity` package implementations while keeping the API contracts (in `/domain`) the same.

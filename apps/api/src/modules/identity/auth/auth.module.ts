@@ -1,6 +1,6 @@
 import { forwardRef, Module, Global } from '@nestjs/common';
 import { SystemAdminGuard } from './system-admin.guard.js';
-import { AuthModule } from '@nexiom/auth';
+import { AuthModule } from '@soopa/auth';
 import { PlatformGuard } from './platform.guard.js';
 import { EmailModule } from '../../email/email.module.js';
 import { AuthController } from './auth.controller.js';

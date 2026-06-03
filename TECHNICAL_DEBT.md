@@ -58,11 +58,11 @@ This document tracks known technical debt items that should be addressed in futu
 
 - Identical `DatabaseManager` implementations are duplicated across both the API and Worker applications.
 - This creates multiple sources of truth for database module initialization, seeding, and migration execution, increasing the risk of configuration drift.
-- Although `@nexiom/dbmanager` exists, it currently only exports TypeScript interfaces rather than the concrete implementation.
+- Although `@soopa/dbmanager` exists, it currently only exports TypeScript interfaces rather than the concrete implementation.
 
 **Recommended Solution**:
 
-- Move the concrete `DatabaseManager` implementation into `@nexiom/dbmanager`.
+- Move the concrete `DatabaseManager` implementation into `@soopa/dbmanager`.
 - Export a global `DbManagerModule` from that package.
 - Delete the redundant files in both `apps/api` and `apps/worker` and refactor them to import the unified library service.
 
@@ -151,10 +151,10 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Resolution**:
 
-- **Single Source of Truth**: All Drizzle schemas, `drizzle.config.ts`, and `drizzle/` migrations folder live exclusively in `@nexiom/database`.
-- **Root-level DDL commands**: `pnpm db:migrate`, `pnpm db:generate`, `pnpm db:studio` — all delegate to `@nexiom/database` via the root `package.json`.
+- **Single Source of Truth**: All Drizzle schemas, `drizzle.config.ts`, and `drizzle/` migrations folder live exclusively in `@soopa/database`.
+- **Root-level DDL commands**: `pnpm db:migrate`, `pnpm db:generate`, `pnpm db:studio` — all delegate to `@soopa/database` via the root `package.json`.
 - **Consumer packages are DDL-free**: `apps/api` and `apps/worker` no longer have `drizzle-kit` in devDependencies or any `db:generate`/`db:migrate`/`db:studio` scripts.
-- **dotenv auto-resolution**: `drizzle.config.ts` in `@nexiom/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
+- **dotenv auto-resolution**: `drizzle.config.ts` in `@soopa/database` loads `DATABASE_URL` from `apps/api/.env` automatically so all root commands work without manual env sourcing.
 - **Enterprise Piece Loader**: `PiecesModule` is now a DynamicModule with `forRoot({ anchorUrl: import.meta.url })`. All 6 host modules (ConnectionsModule, StitchesModule, TriggerModule, SchedulerModule, WebhooksModule, PipelineModule) pass their own `import.meta.url` as the resolution anchor, bypassing pnpm strict package containment in any working directory or container.
 
 ### 7. Shadow Mode Direct Trigger Imports
@@ -183,14 +183,14 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Current State**:
 
-- The project follows a strict "Bounded Context" approach with database schemas separated across multiple packages (`@nexiom/identity` manages `organization`, `@nexiom/database` manages `app_connection` and `tenant`).
+- The project follows a strict "Bounded Context" approach with database schemas separated across multiple packages (`@soopa/identity` manages `organization`, `@soopa/database` manages `app_connection` and `tenant`).
 - While this prevents circular dependencies and provides strict microservice-style domain boundaries, it incurs the overhead of data duplication. Specifically, it necessitates an artificial `tenant` "anchor" table in the database package to shadow the real `organization` table.
 
 **Recommended Solution**:
 
 - Adopt the "Shared Database Architecture" (Monolithic DB Package) which is the industry standard for TS monorepos (e.g., Vercel, Cal.com, Supabase).
-- Migrate all Drizzle schema files from `@nexiom/identity` directly into `@nexiom/database`.
-- Make `@nexiom/database` the single source of truth for the entire database. All other packages will list it as a dependency.
+- Migrate all Drizzle schema files from `@soopa/identity` directly into `@soopa/database`.
+- Make `@soopa/database` the single source of truth for the entire database. All other packages will list it as a dependency.
 - This allows `app_connection` to safely declare a TypeScript foreign key directly to `organization` without circular dependency errors.
 
 ---
@@ -321,7 +321,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Recommended Solution**:
 
-- **Shared Workspace Package**: Export `AuthGuard` from `@nexiom/identity/guards` if `identity` is built as a library.
+- **Shared Workspace Package**: Export `AuthGuard` from `@soopa/identity/guards` if `identity` is built as a library.
 - **Global Guard**: Register `AuthGuard` globally in `app.module.ts` via `APP_GUARD`.
 - **Module Export**: Explicitly export `AuthGuard` from an `index.ts` within the `identity` module.
 
@@ -404,7 +404,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 **Recommended Solution**:
 
 - Deprecate and remove `igt-logger.ts`.
-- Replace all imports of `IgtLogger` across the `@nexiom/connections` and `@nexiom/piece-*` packages with the enterprise-standard `pino` logger instance.
+- Replace all imports of `IgtLogger` across the `@soopa/connections` and `@soopa/piece-*` packages with the enterprise-standard `pino` logger instance.
 - Ensure log levels and metadata context remain structured to avoid breaking existing observability dashboards.
 
 ---
@@ -482,7 +482,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Current State**:
 
-- The engine currently uses a Tier 4A database-driven piece registry. It dynamically resolves pieces from the `pieces` Drizzle table, but assumes the packages (`@nexiom/piece-*`) are already installed in the monorepo's `node_modules`.
+- The engine currently uses a Tier 4A database-driven piece registry. It dynamically resolves pieces from the `pieces` Drizzle table, but assumes the packages (`@soopa/piece-*`) are already installed in the monorepo's `node_modules`.
 - **Note on Terminology**:
   - **Connecting**: Tenants browse the "Marketplace Catalog" in their UI and click "Connect" to authorize a piece (e.g., Salesforce). This creates an `app_connection`. This requires zero platform changes.
   - **Installing**: Adding a *brand new, never-before-seen* integration to the catalog itself (e.g., adding Zendesk tomorrow).
@@ -490,7 +490,7 @@ Adopt industry-standard data-fetching library (React Query or SWR):
 
 **Recommended Solution**:
 
-1. **Out-of-Band Installer**: `PieceLoaderService` must **never** shell out to `npm install` during request handling — this mutates shared state and blocks the event loop. Instead, `PieceLoaderService.loadEnabledPieces()` should check whether `./plugins/@nexiom/piece-X` exists on disk and fail fast with a descriptive error (`"Piece X is not installed — trigger the admin installer job"`) if the artifact is missing. A dedicated admin job/service handles the actual `npm install` step out of band.
+1. **Out-of-Band Installer**: `PieceLoaderService` must **never** shell out to `npm install` during request handling — this mutates shared state and blocks the event loop. Instead, `PieceLoaderService.loadEnabledPieces()` should check whether `./plugins/@soopa/piece-X` exists on disk and fail fast with a descriptive error (`"Piece X is not installed — trigger the admin installer job"`) if the artifact is missing. A dedicated admin job/service handles the actual `npm install` step out of band.
 2. **Security Allowlist**: Validate package names against a signed registry to prevent malicious arbitrary code execution.
 3. **Sandboxing**: A bug in a dynamically loaded piece can crash the main API process. **`worker_threads` do NOT provide crash isolation** — they run in the same Node.js process. True isolation requires separate processes or containers (e.g., `child_process`, containerized workers, or a dedicated worker microservice).
 4. **Persistent Storage**: Ensure the `./plugins` directory lives on a persistent volume (e.g., EFS) so container restarts don't re-trigger installs and cause slow cold starts.

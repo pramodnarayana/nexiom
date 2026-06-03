@@ -8,7 +8,7 @@ import {
   type VendorResponse,
   type ConfigOption,
   type RelatedObjectDescriptor,
-} from '@nexiom/piece-framework';
+} from '@soopa/piece-framework';
 import { quickbooksAuth } from './lib/auth.js';
 import { quickbooksCommon, resolveEnvironment } from './lib/common.js';
 import { quickbooksUniversalTrigger } from './triggers/universal-trigger.js';

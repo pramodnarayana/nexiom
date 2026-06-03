@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthGuard } from '@nexiom/auth';
+import { AuthGuard } from '@soopa/auth';
 import { AiRateLimitGuard } from '../interceptors/ai-ratelimit.guard.js';
 import { AiController } from './ai.controller.js';
-import { OrchestratorService, ChatPersistenceService } from '@nexiom/ai-engine';
+import { OrchestratorService, ChatPersistenceService } from '@soopa/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
-import { QUEUE_SERVICE, QueueName } from '@nexiom/queue';
+import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 
 describe('AiController - Enterprise Hardened', () => {
   let controller: AiController;

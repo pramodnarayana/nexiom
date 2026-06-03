@@ -6,7 +6,7 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   ROLE_PROVIDER,
-} from '@nexiom/identity';
+} from '@soopa/identity';
 import {
   getRequiredAdminRoleId,
   getRequiredOwnerRoleId,
@@ -17,7 +17,7 @@ import {
   AuthGuard,
   PermissionsGuard,
   type RequestAuthContext,
-} from '@nexiom/auth';
+} from '@soopa/auth';
 import { PlatformGuard } from '../auth/platform.guard.js';
 
 vi.mock('../../../constants', () => ({

@@ -3,8 +3,8 @@ import { WebhooksController } from './webhooks.controller.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 import { DbModule } from '../../db/db.module.js';
-import { StorageResolverModule } from '@nexiom/engine';
-import { PiecesModule } from '@nexiom/piece-registry';
+import { StorageResolverModule } from '@soopa/engine';
+import { PiecesModule } from '@soopa/piece-registry';
 import { ObservabilityModule } from '../observability/observability.module.js';
 
 // NOTE: TenantRateLimitGuard injects REDIS_CLIENT, which is provided by

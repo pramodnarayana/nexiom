@@ -13,9 +13,9 @@ import {
   integrationStitches,
   buildTenantSchema,
   assertValidSchemaName,
-} from '@nexiom/database';
-import { StorageResolverService } from '@nexiom/engine';
-import { QueueService, QueueName } from '@nexiom/queue';
+} from '@soopa/database';
+import { StorageResolverService } from '@soopa/engine';
+import { QueueService, QueueName } from '@soopa/queue';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -184,7 +184,7 @@ export class ExceptionService {
       const { outboundGateway } = buildTenantSchema(schemaName);
 
       // Build status filter — use raw SQL to avoid Drizzle's compiled enum
-      // type constraint on DISMISSED until the @nexiom/database package is rebuilt.
+      // type constraint on DISMISSED until the @soopa/database package is rebuilt.
       const statusSql =
         filter.status === 'dismissed'
           ? sql`${outboundGateway.status} = 'DISMISSED'`

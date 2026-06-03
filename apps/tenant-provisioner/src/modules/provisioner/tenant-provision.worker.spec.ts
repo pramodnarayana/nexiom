@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TenantProvisionWorker } from "./tenant-provision.worker.js";
-import { QueueName } from "@nexiom/queue";
-import type { QueueService } from "@nexiom/queue";
-import type { ProvisionDatabaseEvent } from "@nexiom/queue";
+import { QueueName } from "@soopa/queue";
+import type { QueueService } from "@soopa/queue";
+import type { ProvisionDatabaseEvent } from "@soopa/queue";
 
 // --- Mocks ---
 const mockQuery = vi.fn();

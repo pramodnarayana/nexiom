@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { PiecesModule, MetadataModule } from '@nexiom/piece-registry';
-import { DatabaseModule } from '@nexiom/database';
+import { PiecesModule, MetadataModule } from '@soopa/piece-registry';
+import { DatabaseModule } from '@soopa/database';
 import { OrchestratorService } from './runtime/orchestrator.service.js';
 import { MappingService } from './categories/mapping.service.js';
 import { HydratorToolFactory } from './tools/hydrator-tool.factory.js';
 import { ActionToolFactory } from './tools/action-tool.factory.js';
 import { IntentClassifierService } from './planner/intent-classifier.service.js';
-import { TransformationEngine } from '@nexiom/transformer';
+import { TransformationEngine } from '@soopa/transformer';
 import { TransformerSimulationService } from './services/transformer-simulation.service.js';
 import { ChatPersistenceService } from './services/chat-persistence.service.js';
 

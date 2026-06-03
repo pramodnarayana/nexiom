@@ -2,17 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { TraceService } from './trace.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { getTableName } from 'drizzle-orm';
-import { StorageResolverService } from '@nexiom/engine';
+import { StorageResolverService } from '@soopa/engine';
 import { PinoLogger } from 'nestjs-pino';
-import { DB_MANAGER } from '@nexiom/dbmanager';
+import { DB_MANAGER } from '@soopa/dbmanager';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-// The actual @nexiom/database package is used for assertValidSchemaName and buildTenantSchema
+// The actual @soopa/database package is used for assertValidSchemaName and buildTenantSchema
 
 const loggerMock = {
   debug: vi.fn(),

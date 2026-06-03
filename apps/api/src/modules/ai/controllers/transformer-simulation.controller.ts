@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { SystemAdminGuard } from '../../identity/auth/system-admin.guard.js';
-import { TransformerSimulationService } from '@nexiom/ai-engine';
+import { TransformerSimulationService } from '@soopa/ai-engine';
 import { PinoLogger } from 'nestjs-pino';
 import {
   IsString,

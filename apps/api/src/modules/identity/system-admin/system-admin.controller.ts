@@ -18,14 +18,14 @@ import {
   USER_PROVIDER,
   TENANT_PROVIDER,
   ROLE_PROVIDER,
-} from '@nexiom/identity';
+} from '@soopa/identity';
 import type {
   IAuthProvider,
   IUserProvider,
   ITenantProvider,
   IRoleProvider,
-} from '@nexiom/identity';
-import { AuthContext, type RequestAuthContext } from '@nexiom/auth';
+} from '@soopa/identity';
+import { AuthContext, type RequestAuthContext } from '@soopa/auth';
 import {
   getRequiredAdminRoleId,
   getRequiredSystemTenantId,
@@ -40,7 +40,7 @@ import {
 } from './system-admin.validation.js';
 import type { CreateSystemInvitationDto } from './system-admin.validation.js';
 import { LazyZodValidationPipe } from '../../../common/pipes/lazy-zod-validation.pipe.js';
-import { RequirePermission, PermissionsGuard, AuthGuard } from '@nexiom/auth';
+import { RequirePermission, PermissionsGuard, AuthGuard } from '@soopa/auth';
 
 @Controller('admin')
 @UseGuards(AuthGuard, PermissionsGuard)

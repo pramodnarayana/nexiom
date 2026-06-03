@@ -2,7 +2,7 @@ import { Module, Global, forwardRef } from "@nestjs/common";
 import { AuthService } from "./services/auth.service.js";
 import { AuthGuard } from "./guards/auth.guard.js";
 import { PermissionsGuard } from "./guards/permissions.guard.js";
-import { IdentityModule } from "@nexiom/identity";
+import { IdentityModule } from "@soopa/identity";
 
 @Global()
 @Module({

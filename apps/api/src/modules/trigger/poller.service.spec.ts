@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PollerService } from './poller.service.js';
 /* eslint-disable @typescript-eslint/unbound-method */
-import { TriggerStrategy } from '@nexiom/piece-framework';
+import { TriggerStrategy } from '@soopa/piece-framework';
 import type { TriggerExecutorService } from './trigger-executor.service.js';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 
 function makeDb(rows: unknown[] = []) {
   return {
@@ -50,7 +50,7 @@ describe('PollerService', () => {
     ]);
 
     const service = new PollerService(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       executor,
       registry,
     );
@@ -64,7 +64,7 @@ describe('PollerService', () => {
     db = makeDb([]);
 
     const service = new PollerService(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       executor,
       registry,
     );
@@ -88,7 +88,7 @@ describe('PollerService', () => {
 
     const webhookRegistry = makeRegistry(TriggerStrategy.WEBHOOK);
     const service = new PollerService(
-      db as unknown as import('@nexiom/database').DrizzleDb,
+      db as unknown as import('@soopa/database').DrizzleDb,
       executor,
       webhookRegistry,
     );
@@ -106,7 +106,7 @@ describe('PollerService', () => {
     };
 
     const service = new PollerService(
-      brokenDb as unknown as import('@nexiom/database').DrizzleDb,
+      brokenDb as unknown as import('@soopa/database').DrizzleDb,
       executor,
       registry,
     );

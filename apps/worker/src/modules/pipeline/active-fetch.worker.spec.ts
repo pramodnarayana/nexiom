@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from "@nestjs/testing";
 import { ActiveFetchWorker } from "./active-fetch.worker.js";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION } from "@nexiom/database";
-import { PipelineHookBrokerService } from "@nexiom/engine";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION } from "@soopa/database";
+import { PipelineHookBrokerService } from "@soopa/engine";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("ActiveFetchWorker", () => {

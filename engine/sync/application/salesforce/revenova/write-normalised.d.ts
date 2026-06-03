@@ -1,1 +1,1 @@
-export declare const WriteRevenovaNormalisedObject: import("@nexiom/piece-framework").AppNormalizedWriterFn;
+export declare const WriteRevenovaNormalisedObject: import("@soopa/piece-framework").AppNormalizedWriterFn;

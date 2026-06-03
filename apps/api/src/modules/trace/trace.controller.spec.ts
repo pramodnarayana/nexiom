@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TraceController } from './trace.controller.js';
 import { TraceService } from './trace.service.js';
-import { AuthGuard } from '@nexiom/auth';
+import { AuthGuard } from '@soopa/auth';
 import { BadRequestException } from '@nestjs/common';
-import { type RequestAuthContext } from '@nexiom/auth';
+import { type RequestAuthContext } from '@soopa/auth';
 
 type MockedTraceService = {
   listTraces: Mock;

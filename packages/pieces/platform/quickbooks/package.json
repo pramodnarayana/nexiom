@@ -1,5 +1,5 @@
 {
-  "name": "@nexiom/piece-quickbooks",
+  "name": "@soopa/piece-quickbooks",
   "version": "0.1.3",
   "type": "module",
   "main": "dist/src/index.js",
@@ -22,8 +22,8 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@nexiom/credentials": "workspace:*",
-    "@nexiom/piece-framework": "workspace:*",
+    "@soopa/credentials": "workspace:*",
+    "@soopa/piece-framework": "workspace:*",
     "dayjs": "^1.11.19"
   }
 }

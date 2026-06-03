@@ -4,8 +4,8 @@ import { ConnectionExplorerController } from './connection-explorer.controller.j
 import { DataExplorerService } from './data-explorer.service.js';
 import { BadRequestException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RequestAuthContext } from '@nexiom/auth';
-import { AuthGuard } from '@nexiom/auth';
+import type { RequestAuthContext } from '@soopa/auth';
+import { AuthGuard } from '@soopa/auth';
 
 describe('ConnectionExplorerController', () => {
   let controller: ConnectionExplorerController;

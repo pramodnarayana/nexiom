@@ -5,10 +5,10 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { TokenManagerService } from '@nexiom/credentials';
+import { TokenManagerService } from '@soopa/credentials';
 import { MetadataDiscoveryService } from './metadata-discovery.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { REDIS_CLIENT } from '@nexiom/cache';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { REDIS_CLIENT } from '@soopa/cache';
 import { PieceRegistryService } from '../pieces/piece-registry.service.js';
 
 const CONN_ID = 'conn-uuid-1';

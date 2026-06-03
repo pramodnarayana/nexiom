@@ -1,5 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
-import type { RequestAuthContext } from '@nexiom/auth';
+import type { RequestAuthContext } from '@soopa/auth';
 
 /**
  * Extracts the organisation ID from the auth context.

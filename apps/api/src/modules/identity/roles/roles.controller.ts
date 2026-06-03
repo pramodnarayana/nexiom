@@ -18,14 +18,14 @@ import {
   RequirePermission,
   AuthContext,
   type RequestAuthContext,
-} from '@nexiom/auth';
-import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
+} from '@soopa/auth';
+import { ROLE_PROVIDER, RoleScope } from '@soopa/identity';
 import type {
   IRoleProvider,
   CreateRoleInput,
   UpdateRoleInput,
-} from '@nexiom/identity';
-import { filterRolesForRequester } from '@nexiom/identity/utils/role-visibility';
+} from '@soopa/identity';
+import { filterRolesForRequester } from '@soopa/identity/utils/role-visibility';
 
 @Controller('roles')
 @UseGuards(AuthGuard, PermissionsGuard)

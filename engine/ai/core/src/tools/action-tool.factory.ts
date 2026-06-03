@@ -3,7 +3,7 @@ import { dynamicTool } from 'ai';
 import { z } from 'zod';
 import { toAISchema } from './tool-zod.wrapper.js';
 import { optimizePayloadTokens } from '../transformers/token-optimizer.util.js';
-import type { Piece } from '@nexiom/piece-framework';
+import type { Piece } from '@soopa/piece-framework';
 
 @Injectable()
 export class ActionToolFactory {

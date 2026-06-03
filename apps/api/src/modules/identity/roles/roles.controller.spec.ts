@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RolesController } from './roles.controller.js';
-import { ROLE_PROVIDER, RoleScope } from '@nexiom/identity';
+import { ROLE_PROVIDER, RoleScope } from '@soopa/identity';
 import {
   AuthGuard,
   PermissionsGuard,
   type RequestAuthContext,
-} from '@nexiom/auth';
+} from '@soopa/auth';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 

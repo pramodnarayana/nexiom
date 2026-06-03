@@ -3,7 +3,7 @@ import {
   QueueService,
   QueueName,
   type ProvisionDatabaseEvent,
-} from "@nexiom/queue";
+} from "@soopa/queue";
 import { Client as PgClient, Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";

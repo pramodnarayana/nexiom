@@ -13,15 +13,11 @@ import {
   NotFoundException,
   UseGuards,
 } from '@nestjs/common';
-import { AuthContext, AuthGuard, type RequestAuthContext } from '@nexiom/auth';
+import { AuthContext, AuthGuard, type RequestAuthContext } from '@soopa/auth';
 import { SystemAdminGuard } from '../identity/auth/system-admin.guard.js';
-import {
-  DATABASE_CONNECTION,
-  syncCursors,
-  dataSources,
-} from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { DATABASE_CONNECTION, syncCursors, dataSources } from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { pollLockKey } from './lock-keys.js';

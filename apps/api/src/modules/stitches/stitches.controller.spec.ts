@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
-import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { StitchesController } from './stitches.controller.js';
 import { StitchesService } from './stitches.service.js';
 import { ORG_ID, makeAuth } from '../workspaces/workspace-test-fixtures.js';

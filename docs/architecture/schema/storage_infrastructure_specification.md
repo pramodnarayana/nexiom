@@ -49,7 +49,7 @@ The Resolver is the runtime bridge used by Sync Workers (Layers 1-6) to identify
 
 ```typescript
 import { Injectable, NotFoundException, Inject } from "@nestjs/common";
-import { DrizzleDb, DATABASE_CONNECTION, connectionStorageRegistry } from "@nexiom/database";
+import { DrizzleDb, DATABASE_CONNECTION, connectionStorageRegistry } from "@soopa/database";
 import { eq } from "drizzle-orm";
 
 @Injectable()

@@ -7,12 +7,12 @@ import {
   buildTenantSchema,
   tenantStorageRegistry,
   dataSources,
-} from "@nexiom/database";
-import { QueueName } from "@nexiom/queue";
-import { QueueService } from "@nexiom/queue";
-import { getWorkspaceSchemaName } from "@nexiom/dbmanager";
-import type { DatabaseManager } from "@nexiom/dbmanager";
-import { DB_MANAGER } from "@nexiom/dbmanager";
+} from "@soopa/database";
+import { QueueName } from "@soopa/queue";
+import { QueueService } from "@soopa/queue";
+import { getWorkspaceSchemaName } from "@soopa/dbmanager";
+import type { DatabaseManager } from "@soopa/dbmanager";
+import { DB_MANAGER } from "@soopa/dbmanager";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 6;

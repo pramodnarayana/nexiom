@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import type { ApplicationShardModule } from '@nexiom/piece-framework';
+import type { ApplicationShardModule } from '@soopa/piece-framework';
 
 // ---------------------------------------------------------------------------
 // ApplicationLoaderService

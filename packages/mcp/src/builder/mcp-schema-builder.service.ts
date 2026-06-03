@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { Action, PropertyType, AnyProperty } from '@nexiom/piece-framework';
+import { Action, PropertyType, AnyProperty } from '@soopa/piece-framework';
 
 @Injectable()
 export class McpSchemaBuilderService {

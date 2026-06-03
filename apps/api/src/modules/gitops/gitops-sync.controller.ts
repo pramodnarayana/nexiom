@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { GitopsWebhookGuard } from './gitops-webhook.guard.js';
-import { QueueService, QueueName } from '@nexiom/queue';
+import { QueueService, QueueName } from '@soopa/queue';
 
 /**
  * GitopsSyncController

@@ -26,7 +26,7 @@ See also: [Architecture Review 2026-02](./architecture/architecture_review_2026_
 
 **Current behaviour**: `connectionKey = realmId || 'default'` — all providers share this same logic even though only QuickBooks ever sends a realmId.
 
-**Correct design**: Add an optional `getConnectionKey(callbackParams)` hook to `ProviderDefinition` in `@nexiom/connections`. The generic controller calls `provider.getConnectionKey?.(params) ?? 'default'`. QuickBooks' provider file implements `getConnectionKey: (p) => p.realmId`. Other providers stay unmodified.
+**Correct design**: Add an optional `getConnectionKey(callbackParams)` hook to `ProviderDefinition` in `@soopa/connections`. The generic controller calls `provider.getConnectionKey?.(params) ?? 'default'`. QuickBooks' provider file implements `getConnectionKey: (p) => p.realmId`. Other providers stay unmodified.
 
 **See also**: TD-CON-02. Resolving TD-CON-02 (single-table `externalId`) may eliminate the `connectionKey = realmId || 'default'` workaround in `connectors.controller.ts` (specifically inside the `exchangeCode` logic) and could make implementing the `getConnectionKey` hook in `ProviderDefinition` unnecessary or require rework.
 

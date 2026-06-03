@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApplicationLoaderService } from './application-loader.service.js';
-import type { ApplicationShardModule, AppsConnectorDb } from '@nexiom/piece-framework';
+import type { ApplicationShardModule, AppsConnectorDb } from '@soopa/piece-framework';
 
 // ---------------------------------------------------------------------------
 // PipelineHookBrokerService

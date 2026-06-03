@@ -1,2 +1,2 @@
-import { tmsNormalizedWriter } from '@nexiom/domain-tms';
+import { tmsNormalizedWriter } from '@soopa/domain-tms';
 export const WriteRevenovaNormalisedObject = tmsNormalizedWriter;

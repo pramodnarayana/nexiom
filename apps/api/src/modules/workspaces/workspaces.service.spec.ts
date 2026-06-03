@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service.js';
-import { DATABASE_CONNECTION } from '@nexiom/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
 import { Test } from '@nestjs/testing';
 
 // ---------------------------------------------------------------------------

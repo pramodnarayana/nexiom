@@ -2,9 +2,9 @@ import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PipelineModule } from "./modules/pipeline/pipeline.module.js";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { PiecesModule } from "@nexiom/piece-registry";
-import { QueueModule, createQueueModuleOptions } from "@nexiom/queue";
-import { CacheModule } from "@nexiom/cache";
+import { PiecesModule } from "@soopa/piece-registry";
+import { QueueModule, createQueueModuleOptions } from "@soopa/queue";
+import { CacheModule } from "@soopa/cache";
 import { ObservabilityModule } from "./modules/observability/observability.module.js";
 
 @Module({

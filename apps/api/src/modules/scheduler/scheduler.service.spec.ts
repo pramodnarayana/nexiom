@@ -4,7 +4,7 @@ import { SchedulerService } from './scheduler.service.js';
 import { WindmillClient } from './windmill.client.js';
 import { SyncRunner } from './sync-runner.js';
 import type { InferSelectModel } from 'drizzle-orm';
-import { dataSources } from '@nexiom/database';
+import { dataSources } from '@soopa/database';
 
 type DataSource = InferSelectModel<typeof dataSources>;
 

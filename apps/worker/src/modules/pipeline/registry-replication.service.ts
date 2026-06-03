@@ -1,14 +1,14 @@
 import { Injectable, Inject, OnModuleInit, Logger } from "@nestjs/common";
 import { eq, inArray } from "drizzle-orm";
-import { QueueService, QueueName } from "@nexiom/queue";
-import { DATABASE_CONNECTION, globalRegistryOutbox } from "@nexiom/database";
-import type { DrizzleDb } from "@nexiom/database";
+import { QueueService, QueueName } from "@soopa/queue";
+import { DATABASE_CONNECTION, globalRegistryOutbox } from "@soopa/database";
+import type { DrizzleDb } from "@soopa/database";
 import {
   DB_MANAGER,
   SchemaPlan,
   getWorkspaceSchemaName,
-} from "@nexiom/dbmanager";
-import type { DatabaseManager } from "@nexiom/dbmanager";
+} from "@soopa/dbmanager";
+import type { DatabaseManager } from "@soopa/dbmanager";
 import * as schema from "../../db/schema.js";
 
 // ISO 8601 pattern — matches timestamps stored as strings in JSONB

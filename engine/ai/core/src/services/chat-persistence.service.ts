@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, NotFoundException } from '@nestjs/common';
-import { aiConversations, aiMessages } from '@nexiom/database';
-import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
+import { aiConversations, aiMessages } from '@soopa/database';
+import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 import { eq, and, desc } from 'drizzle-orm';
 
 @Injectable()

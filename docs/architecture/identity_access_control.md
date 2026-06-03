@@ -49,7 +49,7 @@ erDiagram
 
 ## 4. Backend Implementation
 
-The `@nexiom/identity` package explicitly defines the provider contract.
+The `@soopa/identity` package explicitly defines the provider contract.
 
 ### 4.1. IPermissionProvider
 

@@ -5,7 +5,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { REDIS_CLIENT, type Redis } from '@nexiom/cache';
+import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import * as crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 

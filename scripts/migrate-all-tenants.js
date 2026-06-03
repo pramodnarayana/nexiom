@@ -18,7 +18,7 @@ async function migrateAll() {
       const url = baseUrl.toString();
 
       console.log(`Migrating ${row.tenant_id} (${row.database_name})...`);
-      execSync('pnpm --filter @nexiom/database db:migrate:tenant', {
+      execSync('pnpm --filter @soopa/database db:migrate:tenant', {
         env: { ...process.env, TENANT_DATABASE_URL: url },
         stdio: 'inherit'
       });

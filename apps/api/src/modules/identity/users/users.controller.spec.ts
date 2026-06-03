@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller.js';
-import { USER_PROVIDER, TENANT_PROVIDER } from '@nexiom/identity';
+import { USER_PROVIDER, TENANT_PROVIDER } from '@soopa/identity';
 import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request } from 'express';
-import { AuthGuard, PermissionsGuard } from '@nexiom/auth';
+import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { CreateUser } from './users.validation.js';
 import {
   NotFoundException,

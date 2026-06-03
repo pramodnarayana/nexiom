@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { ConfigService } from '@nestjs/config';
 import { CursorManagerService, DEFAULT_CURSOR_CHECKPOINT_INTERVAL } from './cursor-manager.service.js';
 import type { StreamBookmark } from './cursor-manager.types.js';
-import type { StreamDescriptor, PollRecord } from '@nexiom/piece-framework';
+import type { StreamDescriptor, PollRecord } from '@soopa/piece-framework';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -11,9 +11,9 @@ import {
   Logger,
   Inject,
 } from '@nestjs/common';
-import type { DrizzleDb } from '@nexiom/database';
-import { DATABASE_CONNECTION } from '@nexiom/database';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import type { DrizzleDb } from '@soopa/database';
+import { DATABASE_CONNECTION } from '@soopa/database';
+import { PieceRegistryService } from '@soopa/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 
 interface ConnectionRow {

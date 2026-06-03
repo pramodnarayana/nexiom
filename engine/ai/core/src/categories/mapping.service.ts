@@ -1,8 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { PinoLogger } from 'nestjs-pino';
-import { canonicalMappings, DATABASE_CONNECTION, type DrizzleDb } from '@nexiom/database';
-import { DB_MANAGER, type DatabaseManager } from '@nexiom/dbmanager';
+import { canonicalMappings, DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
+import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 
 @Injectable()
 export class MappingService {

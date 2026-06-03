@@ -1,4 +1,4 @@
-// TMS Domain Layer — @nexiom/domain-tms
+// TMS Domain Layer — @soopa/domain-tms
 // Shared across ALL TMS source connectors (Revenova, McLeod, TMW…).
 
 export * from './schema/tms-schema.js';

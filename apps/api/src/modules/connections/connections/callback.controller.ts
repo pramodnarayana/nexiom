@@ -1,7 +1,7 @@
 import { Controller, Get, Req, Res, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { PieceRegistryService } from '@nexiom/piece-registry';
+import { PieceRegistryService } from '@soopa/piece-registry';
 
 import { OauthStateService } from '../oauth-state.service.js';
 

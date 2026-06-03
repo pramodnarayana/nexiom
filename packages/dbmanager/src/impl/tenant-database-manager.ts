@@ -1,7 +1,7 @@
 import type { DatabaseManager } from '../interfaces.js';
 import { SchemaPlan } from '../interfaces.js';
-import type { DrizzleDb } from '@nexiom/database';
-import { tenantStorageRegistry, shardRegistry, organization } from '@nexiom/database';
+import type { DrizzleDb } from '@soopa/database';
+import { tenantStorageRegistry, shardRegistry, organization } from '@soopa/database';
 import { eq, sql } from 'drizzle-orm';
 import { SqlDatabaseManager } from './sql-database-manager.js';
 

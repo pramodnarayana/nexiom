@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { executeAppWebhookResponses } from '@nexiom/piece-framework';
+import { executeAppWebhookResponses } from '@soopa/piece-framework';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -22,11 +22,11 @@ import {
   DATABASE_CONNECTION,
   buildTenantSchema,
   assertValidSchemaName,
-} from '@nexiom/database';
-import type { DrizzleDb } from '@nexiom/database';
-import { QueueService, QueueName } from '@nexiom/queue';
-import { StorageResolverService } from '@nexiom/engine';
-import { DB_MANAGER, type TenantDatabaseManager } from '@nexiom/dbmanager';
+} from '@soopa/database';
+import type { DrizzleDb } from '@soopa/database';
+import { QueueService, QueueName } from '@soopa/queue';
+import { StorageResolverService } from '@soopa/engine';
+import { DB_MANAGER, type TenantDatabaseManager } from '@soopa/dbmanager';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 import { TenantRateLimitGuard } from '../../guards/tenant-rate-limit.guard.js';
 

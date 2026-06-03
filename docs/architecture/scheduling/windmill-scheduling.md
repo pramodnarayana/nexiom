@@ -322,7 +322,7 @@ export interface PollPage {
 // Planned location (T047): packages/engine/src/state/cursor-manager.types.ts
 // This file does not exist yet — it will be created as part of T047 (CursorManagerService package).
 
-import type { ReplicationKeyType, StreamDescriptor } from '@nexiom/connectors/framework';
+import type { ReplicationKeyType, StreamDescriptor } from '@soopa/connectors/framework';
 
 export interface StreamBookmark {
   replication_key: string;
@@ -365,7 +365,7 @@ export interface ExecuteStitchResult {
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import dayjs from 'dayjs';
-import type { ReplicationKeyType, StreamDescriptor, PollRecord, PollWindow } from '@nexiom/connectors/framework';
+import type { ReplicationKeyType, StreamDescriptor, PollRecord, PollWindow } from '@soopa/connectors/framework';
 import type { StreamBookmark } from './cursor-manager.types.js';
 
 @Injectable()
