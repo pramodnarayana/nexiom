@@ -12,6 +12,7 @@ export enum QueueName {
   TenantProvisionQueue = "tenant-provision-queue",
   ActiveFetchQueue = "active-fetch-queue",
   RegistryReplicationQueue = "registry-replication-queue",
+  PluginInstallQueue = "plugin-install-queue",
 
   // Dead-letter queues — activated after 5 failed attempts
   InboundQueueDLQ = "inbound-queue-dlq",
@@ -23,6 +24,7 @@ export enum QueueName {
   TenantProvisionQueueDLQ = "tenant-provision-queue-dlq",
   ActiveFetchQueueDLQ = "active-fetch-queue-dlq",
   RegistryReplicationQueueDLQ = "registry-replication-queue-dlq",
+  PluginInstallQueueDLQ = "plugin-install-queue-dlq",
 }
 
 /** Injection token — use to inject QueueService across the application. */

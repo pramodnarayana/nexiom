@@ -20,6 +20,7 @@ QUEUES=(
   "active-fetch-queue"
   "ai-copilot-queue"
   "registry-replication-queue"
+  "plugin-install-queue"
 )
 
 # Step 1: Create all DLQs first (no redrive policy); idempotent — ignore

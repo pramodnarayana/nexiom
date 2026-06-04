@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import type { Piece } from '@soopa/piece-framework';
 import { pieces, type DrizzleDb } from '@soopa/database';
+import { PluginManagerService } from './plugin-manager.service.js';
 
 /**
  * Injection token for the host application's `import.meta.url`.
@@ -26,10 +27,15 @@ export const PIECE_LOADER_ANCHOR_URL = 'PIECE_LOADER_ANCHOR_URL';
 @Injectable()
 export class PieceLoaderService {
   private readonly logger = new Logger(PieceLoaderService.name);
+  private readonly isDev: boolean;
 
   constructor(
     @Optional() @Inject(PIECE_LOADER_ANCHOR_URL) private readonly anchorUrl: string | null,
-  ) {}
+    private readonly pluginManager: PluginManagerService,
+  ) {
+    // Check if we're in development mode
+    this.isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+  }
 
   async loadEnabledPieces(db: DrizzleDb): Promise<Piece[]> {
     const rows = await db.select({
@@ -46,31 +52,41 @@ export class PieceLoaderService {
 
     for (const row of rows) {
       try {
-        // Resolve through the host application's module graph so pnpm strict
-        // linking doesn't hide pieces that are installed in apps/api but
-        // not declared as explicit deps of @soopa/engine.
-        //
-        // Anchor precedence:
-        //   1. PIECE_LOADER_ANCHOR_URL token (set by host via PiecesModule.forRoot)
-        //      — most reliable: always the host's actual file path on disk.
-        //   2. import.meta.url of this file inside the engine package
-        //      — fallback: walks up to the monorepo root's node_modules.
-        //   3. Bare specifier  (pnpm strict-mode fallback, may fail)
-        let resolvedPath = row.packageName;
+        let mod: Record<string, unknown>;
+        
         try {
-          const { createRequire } = await import('node:module');
-          const { fileURLToPath, pathToFileURL } = await import('node:url');
-          const anchor = this.anchorUrl ?? import.meta.url;
-          const anchorFile = anchor.startsWith('file://')
-            ? anchor
-            : pathToFileURL(anchor).href;
-          const hostRequire = createRequire(fileURLToPath(anchorFile));
-          resolvedPath = pathToFileURL(hostRequire.resolve(row.packageName)).href;
-        } catch {
-          // Non-fatal: fall through to bare-specifier import below.
-        }
+          // --- ENTERPRISE STARTUP SYNCHRONIZATION ---
+          // Ensure the plugin is downloaded locally to /opt/nexiom/plugins
+          await this.pluginManager.ensurePiece(row.packageName, 'latest');
 
-        const mod = (await import(resolvedPath)) as Record<string, unknown>;
+          // Dynamically load the piece from the plugin manager's disk cache
+          mod = this.pluginManager.requirePiece(row.packageName) as Record<string, unknown>;
+        } catch (downloadErr: any) {
+          // Only attempt local workspace resolution in development mode
+          if (this.isDev) {
+            this.logger.warn(`Startup Sync failed for ${row.packageName} (${downloadErr.message}). Falling back to local workspace resolution...`);
+
+            // --- LOCAL DEVELOPMENT FALLBACK ---
+            // Allows `pnpm dev` to load unpublished pieces directly from the monorepo node_modules
+            let resolvedPath = row.packageName;
+            try {
+              const { createRequire } = await import('node:module');
+              const { fileURLToPath, pathToFileURL } = await import('node:url');
+              const anchor = this.anchorUrl ?? import.meta.url;
+              const anchorFile = anchor.startsWith('file://') ? anchor : pathToFileURL(anchor).href;
+              const hostRequire = createRequire(fileURLToPath(anchorFile));
+              resolvedPath = pathToFileURL(hostRequire.resolve(row.packageName)).href;
+            } catch {
+              // Non-fatal: fall through to bare-specifier import below.
+            }
+
+            mod = (await import(resolvedPath)) as Record<string, unknown>;
+          } else {
+            // In production, re-throw the original error
+            this.logger.error(`Failed to load piece ${row.packageName} in production: ${downloadErr.message}`);
+            throw downloadErr;
+          }
+        }
         const piece = this.extractPiece(mod, row.name);
         if (piece) {
           loaded.push(piece);

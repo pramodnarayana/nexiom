@@ -14,20 +14,26 @@
   },
   "scripts": {
     "dev": "tsc --watch --preserveWatchOutput",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@soopa/cache": "workspace:*",
-    "@soopa/credentials": "workspace:*",
     "@soopa/database": "workspace:*",
+    "@soopa/credentials": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
-    "drizzle-orm": "^0.45.1"
+    "@soopa/queue": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "live-plugin-manager": "^1.1.0",
+    "piscina": "^5.1.4"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.1"
