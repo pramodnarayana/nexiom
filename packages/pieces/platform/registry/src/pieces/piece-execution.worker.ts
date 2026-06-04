@@ -1,4 +1,6 @@
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 
 /**
  * Enterprise Piece Execution Worker
@@ -23,18 +25,40 @@ export default async function runIntegrationPiece(data: ExecutionData): Promise<
     // ---------------------------------------------------------
     // Ensure the requested script path physically resides within the allowed
     // plugin sandbox directory or the workspace fallback.
-    const resolvedPath = path.resolve(scriptPath);
-    const isLocalWorkspace = resolvedPath.includes('/packages/pieces/platform/') || resolvedPath.includes('/packages/pieces/application/');
-    const isGlobalPlugins = resolvedPath.startsWith('/tmp/soopa-plugins/') || resolvedPath.startsWith('/tmp/plugin');
-    
-    if (!isLocalWorkspace && !isGlobalPlugins) {
+    const resolvedPath = fs.realpathSync(path.resolve(scriptPath));
+
+    // Define and canonicalize allowed roots
+    const pluginsPath = process.env.PLUGINS_PATH || path.join(process.cwd(), '.plugins');
+    const allowedRoots = [
+      fs.realpathSync(pluginsPath),
+      // Workspace package roots for local development
+      ...[
+        path.join(process.cwd(), 'packages/pieces/platform'),
+        path.join(process.cwd(), 'packages/pieces/application'),
+      ].filter(p => {
+        try {
+          return fs.existsSync(p) ? fs.realpathSync(p) : null;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean) as string[],
+    ];
+
+    // Validate that resolvedPath has one of the allowed roots as a strict prefix
+    const isAllowed = allowedRoots.some(root => {
+      const relative = path.relative(root, resolvedPath);
+      // Path is safe if relative path doesn't start with '..' (escaping parent) and isn't absolute
+      return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+    });
+
+    if (!isAllowed) {
       throw new Error(`SECURITY ALERT: Sandbox violation detected. Path traversal attempted: ${resolvedPath}`);
     }
 
     // Dynamically require the managed bundle from the disk
-    // Using __non_webpack_require__ or dynamic import if using a bundler
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const piece = require(resolvedPath);
+    // Create a scoped require for ESM compatibility
+    const scopedRequire = createRequire(import.meta.url);
+    const piece = scopedRequire(resolvedPath);
     
     // Locate the trigger (handling both default export and named export variations)
     const trigger = piece.default?.triggers?.[triggerName] || piece.triggers?.[triggerName];

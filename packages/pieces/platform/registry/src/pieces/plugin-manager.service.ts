@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PluginManager } from 'live-plugin-manager';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
 
@@ -10,14 +11,35 @@ export class PluginManagerService {
   private readonly logger = new Logger(PluginManagerService.name);
   private manager: PluginManager;
   private readonly pluginsPath: string;
+  public static readonly PLUGINS_PATH = (() => {
+    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(os.homedir(), '.soopa'));
+    return process.env.PLUGINS_PATH || (isDev ? path.join(os.tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
+  })();
 
   constructor(
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService
   ) {
-    // Default to a local .plugins directory for development, or /opt/soopa/plugins in prod
-    this.pluginsPath = process.env.PLUGINS_PATH || path.join(os.tmpdir(), 'soopa-plugins');
+    // Determine plugins path based on environment
+    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(os.homedir(), '.soopa'));
+
+    // Default to app-owned persistent directory, only use tmpdir in development
+    this.pluginsPath = process.env.PLUGINS_PATH ||
+      (isDev ? path.join(os.tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
+
     this.logger.log(`Initializing Live Plugin Manager at: ${this.pluginsPath}`);
-    this.manager = new PluginManager({ 
+
+    // Ensure the directory exists with restrictive permissions
+    if (!fs.existsSync(this.pluginsPath)) {
+      fs.mkdirSync(this.pluginsPath, { recursive: true, mode: 0o700 });
+      this.logger.log(`Created plugins directory with restricted permissions (700): ${this.pluginsPath}`);
+    } else {
+      // Apply restrictive permissions to existing directory
+      fs.chmodSync(this.pluginsPath, 0o700);
+    }
+
+    this.manager = new PluginManager({
       pluginsPath: this.pluginsPath,
       npmRegistryUrl: process.env.NPM_REGISTRY_URL || 'https://registry.npmjs.org/'
     });

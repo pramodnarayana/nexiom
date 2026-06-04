@@ -25,10 +25,29 @@ export class MigrationWorkerService implements OnModuleInit {
       async (rawMsg: unknown) => {
         const event = rawMsg as PluginMigrationEvent;
         // The queue might be used for other tenant provision events, so check if it's ours
-        if (event.pluginLocation && event.pieceName) {
+        if (this.isPluginMigrationEvent(event)) {
           await this.runBackgroundMigrations(event);
+        } else {
+          // Non-plugin messages should not be silently dropped
+          // Log and let the message be requeued for other consumers
+          this.logger.warn(
+            'Received non-plugin migration event on TenantProvisionQueue. Message should be handled by dedicated consumer.',
+          );
+          throw new Error('Not a plugin migration event - requeue for appropriate handler');
         }
       }
+    );
+  }
+
+  /**
+   * Type guard to verify if an event is a plugin migration event.
+   */
+  private isPluginMigrationEvent(event: any): event is PluginMigrationEvent {
+    return (
+      typeof event === 'object' &&
+      event !== null &&
+      typeof event.pluginLocation === 'string' &&
+      typeof event.pieceName === 'string'
     );
   }
 
@@ -71,18 +90,20 @@ export class MigrationWorkerService implements OnModuleInit {
     }
   }
 
-  // Mocks for demonstration purposes
+  // Stub helpers - MUST BE IMPLEMENTED BEFORE PRODUCTION USE
   private async getActiveTenants(pieceName: string) {
+    // TODO: Implement real tenant resolution logic
     // e.g., SELECT * FROM tenant_connections WHERE piece_id = $1
-    return [
-      { id: 'tenant_1', dbConnectionUrl: 'postgres://localhost/tenant1' },
-      { id: 'tenant_2', dbConnectionUrl: 'postgres://localhost/tenant2' }
-    ];
+    throw new Error(
+      'getActiveTenants is not implemented. Real tenant resolution must be provided before running plugin migrations in production.',
+    );
   }
 
   private async getTenantDbConnection(connectionUrl: string): Promise<any> {
-    // In production, this would resolve from your TenantDatabaseManager connection pool
-    // Returning globalDb here just to satisfy the mock signature
-    return this.globalDb;
+    // TODO: Implement real tenant database connection management
+    // In production, this should resolve from your TenantDatabaseManager connection pool
+    throw new Error(
+      'getTenantDbConnection is not implemented. Real tenant connection management must be provided before running plugin migrations in production.',
+    );
   }
 }

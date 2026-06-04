@@ -25,14 +25,14 @@
     "@soopa/database": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@soopa/queue": "workspace:*",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "live-plugin-manager": "^1.1.0",
     "piscina": "^5.1.4"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.11",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.0"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.1"

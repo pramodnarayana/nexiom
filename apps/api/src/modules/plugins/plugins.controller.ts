@@ -50,20 +50,43 @@ export class PluginsController {
     this.logger.log('Received NPM publish webhook event');
 
     const webhookSecret = this.configService.get<string>('NPM_WEBHOOK_SECRET');
-    if (webhookSecret && signature) {
-      // Validate HMAC signature to ensure request originated from our private registry
-      const hmac = crypto.createHmac('sha256', webhookSecret);
-      const digest =
-        'sha256=' + hmac.update(JSON.stringify(payload)).digest('hex');
 
-      if (signature !== digest) {
+    // Signature validation is mandatory - fail if secret is not configured
+    if (!webhookSecret) {
+      this.logger.error('NPM_WEBHOOK_SECRET is not configured. Rejecting webhook request.');
+      throw new UnauthorizedException('Webhook authentication not configured');
+    }
+
+    if (!signature) {
+      throw new UnauthorizedException('Missing webhook signature');
+    }
+
+    // Validate HMAC signature to ensure request originated from our private registry
+    const hmac = crypto.createHmac('sha256', webhookSecret);
+    const digest =
+      'sha256=' + hmac.update(JSON.stringify(payload)).digest('hex');
+
+    // Use constant-time comparison to prevent timing attacks
+    try {
+      const signatureBuffer = Buffer.from(signature, 'utf8');
+      const digestBuffer = Buffer.from(digest, 'utf8');
+
+      // Fail early if lengths don't match
+      if (signatureBuffer.length !== digestBuffer.length) {
+        throw new Error('Signature length mismatch');
+      }
+
+      if (!crypto.timingSafeEqual(signatureBuffer, digestBuffer)) {
         this.logger.warn(
           'Invalid NPM webhook signature detected. Dropping payload.',
         );
         throw new UnauthorizedException('Invalid webhook signature');
       }
-    } else if (webhookSecret && !signature) {
-      throw new UnauthorizedException('Missing webhook signature');
+    } catch (error) {
+      this.logger.warn(
+        'Invalid NPM webhook signature detected. Dropping payload.',
+      );
+      throw new UnauthorizedException('Invalid webhook signature');
     }
 
     // Example Verdaccio payload parsing:
@@ -83,26 +106,24 @@ export class PluginsController {
       };
     }
 
-    try {
-      this.logger.log(
-        `Triggering background install for ${packageName}@${version}...`,
-      );
+    this.logger.log(
+      `Triggering background install for ${packageName}@${version}...`,
+    );
 
-      // Fire and forget (or await) the download
-      // The service will handle downloading and updating internal state.
-      await this.pluginManager.installPiece(packageName, version);
-
-      return {
-        status: 'success',
-        message: `Successfully installed ${packageName}@${version}`,
-      };
-    } catch (error: unknown) {
+    // Fire-and-forget: acknowledge immediately and process installation asynchronously
+    // This prevents webhook timeout issues and allows the registry to receive quick confirmation
+    this.pluginManager.installPiece(packageName, version).catch((error: unknown) => {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error(
         `Failed to install plugin via webhook: ${errorMessage}`,
       );
-      return { status: 'error', message: errorMessage };
-    }
+      // Log for monitoring/alerting - external webhook retries or queue-based retry can be added later
+    });
+
+    return {
+      status: 'accepted',
+      message: `Installation queued for ${packageName}@${version}`,
+    };
   }
 }
