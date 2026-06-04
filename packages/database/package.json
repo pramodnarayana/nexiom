@@ -1,50 +1,50 @@
 {
-  "name": "@soopa/database",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./schema/identity": {
-      "types": "./dist/schema/global/identity.d.ts",
-      "import": "./dist/schema/global/identity.js",
-      "default": "./dist/schema/global/identity.js"
-    },
-    "./schema/tenant": {
-      "types": "./dist/schema/tenant/tenant.d.ts",
-      "import": "./dist/schema/tenant/tenant.js",
-      "default": "./dist/schema/tenant/tenant.js"
-    },
-    "./dist/schema/identity": {
-      "types": "./dist/schema/global/identity.d.ts",
-      "import": "./dist/schema/global/identity.js",
-      "default": "./dist/schema/global/identity.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "db:generate": "pnpm build && drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "pnpm build && drizzle-kit migrate --config drizzle.config.ts",
-    "db:generate:tenant": "pnpm build && drizzle-kit generate --config drizzle.config.tenant.ts",
-    "db:migrate:tenant": "pnpm build && drizzle-kit migrate --config drizzle.config.tenant.ts",
-    "db:studio": "pnpm build && drizzle-kit studio --config drizzle.config.ts",
-    "db:studio:tenant": "pnpm build && drizzle-kit studio --config drizzle.config.tenant.ts"
-  },
-  "dependencies": {
-    "@nestjs/common": "^11.1.11",
-    "drizzle-orm": "^0.45.1",
-    "pg": "^8.16.3"
-  },
-  "devDependencies": {
-    "@types/pg": "^8.16.0",
-    "dotenv": "^17.3.1",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "^5.7.3"
-  }
+	"name": "@soopa/database",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./schema/identity": {
+			"types": "./dist/schema/global/identity.d.ts",
+			"import": "./dist/schema/global/identity.js",
+			"default": "./dist/schema/global/identity.js"
+		},
+		"./schema/tenant": {
+			"types": "./dist/schema/tenant/tenant.d.ts",
+			"import": "./dist/schema/tenant/tenant.js",
+			"default": "./dist/schema/tenant/tenant.js"
+		},
+		"./dist/schema/identity": {
+			"types": "./dist/schema/global/identity.d.ts",
+			"import": "./dist/schema/global/identity.js",
+			"default": "./dist/schema/global/identity.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"db:generate": "pnpm build && drizzle-kit generate --config drizzle.config.ts",
+		"db:migrate": "pnpm build && drizzle-kit migrate --config drizzle.config.ts",
+		"db:generate:tenant": "pnpm build && drizzle-kit generate --config drizzle.config.tenant.ts",
+		"db:migrate:tenant": "pnpm build && drizzle-kit migrate --config drizzle.config.tenant.ts",
+		"db:studio": "pnpm build && drizzle-kit studio --config drizzle.config.ts",
+		"db:studio:tenant": "pnpm build && drizzle-kit studio --config drizzle.config.tenant.ts"
+	},
+	"dependencies": {
+		"@nestjs/common": "^11.1.11",
+		"drizzle-orm": "^0.45.1",
+		"pg": "^8.16.3"
+	},
+	"devDependencies": {
+		"@types/pg": "^8.16.0",
+		"dotenv": "^17.3.1",
+		"drizzle-kit": "^0.31.8",
+		"typescript": "^5.7.3"
+	}
 }

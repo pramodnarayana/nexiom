@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller.js';
 import { AuthService, type RequestAuthContext } from '@soopa/auth';
@@ -69,6 +76,58 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
+  describe('login', () => {
+    it('should set cookie if loginCookie is present', async () => {
+      mockAuthService.login.mockResolvedValue({
+        cookie: 'test-cookie=123',
+        session: { id: 's1' },
+        user: { id: 'u1' },
+      });
+      const res = { setHeader: vi.fn() } as any;
+      const result = await controller.login(
+        { email: 'test@example.com', password: 'password' },
+        res,
+      );
+
+      expect(result.session.id).toBe('s1');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Set-Cookie',
+        'test-cookie=123',
+      );
+    });
+
+    it('should not set cookie if loginCookie is absent', async () => {
+      mockAuthService.login.mockResolvedValue({
+        session: { id: 's1' },
+        user: { id: 'u1' },
+      });
+      const res = { setHeader: vi.fn() } as any;
+      const result = await controller.login(
+        { email: 'test@example.com', password: 'password' },
+        res,
+      );
+
+      expect(result.session.id).toBe('s1');
+      expect(res.setHeader).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signup', () => {
+    it('should return user from registerUser', async () => {
+      (mockAuthService as any).registerUser = vi
+        .fn()
+        .mockResolvedValue({ id: 'u1' });
+      const result = await controller.signup({
+        email: 'test@example.com',
+        password: 'password',
+        firstName: 'John',
+        lastName: 'Doe',
+        role: 'member',
+      } as any);
+      expect(result.id).toBe('u1');
+    });
+  });
+
   describe('provisionTenant', () => {
     it('should provision tenant via TenantsService', async () => {
       const mockUser = { id: 'user-123' } as User;
@@ -91,9 +150,21 @@ describe('AuthController', () => {
     it('should throw BadRequestException if invitation not found', async () => {
       mockInvitationsService.get.mockResolvedValue(null);
       const body = { invitationId: 'bad-id' } as unknown as CompleteInvite;
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
       await expect(controller.completeInvite(body, res)).rejects.toThrow(
         'Invalid Invitation ID',
+      );
+    });
+
+    it('should throw BadRequestException if invitation is not pending', async () => {
+      mockInvitationsService.get.mockResolvedValue({
+        status: 'accepted',
+        expiresAt: new Date(Date.now() + 10000), // Valid expiration
+      });
+      const body = { invitationId: 'exp-id' } as unknown as CompleteInvite;
+      const res = { setHeader: vi.fn() } as any;
+      await expect(controller.completeInvite(body, res)).rejects.toThrow(
+        'Invitation is no longer pending/valid',
       );
     });
 
@@ -103,7 +174,7 @@ describe('AuthController', () => {
         expiresAt: new Date(Date.now() - 10000), // Expired
       });
       const body = { invitationId: 'exp-id' } as unknown as CompleteInvite;
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
       await expect(controller.completeInvite(body, res)).rejects.toThrow(
         'Invitation has expired',
       );
@@ -122,7 +193,7 @@ describe('AuthController', () => {
         invitationId: 'inv-1',
         email: 'test@example.com',
       } as unknown as CompleteInvite;
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
       await expect(controller.completeInvite(body, res)).rejects.toThrow(
         'User is already registered',
       );
@@ -151,7 +222,7 @@ describe('AuthController', () => {
         lastName: 'User',
       };
 
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
 
       const result = await controller.completeInvite(body, res);
 
@@ -190,7 +261,7 @@ describe('AuthController', () => {
         lastName: 'User',
       };
 
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
 
       const result = await controller.completeInvite(body, res);
 
@@ -225,7 +296,7 @@ describe('AuthController', () => {
         lastName: 'User',
       };
 
-      const res = { setHeader: vi.fn() } as unknown as Response;
+      const res = { setHeader: vi.fn() } as any;
 
       await expect(controller.completeInvite(body, res)).rejects.toThrow(
         'Failed to accept invitation',
@@ -279,22 +350,35 @@ describe('AuthController', () => {
   });
 
   describe('betterAuth', () => {
-    it.skip('should delegate to authService.getHandler', async () => {
+    it('should delegate to toNodeHandler when handler is a function', async () => {
+      // Create a dummy handler
       const mockHandler = vi.fn();
       mockAuthService.getHandler.mockReturnValue(mockHandler);
+
+      // Mock toNodeHandler to return a function
+      vi.mock('better-auth/node', () => ({
+        toNodeHandler: vi
+          .fn()
+          .mockImplementation((_h: any) => (_req: any, res: any) => res.end()),
+      }));
+
+      const { toNodeHandler } = await import('better-auth/node');
 
       const mockResponse = {
         end: vi.fn(),
         setHeader: vi.fn(),
         getHeader: vi.fn(),
         getHeaders: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
         writable: true,
         headersSent: false,
-      } as unknown as Response;
+      } as any;
 
       const mockRequest = {
         headers: {},
         method: 'POST',
+        path: '/api/auth/signin/email-password',
         url: '/api/auth/signin/email-password',
         socket: { encrypted: false },
       } as unknown as Request;
@@ -302,6 +386,24 @@ describe('AuthController', () => {
       await controller.betterAuth(mockRequest, mockResponse);
 
       expect(mockAuthService.getHandler).toHaveBeenCalled();
+    });
+
+    it('should return 500 if handler is not a function', async () => {
+      mockAuthService.getHandler.mockReturnValue(null as any);
+      const mockResponse = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn(),
+      } as any;
+      const mockRequest = {
+        method: 'GET',
+        path: '/test',
+      } as unknown as Request;
+
+      await controller.betterAuth(mockRequest, mockResponse);
+      expect(mockResponse.status).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        error: 'Invalid auth handler',
+      });
     });
   });
 

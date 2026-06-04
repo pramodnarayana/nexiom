@@ -1,20 +1,20 @@
 {
-  "name": "@soopa/metadata-engine",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "description": "Unified Metadata-Driven Engine for Nexiom",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc"
-  },
-  "dependencies": {
-    "drizzle-orm": "^0.45.1",
-    "jsonata": "^2.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.7",
-    "typescript": "^5.7.3"
-  }
+	"name": "@soopa/metadata-engine",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"description": "Unified Metadata-Driven Engine for Nexiom",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"build": "tsc"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.45.1",
+		"jsonata": "^2.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.14.9",
+		"typescript": "^5.7.3"
+	}
 }

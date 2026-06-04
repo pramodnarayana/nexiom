@@ -116,6 +116,7 @@ const mkOptions = () => ({
 describe("BetterAuthAdapter", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("throws on missing config", () => {
@@ -605,12 +606,13 @@ describe("BetterAuthAdapter", () => {
   it("configures better-auth callbacks correctly (emails, hashing)", async () => {
     const db = mkDb();
     const email = mkEmail();
+    (email as any).id = "test-email-id";
     const { betterAuth } = await import("better-auth");
 
     // Instantiate adapter to trigger betterAuth call
     new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions());
 
-    const callArgs = vi.mocked(betterAuth).mock.calls[0][0] as any;
+    const callArgs = vi.mocked(betterAuth).mock.calls[vi.mocked(betterAuth).mock.calls.length - 1][0] as any;
     expect(callArgs).toBeDefined();
 
     // 1. Password Hashing - trigger hash to cover lines

@@ -25,7 +25,7 @@ import { requireOrgId } from '../workspaces/workspace.utils.js';
  * underscore, dot, and hyphen characters only, with a maximum length of 256.
  */
 @Injectable()
-class ValidateObjectNamePipe implements PipeTransform<string, string> {
+export class ValidateObjectNamePipe implements PipeTransform<string, string> {
   transform(value: string): string {
     if (!value || typeof value !== 'string') {
       throw new BadRequestException('Object name is required.');

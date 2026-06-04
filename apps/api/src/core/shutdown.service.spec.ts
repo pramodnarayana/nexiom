@@ -1,11 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { ShutdownService } from './shutdown.service.js';
 import type { INestApplication } from '@nestjs/common';
 
+/** The subset of process.once that we care about in tests: (event, listener) → process */
+type ProcessOnceFn = (
+  event: string,
+  listener: (...args: unknown[]) => void,
+) => NodeJS.Process;
+
 describe('ShutdownService', () => {
   let service: ShutdownService;
-  let processOnceSpy: ReturnType<typeof vi.spyOn>;
-  let processExitSpy: ReturnType<typeof vi.spyOn>;
+  let processOnceSpy: MockInstance<ProcessOnceFn>;
+  let processExitSpy: MockInstance<() => never>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -14,10 +21,14 @@ describe('ShutdownService', () => {
     // The spy still captures calls so we can extract handlers and invoke them manually.
     processOnceSpy = vi
       .spyOn(process, 'once')
-      .mockImplementation((_event, _listener) => process);
+      .mockImplementation(
+        (_event, _listener) => process,
+      ) as unknown as MockInstance<ProcessOnceFn>;
     processExitSpy = vi
       .spyOn(process, 'exit')
-      .mockImplementation(() => undefined as never);
+      .mockImplementation(() => undefined as never) as unknown as MockInstance<
+      () => never
+    >;
   });
 
   afterEach(() => {

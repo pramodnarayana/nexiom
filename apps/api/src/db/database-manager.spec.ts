@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/unbound-method */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
@@ -59,10 +61,18 @@ vi.mock('pg', () => {
     end: vi.fn(),
   };
   return {
-    Client: vi.fn(() => mClient),
-    Pool: vi.fn(() => mClient),
+    Client: vi.fn(function () {
+      return mClient;
+    }),
+    Pool: vi.fn(function () {
+      return mClient;
+    }),
   };
 });
+
+vi.mock('drizzle-orm/node-postgres/migrator', () => ({
+  migrate: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({
@@ -91,6 +101,15 @@ vi.mock('@soopa/dbmanager', () => ({
     NAMESPACE_ONLY: 'NAMESPACE_ONLY',
     GATEWAY_ACTIVE: 'GATEWAY_ACTIVE',
     OUTBOUND_ACTIVE: 'OUTBOUND_ACTIVE',
+  },
+}));
+
+// Mock the dummy piece to prevent dynamic import failure
+vi.mock('@test/piece-dummy', () => ({
+  default: {
+    name: '@test/piece-dummy',
+    displayName: 'Dummy Piece',
+    logoUrl: 'https://example.com/logo.png',
   },
 }));
 
@@ -205,6 +224,95 @@ describe('DatabaseManager', () => {
     });
   });
 
+  describe('createTenantDatabase()', () => {
+    it('should connect to pg and create database if it does not exist', async () => {
+      const { Client } = await import('pg');
+      const mClient = new Client();
+      vi.mocked(mClient.query).mockImplementationOnce(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('pg_database'))
+          return { rowCount: 0, rows: [] };
+        return { rowCount: 1, rows: [] };
+      });
+
+      const migrateSpy = vi
+        .spyOn(manager, 'migrateTenant')
+        .mockResolvedValue(undefined);
+
+      await manager.createTenantDatabase(
+        'valid_db',
+        'postgres://localhost:5432',
+      );
+
+      expect(mClient.query).toHaveBeenCalledWith('CREATE DATABASE "valid_db"');
+      expect(migrateSpy).toHaveBeenCalledWith(
+        'valid_db',
+        'postgres://localhost:5432',
+      );
+    });
+
+    it('should throw if database name is invalid', async () => {
+      const { Client } = await import('pg');
+      const mClient = new Client();
+      vi.mocked(mClient.query).mockImplementationOnce(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('pg_database'))
+          return { rowCount: 0, rows: [] };
+        return { rowCount: 1, rows: [] };
+      });
+
+      await expect(
+        manager.createTenantDatabase(
+          'invalid-db!',
+          'postgres://localhost:5432',
+        ),
+      ).rejects.toThrow('Invalid tenant database name');
+    });
+
+    it('should skip creating database if it exists', async () => {
+      const { Client } = await import('pg');
+      const mClient = new Client();
+      vi.mocked(mClient.query).mockImplementationOnce(async (sql: unknown) => {
+        if (typeof sql === 'string' && sql.includes('pg_database'))
+          return { rowCount: 1, rows: [] };
+        return { rowCount: 1, rows: [] };
+      });
+
+      const logSpy = vi.spyOn(console, 'log');
+      const migrateSpy = vi
+        .spyOn(manager, 'migrateTenant')
+        .mockResolvedValue(undefined);
+
+      await manager.createTenantDatabase(
+        'valid_db',
+        'postgres://localhost:5432',
+      );
+
+      expect(mClient.query).not.toHaveBeenCalledWith(
+        'CREATE DATABASE "valid_db"',
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Tenant database already exists'),
+      );
+      expect(migrateSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe('migrateTenant()', () => {
+    it('should invoke drizzle migrate against the tenant pool', async () => {
+      const { Pool } = await import('pg');
+      const migrateMod = await import('drizzle-orm/node-postgres/migrator');
+
+      await manager.migrateTenant('test_db', 'postgres://localhost:5432');
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionString: 'postgres://localhost:5432/test_db',
+          max: 2,
+        }),
+      );
+      expect(migrateMod.migrate).toHaveBeenCalled();
+    });
+  });
+
   describe('dropAll()', () => {
     it('should execute drop and create schema queries', async () => {
       await manager.dropAll();
@@ -261,7 +369,6 @@ describe('DatabaseManager', () => {
 
       // Mock SELECT query response
       vi.mocked(clientInstance.query).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
         async (sql: unknown) => {
           if (
             typeof sql === 'string' &&
@@ -409,18 +516,14 @@ describe('DatabaseManager', () => {
       const clientInstance = new Client();
 
       // Mock successful table discovery
-      vi.mocked(clientInstance.query).mockImplementationOnce(
-        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
-        async () => ({ rows: [{ table_name: 'test_table' }] }),
-      );
+      vi.mocked(clientInstance.query).mockImplementationOnce(async () => ({
+        rows: [{ table_name: 'test_table' }],
+      }));
 
       // Mock truncate failure
-      vi.mocked(clientInstance.query).mockImplementationOnce(
-        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
-        async () => {
-          throw new Error('Truncate error');
-        },
-      );
+      vi.mocked(clientInstance.query).mockImplementationOnce(async () => {
+        throw new Error('Truncate error');
+      });
 
       const logSpy = vi.spyOn(console, 'log');
 
@@ -437,10 +540,9 @@ describe('DatabaseManager', () => {
       const clientInstance = new Client();
 
       // Mock empty tables
-      vi.mocked(clientInstance.query).mockImplementationOnce(
-        // eslint-disable-next-line @typescript-eslint/require-await, @typescript-eslint/no-misused-promises
-        async () => ({ rows: [] }),
-      );
+      vi.mocked(clientInstance.query).mockImplementationOnce(async () => ({
+        rows: [],
+      }));
 
       const logSpy = vi.spyOn(console, 'log');
       await manager.truncateAll();

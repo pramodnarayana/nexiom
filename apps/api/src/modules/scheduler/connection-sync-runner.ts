@@ -311,7 +311,9 @@ export class ConnectionSyncRunner {
               connectionId,
               streamName,
               record.data,
-              String(record.replicationKeyValue),
+              record.replicationKeyValue != null
+                ? String(record.replicationKeyValue)
+                : '',
             );
             if (inserted) {
               recordsIngested++;

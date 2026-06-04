@@ -1,41 +1,41 @@
 {
-  "name": "@soopa/piece-framework",
-  "version": "1.0.0",
-  "type": "module",
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/pramodnarayana/nexiom.git"
-  },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./discovery": {
-      "types": "./dist/discovery/index.d.ts",
-      "import": "./dist/discovery/index.js",
-      "default": "./dist/discovery/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:cov": "vitest run --coverage"
-  },
-  "dependencies": {
-    "jsonata": "^2.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^25.5.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  }
+	"name": "@soopa/piece-framework",
+	"version": "1.0.0",
+	"type": "module",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/pramodnarayana/nexiom.git"
+	},
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./discovery": {
+			"types": "./dist/discovery/index.d.ts",
+			"import": "./dist/discovery/index.js",
+			"default": "./dist/discovery/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:cov": "vitest run --coverage"
+	},
+	"dependencies": {
+		"jsonata": "^2.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.14.9",
+		"@vitest/coverage-v8": "^4.0.18",
+		"typescript": "^5.7.3",
+		"vitest": "^4.0.18"
+	}
 }

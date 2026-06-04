@@ -20,7 +20,7 @@ vi.mock('fs', async (importOriginal) => {
 // Mock live-plugin-manager so we don't actually hit the network or filesystem
 vi.mock('live-plugin-manager', () => {
   return {
-    PluginManager: vi.fn().mockImplementation(() => {
+    PluginManager: vi.fn().mockImplementation(function() {
       return {
         getInfo: vi.fn(),
         install: vi.fn(),

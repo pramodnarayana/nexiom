@@ -1,11 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { builtinEnvironments } from 'vitest/environments';
-import type { Environment } from 'vitest';
+import type { Environment } from 'vitest/environments';
 
 export default {
     name: 'jsdom-msw',
     transformMode: 'web',
 
-    async setup(global, options) {
+    async setup(global: any, options: any) {
         // 1. Destructive Intervention: Remove Native Fetch
         // We do this BEFORE the JSDOM environment initializes to ensure
         // JSDOM doesn't inherit or try to use the Node.js fetch.
@@ -23,7 +24,7 @@ export default {
         const envTeardown = await jsdomEnv.setup(global, options);
 
         return {
-            async teardown(global) {
+            async teardown(global: any) {
                 await envTeardown.teardown(global);
             }
         };

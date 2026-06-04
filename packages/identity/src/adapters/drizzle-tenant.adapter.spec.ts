@@ -136,7 +136,7 @@ describe("DrizzleTenantAdapter", () => {
         tx.insert.mockReturnThis();
         tx.values.mockReturnThis();
         tx.returning.mockResolvedValue([mkOrg()]);
-        return Promise.reject(firstError);
+        throw firstError;
       })
       .mockImplementationOnce((fn: (tx: MockTx) => unknown) => {
         tx.insert.mockReturnThis();

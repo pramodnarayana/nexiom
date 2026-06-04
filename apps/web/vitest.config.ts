@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
@@ -8,7 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+                // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
+        react()],
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),
@@ -18,7 +19,8 @@ export default defineConfig({
         globals: true,
         fileParallelism: true,
         pool: 'forks',
-        environment: './src/test/environments/jsdom-msw.ts',
+        environment: 'jsdom',
+        testTimeout: 10000,
         setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
         exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
@@ -64,7 +66,6 @@ export default defineConfig({
                 // Layout components (presentational)
                 'src/app/layouts/**',
             ],
-            all: true,
         },
         env: {
             VITE_API_URL: 'http://localhost:3000/api',

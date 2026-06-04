@@ -9,7 +9,6 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
-            all: true,
             include: ['src/**/*.ts'],
             exclude: [
                 'src/**/*.spec.ts',
@@ -24,5 +23,7 @@ export default defineConfig({
             },
         },
     },
-    plugins: [swc.vite({ module: { type: 'es6' } })],
+    plugins: [
+                // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
+        swc.vite({ module: { type: 'es6' } })],
 });

@@ -139,46 +139,52 @@ export class BetterAuthAdapter implements IAuthProvider {
           process.env.TEST_SEND_ON_SIGNUP === "true",
         autoSignInAfterVerification: true,
         sendVerificationEmail: async ({ user, url, token }) => {
-          const frontendUrl = validateFrontendUrl(
-            this.config.frontendUrl,
-            this.config.allowedOrigins,
-          );
+          try {
+            const frontendUrl = validateFrontendUrl(
+              this.config.frontendUrl,
+              this.config.allowedOrigins,
+            );
 
-          // Use URL API to safely join paths and prevent double slashes
-          const callbackTargetUrl = new URL(
-            "/verify-email-callback",
-            frontendUrl,
-          );
-          const callbackTarget = callbackTargetUrl.toString();
+            // Use URL API to safely join paths and prevent double slashes
+            const callbackTargetUrl = new URL(
+              "/verify-email-callback",
+              frontendUrl,
+            );
+            const callbackTarget = callbackTargetUrl.toString();
 
-          // Use the URL object to safely manipulate parameters
-          // We clear strict existing parameters to prevent any duplicates
-          // NOTE: 'url' passed here might be frontendUrl based or betterAuthUrl based depending on config
-          // But we want it to be CLEAN.
+            // Use the URL object to safely manipulate parameters
+            // We clear strict existing parameters to prevent any duplicates
+            // NOTE: 'url' passed here might be frontendUrl based or betterAuthUrl based depending on config
+            // But we want it to be CLEAN.
 
-          if (!token) {
-            throw new Error("Token Argument is missing from Better Auth");
+            if (!token) {
+              throw new Error("Token Argument is missing from Better Auth");
+            }
+
+            if (!url) {
+              throw new Error("URL Argument is missing from Better Auth");
+            }
+            const urlObj = new URL(url, this.config.betterAuthUrl);
+
+            urlObj.search = ""; // Wipe existing query string (Removes default callbackURL=/)
+
+            // Set our parameters
+            urlObj.searchParams.set("token", token);
+            urlObj.searchParams.set("callbackURL", callbackTarget);
+
+            const verificationUrl = urlObj.toString();
+
+            console.log("SENDING EMAIL NOW");
+            await this.emailService.sendEmail({
+              to: user.email,
+              subject: "Verify your email for Nexiom",
+              text: `Please verify your email by clicking the following link: ${verificationUrl}`,
+              html: `<p>Please verify your email by clicking the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
+            });
+          } catch (e) {
+            console.error("VERIFY ERR", e);
+            throw e;
           }
-
-          if (!url) {
-            throw new Error("URL Argument is missing from Better Auth");
-          }
-          const urlObj = new URL(url, this.config.betterAuthUrl);
-
-          urlObj.search = ""; // Wipe existing query string (Removes default callbackURL=/)
-
-          // Set our parameters
-          urlObj.searchParams.set("token", token);
-          urlObj.searchParams.set("callbackURL", callbackTarget);
-
-          const verificationUrl = urlObj.toString();
-
-          await this.emailService.sendEmail({
-            to: user.email,
-            subject: "Verify your email for Nexiom",
-            text: `Please verify your email by clicking the following link: ${verificationUrl}`,
-            html: `<p>Please verify your email by clicking the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
-          });
         },
       },
       plugins: getBetterAuthPlugins(

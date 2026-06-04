@@ -12,14 +12,18 @@ const mockPoolEnd = vi.fn();
 
 vi.mock("pg", () => {
   return {
-    Client: vi.fn().mockImplementation(() => ({
-      connect: mockConnect,
-      query: mockQuery,
-      end: mockEnd,
-    })),
-    Pool: vi.fn().mockImplementation(() => ({
-      end: mockPoolEnd,
-    })),
+    Client: vi.fn().mockImplementation(function () {
+      return {
+        connect: mockConnect,
+        query: mockQuery,
+        end: mockEnd,
+      };
+    }),
+    Pool: vi.fn().mockImplementation(function () {
+      return {
+        end: mockPoolEnd,
+      };
+    }),
   };
 });
 

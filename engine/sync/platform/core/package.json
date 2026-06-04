@@ -1,40 +1,40 @@
 {
-  "name": "@soopa/engine",
-  "version": "1.0.0",
-  "type": "module",
-  "private": true,
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:cov": "vitest run --coverage"
-  },
-  "dependencies": {
-    "@soopa/credentials": "workspace:*",
-    "@soopa/database": "workspace:*",
-    "@soopa/piece-framework": "workspace:*",
-    "ai": "^6.0.146",
-    "quickjs-emscripten": "^0.32.0",
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.2",
-    "@vitest/coverage-v8": "^2.1.9",
-    "typescript": "^5.7.3",
-    "vitest": "^2.1.9"
-  },
-  "peerDependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/config": "^4.0.2"
-  }
+	"name": "@soopa/engine",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:cov": "vitest run --coverage"
+	},
+	"dependencies": {
+		"@soopa/credentials": "workspace:*",
+		"@soopa/database": "workspace:*",
+		"@soopa/piece-framework": "workspace:*",
+		"ai": "^6.0.146",
+		"quickjs-emscripten": "^0.32.0",
+		"zod": "^4.3.5"
+	},
+	"devDependencies": {
+		"@nestjs/common": "^11.1.11",
+		"@nestjs/config": "^4.0.2",
+		"@vitest/coverage-v8": "^4.0.18",
+		"typescript": "^5.7.3",
+		"vitest": "^4.0.18"
+	},
+	"peerDependencies": {
+		"@nestjs/common": "^11.1.11",
+		"@nestjs/config": "^4.0.2"
+	}
 }

@@ -4,7 +4,7 @@ import { ExecutionWorkerService } from './execution-worker.service.js';
 // Mock Piscina
 vi.mock('piscina', () => {
   return {
-    default: vi.fn().mockImplementation(() => {
+    default: vi.fn().mockImplementation(function() {
       return {
         run: vi.fn()
       };

@@ -15,5 +15,6 @@ export default defineConfig({
       '@src': path.resolve(__dirname, '../src'),
     },
   },
+  // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
   plugins: [swc.vite()],
 });
