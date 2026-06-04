@@ -23,7 +23,6 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@soopa/credentials": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "dayjs": "^1.11.19"
   }
