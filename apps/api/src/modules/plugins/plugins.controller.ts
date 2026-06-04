@@ -5,9 +5,12 @@ import {
   Headers,
   Logger,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PluginManagerService } from '@soopa/piece-registry';
+import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
+import type { IQueueService, PluginInstallEvent } from '@soopa/queue';
 import * as crypto from 'crypto';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -35,6 +38,7 @@ export class PluginsController {
   constructor(
     private readonly pluginManager: PluginManagerService,
     private readonly configService: ConfigService,
+    @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService,
   ) {}
 
   /**
@@ -107,19 +111,25 @@ export class PluginsController {
     }
 
     this.logger.log(
-      `Triggering background install for ${packageName}@${version}...`,
+      `Persisting durable install job for ${packageName}@${version}...`,
     );
 
-    // Fire-and-forget: acknowledge immediately and process installation asynchronously
-    // This prevents webhook timeout issues and allows the registry to receive quick confirmation
-    this.pluginManager.installPiece(packageName, version).catch((error: unknown) => {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Failed to install plugin via webhook: ${errorMessage}`,
-      );
-      // Log for monitoring/alerting - external webhook retries or queue-based retry can be added later
-    });
+    // Persist a durable install job to the queue before responding
+    // This ensures the install request is not lost if the process dies
+    const installEvent: PluginInstallEvent = {
+      packageName,
+      version,
+      requestMetadata: {
+        webhookReceivedAt: new Date().toISOString(),
+        source: 'npm-webhook',
+      },
+    };
+
+    await this.queueService.send(QueueName.PluginInstallQueue, installEvent);
+
+    this.logger.log(
+      `Installation job persisted to queue for ${packageName}@${version}`,
+    );
 
     return {
       status: 'accepted',

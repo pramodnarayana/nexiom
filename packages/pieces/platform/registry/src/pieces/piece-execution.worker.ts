@@ -28,21 +28,37 @@ export default async function runIntegrationPiece(data: ExecutionData): Promise<
     const resolvedPath = fs.realpathSync(path.resolve(scriptPath));
 
     // Define and canonicalize allowed roots
-    const pluginsPath = process.env.PLUGINS_PATH || path.join(process.cwd(), '.plugins');
-    const allowedRoots = [
-      fs.realpathSync(pluginsPath),
-      // Workspace package roots for local development
-      ...[
-        path.join(process.cwd(), 'packages/pieces/platform'),
-        path.join(process.cwd(), 'packages/pieces/application'),
-      ].filter(p => {
-        try {
-          return fs.existsSync(p) ? fs.realpathSync(p) : null;
-        } catch {
-          return null;
-        }
-      }).filter(Boolean) as string[],
+    // Reuse the same plugin-root logic as PluginManagerService to ensure consistency
+    const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(require('node:os').homedir(), '.soopa'));
+    const pluginsPath = process.env.PLUGINS_PATH || (isDev ? path.join(require('node:os').tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
+
+    const allowedRoots: string[] = [];
+
+    // Only canonicalize pluginsPath if it exists
+    if (fs.existsSync(pluginsPath)) {
+      try {
+        allowedRoots.push(fs.realpathSync(pluginsPath));
+      } catch {
+        // If realpathSync fails, skip this root
+      }
+    }
+
+    // Workspace package roots for local development
+    const workspaceRoots = [
+      path.join(process.cwd(), 'packages/pieces/platform'),
+      path.join(process.cwd(), 'packages/pieces/application'),
     ];
+
+    for (const p of workspaceRoots) {
+      if (fs.existsSync(p)) {
+        try {
+          allowedRoots.push(fs.realpathSync(p));
+        } catch {
+          // If realpathSync fails, skip this root
+        }
+      }
+    }
 
     // Validate that resolvedPath has one of the allowed roots as a strict prefix
     const isAllowed = allowedRoots.some(root => {

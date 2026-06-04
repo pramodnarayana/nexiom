@@ -13,3 +13,4 @@ export type {
 export { createQueueModuleOptions } from "./queue.options.js";
 export type { ProvisionDatabaseEvent } from "./events/provision-database.event.js";
 export type { PluginMigrationEvent } from "./events/plugin-migration.event.js";
+export type { PluginInstallEvent } from "./events/plugin-install.event.js";

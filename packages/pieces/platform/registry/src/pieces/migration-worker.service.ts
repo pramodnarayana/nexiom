@@ -19,6 +19,16 @@ export class MigrationWorkerService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    // Guard against registering migration consumer when tenant handlers are not implemented
+    if (!this.areTenantHandlersAvailable()) {
+      this.logger.warn(
+        'Tenant handlers (getActiveTenants, getTenantDbConnection) are not implemented. ' +
+        'Plugin migration consumer will NOT be registered. ' +
+        'Set ENABLE_PLUGIN_MIGRATIONS=true when implementations are ready.'
+      );
+      return;
+    }
+
     this.logger.log('Registering SQS Queue Consumer for Plugin Migrations...');
     this.queueService.consume(
       QueueName.TenantProvisionQueue,
@@ -40,6 +50,13 @@ export class MigrationWorkerService implements OnModuleInit {
   }
 
   /**
+   * Checks if tenant handlers are available. Returns false if stubbed implementations exist.
+   */
+  private areTenantHandlersAvailable(): boolean {
+    return process.env.ENABLE_PLUGIN_MIGRATIONS === 'true';
+  }
+
+  /**
    * Type guard to verify if an event is a plugin migration event.
    */
   private isPluginMigrationEvent(event: any): event is PluginMigrationEvent {
@@ -55,13 +72,22 @@ export class MigrationWorkerService implements OnModuleInit {
    * Executes Drizzle migrations for a dynamically loaded piece using SQS Fan-Out.
    */
   async runBackgroundMigrations(event: PluginMigrationEvent) {
+    // Guard against executing migrations when tenant handlers are not available
+    if (!this.areTenantHandlersAvailable()) {
+      this.logger.error(
+        `Cannot run migrations for ${event.pieceName}: tenant handlers are not implemented. ` +
+        'Set ENABLE_PLUGIN_MIGRATIONS=true when implementations are ready.'
+      );
+      throw new Error('Tenant handlers not available - migrations disabled');
+    }
+
     if (!event.tenantId) {
       // --- FAN-OUT MODE ---
       this.logger.log(`[Fan-Out] Starting fan-out for ${event.pieceName} from ${event.pluginLocation}`);
       const activeTenants = await this.getActiveTenants(event.pieceName);
-      
+
       this.logger.log(`[Fan-Out] Found ${activeTenants.length} active tenants. Dispatching single-tenant SQS messages...`);
-      
+
       // Dispatch 1 SQS message per tenant. This perfectly parallelizes migrations
       // across all available workers and prevents a single tenant's failure from retrying the entire batch.
       for (const tenant of activeTenants) {
@@ -77,7 +103,7 @@ export class MigrationWorkerService implements OnModuleInit {
     // --- WORKER MODE (Single Tenant) ---
     this.logger.log(`[Worker] Executing migration for tenant ${event.tenantId} (Piece: ${event.pieceName})`);
     const migrationsFolder = `${event.pluginLocation}/drizzle/migrations`;
-    
+
     try {
       const tenantDb = await this.getTenantDbConnection(event.tenantId);
       await migrate(tenantDb, { migrationsFolder });
@@ -91,7 +117,7 @@ export class MigrationWorkerService implements OnModuleInit {
   }
 
   // Stub helpers - MUST BE IMPLEMENTED BEFORE PRODUCTION USE
-  private async getActiveTenants(pieceName: string) {
+  private async getActiveTenants(pieceName: string): Promise<Array<{ id: string }>> {
     // TODO: Implement real tenant resolution logic
     // e.g., SELECT * FROM tenant_connections WHERE piece_id = $1
     throw new Error(

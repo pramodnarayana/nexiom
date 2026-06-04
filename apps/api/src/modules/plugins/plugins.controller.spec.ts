@@ -3,6 +3,8 @@ import { PluginsController, WebhookPayloadDto } from './plugins.controller.js';
 import { PluginManagerService } from '@soopa/piece-registry';
 import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException } from '@nestjs/common';
+import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
+import type { IQueueService } from '@soopa/queue';
 import * as crypto from 'crypto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Mocked } from 'vitest';
@@ -11,6 +13,7 @@ describe('PluginsController', () => {
   let controller: PluginsController;
   let pluginManagerService: Mocked<PluginManagerService>;
   let configService: Mocked<ConfigService>;
+  let queueService: Mocked<IQueueService>;
   let installPieceMock: ReturnType<typeof vi.fn>;
 
   const TEST_SECRET = 'test-secret';
@@ -30,11 +33,18 @@ describe('PluginsController', () => {
       }),
     } as unknown as Mocked<ConfigService>;
 
+    queueService = {
+      send: vi.fn().mockResolvedValue(undefined),
+      consume: vi.fn(),
+      stopConsuming: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Mocked<IQueueService>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PluginsController],
       providers: [
         { provide: PluginManagerService, useValue: pluginManagerService },
         { provide: ConfigService, useValue: configService },
+        { provide: QUEUE_SERVICE, useValue: queueService },
       ],
     }).compile();
 
@@ -68,7 +78,7 @@ describe('PluginsController', () => {
       await expect(controller.handleNpmWebhook('sha256=somesignature', payload)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(installPieceMock).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if signature is missing but secret is configured', async () => {
@@ -80,7 +90,7 @@ describe('PluginsController', () => {
       await expect(controller.handleNpmWebhook('', payload)).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(installPieceMock).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if signature is invalid', async () => {
@@ -93,7 +103,7 @@ describe('PluginsController', () => {
       await expect(
         controller.handleNpmWebhook(invalidSignature, payload),
       ).rejects.toThrow(UnauthorizedException);
-      expect(installPieceMock).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should ignore payload without a package name gracefully', async () => {
@@ -107,7 +117,7 @@ describe('PluginsController', () => {
         status: 'ignored',
         reason: 'No package name found in payload',
       });
-      expect(installPieceMock).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should ignore payload that does not belong to @soopa scope', async () => {
@@ -124,7 +134,7 @@ describe('PluginsController', () => {
         status: 'ignored',
         reason: 'Only @soopa packages are hot-loaded',
       });
-      expect(installPieceMock).not.toHaveBeenCalled();
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should successfully queue a valid piece installation and return accepted', async () => {
@@ -135,24 +145,30 @@ describe('PluginsController', () => {
       const rawBody = JSON.stringify(payload);
       const signature = generateValidSignature(rawBody);
 
-      pluginManagerService.installPiece.mockResolvedValueOnce({
-        location: '/tmp/plugin',
-        version: '1.2.3',
-      });
-
       const result = await controller.handleNpmWebhook(signature, payload);
 
       expect(result).toEqual({
         status: 'accepted',
         message: 'Installation queued for @soopa/piece-slack@1.2.3',
       });
-      expect(installPieceMock).toHaveBeenCalledWith(
-        '@soopa/piece-slack',
-        '1.2.3',
+
+      // Verify the install event was sent to the queue
+      expect(queueService.send).toHaveBeenCalledWith(
+        QueueName.PluginInstallQueue,
+        expect.objectContaining({
+          packageName: '@soopa/piece-slack',
+          version: '1.2.3',
+          requestMetadata: expect.objectContaining({
+            source: 'npm-webhook',
+          }),
+        })
       );
+
+      // The controller should NOT directly call installPiece anymore
+      expect(installPieceMock).not.toHaveBeenCalled();
     });
 
-    it('should return accepted status even if pluginManager fails (fire-and-forget)', async () => {
+    it('should return accepted status when queue send succeeds', async () => {
       const payload = {
         name: '@soopa/piece-slack',
         version: '1.2.3',
@@ -160,17 +176,19 @@ describe('PluginsController', () => {
       const rawBody = JSON.stringify(payload);
       const signature = generateValidSignature(rawBody);
 
-      installPieceMock.mockRejectedValueOnce(new Error('Network Failure'));
-
       const result = await controller.handleNpmWebhook(signature, payload);
 
       expect(result).toEqual({
         status: 'accepted',
         message: 'Installation queued for @soopa/piece-slack@1.2.3'
       });
-      expect(installPieceMock).toHaveBeenCalledWith(
-        '@soopa/piece-slack',
-        '1.2.3',
+
+      expect(queueService.send).toHaveBeenCalledWith(
+        QueueName.PluginInstallQueue,
+        expect.objectContaining({
+          packageName: '@soopa/piece-slack',
+          version: '1.2.3',
+        })
       );
     });
   });

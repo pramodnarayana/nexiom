@@ -31,6 +31,24 @@ describe('MigrationWorkerService', () => {
   });
 
   describe('runBackgroundMigrations', () => {
+    beforeEach(() => {
+      // Enable migrations for tests that need tenant handlers
+      process.env.ENABLE_PLUGIN_MIGRATIONS = 'true';
+    });
+
+    afterEach(() => {
+      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+    });
+
+    it('should throw error if tenant handlers are not available', async () => {
+      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+
+      await expect(service.runBackgroundMigrations({
+        pluginLocation: '/tmp/plugin',
+        pieceName: '@soopa/piece-migrate'
+      })).rejects.toThrow('Tenant handlers not available - migrations disabled');
+    });
+
     it('should Fan-out to multiple queue messages if tenantId is missing', async () => {
       // Mock the internal getActiveTenants helper
       const getActiveTenantsSpy = vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([
@@ -44,7 +62,7 @@ describe('MigrationWorkerService', () => {
       });
 
       expect(getActiveTenantsSpy).toHaveBeenCalledWith('@soopa/piece-migrate');
-      
+
       // It should have fanned out into 2 explicit queue messages
       expect(queueService.send).toHaveBeenCalledTimes(2);
       expect(queueService.send).toHaveBeenNthCalledWith(1, QueueName.TenantProvisionQueue, {
@@ -57,7 +75,7 @@ describe('MigrationWorkerService', () => {
         pieceName: '@soopa/piece-migrate',
         tenantId: 't2'
       });
-      
+
       // Should not run migrations itself in Fan-Out mode
       expect(migrator.migrate).not.toHaveBeenCalled();
     });

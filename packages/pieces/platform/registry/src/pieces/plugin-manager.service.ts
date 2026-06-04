@@ -55,15 +55,22 @@ export class PluginManagerService {
     try {
       const pluginInfo = await this.manager.install(packageName, version);
       this.logger.log(`Successfully installed ${packageName}@${pluginInfo.version} to ${pluginInfo.location}`);
-      
+
       // Dispatch migration job to SQS queue for guaranteed execution
-      const migrationEvent: PluginMigrationEvent = {
-        pluginLocation: pluginInfo.location,
-        pieceName: packageName
-      };
-      
-      await this.queueService.send(QueueName.TenantProvisionQueue, migrationEvent);
-      this.logger.log(`Dispatched migration job for ${packageName} to SQS`);
+      // Only dispatch if tenant handlers are available
+      if (process.env.ENABLE_PLUGIN_MIGRATIONS === 'true') {
+        const migrationEvent: PluginMigrationEvent = {
+          pluginLocation: pluginInfo.location,
+          pieceName: packageName
+        };
+
+        await this.queueService.send(QueueName.TenantProvisionQueue, migrationEvent);
+        this.logger.log(`Dispatched migration job for ${packageName} to SQS`);
+      } else {
+        this.logger.debug(
+          `Skipping migration dispatch for ${packageName} (ENABLE_PLUGIN_MIGRATIONS not set)`
+        );
+      }
 
       return pluginInfo;
     } catch (error) {
