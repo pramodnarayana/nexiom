@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/restrict-plus-operands */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, vi } from 'vitest';
 import { LazyZodValidationPipe } from './lazy-zod-validation.pipe.js';
 import { z } from 'zod';
@@ -11,7 +9,7 @@ vi.mock('nestjs-zod', () => {
     ZodValidationPipe: class MockZodPipe {
       constructor(private schema: unknown) {}
       transform(value: unknown) {
-        return value + '-transformed';
+        return String(value) + '-transformed';
       }
     },
   };

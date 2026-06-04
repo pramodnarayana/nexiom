@@ -24,6 +24,6 @@ export default defineConfig({
         },
     },
     plugins: [
-                // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
+        // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
         swc.vite({ module: { type: 'es6' } })],
 });

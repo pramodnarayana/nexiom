@@ -333,4 +333,14 @@ describe('ValidateObjectNamePipe', () => {
     expect(() => pipe.transform('Invalid/Name')).toThrow(BadRequestException);
     expect(() => pipe.transform('Drop Table;')).toThrow(BadRequestException);
   });
+
+  it('allows exactly 256 characters', () => {
+    const validName = 'A'.repeat(256);
+    expect(pipe.transform(validName)).toBe(validName);
+  });
+
+  it('throws BadRequestException for 257 characters', () => {
+    const tooLongName = 'A'.repeat(257);
+    expect(() => pipe.transform(tooLongName)).toThrow(BadRequestException);
+  });
 });

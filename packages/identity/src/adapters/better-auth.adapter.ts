@@ -182,7 +182,9 @@ export class BetterAuthAdapter implements IAuthProvider {
               html: `<p>Please verify your email by clicking the following link: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
             });
           } catch (e) {
-            console.error("VERIFY ERR", e);
+            const errorName = e instanceof Error ? e.name : 'UnknownError';
+            const errorMessage = e instanceof Error ? e.message.substring(0, 100) : 'Unknown error';
+            console.error("Email verification error:", { errorName, errorMessage });
             throw e;
           }
         },

@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
     plugins: [
-                // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
+        // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
         react()],
     resolve: {
         alias: {
@@ -19,7 +19,7 @@ export default defineConfig({
         globals: true,
         fileParallelism: true,
         pool: 'forks',
-        environment: 'jsdom',
+        environment: './src/test/environments/jsdom-msw',
         testTimeout: 10000,
         setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
         exclude: ['e2e/**', 'node_modules/**'],

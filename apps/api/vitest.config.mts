@@ -71,7 +71,7 @@ export default defineConfig({
     },
     plugins: [
         // Essential for NestJS DI to work correctly
-                // @ts-ignore - Type mismatch between vitest/config vite version and local vite plugin version
+        // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
         swc.vite({
             module: { type: 'es6' },
             jsc: {

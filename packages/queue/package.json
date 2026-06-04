@@ -25,13 +25,13 @@
 	},
 	"peerDependencies": {
 		"@nestjs/common": "^11.1.11",
-		"@nestjs/core": "^11.0.1",
+		"@nestjs/core": "^11.1.11",
 		"rxjs": "^7.8.1"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.39.1",
 		"@nestjs/common": "^11.1.11",
-		"@nestjs/core": "^11.0.1",
+		"@nestjs/core": "^11.1.11",
 		"@nestjs/testing": "^11.1.11",
 		"@types/node": "^20.14.9",
 		"@vitest/coverage-v8": "^4.0.18",
@@ -39,7 +39,7 @@
 		"eslint-config-prettier": "^10.0.1",
 		"eslint-plugin-prettier": "^5.2.3",
 		"globals": "^16.5.0",
-		"prettier": ">=3.0.0",
+		"prettier": "^3.7.4",
 		"rxjs": "^7.8.1",
 		"typescript": "^5.7.3",
 		"typescript-eslint": "^8.46.4",

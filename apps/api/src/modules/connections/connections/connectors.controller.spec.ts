@@ -755,6 +755,46 @@ describe('ConnectorsController', () => {
       );
     });
 
+    it('should fallback to stored credentials when both clientId and clientSecret are missing', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-456' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([{ value: 'stored-encrypted-blob' }]),
+      });
+
+      mockEncryptionService.decrypt.mockResolvedValue(
+        JSON.stringify({
+          clientId: 'stored-client-id',
+          clientSecret: 'stored-client-secret',
+        }),
+      );
+
+      const reconnectBodyNoCreds = {
+        ...validBody,
+        clientId: undefined,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+
+      await controller.exchangeCode(mockCtx, reconnectBodyNoCreds);
+
+      expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
+        'mock-piece',
+        'auth-code-123',
+        'stored-client-id',
+        'stored-client-secret',
+        {},
+      );
+    });
+
     it('should throw NotFoundException if stored credentials not found in DB', async () => {
       mockOauthStateService.verifyState.mockResolvedValue({
         tenantId: 'tenant-123',
