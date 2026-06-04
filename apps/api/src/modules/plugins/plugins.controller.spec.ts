@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { PluginsController, WebhookPayloadDto } from './plugins.controller.js';
 import { PluginManagerService } from '@soopa/piece-registry';
@@ -75,9 +76,9 @@ describe('PluginsController', () => {
         version: '1.0.0',
       } as WebhookPayloadDto;
 
-      await expect(controller.handleNpmWebhook('sha256=somesignature', payload)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        controller.handleNpmWebhook('sha256=somesignature', payload),
+      ).rejects.toThrow(UnauthorizedException);
       expect(queueService.send).not.toHaveBeenCalled();
     });
 
@@ -161,7 +162,7 @@ describe('PluginsController', () => {
           requestMetadata: expect.objectContaining({
             source: 'npm-webhook',
           }),
-        })
+        }),
       );
 
       // The controller should NOT directly call installPiece anymore
@@ -180,7 +181,7 @@ describe('PluginsController', () => {
 
       expect(result).toEqual({
         status: 'accepted',
-        message: 'Installation queued for @soopa/piece-slack@1.2.3'
+        message: 'Installation queued for @soopa/piece-slack@1.2.3',
       });
 
       expect(queueService.send).toHaveBeenCalledWith(
@@ -188,7 +189,7 @@ describe('PluginsController', () => {
         expect.objectContaining({
           packageName: '@soopa/piece-slack',
           version: '1.2.3',
-        })
+        }),
       );
     });
   });

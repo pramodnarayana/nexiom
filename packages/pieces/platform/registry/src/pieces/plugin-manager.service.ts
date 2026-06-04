@@ -64,8 +64,14 @@ export class PluginManagerService {
           pieceName: packageName
         };
 
-        await this.queueService.send(QueueName.TenantProvisionQueue, migrationEvent);
-        this.logger.log(`Dispatched migration job for ${packageName} to SQS`);
+        try {
+          await this.queueService.send(QueueName.TenantProvisionQueue, migrationEvent);
+          this.logger.log(`Dispatched migration job for ${packageName} to SQS`);
+        } catch (queueError) {
+          this.logger.error(`Failed to dispatch migration job for ${packageName}. Rolling back installation...`, queueError);
+          await this.manager.uninstall(packageName);
+          throw queueError;
+        }
       } else {
         this.logger.debug(
           `Skipping migration dispatch for ${packageName} (ENABLE_PLUGIN_MIGRATIONS not set)`
@@ -98,7 +104,8 @@ export class PluginManagerService {
     }
     
     this.logger.log(`Startup Sync: Downloading missing piece ${packageName}...`);
-    const pluginInfo = await this.manager.install(packageName, version);
+    // Delegate to installPiece so that migrations and publishing flow are triggered
+    const pluginInfo = await this.installPiece(packageName, version);
     this.logger.log(`Startup Sync: Installed ${packageName} to ${pluginInfo.location}`);
     return pluginInfo;
   }

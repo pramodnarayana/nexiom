@@ -5,4 +5,4 @@ export * from './metadata/metadata-discovery.service.js';
 export * from './metadata/metadata.module.js';
 export * from './pieces/plugin-manager.service.js';
 export * from './pieces/execution-worker.service.js';
-export * from './pieces/plugin-install.worker.js';
+export * from './pieces/migration-worker.service.js';

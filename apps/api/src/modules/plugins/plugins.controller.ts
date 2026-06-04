@@ -57,7 +57,9 @@ export class PluginsController {
 
     // Signature validation is mandatory - fail if secret is not configured
     if (!webhookSecret) {
-      this.logger.error('NPM_WEBHOOK_SECRET is not configured. Rejecting webhook request.');
+      this.logger.error(
+        'NPM_WEBHOOK_SECRET is not configured. Rejecting webhook request.',
+      );
       throw new UnauthorizedException('Webhook authentication not configured');
     }
 
@@ -86,7 +88,7 @@ export class PluginsController {
         );
         throw new UnauthorizedException('Invalid webhook signature');
       }
-    } catch (error) {
+    } catch (_error) {
       this.logger.warn(
         'Invalid NPM webhook signature detected. Dropping payload.',
       );

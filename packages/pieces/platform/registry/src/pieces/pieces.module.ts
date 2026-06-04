@@ -7,7 +7,6 @@ import { PieceLoaderService, PIECE_LOADER_ANCHOR_URL } from './piece-loader.serv
 import { PluginManagerService } from './plugin-manager.service.js';
 import { ExecutionWorkerService } from './execution-worker.service.js';
 import { MigrationWorkerService } from './migration-worker.service.js';
-import { PluginInstallWorkerService } from './plugin-install.worker.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import type { Piece } from '@soopa/piece-framework';
@@ -26,7 +25,6 @@ const SHARED_PROVIDERS = [
   PluginManagerService,
   ExecutionWorkerService,
   MigrationWorkerService,
-  PluginInstallWorkerService,
 ];
 
 /**
@@ -51,7 +49,7 @@ export class PiecesModule {
         { provide: PIECE_LOADER_ANCHOR_URL, useValue: options.anchorUrl },
         ...SHARED_PROVIDERS,
       ],
-      exports: [PieceRegistryService, PieceLoaderService, PluginManagerService, ExecutionWorkerService, MigrationWorkerService, PluginInstallWorkerService, PIECES],
+      exports: [PieceRegistryService, PieceLoaderService, PluginManagerService, ExecutionWorkerService, MigrationWorkerService, PIECES],
     };
   }
 
