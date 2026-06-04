@@ -14,6 +14,12 @@ import { InvitationsService } from '../invitations/invitations.service.js';
 import { Request, Response } from 'express';
 import { CompleteInvite } from '../users/users.validation.js';
 
+vi.mock('better-auth/node', () => ({
+  toNodeHandler: vi
+    .fn()
+    .mockImplementation((_h: any) => (_req: any, res: any) => res.end()),
+}));
+
 describe('AuthController', () => {
   let controller: AuthController;
   let module: TestingModule;
@@ -355,12 +361,7 @@ describe('AuthController', () => {
       const mockHandler = vi.fn();
       mockAuthService.getHandler.mockReturnValue(mockHandler);
 
-      // Mock toNodeHandler to return a function
-      vi.mock('better-auth/node', () => ({
-        toNodeHandler: vi
-          .fn()
-          .mockImplementation((_h: any) => (_req: any, res: any) => res.end()),
-      }));
+      // Mock toNodeHandler is hoisted to the top level
 
       const { toNodeHandler } = await import('better-auth/node');
 

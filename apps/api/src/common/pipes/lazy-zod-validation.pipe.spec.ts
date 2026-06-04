@@ -18,7 +18,7 @@ vi.mock('nestjs-zod', () => {
 describe('LazyZodValidationPipe', () => {
   it('should skip transformation for custom decorators (not body, query, param)', () => {
     const pipe = new LazyZodValidationPipe(() => z.string());
-    const result = pipe.transform('test', {
+    const result: unknown = pipe.transform('test', {
       type: 'custom',
     } as ArgumentMetadata);
     expect(result).toBe('test');
