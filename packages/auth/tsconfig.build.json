@@ -20,6 +20,8 @@
         "src/**/*"
     ],
     "exclude": [
+    "vitest.config.mts",
+    "vitest.config.ts",
         "node_modules",
         "dist",
         "**/*.spec.ts"

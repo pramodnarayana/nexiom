@@ -12,6 +12,5 @@ import { z } from 'zod';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function toAISchema(schema: z.ZodTypeAny): any {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-expect-error TS2589 — Temporary workaround for Zod generic depth compiler error; runtime validation is correct
   return zodSchema(schema);
 }

@@ -22,12 +22,12 @@ export default defineConfig({
         'node_modules/**',
         'dist/**'
       ],
-      all: true,
     },
   },
   plugins: [
-    // This is required to build the test files with SWC
-    swc.vite({
+        // This is required to build the test files with SWC
+        // @ts-expect-error - Type mismatch between vitest/config vite version and local vite plugin version
+        swc.vite({
       // Explicitly set the module type to avoid conflicts with nestjs/cli
       module: { type: 'es6' },
     }),

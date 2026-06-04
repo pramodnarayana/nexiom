@@ -21,6 +21,7 @@ const mockMetadataDiscovery = {
   describeFields: vi.fn(),
   describeRelatedObjects: vi.fn(),
   describeConfig: vi.fn(),
+  countRecords: vi.fn(),
 };
 
 describe('StitchesMetadataController', () => {
@@ -278,5 +279,68 @@ describe('StitchesMetadataController', () => {
 
       expect(result).toEqual([]);
     });
+  });
+
+  // ── countRecords ───────────────────────────────────────────────────────────
+
+  describe('countRecords', () => {
+    it('delegates to metadataDiscovery.countRecords and returns { count }', async () => {
+      mockMetadataDiscovery.countRecords.mockResolvedValue(42);
+
+      const result = await controller.countRecords(
+        mockAuth,
+        CONNECTION_ID,
+        OBJECT_NAME,
+      );
+
+      expect(result).toEqual({ count: 42 });
+      expect(mockMetadataDiscovery.countRecords).toHaveBeenCalledWith(
+        ORG_ID,
+        CONNECTION_ID,
+        OBJECT_NAME,
+      );
+    });
+  });
+});
+
+import { BadRequestException } from '@nestjs/common';
+import { ValidateObjectNamePipe } from './stitches-metadata.controller.js';
+
+describe('ValidateObjectNamePipe', () => {
+  let pipe: ValidateObjectNamePipe;
+
+  beforeEach(() => {
+    pipe = new ValidateObjectNamePipe();
+  });
+
+  it('allows valid object names', () => {
+    expect(pipe.transform('Account')).toBe('Account');
+    expect(pipe.transform('CustomObject__c')).toBe('CustomObject__c');
+    expect(pipe.transform('Namespace.Object-Name')).toBe(
+      'Namespace.Object-Name',
+    );
+  });
+
+  it('throws BadRequestException if value is missing', () => {
+    expect(() => pipe.transform(undefined as unknown as string)).toThrow(
+      BadRequestException,
+    );
+    expect(() => pipe.transform('')).toThrow(BadRequestException);
+  });
+
+  it('throws BadRequestException if value is invalid', () => {
+    expect(() => pipe.transform('Invalid Name!')).toThrow(BadRequestException);
+    expect(() => pipe.transform('Invalid/Name')).toThrow(BadRequestException);
+    expect(() => pipe.transform('Drop Table;')).toThrow(BadRequestException);
+  });
+
+  it('allows exactly 256 characters', () => {
+    const validName = 'A'.repeat(256);
+    expect(pipe.transform(validName)).toBe(validName);
+  });
+
+  it('throws BadRequestException for 257 characters', () => {
+    const tooLongName = 'A'.repeat(257);
+    expect(() => pipe.transform(tooLongName)).toThrow(BadRequestException);
   });
 });

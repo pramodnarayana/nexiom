@@ -175,6 +175,19 @@ describe('RolesController', () => {
         NotFoundException,
       );
     });
+
+    it('should throw NotFoundException if role is not visible to requester', async () => {
+      const role = { id: 'owner', name: 'Owner' };
+      roleProvider.findById.mockResolvedValue(role);
+      const memberCtx = {
+        ...mockContext,
+        user: { memberRole: 'member' },
+      } as unknown as RequestAuthContext;
+
+      await expect(controller.findById('owner', memberCtx)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
   });
 
   describe('update', () => {
@@ -193,6 +206,27 @@ describe('RolesController', () => {
 
       expect(result).toEqual({ data: updatedRole });
       expect(roleProvider.update).toHaveBeenCalledWith('admin', updateData);
+    });
+
+    it('should throw NotFoundException if role to update is not visible', async () => {
+      const existingRole = { id: 'owner', name: 'Owner' };
+      roleProvider.findById.mockResolvedValue(existingRole);
+      const memberCtx = {
+        ...mockContext,
+        user: { memberRole: 'member' },
+      } as unknown as RequestAuthContext;
+
+      await expect(controller.update('owner', {}, memberCtx)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw NotFoundException if role to update does not exist', async () => {
+      roleProvider.findById.mockResolvedValue(null);
+
+      await expect(
+        controller.update('unknown', {}, mockContext),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -215,6 +249,19 @@ describe('RolesController', () => {
         NotFoundException, // Assuming controller throws NotFoundException if findById returns null
       );
       expect(roleProvider.delete).not.toHaveBeenCalled(); // delete is NOT called if findById returns null
+    });
+
+    it('should throw NotFoundException if role to delete is not visible', async () => {
+      const existingRole = { id: 'owner', name: 'Owner' };
+      roleProvider.findById.mockResolvedValue(existingRole);
+      const memberCtx = {
+        ...mockContext,
+        user: { memberRole: 'member' },
+      } as unknown as RequestAuthContext;
+
+      await expect(controller.delete('owner', memberCtx)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

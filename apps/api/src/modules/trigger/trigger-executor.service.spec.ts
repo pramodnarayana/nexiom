@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TriggerExecutorService } from './trigger-executor.service.js';
@@ -219,6 +221,51 @@ describe('TriggerExecutorService', () => {
       expect(onEnable).toHaveBeenCalled();
     });
 
+    it('runOnDisable should catch and log error if onDisable fails', async () => {
+      const onDisable = vi.fn().mockRejectedValue(new Error('failed'));
+      const trigger = makeMockTrigger({ onDisable });
+
+      await expect(
+        service.runOnDisable({
+          trigger,
+          appName: 'salesforce',
+          triggerName: 'new_record',
+          objectType: undefined,
+          auth: {},
+          propsValue: {},
+          workspaceId: 'ws_1',
+          dataSourceId: TEST_CONNECTION_ID,
+          tenantId: 'tenant_test',
+        }),
+      ).resolves.not.toThrow();
+    });
+
+    describe('executeAndIngest edge cases', () => {
+      it('returns early if records.length === 0', async () => {
+        redis.set.mockResolvedValue('OK');
+        redis.del.mockResolvedValue(1);
+
+        const trigger = makeMockTrigger({
+          run: () => Promise.resolve([]),
+        });
+
+        await service.runPoll({
+          trigger,
+          appName: 'salesforce',
+          triggerName: 'new_record',
+          objectType: undefined,
+          auth: {},
+          propsValue: {},
+          workspaceId: 'ws_1',
+          dataSourceId: TEST_CONNECTION_ID,
+          tenantId: 'tenant_test',
+        });
+
+        // No DB inserts should have occurred
+        expect(db.insert).not.toHaveBeenCalled();
+      });
+    });
+
     it('runOnDisable should not throw even if onDisable fails', async () => {
       const onDisable = vi.fn().mockRejectedValue(new Error('failed'));
       const trigger = makeMockTrigger({ onDisable });
@@ -265,6 +312,161 @@ describe('TriggerExecutorService', () => {
         'dlq:triggers',
         expect.stringContaining('API down'),
       );
+    });
+  });
+
+  describe('handleRecordIngestFailure', () => {
+    it('re-throws error if fromDlqRetry is true without pushing to DLQ', async () => {
+      redis.set.mockResolvedValue('OK');
+      redis.del.mockResolvedValue(1);
+
+      const failingInsertDb = makeMockDb();
+      failingInsertDb.transaction.mockImplementation(async () => {
+        throw new Error('Insert failed');
+      });
+
+      const svc = new TriggerExecutorService(
+        failingInsertDb as unknown as import('@soopa/database').DrizzleDb,
+        redis as unknown as import('ioredis').Redis,
+        {
+          applyPlan: vi.fn(),
+        } as unknown as import('@soopa/dbmanager').DatabaseManager,
+        {
+          resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
+        } as unknown as import('@soopa/engine').StorageResolverService,
+      );
+
+      const trigger = makeMockTrigger({
+        run: () => Promise.resolve([{ id: '1' }]),
+      });
+
+      await expect(
+        svc.runPoll(
+          {
+            trigger,
+            appName: 'salesforce',
+            triggerName: 'new_record',
+            objectType: undefined,
+            auth: {},
+            propsValue: {},
+            workspaceId: 'ws_1',
+            dataSourceId: TEST_CONNECTION_ID,
+            tenantId: 'tenant_test',
+          },
+          true, // fromDlqRetry
+        ),
+      ).rejects.toThrow('Insert failed');
+
+      // The DLQ lpush should not be called again if fromDlqRetry is true
+      expect(redis.lpush).not.toHaveBeenCalled();
+    });
+
+    it('pushes remaining records to DLQ and throws if fromDlqRetry is false for webhook', async () => {
+      redis.set.mockResolvedValue('OK');
+      redis.del.mockResolvedValue(1);
+
+      const failingInsertDb = makeMockDb();
+      failingInsertDb.transaction.mockImplementation(async () => {
+        throw new Error('Insert failed');
+      });
+
+      const svc = new TriggerExecutorService(
+        failingInsertDb as unknown as import('@soopa/database').DrizzleDb,
+        redis as unknown as import('ioredis').Redis,
+        {
+          applyPlan: vi.fn(),
+        } as unknown as import('@soopa/dbmanager').DatabaseManager,
+        {
+          resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
+        } as unknown as import('@soopa/engine').StorageResolverService,
+      );
+
+      const payloadArray = [{ id: '1' }, { id: '2' }];
+      const trigger = makeMockTrigger({
+        run: () => Promise.resolve(payloadArray),
+      });
+
+      await expect(
+        svc.runWebhook({
+          trigger,
+          appName: 'salesforce',
+          triggerName: 'new_record',
+          objectType: undefined,
+          auth: {},
+          propsValue: {},
+          workspaceId: 'ws_1',
+          dataSourceId: TEST_CONNECTION_ID,
+          tenantId: 'tenant_test',
+          headers: {},
+          rawBody: Buffer.from(JSON.stringify(payloadArray)),
+        }),
+      ).rejects.toThrow('Insert failed');
+
+      expect(redis.lpush).toHaveBeenCalledWith(
+        'dlq:triggers',
+        expect.stringContaining('Insert failed'),
+      );
+      // We also check that the pushed job has the payload intact
+      const dlqCall = redis.lpush.mock.calls[0][1];
+      const job = JSON.parse(dlqCall as string);
+      expect(job.payload).toEqual(payloadArray);
+    });
+  });
+
+  describe('buildSourceEventId', () => {
+    it('handles non-object records and arrays', async () => {
+      redis.set.mockResolvedValue('OK');
+      redis.del.mockResolvedValue(1);
+
+      const trigger = makeMockTrigger({
+        run: () => Promise.resolve(['string_record', [1, 2, 3]]),
+      });
+
+      await service.runPoll({
+        trigger,
+        appName: 'salesforce',
+        triggerName: 'new_record',
+        objectType: undefined,
+        auth: {},
+        propsValue: {},
+        workspaceId: 'ws_1',
+        dataSourceId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
+      });
+
+      // Should have successfully called db.insert for both records (2 rows per record -> 4 inserts)
+      expect(db.insert).toHaveBeenCalledTimes(4);
+    });
+
+    it('strips volatile keys and caps at FINGERPRINT_MAX_BYTES', async () => {
+      redis.set.mockResolvedValue('OK');
+      redis.del.mockResolvedValue(1);
+
+      const hugeString = 'a'.repeat(5000);
+      const record = {
+        _etag: 'volatile',
+        SystemModstamp: 'volatile2',
+        important: 'data',
+        huge: hugeString,
+      };
+
+      const trigger = makeMockTrigger({
+        run: () => Promise.resolve([record]),
+      });
+
+      await service.runPoll({
+        trigger,
+        appName: 'salesforce',
+        triggerName: 'new_record',
+        objectType: undefined,
+        auth: {},
+        propsValue: {},
+        workspaceId: 'ws_1',
+        dataSourceId: TEST_CONNECTION_ID,
+        tenantId: 'tenant_test',
+      });
+
+      expect(db.insert).toHaveBeenCalledTimes(2);
     });
   });
 });

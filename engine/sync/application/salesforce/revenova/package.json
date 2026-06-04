@@ -1,18 +1,18 @@
 {
-  "name": "@soopa/shard-salesforce-revenova",
-  "version": "1.0.0",
-  "type": "module",
-  "private": true,
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc"
-  },
-  "dependencies": {
-    "@soopa/domain-tms": "workspace:*",
-    "@soopa/piece-framework": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "^5.7.3"
-  }
+	"name": "@soopa/shard-salesforce-revenova",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"build": "tsc"
+	},
+	"dependencies": {
+		"@soopa/domain-tms": "workspace:*",
+		"@soopa/piece-framework": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^5.7.3"
+	}
 }

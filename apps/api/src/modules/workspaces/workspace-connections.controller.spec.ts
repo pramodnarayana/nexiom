@@ -1,5 +1,11 @@
+/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { WorkspaceConnectionsController } from './workspace-connections.controller.js';
@@ -218,5 +224,45 @@ describe('WorkspaceConnectionsController', () => {
     await expect(
       controller.unassign(makeAuth(), WS_ID, CONN_ID),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  // ── sync ──────────────────────────────────────────────────────────────────
+
+  describe('sync', () => {
+    it('sync — validates objectType and throws BadRequestException if invalid', async () => {
+      mockService.findOne.mockResolvedValue(WORKSPACE);
+
+      await expect(
+        controller.sync(makeAuth(), WS_ID, CONN_ID, 'invalid/object!'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('sync — throws NotFoundException when connection not found', async () => {
+      mockService.findOne.mockResolvedValue(WORKSPACE);
+      mocks.selectRows.mockResolvedValue([]);
+
+      await expect(
+        controller.sync(makeAuth(), WS_ID, CONN_ID, 'ValidObject_1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('sync — executes sync via syncRunner and returns result', async () => {
+      mockService.findOne.mockResolvedValue(WORKSPACE);
+      mocks.selectRows.mockResolvedValue([{ id: CONN_ID }]);
+
+      const syncResult = { status: 'success' };
+      const syncRunner = module.get(SyncRunner);
+      vi.mocked(syncRunner.run).mockResolvedValue(syncResult as any);
+
+      const result = await controller.sync(
+        makeAuth(),
+        WS_ID,
+        CONN_ID,
+        'ValidObject_1',
+      );
+
+      expect(result).toBe(syncResult);
+      expect(syncRunner.run).toHaveBeenCalledWith(CONN_ID, 'ValidObject_1');
+    });
   });
 });

@@ -46,7 +46,11 @@ vi.mock("pg", () => {
     query: vi.fn().mockResolvedValue({ rows: [] }),
     end: vi.fn(),
   };
-  return { Client: vi.fn(() => mClient) };
+  return {
+    Client: vi.fn(function () {
+      return mClient;
+    }),
+  };
 });
 
 vi.mock("drizzle-orm/node-postgres", () => ({

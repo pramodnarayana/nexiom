@@ -218,6 +218,26 @@ describe('DataExplorerService', () => {
   });
 
   describe('getConnectionTrace', () => {
+    it('should return null for missing trace components', async () => {
+      dbManager.getTenantDb.mockResolvedValue({
+        select: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue([]), // Return empty array
+        })),
+      });
+
+      const res = await service.getConnectionTrace(
+        'org_1',
+        'conn_1',
+        'missing_t1',
+      );
+      expect(res.inbound).toBeNull();
+      expect(res.replica).toBeNull();
+      expect(res.normalized).toBeNull();
+      expect(res.outbound).toBeNull();
+    });
+
     it('should return a connection trace', async () => {
       dbManager.getTenantDb.mockResolvedValue({
         select: vi.fn().mockImplementation(() => ({
@@ -250,6 +270,41 @@ describe('DataExplorerService', () => {
   });
 
   describe('listObjectsByConnection', () => {
+    it('should handle null types by defaulting to Uncategorized', async () => {
+      dbManager.getTenantDb.mockResolvedValue({
+        selectDistinct: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([{ type: null }]),
+        })),
+      });
+
+      const res = await service.listObjectsByConnection(
+        'org_1',
+        'conn_1',
+        'inbound',
+      );
+      expect(res).toEqual(['Uncategorized']);
+
+      const resReplica = await service.listObjectsByConnection(
+        'org_1',
+        'conn_1',
+        'replica',
+      );
+      expect(resReplica).toEqual(['Uncategorized']);
+
+      dbManager.getTenantDb.mockResolvedValue({
+        selectDistinct: vi.fn().mockImplementation(() => ({
+          from: vi.fn().mockResolvedValue([{ type: null }]),
+        })),
+      });
+      const resNorm = await service.listObjectsByConnection(
+        'org_1',
+        'conn_1',
+        'normalized',
+      );
+      expect(resNorm).toEqual(['Uncategorized']);
+    });
+
     it('should list object types for a tab', async () => {
       dbManager.getTenantDb.mockResolvedValue({
         selectDistinct: vi.fn().mockImplementation(() => ({

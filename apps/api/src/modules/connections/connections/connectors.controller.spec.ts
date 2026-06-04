@@ -715,6 +715,176 @@ describe('ConnectorsController', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    // ── resolveCredentialsForExchange (indirect via exchangeCode) ──
+    it('should resolve credentials from DB if clientSecret is missing and dataSourceId provided', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([{ value: 'stored-encrypted-blob' }]),
+      });
+
+      mockEncryptionService.decrypt.mockResolvedValue(
+        JSON.stringify({
+          clientId: 'stored-client',
+          clientSecret: 'stored-secret',
+        }),
+      );
+
+      const reconnectBodyNoSecret = {
+        ...validBody,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+
+      await controller.exchangeCode(mockCtx, reconnectBodyNoSecret);
+
+      expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
+        'mock-piece',
+        'auth-code-123',
+        validBody.clientId, // Request client ID is used since it's provided
+        'stored-secret',
+        {},
+      );
+    });
+
+    it('should fallback to stored credentials when both clientId and clientSecret are missing', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue(
+        mockTokenResponse,
+      );
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-456' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([{ value: 'stored-encrypted-blob' }]),
+      });
+
+      mockEncryptionService.decrypt.mockResolvedValue(
+        JSON.stringify({
+          clientId: 'stored-client-id',
+          clientSecret: 'stored-client-secret',
+        }),
+      );
+
+      const reconnectBodyNoCreds = {
+        ...validBody,
+        clientId: undefined,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+
+      await controller.exchangeCode(mockCtx, reconnectBodyNoCreds);
+
+      expect(mockConnectorsService.exchangeCodeForTokens).toHaveBeenCalledWith(
+        'mock-piece',
+        'auth-code-123',
+        'stored-client-id',
+        'stored-client-secret',
+        {},
+      );
+    });
+
+    it('should throw NotFoundException if stored credentials not found in DB', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([]),
+      });
+
+      const reconnectBodyNoSecret = {
+        ...validBody,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBodyNoSecret),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw InternalServerErrorException if DB fetch fails in resolveCredentials', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockRejectedValue(new Error('DB Error')),
+      });
+
+      const reconnectBodyNoSecret = {
+        ...validBody,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBodyNoSecret),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException if decrypt fails in resolveCredentials', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([{ value: 'stored' }]),
+      });
+      mockEncryptionService.decrypt.mockRejectedValue(
+        new Error('Decrypt error'),
+      );
+
+      const reconnectBodyNoSecret = {
+        ...validBody,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBodyNoSecret),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw BadRequestException if stored credential has no secret', async () => {
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+      });
+      mockRedis.set.mockResolvedValue('OK');
+
+      mockDb.where.mockResolvedValueOnce([{ externalId: 'existing-slug-123' }]);
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValue([{ value: 'stored' }]),
+      });
+      mockEncryptionService.decrypt.mockResolvedValue(
+        JSON.stringify({ clientId: 'id' }),
+      ); // no secret
+
+      const reconnectBodyNoSecret = {
+        ...validBody,
+        clientSecret: undefined,
+        dataSourceId: 'existing-id',
+      };
+      await expect(
+        controller.exchangeCode(mockCtx, reconnectBodyNoSecret),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     // Note: DTO validation (ValidationPipe) tests are typically handled in e2e tests
 
     it('should throw NotFoundException if provider is not registered', async () => {

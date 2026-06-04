@@ -26,7 +26,5 @@
     "noUnusedParameters": true
   },
   "exclude": [
-    "vitest.config.mts",
-    "test/vitest-e2e.config.mts"
   ]
 }
