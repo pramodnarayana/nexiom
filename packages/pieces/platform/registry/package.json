@@ -23,16 +23,17 @@
     "@nestjs/config": "^4.0.2",
     "@soopa/cache": "workspace:*",
     "@soopa/database": "workspace:*",
+    "@soopa/credentials": "workspace:*",
     "@soopa/piece-framework": "workspace:*",
     "@soopa/queue": "workspace:*",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.1",
     "live-plugin-manager": "^1.1.0",
     "piscina": "^5.1.4"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.11",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^2.1.9"
   },
   "peerDependencies": {
     "@nestjs/common": "^11.0.1"

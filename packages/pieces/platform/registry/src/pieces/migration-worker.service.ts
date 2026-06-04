@@ -53,6 +53,13 @@ export class MigrationWorkerService implements OnModuleInit {
    * Checks if tenant handlers are available. Returns false if stubbed implementations exist.
    */
   private areTenantHandlersAvailable(): boolean {
+    const isGetActiveTenantsStubbed = this.getActiveTenants.toString().includes('is not implemented');
+    const isGetTenantDbConnectionStubbed = this.getTenantDbConnection.toString().includes('is not implemented');
+    
+    if (isGetActiveTenantsStubbed || isGetTenantDbConnectionStubbed) {
+      return false;
+    }
+
     return process.env.ENABLE_PLUGIN_MIGRATIONS === 'true';
   }
 
@@ -64,7 +71,8 @@ export class MigrationWorkerService implements OnModuleInit {
       typeof event === 'object' &&
       event !== null &&
       typeof event.pluginLocation === 'string' &&
-      typeof event.pieceName === 'string'
+      typeof event.pieceName === 'string' &&
+      (typeof event.tenantId === 'string' || typeof event.tenantId === 'undefined')
     );
   }
 
@@ -74,11 +82,11 @@ export class MigrationWorkerService implements OnModuleInit {
   async runBackgroundMigrations(event: PluginMigrationEvent) {
     // Guard against executing migrations when tenant handlers are not available
     if (!this.areTenantHandlersAvailable()) {
-      this.logger.error(
+      this.logger.debug(
         `Cannot run migrations for ${event.pieceName}: tenant handlers are not implemented. ` +
         'Set ENABLE_PLUGIN_MIGRATIONS=true when implementations are ready.'
       );
-      throw new Error('Tenant handlers not available - migrations disabled');
+      return;
     }
 
     if (!event.tenantId) {

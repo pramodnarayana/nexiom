@@ -6,6 +6,7 @@ import {
   Logger,
   UnauthorizedException,
   Inject,
+  RawBody,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PluginManagerService } from '@soopa/piece-registry';
@@ -49,6 +50,7 @@ export class PluginsController {
   async handleNpmWebhook(
     @Headers('x-npm-signature') signature: string,
     @Body() payloadRaw: WebhookPayloadDto,
+    @RawBody() rawBody: Buffer,
   ) {
     const payload = payloadRaw as unknown as WebhookPayload;
     this.logger.log('Received NPM publish webhook event');
@@ -69,8 +71,7 @@ export class PluginsController {
 
     // Validate HMAC signature to ensure request originated from our private registry
     const hmac = crypto.createHmac('sha256', webhookSecret);
-    const digest =
-      'sha256=' + hmac.update(JSON.stringify(payload)).digest('hex');
+    const digest = 'sha256=' + hmac.update(rawBody).digest('hex');
 
     // Use constant-time comparison to prevent timing attacks
     try {

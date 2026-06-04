@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { createRequire } from 'node:module';
 
 /**
@@ -30,8 +31,8 @@ export default async function runIntegrationPiece(data: ExecutionData): Promise<
     // Define and canonicalize allowed roots
     // Reuse the same plugin-root logic as PluginManagerService to ensure consistency
     const isDev = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
-    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(require('node:os').homedir(), '.soopa'));
-    const pluginsPath = process.env.PLUGINS_PATH || (isDev ? path.join(require('node:os').tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
+    const appDataDir = process.env.APP_DATA_DIR || (isDev ? process.cwd() : path.join(os.homedir(), '.soopa'));
+    const pluginsPath = process.env.PLUGINS_PATH || (isDev ? path.join(os.tmpdir(), 'soopa-plugins') : path.join(appDataDir, 'plugins'));
 
     const allowedRoots: string[] = [];
 

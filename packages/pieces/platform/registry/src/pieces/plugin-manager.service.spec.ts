@@ -9,9 +9,11 @@ vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
     ...actual,
-    existsSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    chmodSync: vi.fn(),
+    promises: {
+      access: vi.fn(),
+      mkdir: vi.fn(),
+      chmod: vi.fn(),
+    }
   };
 });
 
@@ -42,23 +44,25 @@ describe('PluginManagerService', () => {
     service = new PluginManagerService(queueService);
   });
 
-  describe('constructor', () => {
-    it('should create plugins directory with 0o700 permissions if it does not exist', () => {
-      vi.mocked(fs.existsSync).mockReturnValueOnce(false);
+  describe('onModuleInit', () => {
+    it('should create plugins directory with 0o700 permissions if it does not exist', async () => {
+      const error = new Error('ENOENT') as any;
+      error.code = 'ENOENT';
+      vi.mocked(fs.promises.access).mockRejectedValueOnce(error);
       
-      new PluginManagerService(queueService);
+      await service.onModuleInit();
       
-      expect(fs.existsSync).toHaveBeenCalled();
-      expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
+      expect(fs.promises.access).toHaveBeenCalled();
+      expect(fs.promises.mkdir).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
     });
 
-    it('should chmod existing directory to 0o700 if it already exists', () => {
-      vi.mocked(fs.existsSync).mockReturnValueOnce(true);
+    it('should chmod existing directory to 0o700 if it already exists', async () => {
+      vi.mocked(fs.promises.access).mockResolvedValueOnce(undefined);
       
-      new PluginManagerService(queueService);
+      await service.onModuleInit();
       
-      expect(fs.existsSync).toHaveBeenCalled();
-      expect(fs.chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
+      expect(fs.promises.access).toHaveBeenCalled();
+      expect(fs.promises.chmod).toHaveBeenCalledWith(expect.any(String), 0o700);
     });
   });
 
@@ -91,6 +95,20 @@ describe('PluginManagerService', () => {
   });
 
   describe('installPiece', () => {
+    let originalEnablePluginMigrations: string | undefined;
+
+    beforeEach(() => {
+      originalEnablePluginMigrations = process.env.ENABLE_PLUGIN_MIGRATIONS;
+    });
+
+    afterEach(() => {
+      if (originalEnablePluginMigrations === undefined) {
+        delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+      } else {
+        process.env.ENABLE_PLUGIN_MIGRATIONS = originalEnablePluginMigrations;
+      }
+    });
+
     it('should install piece and immediately dispatch a migration event to SQS', async () => {
       process.env.ENABLE_PLUGIN_MIGRATIONS = 'true';
       const mockInstall = vi.spyOn((service as any).manager, 'install').mockResolvedValue({ version: '2.0.0', location: '/tmp/plugin' });
@@ -103,7 +121,6 @@ describe('PluginManagerService', () => {
         pluginLocation: '/tmp/plugin',
         pieceName: '@soopa/piece-migrate'
       });
-      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
     });
 
     it('should skip migration dispatch if ENABLE_PLUGIN_MIGRATIONS is not true', async () => {
@@ -135,8 +152,6 @@ describe('PluginManagerService', () => {
       
       expect(mockInstall).toHaveBeenCalledWith('@soopa/piece-migrate', '2.0.0');
       expect(mockUninstall).toHaveBeenCalledWith('@soopa/piece-migrate');
-      
-      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
     });
   });
 

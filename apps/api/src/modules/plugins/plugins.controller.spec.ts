@@ -56,8 +56,8 @@ describe('PluginsController', () => {
     vi.clearAllMocks();
   });
 
-  // Helper to generate valid HMAC signature from raw body string
-  const generateValidSignature = (rawBody: string): string => {
+  // Helper to generate valid HMAC signature from raw body buffer
+  const generateValidSignature = (rawBody: Buffer): string => {
     const hmac = crypto.createHmac('sha256', TEST_SECRET);
     return 'sha256=' + hmac.update(rawBody).digest('hex');
   };
@@ -76,8 +76,10 @@ describe('PluginsController', () => {
         version: '1.0.0',
       } as WebhookPayloadDto;
 
+      const rawBody = Buffer.from(JSON.stringify(payload));
+
       await expect(
-        controller.handleNpmWebhook('sha256=somesignature', payload),
+        controller.handleNpmWebhook('sha256=somesignature', payload, rawBody),
       ).rejects.toThrow(UnauthorizedException);
       expect(queueService.send).not.toHaveBeenCalled();
     });
@@ -88,9 +90,11 @@ describe('PluginsController', () => {
         version: '1.0.0',
       } as WebhookPayloadDto;
 
-      await expect(controller.handleNpmWebhook('', payload)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      const rawBody = Buffer.from(JSON.stringify(payload));
+
+      await expect(
+        controller.handleNpmWebhook('', payload, rawBody),
+      ).rejects.toThrow(UnauthorizedException);
       expect(queueService.send).not.toHaveBeenCalled();
     });
 
@@ -100,19 +104,24 @@ describe('PluginsController', () => {
         version: '1.0.0',
       } as WebhookPayloadDto;
       const invalidSignature = 'sha256=invalidhash12345';
+      const rawBody = Buffer.from(JSON.stringify(payload));
 
       await expect(
-        controller.handleNpmWebhook(invalidSignature, payload),
+        controller.handleNpmWebhook(invalidSignature, payload, rawBody),
       ).rejects.toThrow(UnauthorizedException);
       expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should ignore payload without a package name gracefully', async () => {
       const payload = { version: '1.0.0' } as WebhookPayloadDto;
-      const rawBody = JSON.stringify(payload);
+      const rawBody = Buffer.from(JSON.stringify(payload));
       const signature = generateValidSignature(rawBody);
 
-      const result = await controller.handleNpmWebhook(signature, payload);
+      const result = await controller.handleNpmWebhook(
+        signature,
+        payload,
+        rawBody,
+      );
 
       expect(result).toEqual({
         status: 'ignored',
@@ -126,10 +135,14 @@ describe('PluginsController', () => {
         name: '@other/piece-slack',
         version: '1.0.0',
       } as WebhookPayloadDto;
-      const rawBody = JSON.stringify(payload);
+      const rawBody = Buffer.from(JSON.stringify(payload));
       const signature = generateValidSignature(rawBody);
 
-      const result = await controller.handleNpmWebhook(signature, payload);
+      const result = await controller.handleNpmWebhook(
+        signature,
+        payload,
+        rawBody,
+      );
 
       expect(result).toEqual({
         status: 'ignored',
@@ -143,10 +156,14 @@ describe('PluginsController', () => {
         name: '@soopa/piece-slack',
         version: '1.2.3',
       } as unknown as WebhookPayloadDto;
-      const rawBody = JSON.stringify(payload);
+      const rawBody = Buffer.from(JSON.stringify(payload));
       const signature = generateValidSignature(rawBody);
 
-      const result = await controller.handleNpmWebhook(signature, payload);
+      const result = await controller.handleNpmWebhook(
+        signature,
+        payload,
+        rawBody,
+      );
 
       expect(result).toEqual({
         status: 'accepted',
@@ -174,10 +191,14 @@ describe('PluginsController', () => {
         name: '@soopa/piece-slack',
         version: '1.2.3',
       } as unknown as WebhookPayloadDto;
-      const rawBody = JSON.stringify(payload);
+      const rawBody = Buffer.from(JSON.stringify(payload));
       const signature = generateValidSignature(rawBody);
 
-      const result = await controller.handleNpmWebhook(signature, payload);
+      const result = await controller.handleNpmWebhook(
+        signature,
+        payload,
+        rawBody,
+      );
 
       expect(result).toEqual({
         status: 'accepted',

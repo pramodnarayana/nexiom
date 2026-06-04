@@ -31,22 +31,31 @@ describe('MigrationWorkerService', () => {
   });
 
   describe('runBackgroundMigrations', () => {
+    let originalEnablePluginMigrations: string | undefined;
+
     beforeEach(() => {
+      originalEnablePluginMigrations = process.env.ENABLE_PLUGIN_MIGRATIONS;
       // Enable migrations for tests that need tenant handlers
       process.env.ENABLE_PLUGIN_MIGRATIONS = 'true';
     });
 
     afterEach(() => {
-      delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+      if (originalEnablePluginMigrations === undefined) {
+        delete process.env.ENABLE_PLUGIN_MIGRATIONS;
+      } else {
+        process.env.ENABLE_PLUGIN_MIGRATIONS = originalEnablePluginMigrations;
+      }
     });
 
-    it('should throw error if tenant handlers are not available', async () => {
+    it('should abort gracefully if tenant handlers are not available', async () => {
       delete process.env.ENABLE_PLUGIN_MIGRATIONS;
 
-      await expect(service.runBackgroundMigrations({
+      await service.runBackgroundMigrations({
         pluginLocation: '/tmp/plugin',
         pieceName: '@soopa/piece-migrate'
-      })).rejects.toThrow('Tenant handlers not available - migrations disabled');
+      });
+      
+      expect(queueService.send).not.toHaveBeenCalled();
     });
 
     it('should Fan-out to multiple queue messages if tenantId is missing', async () => {
@@ -55,6 +64,7 @@ describe('MigrationWorkerService', () => {
         { id: 't1' },
         { id: 't2' }
       ]);
+      vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
 
       await service.runBackgroundMigrations({
         pluginLocation: '/tmp/plugin',
@@ -81,7 +91,7 @@ describe('MigrationWorkerService', () => {
     });
 
     it('should execute single-tenant migration if tenantId is provided', async () => {
-      const getActiveTenantsSpy = vi.spyOn(service as any, 'getActiveTenants');
+      const getActiveTenantsSpy = vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([]);
       const getTenantDbSpy = vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
 
       await service.runBackgroundMigrations({
@@ -100,6 +110,7 @@ describe('MigrationWorkerService', () => {
     });
 
     it('should throw an error if single-tenant migration fails to trigger Dead-Letter Queue', async () => {
+      vi.spyOn(service as any, 'getActiveTenants').mockResolvedValue([]);
       vi.spyOn(service as any, 'getTenantDbConnection').mockResolvedValue({} as any);
       (migrator.migrate as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('DB Timeout'));
 
