@@ -77,12 +77,14 @@ export class CredentialLinkingService {
         if (id) {
           let updated;
           try {
+            const schemaNameForUpdate = getWorkspaceSchemaName(id, providerName);
             [updated] = await tx
               .update(dataSources)
               .set({
                 displayName,
                 externalId,
                 metadata,
+                schemaName: schemaNameForUpdate,
                 updatedAt: new Date(),
                 ...(envType !== undefined && { envType }),
               })
@@ -323,8 +325,6 @@ export class CredentialLinkingService {
                   externalId,
                   metadata,
                   envType: envType ?? 'PRODUCTION',
-                  // Re-persist schemaName on recovery — guards against rows that
-                  // were inserted before this column existed (pre-migration rows).
                   schemaName: recoveredSchemaName,
                   updatedAt: new Date(),
                 })

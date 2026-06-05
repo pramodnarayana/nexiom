@@ -2,6 +2,6 @@ import type { TenantProvisionedEvent } from "../events/tenant-provisioned.event.
 import type { UserInvitedEvent } from "../events/user-invited.event.js";
 
 export interface IIdentityEventPublisher {
-  publishTenantProvisioned(event: TenantProvisionedEvent): Promise<void> | void;
-  publishUserInvited(event: UserInvitedEvent): Promise<void> | void;
+  publishTenantProvisioned(event: TenantProvisionedEvent): Promise<void>;
+  publishUserInvited(event: UserInvitedEvent): Promise<void>;
 }

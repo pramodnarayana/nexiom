@@ -23,7 +23,7 @@ const axiosInstance = axios.create({
  */
 const simpleRestProvider = dataProviderSimpleRest(API_URL, axiosInstance);
 
-import type { GetListParams, CrudFilter } from "@refinedev/core";
+import type { GetListParams } from "@refinedev/core";
 
 export const dataProvider = {
     ...simpleRestProvider,

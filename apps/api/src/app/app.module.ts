@@ -88,8 +88,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
           adminRoleId: configService.getOrThrow<string>('ADMIN_ROLE_ID'),
           memberRoleId: configService.getOrThrow<string>('MEMBER_ROLE_ID'),
         },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        db: db as any,
+        db: db,
         email: emailService,
       }),
     }),

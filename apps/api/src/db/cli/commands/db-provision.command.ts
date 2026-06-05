@@ -40,7 +40,7 @@ export class DbProvisionCommand extends CommandRunner {
   }
 
   @Option({
-    flags: '-s, --schema [name]',
+    flags: '-s, --schema <name>',
     description:
       'The physical schema name (e.g. ws_salesforce_abc123) for gateway/outbound commands',
   })
@@ -88,7 +88,7 @@ export class DbProvisionCommand extends CommandRunner {
 
       // Validate schema is required for gateway and outbound
       if (options?.gateway || options?.outbound) {
-        if (!options?.schema || typeof options.schema !== 'string') {
+        if (!options?.schema) {
           console.error(
             'Error: --schema <schema> is required when using --gateway or --outbound',
           );

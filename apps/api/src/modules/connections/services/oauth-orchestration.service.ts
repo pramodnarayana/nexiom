@@ -249,16 +249,22 @@ export class OAuthOrchestrationService {
     providerName: string,
   ): Promise<Response> {
     try {
+      const params: Record<string, string> = {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+      };
+
+      // Only include client_secret if it's non-empty/defined
+      if (clientSecret && clientSecret.trim()) {
+        params.client_secret = clientSecret;
+      }
+
       return await fetch(tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }).toString(),
+        body: new URLSearchParams(params).toString(),
         signal: AbortSignal.timeout(10000),
       });
     } catch (err: unknown) {

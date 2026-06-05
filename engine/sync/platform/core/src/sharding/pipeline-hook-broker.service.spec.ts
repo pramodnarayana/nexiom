@@ -96,7 +96,7 @@ describe('PipelineHookBrokerService', () => {
     it('returns without error if method is omitted', async () => {
       const incompleteShard = { extractReplica: vi.fn(), normalize: vi.fn() };
       (loader.load as any).mockResolvedValue(incompleteShard);
-      await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public')).resolves.not.toThrow();
+      await expect(service.provisionDomain('salesforce', 'standard', {} as any, 'public')).resolves.toBeUndefined();
     });
   });
 
@@ -172,7 +172,7 @@ describe('PipelineHookBrokerService', () => {
     it('returns without error if method is omitted', async () => {
       const incompleteShard = { extractReplica: vi.fn(), normalize: vi.fn() };
       (loader.load as any).mockResolvedValue(incompleteShard);
-      await expect(service.activeFetch('salesforce', 'standard', [], 'ds-1')).resolves.not.toThrow();
+      await expect(service.activeFetch('salesforce', 'standard', [], 'ds-1')).resolves.toBeUndefined();
     });
   });
 

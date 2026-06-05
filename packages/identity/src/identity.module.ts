@@ -197,6 +197,7 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
+        // Use useClass as default to avoid circular dependency issues
         {
           provide: IDENTITY_EVENT_PUBLISHER,
           useClass: IdentityEventPublisher,

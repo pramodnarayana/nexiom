@@ -225,6 +225,28 @@ export class SystemSeederService {
         if (user) {
           console.log('    ℹ️  User already exists');
 
+          // Upsert bootstrap credential for existing user
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await db
+            .insert(schema.account)
+            .values({
+              id: uuidv4(),
+              userId: userId,
+              accountId: email,
+              providerId: 'credential',
+              password: hashedPassword,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [schema.account.userId, schema.account.providerId],
+              set: {
+                password: hashedPassword,
+                updatedAt: now,
+              },
+            });
+          console.log('    ✓ Bootstrap credential upserted');
+
           // Ensure System Membership (Owner) for existing user
           const existingMember = await db.query.member.findFirst({
             where: (m, { and, eq }) =>
@@ -404,12 +426,44 @@ export class SystemSeederService {
         );
       }
 
-      // Check if a workspace exists
-      // Note: This uses an unfiltered query which may pick any existing workspace.
-      // For deterministic behavior, ensure a seeded workspace exists via db:seed.
-      const workspaces = await db.select().from(schema.uiWorkspaces).limit(1);
-      if (workspaces.length === 0) {
-        throw new Error('No workspace found. Run pnpm db:seed first.');
+      // Deterministically resolve the target workspace
+      // Option 1: Use environment variable if provided
+      const envWorkspaceId = process.env.SEED_WORKSPACE_ID;
+      let workspaceId: string;
+      let orgId: string;
+
+      if (envWorkspaceId) {
+        const workspaces = await db
+          .select()
+          .from(schema.uiWorkspaces)
+          .where(eq(schema.uiWorkspaces.id, envWorkspaceId))
+          .limit(1);
+        if (workspaces.length === 0) {
+          throw new Error(
+            `Workspace with ID "${envWorkspaceId}" (from SEED_WORKSPACE_ID) not found.`,
+          );
+        }
+        workspaceId = workspaces[0].id;
+        orgId = workspaces[0].orgId;
+      } else {
+        // Option 2: Query for a canonical/default workspace
+        const workspaces = await db
+          .select()
+          .from(schema.uiWorkspaces)
+          .limit(2);
+
+        if (workspaces.length === 0) {
+          throw new Error(
+            'No workspace found. Run pnpm db:seed first or set SEED_WORKSPACE_ID.',
+          );
+        }
+        if (workspaces.length > 1) {
+          throw new Error(
+            'Multiple workspaces found. Please set SEED_WORKSPACE_ID environment variable to specify which workspace to use for seeding.',
+          );
+        }
+        workspaceId = workspaces[0].id;
+        orgId = workspaces[0].orgId;
       }
 
       // Check for existing stitch
@@ -420,7 +474,7 @@ export class SystemSeederService {
           and(
             eq(schema.integrationStitches.canonicalObject, 'TMS_CARRIER'),
             eq(schema.integrationStitches.destDataSourceId, qbConn[0].id),
-            eq(schema.integrationStitches.workspaceId, workspaces[0].id),
+            eq(schema.integrationStitches.workspaceId, workspaceId),
           ),
         )
         .limit(1);
@@ -431,8 +485,8 @@ export class SystemSeederService {
           .insert(schema.integrationStitches)
           .values({
             name: 'Revenova to QuickBooks Local Sync',
-            orgId: workspaces[0].orgId,
-            workspaceId: workspaces[0].id,
+            orgId: orgId,
+            workspaceId: workspaceId,
             destDataSourceId: qbConn[0].id,
             canonicalObject: 'TMS_CARRIER',
             targetObject: 'Vendor',

@@ -45,7 +45,7 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     try {
       this.validateInputs(tenantId, appName, externalId, refreshToken);
       const tokenUrl = await this.getTokenUrl(appName);
-      const { clientId, clientSecret, vendorParams } = await this.getCredentials(tenantId, appName, externalId);
+      const { clientId, clientSecret, vendorParams, credentialId } = await this.getCredentials(tenantId, appName, externalId);
       const resolvedTokenUrl = resolveOAuth2Url(tokenUrl, vendorParams);
       const response = await this.httpClient.fetch(resolvedTokenUrl, {
         method: 'POST',
@@ -62,10 +62,8 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
         if (response.status === 400 || response.status === 401) {
           if (this.eventPublisher) {
             try {
-              // Fetch the credential record to get the real credential ID
-              const credInfo = await this.getCredentials(tenantId, appName, externalId);
               await this.eventPublisher.publishCredentialInvalidated(
-                new CredentialInvalidatedEvent(credInfo.credentialId, `HTTP ${response.status}: ${response.statusText}`, appName)
+                new CredentialInvalidatedEvent(credentialId, `HTTP ${response.status}: ${response.statusText}`, appName)
               );
             } catch (err) {
               this.logger.error('Failed to publish CredentialInvalidatedEvent', err);

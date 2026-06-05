@@ -346,7 +346,9 @@ export class TriggerExecutorService {
           inserted++;
           const sourceCursor =
             this.payloadTransformer.extractRecordCursor(record);
-          await store.put('last_cursor', sourceCursor);
+          if (sourceCursor !== undefined) {
+            await store.put('last_cursor', sourceCursor);
+          }
         }
       } catch (err) {
         await this.retryPolicyService.handleRecordIngestFailure(

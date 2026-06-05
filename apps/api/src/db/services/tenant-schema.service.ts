@@ -84,8 +84,9 @@ export class TenantSchemaService {
 
   async createTenantDatabase(dbName: string, hostUrl: string): Promise<void> {
     const { PgClient } = await this.connectionPool.resolvePgModule();
+    const adminConnectionString = `${hostUrl.replace(/\/$/, '')}/postgres`;
     const adminClient = new PgClient({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: adminConnectionString,
     });
     await adminClient.connect();
 
@@ -186,9 +187,18 @@ export class TenantSchemaService {
           );
         }
       } catch (err) {
-        console.log(
-          `  ⚠️  Shard Truncate failed (database might not exist yet): ${String(err)}`,
-        );
+        // Only ignore "database does not exist" errors (code '3D000')
+        const pgCode =
+          (err as { code?: string })?.code ||
+          (err as { cause?: { code?: string } })?.cause?.code;
+        if (pgCode === '3D000') {
+          console.log(
+            `  ℹ️  Shard database does not exist yet, skipping truncate`,
+          );
+        } else {
+          console.log(`  ⚠️  Shard Truncate failed: ${String(err)}`);
+          throw err;
+        }
       } finally {
         if (shardClient) {
           await shardClient.end();

@@ -96,6 +96,10 @@ export class SyncSeedingService {
                 schema.integrationStitches.destDataSourceId,
                 mapping.destDataSourceId,
               ),
+              eq(
+                schema.integrationStitches.sourceDataSourceId,
+                mapping.sourceDataSourceId,
+              ),
               eq(schema.integrationStitches.workspaceId, workspaceId),
             ),
           )
@@ -109,6 +113,7 @@ export class SyncSeedingService {
               name: mapping.name,
               orgId: orgId,
               workspaceId: workspaceId,
+              sourceDataSourceId: mapping.sourceDataSourceId,
               destDataSourceId: mapping.destDataSourceId,
               canonicalObject: mapping.canonicalObject,
               targetObject: mapping.targetObject,

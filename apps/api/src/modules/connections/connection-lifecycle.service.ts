@@ -72,16 +72,6 @@ export class ConnectionLifecycleService {
         },
       );
 
-      // Emit domain event to decouple pipeline CDC registration from the connections domain.
-      this.eventEmitter.emit(
-        'connection.provisioned',
-        new ConnectionSchemaProvisionedEvent(
-          tenantId,
-          workspaceProvisionInfo.dataSourceId,
-          workspaceProvisionInfo.schemaName,
-        ),
-      );
-
       // Transition to ACTIVE only after namespace is successfully provisioned
       await this.db.transaction(async (tx) => {
         const [activeConn] = await tx
@@ -107,6 +97,16 @@ export class ConnectionLifecycleService {
           payload: activeConn,
         });
       });
+
+      // Emit domain event after transaction completes successfully
+      this.eventEmitter.emit(
+        'connection.provisioned',
+        new ConnectionSchemaProvisionedEvent(
+          tenantId,
+          workspaceProvisionInfo.dataSourceId,
+          workspaceProvisionInfo.schemaName,
+        ),
+      );
     } catch (applyError) {
       this.logger.error(
         `Failed to provision namespace for connection ${workspaceProvisionInfo.dataSourceId} (schema: ${workspaceProvisionInfo.schemaName || 'unknown'}, provider: ${providerName})`,
@@ -172,8 +172,15 @@ export class ConnectionLifecycleService {
     tenantId: string,
     dataSourceId: string,
   ): Promise<void> {
-    // ── Step 1: Verify connection exists and lock it (global DB) ─────────────
+    // Acquire Postgres advisory lock to prevent race conditions during check-and-delete
+    const lockKey = `${tenantId}:${dataSourceId}`;
+    const lockId = this.hashLockKey(lockKey);
+
     await this.db.transaction(async (tx) => {
+      // Acquire advisory lock for the entire check-and-delete sequence
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockId})`);
+
+      // ── Step 1: Verify connection exists and lock it (global DB) ─────────────
       const [lockedConn] = await tx
         .select({ id: dataSources.id })
         .from(dataSources)
@@ -189,11 +196,10 @@ export class ConnectionLifecycleService {
       if (!lockedConn) {
         throw new NotFoundException(`Connection ${dataSourceId} not found`);
       }
-    });
 
-    // ── Step 2: Check GEM in the tenant database ─────────────────────────────
-    // GEM is data-plane data stored in the tenant control-plane public schema.
-    try {
+      // ── Step 2: Check GEM in the tenant database ─────────────────────────────
+      // GEM is data-plane data stored in the tenant control-plane public schema.
+      try {
       const storageProfile =
         await this.storageResolver.resolveStorageProfile(dataSourceId);
 
@@ -255,10 +261,8 @@ export class ConnectionLifecycleService {
         );
         throw err;
       }
-    }
 
-    // ── Step 3: Delete the connection from global DB ──────────────────────────
-    await this.db.transaction(async (tx) => {
+      // ── Step 3: Delete the connection from global DB ──────────────────────────
       const [deletedConn] = await tx
         .delete(dataSources)
         .where(
@@ -281,6 +285,19 @@ export class ConnectionLifecycleService {
     });
   }
 
+  /**
+   * Hashes a string key into a stable 32-bit integer for pg_advisory_lock.
+   */
+  private hashLockKey(key: string): number {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      const char = key.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+  }
+
   @OnEvent('credential.invalidated')
   async handleCredentialInvalidated(
     event: CredentialInvalidatedEvent,
@@ -293,7 +310,7 @@ export class ConnectionLifecycleService {
       await this.db.transaction(async (tx) => {
         // Pause all dataSources related to this externalId/appName combo.
         // The token-refresh service passes externalId as the credentialId.
-        const [updatedConn] = await tx
+        const updatedConns = await tx
           .update(dataSources)
           .set({ updatedAt: new Date() })
           .where(
@@ -304,7 +321,8 @@ export class ConnectionLifecycleService {
           )
           .returning();
 
-        if (updatedConn) {
+        // Iterate over all returned connections
+        for (const updatedConn of updatedConns) {
           await tx
             .update(credentials)
             .set({ status: AppConnectionStatus.FAILED })

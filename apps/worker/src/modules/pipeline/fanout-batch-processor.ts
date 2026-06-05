@@ -321,6 +321,23 @@ export class FanoutBatchProcessor {
               },
               `Failed best-effort MQ publish: ${sanitizeError(sendErr)}`,
             );
+
+            // Update DB row to retryable failed state
+            const destSchemaName = await this.storageResolver.resolveSchemaName(
+              stitch.destDataSourceId,
+            );
+            assertValidSchemaName(destSchemaName);
+            await tenantDb.transaction(async (destTx) => {
+              await destTx.execute(
+                sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
+              );
+              await destTx.execute(sql`
+                UPDATE outbound_gateway
+                SET status = 'FAILED', updated_at = NOW()
+                WHERE trace_id = ${traceId} AND route_id = ${stitch.id}
+              `);
+            });
+
             throw sendErr;
           }
 

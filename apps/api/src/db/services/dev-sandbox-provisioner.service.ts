@@ -20,6 +20,20 @@ export class DevSandboxProvisionerService {
     private readonly tenantSchema: TenantSchemaService,
   ) {}
 
+  async onModuleDestroy() {
+    // Close all cached tenant pools to prevent connection leaks
+    for (const [cacheKey, cached] of tenantPoolCache.entries()) {
+      try {
+        await cached.pool.end();
+      } catch (err) {
+        console.warn(
+          `Failed to close tenant pool for ${cacheKey}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    tenantPoolCache.clear();
+  }
+
   private deriveMetadata(appName: string): Record<string, unknown> {
     if (appName === 'salesforce') {
       return { instance_url: 'https://test.salesforce.com' };
@@ -28,7 +42,7 @@ export class DevSandboxProvisionerService {
   }
 
   encryptFixture(plaintext: string, encryptionKey: string): string {
-    const keyBuffer = Buffer.from(encryptionKey);
+    const keyBuffer = Buffer.from(encryptionKey, 'utf8');
     if (keyBuffer.length !== 32) {
       throw new Error(
         `ENCRYPTION_KEY must be exactly 32 bytes, got ${keyBuffer.length}. ` +
@@ -238,6 +252,18 @@ export class DevSandboxProvisionerService {
               }) as unknown as import('@soopa/database').DrizzleDb;
               cached = { pool: pool2, drizzle: drizzleInstance };
               tenantPoolCache.set(cacheKey, cached);
+            } else {
+              // Close and replace old pool if it already exists
+              const old = tenantPoolCache.get(cacheKey);
+              if (old) {
+                old.pool.end().catch(() => {});
+              }
+              const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+              const drizzleInstance = drizzle(pool2, {
+                schema: dbSchema,
+              }) as unknown as import('@soopa/database').DrizzleDb;
+              cached = { pool: pool2, drizzle: drizzleInstance };
+              tenantPoolCache.set(cacheKey, cached);
             }
             return cached.drizzle;
           },
@@ -339,6 +365,8 @@ export class DevSandboxProvisionerService {
                 value: encryptedValue,
                 authType: 'OAUTH2',
                 expiresAt: futureExpiresAt,
+                // Preserve ACTIVE/REVOKED status during update to avoid downgrading live connections.
+                // This ensures fixture updates don't accidentally revoke production credentials.
                 status: sql`CASE
                 WHEN ${dbSchema.credentials.status} IN ('ACTIVE', 'REVOKED')
                 THEN ${dbSchema.credentials.status}

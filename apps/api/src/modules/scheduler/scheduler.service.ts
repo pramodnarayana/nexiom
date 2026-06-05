@@ -110,7 +110,13 @@ export class SchedulerService implements OnModuleInit {
     this.logger.log(
       `Connection paused event received for ${event.connectionId} due to: ${event.reason}. Deleting schedule.`,
     );
-    await this.schedulerClient.deleteSchedule(event.connectionId);
+    try {
+      await this.schedulerClient.deleteSchedule(event.connectionId);
+    } catch (err) {
+      this.logger.error(
+        `Failed to delete schedule for connection ${event.connectionId}: ${String(err)}`,
+      );
+    }
   }
 
   /**

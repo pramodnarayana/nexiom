@@ -97,6 +97,11 @@ export class RbacInspectorService {
       // Resolve Member Role Permissions (this is what the app actually uses)
       if (user.members && user.members.length > 0) {
         // Enforce Single-Tenant Rule: Use only the first member record
+        if (user.members.length > 1) {
+          console.warn(
+            `  ⚠️  User has ${user.members.length} memberships. Single-Tenant Rule enforces first only.`,
+          );
+        }
         const member = user.members[0];
         const normalized = normalizeRole(member.role);
         const roleName = normalized.name;

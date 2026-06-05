@@ -400,17 +400,33 @@ export class BetterAuthAdapter implements IAuthProvider {
 
       const invitation = this.validateInvitationResponse(invData);
 
-      try {
-        await this.eventPublisher.publishUserInvited(
-          new UserInvitedEvent(
-            invitation.id,
-            invitation.email,
-            invitation.organizationId || "",
-            invitation.role || "member",
-          ),
-        );
-      } catch (err) {
-        console.error("Failed to publish UserInvitedEvent", err);
+      // Retry publishing event with exponential backoff
+      let publishAttempts = 0;
+      const maxAttempts = 3;
+      while (publishAttempts < maxAttempts) {
+        try {
+          await this.eventPublisher.publishUserInvited(
+            new UserInvitedEvent(
+              invitation.id,
+              invitation.email,
+              invitation.organizationId || "",
+              invitation.role || "member",
+            ),
+          );
+          break; // Success, exit loop
+        } catch (err) {
+          publishAttempts++;
+          if (publishAttempts >= maxAttempts) {
+            console.error(
+              `Failed to publish UserInvitedEvent after ${maxAttempts} attempts`,
+              err,
+            );
+          } else {
+            // Exponential backoff: 100ms, 200ms, 400ms
+            const delayMs = 100 * Math.pow(2, publishAttempts - 1);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
       }
 
       return invitation;
