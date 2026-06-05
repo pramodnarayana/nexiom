@@ -21,6 +21,7 @@ export class DbSeedCommand extends CommandRunner {
       await this.seederService.seed();
       await this.seederService.seedAbac(ABAC_PERMISSIONS);
       await this.syncSeederService.seedMappings(LOCAL_SEED_MAPPINGS);
+      console.log('Database seed completed successfully');
     } catch (err) {
       console.error('Failed to seed database:', err);
       process.exit(1);

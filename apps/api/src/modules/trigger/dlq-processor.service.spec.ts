@@ -235,7 +235,6 @@ describe('DlqProcessorService', () => {
   it('should move to failed list after MAX_ATTEMPTS exhausted', async () => {
     dlqService = makeMockDlqService();
     const failingExecutor = {
-      run反Poll: vi.fn().mockRejectedValue(new Error('permanent fail')),
       runPoll: vi.fn().mockRejectedValue(new Error('permanent fail')),
     } as unknown as TriggerExecutorService;
     registry = makeRegistry();

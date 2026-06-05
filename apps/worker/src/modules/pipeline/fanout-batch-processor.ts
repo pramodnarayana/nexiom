@@ -228,7 +228,7 @@ export class FanoutBatchProcessor {
           } catch (err) {
             this.logger.error(
               { err: sanitizeErrorObject(err), traceId, routeId: stitch.id },
-              `L4→L5: failed to publish stitch routing envelope: ${sanitizeError(err)}`,
+              `L4: failed to load destState from replica entity: ${sanitizeError(err)}`,
             );
           }
         } else {
@@ -262,16 +262,16 @@ export class FanoutBatchProcessor {
         `[DEBUG] prepareUpdate result — Id=${"Id" in hydratedPayload}, SyncToken=${"SyncToken" in hydratedPayload}, sparse=${"sparse" in hydratedPayload}, domain=${"domain" in hydratedPayload}`,
       );
 
+      const destSchemaName = await this.storageResolver.resolveSchemaName(
+        stitch.destDataSourceId,
+      );
+      assertValidSchemaName(destSchemaName);
+
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(schemaName);
         await tx.execute(
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
-
-        const destSchemaName = await this.storageResolver.resolveSchemaName(
-          stitch.destDataSourceId,
-        );
-        assertValidSchemaName(destSchemaName);
 
         let shouldPublish = false;
         await tenantDb.transaction(async (destTx) => {
@@ -323,10 +323,6 @@ export class FanoutBatchProcessor {
             );
 
             // Update DB row to retryable failed state
-            const destSchemaName = await this.storageResolver.resolveSchemaName(
-              stitch.destDataSourceId,
-            );
-            assertValidSchemaName(destSchemaName);
             await tenantDb.transaction(async (destTx) => {
               await destTx.execute(
                 sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,

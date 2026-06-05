@@ -25,10 +25,10 @@ export default defineConfig({
         exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
       thresholds: {
-        statements: 10, // TODO: Increase to 80% after refactor
-        branches: 10,
-        functions: 10,
-        lines: 10,
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
       },
             enabled: true,
             provider: 'v8',

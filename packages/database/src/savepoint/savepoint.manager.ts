@@ -33,8 +33,9 @@ export class PostgresSavePointManager implements ISavePointManager {
       throw new Error('Savepoint name must be a non-empty string');
     }
     // Prevent SQL injection by validating the name only contains safe characters
-    if (!/^[a-zA-Z0-9_]+$/.test(name)) {
-      throw new Error('Savepoint name must contain only alphanumeric characters and underscores');
+    // First character must be a letter or underscore, subsequent characters can be alphanumeric or underscores
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+      throw new Error('Savepoint name must start with a letter or underscore and contain only alphanumeric characters and underscores');
     }
   }
 }

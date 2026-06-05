@@ -28,7 +28,7 @@ import {
   type DrizzleDb,
   member,
 } from '@soopa/database';
-import { eq, and, count, desc } from 'drizzle-orm';
+import { eq, and, count, desc, sql } from 'drizzle-orm';
 import type { AnyProperty } from '@soopa/piece-framework';
 import { CredentialLinkingService } from '../services/credential-linking.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
@@ -175,7 +175,6 @@ export class CredentialController {
     let countResult: { count: number | string } | undefined;
 
     try {
-      const { isNotNull, sql } = await import('drizzle-orm');
       [activeConnections, [countResult]] = await Promise.all([
         this.db
           .select({

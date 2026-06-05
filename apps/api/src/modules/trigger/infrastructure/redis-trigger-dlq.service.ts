@@ -46,33 +46,33 @@ export class RedisTriggerDlqService implements ITriggerDlqService {
   async reclaimStaleJobs(staleMs: number, batchSize: number): Promise<number> {
     const staleThreshold = Date.now() - staleMs;
 
-    const LUA_RECLAIM = [
-      'local item = redis.call("LINDEX", KEYS[1], -1)',
-      'if not item then return 0 end',
-      'local ok, parsed = pcall(cjson.decode, item)',
-      'if not ok then',
-      '  redis.call("RPOP", KEYS[1])',
-      '  return 0',
+    const LUA_RECLAIM_BATCH = [
+      'local reclaimed = 0',
+      'local maxItems = tonumber(ARGV[2])',
+      'for i = 1, maxItems do',
+      '  local item = redis.call("LINDEX", KEYS[1], -1)',
+      '  if not item then break end',
+      '  local ok, parsed = pcall(cjson.decode, item)',
+      '  if not ok then',
+      '    redis.call("RPOP", KEYS[1])',
+      '  elseif parsed.processingStartedAt and parsed.processingStartedAt <= tonumber(ARGV[1]) then',
+      '    redis.call("RPOPLPUSH", KEYS[1], KEYS[2])',
+      '    reclaimed = reclaimed + 1',
+      '  else',
+      '    break',
+      '  end',
       'end',
-      'if not parsed.processingStartedAt or parsed.processingStartedAt > tonumber(ARGV[1]) then',
-      '  return 0',
-      'end',
-      'redis.call("RPOPLPUSH", KEYS[1], KEYS[2])',
-      'return 1',
+      'return reclaimed',
     ].join('\n');
 
-    let reclaimed = 0;
-    for (let i = 0; i < batchSize; i++) {
-      const moved = (await this.redis.eval(
-        LUA_RECLAIM,
-        2,
-        DLQ_PROCESSING_KEY,
-        DLQ_KEY,
-        String(staleThreshold),
-      )) as number;
-      if (!moved) break;
-      reclaimed++;
-    }
+    const reclaimed = (await this.redis.eval(
+      LUA_RECLAIM_BATCH,
+      2,
+      DLQ_PROCESSING_KEY,
+      DLQ_KEY,
+      String(staleThreshold),
+      String(batchSize),
+    )) as number;
 
     return reclaimed;
   }

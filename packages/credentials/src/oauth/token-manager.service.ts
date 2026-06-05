@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { DrizzleDb } from '@soopa/database';
 
 import { EncryptionService } from '../crypto/encryption.interface.js';
+import type { IDistributedLock } from './distributed-lock.interface.js';
 
 /**
  * Shape of the decrypted credential blob stored in credentials.value.
@@ -63,10 +64,7 @@ export abstract class OAuthRefreshClient {
     abstract refresh(tenantId: string, appName: string, externalId: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
-export interface IDistributedLock {
-    acquire(key: string, value: string, ttlMs: number): Promise<boolean>;
-    release(key: string, value: string): Promise<void>;
-}
+export type { IDistributedLock } from './distributed-lock.interface.js';
 
 function parseExpiresAt(value: unknown): Date | null {
     if (!value) return null;

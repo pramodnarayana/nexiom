@@ -3,42 +3,46 @@ import { sql } from "drizzle-orm";
 import type { DrizzleDb } from "@soopa/database";
 import { globalEntityMap } from "@soopa/database";
 
+export interface GemMappingParams {
+  traceId: string;
+  routeId: string;
+  srcAppName: string;
+  dataSourceId: string;
+  srcTenantId: string;
+  canonicalType: string;
+  srcVendorId: string;
+  targetAppName: string;
+  targetConnectionId: string;
+  targetTenantId: string;
+  destVendorId: string;
+}
+
 @Injectable()
 export class GemHydrationService {
   private readonly logger = new Logger(GemHydrationService.name);
 
   async writeGemMapping(
     tenantDb: DrizzleDb,
-    traceId: string,
-    routeId: string,
-    srcAppName: string,
-    dataSourceId: string,
-    srcTenantId: string,
-    canonicalType: string,
-    srcVendorId: string,
-    targetAppName: string,
-    targetConnectionId: string,
-    targetTenantId: string,
-    destVendorId: string,
+    params: GemMappingParams,
   ): Promise<void> {
     await tenantDb
       .insert(globalEntityMap)
       .values({
-        stitchId: routeId,
-        sourceAppName: srcAppName,
-        sourceDataSourceId: dataSourceId,
-        sourceOrgId: srcTenantId,
-        sourceEntityType: canonicalType,
-        sourceEntityId: srcVendorId,
+        stitchId: params.routeId,
+        sourceAppName: params.srcAppName,
+        sourceDataSourceId: params.dataSourceId,
+        sourceOrgId: params.srcTenantId,
+        sourceEntityType: params.canonicalType,
+        sourceEntityId: params.srcVendorId,
         sourceRefLayer: "L2",
-        sourceTraceId: traceId,
-        destAppName: targetAppName,
-        destDataSourceId: targetConnectionId,
-        destOrgId: targetTenantId,
-        destEntityType: canonicalType,
-        destEntityId: destVendorId,
+        sourceTraceId: params.traceId,
+        destAppName: params.targetAppName,
+        destDataSourceId: params.targetConnectionId,
+        destOrgId: params.targetTenantId,
+        destEntityType: params.canonicalType,
+        destEntityId: params.destVendorId,
         destRefLayer: "L6",
-        destTraceId: traceId,
+        destTraceId: params.traceId,
       })
       .onConflictDoUpdate({
         target: [
@@ -49,8 +53,8 @@ export class GemHydrationService {
           globalEntityMap.destEntityType,
         ],
         set: {
-          destEntityId: destVendorId,
-          destTraceId: traceId,
+          destEntityId: params.destVendorId,
+          destTraceId: params.traceId,
           lastSyncedAt: sql`NOW()`,
         },
       });
@@ -58,14 +62,14 @@ export class GemHydrationService {
     this.logger.log(
       {
         event: "gem.mapped",
-        traceId,
-        routeId,
-        sourceAppName: srcAppName,
-        sourceEntityId: srcVendorId,
-        destAppName: targetAppName,
-        destEntityId: destVendorId,
+        traceId: params.traceId,
+        routeId: params.routeId,
+        sourceAppName: params.srcAppName,
+        sourceEntityId: params.srcVendorId,
+        destAppName: params.targetAppName,
+        destEntityId: params.destVendorId,
       },
-      `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
+      `Successfully wrote GEM linkage: ${params.srcAppName}[${params.srcVendorId}] -> ${params.targetAppName}[${params.destVendorId}]`,
     );
   }
 }

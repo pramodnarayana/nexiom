@@ -15,7 +15,7 @@ export class DbFreshCommand extends CommandRunner {
       await this.resetService.fresh();
     } catch (err) {
       console.error('Failed to fresh install database:', err);
-      process.exit(1);
+      throw err;
     }
   }
 }

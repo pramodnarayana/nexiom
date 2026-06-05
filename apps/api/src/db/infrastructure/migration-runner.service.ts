@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { PgConnectionPool } from './pg-connection.pool.js';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -9,7 +8,7 @@ const execAsync = promisify(exec);
 
 @Injectable()
 export class MigrationRunnerService {
-  constructor(private readonly connectionPool: PgConnectionPool) {}
+  constructor() {}
 
   async migrateAllSchemas(): Promise<void> {
     console.log('🔄 Running Drizzle migrations...');
@@ -23,6 +22,7 @@ export class MigrationRunnerService {
         env: {
           ...process.env,
         },
+        timeout: 300000,
       });
       console.log('✅ Base migrations completed successfully');
     } catch (error) {
@@ -53,6 +53,7 @@ export class MigrationRunnerService {
           ...process.env,
           DATABASE_URL: urlWithDb,
         },
+        timeout: 300000,
       });
 
       console.log(`✅ Tenant migrations completed successfully for ${dbName}`);

@@ -15,7 +15,7 @@ export class DbResetCommand extends CommandRunner {
       await this.resetService.reset();
     } catch (err) {
       console.error('Failed to reset database:', err);
-      process.exit(1);
+      throw err;
     }
   }
 }

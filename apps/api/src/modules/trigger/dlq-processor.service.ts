@@ -10,8 +10,6 @@ import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
 
 const MAX_ATTEMPTS = 3;
 
-// Replaced by RedisTriggerDlqService implementation
-
 interface DlqJob {
   appName: string;
   triggerName: string;

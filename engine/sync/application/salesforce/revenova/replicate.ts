@@ -72,7 +72,16 @@ export async function ReplicateRevenovaObject(payload: unknown): Promise<{ entit
     if (!notifications) return null;
 
     // Notifications could be an array, we only take the first one or assume single for now
-    const notification = Array.isArray(notifications['Notification']) ? notifications['Notification'][0] : notifications['Notification'];
+    const notificationArray = notifications['Notification'];
+    let notification;
+    if (Array.isArray(notificationArray)) {
+        if (notificationArray.length > 1) {
+            throw new Error(`Multiple notifications (${notificationArray.length}) are not supported in a single SOAP envelope`);
+        }
+        notification = notificationArray[0];
+    } else {
+        notification = notificationArray;
+    }
     if (!notification) return null;
 
     const sObject = notification['sObject'];

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PgConnectionPool } from '../infrastructure/pg-connection.pool.js';
-import { EnvironmentGuardService } from './environment-guard.service.js';
 
 @Injectable()
 export class RbacInspectorService {
@@ -14,7 +13,6 @@ export class RbacInspectorService {
 
   constructor(
     private readonly connectionPool: PgConnectionPool,
-    private readonly environmentGuard: EnvironmentGuardService,
   ) {}
 
   async debugPermissions(roleName: string): Promise<void> {

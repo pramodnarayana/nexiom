@@ -27,7 +27,7 @@ export class ConnectionSchemaProvisionerService {
     const client = await this.connectionPool.getPgClient();
 
     // Track created pools to ensure they are closed
-    const createdPools: typeof Pool.prototype[] = [];
+    const createdPools: Pool[] = [];
 
     try {
       const db = drizzle(client, { schema: dbSchema });
@@ -148,59 +148,54 @@ export class ConnectionSchemaProvisionerService {
     );
 
     const dbSchema = await import('@soopa/database');
-    const { eq } = await import('drizzle-orm');
+    const { eq, sql } = await import('drizzle-orm');
 
     await this.withSchemaMgr(async (schemaMgr, db) => {
-      const client = await this.connectionPool.getPgClient();
-      try {
-        const result = await client.query<{ schema_name: string }>(`
-          SELECT schema_name
-          FROM information_schema.schemata
-          WHERE schema_name LIKE 'ws\_%' ESCAPE '\'
-          ORDER BY schema_name;
-        `);
+      const result = await db.execute<{ schema_name: string }>(sql`
+        SELECT schema_name
+        FROM information_schema.schemata
+        WHERE schema_name LIKE 'ws\_%' ESCAPE '\'
+        ORDER BY schema_name
+      `);
 
-        if (result.rows.length === 0) {
-          console.log('  ℹ️  No tenant schemas found.');
-          return;
-        }
-
-        const failures: Array<{ schema: string; error: string }> = [];
-
-        for (const { schema_name } of result.rows) {
-          try {
-            const connRow = await db
-              .select({ tenantId: dbSchema.dataSources.tenantId })
-              .from(dbSchema.dataSources)
-              .where(eq(dbSchema.dataSources.schemaName, schema_name))
-              .limit(1);
-
-            const tenantId = connRow[0]?.tenantId;
-            if (!tenantId) {
-              throw new Error(
-                `No connection found for schema "${schema_name}" — skipping migration.`,
-              );
-            }
-
-            await schemaMgr.migrateToOutboundActive(tenantId, schema_name);
-            console.log(`  ✓ ${schema_name}`);
-          } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : String(err);
-            console.error(`  ✗ ${schema_name}:`, errorMsg);
-            failures.push({ schema: schema_name, error: errorMsg });
-          }
-        }
-
-        if (failures.length > 0) {
-          throw new Error(`Migration failed for ${failures.length} schema(s).`);
-        }
-
-        console.log(
-          `\n✅ All ${result.rows.length} tenant schema(s) migrated successfully.`,
-        );
-      } finally {
-        await client.end();
+      if (result.rows.length === 0) {
+        console.log('  ℹ️  No tenant schemas found.');
+        return;
       }
+
+      const failures: Array<{ schema: string; error: string }> = [];
+
+      for (const { schema_name } of result.rows) {
+        try {
+          const connRow = await db
+            .select({ tenantId: dbSchema.dataSources.tenantId })
+            .from(dbSchema.dataSources)
+            .where(eq(dbSchema.dataSources.schemaName, schema_name))
+            .limit(1);
+
+          const tenantId = connRow[0]?.tenantId;
+          if (!tenantId) {
+            throw new Error(
+              `No connection found for schema "${schema_name}" — skipping migration.`,
+            );
+          }
+
+          await schemaMgr.migrateToOutboundActive(tenantId, schema_name);
+          console.log(`  ✓ ${schema_name}`);
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          console.error(`  ✗ ${schema_name}:`, errorMsg);
+          failures.push({ schema: schema_name, error: errorMsg });
+        }
+      }
+
+      if (failures.length > 0) {
+        throw new Error(`Migration failed for ${failures.length} schema(s).`);
+      }
+
+      console.log(
+        `\n✅ All ${result.rows.length} tenant schema(s) migrated successfully.`,
+      );
     });
   }
 }

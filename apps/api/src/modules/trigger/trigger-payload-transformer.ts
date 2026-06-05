@@ -10,7 +10,7 @@ export class TriggerPayloadTransformer {
     if (record !== null && typeof record === 'object') {
       const r = record as Record<string, unknown>;
       for (const key of ['LastModifiedDate', '_cursor', 'CreatedDate']) {
-        if (typeof r[key] === 'string' && r[key]) return r[key];
+        if (typeof r[key] === 'string' && r[key]) return r[key] as string;
       }
     }
     return new Date().toISOString();

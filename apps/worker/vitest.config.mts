@@ -56,7 +56,7 @@ export default defineConfig({
             ],
             reporter: ['text', 'json', 'html'],
       thresholds: {
-        statements: 50, // TODO: Increase to 80% after refactor
+        statements: 50, // TODO: Restore thresholds to 80% when refactor done
         branches: 50,
         functions: 50,
         lines: 50,

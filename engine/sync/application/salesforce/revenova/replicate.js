@@ -70,40 +70,38 @@ export async function ReplicateRevenovaObject(payload) {
     const notifications = bodyNode['notifications'];
     if (!notifications)
         return null;
-    // Handle arrays explicitly: process all notifications
-    const notificationArray = Array.isArray(notifications['Notification'])
-        ? notifications['Notification']
-        : [notifications['Notification']];
-
-    if (notificationArray.length === 0)
-        return null;
-
-    // Process multiple notifications (batched webhooks)
-    const results = [];
-    for (const notification of notificationArray) {
-        if (!notification)
-            continue;
-        const sObject = notification['sObject'];
-        if (!sObject)
-            continue;
-        const entityType = sObject['@_xsi:type']?.replace('sf:', '');
-        const entityId = sObject['sf:Id'] || sObject['sf:id'] || sObject['Id'];
-        if (!entityType || !entityId) {
-            continue;
+    // Notifications could be an array, we only take the first one or assume single for now
+    const notificationArray = notifications['Notification'];
+    let notification;
+    if (Array.isArray(notificationArray)) {
+        if (notificationArray.length > 1) {
+            throw new Error(`Multiple notifications (${notificationArray.length}) are not supported in a single SOAP envelope`);
         }
-        const data = {};
-        for (const [key, value] of Object.entries(sObject)) {
-            if (key.startsWith('sf:') && key !== 'sf:Id' && key !== 'sf:id') {
-                const cleanKey = key.replace('sf:', '').toLowerCase();
-                data[cleanKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
-            }
-        }
-        results.push({
-            entityType,
-            entityId,
-            data,
-        });
+        notification = notificationArray[0];
     }
-    // Return first result for backward compatibility (or extend API to return array)
-    return results.length > 0 ? results[0] : null;
+    else {
+        notification = notificationArray;
+    }
+    if (!notification)
+        return null;
+    const sObject = notification['sObject'];
+    if (!sObject)
+        return null;
+    const entityType = sObject['@_xsi:type']?.replace('sf:', '');
+    const entityId = sObject['sf:Id'] || sObject['sf:id'] || sObject['Id'];
+    if (!entityType || !entityId) {
+        return null;
+    }
+    const data = {};
+    for (const [key, value] of Object.entries(sObject)) {
+        if (key.startsWith('sf:') && key !== 'sf:Id' && key !== 'sf:id') {
+            const cleanKey = key.replace('sf:', '').toLowerCase();
+            data[cleanKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        }
+    }
+    return {
+        entityType,
+        entityId,
+        data,
+    };
 }

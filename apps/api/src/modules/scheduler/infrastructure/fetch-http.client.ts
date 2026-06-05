@@ -12,7 +12,7 @@ export class FetchHttpClient implements IHttpClient {
       timeoutMs?: number;
     },
   ): Promise<Response> {
-    const headers: Record<string, string> = options?.headers || {};
+    const headers: Record<string, string> = { ...(options?.headers || {}) };
 
     const fetchOptions: RequestInit = {
       method,

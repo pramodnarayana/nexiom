@@ -60,7 +60,7 @@ export class TriggerExecutorService {
     private readonly lockService: IDistributedLockService,
     private readonly retryPolicyService: TriggerRetryPolicyService,
     private readonly payloadTransformer: TriggerPayloadTransformer,
-    @Inject('REDIS_CLIENT') private readonly kvStore: IKeyValueStore, // for KeyValueTriggerStore
+    @Inject('KEY_VALUE_STORE') private readonly kvStore: IKeyValueStore, // for KeyValueTriggerStore
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly storageResolver: StorageResolverService,
   ) {}

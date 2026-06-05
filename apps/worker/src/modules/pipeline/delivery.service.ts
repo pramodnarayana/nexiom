@@ -690,8 +690,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetAppName &&
         targetTenantId
       ) {
-        await this.gemService.writeGemMapping(
-          tenantDb,
+        await this.gemService.writeGemMapping(tenantDb, {
           traceId,
           routeId,
           srcAppName,
@@ -703,7 +702,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           targetConnectionId,
           targetTenantId,
           destVendorId,
-        );
+        });
       }
       // Only mark as committed after all write operations succeed
       sourceCommitted = true;

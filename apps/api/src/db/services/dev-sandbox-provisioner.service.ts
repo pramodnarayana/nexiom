@@ -244,28 +244,17 @@ export class DevSandboxProvisionerService {
           (_hostIdentifier: string) => {
             // Use cached pool to prevent connection leaks
             const cacheKey = tenantUrl;
-            let cached = tenantPoolCache.get(cacheKey);
-            if (!cached) {
-              const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
-              const drizzleInstance = drizzle(pool2, {
-                schema: dbSchema,
-              }) as unknown as import('@soopa/database').DrizzleDb;
-              cached = { pool: pool2, drizzle: drizzleInstance };
-              tenantPoolCache.set(cacheKey, cached);
-            } else {
-              // Close and replace old pool if it already exists
-              const old = tenantPoolCache.get(cacheKey);
-              if (old) {
-                old.pool.end().catch(() => {});
-              }
-              const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
-              const drizzleInstance = drizzle(pool2, {
-                schema: dbSchema,
-              }) as unknown as import('@soopa/database').DrizzleDb;
-              cached = { pool: pool2, drizzle: drizzleInstance };
-              tenantPoolCache.set(cacheKey, cached);
+            const cached = tenantPoolCache.get(cacheKey);
+            if (cached) {
+              return cached.drizzle;
             }
-            return cached.drizzle;
+            const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+            const drizzleInstance = drizzle(pool2, {
+              schema: dbSchema,
+            }) as unknown as import('@soopa/database').DrizzleDb;
+            const newCached = { pool: pool2, drizzle: drizzleInstance };
+            tenantPoolCache.set(cacheKey, newCached);
+            return newCached.drizzle;
           },
           getDomainProvisioner,
         );
