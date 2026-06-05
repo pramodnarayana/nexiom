@@ -6,6 +6,12 @@ import { TenantSchemaService } from './tenant-schema.service.js';
 import { sql, eq } from 'drizzle-orm';
 import type { Pool } from 'pg';
 
+// Module-level cache for tenant pools to prevent connection leaks
+const tenantPoolCache = new Map<
+  string,
+  { pool: Pool; drizzle: import('@soopa/database').DrizzleDb }
+>();
+
 @Injectable()
 export class DevSandboxProvisionerService {
   constructor(
@@ -103,7 +109,12 @@ export class DevSandboxProvisionerService {
         process.env.DATABASE_URL ||
           'postgresql://user:password@localhost:5432/platform_global',
       );
-      hostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      // Preserve credentials in the host URL for authenticated connections
+      const auth =
+        parsedUrl.username && parsedUrl.password
+          ? `${parsedUrl.username}:${parsedUrl.password}@`
+          : '';
+      hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
     } catch (err) {
       const redactedUrl = process.env.DATABASE_URL
         ? process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***:***@')
@@ -202,6 +213,7 @@ export class DevSandboxProvisionerService {
       // REMOVED: provision should not drop anything. db:reset handles cleanup.
 
       // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
+      // hostUrl already includes credentials if present from Step 1
       const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
       let tenantPool: Pool | undefined;
 
@@ -216,10 +228,18 @@ export class DevSandboxProvisionerService {
         const schemaMgr = new TenantDatabaseManager(
           globalDb as unknown as import('@soopa/database').DrizzleDb,
           (_hostIdentifier: string) => {
-            const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
-            return drizzle(pool2, {
-              schema: dbSchema,
-            }) as unknown as import('@soopa/database').DrizzleDb;
+            // Use cached pool to prevent connection leaks
+            const cacheKey = tenantUrl;
+            let cached = tenantPoolCache.get(cacheKey);
+            if (!cached) {
+              const pool2 = new Pool({ connectionString: tenantUrl, max: 20 });
+              const drizzleInstance = drizzle(pool2, {
+                schema: dbSchema,
+              }) as unknown as import('@soopa/database').DrizzleDb;
+              cached = { pool: pool2, drizzle: drizzleInstance };
+              tenantPoolCache.set(cacheKey, cached);
+            }
+            return cached.drizzle;
           },
           getDomainProvisioner,
         );

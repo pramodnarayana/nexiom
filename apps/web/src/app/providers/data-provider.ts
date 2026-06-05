@@ -33,18 +33,18 @@ export const dataProvider = {
         const queryFilters: Record<string, unknown> = {};
 
         if (filters && filters.length > 0) {
-            // Map the generic 'q' filter to our backend 'search' parameter
-            const searchFilter = filters.find((f: CrudFilter) => 'field' in f && (f.field === 'q' || f.field === 'search'));
-            if (searchFilter && 'value' in searchFilter) {
-                queryFilters.search = searchFilter.value;
-            }
-            
-            // Map other exact filters
-            filters.forEach((f: CrudFilter) => {
-                if ('field' in f && f.field !== 'q' && f.field !== 'search' && f.operator === 'eq') {
-                    queryFilters[f.field] = f.value;
+            // Consolidate into a single-pass loop over filters
+            for (const f of filters) {
+                if ('field' in f && f.field) {
+                    if (f.field === 'q' || f.field === 'search') {
+                        if ('value' in f) {
+                            queryFilters.search = f.value;
+                        }
+                    } else if (f.operator === 'eq' && 'value' in f) {
+                        queryFilters[f.field] = f.value;
+                    }
                 }
-            });
+            }
         }
 
         if (sorters && sorters.length > 0) {

@@ -128,9 +128,10 @@ export class DeliveryRetryService {
       string,
       unknown
     > | null;
+    // Load persisted destVendorId from outbound_gateway record instead of reconstructing
     const destVendorId =
-      typeof resPayload?.["entityId"] === "string"
-        ? resPayload["entityId"]
+      typeof existingResult[0].destVendorId === "string"
+        ? existingResult[0].destVendorId
         : undefined;
 
     return await this.deliveryService.writeL6Result(

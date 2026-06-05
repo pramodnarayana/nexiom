@@ -38,7 +38,14 @@ export class MigrationRunnerService {
     const dbDir = path.dirname(path.dirname(__filename));
 
     try {
-      const urlWithDb = `${hostUrl}/${dbName}`;
+      // Construct a proper database URL using the URL API
+      const url = new URL(hostUrl);
+      // Normalize pathname: remove trailing slash if present
+      let pathname = url.pathname.replace(/\/$/, '');
+      // Append the encoded database name as a path segment
+      pathname = pathname + '/' + encodeURIComponent(dbName);
+      url.pathname = pathname;
+      const urlWithDb = url.toString();
 
       await execAsync('npx drizzle-kit migrate', {
         cwd: dbDir,

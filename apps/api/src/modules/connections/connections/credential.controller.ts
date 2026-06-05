@@ -170,11 +170,12 @@ export class CredentialController {
       expiresAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
-      value: string | null;
+      hasCredentials: boolean;
     }[];
     let countResult: { count: number | string } | undefined;
 
     try {
+      const { isNotNull, sql } = await import('drizzle-orm');
       [activeConnections, [countResult]] = await Promise.all([
         this.db
           .select({
@@ -189,7 +190,7 @@ export class CredentialController {
             expiresAt: credentials.expiresAt,
             createdAt: dataSources.createdAt,
             updatedAt: dataSources.updatedAt,
-            value: credentials.value,
+            hasCredentials: sql<boolean>`${credentials.value} IS NOT NULL`,
           })
           .from(dataSources)
           .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
@@ -222,7 +223,7 @@ export class CredentialController {
     );
 
     const listConnections = activeConnections.map((conn) => {
-      const hasCredentials = !!conn.value;
+      const hasCredentials = conn.hasCredentials;
 
       let aliasAppName = conn.appName;
       const piece = this.pieceRegistry.getPiece(conn.appName);

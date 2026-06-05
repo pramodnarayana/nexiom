@@ -112,13 +112,42 @@ export class RedisTriggerDlqService implements ITriggerDlqService {
     retryPayload: string,
     delayMs: number,
   ): Promise<void> {
-    await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-    await this.redis.zadd(DLQ_DELAYED_KEY, Date.now() + delayMs, retryPayload);
+    // Use Lua script to atomically LREM and ZADD
+    const script = `
+      local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
+      if removed > 0 then
+        redis.call('ZADD', KEYS[2], ARGV[2], ARGV[3])
+      end
+      return removed
+    `;
+    await this.redis.eval(
+      script,
+      2,
+      DLQ_PROCESSING_KEY,
+      DLQ_DELAYED_KEY,
+      raw,
+      Date.now() + delayMs,
+      retryPayload,
+    );
   }
 
   async markJobFailed(raw: string, failedPayload: string): Promise<void> {
-    await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-    await this.redis.lpush(DLQ_FAILED_KEY, failedPayload);
+    // Use Lua script to atomically LREM and LPUSH
+    const script = `
+      local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
+      if removed > 0 then
+        redis.call('LPUSH', KEYS[2], ARGV[2])
+      end
+      return removed
+    `;
+    await this.redis.eval(
+      script,
+      2,
+      DLQ_PROCESSING_KEY,
+      DLQ_FAILED_KEY,
+      raw,
+      failedPayload,
+    );
   }
 
   async acknowledgeJob(raw: string): Promise<void> {

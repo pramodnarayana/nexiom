@@ -64,6 +64,7 @@ export class TenantSchemaService {
 
   async dropTenantDatabaseIfExists(dbName: string): Promise<void> {
     const { PgClient } = await this.connectionPool.resolvePgModule();
+    const format = (await import('pg-format')).default;
     const adminClient = new PgClient({
       connectionString: process.env.DATABASE_URL,
     });
@@ -73,7 +74,8 @@ export class TenantSchemaService {
         `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
         [dbName],
       );
-      await adminClient.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+      // Use pg-format to properly escape the database identifier
+      await adminClient.query(format('DROP DATABASE IF EXISTS %I', dbName));
       console.log(`  ✓ Dropped tenant database: ${dbName}`);
     } finally {
       await adminClient.end();

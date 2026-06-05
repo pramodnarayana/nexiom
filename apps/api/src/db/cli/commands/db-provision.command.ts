@@ -58,16 +58,54 @@ export class DbProvisionCommand extends CommandRunner {
     },
   ): Promise<void> {
     try {
+      // Count how many mode flags are set
+      const flagCount = [
+        options?.local,
+        options?.gateway,
+        options?.outbound,
+      ].filter(Boolean).length;
+
+      // Validate exactly one mode flag is set
+      if (flagCount === 0) {
+        console.error(
+          'Error: Must specify exactly one provisioning mode (--local, --gateway, or --outbound)',
+        );
+        console.error(
+          'Usage: db:provision --local | --gateway --schema <schema> | --outbound --schema <schema>',
+        );
+        process.exit(1);
+      }
+
+      if (flagCount > 1) {
+        console.error(
+          'Error: Cannot specify multiple provisioning modes simultaneously',
+        );
+        console.error(
+          'Usage: db:provision --local | --gateway --schema <schema> | --outbound --schema <schema>',
+        );
+        process.exit(1);
+      }
+
+      // Validate schema is required for gateway and outbound
+      if (options?.gateway || options?.outbound) {
+        if (!options?.schema || typeof options.schema !== 'string') {
+          console.error(
+            'Error: --schema <schema> is required when using --gateway or --outbound',
+          );
+          console.error(
+            'Usage: db:provision --local | --gateway --schema <schema> | --outbound --schema <schema>',
+          );
+          process.exit(1);
+        }
+      }
+
+      // Execute the appropriate provisioner
       if (options?.local) {
         await this.sandboxProvisioner.provisionLocal();
       } else if (options?.gateway && options?.schema) {
         await this.schemaProvisioner.provisionGateway(options.schema);
       } else if (options?.outbound && options?.schema) {
         await this.schemaProvisioner.provisionOutbound(options.schema);
-      } else {
-        console.error(
-          'Usage: db:provision --type <local|gateway|outbound> [--schema <schema>]',
-        );
       }
     } catch (err) {
       console.error('Failed to provision database:', err);

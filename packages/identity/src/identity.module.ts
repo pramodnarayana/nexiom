@@ -37,6 +37,8 @@ export interface IdentityModuleOptions {
   dbToken?: string | symbol | Type<any>;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   emailToken?: string | symbol | Type<any> | Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  eventPublisherToken?: string | symbol | Type<any> | Function;
   // Resolved instances (for async injection)
   db?: NodePgDatabase<typeof schema>;
   email?: IEmailProvider;
@@ -96,6 +98,10 @@ export class IdentityModule {
         {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
+        },
+        {
+          provide: IDENTITY_EVENT_PUBLISHER,
+          useExisting: options.eventPublisherToken || IDENTITY_EVENT_PUBLISHER,
         },
         PermissionSeeder,
       ],

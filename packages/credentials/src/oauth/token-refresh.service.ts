@@ -62,10 +62,10 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
         if (response.status === 400 || response.status === 401) {
           if (this.eventPublisher) {
             try {
-              // Note: we use externalId here as the proxy for credentialId, as the true credential ID is resolved internally.
-              // The host app can map this back. Alternatively, we could resolve credential.id from the DB.
+              // Fetch the credential record to get the real credential ID
+              const credInfo = await this.getCredentials(tenantId, appName, externalId);
               await this.eventPublisher.publishCredentialInvalidated(
-                new CredentialInvalidatedEvent(externalId, `HTTP ${response.status}: ${response.statusText}`, appName)
+                new CredentialInvalidatedEvent(credInfo.credentialId, `HTTP ${response.status}: ${response.statusText}`, appName)
               );
             } catch (err) {
               this.logger.error('Failed to publish CredentialInvalidatedEvent', err);
@@ -96,9 +96,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     if (typeof refreshToken !== 'string' || !refreshToken.trim()) throw new TypeError('Invalid refresh input: refreshToken');
   }
 
-  private async getCredentials(tenantId: string, appName: string, externalId: string): Promise<{ clientId: string; clientSecret: string; vendorParams: Record<string, string>; }> {
+  private async getCredentials(tenantId: string, appName: string, externalId: string): Promise<{ clientId: string; clientSecret: string; vendorParams: Record<string, string>; credentialId: string; }> {
     try {
-      const [connection] = await this.db.select({ value: credentials.value }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
+      const [connection] = await this.db.select({ value: credentials.value, credentialId: credentials.id }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
         withTenantGuard(dataSources.tenantId, tenantId, and(eq(dataSources.appName, appName), eq(dataSources.externalId, externalId), eq(credentials.status, AppConnectionStatus.ACTIVE)))
       ).orderBy(desc(dataSources.updatedAt), desc(dataSources.id)).limit(1);
       if (!connection) throw new Error(`No active connection found for ${appName} on tenant ${tenantId}`);
@@ -120,6 +120,7 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
           ...vendorParamsSpread,
           ...environmentEntry,
         },
+        credentialId: connection.credentialId,
       };
     } catch (error: unknown) {
       throw new Error(`Failed to retrieve credentials for tenantId=${tenantId} appName=${appName} externalId=${externalId}: ${error instanceof Error ? error.message : String(error)}`);

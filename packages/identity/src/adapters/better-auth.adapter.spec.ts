@@ -414,7 +414,8 @@ describe("BetterAuthAdapter", () => {
   it("createInvitation handles system and org flows with validation", async () => {
     const db = mkDb();
     const email = mkEmail();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions(), mkPublisher() as any);
+    const publisher = mkPublisher();
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions(), publisher as any);
 
 
 
@@ -440,6 +441,14 @@ describe("BetterAuthAdapter", () => {
       organizationId: "o1",
     });
     expect(inv2.organizationId).toBe("o1");
+    // Verify that the event was published
+    expect(publisher.publishUserInvited).toHaveBeenCalledOnce();
+    expect(publisher.publishUserInvited).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "b@c.com",
+        organizationId: "o1",
+      })
+    );
 
     // Invalid response
     auth.api.createInvitation.mockResolvedValue({ invitation: { foo: 1 } });

@@ -607,6 +607,8 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
           statusCode,
           status: finalStatus,
           ...(sentPayload && { payload: sentPayload }),
+          // Persist destVendorId so it survives partial commits and can be used in retries
+          ...(destVendorId && { destVendorId }),
         })
         .where(sql`${outboundGateway.id} = ${outboundGatewayId}`);
 

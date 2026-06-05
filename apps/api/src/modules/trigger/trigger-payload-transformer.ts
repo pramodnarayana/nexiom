@@ -37,21 +37,28 @@ export class TriggerPayloadTransformer {
     ]);
 
     let payload: string;
-    if (
-      record !== null &&
-      typeof record === 'object' &&
-      !Array.isArray(record)
-    ) {
-      const sorted = Object.keys(record as Record<string, unknown>)
-        .filter((k) => !VOLATILE_KEYS.has(k))
-        .sort((a, b) => (a ?? '').localeCompare(b ?? ''))
-        .reduce<Record<string, unknown>>((acc, k) => {
-          acc[k] = (record as Record<string, unknown>)[k];
-          return acc;
-        }, {});
-      payload = JSON.stringify(sorted);
-    } else {
-      payload = JSON.stringify(record);
+    try {
+      if (
+        record !== null &&
+        typeof record === 'object' &&
+        !Array.isArray(record)
+      ) {
+        const sorted = Object.keys(record as Record<string, unknown>)
+          .filter((k) => !VOLATILE_KEYS.has(k))
+          .sort((a, b) => (a ?? '').localeCompare(b ?? ''))
+          .reduce<Record<string, unknown>>((acc, k) => {
+            acc[k] = (record as Record<string, unknown>)[k];
+            return acc;
+          }, {});
+        const stringified = JSON.stringify(sorted);
+        payload = stringified ?? '{}';
+      } else {
+        const stringified = JSON.stringify(record);
+        payload = stringified ?? String(record);
+      }
+    } catch {
+      // Fallback if JSON.stringify fails or returns undefined
+      payload = String(record);
     }
 
     const bounded =

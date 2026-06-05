@@ -11,7 +11,7 @@ export class DbDebugCommand extends CommandRunner {
   }
 
   @Option({
-    flags: '-u, --user [identifier]',
+    flags: '-u, --user <identifier>',
     description: 'Check permissions for a specific user (by ID or Email)',
   })
   parseUser(val: string): string {
@@ -19,7 +19,7 @@ export class DbDebugCommand extends CommandRunner {
   }
 
   @Option({
-    flags: '-r, --role [roleName]',
+    flags: '-r, --role <roleName>',
     description: 'Debug RBAC permissions for a role',
   })
   parseRole(val: string): string {
@@ -28,17 +28,56 @@ export class DbDebugCommand extends CommandRunner {
 
   async run(
     _passedParam: string[],
-    options?: { user?: string; role?: string },
+    options?: { user?: string | boolean; role?: string | boolean },
   ): Promise<void> {
     try {
-      if (options?.user) {
-        await this.rbacInspectorService.checkUserPermissions(options.user);
-      } else if (options?.role) {
-        await this.rbacInspectorService.debugPermissions(options.role);
-      } else {
+      // Enforce mutual exclusivity
+      if (options?.user && options?.role) {
         console.error(
-          'Usage: db:debug [--user <userId|email>] [--role <roleName>]',
+          'Error: Cannot specify both --user and --role options simultaneously',
         );
+        console.error(
+          'Usage: db:debug --user <userId|email> | --role <roleName>',
+        );
+        process.exit(1);
+      }
+
+      // Validate and execute user check
+      if (options?.user) {
+        if (typeof options.user !== 'string' || options.user === '') {
+          console.error('Error: --user requires a valid string identifier');
+          console.error(
+            'Usage: db:debug --user <userId|email> | --role <roleName>',
+          );
+          process.exit(1);
+        }
+        const result =
+          await this.rbacInspectorService.checkUserPermissions(options.user);
+        if (!result) {
+          console.error(`User not found: ${options.user}`);
+          process.exit(1);
+        }
+      } else if (options?.role) {
+        // Validate and execute role check
+        if (typeof options.role !== 'string' || options.role === '') {
+          console.error('Error: --role requires a valid string role name');
+          console.error(
+            'Usage: db:debug --user <userId|email> | --role <roleName>',
+          );
+          process.exit(1);
+        }
+        const result =
+          await this.rbacInspectorService.debugPermissions(options.role);
+        if (!result) {
+          console.error(`Role not found: ${options.role}`);
+          process.exit(1);
+        }
+      } else {
+        console.error('Error: Must specify either --user or --role option');
+        console.error(
+          'Usage: db:debug --user <userId|email> | --role <roleName>',
+        );
+        process.exit(1);
       }
     } catch (err) {
       console.error('Failed to run debug command:', err);

@@ -329,7 +329,7 @@ export class CredentialLinkingService {
                   updatedAt: new Date(),
                 })
                 .where(eq(dataSources.id, existingFailed.id))
-                .returning({ id: dataSources.id });
+                .returning();
 
               await tx
                 .insert(credentials)
@@ -350,6 +350,15 @@ export class CredentialLinkingService {
                     updatedAt: new Date(),
                   },
                 });
+
+              // Publish to global registry outbox (same as other write paths)
+              await tx.insert(globalRegistryOutbox).values({
+                tenantId: updated.tenantId,
+                entityType: 'APP_CONNECTION',
+                entityId: updated.id,
+                action: 'UPSERT',
+                payload: updated,
+              });
 
               connection = updated;
             } else {

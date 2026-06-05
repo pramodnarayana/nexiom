@@ -83,7 +83,7 @@ export class TokenManagerService {
 
     constructor(
         @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-        @Inject('REDIS_CLIENT') private readonly lock: IDistributedLock,
+        private readonly lock: IDistributedLock,
         private readonly crypto: EncryptionService,
         private readonly oauthClient: OAuthRefreshClient,
         // Using Optional() since other apps might not provide it if not needed
@@ -294,16 +294,20 @@ export class TokenManagerService {
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(credentials.id, connection.credentialId as string));
 
-        // 8. Emit the domain event
+        // 8. Emit the domain event (don't propagate listener errors)
         if (this.eventPublisher) {
-            await this.eventPublisher.publishCredentialRefreshed(
-                new CredentialRefreshedEvent(
-                    connection.credentialId as string,
-                    connection.tenantId as string,
-                    connection.id as string,
-                    expiresAt,
-                )
-            );
+            try {
+                await this.eventPublisher.publishCredentialRefreshed(
+                    new CredentialRefreshedEvent(
+                        connection.credentialId as string,
+                        connection.tenantId as string,
+                        connection.id as string,
+                        expiresAt,
+                    )
+                );
+            } catch (pubErr) {
+                this.logger.error('Failed to publish CredentialRefreshedEvent (non-fatal)', pubErr);
+            }
         }
 
         return updatedPayload;

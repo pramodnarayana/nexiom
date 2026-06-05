@@ -71,10 +71,13 @@ export class SystemSeederService {
       // Resolve the pieces directory from the current file's location so the
       // path is correct regardless of working directory (CI, Docker, local).
       // __dirname equivalent for ESM: fileURLToPath(import.meta.url) gives us
-      // <monorepo>/apps/api/src/db/database-manager.{ts|js}
-      // → resolve 4 levels up to reach the monorepo root.
+      // <monorepo>/apps/api/src/db/services/system-seeder.service.{ts|js}
+      // → resolve 5 levels up to reach the monorepo root.
       const thisFile = fileURLToPath(import.meta.url);
-      const monorepoRoot = path.resolve(path.dirname(thisFile), '../../../../');
+      const monorepoRoot = path.resolve(
+        path.dirname(thisFile),
+        '../../../../../',
+      );
       const piecePaths = [
         path.join(monorepoRoot, 'packages/pieces/application'),
         path.join(monorepoRoot, 'packages/pieces/platform'),
@@ -240,6 +243,16 @@ export class SystemSeederService {
               })
               .onConflictDoNothing();
             console.log('    ✓ System Owner membership created');
+          } else if (existingMember.role !== config.ownerRoleId) {
+            // Promote existing member to owner if not already owner
+            await db
+              .update(schema.member)
+              .set({
+                role: config.ownerRoleId,
+                updatedAt: now,
+              })
+              .where(eq(schema.member.id, existingMember.id));
+            console.log('    ✓ Promoted existing member to System Owner');
           }
         } else {
           const hashedPassword = await bcrypt.hash(password, 10);
@@ -301,6 +314,9 @@ export class SystemSeederService {
     this.environmentGuard.assertSafeEnvironment();
     console.log('🌱 Seeding ABAC data for verification...');
 
+    const { getRequiredOwnerRoleId } = await import('../../constants.js');
+    const ownerRoleId = getRequiredOwnerRoleId();
+
     await this.connectionPool.withDrizzle(async (db, schema) => {
       // 1. Ensure permissions exist
       if (permissions.length > 0) {
@@ -344,12 +360,12 @@ export class SystemSeederService {
           roleId: 'restricted_admin',
           permissionId: 'users:delete',
           conditions: {
-            role: { $ne: 'owner' },
+            role: { $ne: ownerRoleId },
           } as import('@soopa/database').AbacConditions,
         })
         .onConflictDoNothing();
       console.log(
-        '  ✓ Granted "users:delete" with condition { role: { $ne: "owner" } }',
+        `  ✓ Granted "users:delete" with condition { role: { $ne: "${ownerRoleId}" } }`,
       );
     });
   }

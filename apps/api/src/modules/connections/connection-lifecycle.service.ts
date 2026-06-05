@@ -113,8 +113,9 @@ export class ConnectionLifecycleService {
         applyError instanceof Error ? applyError.stack : String(applyError),
       );
       try {
-        await this.db.transaction(async (tx) => {
-          if (workspaceProvisionInfo.createdAppConnection) {
+        // Only start a transaction if we actually created a connection
+        if (workspaceProvisionInfo.createdAppConnection) {
+          await this.db.transaction(async (tx) => {
             const [failedConn] = await tx
               .update(dataSources)
               .set({ updatedAt: new Date() })
@@ -138,8 +139,8 @@ export class ConnectionLifecycleService {
               action: 'UPSERT',
               payload: failedConn,
             });
-          }
-        });
+          });
+        }
       } catch (rollbackError) {
         this.logger.error(
           `Rollback transaction failed for ${providerName}`,
@@ -224,8 +225,9 @@ export class ConnectionLifecycleService {
         );
       }
     } catch (err) {
-      // Re-throw ConflictException; schema not found means no GEM data → safe to proceed
+      // Re-throw ConflictException and ForbiddenException; these are security/business rule violations
       if (err instanceof ConflictException) throw err;
+      if (err instanceof ForbiddenException) throw err;
 
       // Only swallow "schema does not exist" or "relation does not exist" errors
       const errMsg = err instanceof Error ? err.message : String(err);

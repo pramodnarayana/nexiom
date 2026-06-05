@@ -26,6 +26,9 @@ export class ConnectionSchemaProvisionerService {
     const dbSchema = await import('@soopa/database');
     const client = await this.connectionPool.getPgClient();
 
+    // Track created pools to ensure they are closed
+    const createdPools: typeof Pool.prototype[] = [];
+
     try {
       const db = drizzle(client, { schema: dbSchema });
       const { dbUrl } = await this.connectionPool.resolvePgModule();
@@ -44,6 +47,8 @@ export class ConnectionSchemaProvisionerService {
             idleTimeoutMillis: 30_000,
             connectionTimeoutMillis: 5_000,
           });
+          // Track the pool so we can close it in finally
+          createdPools.push(pool);
           return drizzle(pool, {
             schema: dbSchema,
           }) as unknown as import('@soopa/database').DrizzleDb;
@@ -55,6 +60,8 @@ export class ConnectionSchemaProvisionerService {
         db as unknown as import('@soopa/database').DrizzleDb,
       );
     } finally {
+      // Close all created pools
+      await Promise.all(createdPools.map((pool) => pool.end()));
       await client.end();
     }
   }
@@ -135,6 +142,7 @@ export class ConnectionSchemaProvisionerService {
    * Discovers all tenant schemas (ws_*) and migrates them to OUTBOUND_ACTIVE state.
    */
   async migrateAllSchemas(): Promise<void> {
+    this.environmentGuard.assertSafeEnvironment();
     console.log(
       '\n🔧 Migrating all tenant schemas to OUTBOUND_ACTIVE state...',
     );
@@ -148,7 +156,7 @@ export class ConnectionSchemaProvisionerService {
         const result = await client.query<{ schema_name: string }>(`
           SELECT schema_name
           FROM information_schema.schemata
-          WHERE schema_name LIKE 'ws_%'
+          WHERE schema_name LIKE 'ws\_%' ESCAPE '\'
           ORDER BY schema_name;
         `);
 

@@ -33,7 +33,7 @@ export class DrizzleTenantAdapter implements ITenantProvider {
 
     while (retries > 0) {
       try {
-        return await this.db.transaction(async (tx) => {
+        const tenant = await this.db.transaction(async (tx) => {
           // 1. Create Organization
           const [org] = await tx
             .insert(schema.organization)
@@ -55,16 +55,19 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             createdAt: new Date(),
           });
 
-          const tenant = this.mapTenant(org);
-          try {
-            await this.eventPublisher.publishTenantProvisioned(
-              new TenantProvisionedEvent(orgId, userId, name),
-            );
-          } catch (err) {
-            console.error("Failed to publish TenantProvisionedEvent", err);
-          }
-          return tenant;
+          return this.mapTenant(org);
         });
+
+        // Publish the event after the transaction commits successfully
+        try {
+          await this.eventPublisher.publishTenantProvisioned(
+            new TenantProvisionedEvent(orgId, userId, name),
+          );
+        } catch (err) {
+          console.error("Failed to publish TenantProvisionedEvent", err);
+        }
+
+        return tenant;
       } catch (error: unknown) {
         // Check for unique constraint violation on slug
         if (

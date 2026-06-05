@@ -21,13 +21,45 @@ export class SyncSeedingService {
     await this.connectionPool.withDrizzle(async (db, schema) => {
       const { eq, and } = await import('drizzle-orm');
 
-      // Check if a workspace exists
-      const workspaces = await db.select().from(schema.uiWorkspaces).limit(1);
-      if (workspaces.length === 0) {
-        throw new Error('No workspace found. Run pnpm db:seed first.');
+      // Deterministically resolve the target workspace
+      // Option 1: Use environment variable if provided
+      const envWorkspaceId = process.env.SEED_WORKSPACE_ID;
+      let workspaceId: string;
+      let orgId: string;
+
+      if (envWorkspaceId) {
+        const workspaces = await db
+          .select()
+          .from(schema.uiWorkspaces)
+          .where(eq(schema.uiWorkspaces.id, envWorkspaceId))
+          .limit(1);
+        if (workspaces.length === 0) {
+          throw new Error(
+            `Workspace with ID "${envWorkspaceId}" (from SEED_WORKSPACE_ID) not found.`,
+          );
+        }
+        workspaceId = workspaces[0].id;
+        orgId = workspaces[0].orgId;
+      } else {
+        // Option 2: Query for a canonical/default workspace
+        const workspaces = await db
+          .select()
+          .from(schema.uiWorkspaces)
+          .limit(2);
+
+        if (workspaces.length === 0) {
+          throw new Error(
+            'No workspace found. Run pnpm db:seed first or set SEED_WORKSPACE_ID.',
+          );
+        }
+        if (workspaces.length > 1) {
+          throw new Error(
+            'Multiple workspaces found. Please set SEED_WORKSPACE_ID environment variable to specify which workspace to use for seeding.',
+          );
+        }
+        workspaceId = workspaces[0].id;
+        orgId = workspaces[0].orgId;
       }
-      const workspaceId = workspaces[0].id;
-      const orgId = workspaces[0].orgId;
 
       for (const mapping of mappings) {
         // Look up the deterministic fixtures to ensure they exist

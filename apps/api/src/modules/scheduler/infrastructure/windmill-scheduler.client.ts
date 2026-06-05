@@ -268,7 +268,8 @@ export class WindmillSchedulerClient implements ISchedulerClient {
         ...(body !== undefined && { 'Content-Type': 'application/json' }),
       },
       timeoutMs: REQUEST_TIMEOUT_MS,
-      ...(body !== undefined && { body: JSON.stringify(body) }),
+      // Pass body directly - FetchHttpClient.request already serializes it
+      ...(body !== undefined && { body }),
     });
   }
 

@@ -70,28 +70,40 @@ export async function ReplicateRevenovaObject(payload) {
     const notifications = bodyNode['notifications'];
     if (!notifications)
         return null;
-    // Notifications could be an array, we only take the first one or assume single for now
-    const notification = Array.isArray(notifications['Notification']) ? notifications['Notification'][0] : notifications['Notification'];
-    if (!notification)
+    // Handle arrays explicitly: process all notifications
+    const notificationArray = Array.isArray(notifications['Notification'])
+        ? notifications['Notification']
+        : [notifications['Notification']];
+
+    if (notificationArray.length === 0)
         return null;
-    const sObject = notification['sObject'];
-    if (!sObject)
-        return null;
-    const entityType = sObject['@_xsi:type']?.replace('sf:', '');
-    const entityId = sObject['sf:Id'] || sObject['sf:id'] || sObject['Id'];
-    if (!entityType || !entityId) {
-        return null;
-    }
-    const data = {};
-    for (const [key, value] of Object.entries(sObject)) {
-        if (key.startsWith('sf:') && key !== 'sf:Id' && key !== 'sf:id') {
-            const cleanKey = key.replace('sf:', '').toLowerCase();
-            data[cleanKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+
+    // Process multiple notifications (batched webhooks)
+    const results = [];
+    for (const notification of notificationArray) {
+        if (!notification)
+            continue;
+        const sObject = notification['sObject'];
+        if (!sObject)
+            continue;
+        const entityType = sObject['@_xsi:type']?.replace('sf:', '');
+        const entityId = sObject['sf:Id'] || sObject['sf:id'] || sObject['Id'];
+        if (!entityType || !entityId) {
+            continue;
         }
+        const data = {};
+        for (const [key, value] of Object.entries(sObject)) {
+            if (key.startsWith('sf:') && key !== 'sf:Id' && key !== 'sf:id') {
+                const cleanKey = key.replace('sf:', '').toLowerCase();
+                data[cleanKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+            }
+        }
+        results.push({
+            entityType,
+            entityId,
+            data,
+        });
     }
-    return {
-        entityType,
-        entityId,
-        data,
-    };
+    // Return first result for backward compatibility (or extend API to return array)
+    return results.length > 0 ? results[0] : null;
 }

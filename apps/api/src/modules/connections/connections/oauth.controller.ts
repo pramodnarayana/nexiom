@@ -40,7 +40,7 @@ function toKebabSlug(providerName: string, displayName: string): string {
     .replaceAll(/[^a-z0-9]+/g, '-')
     .replaceAll(/(^-+)|(-+$)/g, '');
 
-  const uniqueSuffix = randomBytes(2).toString('hex'); // 4 characters
+  const uniqueSuffix = randomBytes(6).toString('hex'); // 12 characters for better collision resistance
   return `${providerName}-${baseSlug}-${uniqueSuffix}`;
 }
 
@@ -508,9 +508,12 @@ export class OAuthController {
       valueBlob.refresh_token = refreshToken;
     }
 
+    // Keep verified metadata as authoritative, only add appProfile if not already set
     const mergedMetadata = {
       ...metadata,
-      ...(aliasAppProfile ? { appProfile: aliasAppProfile } : {}),
+      ...(aliasAppProfile && !metadata?.appProfile
+        ? { appProfile: aliasAppProfile }
+        : {}),
       originalProviderName,
     };
 

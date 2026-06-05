@@ -185,22 +185,23 @@ export class OAuthOrchestrationService {
       sanitizedError = sanitizedError.substring(0, 500) + '...(truncated)';
     }
 
+    // Log the detailed error (with sanitized vendor response)
     const errorMessage = `Vendor Token Exchange Failed for ${providerName} [${response.status}]: ${sanitizedError}`;
     this.logger.error(errorMessage);
 
+    // Throw generic client-facing messages (without vendor details)
+    const genericMessage = `Failed to exchange code with ${providerName}`;
     if (response.status === 400) {
-      throw new BadRequestException(errorMessage);
+      throw new BadRequestException(genericMessage);
     }
     if (response.status === 401) {
-      throw new UnauthorizedException(errorMessage);
+      throw new UnauthorizedException(genericMessage);
     }
     if (response.status >= 400 && response.status < 500) {
-      throw new HttpException(errorMessage, response.status);
+      throw new HttpException(genericMessage, response.status);
     }
 
-    throw new InternalServerErrorException(
-      `Failed to exchange code with ${providerName}`,
-    );
+    throw new InternalServerErrorException(genericMessage);
   }
 
   private async parseTokenResponse(

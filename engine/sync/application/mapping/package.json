@@ -20,7 +20,7 @@
 		"test:cov": "vitest run --coverage"
 	},
 	"dependencies": {
-		"@soopa/platform": "workspace:*",
+		"@soopa/engine": "workspace:*",
 		"jsonata": "^2.1.0"
 	},
 	"devDependencies": {

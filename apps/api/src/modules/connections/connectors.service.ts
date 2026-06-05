@@ -422,7 +422,9 @@ export class ConnectorsService {
             .returning();
 
           if (!connection) {
-            throw new Error('Failed to retrieve connection ID after insert');
+            throw new InternalServerErrorException(
+              'Failed to retrieve connection ID after insert',
+            );
           }
 
           await tx.insert(credentials).values({

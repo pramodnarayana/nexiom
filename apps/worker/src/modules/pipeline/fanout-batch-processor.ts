@@ -72,7 +72,6 @@ export class FanoutBatchProcessor {
           syncLog,
           tenantDb,
         );
-        if (srcVendorId) lockRefCount.count--;
         return;
       }
 
@@ -105,7 +104,6 @@ export class FanoutBatchProcessor {
           syncLog,
           tenantDb,
         );
-        if (srcVendorId) lockRefCount.count--;
         return;
       }
 
@@ -346,9 +344,6 @@ export class FanoutBatchProcessor {
             },
             "Route already processed (outbound_gateway in non-retriable state), skipping",
           );
-          if (srcVendorId) {
-            lockRefCount.count--;
-          }
         }
       });
     } catch (err) {
@@ -436,9 +431,6 @@ export class FanoutBatchProcessor {
           );
         }
 
-        if (srcVendorId) {
-          lockRefCount.count--;
-        }
         return;
       }
 
@@ -466,6 +458,8 @@ export class FanoutBatchProcessor {
         tenantDb,
         err instanceof Error ? err.message : String(err),
       );
+    } finally {
+      // Decrement lock count exactly once per stitch regardless of outcome
       if (srcVendorId) {
         lockRefCount.count--;
       }
