@@ -385,16 +385,6 @@ describe('ExceptionService', () => {
         NotFoundException,
       );
     });
-
-    it('rethrows when dispatchRetry fails', async () => {
-      mockDispatcher.dispatchRetry = vi
-        .fn()
-        .mockRejectedValue(new Error('queue unavailable'));
-
-      await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
-        'queue unavailable',
-      );
-    });
   });
 
   describe('dismissException()', () => {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -88,7 +89,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
           adminRoleId: configService.getOrThrow<string>('ADMIN_ROLE_ID'),
           memberRoleId: configService.getOrThrow<string>('MEMBER_ROLE_ID'),
         },
-        db: db,
+        db: db as any,
         email: emailService,
       }),
     }),

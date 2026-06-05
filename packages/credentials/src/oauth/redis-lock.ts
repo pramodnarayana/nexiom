@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import { IDistributedLock } from './distributed-lock.interface.js';
+import type { IDistributedLock } from './distributed-lock.interface.js';
 
 export class RedisDistributedLock implements IDistributedLock {
     constructor(private readonly redis: Redis) {}

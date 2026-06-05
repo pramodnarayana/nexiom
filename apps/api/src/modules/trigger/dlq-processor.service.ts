@@ -117,11 +117,24 @@ export class DlqProcessorService {
 
     const trigger = this.pieceRegistry.getTrigger(job.appName, job.triggerName);
     if (!trigger) {
-      this.logger.warn('DLQ job references unknown trigger — discarding', {
+      const failedPayload = JSON.stringify({
         appName: job.appName,
         triggerName: job.triggerName,
+        tenantId: job.tenantId,
+        workspaceId: job.workspaceId,
+        dataSourceId: job.dataSourceId,
+        attempt: job.attempt,
+        exhaustedAt: new Date().toISOString(),
+        error: 'Unknown trigger',
       });
-      await this.dlqService.acknowledgeJob(raw); // discard it
+      await this.dlqService.markJobFailed(raw, failedPayload);
+      this.logger.warn(
+        'DLQ job references unknown trigger — moved to failed list',
+        {
+          appName: job.appName,
+          triggerName: job.triggerName,
+        },
+      );
       return;
     }
 

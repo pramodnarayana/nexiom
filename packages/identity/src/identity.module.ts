@@ -99,10 +99,15 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
-        {
-          provide: IDENTITY_EVENT_PUBLISHER,
-          useExisting: options.eventPublisherToken || IDENTITY_EVENT_PUBLISHER,
-        },
+        options.eventPublisherToken
+          ? {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useExisting: options.eventPublisherToken,
+            }
+          : {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useClass: IdentityEventPublisher,
+            },
         PermissionSeeder,
       ],
       exports: [

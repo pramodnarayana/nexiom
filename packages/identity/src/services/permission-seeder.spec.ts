@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { PermissionSeeder } from "./permission-seeder.js";
 import { Logger } from "@nestjs/common";

@@ -319,7 +319,7 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    await this.db.transaction(async (tx) => {
+    const txResult = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -346,27 +346,63 @@ export class ExceptionService {
         );
       }
 
-      const row = updatedRows[0];
+      return {
+        traceId: updatedRows[0].traceId,
+        routeId: updatedRows[0].routeId,
+        payload: updatedRows[0].payload,
+        srcDataSourceId: outboundGatewayRow.srcDataSourceId,
+        destDataSourceId: stitch.destDataSourceId,
+      };
+    });
 
+    // Asynchronously dispatch the retry using the captured intent
+    (async () => {
       try {
         await this.queueDispatcher.dispatchRetry({
-          traceId: row.traceId,
-          srcDataSourceId: outboundGatewayRow.srcDataSourceId,
-          destDataSourceId: stitch.destDataSourceId,
-          routeId: row.routeId,
-          hydratedPayload: row.payload,
+          traceId: txResult.traceId,
+          srcDataSourceId: txResult.srcDataSourceId,
+          destDataSourceId: txResult.destDataSourceId,
+          routeId: txResult.routeId,
+          hydratedPayload: txResult.payload,
         });
       } catch (sendErr) {
-        this.logger.warn(
+        this.logger.error(
           {
             id: outboundGatewayId,
             err: sendErr instanceof Error ? sendErr.message : String(sendErr),
           },
-          'exception.retry: queueService.send failed',
+          'exception.retry: queueService.send failed, marking as FAIL',
         );
-        throw sendErr; // Rolls back the PENDING status update automatically
+
+        // Mark outboundGateway row back to FAIL so it can be retried safely later
+        try {
+          await this.db.transaction(async (tx) => {
+            assertValidSchemaName(schemaName);
+            await tx.execute(
+              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+            );
+            await tx
+              .update(outboundGateway)
+              .set({
+                status: 'FAIL',
+                errorMessage:
+                  sendErr instanceof Error
+                    ? sendErr.message.slice(0, 500)
+                    : String(sendErr).slice(0, 500),
+              })
+              .where(eq(outboundGateway.id, outboundGatewayId));
+          });
+        } catch (dbErr) {
+          this.logger.error(
+            {
+              id: outboundGatewayId,
+              err: dbErr instanceof Error ? dbErr.message : String(dbErr),
+            },
+            'exception.retry: failed to update status to FAIL after dispatch failure',
+          );
+        }
       }
-    });
+    })();
 
     this.logger.info(
       { id: outboundGatewayId, traceId: outboundGatewayRow.traceId },

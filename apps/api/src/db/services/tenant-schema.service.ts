@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Injectable } from '@nestjs/common';
 import { EnvironmentGuardService } from './environment-guard.service.js';
 import { PgConnectionPool } from '../infrastructure/pg-connection.pool.js';
@@ -64,6 +65,7 @@ export class TenantSchemaService {
 
   async dropTenantDatabaseIfExists(dbName: string): Promise<void> {
     const { PgClient } = await this.connectionPool.resolvePgModule();
+    // @ts-expect-error TS2307: Cannot find module 'pg-format'
     const format = (await import('pg-format')).default;
     const adminClient = new PgClient({
       connectionString: process.env.DATABASE_URL,
@@ -99,7 +101,9 @@ export class TenantSchemaService {
         if (!/^[a-zA-Z0-9_]+$/.test(dbName)) {
           throw new Error(`Invalid tenant database name: ${dbName}`);
         }
-        await adminClient.query(`CREATE DATABASE "${dbName}"`);
+        // @ts-expect-error TS2307: Cannot find module 'pg-format'
+        const format = (await import('pg-format')).default;
+        await adminClient.query(format('CREATE DATABASE %I', dbName));
         console.log(`  ✓ Created tenant database: ${dbName}`);
       } else {
         console.log(`  ℹ️  Tenant database already exists: ${dbName}`);

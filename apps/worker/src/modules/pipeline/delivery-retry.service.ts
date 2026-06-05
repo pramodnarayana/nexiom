@@ -95,6 +95,7 @@ export class DeliveryRetryService {
         .select({
           response: outboundGateway.response,
           statusCode: outboundGateway.statusCode,
+          destVendorId: outboundGateway.destVendorId,
         })
         .from(outboundGateway)
         .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
@@ -128,11 +129,7 @@ export class DeliveryRetryService {
       string,
       unknown
     > | null;
-    // Load persisted destVendorId from outbound_gateway record instead of reconstructing
-    const destVendorId =
-      typeof existingResult[0].destVendorId === "string"
-        ? existingResult[0].destVendorId
-        : undefined;
+    const destVendorId = existingResult[0].destVendorId ?? undefined;
 
     return await this.deliveryService.writeL6Result(
       destSchemaName,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { randomBytes, createCipheriv } from 'node:crypto';
 import { EnvironmentGuardService } from './environment-guard.service.js';
 import { PgConnectionPool } from '../infrastructure/pg-connection.pool.js';
@@ -13,7 +13,7 @@ const tenantPoolCache = new Map<
 >();
 
 @Injectable()
-export class DevSandboxProvisionerService {
+export class DevSandboxProvisionerService implements OnModuleDestroy {
   constructor(
     private readonly environmentGuard: EnvironmentGuardService,
     private readonly connectionPool: PgConnectionPool,

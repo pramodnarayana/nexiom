@@ -199,7 +199,7 @@ describe('DlqProcessorService', () => {
     await service.processDlq();
 
     expect(executor.runPoll).not.toHaveBeenCalled();
-    expect(dlqService.acknowledgeJob).toHaveBeenCalled(); // acked/discarded
+    expect(dlqService.markJobFailed).toHaveBeenCalled(); // acked/discarded
   });
 
   it('should schedule a delayed retry when runPoll throws and attempts remain', async () => {

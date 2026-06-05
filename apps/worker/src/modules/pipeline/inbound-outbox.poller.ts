@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql, eq, and, inArray } from "drizzle-orm";
 import {
@@ -94,6 +95,8 @@ export class InboundOutboxPoller {
     // delivery failure inside processOutboxRow. This ensures `attempts` reflects
     // real delivery failures, not claim attempts (which could be spurious retries
     // from PROCESSING rows that timed out without a real error).
+    const claimToken = randomUUID();
+
     const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
@@ -103,6 +106,7 @@ export class InboundOutboxPoller {
         .update(inboundOutbox)
         .set({
           status: "PROCESSING",
+          claimToken,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
         .where(
@@ -169,6 +173,7 @@ export class InboundOutboxPoller {
       traceId: string;
       dataSourceId: string;
       attempts: number;
+      claimToken: string | null;
     },
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
@@ -185,7 +190,7 @@ export class InboundOutboxPoller {
         .update(inboundOutbox)
         .set({ status: "SUCCESS", errorMessage: null })
         .where(
-          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
+          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts} AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
         );
 
       this.logger.debug(
@@ -204,7 +209,7 @@ export class InboundOutboxPoller {
             attempts: incrementedAttempts,
           })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
           );
         this.logger.error(
           `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
@@ -222,10 +227,10 @@ export class InboundOutboxPoller {
             attempts: incrementedAttempts,
           })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING'`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
           );
         this.logger.warn(
-          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,
+          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${incrementedAttempts}): ${errorMessage}`,
         );
       }
     }

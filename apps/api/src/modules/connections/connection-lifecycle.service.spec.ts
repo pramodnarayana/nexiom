@@ -44,6 +44,7 @@ describe('ConnectionLifecycleService', () => {
       from: vi.fn().mockReturnThis(),
       for: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([{ id: '1' }]),
+      execute: vi.fn().mockResolvedValue(undefined),
     } as unknown as MockedObject<DrizzleDb> & {
       limit: import('vitest').Mock;
       returning: import('vitest').Mock;

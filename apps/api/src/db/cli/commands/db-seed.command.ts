@@ -24,7 +24,7 @@ export class DbSeedCommand extends CommandRunner {
       console.log('Database seed completed successfully');
     } catch (err) {
       console.error('Failed to seed database:', err);
-      process.exit(1);
+      throw err;
     }
   }
 }

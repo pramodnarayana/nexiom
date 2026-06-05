@@ -271,7 +271,6 @@ export class SystemSeederService {
               .update(schema.member)
               .set({
                 role: config.ownerRoleId,
-                updatedAt: now,
               })
               .where(eq(schema.member.id, existingMember.id));
             console.log('    ✓ Promoted existing member to System Owner');
@@ -447,10 +446,7 @@ export class SystemSeederService {
         orgId = workspaces[0].orgId;
       } else {
         // Option 2: Query for a canonical/default workspace
-        const workspaces = await db
-          .select()
-          .from(schema.uiWorkspaces)
-          .limit(2);
+        const workspaces = await db.select().from(schema.uiWorkspaces).limit(2);
 
         if (workspaces.length === 0) {
           throw new Error(

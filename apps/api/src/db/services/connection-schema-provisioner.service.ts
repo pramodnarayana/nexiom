@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EnvironmentGuardService } from './environment-guard.service.js';
 import { PgConnectionPool } from '../infrastructure/pg-connection.pool.js';
+import type { Pool } from 'pg';
 
 @Injectable()
 export class ConnectionSchemaProvisionerService {

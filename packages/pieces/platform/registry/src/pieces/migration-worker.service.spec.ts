@@ -13,17 +13,19 @@ vi.mock('drizzle-orm/node-postgres/migrator', () => ({
 describe('MigrationWorkerService', () => {
   let service: MigrationWorkerService;
   let globalDb: Mocked<DrizzleDb>;
+  let dbManager: any;
   let queueService: Mocked<IQueueService>;
 
   beforeEach(() => {
     globalDb = {} as unknown as Mocked<DrizzleDb>;
+    dbManager = { getTenantDb: vi.fn() };
     
     queueService = {
       send: vi.fn(),
       consume: vi.fn(),
     } as unknown as Mocked<IQueueService>;
 
-    service = new MigrationWorkerService(globalDb, queueService);
+    service = new MigrationWorkerService(globalDb, dbManager, queueService);
   });
 
   afterEach(() => {

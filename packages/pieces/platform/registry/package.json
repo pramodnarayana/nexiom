@@ -23,6 +23,7 @@
 		"@nestjs/config": "^4.0.2",
 		"@soopa/cache": "workspace:*",
 		"@soopa/database": "workspace:*",
+		"@soopa/dbmanager": "workspace:*",
 		"@soopa/credentials": "workspace:*",
 		"@soopa/piece-framework": "workspace:*",
 		"@soopa/queue": "workspace:*",

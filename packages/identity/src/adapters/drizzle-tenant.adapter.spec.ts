@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Tenant as TenantInterface } from "../interfaces/index.js";
@@ -126,9 +127,10 @@ describe("DrizzleTenantAdapter", () => {
 
   it("create creates organization and admin member, handles slug collision retries", async () => {
     const { db, tx } = mkDb();
+    const publisher = mkPublisher();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
-      mkPublisher(),
+      publisher,
     );
 
     const firstError = new Error("duplicate key") as Error & {
@@ -157,6 +159,14 @@ describe("DrizzleTenantAdapter", () => {
     expect(tenant.name).toBe("Acme");
     expect(tenant.slug).toMatch(/^acme-/);
     expect(tx.insert).toHaveBeenCalled();
+    expect(publisher.publishTenantProvisioned).toHaveBeenCalledTimes(1);
+    expect(publisher.publishTenantProvisioned).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: expect.any(String),
+        organizationName: tenant.name,
+        ownerId: "user-1",
+      }),
+    );
   });
 
   it("createTenant inserts organization and maps result; duplicate slug throws", async () => {

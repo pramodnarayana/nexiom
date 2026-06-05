@@ -3,7 +3,10 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema.js";
 import { IDENTITY_OPTIONS, IDENTITY_DB } from "../constants.js";
 import type { IdentityModuleOptions } from "../identity.module.js";
-import { seedSystemRbac } from "../utils/rbac-seeding.js";
+import {
+  seedSystemRbac,
+  DrizzleRbacRepository,
+} from "../utils/rbac-seeding.js";
 
 @Injectable()
 export class PermissionSeeder implements OnModuleInit {
@@ -53,7 +56,7 @@ export class PermissionSeeder implements OnModuleInit {
       }
 
       await seedSystemRbac(
-        tx,
+        new DrizzleRbacRepository(tx),
         { ownerRoleId, adminRoleId, memberRoleId, systemTenantId },
         this.logger,
       );

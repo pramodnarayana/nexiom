@@ -42,10 +42,7 @@ export class SyncSeedingService {
         orgId = workspaces[0].orgId;
       } else {
         // Option 2: Query for a canonical/default workspace
-        const workspaces = await db
-          .select()
-          .from(schema.uiWorkspaces)
-          .limit(2);
+        const workspaces = await db.select().from(schema.uiWorkspaces).limit(2);
 
         if (workspaces.length === 0) {
           throw new Error(
@@ -96,10 +93,6 @@ export class SyncSeedingService {
                 schema.integrationStitches.destDataSourceId,
                 mapping.destDataSourceId,
               ),
-              eq(
-                schema.integrationStitches.sourceDataSourceId,
-                mapping.sourceDataSourceId,
-              ),
               eq(schema.integrationStitches.workspaceId, workspaceId),
             ),
           )
@@ -113,7 +106,6 @@ export class SyncSeedingService {
               name: mapping.name,
               orgId: orgId,
               workspaceId: workspaceId,
-              sourceDataSourceId: mapping.sourceDataSourceId,
               destDataSourceId: mapping.destDataSourceId,
               canonicalObject: mapping.canonicalObject,
               targetObject: mapping.targetObject,

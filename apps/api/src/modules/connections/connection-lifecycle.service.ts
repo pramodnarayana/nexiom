@@ -200,66 +200,67 @@ export class ConnectionLifecycleService {
       // ── Step 2: Check GEM in the tenant database ─────────────────────────────
       // GEM is data-plane data stored in the tenant control-plane public schema.
       try {
-      const storageProfile =
-        await this.storageResolver.resolveStorageProfile(dataSourceId);
+        const storageProfile =
+          await this.storageResolver.resolveStorageProfile(dataSourceId);
 
-      // Verify that the resolved storage profile belongs to the correct tenant
-      if (storageProfile.tenantId !== tenantId) {
-        throw new ForbiddenException(
-          `Connection ${dataSourceId} belongs to tenant ${storageProfile.tenantId}, ` +
-            `but was accessed in the context of tenant ${tenantId}. ` +
-            `Cross-tenant access is not permitted.`,
-        );
-      }
+        // Verify that the resolved storage profile belongs to the correct tenant
+        if (storageProfile.tenantId !== tenantId) {
+          throw new ForbiddenException(
+            `Connection ${dataSourceId} belongs to tenant ${storageProfile.tenantId}, ` +
+              `but was accessed in the context of tenant ${tenantId}. ` +
+              `Cross-tenant access is not permitted.`,
+          );
+        }
 
-      const tenantDb = await this.dbManager.getTenantDb(tenantId);
+        const tenantDb = await this.dbManager.getTenantDb(tenantId);
 
-      const [mapping] = await tenantDb
-        .select({ id: globalEntityMap.id })
-        .from(globalEntityMap)
-        .where(
-          or(
-            eq(globalEntityMap.sourceDataSourceId, dataSourceId),
-            eq(globalEntityMap.destDataSourceId, dataSourceId),
-          ),
-        )
-        .limit(1);
+        const [mapping] = await tenantDb
+          .select({ id: globalEntityMap.id })
+          .from(globalEntityMap)
+          .where(
+            or(
+              eq(globalEntityMap.sourceDataSourceId, dataSourceId),
+              eq(globalEntityMap.destDataSourceId, dataSourceId),
+            ),
+          )
+          .limit(1);
 
-      if (mapping) {
-        throw new ConflictException(
-          'Cannot delete connection as it is currently in use. Please delete the associated integration stitches to remove these dependencies.',
-        );
-      }
-    } catch (err) {
-      // Re-throw ConflictException and ForbiddenException; these are security/business rule violations
-      if (err instanceof ConflictException) throw err;
-      if (err instanceof ForbiddenException) throw err;
+        if (mapping) {
+          throw new ConflictException(
+            'Cannot delete connection as it is currently in use. Please delete the associated integration stitches to remove these dependencies.',
+          );
+        }
+      } catch (err) {
+        // Re-throw ConflictException and ForbiddenException; these are security/business rule violations
+        if (err instanceof ConflictException) throw err;
+        if (err instanceof ForbiddenException) throw err;
 
-      // Only swallow "schema does not exist" or "relation does not exist" errors
-      const errMsg = err instanceof Error ? err.message : String(err);
+        // Only swallow "schema does not exist" or "relation does not exist" errors
+        const errMsg = err instanceof Error ? err.message : String(err);
 
-      // Drizzle may wrap the Postgres error, so we check both the top-level code and the cause's code
-      const pgCode =
-        (err as { code?: string })?.code ||
-        (err as { cause?: { code?: string } })?.cause?.code;
+        // Drizzle may wrap the Postgres error, so we check both the top-level code and the cause's code
+        const pgCode =
+          (err as { code?: string })?.code ||
+          (err as { cause?: { code?: string } })?.cause?.code;
 
-      if (
-        pgCode === '3F000' || // invalid_schema_name
-        pgCode === '42P01' || // undefined_table
-        (errMsg.includes('schema') &&
-          (errMsg.includes('does not exist') ||
-            errMsg.includes('not found'))) ||
-        (errMsg.includes('relation') && errMsg.includes('does not exist'))
-      ) {
-        this.logger.warn(
-          `Storage not fully provisioned for connection ${dataSourceId} — proceeding with deletion: ${errMsg}`,
-        );
-      } else {
-        // Transient failures or unexpected errors should abort deletion
-        this.logger.error(
-          `Failed to check GEM for connection ${dataSourceId} — aborting deletion: ${errMsg}`,
-        );
-        throw err;
+        if (
+          pgCode === '3F000' || // invalid_schema_name
+          pgCode === '42P01' || // undefined_table
+          (errMsg.includes('schema') &&
+            (errMsg.includes('does not exist') ||
+              errMsg.includes('not found'))) ||
+          (errMsg.includes('relation') && errMsg.includes('does not exist'))
+        ) {
+          this.logger.warn(
+            `Storage not fully provisioned for connection ${dataSourceId} — proceeding with deletion: ${errMsg}`,
+          );
+        } else {
+          // Transient failures or unexpected errors should abort deletion
+          this.logger.error(
+            `Failed to check GEM for connection ${dataSourceId} — aborting deletion: ${errMsg}`,
+          );
+          throw err;
+        }
       }
 
       // ── Step 3: Delete the connection from global DB ──────────────────────────

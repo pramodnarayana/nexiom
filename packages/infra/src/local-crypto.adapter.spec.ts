@@ -18,6 +18,12 @@ describe("LocalCryptoAdapter", () => {
         () => new LocalCryptoAdapter({ encryptionKey: "a".repeat(33) }),
       ).toThrow("32 bytes");
     });
+
+    it("throws if encryptionKey is missing or empty", () => {
+      expect(() => new LocalCryptoAdapter({ encryptionKey: "" })).toThrow(
+        "missing or invalid",
+      );
+    });
   });
 
   describe("encrypt()", () => {
@@ -38,6 +44,14 @@ describe("LocalCryptoAdapter", () => {
       const c1 = await adapter.encrypt("same");
       const c2 = await adapter.encrypt("same");
       expect(c1).not.toBe(c2);
+    });
+
+    it("throws on encryption failure (e.g. invalid key at runtime)", async () => {
+      const badAdapter = new LocalCryptoAdapter({ encryptionKey: KEY_32 });
+      (badAdapter as any).algorithm = "invalid-algo";
+      await expect(badAdapter.encrypt("hello")).rejects.toThrow(
+        "Encryption failed",
+      );
     });
   });
 

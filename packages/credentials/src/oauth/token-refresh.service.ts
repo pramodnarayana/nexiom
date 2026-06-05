@@ -79,8 +79,11 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       return parsed as Record<string, unknown>;
     } catch (error) {
       if (error instanceof OAuthRefreshError) throw error;
+      if (error instanceof TypeError && error.message.startsWith('Invalid refresh input')) {
+        throw new OAuthRefreshError(error.message, 400);
+      }
       if (error instanceof TypeError) {
-        throw new OAuthRefreshError(`Invalid refresh input: ${error.message}`, 400);
+        throw new OAuthRefreshError(`Transport or configuration TypeError: ${error.message}`, 502);
       }
       this.logger.error(`[TokenRefresh] Unexpected error for ${appName} on tenant ${tenantId}:`, error);
       throw new OAuthRefreshError(`Unexpected error during token refresh for ${appName}: ${error instanceof Error ? error.message : String(error)}`, 500);

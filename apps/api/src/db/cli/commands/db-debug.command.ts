@@ -51,12 +51,7 @@ export class DbDebugCommand extends CommandRunner {
           );
           process.exit(1);
         }
-        const result =
-          await this.rbacInspectorService.checkUserPermissions(options.user);
-        if (!result) {
-          console.error(`User not found: ${options.user}`);
-          process.exit(1);
-        }
+        await this.rbacInspectorService.checkUserPermissions(options.user);
       } else if (options?.role) {
         // Validate and execute role check
         if (typeof options.role !== 'string' || options.role === '') {
@@ -66,12 +61,7 @@ export class DbDebugCommand extends CommandRunner {
           );
           process.exit(1);
         }
-        const result =
-          await this.rbacInspectorService.debugPermissions(options.role);
-        if (!result) {
-          console.error(`Role not found: ${options.role}`);
-          process.exit(1);
-        }
+        await this.rbacInspectorService.debugPermissions(options.role);
       } else {
         console.error('Error: Must specify either --user or --role option');
         console.error(

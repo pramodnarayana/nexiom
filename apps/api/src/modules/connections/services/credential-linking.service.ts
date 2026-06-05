@@ -77,7 +77,10 @@ export class CredentialLinkingService {
         if (id) {
           let updated;
           try {
-            const schemaNameForUpdate = getWorkspaceSchemaName(id, providerName);
+            const schemaNameForUpdate = getWorkspaceSchemaName(
+              id,
+              providerName,
+            );
             [updated] = await tx
               .update(dataSources)
               .set({

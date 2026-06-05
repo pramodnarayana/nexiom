@@ -32,6 +32,16 @@ describe("AwsKmsAdapter", () => {
     });
   });
 
+  describe("isLocalEndpoint behavior", () => {
+    it("handles invalid endpoint URL gracefully by treating it as non-local", () => {
+      const invalidAdapter = new AwsKmsAdapter({
+        keyId: "alias/test",
+        endpoint: "not-a-valid-url",
+      });
+      expect((invalidAdapter as any).isLocal).toBe(false);
+    });
+  });
+
   describe("encrypt()", () => {
     it("returns base64-encoded ciphertext from KMS CiphertextBlob", async () => {
       const blob = Buffer.from("kms-ciphertext-bytes");

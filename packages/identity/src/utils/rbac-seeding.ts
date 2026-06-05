@@ -9,11 +9,6 @@ import {
 } from "../constants.js";
 import { inArray } from "drizzle-orm";
 
-/**
- * Non-system permissions granted to the member role (organizationId: null —
- * applied in any org context). Exported so tests can derive fixtures from this
- * canonical list rather than duplicating it as hard-coded literals.
- */
 export const MEMBER_BASE_PERMS: PermissionType[] = [
   "users:read",
   "tenants:read",
@@ -22,11 +17,6 @@ export const MEMBER_BASE_PERMS: PermissionType[] = [
   "stitches:read",
 ];
 
-/**
- * System-scoped read-only permissions for the member role (organizationId set
- * to systemTenantId). Only returned when the member is operating inside the
- * system tenant — grants admin dashboard read access without write capabilities.
- */
 export const MEMBER_SYSTEM_PERMS: PermissionType[] = [
   "admin_dashboard:view",
   "system_users:read",
@@ -40,8 +30,119 @@ export interface RbacConfig {
   systemTenantId: string;
 }
 
+export interface IRbacRepository {
+  ensureRoles(
+    roles: {
+      id: string;
+      name: string;
+      isSystem: boolean;
+      description: string;
+      createdAt: Date;
+    }[],
+  ): Promise<void>;
+  ensurePermissions(
+    permissions: {
+      id: string;
+      resource: string;
+      action: string;
+      createdAt: Date;
+    }[],
+  ): Promise<void>;
+  getExistingRolePermissions(
+    roleIds: string[],
+  ): Promise<
+    { roleId: string; permissionId: string; organizationId: string | null }[]
+  >;
+  insertRolePermissions(
+    rolePermissions: {
+      id: string;
+      roleId: string;
+      permissionId: string;
+      organizationId: string | null;
+    }[],
+  ): Promise<void>;
+  transaction<T>(cb: (repo: IRbacRepository) => Promise<T>): Promise<T>;
+}
+
+export class DrizzleRbacRepository implements IRbacRepository {
+  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+
+  async ensureRoles(
+    roles: {
+      id: string;
+      name: string;
+      isSystem: boolean;
+      description: string;
+      createdAt: Date;
+    }[],
+  ): Promise<void> {
+    await this.db.insert(schema.role).values(roles).onConflictDoNothing();
+  }
+
+  async ensurePermissions(
+    permissions: {
+      id: string;
+      resource: string;
+      action: string;
+      createdAt: Date;
+    }[],
+  ): Promise<void> {
+    await this.db
+      .insert(schema.permission)
+      .values(permissions)
+      .onConflictDoNothing();
+  }
+
+  async getExistingRolePermissions(
+    roleIds: string[],
+  ): Promise<
+    { roleId: string; permissionId: string; organizationId: string | null }[]
+  > {
+    if (roleIds.length === 0) return [];
+
+    return await this.db
+      .select({
+        roleId: schema.rolePermission.roleId,
+        permissionId: schema.rolePermission.permissionId,
+        organizationId: schema.rolePermission.organizationId,
+      })
+      .from(schema.rolePermission)
+      .where(inArray(schema.rolePermission.roleId, roleIds));
+  }
+
+  async insertRolePermissions(
+    rolePermissions: {
+      id: string;
+      roleId: string;
+      permissionId: string;
+      organizationId: string | null;
+    }[],
+  ): Promise<void> {
+    if (rolePermissions.length > 0) {
+      await this.db.insert(schema.rolePermission).values(rolePermissions);
+    }
+  }
+
+  async transaction<T>(cb: (repo: IRbacRepository) => Promise<T>): Promise<T> {
+    // Check if db is already a transaction (has no transaction method)
+    if (
+      typeof (this.db as unknown as Record<string, unknown>).transaction !==
+      "function"
+    ) {
+      return cb(this);
+    }
+
+    return await this.db.transaction(async (tx) => {
+      const txRepo = new DrizzleRbacRepository(
+        tx as unknown as NodePgDatabase<typeof schema>,
+      );
+      return await cb(txRepo);
+    });
+  }
+}
+
 export async function seedSystemRbac(
-  db: NodePgDatabase<typeof schema>,
+  repo: IRbacRepository,
   config: RbacConfig,
   logger: Logger | Console = console,
 ) {
@@ -49,7 +150,6 @@ export async function seedSystemRbac(
   const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } = config;
   const now = new Date();
 
-  // 0. Validate Config
   if (new Set([ownerRoleId, adminRoleId, memberRoleId]).size !== 3) {
     throw new Error(
       `Duplicate Role IDs detected: Owner=${ownerRoleId}, Admin=${adminRoleId}, Member=${memberRoleId}. Roles must be distinct.`,
@@ -57,47 +157,38 @@ export async function seedSystemRbac(
   }
 
   try {
-    // Wrap entire operation in a transaction for atomicity
-    await db.transaction(async (tx) => {
-      // 1. Ensure Roles
+    await repo.transaction(async (txRepo) => {
       const roles = [
         {
           id: ownerRoleId,
           name: "owner",
           isSystem: true,
           description: "Full access",
+          createdAt: now,
         },
         {
           id: adminRoleId,
           name: "admin",
           isSystem: true,
           description: "Manage users and settings",
+          createdAt: now,
         },
         {
           id: memberRoleId,
           name: "member",
           isSystem: true,
           description: "Read only access",
+          createdAt: now,
         },
       ];
 
-      await tx
-        .insert(schema.role)
-        .values(
-          roles.map((r) => ({
-            ...r,
-            createdAt: now,
-          })),
-        )
-        .onConflictDoNothing();
+      await txRepo.ensureRoles(roles);
 
-      // 2. Ensure Permissions
       const perms = ALL_PERMISSIONS;
       const permissionsToInsert = perms.map((p) => {
         const separatorIndex = p.indexOf(":");
-        if (separatorIndex === -1) {
+        if (separatorIndex === -1)
           throw new Error(`Invalid permission format: ${p}`);
-        }
         return {
           id: p,
           resource: p.substring(0, separatorIndex),
@@ -106,17 +197,13 @@ export async function seedSystemRbac(
         };
       });
 
-      await tx
-        .insert(schema.permission)
-        .values(permissionsToInsert)
-        .onConflictDoNothing();
+      await txRepo.ensurePermissions(permissionsToInsert);
 
-      // 3. Build Role-Permission Mappings
       const rolePermissionsToInsert: {
         id: string;
         roleId: string;
         permissionId: string;
-        organizationId?: string | null;
+        organizationId: string | null;
       }[] = [];
 
       const addPermissionsForRole = (
@@ -125,11 +212,8 @@ export async function seedSystemRbac(
         scopedOrganizationId: string,
       ) => {
         for (const p of permissions) {
-          // Deterministically decide scope based on permission type
           const isSystem = isSystemPermission(p);
           const orgId = isSystem ? scopedOrganizationId : null;
-
-          // Push to list
           rolePermissionsToInsert.push({
             id: uuidv4(),
             roleId,
@@ -139,18 +223,11 @@ export async function seedSystemRbac(
         }
       };
 
-      // Admin
       addPermissionsForRole(adminRoleId, perms, systemTenantId);
 
-      // Member: curated safe subset
-      // Non-system perms (organizationId: null) — apply in any org context.
       const memberBasePerms = MEMBER_BASE_PERMS;
-
-      // System-scoped read-only perms — only visible when member is in the system tenant.
-      // Grants read-only access to the admin dashboard without any write/manage capabilities.
       const memberSystemPerms = MEMBER_SYSTEM_PERMS;
 
-      // Validate configuration fail-fast
       const allMemberPerms = [...memberBasePerms, ...memberSystemPerms];
       const invalidPerms = allMemberPerms.filter((p) => !perms.includes(p));
       if (invalidPerms.length > 0) {
@@ -159,7 +236,6 @@ export async function seedSystemRbac(
         );
       }
 
-      // Non-system perms: organizationId null (apply in any tenant)
       for (const p of memberBasePerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -169,7 +245,6 @@ export async function seedSystemRbac(
         });
       }
 
-      // System-scoped perms: only returned when user is in the system tenant
       for (const p of memberSystemPerms) {
         rolePermissionsToInsert.push({
           id: uuidv4(),
@@ -179,26 +254,14 @@ export async function seedSystemRbac(
         });
       }
 
-      // Owner (Same as Admin)
       addPermissionsForRole(ownerRoleId, perms, systemTenantId);
 
-      // 4. Assign Permissions (Read-Filter-Insert to avoid ON CONFLICT issues)
       if (rolePermissionsToInsert.length > 0) {
-        // Fetch existing logic: restricted to the relevant system roles
-        const existing = await tx
-          .select({
-            roleId: schema.rolePermission.roleId,
-            permissionId: schema.rolePermission.permissionId,
-            organizationId: schema.rolePermission.organizationId,
-          })
-          .from(schema.rolePermission)
-          .where(
-            inArray(schema.rolePermission.roleId, [
-              ownerRoleId,
-              adminRoleId,
-              memberRoleId,
-            ]),
-          );
+        const existing = await txRepo.getExistingRolePermissions([
+          ownerRoleId,
+          adminRoleId,
+          memberRoleId,
+        ]);
 
         const existingSet = new Set(
           existing.map(
@@ -209,17 +272,13 @@ export async function seedSystemRbac(
 
         const toInsert = rolePermissionsToInsert.filter((rp) => {
           const key = `${rp.roleId}|${rp.permissionId}|${rp.organizationId ?? "__NULL__"}`;
-          if (existingSet.has(key)) {
-            return false;
-          }
-          // Also dedupe internally within the batch
+          if (existingSet.has(key)) return false;
           existingSet.add(key);
           return true;
         });
 
         if (toInsert.length > 0) {
-          // Batch insert using transaction
-          await tx.insert(schema.rolePermission).values(toInsert);
+          await txRepo.insertRolePermissions(toInsert);
           logger.log(`Inserted ${toInsert.length} new role permissions.`);
         } else {
           logger.log("No new role permissions to insert.");

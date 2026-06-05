@@ -104,10 +104,7 @@ describe('WindmillSchedulerClient', () => {
       const options = getCallOptions(requestSpy, 0);
       expect(url).toContain('/schedules/create');
       expect(requestSpy.mock.calls[0][0]).toBe('POST');
-      const body = JSON.parse(options.body as string) as Record<
-        string,
-        unknown
-      >;
+      const body = options.body as Record<string, unknown>;
       expect(body.enabled).toBe(true);
       expect(body.args).toEqual({ dataSourceId: STITCH_ID });
     });
@@ -168,7 +165,7 @@ describe('WindmillSchedulerClient', () => {
       const url = getCallUrl(requestSpy, 0);
       const options = getCallOptions(requestSpy, 0);
       expect(url).toContain('setenabled');
-      expect(JSON.parse(options.body as string)).toEqual({ enabled: false });
+      expect(options.body).toEqual({ enabled: false });
     });
   });
 

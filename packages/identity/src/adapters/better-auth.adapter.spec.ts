@@ -416,7 +416,7 @@ describe("BetterAuthAdapter", () => {
     const db = mkDb();
     const email = mkEmail();
     const publisher = mkPublisher();
-    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions(), publisher as any);
+    const adapter = new BetterAuthAdapter(db, email as any, cfg(), mkTenantProvider() as any, mkOptions(), publisher);
 
 
 
@@ -447,7 +447,7 @@ describe("BetterAuthAdapter", () => {
     expect(publisher.publishUserInvited).toHaveBeenCalledWith(
       expect.objectContaining({
         email: "b@c.com",
-        organizationId: "o1",
+        tenantId: "o1",
       })
     );
 

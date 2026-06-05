@@ -584,12 +584,11 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     srcTenantId: string,
     srcVendorId: string | undefined,
     targetConnectionId: string,
-    targetAppName?: string,
-    targetTenantId?: string,
-    targetObject?: string,
-    tenantDb?: DrizzleDb,
+    targetAppName: string | undefined,
+    targetTenantId: string | undefined,
+    targetObject: string | undefined,
+    tenantDb: DrizzleDb,
   ): Promise<boolean> {
-    if (!tenantDb) throw new Error("tenantDb is required for writeL6Result");
     // ── Destination Schema Transaction ──────────────────────────────────────
     await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(destSchemaName);
@@ -647,6 +646,29 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     // ── Source Schema Transaction ──────────────────────────────────────────
     let sourceCommitted = false;
     try {
+      // ── Write GEM (Control Plane) ──────────────────────────────────────────
+      if (
+        finalStatus === "SUCCESS" &&
+        srcVendorId &&
+        destVendorId &&
+        targetAppName &&
+        targetTenantId
+      ) {
+        await this.gemService.writeGemMapping(tenantDb, {
+          traceId,
+          routeId,
+          srcAppName,
+          dataSourceId,
+          srcTenantId,
+          canonicalType,
+          srcVendorId,
+          targetAppName,
+          targetConnectionId,
+          targetTenantId,
+          destVendorId,
+        });
+      }
+
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -681,29 +703,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             .where(sql`${activeSyncLocks.lockedByTraceId} = ${traceId}`);
         }
       });
-
-      // ── Write GEM (Control Plane) ──────────────────────────────────────────
-      if (
-        finalStatus === "SUCCESS" &&
-        srcVendorId &&
-        destVendorId &&
-        targetAppName &&
-        targetTenantId
-      ) {
-        await this.gemService.writeGemMapping(tenantDb, {
-          traceId,
-          routeId,
-          srcAppName,
-          dataSourceId,
-          srcTenantId,
-          canonicalType,
-          srcVendorId,
-          targetAppName,
-          targetConnectionId,
-          targetTenantId,
-          destVendorId,
-        });
-      }
       // Only mark as committed after all write operations succeed
       sourceCommitted = true;
     } catch (err) {

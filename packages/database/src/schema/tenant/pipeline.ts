@@ -184,6 +184,7 @@ export function buildTenantSchema(schemaName: string) {
         payload: jsonb('payload').notNull(),
         response: jsonb('response'),
         statusCode: integer('status_code'),
+        destVendorId: varchar('dest_vendor_id', { length: 255 }),
         status: text('status').$type<OutboundGatewayStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         errorMessage: text('error_message'),
@@ -255,6 +256,7 @@ export function buildTenantSchema(schemaName: string) {
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         errorMessage: varchar('error_message', { length: 500 }),
+        claimToken: varchar('claim_token', { length: 36 }),
         nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
@@ -310,6 +312,28 @@ export function buildTenantSchema(schemaName: string) {
         uniqueIndex('idx_normalized_outbox_trace').on(table.traceId, table.dataSourceId),
     ]);
 
+    /**
+     * OUTBOUND OUTBOX
+     *
+     * Transactional outbox pattern used to safely decouple exception retries
+     * from the user-facing database transaction.
+     */
+    const outboundOutbox = schema.table('outbound_outbox', {
+        id: uuid('id').defaultRandom().primaryKey(),
+        outboundGatewayId: uuid('outbound_gateway_id').notNull(),
+        traceId: uuid('trace_id').notNull(),
+        routeId: uuid('route_id').notNull(),
+        payload: jsonb('payload').notNull(),
+        srcDataSourceId: uuid('src_data_source_id').notNull(),
+        destDataSourceId: uuid('dest_data_source_id').notNull(),
+        status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
+        attempts: integer('attempts').notNull().default(0),
+        errorMessage: varchar('error_message', { length: 500 }),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    }, (table) => [
+        index('idx_outbound_outbox_claim').on(table.status),
+    ]);
+
     return {
         activeSyncLocks,
         inboundGateway,
@@ -321,6 +345,7 @@ export function buildTenantSchema(schemaName: string) {
         syncCursor,
         replicaOutbox,
         normalizedOutbox,
+        outboundOutbox,
     };
 }
 

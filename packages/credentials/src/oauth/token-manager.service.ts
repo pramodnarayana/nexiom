@@ -152,7 +152,11 @@ export class TokenManagerService {
             await this.handleRefreshError(error, connection);
             throw error;
         } finally {
-            await this.releaseLock(lockKey, lockValue);
+            try {
+                await this.releaseLock(lockKey, lockValue);
+            } catch (releaseErr) {
+                this.logger.error(`Failed to release refresh lock for ${lockKey}`, releaseErr);
+            }
         }
     }
 
@@ -317,7 +321,14 @@ export class TokenManagerService {
      * so callers never have to repeat the decrypt + cast + validate triple inline.
      */
     private async decryptAndValidate(connection: Record<string, any>): Promise<OAuthCredentialBlob> {
-        const parsed: unknown = JSON.parse(await this.crypto.decrypt(connection.value));
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(await this.crypto.decrypt(connection.value));
+        } catch (error) {
+            throw new AppCredentialError(
+                `Failed to decrypt or parse stored credentials: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
         if (!isOAuthCredentialBlob(parsed)) {
             throw new AppCredentialError(
                 'Stored credentials are malformed and do not match OAuthCredentialBlob. Re-authorization required.',

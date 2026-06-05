@@ -11,9 +11,7 @@ export class RbacInspectorService {
     'users:delete',
   ];
 
-  constructor(
-    private readonly connectionPool: PgConnectionPool,
-  ) {}
+  constructor(private readonly connectionPool: PgConnectionPool) {}
 
   async debugPermissions(roleName: string): Promise<void> {
     console.log(`🔍 Debugging permissions for role: ${roleName}...`);

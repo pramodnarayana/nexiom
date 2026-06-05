@@ -1,6 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SystemAdminController } from './system-admin.controller.js';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import {
   AUTH_PROVIDER,
   USER_PROVIDER,
@@ -355,6 +360,23 @@ describe('SystemAdminController', () => {
 
       await expect(controller.deleteUser('missing')).rejects.toThrow(
         NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException if user is the last admin', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+      });
+      mockUserProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: false,
+      });
+
+      await expect(controller.deleteUser('u1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockUserProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        'u1',
+        getRequiredSystemTenantId(),
       );
     });
 
