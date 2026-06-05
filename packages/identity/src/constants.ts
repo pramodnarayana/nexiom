@@ -7,6 +7,7 @@ export const EMAIL_PROVIDER = "EMAIL_PROVIDER";
 export const IDENTITY_DB = "IDENTITY_DB";
 export const BETTER_AUTH_CONFIG = "BETTER_AUTH_CONFIG";
 export const ROLE_PROVIDER = "ROLE_PROVIDER";
+export const IDENTITY_EVENT_PUBLISHER = "IDENTITY_EVENT_PUBLISHER";
 
 export const ALL_PERMISSIONS = [
   "users:read",

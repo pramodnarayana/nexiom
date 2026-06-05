@@ -11,6 +11,7 @@ import {
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
   ROLE_PROVIDER,
+  IDENTITY_EVENT_PUBLISHER,
 } from "./constants.js";
 import { BetterAuthAdapter } from "./adapters/better-auth.adapter.js";
 import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface.js";
@@ -21,6 +22,7 @@ import { DrizzleRoleAdapter } from "./adapters/drizzle-role.adapter.js";
 import type { IEmailProvider } from "./interfaces/email-provider.interface.js";
 import * as schema from "./schema.js";
 import { PermissionSeeder } from "./services/permission-seeder.js";
+import { IdentityEventPublisher } from "./services/identity-event-publisher.service.js";
 
 export interface IdentityConstants {
   systemTenantId: string;
@@ -107,6 +109,7 @@ export class IdentityModule {
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
         ROLE_PROVIDER,
+        IDENTITY_EVENT_PUBLISHER,
         PermissionSeeder,
       ],
     };
@@ -188,6 +191,10 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
+        {
+          provide: IDENTITY_EVENT_PUBLISHER,
+          useClass: IdentityEventPublisher,
+        },
         PermissionSeeder,
       ],
       exports: [
@@ -200,6 +207,7 @@ export class IdentityModule {
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
         ROLE_PROVIDER,
+        IDENTITY_EVENT_PUBLISHER,
         PermissionSeeder,
       ],
     };

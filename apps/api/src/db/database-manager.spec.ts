@@ -86,6 +86,7 @@ vi.mock('drizzle-orm/node-postgres', () => ({
 
 vi.mock('@soopa/identity/utils/rbac-seeding', () => ({
   seedSystemRbac: rbacMocks.seedSystemRbac,
+  DrizzleRbacRepository: vi.fn(),
 }));
 
 vi.mock('../constants.js', () => constantMocks);

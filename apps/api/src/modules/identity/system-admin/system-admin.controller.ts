@@ -267,10 +267,20 @@ export class SystemAdminController {
       throw new NotFoundException('User not found');
     }
 
-    // Safety: Prevent deleting the last platform admin
-    // TODO: Implement safety check for last Platform Administrator using PermissionProvider count
+    // Safety: Prevent deleting the last Platform Administrator.
+    // Uses an atomic deleteIfNotLastAdmin() transaction to prevent TOCTOU
+    // race conditions — two concurrent requests cannot both see "2 admins"
+    // and both proceed to delete, leaving zero.
+    const result = await this.userProvider.deleteIfNotLastAdmin(
+      id,
+      getRequiredSystemTenantId(),
+    );
 
-    await this.userProvider.delete(id);
+    if (!result.success) {
+      throw new BadRequestException(
+        'Cannot delete the last Platform Administrator. Assign another administrator before removing this user.',
+      );
+    }
 
     return { success: true };
   }

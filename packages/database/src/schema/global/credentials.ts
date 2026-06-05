@@ -27,3 +27,6 @@ export const credentials = pgTable('credential', {
     index('cred_status_idx').on(table.status),
     index('cred_expires_at_idx').on(table.expiresAt).where(sql`${table.expiresAt} IS NOT NULL`),
 ]);
+
+export type InsertCredential = typeof credentials.$inferInsert;
+export type SelectCredential = typeof credentials.$inferSelect;

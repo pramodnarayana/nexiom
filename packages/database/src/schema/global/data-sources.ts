@@ -53,3 +53,6 @@ export const dataSources = pgTable('data_source', {
     // Note: NULLs are allowed (for apps that don't have a stable tenant ID) and are not considered equal by Postgres
     uniqueIndex('ds_tenant_vendor_id_idx').on(table.tenantId, table.appName, table.envType, table.vendorTenantId),
 ]);
+
+export type InsertDataSource = typeof dataSources.$inferInsert;
+export type SelectDataSource = typeof dataSources.$inferSelect;

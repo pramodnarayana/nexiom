@@ -2,12 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { ConfigService } from '@nestjs/config';
 import { ConnectorsService } from './connectors.service.js';
+
+import { SAVEPOINT_MANAGER } from '@soopa/database';
+import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { StorageResolverService } from '@soopa/engine';
+
 import { EncryptionService, AppCredentialError } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
 import type { Piece } from '@soopa/piece-framework';
 import { DB_MANAGER } from '@soopa/dbmanager';
-import { SchemaPlan } from '@soopa/dbmanager';
-import { StorageResolverService } from '@soopa/engine';
+
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -110,14 +114,24 @@ describe('ConnectorsService', () => {
           provide: DB_MANAGER,
           useValue: {
             applyPlan: vi.fn(),
-            getTenantDb: vi
-              .fn()
-              .mockResolvedValue({ execute: vi.fn().mockResolvedValue(true) }),
+            getTenantDb: vi.fn().mockResolvedValue({ execute: vi.fn() }),
           },
         },
         {
           provide: StorageResolverService,
-          useValue: { resolveSchemaName: vi.fn().mockResolvedValue('ws_test') },
+          useValue: { resolveStorageProfile: vi.fn() },
+        },
+        {
+          provide: SAVEPOINT_MANAGER,
+          useValue: {
+            createSavepoint: vi.fn(),
+            releaseSavepoint: vi.fn(),
+            rollbackToSavepoint: vi.fn(),
+          },
+        },
+        {
+          provide: ConnectionLifecycleService,
+          useValue: { provisionNamespace: vi.fn(), teardownNamespace: vi.fn() },
         },
       ],
     }).compile();
@@ -475,7 +489,7 @@ describe('ConnectorsService', () => {
       ).rejects.toThrow(InternalServerErrorException);
     });
 
-    it('should throw InternalServerErrorException on network/timeout errors', async () => {
+    it('should throw InternalServerErrorException on network errors', async () => {
       mockPieceRegistry.getPiece.mockReturnValue({
         name: 'mock-piece',
         auth: {
@@ -494,6 +508,29 @@ describe('ConnectorsService', () => {
           'mock_client_secret',
         ),
       ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should throw InternalServerErrorException specifically for timeouts (AbortError)', async () => {
+      mockPieceRegistry.getPiece.mockReturnValue({
+        name: 'mock-piece',
+        auth: {
+          type: 'OAUTH2',
+          tokenUrl: 'https://login.mock-piece.com/services/oauth2/token',
+        },
+      } as unknown as Piece);
+
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      vi.mocked(fetch).mockRejectedValue(abortError);
+
+      await expect(
+        service.exchangeCodeForTokens(
+          'mock-piece',
+          'timeout-code',
+          'mock_client_id',
+          'mock_client_secret',
+        ),
+      ).rejects.toThrow('Token exchange timed out after 10s for mock-piece');
     });
   });
 
@@ -523,7 +560,7 @@ describe('ConnectorsService', () => {
         metadata: { env: 'sandbox' },
       });
 
-      expect(mockDbInsert).toHaveBeenCalledTimes(4);
+      expect(mockDbInsert).toHaveBeenCalledTimes(3);
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const dsCall = vi.mocked(mockDbInsert).mock.results[0]?.value;
@@ -554,48 +591,46 @@ describe('ConnectorsService', () => {
         value: 'encrypted-value-blob',
       });
 
-      // At connection setup time, L1→L3 pipeline tables are provisioned so
-      // webhook ingestion works immediately without a stitch being configured.
-      const { applyPlan } = service['dbManager'] as unknown as {
-        applyPlan: ReturnType<typeof vi.fn>;
+      // Expect lifecycleService.provisionNamespace to be called
+      const { provisionNamespace } = service['lifecycleService'] as unknown as {
+        provisionNamespace: ReturnType<typeof vi.fn>;
       };
-      expect(applyPlan).toHaveBeenCalledWith(
+      expect(provisionNamespace).toHaveBeenCalledWith(
         'tenant-123',
-        expect.stringMatching(/^ws_/),
-        SchemaPlan.CANONICAL_ACTIVE,
         expect.objectContaining({
-          appName: 'mock-piece',
-          appProfile: 'standard',
+          dataSourceId: 'mock-uuid-conn-id',
+          createdAppConnection: true,
+        }),
+        'mock-piece',
+        { env: 'sandbox' },
+      );
+    });
+
+    it('should throw InternalServerErrorException if connection ID is missing after insert', async () => {
+      // Return empty array from returning()
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
+      });
+      mockDb.where = vi.fn().mockReturnValue(
+        Object.assign(Promise.resolve([]), {
+          limit: vi.fn().mockResolvedValue([]),
         }),
       );
 
-      // Verify the final transition to ACTIVE
-      expect(mockDbUpdate).toHaveBeenCalled();
-      const updateCall = vi
-        .mocked(mockDbUpdate)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        .mock.results.find((r) => r.value?.set);
-      expect(updateCall).toBeDefined();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      expect(updateCall!.value.set).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'ACTIVE' }),
-      );
-
-      // Verify CDC registrations: getTenantDb().execute should be called 4 times
-      // for platform_cdc publication (inbound_outbox, replica_outbox, normalized_outbox, outbound_outbox)
-      const { getTenantDb } = service['dbManager'] as unknown as {
-        getTenantDb: ReturnType<typeof vi.fn>;
-      };
-      expect(getTenantDb).toHaveBeenCalledWith('tenant-123');
-      const tenantDbMock = (await getTenantDb.mock.results[0]?.value) as {
-        execute: ReturnType<typeof vi.fn>;
-      };
-      expect(tenantDbMock.execute).toHaveBeenCalledTimes(4);
-      // Verify each call registers a table with platform_cdc
-      for (let i = 0; i < 4; i++) {
-        const callArg = tenantDbMock.execute.mock.calls[i]?.[0] as unknown;
-        expect(JSON.stringify(callArg)).toContain('platform_cdc');
-      }
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
     });
 
     it('should update an existing connection explicitly using an ID', async () => {
@@ -613,15 +648,41 @@ describe('ConnectorsService', () => {
       expect(mockDb.update).toHaveBeenCalled();
       expect(mockDbInsert).toHaveBeenCalledTimes(2); // credentials and outbox
     });
+
+    it('should throw InternalServerErrorException if nodeEnv is production and regionContext is missing', async () => {
+      const configGet = vi.spyOn(service['configService'], 'get');
+      configGet.mockImplementation((key: string) => {
+        if (key === 'DEFAULT_REGION_CONTEXT') return undefined;
+        if (key === 'NODE_ENV') return 'production';
+        return undefined;
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: {},
+        }),
+      ).rejects.toThrow(InternalServerErrorException);
+      configGet.mockRestore();
+    });
     it('should throw HttpException 409 on displayName conflict when updating', async () => {
       mockDbUpdate.mockReturnValueOnce({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             returning: vi.fn().mockRejectedValue(
-              Object.assign(new Error('Unique violation'), {
-                code: '23505',
-                constraint: 'tenant_app_display_name_lower_idx',
-              }),
+              Object.assign(
+                new Error('duplicate key value violates unique constraint'),
+                {
+                  code: '23505',
+                  constraint: 'ds_tenant_app_display_name_lower_idx',
+                },
+              ),
             ),
           }),
         }),
@@ -645,10 +706,13 @@ describe('ConnectorsService', () => {
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
             returning: vi.fn().mockRejectedValue(
-              Object.assign(new Error('Unique violation'), {
-                code: '23505',
-                constraint: 'tenant_external_id_unique_idx',
-              }),
+              Object.assign(
+                new Error('duplicate key value violates unique constraint'),
+                {
+                  code: '23505',
+                  constraint: 'ds_tenant_external_id_idx',
+                },
+              ),
             ),
           }),
         }),
@@ -696,7 +760,7 @@ describe('ConnectorsService', () => {
           returning: vi.fn().mockRejectedValue(
             Object.assign(new Error('Unique violation'), {
               code: '23505',
-              constraint: 'tenant_app_display_name_lower_idx',
+              constraint: 'ds_tenant_app_display_name_lower_idx',
             }),
           ),
         }),
@@ -722,7 +786,7 @@ describe('ConnectorsService', () => {
           returning: vi.fn().mockRejectedValue(
             Object.assign(new Error('Unique violation'), {
               code: '23505',
-              constraint: 'tenant_external_id_unique_idx',
+              constraint: 'ds_tenant_external_id_idx',
             }),
           ),
         }),
@@ -738,6 +802,196 @@ describe('ConnectorsService', () => {
           value: 'encrypted-value-blob',
           expiresAt: new Date(),
           metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should treat unrecognized unique constraints as 409 Conflict', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'some_unknown_constraint',
+            }),
+          ),
+        }),
+      });
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: { env: 'sandbox' },
+        }),
+      ).rejects.toThrow('A connection with these details already exists.');
+    });
+
+    it('should recover a FAILED connection when displayName collides', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'ds_tenant_app_display_name_lower_idx',
+            }),
+          ),
+        }),
+      });
+
+      // Mock select to return existing FAILED connection for the first query, and empty for the cross-check
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce({
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'failed-conn-1', status: 'FAILED' }]),
+        }) // main query
+        .mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([]) }); // cross-check query
+
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'failed-conn-1' }]),
+          }),
+        }),
+      });
+
+      await service.storeOAuthConnection({
+        tenantId: 'tenant-123',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
+        authType: 'OAUTH2',
+        value: 'encrypted-value-blob',
+        expiresAt: new Date(),
+        metadata: {},
+      });
+
+      expect(mockDb.update).toHaveBeenCalled();
+    });
+
+    it('should recover a FAILED connection when externalId collides', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'ds_tenant_external_id_idx',
+            }),
+          ),
+        }),
+      });
+
+      // Mock select to return existing FAILED connection for the first query, and empty for the cross-check
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce({
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'failed-conn-2', status: 'FAILED' }]),
+        }) // main query
+        .mockReturnValueOnce({ limit: vi.fn().mockResolvedValue([]) }); // cross-check query
+
+      mockDbUpdate.mockReturnValueOnce({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: 'failed-conn-2' }]),
+          }),
+        }),
+      });
+
+      await service.storeOAuthConnection({
+        tenantId: 'tenant-123',
+        providerName: 'mock-piece',
+        externalId: 'mock-piece-tms',
+        displayName: 'TMS MockPiece',
+        authType: 'OAUTH2',
+        value: 'encrypted-value-blob',
+        expiresAt: new Date(),
+        metadata: {},
+      });
+
+      expect(mockDb.update).toHaveBeenCalled();
+    });
+
+    it('should reject FAILED recovery if displayName collides but externalId is taken by a DIFFERENT connection', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'ds_tenant_app_display_name_lower_idx',
+            }),
+          ),
+        }),
+      });
+
+      // Cross check returns a DIFFERENT id, so it clears existingFailed and hits throwOnDuplicateConnection
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce({
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'failed-conn-1', status: 'FAILED' }]),
+        }) // main query
+        .mockReturnValueOnce({
+          limit: vi.fn().mockResolvedValue([{ id: 'different-conn' }]),
+        }); // cross-check query
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: {},
+        }),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should reject FAILED recovery if externalId collides but displayName is taken by a DIFFERENT connection', async () => {
+      mockDbInsert.mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockRejectedValue(
+            Object.assign(new Error('Unique violation'), {
+              code: '23505',
+              constraint: 'ds_tenant_external_id_idx',
+            }),
+          ),
+        }),
+      });
+
+      // Cross check returns a DIFFERENT id, so it clears existingFailed and hits throwOnDuplicateConnection
+      mockDb.where = vi
+        .fn()
+        .mockReturnValueOnce({
+          limit: vi
+            .fn()
+            .mockResolvedValue([{ id: 'failed-conn-2', status: 'FAILED' }]),
+        }) // main query
+        .mockReturnValueOnce({
+          limit: vi.fn().mockResolvedValue([{ id: 'different-conn' }]),
+        }); // cross-check query
+
+      await expect(
+        service.storeOAuthConnection({
+          tenantId: 'tenant-123',
+          providerName: 'mock-piece',
+          externalId: 'mock-piece-tms',
+          displayName: 'TMS MockPiece',
+          authType: 'OAUTH2',
+          value: 'encrypted-value-blob',
+          expiresAt: new Date(),
+          metadata: {},
         }),
       ).rejects.toThrow(HttpException);
     });
@@ -769,59 +1023,16 @@ describe('ConnectorsService', () => {
         }),
       ).rejects.toThrow(InternalServerErrorException);
     });
+  });
 
-    it('should throw InternalServerErrorException and abort if DB manager applyPlan fails', async () => {
-      mockDb.where = vi.fn().mockReturnValue(
-        Object.assign(Promise.resolve([]), {
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      );
-      // Mock dataSource insert succeeding:
-      mockDbInsert.mockReturnValueOnce({
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 'mock-connection-id' }]),
-        }),
-      });
-
-      // We need to re-mock the DB_MANAGER for this specific test
-      const failingDbManager = {
-        applyPlan: vi.fn().mockRejectedValue(new Error('applyPlan failed')),
+  describe('deleteConnection', () => {
+    it('should delegate to lifecycleService.teardownNamespace', async () => {
+      const { teardownNamespace } = service['lifecycleService'] as unknown as {
+        teardownNamespace: ReturnType<typeof vi.fn>;
       };
-      const moduleFail: TestingModule = await Test.createTestingModule({
-        providers: [
-          ConnectorsService,
-          { provide: PieceRegistryService, useValue: mockPieceRegistry },
-          {
-            provide: ConfigService,
-            useValue: { get: vi.fn().mockReturnValue('mock-region-context') },
-          },
-          { provide: EncryptionService, useValue: mockEncryptionService },
-          { provide: DATABASE_CONNECTION, useValue: mockDb as unknown },
-          { provide: DB_MANAGER, useValue: failingDbManager },
-          {
-            provide: StorageResolverService,
-            useValue: {
-              resolveSchemaName: vi.fn().mockResolvedValue('ws_test'),
-            },
-          },
-        ],
-      }).compile();
 
-      const failingService =
-        moduleFail.get<ConnectorsService>(ConnectorsService);
-
-      await expect(
-        failingService.storeOAuthConnection({
-          tenantId: 'tenant-123',
-          providerName: 'mock-piece',
-          externalId: 'mock-piece-tms',
-          displayName: 'TMS MockPiece',
-          authType: 'OAUTH2',
-          value: 'encrypted-value-blob',
-          expiresAt: new Date(),
-          metadata: { env: 'sandbox' },
-        }),
-      ).rejects.toThrow(InternalServerErrorException);
+      await service.deleteConnection('tenant-123', 'ds-1');
+      expect(teardownNamespace).toHaveBeenCalledWith('tenant-123', 'ds-1');
     });
   });
 });

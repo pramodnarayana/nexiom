@@ -382,6 +382,51 @@ describe('ConnectorsController', () => {
   });
 
   describe('getProviders', () => {
+    it('should map aliases and merge their properties with the base piece', () => {
+      mockPieceRegistry.getAllPieces.mockReturnValue([
+        {
+          name: 'base-piece',
+          displayName: 'Base Piece',
+          description: 'Base desc',
+          logoUrl: 'base.png',
+          auth: { type: 'OAUTH2', props: {} },
+          aliases: [
+            {
+              name: 'alias-1',
+              displayName: 'Alias 1',
+              description: 'Alias desc',
+              category: 'AliasCat',
+            },
+            {
+              name: 'alias-2',
+              displayName: 'Alias 2',
+            },
+          ],
+        } as unknown as Piece,
+      ]);
+
+      const result = controller.getProviders();
+      expect(result).toHaveLength(3);
+      expect(result[0]).toMatchObject({
+        name: 'base-piece',
+        description: 'Base desc',
+        category: 'Other',
+        logoUrl: 'base.png',
+      });
+      expect(result[1]).toMatchObject({
+        name: 'alias-1',
+        description: 'Alias desc',
+        category: 'AliasCat',
+        logoUrl: 'base.png',
+      });
+      expect(result[2]).toMatchObject({
+        name: 'alias-2',
+        description: 'Base desc',
+        logoUrl: 'base.png',
+        category: 'Other',
+      });
+    });
+
     it('should map piece data exactly as required by the frontend uiSchema', () => {
       (mockPieceRegistry.getAllPieces as Mock).mockReturnValue([
         {
@@ -428,6 +473,78 @@ describe('ConnectorsController', () => {
   });
 
   describe('getActiveConnections', () => {
+    it('should handle custom limit and offset parameters', async () => {
+      const dataChain = {
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue([]),
+      };
+      mockDb.where
+        .mockReturnValueOnce(dataChain)
+        .mockResolvedValueOnce([{ count: 0 }]);
+      await controller.getActiveConnections(mockCtx, '10', '5');
+      expect(dataChain.limit).toHaveBeenCalledWith(10);
+      expect(dataChain.offset).toHaveBeenCalledWith(5);
+    });
+
+    it('should fallback to default limit and offset if parameters are invalid', async () => {
+      const dataChain = {
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue([]),
+      };
+      mockDb.where
+        .mockReturnValueOnce(dataChain)
+        .mockResolvedValueOnce([{ count: 0 }]);
+      await controller.getActiveConnections(mockCtx, 'abc', '-5');
+      expect(dataChain.limit).toHaveBeenCalledWith(50);
+      expect(dataChain.offset).toHaveBeenCalledWith(0);
+    });
+
+    it('should throw InternalServerErrorException if DB fetch fails (Error object)', async () => {
+      mockDb.where.mockRejectedValueOnce(new Error('Fetch failed'));
+      await expect(controller.getActiveConnections(mockCtx)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+
+    it('should throw InternalServerErrorException if DB fetch fails (Non-error object)', async () => {
+      mockDb.where.mockRejectedValueOnce('Some string error');
+      await expect(controller.getActiveConnections(mockCtx)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+    });
+
+    it('should resolve alias appName if connection metadata contains appProfile', async () => {
+      const mockConnectionRow = {
+        id: '1',
+        appName: 'base-piece',
+        externalId: 'ext-1',
+        displayName: 'Base',
+        authType: 'OAUTH2' as const,
+        status: AppConnectionStatus.ACTIVE,
+        value: 'dummy',
+        metadata: { appProfile: 'custom-profile' },
+      };
+
+      const dataChain = {
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        offset: vi.fn().mockResolvedValue([mockConnectionRow]),
+      };
+
+      mockDb.where
+        .mockReturnValueOnce(dataChain)
+        .mockResolvedValueOnce([{ count: 1 }]);
+
+      mockPieceRegistry.getPiece.mockReturnValue({
+        aliases: [{ name: 'alias-piece', appProfile: 'custom-profile' }],
+      } as unknown as Piece);
+
+      const result = await controller.getActiveConnections(mockCtx);
+      expect(result.data[0].appName).toBe('alias-piece');
+    });
+
     it('should return active connections with externalId and displayName for the requesting tenant', async () => {
       const mockDate = new Date();
       const mockConnectionRow = {
@@ -497,6 +614,68 @@ describe('ConnectorsController', () => {
   });
 
   describe('exchangeCode', () => {
+    it('should resolve alias appProfile if providerName is an alias', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+      mockConnectorsService.exchangeCodeForTokens.mockResolvedValue({
+        access_token: 'access',
+        refresh_token: 'refresh',
+        expires_in: 3600,
+      });
+      mockOauthStateService.verifyState.mockResolvedValue({
+        tenantId: 'tenant-123',
+        vendorParams: { realmId: 'test-123' },
+      });
+      mockEncryptionService.encrypt.mockResolvedValue('encrypted');
+      mockConnectorsService.storeOAuthConnection.mockResolvedValue(undefined);
+
+      mockPieceRegistry.resolveBasePieceName.mockReturnValueOnce('base-piece');
+      mockPieceRegistry.getPiece.mockReturnValueOnce({
+        aliases: [{ name: 'alias-provider', appProfile: 'custom-profile' }],
+      } as unknown as Piece);
+
+      await controller.exchangeCode(mockCtx, {
+        providerName: 'alias-provider',
+        code: 'auth-code',
+        clientId: 'client',
+        clientSecret: 'secret',
+        state: 'valid-state',
+        displayName: 'My Alias',
+      });
+
+      expect(mockConnectorsService.storeOAuthConnection).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerName: 'base-piece',
+          metadata: { appProfile: 'custom-profile' },
+        }),
+      );
+    });
+
+    it('should throw BadRequestException if displayName is blank', async () => {
+      await expect(
+        controller.exchangeCode(mockCtx, {
+          providerName: 'provider',
+          code: 'c',
+          clientId: 'c',
+          clientSecret: 's',
+          state: 's',
+          displayName: '   ',
+        }),
+      ).rejects.toThrow('displayName cannot be blank');
+    });
+
+    it('should throw BadRequestException if displayName exceeds max length', async () => {
+      await expect(
+        controller.exchangeCode(mockCtx, {
+          providerName: 'provider',
+          code: 'c',
+          clientId: 'c',
+          clientSecret: 's',
+          state: 's',
+          displayName: 'A'.repeat(300),
+        }),
+      ).rejects.toThrow(/displayName exceeds/);
+    });
+
     const validBody = {
       providerName: 'mock-piece',
       code: 'auth-code-123',
@@ -1009,6 +1188,104 @@ describe('ConnectorsController', () => {
       expect(mockRedis.del).toHaveBeenCalledWith(
         `oauth:idempotency:tenant-123:create:${validBody.code}`,
       );
+    });
+  });
+
+  describe('getConnectionCredentials', () => {
+    it('should throw BadRequestException if tenantId is missing', async () => {
+      await expect(
+        controller.getConnectionCredentials(missingTenantCtx, 'uuid-123'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if connection not found', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([]),
+      });
+      await expect(
+        controller.getConnectionCredentials(mockCtx, 'uuid-123'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should decrypt connection value if present', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockDb.where.mockReturnValueOnce({
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: 'uuid-123', value: 'encrypted' }]),
+      });
+      // Mock decrypt
+      mockEncryptionService.decrypt.mockResolvedValueOnce(
+        JSON.stringify({
+          clientId: 'client',
+          clientSecret: 'secret',
+          vendorParams: { a: '1' },
+        }),
+      );
+      const res = await controller.getConnectionCredentials(
+        mockCtx,
+        'uuid-123',
+      );
+      expect(res).toEqual({
+        clientId: 'client',
+        hasClientSecret: true,
+        vendorParams: { a: '1' },
+      }); // secret stripped
+    });
+
+    it('should return defaults if connection value is missing', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ id: 'uuid-123', value: null }]),
+      });
+      const res = await controller.getConnectionCredentials(
+        mockCtx,
+        'uuid-123',
+      );
+      expect(res).toEqual({
+        clientId: '',
+        hasClientSecret: false,
+        vendorParams: undefined,
+      });
+    });
+
+    it('should handle decryption errors and throw InternalServerErrorException (Error object)', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockDb.where.mockReturnValueOnce({
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: 'uuid-123', value: 'encrypted' }]),
+      });
+      mockEncryptionService.decrypt.mockRejectedValueOnce(
+        new Error('Decrypt failed'),
+      );
+      await expect(
+        controller.getConnectionCredentials(mockCtx, 'uuid-123'),
+      ).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('should handle decryption errors and throw InternalServerErrorException (String error)', async () => {
+      mockDb.where.mockReturnValueOnce({
+        limit: vi.fn().mockResolvedValueOnce([{ role: 'admin' }]),
+      });
+      mockDb.where.mockReturnValueOnce({
+        limit: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: 'uuid-123', value: 'encrypted' }]),
+      });
+      mockEncryptionService.decrypt.mockRejectedValueOnce('String error');
+      await expect(
+        controller.getConnectionCredentials(mockCtx, 'uuid-123'),
+      ).rejects.toThrow(InternalServerErrorException);
     });
   });
 

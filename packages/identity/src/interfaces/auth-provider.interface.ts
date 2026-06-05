@@ -44,4 +44,7 @@ export interface IAuthProvider {
 
   resendVerificationEmail?(email: string): Promise<void>;
   findById?(userId: string): Promise<User>;
+  // Used for framework integrations (e.g. BetterAuth)
+
+  getHandler?(): (...args: any[]) => any;
 }

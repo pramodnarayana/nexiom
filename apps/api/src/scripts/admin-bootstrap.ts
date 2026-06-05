@@ -22,7 +22,10 @@ import {
   getRequiredMemberRoleId,
   getRequiredSystemTenantId,
 } from '../constants.js';
-import { seedSystemRbac } from '@soopa/identity/utils/rbac-seeding';
+import {
+  seedSystemRbac,
+  DrizzleRbacRepository,
+} from '@soopa/identity/utils/rbac-seeding';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 const ALLOWED_ENVS = ['development', 'test', 'local'];
@@ -57,7 +60,7 @@ async function seedRbac(client: Client) {
 
   // Create a new Drizzle instance scoped to the identity schema
   const identityDb = drizzle(client, { schema: identitySchema });
-  await seedSystemRbac(identityDb, config, console);
+  await seedSystemRbac(new DrizzleRbacRepository(identityDb), config, console);
 }
 
 // Shared helper to elevate a user to System Owner

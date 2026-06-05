@@ -186,7 +186,8 @@ describe("PermissionSeeder", () => {
   });
 
   it("seed skips rolePermission insertion if all exist", async () => {
-    const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+    const { seedSystemRbac, DrizzleRbacRepository } =
+      await import("../utils/rbac-seeding.js");
     const dbMock = mkDb();
     const optionsMock = mkOptions();
     const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
@@ -222,7 +223,11 @@ describe("PermissionSeeder", () => {
 
     const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
 
-    await seedSystemRbac(dbMock, optionsMock.constants, loggerMock);
+    await seedSystemRbac(
+      new DrizzleRbacRepository(dbMock as any),
+      optionsMock.constants,
+      loggerMock,
+    );
 
     expect(loggerMock.log).toHaveBeenCalledWith(
       "No new role permissions to insert.",
@@ -240,13 +245,18 @@ describe("PermissionSeeder", () => {
     });
 
     try {
-      const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+      const { seedSystemRbac, DrizzleRbacRepository } =
+        await import("../utils/rbac-seeding.js");
       const dbMock = mkDb();
       const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
       const optionsMock = mkOptions();
 
       await expect(
-        seedSystemRbac(dbMock, optionsMock.constants, loggerMock),
+        seedSystemRbac(
+          new DrizzleRbacRepository(dbMock as any),
+          optionsMock.constants,
+          loggerMock,
+        ),
       ).rejects.toThrow("Invalid permission format: invalid-format");
     } finally {
       vi.doUnmock("../constants.js");

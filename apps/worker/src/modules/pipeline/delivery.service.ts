@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
   Optional,
   Logger,
+  forwardRef,
 } from "@nestjs/common";
 import { eq, sql } from "drizzle-orm";
 import { QueueService, QueueName } from "@soopa/queue";
@@ -14,7 +15,6 @@ import {
   assertValidSchemaName,
   integrationStitches,
   dataSources,
-  globalEntityMap,
 } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { StorageResolverService } from "@soopa/engine";
@@ -29,6 +29,8 @@ import {
   isValidPipelineMessage,
   sanitizeErrorObject,
 } from "../../shared/pipeline.utils.js";
+import { DeliveryRetryService } from "./delivery-retry.service.js";
+import { GemHydrationService } from "./gem-hydration.service.js";
 
 /** Maximum number of executeAction attempts before permanently failing. */
 const MAX_DELIVERY_ATTEMPTS = 5;
@@ -42,6 +44,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     private readonly storageResolver: StorageResolverService,
     private readonly pieceRegistry: PieceRegistryService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
+    @Inject(forwardRef(() => DeliveryRetryService))
+    private readonly retryService: DeliveryRetryService,
+    private readonly gemService: GemHydrationService,
     @Optional() private readonly tokenManagerService?: TokenManagerService,
   ) {}
 
@@ -217,7 +222,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // ── Check if delivery already succeeded AND source-side finalized ─────
       if (currentStatus === "SUCCESS") {
         // Verify source-side finalization completed by checking sync_log
-        sourceFinalized = await this.isSourceFinalized(
+        sourceFinalized = await this.retryService.isSourceFinalized(
           srcSchemaName,
           traceId,
           routeId,
@@ -240,7 +245,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             "Delivery succeeded but source-side incomplete — retrying finalization only",
           );
 
-          sourceFinalized = await this.retrySourceFinalization(
+          sourceFinalized = await this.retryService.retrySourceFinalization(
             destSchemaName,
             srcSchemaName,
             outboundGatewayId,
@@ -280,7 +285,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       // ── Check if delivery already failed AND source-side finalized ─────
       if (currentStatus === "FAIL") {
         // Verify source-side finalization completed by checking sync_log
-        sourceFinalized = await this.isSourceFinalized(
+        sourceFinalized = await this.retryService.isSourceFinalized(
           srcSchemaName,
           traceId,
           routeId,
@@ -305,7 +310,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             `L5 routing delivery failed: Delivery failed but source-side incomplete`,
           );
 
-          sourceFinalized = await this.retrySourceFinalization(
+          sourceFinalized = await this.retryService.retrySourceFinalization(
             destSchemaName,
             srcSchemaName,
             outboundGatewayId,
@@ -561,147 +566,7 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Check if source-side finalization completed for a given delivery.
-   * Verifies that sync_log contains a SUCCESS/FAIL entry for this (traceId, routeId) at L6.
-   */
-  private async isSourceFinalized(
-    srcSchemaName: string,
-    traceId: string,
-    routeId: string,
-    tenantDb: DrizzleDb,
-  ): Promise<boolean> {
-    try {
-      const { syncLog } = buildTenantSchema(srcSchemaName);
-      const logs = await tenantDb.transaction(async (tx) => {
-        assertValidSchemaName(srcSchemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + srcSchemaName + '"')}`,
-        );
-        return await tx
-          .select()
-          .from(syncLog)
-          .where(
-            sql`${syncLog.traceId} = ${traceId} AND ${syncLog.routeId} = ${routeId} AND ${syncLog.layer} = 'L6' AND ${syncLog.status} != 'RETRY'`,
-          )
-          .limit(1);
-      });
-      return logs.length > 0;
-    } catch (err) {
-      this.logger.error(
-        {
-          event: "l5.source_finalized_check_failed",
-          traceId,
-          routeId,
-          layer: "L5",
-          err: sanitizeErrorObject(err),
-        },
-        `Failed to check source finalization status — assuming incomplete: ${sanitizeError(err)}`,
-      );
-      return false;
-    }
-  }
-
-  /**
-   * Retry source-side finalization for a delivery that already completed (SUCCESS or FAIL)
-   * but whose source-side write didn't finish.
-   */
-  private async retrySourceFinalization(
-    destSchemaName: string,
-    srcSchemaName: string,
-    outboundGatewayId: string,
-    traceId: string,
-    routeId: string,
-    dataSourceId: string,
-    targetConnectionId: string,
-    finalStatus: "SUCCESS" | "FAIL",
-    defaultStatusCode: number,
-    canonicalType: string,
-    srcAppName: string,
-    srcTenantId: string,
-    srcVendorId: string | undefined,
-    start: number,
-    tenantDb: DrizzleDb,
-  ): Promise<boolean> {
-    const { outboundGateway } = buildTenantSchema(destSchemaName);
-
-    // Fetch existing result from outbound_gateway and retry source finalization
-    const existingResult = await tenantDb.transaction(async (tx) => {
-      assertValidSchemaName(destSchemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + destSchemaName + '"')}`,
-      );
-      return await tx
-        .select({
-          response: outboundGateway.response,
-          statusCode: outboundGateway.statusCode,
-        })
-        .from(outboundGateway)
-        .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
-        .limit(1);
-    });
-
-    if (existingResult.length === 0) {
-      throw new Error("Outbound gateway result not found for retry");
-    }
-
-    // Need to fetch target metadata for GEM
-    const connRows = await tenantDb
-      .select({
-        appName: dataSources.appName,
-        tenantId: dataSources.tenantId,
-      })
-      .from(dataSources)
-      .where(eq(dataSources.id, targetConnectionId))
-      .limit(1);
-
-    const targetAppName = connRows[0]?.appName;
-    const targetTenantId = connRows[0]?.tenantId;
-
-    const stitchDocs = await tenantDb
-      .select()
-      .from(integrationStitches)
-      .where(sql`id = ${routeId}`)
-      .limit(1);
-    const targetObject = stitchDocs[0]?.targetObject ?? "";
-
-    // Extract destVendorId from existing result
-    const resPayload = existingResult[0].response as Record<
-      string,
-      unknown
-    > | null;
-    // Extract entityId from resPayload
-    const destVendorId =
-      typeof resPayload?.["entityId"] === "string"
-        ? resPayload["entityId"]
-        : undefined;
-
-    return await this.writeL6Result(
-      destSchemaName,
-      srcSchemaName,
-      outboundGatewayId,
-      dataSourceId,
-      traceId,
-      routeId,
-      resPayload,
-      null, // sentPayload is unknown during a source-finalization retry
-      existingResult[0].statusCode ?? defaultStatusCode,
-      finalStatus,
-      start,
-      destVendorId,
-      canonicalType,
-      srcAppName,
-      srcTenantId,
-      srcVendorId,
-      targetConnectionId,
-      targetAppName,
-      targetTenantId,
-      targetObject,
-      tenantDb,
-    );
-  }
-
-  private async writeL6Result(
+  public async writeL6Result(
     destSchemaName: string,
     srcSchemaName: string,
     outboundGatewayId: string,
@@ -823,55 +688,23 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         targetAppName &&
         targetTenantId
       ) {
-        await tenantDb
-          .insert(globalEntityMap)
-          .values({
-            stitchId: routeId,
-            sourceAppName: srcAppName,
-            sourceDataSourceId: dataSourceId,
-            sourceOrgId: srcTenantId,
-            sourceEntityType: canonicalType,
-            sourceEntityId: srcVendorId,
-            sourceRefLayer: "L2",
-            sourceTraceId: traceId,
-            destAppName: targetAppName,
-            destDataSourceId: targetConnectionId,
-            destOrgId: targetTenantId,
-            destEntityType: canonicalType,
-            destEntityId: destVendorId,
-            destRefLayer: "L6",
-            destTraceId: traceId,
-          })
-          .onConflictDoUpdate({
-            target: [
-              globalEntityMap.stitchId,
-              globalEntityMap.sourceDataSourceId,
-              globalEntityMap.sourceEntityId,
-              globalEntityMap.destDataSourceId,
-              globalEntityMap.destEntityType,
-            ],
-            set: {
-              destEntityId: destVendorId,
-              destTraceId: traceId,
-              lastSyncedAt: sql`NOW()`,
-            },
-          });
+        await this.gemService.writeGemMapping(
+          tenantDb,
+          traceId,
+          routeId,
+          srcAppName,
+          dataSourceId,
+          srcTenantId,
+          canonicalType,
+          srcVendorId,
+          targetAppName,
+          targetConnectionId,
+          targetTenantId,
+          destVendorId,
+        );
       }
       // Only mark as committed after all write operations succeed
       sourceCommitted = true;
-
-      this.logger.log(
-        {
-          event: "gem.mapped",
-          traceId,
-          routeId,
-          sourceAppName: srcAppName,
-          sourceEntityId: srcVendorId,
-          destAppName: targetAppName,
-          destEntityId: destVendorId,
-        },
-        `Successfully wrote GEM linkage: ${srcAppName}[${srcVendorId}] -> ${targetAppName}[${destVendorId}]`,
-      );
     } catch (err) {
       this.logger.error(
         {

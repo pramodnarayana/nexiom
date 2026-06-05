@@ -1,5 +1,5 @@
 import type { TriggerStore } from '@soopa/piece-framework';
-import type { Redis } from 'ioredis';
+import type { IKeyValueStore } from '@soopa/cache';
 
 /**
  * Redis-backed TriggerStore.
@@ -18,11 +18,11 @@ import type { Redis } from 'ioredis';
  *   - DLQ list:           dlq:triggers
  *   - Poll locks:         lock:poll:...
  */
-export class RedisBackedTriggerStore implements TriggerStore {
+export class KeyValueTriggerStore implements TriggerStore {
   private readonly hashKey: string;
 
   constructor(
-    private readonly redis: Redis,
+    private readonly store: IKeyValueStore,
     workspaceId: string,
     appName: string,
     objectType: string | undefined,
@@ -33,7 +33,7 @@ export class RedisBackedTriggerStore implements TriggerStore {
   }
 
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.redis.hget(this.hashKey, key);
+    const raw = await this.store.hget(this.hashKey, key);
     if (raw === null) return null;
     try {
       return JSON.parse(raw) as T;
@@ -43,10 +43,10 @@ export class RedisBackedTriggerStore implements TriggerStore {
   }
 
   async put<T>(key: string, value: T): Promise<void> {
-    await this.redis.hset(this.hashKey, key, JSON.stringify(value));
+    await this.store.hset(this.hashKey, key, JSON.stringify(value));
   }
 
   async delete(key: string): Promise<void> {
-    await this.redis.hdel(this.hashKey, key);
+    await this.store.hdel(this.hashKey, key);
   }
 }

@@ -1,26 +1,16 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHash } from 'node:crypto';
-import type { Redis } from 'ioredis';
 import {
   TriggerExecutorService,
   type TriggerRunParams,
 } from './trigger-executor.service.js';
 import { PieceRegistryService } from '@soopa/piece-registry';
+import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
 
 const MAX_ATTEMPTS = 3;
 
-/**
- * Redis key namespace:
- *  dlq:triggers           — ready queue (RPOPLPUSH source)
- *  dlq:triggers:processing — atomic in-flight list
- *  dlq:triggers:delayed   — sorted set of deferred retries (score = epoch ms)
- *  dlq:triggers:failed    — permanently exhausted jobs
- */
-const DLQ_KEY = 'dlq:triggers';
-const DLQ_PROCESSING_KEY = 'dlq:triggers:processing';
-const DLQ_DELAYED_KEY = 'dlq:triggers:delayed';
-const DLQ_FAILED_KEY = 'dlq:triggers:failed';
+// Replaced by RedisTriggerDlqService implementation
 
 interface DlqJob {
   appName: string;
@@ -63,7 +53,7 @@ export class DlqProcessorService {
   private readonly BATCH_SIZE = 50;
 
   constructor(
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject(ITriggerDlqService) private readonly dlqService: ITriggerDlqService,
     private readonly executor: TriggerExecutorService,
     private readonly pieceRegistry: PieceRegistryService,
   ) {}
@@ -77,41 +67,8 @@ export class DlqProcessorService {
     await this.drainReadyJobs();
   }
 
-  /**
-   * Fully atomic delayed-job promotion via a single Lua script.
-   *
-   * The Lua script:
-   *   1. ZRANGEBYSCORE — read due members (score ≤ now).
-   *   2. For each member, LPUSH into DLQ_KEY (ready queue).
-   *   3. ZREM those members from DLQ_DELAYED_KEY.
-   *
-   * All three steps happen inside one Redis atomic execution, so there is
-   * no window where a process crash can leave items removed from the sorted
-   * set but not yet in the ready queue.
-   */
   private async promoteDelayedJobs(): Promise<void> {
-    const now = Date.now();
-
-    const LUA_PROMOTE = [
-      'local members = redis.call("ZRANGEBYSCORE", KEYS[1], "-inf", ARGV[1], "LIMIT", 0, ARGV[2])',
-      'if #members > 0 then',
-      '  for _, m in ipairs(members) do',
-      '    redis.call("LPUSH", KEYS[2], m)',
-      '    redis.call("ZREM", KEYS[1], m)',
-      '  end',
-      'end',
-      'return #members',
-    ].join('\n');
-
-    const promoted = (await this.redis.eval(
-      LUA_PROMOTE,
-      2, // numkeys
-      DLQ_DELAYED_KEY, // KEYS[1]
-      DLQ_KEY, // KEYS[2]
-      String(now), // ARGV[1] — upper score bound
-      String(this.BATCH_SIZE), // ARGV[2] — page limit
-    )) as number;
-
+    const promoted = await this.dlqService.promoteDelayedJobs(this.BATCH_SIZE);
     if (promoted > 0) {
       this.logger.debug(
         `Promoted ${promoted} delayed DLQ job(s) to ready queue`,
@@ -119,53 +76,13 @@ export class DlqProcessorService {
     }
   }
 
-  /**
-   * Reclaims stale in-flight jobs from DLQ_PROCESSING_KEY.
-   *
-   * Jobs are moved via RPOPLPUSH so a crashed pod leaves them in
-   * DLQ_PROCESSING_KEY indefinitely.  Each job payload stores a
-   * `processingStartedAt` timestamp; any item older than STALE_LEASE_MS is
-   * considered abandoned and moved back to DLQ_KEY for retry.
-   *
-   * Atomicity: a Lua script reads the list tail, checks the timestamp, and
-   * if stale performs RPOPLPUSH(processing → ready) in one atomic step.
-   */
   private readonly STALE_LEASE_MS = 10 * 60 * 1000; // 10 minutes
 
   private async reclaimStaleProcessingJobs(): Promise<void> {
-    const staleThreshold = Date.now() - this.STALE_LEASE_MS;
-
-    // Lua: inspect the tail of the processing list, move back if stale
-    const LUA_RECLAIM = [
-      'local item = redis.call("LINDEX", KEYS[1], -1)',
-      'if not item then return 0 end',
-      'local ok, parsed = pcall(cjson.decode, item)',
-      'if not ok then',
-      '  -- Unparseable item: remove exactly this tail item rather than searching',
-      '  redis.call("RPOP", KEYS[1])',
-      '  return 0',
-      'end',
-      'if not parsed.processingStartedAt or parsed.processingStartedAt > tonumber(ARGV[1]) then',
-      '  return 0',
-      'end',
-      'redis.call("RPOPLPUSH", KEYS[1], KEYS[2])',
-      'return 1',
-    ].join('\n');
-
-    let reclaimed = 0;
-    // Iterate up to BATCH_SIZE times (one item per eval call for atomicity)
-    for (let i = 0; i < this.BATCH_SIZE; i++) {
-      const moved = (await this.redis.eval(
-        LUA_RECLAIM,
-        2,
-        DLQ_PROCESSING_KEY,
-        DLQ_KEY,
-        String(staleThreshold),
-      )) as number;
-      if (!moved) break;
-      reclaimed++;
-    }
-
+    const reclaimed = await this.dlqService.reclaimStaleJobs(
+      this.STALE_LEASE_MS,
+      this.BATCH_SIZE,
+    );
     if (reclaimed > 0) {
       this.logger.warn(`Reclaimed ${reclaimed} stale in-flight DLQ job(s)`);
     }
@@ -174,32 +91,9 @@ export class DlqProcessorService {
   // ─── Drain ready queue ───────────────────────────────────────────────────
 
   private async drainReadyJobs(): Promise<void> {
-    // Atomically move from DLQ_KEY to DLQ_PROCESSING_KEY and stamp processingStartedAt
-    // so the reclaim script can detect stale leases if the pod crashes.
-    const LUA_DRAIN = [
-      'local item = redis.call("RPOP", KEYS[1])',
-      'if not item then return nil end',
-      'local ok, parsed = pcall(cjson.decode, item)',
-      'if ok then',
-      '  parsed.processingStartedAt = tonumber(ARGV[1])',
-      '  item = cjson.encode(parsed)',
-      'end',
-      'redis.call("LPUSH", KEYS[2], item)',
-      'return item',
-    ].join('\n');
-
-    for (let i = 0; i < this.BATCH_SIZE; i++) {
-      const raw = (await this.redis.eval(
-        LUA_DRAIN,
-        2,
-        DLQ_KEY,
-        DLQ_PROCESSING_KEY,
-        String(Date.now()),
-      )) as string | null;
-      if (!raw) break;
-
+    await this.dlqService.drainReadyJobs(this.BATCH_SIZE, async (raw) => {
       await this.handleJob(raw);
-    }
+    });
   }
 
   // ─── Single-job handler ──────────────────────────────────────────────────
@@ -219,7 +113,7 @@ export class DlqProcessorService {
         length: raw.length,
         parseError: error_ instanceof Error ? error_.message : String(error_),
       });
-      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
+      await this.dlqService.removeUnparseableJob(raw);
       return;
     }
 
@@ -229,7 +123,7 @@ export class DlqProcessorService {
         appName: job.appName,
         triggerName: job.triggerName,
       });
-      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
+      await this.dlqService.acknowledgeJob(raw); // discard it
       return;
     }
 
@@ -259,12 +153,7 @@ export class DlqProcessorService {
           ...job,
           nextAttemptAt: Date.now() + delay,
         });
-        await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-        await this.redis.zadd(
-          DLQ_DELAYED_KEY,
-          Date.now() + delay,
-          retryPayload,
-        );
+        await this.dlqService.scheduleDelayedRetry(raw, retryPayload, delay);
         this.logger.debug(
           'DLQ job deferred (lock contention) — scheduled in delayed set',
           {
@@ -277,7 +166,7 @@ export class DlqProcessorService {
       }
 
       // Success — remove from in-flight list
-      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
+      await this.dlqService.acknowledgeJob(raw);
       this.logger.log('DLQ job retried successfully', {
         appName: job.appName,
         triggerName: job.triggerName,
@@ -307,8 +196,7 @@ export class DlqProcessorService {
         exhaustedAt: new Date().toISOString(),
         error: err instanceof Error ? err.message : String(err),
       });
-      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-      await this.redis.lpush(DLQ_FAILED_KEY, failedPayload);
+      await this.dlqService.markJobFailed(raw, failedPayload);
       this.logger.error('DLQ job exhausted retries — moved to failed list', {
         appName: job.appName,
         triggerName: job.triggerName,
@@ -331,8 +219,7 @@ export class DlqProcessorService {
         attempt: nextAttempt,
         nextAttemptAt: Date.now() + delay,
       });
-      await this.redis.lrem(DLQ_PROCESSING_KEY, 1, raw);
-      await this.redis.zadd(DLQ_DELAYED_KEY, Date.now() + delay, retryJob);
+      await this.dlqService.scheduleDelayedRetry(raw, retryJob, delay);
       this.logger.warn(
         `DLQ job failed (attempt ${nextAttempt}/${MAX_ATTEMPTS}) — scheduled delay ${delay}ms`,
         { appName: job.appName, triggerName: job.triggerName },

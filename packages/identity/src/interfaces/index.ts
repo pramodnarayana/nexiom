@@ -5,4 +5,5 @@ export * from "./tenant-provider.interface.js";
 export * from "./permission-provider.interface.js";
 export * from "./email-provider.interface.js";
 export * from "./role-provider.interface.js";
+export * from "./event-publisher.interface.js";
 export * from "./errors.js";

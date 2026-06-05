@@ -345,7 +345,7 @@ export class DatabaseManager {
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const schema = await import('./schema.js');
     const { eq, sql, notInArray } = await import('drizzle-orm');
-    const { seedSystemRbac } =
+    const { seedSystemRbac, DrizzleRbacRepository } =
       await import('@soopa/identity/utils/rbac-seeding');
     const {
       getRequiredOwnerRoleId,
@@ -386,7 +386,8 @@ export class DatabaseManager {
       // Create a separate DB instance with identity schema for seedSystemRbac
       const identitySchema = await import('@soopa/identity/schema');
       const identityDb = drizzle(client, { schema: identitySchema });
-      await seedSystemRbac(identityDb, config, console);
+      const rbacRepo = new DrizzleRbacRepository(identityDb);
+      await seedSystemRbac(rbacRepo, config, console);
 
       // 3. Seed Marketplace Pieces dynamically from monorepo (Enterprise-Grade)
       const { v4: uuidv4Marketplace } = await import('uuid');

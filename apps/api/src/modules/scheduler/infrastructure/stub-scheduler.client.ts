@@ -1,19 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { WindmillClient } from './windmill.client.js';
+import { ISchedulerClient } from '../interfaces/scheduler-client.interface.js';
 
 /**
- * StubWindmillClient — in-memory no-op implementation.
+ * StubSchedulerClient — in-memory no-op implementation.
  *
  * Injected when WINDMILL_ENABLED=false (local development / unit tests).
  * All write operations log a debug message and return immediately.
  * scheduleExists() always returns false so callers treat every connection as new.
  */
 @Injectable()
-export class StubWindmillClient extends WindmillClient {
-  private readonly logger = new Logger(StubWindmillClient.name);
+export class StubSchedulerClient implements ISchedulerClient {
+  private readonly logger = new Logger(StubSchedulerClient.name);
 
   ensureConnectionScript(): Promise<void> {
-    this.logger.debug('StubWindmillClient: ensureConnectionScript (no-op)');
+    this.logger.debug('StubSchedulerClient: ensureConnectionScript (no-op)');
     return Promise.resolve();
   }
 
@@ -23,7 +23,7 @@ export class StubWindmillClient extends WindmillClient {
     enabled: boolean,
   ): Promise<void> {
     this.logger.debug(
-      `StubWindmillClient: createSchedule connectionId=${connectionId} cron=${cron} enabled=${enabled}`,
+      `StubSchedulerClient: createSchedule connectionId=${connectionId} cron=${cron} enabled=${enabled}`,
     );
     return Promise.resolve();
   }
@@ -34,7 +34,7 @@ export class StubWindmillClient extends WindmillClient {
     enabled: boolean,
   ): Promise<boolean> {
     this.logger.debug(
-      `StubWindmillClient: updateSchedule connectionId=${connectionId} cron=${cron} enabled=${enabled}`,
+      `StubSchedulerClient: updateSchedule connectionId=${connectionId} cron=${cron} enabled=${enabled}`,
     );
     // Stub has no persisted schedules — always report not found so callers fall back to create.
     return Promise.resolve(false);
@@ -42,7 +42,7 @@ export class StubWindmillClient extends WindmillClient {
 
   setScheduleEnabled(connectionId: string, enabled: boolean): Promise<void> {
     this.logger.debug(
-      `StubWindmillClient: setScheduleEnabled connectionId=${connectionId} enabled=${enabled}`,
+      `StubSchedulerClient: setScheduleEnabled connectionId=${connectionId} enabled=${enabled}`,
     );
     return Promise.resolve();
   }
@@ -53,14 +53,14 @@ export class StubWindmillClient extends WindmillClient {
 
   deleteSchedule(connectionId: string): Promise<void> {
     this.logger.debug(
-      `StubWindmillClient: deleteSchedule connectionId=${connectionId}`,
+      `StubSchedulerClient: deleteSchedule connectionId=${connectionId}`,
     );
     return Promise.resolve();
   }
 
   triggerOnce(connectionId: string): Promise<string> {
     this.logger.debug(
-      `StubWindmillClient: triggerOnce connectionId=${connectionId}`,
+      `StubSchedulerClient: triggerOnce connectionId=${connectionId}`,
     );
     return Promise.resolve(`stub-job-${connectionId}`);
   }

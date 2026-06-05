@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OAuthRefreshClient, OAuthRefreshError } from './token-manager.service.js';
 import { EncryptionService } from '../crypto/encryption.interface.js';
+import type { ICredentialsEventPublisher } from '../interfaces/event-publisher.interface.js';
+import { CredentialInvalidatedEvent } from '../events/credential-invalidated.event.js';
 import { resolveOAuth2Url } from '@soopa/piece-framework';
 import {
   dataSources,
@@ -11,6 +13,16 @@ import {
 } from '@soopa/database';
 import { eq, and, desc } from 'drizzle-orm';
 
+export interface IHttpClient {
+  fetch(url: string, init?: RequestInit): Promise<Response>;
+}
+
+export class NativeHttpClient implements IHttpClient {
+  async fetch(url: string, init?: RequestInit): Promise<Response> {
+    return globalThis.fetch(url, init);
+  }
+}
+
 @Injectable()
 export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
   private readonly logger = new Logger(BaseOAuthRefreshClient.name);
@@ -18,6 +30,8 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
   constructor(
     protected readonly db: DrizzleDb,
     protected readonly crypto: EncryptionService,
+    protected readonly httpClient: IHttpClient = new NativeHttpClient(),
+    protected readonly eventPublisher?: ICredentialsEventPublisher,
   ) {}
 
   protected abstract getTokenUrl(appName: string): string | Promise<string>;
@@ -33,7 +47,7 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       const tokenUrl = await this.getTokenUrl(appName);
       const { clientId, clientSecret, vendorParams } = await this.getCredentials(tenantId, appName, externalId);
       const resolvedTokenUrl = resolveOAuth2Url(tokenUrl, vendorParams);
-      const response = await fetch(resolvedTokenUrl, {
+      const response = await this.httpClient.fetch(resolvedTokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -45,6 +59,19 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) {
+        if (response.status === 400 || response.status === 401) {
+          if (this.eventPublisher) {
+            try {
+              // Note: we use externalId here as the proxy for credentialId, as the true credential ID is resolved internally.
+              // The host app can map this back. Alternatively, we could resolve credential.id from the DB.
+              await this.eventPublisher.publishCredentialInvalidated(
+                new CredentialInvalidatedEvent(externalId, `HTTP ${response.status}: ${response.statusText}`, appName)
+              );
+            } catch (err) {
+              this.logger.error('Failed to publish CredentialInvalidatedEvent', err);
+            }
+          }
+        }
         throw new OAuthRefreshError(`OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(), response.status);
       }
       const parsed = await response.json();

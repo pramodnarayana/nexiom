@@ -240,10 +240,11 @@ export class TenantDatabaseManager implements DatabaseManager {
         try {
             // Call the Drizzle/connection-pool shutdown method
             // Drizzle's pg adapter exposes .$pool or similar; adapt as needed
-            if (typeof (tenantDb as any).$client?.end === 'function') {
-                await (tenantDb as any).$client.end();
-            } else if (typeof (tenantDb as any).end === 'function') {
-                await (tenantDb as any).end();
+            const db = tenantDb as unknown as { $client?: { end: () => Promise<void> }; end?: () => Promise<void> };
+            if (typeof db.$client?.end === 'function') {
+                await db.$client.end();
+            } else if (typeof db.end === 'function') {
+                await db.end();
             }
             this.logger.debug(`Closed connection pool for tenant ${tenantId}`);
         } catch (err) {

@@ -1,13 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { IDENTITY_DB, Role } from "../constants.js";
+import { IDENTITY_DB, IDENTITY_EVENT_PUBLISHER, Role } from "../constants.js";
 import { eq, count, ilike, desc, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type {
   ITenantProvider,
   Tenant as TenantInterface,
   UpdateTenantInput,
+  IIdentityEventPublisher,
 } from "../interfaces/index.js";
+import { TenantProvisionedEvent } from "../events/index.js";
 import * as schema from "../schema.js";
 import { generateFancyTenantName } from "../utils/name-generator.js";
 
@@ -20,6 +22,8 @@ interface PgError extends Error {
 export class DrizzleTenantAdapter implements ITenantProvider {
   constructor(
     @Inject(IDENTITY_DB) private readonly db: NodePgDatabase<typeof schema>,
+    @Inject(IDENTITY_EVENT_PUBLISHER)
+    private readonly eventPublisher: IIdentityEventPublisher,
   ) {}
 
   async create(userId: string, name: string): Promise<TenantInterface> {
@@ -51,7 +55,15 @@ export class DrizzleTenantAdapter implements ITenantProvider {
             createdAt: new Date(),
           });
 
-          return this.mapTenant(org);
+          const tenant = this.mapTenant(org);
+          try {
+            await this.eventPublisher.publishTenantProvisioned(
+              new TenantProvisionedEvent(orgId, userId, name),
+            );
+          } catch (err) {
+            console.error("Failed to publish TenantProvisionedEvent", err);
+          }
+          return tenant;
         });
       } catch (error: unknown) {
         // Check for unique constraint violation on slug

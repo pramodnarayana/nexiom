@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import type { OnModuleDestroy } from '@nestjs/common';
 import { DATABASE_CONNECTION } from './constants.js';
 import { getDb, closeDb } from './client.js';
+import { PostgresSavePointManager, SAVEPOINT_MANAGER } from './savepoint/savepoint.manager.js';
 
 @Global()
 @Module({
@@ -12,8 +13,12 @@ import { getDb, closeDb } from './client.js';
                 return getDb();
             },
         },
+        {
+            provide: SAVEPOINT_MANAGER,
+            useClass: PostgresSavePointManager,
+        },
     ],
-    exports: [DATABASE_CONNECTION],
+    exports: [DATABASE_CONNECTION, SAVEPOINT_MANAGER],
 })
 export class DatabaseModule implements OnModuleDestroy {
     async onModuleDestroy(): Promise<void> {

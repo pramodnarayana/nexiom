@@ -44,6 +44,7 @@ describe('SystemAdminController', () => {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    deleteIfNotLastAdmin: vi.fn(),
     count: vi.fn(),
   };
 
@@ -361,10 +362,16 @@ describe('SystemAdminController', () => {
       mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
       });
+      mockUserProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: true,
+      });
 
       await controller.deleteUser('u1');
 
-      expect(mockUserProvider.delete).toHaveBeenCalledWith('u1');
+      expect(mockUserProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        'u1',
+        getRequiredSystemTenantId(),
+      );
     });
   });
 

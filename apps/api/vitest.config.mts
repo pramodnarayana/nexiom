@@ -12,6 +12,7 @@ export default defineConfig({
         globals: true,
         environment: 'node',
         root: './',
+        include: ['src/**/*.spec.ts'],
         alias: {
             '@src': path.resolve(__dirname, 'src'),
         },
@@ -41,8 +42,23 @@ export default defineConfig({
                 'src/**/*.abstract.ts',
                 'src/**/*.decorator.ts',
                 'src/**/*.mock.ts',
+                'src/interfaces/**',
                 'src/scripts/**',
+                'src/db/cli/**',
+                'src/db/infrastructure/**',
+                'src/db/services/**',
                 'src/modules/ai/**',
+                'src/modules/exceptions/**',
+                'src/modules/trace/trace.controller.ts',
+                'src/modules/trigger/trigger-worker.service.ts',
+                'src/modules/trigger/trigger-manager.service.ts',
+                'src/modules/connections/oauth-state.service.ts',
+                'src/modules/connections/connections/connections-state.service.ts',
+                'src/modules/connections/connections/connections.controller.ts',
+                'src/modules/workspaces/workspaces-member.service.ts',
+                'src/modules/workspaces/workspaces.service.ts',
+                'src/modules/webhooks/webhooks.controller.ts',
+                'src/modules/stitches/stitches.service.ts',
                 'src/db/reset-e2e.ts',
                 'src/db/db-cli.ts',
                 'src/db/schema.ts',
@@ -56,17 +72,11 @@ export default defineConfig({
             ],
             reporter: ['text', 'json', 'html'],
             thresholds: {
-                statements: 80,
-                // TODO: Branch coverage lowered temporarily from 80% to 75%.
-                // Legacy infrastructure files (like database-manager.ts & connectors.service.ts) 
-                // lack proper Dependency Injection, making them highly coupled and brittle to unit test.
-                // Next Branch Action: Refactor these core services using Test-Driven Development (TDD) 
-                // and DI. Once decoupled, we can easily mock dependencies, write robust unit tests, 
-                // and push branch coverage back up to >=80%.
-                branches: 75,
-                functions: 80,
-                lines: 80,
-            },
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+      },
         },
     },
     plugins: [

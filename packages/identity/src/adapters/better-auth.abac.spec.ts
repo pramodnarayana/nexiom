@@ -64,6 +64,7 @@ describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
       mkConfig(),
       mockTenantProvider,
       options,
+      { publishTenantProvisioned: vi.fn(), publishUserInvited: vi.fn() } as any,
     );
 
     // Mock DB User with Role containing Conditional Permission

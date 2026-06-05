@@ -1,10 +1,27 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  WindmillClient,
-  schedulePathFor,
-  CONNECTION_RUNNER_PATH,
-} from './windmill.client.js';
+import { ISchedulerClient } from '../interfaces/scheduler-client.interface.js';
+import { IHttpClient } from '../interfaces/http-client.interface.js';
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Windmill schedule path for a given connection.
+ * All connection schedules live under f/connections/ in the nexiom workspace.
+ * Validates that connectionId is a UUID to prevent path traversal in the Windmill API URL.
+ */
+export function schedulePathFor(connectionId: string): string {
+  if (!UUID_RE.test(connectionId)) {
+    throw new Error(
+      `Invalid connectionId: expected a UUID, got "${connectionId.slice(0, 50)}"`,
+    );
+  }
+  return `f/connections/${connectionId}`;
+}
+
+/** Windmill script path for the shared connection-runner. */
+export const CONNECTION_RUNNER_PATH = 'f/connection-runner/main';
 
 /** Timeout for all Windmill API calls. Prevents indefinite hangs on network issues. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -34,16 +51,18 @@ export async function main(dataSourceId: string): Promise<object> {
 `.trim();
 
 @Injectable()
-export class HttpWindmillClient extends WindmillClient {
-  private readonly logger = new Logger(HttpWindmillClient.name);
+export class WindmillSchedulerClient implements ISchedulerClient {
+  private readonly logger = new Logger(WindmillSchedulerClient.name);
   private readonly baseUrl: string;
   private readonly workspace: string;
   private readonly token: string;
   private readonly internalSecret: string;
   private readonly callbackUrl: string;
 
-  constructor(private readonly config: ConfigService) {
-    super();
+  constructor(
+    private readonly config: ConfigService,
+    @Inject(IHttpClient) private readonly httpClient: IHttpClient,
+  ) {
     this.baseUrl = this.config.getOrThrow<string>('WINDMILL_BASE_URL');
     this.workspace = this.config.getOrThrow<string>('WINDMILL_WORKSPACE');
     this.token = this.config.getOrThrow<string>('WINDMILL_TOKEN');
@@ -243,15 +262,12 @@ export class HttpWindmillClient extends WindmillClient {
     path: string,
     body?: unknown,
   ): Promise<Response> {
-    return fetch(this.url(path), {
-      method,
+    return this.httpClient.request(method, this.url(path), {
       headers: {
         Authorization: `Bearer ${this.token}`,
-        // Only set Content-Type when there is a body — some API gateways reject
-        // GET requests that carry a Content-Type header.
         ...(body !== undefined && { 'Content-Type': 'application/json' }),
       },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      timeoutMs: REQUEST_TIMEOUT_MS,
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
   }

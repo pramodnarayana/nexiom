@@ -1,23 +1,23 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
-import { RedisBackedTriggerStore } from './redis-trigger-store.js';
-import type { Redis } from 'ioredis';
+import { KeyValueTriggerStore } from './key-value-trigger-store.js';
+import type { IKeyValueStore } from '@soopa/cache';
 
 function makeMockRedis() {
   return {
     hget: vi.fn(),
     hset: vi.fn(),
     hdel: vi.fn(),
-  } as unknown as Redis;
+  } as unknown as IKeyValueStore;
 }
 
-describe('RedisBackedTriggerStore', () => {
+describe('KeyValueTriggerStore', () => {
   let redis: ReturnType<typeof makeMockRedis>;
-  let store: RedisBackedTriggerStore;
+  let store: KeyValueTriggerStore;
 
   beforeEach(() => {
     redis = makeMockRedis();
-    store = new RedisBackedTriggerStore(
+    store = new KeyValueTriggerStore(
       redis,
       'ws_test',
       'salesforce',
@@ -67,7 +67,7 @@ describe('RedisBackedTriggerStore', () => {
 
   it('uses "_" as object-type segment when objectType is undefined', async () => {
     // Instantiate with objectType=undefined to exercise the fallback branch.
-    const noObjectStore = new RedisBackedTriggerStore(
+    const noObjectStore = new KeyValueTriggerStore(
       redis,
       'ws_test',
       'salesforce',

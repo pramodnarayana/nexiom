@@ -13,9 +13,10 @@ import {
   integrationStitches,
   buildTenantSchema,
   assertValidSchemaName,
+  type OutboundGatewayStatus,
 } from '@soopa/database';
 import { StorageResolverService } from '@soopa/engine';
-import { QueueService, QueueName } from '@soopa/queue';
+import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,7 +104,8 @@ export class ExceptionService {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
-    private readonly queueService: QueueService,
+    @Inject(IDeliveryQueueDispatcher)
+    private readonly queueDispatcher: IDeliveryQueueDispatcher,
   ) {
     this.logger.setContext(ExceptionService.name);
   }
@@ -325,7 +327,7 @@ export class ExceptionService {
 
       const updatedRows = await tx
         .update(outboundGateway)
-        .set({ status: 'PENDING' } as never)
+        .set({ status: 'PENDING' as OutboundGatewayStatus })
         .where(
           and(
             eq(outboundGateway.id, outboundGatewayId),
@@ -347,7 +349,7 @@ export class ExceptionService {
       const row = updatedRows[0];
 
       try {
-        await this.queueService.send(QueueName.DeliveryQueue, {
+        await this.queueDispatcher.dispatchRetry({
           traceId: row.traceId,
           srcDataSourceId: outboundGatewayRow.srcDataSourceId,
           destDataSourceId: stitch.destDataSourceId,
@@ -400,7 +402,7 @@ export class ExceptionService {
       );
       return tx
         .update(outboundGateway)
-        .set({ status: 'DISMISSED' } as never)
+        .set({ status: 'DISMISSED' as OutboundGatewayStatus })
         .where(
           and(
             eq(outboundGateway.id, outboundGatewayId),

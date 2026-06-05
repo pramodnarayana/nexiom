@@ -1,7 +1,6 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { dataSources, credentials, DATABASE_CONNECTION } from '@soopa/database';
 import { eq } from 'drizzle-orm';
-import { Redis } from 'ioredis';
 import type { DrizzleDb } from '@soopa/database';
 
 import { EncryptionService } from '../crypto/encryption.interface.js';
@@ -64,11 +63,19 @@ export abstract class OAuthRefreshClient {
     abstract refresh(tenantId: string, appName: string, externalId: string, refreshToken: string): Promise<Record<string, unknown>>;
 }
 
+export interface IDistributedLock {
+    acquire(key: string, value: string, ttlMs: number): Promise<boolean>;
+    release(key: string, value: string): Promise<void>;
+}
+
 function parseExpiresAt(value: unknown): Date | null {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(value as string | number);
     return Number.isNaN(date.getTime()) ? null : date;
 }
+
+import { CredentialRefreshedEvent } from '../events/index.js';
+import { CredentialsEventPublisher } from '../services/credentials-event-publisher.service.js';
 
 @Injectable()
 export class TokenManagerService {
@@ -76,9 +83,11 @@ export class TokenManagerService {
 
     constructor(
         @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-        @Inject('REDIS_CLIENT') private readonly redis: Redis,
+        @Inject('REDIS_CLIENT') private readonly lock: IDistributedLock,
         private readonly crypto: EncryptionService,
         private readonly oauthClient: OAuthRefreshClient,
+        // Using Optional() since other apps might not provide it if not needed
+        @Optional() @Inject(CredentialsEventPublisher) private readonly eventPublisher?: CredentialsEventPublisher,
     ) { }
 
     /**
@@ -126,7 +135,7 @@ export class TokenManagerService {
         const lockValue = Math.random().toString(36).substring(2);
 
         // Acquire Lock (TTL 10 seconds to prevent deadlocks if worker crashes)
-        const lockAcquired = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');
+        const lockAcquired = await this.lock.acquire(lockKey, lockValue, 10000);
 
         if (!lockAcquired) {
             this.logger.debug(`Connection ${connection.id as string} is currently refreshing. Waiting...`);
@@ -189,7 +198,7 @@ export class TokenManagerService {
                 return { credentials: oauthCredentials, connection };
             }
 
-            const retryLock = await this.redis.set(lockKey, lockValue, 'PX', 10000, 'NX');
+            const retryLock = await this.lock.acquire(lockKey, lockValue, 10000);
             if (retryLock) {
                 // Re-read after acquiring the lock to avoid refreshing stale data
                 const [latestConnection] = await this.db.select({
@@ -285,6 +294,18 @@ export class TokenManagerService {
             .set({ value: encryptedPayload, expiresAt, updatedAt: new Date() })
             .where(eq(credentials.id, connection.credentialId as string));
 
+        // 8. Emit the domain event
+        if (this.eventPublisher) {
+            await this.eventPublisher.publishCredentialRefreshed(
+                new CredentialRefreshedEvent(
+                    connection.credentialId as string,
+                    connection.tenantId as string,
+                    connection.id as string,
+                    expiresAt,
+                )
+            );
+        }
+
         return updatedPayload;
     }
 
@@ -316,16 +337,9 @@ export class TokenManagerService {
         this.logger.error(`Token refresh rejected. Marked connection as REVOKED.`);
     }
 
-    /** Releases the distributed lock using a Lua script to prevent deleting another worker's lock. */
+    /** Releases the distributed lock. */
     private async releaseLock(lockKey: string, lockValue: string): Promise<void> {
-        const luaScript = `
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-                return redis.call("del", KEYS[1])
-            else
-                return 0
-            end
-        `;
-        await this.redis.eval(luaScript, 1, lockKey, lockValue);
+        await this.lock.release(lockKey, lockValue);
     }
 }
 

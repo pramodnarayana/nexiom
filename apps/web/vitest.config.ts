@@ -24,6 +24,12 @@ export default defineConfig({
         setupFiles: ['./src/test/setup-env.ts', './src/test/setup.ts'],
         exclude: ['e2e/**', 'node_modules/**'],
         coverage: {
+      thresholds: {
+        statements: 10, // TODO: Increase to 80% after refactor
+        branches: 10,
+        functions: 10,
+        lines: 10,
+      },
             enabled: true,
             provider: 'v8',
             reporter: ['text', 'json', 'html'],

@@ -23,14 +23,35 @@ const axiosInstance = axios.create({
  */
 const simpleRestProvider = dataProviderSimpleRest(API_URL, axiosInstance);
 
+import type { GetListParams, CrudFilter } from "@refinedev/core";
+
 export const dataProvider = {
     ...simpleRestProvider,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-    getList: async ({ resource, pagination, filters: _filters, sorters: _sorters }: any) => {
+    getList: async ({ resource, pagination, filters, sorters }: GetListParams) => {
         const { current = 1, pageSize = 10 } = pagination ?? {};
 
-        // TODO: Map filters and sorters to backend query params if needed
         const queryFilters: Record<string, unknown> = {};
+
+        if (filters && filters.length > 0) {
+            // Map the generic 'q' filter to our backend 'search' parameter
+            const searchFilter = filters.find((f: CrudFilter) => 'field' in f && (f.field === 'q' || f.field === 'search'));
+            if (searchFilter && 'value' in searchFilter) {
+                queryFilters.search = searchFilter.value;
+            }
+            
+            // Map other exact filters
+            filters.forEach((f: CrudFilter) => {
+                if ('field' in f && f.field !== 'q' && f.field !== 'search' && f.operator === 'eq') {
+                    queryFilters[f.field] = f.value;
+                }
+            });
+        }
+
+        if (sorters && sorters.length > 0) {
+            // Take the primary sorter
+            queryFilters.sort = sorters[0].field;
+            queryFilters.sortOrder = sorters[0].order;
+        }
 
         const url = `${API_URL}/${resource}`;
 

@@ -1,16 +1,19 @@
 import { Module } from '@nestjs/common';
 import { DbModule } from '../../db/db.module.js';
-import { REDIS_CLIENT } from '@soopa/cache';
-import type { Redis } from '@soopa/cache';
+
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
 import { PollerService } from './poller.service.js';
 import { DlqProcessorService } from './dlq-processor.service.js';
+import { TriggerPayloadTransformer } from './trigger-payload-transformer.js';
+import { TriggerRetryPolicyService } from './trigger-retry-policy.service.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
-import { DB_MANAGER } from '@soopa/dbmanager';
-import type { DatabaseManager } from '@soopa/dbmanager';
-import { StorageResolverModule, StorageResolverService } from '@soopa/engine';
+import { StorageResolverModule } from '@soopa/engine';
+import { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
+import { ITriggerDlqService } from './interfaces/trigger-dlq.interface.js';
+import { RedisDistributedLockService } from './infrastructure/redis-distributed-lock.service.js';
+import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.service.js';
 
 /**
  * Wires all trigger-related services.
@@ -22,20 +25,16 @@ import { StorageResolverModule, StorageResolverService } from '@soopa/engine';
   imports: [DbModule, StorageResolverModule],
   providers: [
     {
-      provide: TriggerExecutorService,
-      useFactory: (
-        db: DrizzleDb,
-        redis: Redis,
-        dbManager: DatabaseManager,
-        storageResolver: StorageResolverService,
-      ) => new TriggerExecutorService(db, redis, dbManager, storageResolver),
-      inject: [
-        DATABASE_CONNECTION,
-        REDIS_CLIENT,
-        DB_MANAGER,
-        StorageResolverService,
-      ],
+      provide: IDistributedLockService,
+      useClass: RedisDistributedLockService,
     },
+    {
+      provide: ITriggerDlqService,
+      useClass: RedisTriggerDlqService,
+    },
+    TriggerPayloadTransformer,
+    TriggerRetryPolicyService,
+    TriggerExecutorService,
     {
       provide: PollerService,
       useFactory: (
@@ -52,11 +51,15 @@ import { StorageResolverModule, StorageResolverService } from '@soopa/engine';
     {
       provide: DlqProcessorService,
       useFactory: (
-        redis: Redis,
+        dlqService: ITriggerDlqService,
         executor: TriggerExecutorService,
         registry: PieceRegistryService,
-      ) => new DlqProcessorService(redis, executor, registry),
-      inject: [REDIS_CLIENT, TriggerExecutorService, PieceRegistryService],
+      ) => new DlqProcessorService(dlqService, executor, registry),
+      inject: [
+        ITriggerDlqService,
+        TriggerExecutorService,
+        PieceRegistryService,
+      ],
     },
   ],
   exports: [TriggerExecutorService],

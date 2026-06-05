@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Tenant as TenantInterface } from "../interfaces/index.js";
+import type { IIdentityEventPublisher } from "../interfaces/index.js";
 import { DrizzleTenantAdapter } from "./drizzle-tenant.adapter.js";
 import * as schema from "../schema.js";
 
@@ -109,6 +110,11 @@ describe("DrizzleTenantAdapter", () => {
     return { db, tx } as const;
   };
 
+  const mkPublisher = (): IIdentityEventPublisher => ({
+    publishTenantProvisioned: vi.fn().mockResolvedValue(undefined),
+    publishUserInvited: vi.fn().mockResolvedValue(undefined),
+  });
+
   beforeEach(() => {
     vi.setSystemTime(now);
     vi.restoreAllMocks();
@@ -122,6 +128,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db, tx } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     const firstError = new Error("duplicate key") as Error & {
@@ -156,6 +163,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     db.returning.mockResolvedValue([mkOrg({ slug: "acme" })]);
@@ -176,6 +184,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     await expect(
@@ -187,6 +196,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     db.returning.mockResolvedValue([
@@ -217,6 +227,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     await expect(adapter.update("org-1", { slug: "  " })).rejects.toThrow(
@@ -228,6 +239,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db, tx } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     tx.returning.mockResolvedValueOnce([{ id: "org-1" }]);
@@ -247,6 +259,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     const rows = [
@@ -271,6 +284,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     const tenants = [mkOrg({ id: "org-1" }), mkOrg({ id: "org-2" })];
@@ -302,6 +316,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     db.query.organization.findFirst.mockResolvedValueOnce(
@@ -319,6 +334,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     db.query.organization.findFirst.mockResolvedValueOnce(
@@ -336,6 +352,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     db.returning.mockResolvedValueOnce([
@@ -359,6 +376,7 @@ describe("DrizzleTenantAdapter", () => {
     const { db } = mkDb();
     const adapter = new DrizzleTenantAdapter(
       db as unknown as NodePgDatabase<typeof schema>,
+      mkPublisher(),
     );
 
     const spy = vi.spyOn(adapter, "create").mockResolvedValueOnce({
