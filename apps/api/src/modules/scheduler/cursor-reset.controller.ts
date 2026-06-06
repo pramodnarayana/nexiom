@@ -21,6 +21,7 @@ import { REDIS_CLIENT, type Redis } from '@soopa/cache';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { pollLockKey } from './lock-keys.js';
+import { computeCursorStaleness } from './cursor-staleness.js';
 
 // TTL for the admin cursor-reset lock.  Must be long enough to cover the DB
 // delete even under elevated database latency.  Matches the minimum floor used
@@ -121,8 +122,6 @@ export class CursorResetController {
       throw new NotFoundException(`Connection not found: ${id}`);
     }
 
-    // Select only safe, non-sensitive columns.  stateDocument is intentionally
-    // excluded — it may contain opaque vendor cursor tokens.
     const rows = await this.db
       .select({
         id: syncCursors.id,
@@ -134,28 +133,6 @@ export class CursorResetController {
       .from(syncCursors)
       .where(eq(syncCursors.dataSourceId, id));
 
-    const now = Date.now();
-    const staleThresholdMs =
-      connection.syncIntervalMinutes > 0
-        ? 2 * connection.syncIntervalMinutes * 60_000
-        : Number.POSITIVE_INFINITY;
-
-    return rows.map((row) => {
-      const ageMs = now - row.updatedAt.getTime();
-      // Paused connections are never stale — cursors are not expected to advance.
-      const paused = !connection.scheduleEnabled;
-      // Explicitly enumerate fields rather than spreading — stateDocument is
-      // intentionally absent and must never appear in the HTTP response.
-      return {
-        id: row.id,
-        dataSourceId: row.dataSourceId,
-        streamName: row.streamName,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        ageMs,
-        paused,
-        stale: paused ? false : ageMs > staleThresholdMs,
-      };
-    });
+    return computeCursorStaleness(rows, connection);
   }
 }

@@ -1,12 +1,9 @@
-import * as React from "react";
-import { useDelete, useCustomMutation } from "@refinedev/core";
 import { Trash2, Edit, Eye, Send, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Actions, Resources } from "@/shared/lib/auth/constants";
-import { useAuth, Can } from "@/shared/lib/auth/context";
-import { hasPermission, normalizeResource } from "@/shared/lib/auth/utils";
+import { Resources } from "@/shared/lib/auth/constants";
+import { Can } from "@/shared/lib/auth/context";
 import type { UserSubject } from "@/shared/lib/auth/access-control";
-import { useBasePath } from "@/shared/contexts/useBasePath";
+import { useUsersList } from "./hooks/useUsersList";
 import {
     Table,
     TableBody,
@@ -26,74 +23,15 @@ interface UsersProps {
 }
 
 export const Users = ({ data, isLoading, resource }: UsersProps) => {
-    const { mutate: deleteUser } = useDelete();
-    const { mutate: sendInvite } = useCustomMutation();
-    const { user: currentUser } = useAuth();
-
-    // Get scope-aware basePath from centralized hook
-    const basePath = useBasePath('USERS');
-
-    // Check if user is platform_admin (can perform write operations)
-    // PBAC: Check if user can manage users
-    const normalizedResource = normalizeResource(resource || basePath);
-    const canManageUsers = hasPermission(currentUser?.permissions, normalizedResource, Actions.MANAGE);
-
-    // Compute the resource for deletion. Fallback to basePath (trimmed) if not provided.
-    const deleteResource = (resource || basePath).replaceAll(/(^\/+)|(\/+$)/g, '');
-
-    const handleDelete = (id: string, name: string) => {
-        if (globalThis.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
-            deleteUser({
-                resource: deleteResource,
-                id: id,
-                mutationMode: "optimistic",
-                successNotification: {
-                    message: "User deleted successfully",
-                    type: "success",
-                },
-                errorNotification: (error) => ({
-                    message: `Failed to delete ${name}: ${error?.message || "unknown error"}`,
-                    type: "error",
-                }),
-            });
-        }
-    };
-
-    const [invitingIds, setInvitingIds] = React.useState<Set<string>>(new Set());
-
-    const handleInvite = (id: string, name: string) => {
-        if (invitingIds.has(id)) return;
-
-        setInvitingIds((prev) => new Set(prev).add(id));
-        const API_URL = import.meta.env.VITE_API_URL || '/api';
-
-        // Derive endpoint from resource prop or default to admin/users
-        // Ensure we don't duplicate slashes if resource has them
-        const resourcePath = (resource || basePath).replaceAll(/(^\/+)|(\/+$)/g, "");
-        const inviteUrl = `${API_URL}/${resourcePath}/${id}/invite`;
-
-        sendInvite({
-            url: inviteUrl,
-            method: "post",
-            values: {},
-            successNotification: {
-                message: `Invitation sent to ${name}`,
-                type: "success",
-            },
-            errorNotification: (error) => ({
-                message: `Failed to send invite: ${error?.message || "unknown error"}`,
-                type: "error",
-            }),
-        }, {
-            onSettled: () => {
-                setInvitingIds((prev) => {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                });
-            }
-        });
-    };
+    const {
+        currentUser,
+        basePath,
+        normalizedResource,
+        canManageUsers,
+        invitingIds,
+        handleDelete,
+        handleInvite
+    } = useUsersList(resource);
 
     /**
      * Render email verification status badge

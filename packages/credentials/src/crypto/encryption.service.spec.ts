@@ -22,6 +22,26 @@ describe('AesEncryptionService', () => {
         delete process.env.ENCRYPTION_KEY;
     });
 
+    it('throws error if ENCRYPTION_KEY is missing', () => {
+        const configService = { get: vi.fn().mockReturnValue(undefined) };
+        expect(() => new AesEncryptionService(configService as any)).toThrow('ENCRYPTION_KEY is missing');
+    });
+
+    it('throws error if ENCRYPTION_KEY is not 32 bytes', () => {
+        const configService = { get: vi.fn().mockReturnValue('tooshort') };
+        expect(() => new AesEncryptionService(configService as any)).toThrow('Invalid key length: expected 32 bytes');
+    });
+
+    it('throws error if encryption fails', async () => {
+        // Intentionally corrupt the keyBuffer to force encryption failure
+        (service as any).keyBuffer = Buffer.from('corrupted');
+        await expect(service.encrypt('payload')).rejects.toThrow('Encryption failed');
+    });
+
+    it('throws error if encrypted string format is invalid (no parts)', async () => {
+        await expect(service.decrypt('invalid_string')).rejects.toThrow('Decryption failed');
+    });
+
     it('should successfully encrypt and decrypt a plaintext string (e.g. JSON tokens)', async () => {
         const payload = JSON.stringify({ accessToken: 'secret123', refreshToken: 'refresh456' });
 

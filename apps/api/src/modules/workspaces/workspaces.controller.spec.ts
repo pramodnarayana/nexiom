@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, PermissionsGuard } from '@soopa/auth';
 import { WorkspacesController } from './workspaces.controller.js';
-import { WorkspacesService } from './workspaces.service.js';
 import { ORG_ID, WS_ID, makeAuth } from './workspace-test-fixtures.js';
+import { WorkspaceProvisionerUseCase } from './use-cases/workspace-provisioner.use-case.js';
+import { WorkspaceRepository } from './repositories/workspace.repository.js';
 
 const WORKSPACE = {
   id: WS_ID,
@@ -17,18 +22,21 @@ const WORKSPACE = {
 
 describe('WorkspacesController', () => {
   let controller: WorkspacesController;
-  const mockService = {
-    create: vi.fn(),
-    list: vi.fn(),
-    findOne: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
+  const mockProvisioner = { execute: vi.fn() };
+  const mockWorkspaceRepository = {
+    findByOrg: vi.fn(),
+    findByIdAndOrg: vi.fn(),
+    updateWorkspace: vi.fn(),
+    deleteWorkspace: vi.fn(),
   };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       controllers: [WorkspacesController],
-      providers: [{ provide: WorkspacesService, useValue: mockService }],
+      providers: [
+        { provide: WorkspaceProvisionerUseCase, useValue: mockProvisioner },
+        { provide: WorkspaceRepository, useValue: mockWorkspaceRepository },
+      ],
     })
       .overrideGuard(AuthGuard)
       .useValue({ canActivate: () => true })
@@ -40,51 +48,87 @@ describe('WorkspacesController', () => {
     vi.clearAllMocks();
   });
 
-  it('create — delegates to service', async () => {
-    mockService.create.mockResolvedValue(WORKSPACE);
+  it('create — delegates to provisioner', async () => {
+    mockProvisioner.execute.mockResolvedValue(WORKSPACE);
     const result = await controller.create(makeAuth(), { name: 'Logistics' });
     expect(result).toBe(WORKSPACE);
-    expect(mockService.create).toHaveBeenCalledWith(ORG_ID, {
+    expect(mockProvisioner.execute).toHaveBeenCalledWith(ORG_ID, {
       name: 'Logistics',
     });
   });
 
-  it('list — delegates to service', async () => {
-    mockService.list.mockResolvedValue([WORKSPACE]);
+  it('list — returns workspaces from repository', async () => {
+    mockWorkspaceRepository.findByOrg.mockResolvedValue([WORKSPACE]);
     const result = await controller.list(makeAuth());
     expect(result).toEqual([WORKSPACE]);
-    expect(mockService.list).toHaveBeenCalledWith(ORG_ID);
+    expect(mockWorkspaceRepository.findByOrg).toHaveBeenCalledWith(ORG_ID);
   });
 
-  it('findOne — delegates to service', async () => {
-    mockService.findOne.mockResolvedValue(WORKSPACE);
+  it('findOne — returns workspace from repository', async () => {
+    mockWorkspaceRepository.findByIdAndOrg.mockResolvedValue(WORKSPACE);
     const result = await controller.findOne(makeAuth(), WS_ID);
     expect(result).toBe(WORKSPACE);
-    expect(mockService.findOne).toHaveBeenCalledWith(ORG_ID, WS_ID);
+    expect(mockWorkspaceRepository.findByIdAndOrg).toHaveBeenCalledWith(
+      WS_ID,
+      ORG_ID,
+    );
   });
 
-  it('findOne — propagates NotFoundException from service', async () => {
-    mockService.findOne.mockRejectedValue(new NotFoundException());
+  it('findOne — throws NotFoundException if workspace not found', async () => {
+    mockWorkspaceRepository.findByIdAndOrg.mockResolvedValue(null);
     await expect(controller.findOne(makeAuth(), WS_ID)).rejects.toThrow(
       NotFoundException,
     );
   });
 
-  it('update — delegates to service', async () => {
+  it('update — delegates to repository', async () => {
     const updated = { ...WORKSPACE, name: 'Logistics-EU' };
-    mockService.update.mockResolvedValue(updated);
+    mockWorkspaceRepository.updateWorkspace.mockResolvedValue(updated);
     const result = await controller.update(makeAuth(), WS_ID, {
       name: 'Logistics-EU',
     });
     expect(result).toBe(updated);
-    expect(mockService.update).toHaveBeenCalledWith(ORG_ID, WS_ID, {
-      name: 'Logistics-EU',
-    });
+    expect(mockWorkspaceRepository.updateWorkspace).toHaveBeenCalledWith(
+      WS_ID,
+      ORG_ID,
+      { name: 'Logistics-EU' },
+    );
   });
 
-  it('remove — delegates to service', async () => {
-    mockService.remove.mockResolvedValue(undefined);
+  it('update — throws BadRequestException if no updatable fields provided', async () => {
+    await expect(controller.update(makeAuth(), WS_ID, {})).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('update — throws NotFoundException if workspace not found after update', async () => {
+    mockWorkspaceRepository.updateWorkspace.mockResolvedValue(null);
+    await expect(
+      controller.update(makeAuth(), WS_ID, { name: 'X' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('update — throws ConflictException on unique violation (23505)', async () => {
+    const uniqueErr = Object.assign(new Error('duplicate'), { code: '23505' });
+    mockWorkspaceRepository.updateWorkspace.mockRejectedValue(uniqueErr);
+    await expect(
+      controller.update(makeAuth(), WS_ID, { name: 'Dup' }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('remove — delegates to repository', async () => {
+    mockWorkspaceRepository.deleteWorkspace.mockResolvedValue(WORKSPACE);
     await expect(controller.remove(makeAuth(), WS_ID)).resolves.toBeUndefined();
-    expect(mockService.remove).toHaveBeenCalledWith(ORG_ID, WS_ID);
+    expect(mockWorkspaceRepository.deleteWorkspace).toHaveBeenCalledWith(
+      WS_ID,
+      ORG_ID,
+    );
+  });
+
+  it('remove — throws NotFoundException if workspace not found', async () => {
+    mockWorkspaceRepository.deleteWorkspace.mockResolvedValue(null);
+    await expect(controller.remove(makeAuth(), WS_ID)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { PluginsController, WebhookPayloadDto } from './plugins.controller.js';
 import { PluginManagerService } from '@soopa/piece-registry';

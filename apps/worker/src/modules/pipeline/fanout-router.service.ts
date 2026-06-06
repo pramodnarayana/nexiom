@@ -20,6 +20,7 @@ import {
   sanitizeErrorObject,
 } from "../../shared/pipeline.utils.js";
 import { FanoutBatchProcessor } from "./fanout-batch-processor.js";
+import { RoutingDecisionEngine } from "./routing-decision.engine.js";
 
 @Injectable()
 export class FanoutRouterService implements OnModuleInit {
@@ -30,6 +31,7 @@ export class FanoutRouterService implements OnModuleInit {
     private readonly storageResolver: StorageResolverService,
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly batchProcessor: FanoutBatchProcessor,
+    private readonly routingDecisionEngine: RoutingDecisionEngine,
   ) {}
 
   onModuleInit() {
@@ -97,42 +99,27 @@ export class FanoutRouterService implements OnModuleInit {
           sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
         );
 
+        const evaluation = await this.routingDecisionEngine.evaluateSuperseded(
+          tx,
+          normalizedEntity,
+          replicaEntity,
+          traceId,
+        );
+
+        if (evaluation.kind === "superseded") {
+          return { kind: "superseded" as const };
+        }
+
         const normRows = await tx
           .select()
           .from(normalizedEntity)
           .where(sql`${normalizedEntity.traceId} = ${traceId}`)
           .limit(1);
 
-        if (!normRows.length) {
-          const replicaRows = await tx
-            .select({ replicaId: replicaEntity.id })
-            .from(replicaEntity)
-            .where(sql`${replicaEntity.traceId} = ${traceId}`)
-            .limit(1);
-
-          if (replicaRows.length > 0) {
-            const replicaId = replicaRows[0].replicaId;
-            const anyNorm = await tx
-              .select({ traceId: normalizedEntity.traceId })
-              .from(normalizedEntity)
-              .where(
-                sql`${normalizedEntity.replicaId} = ${replicaId} AND ${normalizedEntity.traceId} != ${traceId}`,
-              )
-              .limit(1);
-
-            if (anyNorm.length > 0) {
-              return { kind: "superseded" as const };
-            }
-          }
-
-          throw new Error(
-            `Normalized record for traceId ${traceId} not found and no superseding record exists. ` +
-              `L3 may not have committed. The message will be retried.`,
-          );
+        if (normRows.length > 0) {
+          normalizedData = normRows[0].data as Record<string, unknown>;
+          canonicalType = normRows[0].canonicalType ?? "RAW";
         }
-
-        normalizedData = normRows[0].data as Record<string, unknown>;
-        canonicalType = normRows[0].canonicalType ?? "RAW";
 
         const replicaRows = await tx
           .select({ entityId: replicaEntity.entityId })

@@ -21,7 +21,9 @@ import { NormalizationService } from "./normalization.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
 import { FanoutRouterService } from "./fanout-router.service.js";
 import { FanoutBatchProcessor } from "./fanout-batch-processor.js";
+import { RoutingDecisionEngine } from "./routing-decision.engine.js";
 import { DeliveryService } from "./delivery.service.js";
+import { PieceOutboundDispatcher } from "./piece-outbound.dispatcher.js";
 import { DeliveryRetryService } from "./delivery-retry.service.js";
 import { GemHydrationService } from "./gem-hydration.service.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
@@ -52,6 +54,11 @@ import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
     TargetBuilderService, // SQL JOIN enrichment for target payload assembly
     FanoutRouterService,
     FanoutBatchProcessor,
+    RoutingDecisionEngine,
+    {
+      provide: "IOutboundDispatcher",
+      useClass: PieceOutboundDispatcher,
+    },
     DeliveryService,
     DeliveryRetryService,
     GemHydrationService,

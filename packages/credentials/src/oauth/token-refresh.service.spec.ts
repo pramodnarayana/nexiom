@@ -87,4 +87,57 @@ describe('BaseOAuthRefreshClient', () => {
     await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow(OAuthRefreshError);
     await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow(/400 Bad Request/);
   });
+
+  it('publishes CredentialInvalidatedEvent on 400 or 401', async () => {
+    dbMock.limit.mockResolvedValue([{ value: 'encrypted', credentialId: 'cred-1' }]);
+    
+    vi.mocked(httpClientMock.fetch).mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized'
+    } as any);
+
+    const eventPublisherMock = {
+      publishCredentialInvalidated: vi.fn(),
+      publishCredentialRefreshed: vi.fn(),
+      publishCredentialDeleted: vi.fn(),
+    };
+    
+    const clientWithEvents = new MockRefreshClient(dbMock, cryptoMock, httpClientMock, eventPublisherMock);
+    
+    await expect(clientWithEvents.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow(OAuthRefreshError);
+    expect(eventPublisherMock.publishCredentialInvalidated).toHaveBeenCalled();
+  });
+
+  it('throws Error if credential payload is invalid', async () => {
+    dbMock.limit.mockResolvedValue([{ value: 'bad-encrypted' }]);
+    vi.mocked(cryptoMock.decrypt).mockResolvedValueOnce('null');
+
+    await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow('Invalid credential payload: expected a non-null plain object');
+  });
+
+  it('throws Error if clientId or clientSecret is missing', async () => {
+    dbMock.limit.mockResolvedValue([{ value: 'bad-encrypted' }]);
+    vi.mocked(cryptoMock.decrypt).mockResolvedValueOnce(JSON.stringify({ clientId: '' }));
+
+    await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow('Decrypted credentials missing valid clientId or clientSecret');
+  });
+
+  it('throws OAuthRefreshError if API returns non-object JSON', async () => {
+    dbMock.limit.mockResolvedValue([{ value: 'encrypted' }]);
+    
+    vi.mocked(httpClientMock.fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(["an", "array", "not", "an", "object"])
+    } as any);
+
+    await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow('OAuth token response must be a non-null object');
+  });
+
+  it('throws 502 for TypeErrors during fetch', async () => {
+    dbMock.limit.mockResolvedValue([{ value: 'encrypted' }]);
+    vi.mocked(httpClientMock.fetch).mockRejectedValue(new TypeError('Network request failed'));
+
+    await expect(client.refresh('t1', 'app', 'ext', 'ref-token')).rejects.toThrow('Transport or configuration TypeError: Network request failed');
+  });
 });

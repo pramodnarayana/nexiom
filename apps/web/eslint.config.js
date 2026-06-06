@@ -29,6 +29,15 @@ export default defineConfig([
       }],
     },
   },
+  // ─── Test files: relax strict typing ─────────────────────────────────────────
+  // Rationale: Test stubs and mocks frequently use `any` to avoid excessive
+  // boilerplate when mocking complex objects.
+  {
+    files: ['**/*.spec.ts', '**/*.spec.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
   // ─── Connections module: ban browser credential storage ───────────────────
   // Rationale: OAuth credentials (clientId, clientSecret, vendorParams) must
   // NEVER be persisted to localStorage/sessionStorage. They are unencrypted

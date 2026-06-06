@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { Test, TestingModule } from '@nestjs/testing';
 import { MappingsController } from './mappings.controller.js';
 import { MappingsService } from './mappings.service.js';

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectionExplorerController } from './connection-explorer.controller.js';
 import { DataExplorerService } from './data-explorer.service.js';

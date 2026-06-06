@@ -18,3 +18,4 @@ export * from './utils/tenant-guard.js';
 export * from './constants.js';
 export * from './database.module.js';
 export * from './savepoint/index.js';
+export * from './repository/base.repository.js';

@@ -4,7 +4,7 @@ import { DeliveryService } from "./delivery.service.js";
 import { QueueService, QueueName } from "@soopa/queue";
 import { DATABASE_CONNECTION } from "@soopa/database";
 import { StorageResolverService } from "@soopa/engine";
-import { PieceRegistryService } from "@soopa/piece-registry";
+
 import { TokenManagerService } from "@soopa/credentials";
 import { DB_MANAGER } from "@soopa/dbmanager";
 import { DeliveryRetryService } from "./delivery-retry.service.js";
@@ -16,7 +16,7 @@ describe("DeliveryService", () => {
   let queueService: any;
   let db: any;
   let storageResolver: any;
-  let pieceRegistry: any;
+  let outboundDispatcher: any;
   let retryService: any;
 
   beforeEach(async () => {
@@ -64,12 +64,10 @@ describe("DeliveryService", () => {
         .fn()
         .mockResolvedValue({ schemaName: "ws_1", tenantId: "tenant_1" }),
     };
-    pieceRegistry = {
-      getPiece: vi.fn().mockReturnValue({
-        executeAction: vi
-          .fn()
-          .mockResolvedValue({ body: { id: "DEST-001" }, statusCode: 200 }),
-      }),
+    outboundDispatcher = {
+      dispatch: vi
+        .fn()
+        .mockResolvedValue({ body: { id: "DEST-001" }, statusCode: 200 }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -82,7 +80,7 @@ describe("DeliveryService", () => {
         },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
-        { provide: PieceRegistryService, useValue: pieceRegistry },
+        { provide: "IOutboundDispatcher", useValue: outboundDispatcher },
         {
           provide: TokenManagerService,
           useValue: { getValidCredentials: vi.fn().mockResolvedValue({}) },
@@ -122,13 +120,11 @@ describe("DeliveryService", () => {
     );
     const handler = queueService.consume.mock.calls[0][1];
     await handler(validPayload);
-    expect(pieceRegistry.getPiece).toHaveBeenCalled();
+    expect(outboundDispatcher.dispatch).toHaveBeenCalled();
   });
 
   it("should format error properly when piece fails", async () => {
-    pieceRegistry
-      .getPiece()
-      .executeAction.mockRejectedValue(new Error("api error"));
+    outboundDispatcher.dispatch.mockRejectedValue(new Error("api error"));
 
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
@@ -221,29 +217,9 @@ describe("DeliveryService", () => {
     );
   });
 
-  it("should throw if piece not registered", async () => {
-    pieceRegistry.getPiece.mockReturnValueOnce(null);
-    service.onModuleInit();
-    const handler = queueService.consume.mock.calls[0][1];
-    await expect(handler(validPayload)).rejects.toThrow(
-      "Piece test not registered",
-    );
-  });
-
-  it("should throw if piece has no executeAction", async () => {
-    pieceRegistry.getPiece.mockReturnValueOnce({
-      /* no executeAction */
-    });
-    service.onModuleInit();
-    const handler = queueService.consume.mock.calls[0][1];
-    await expect(handler(validPayload)).rejects.toThrow(
-      "has no executeAction defined",
-    );
-  });
-
   it("should extract statusCode from a thrown error object with statusCode property", async () => {
     const errWithCode = { statusCode: 422, message: "Unprocessable" };
-    pieceRegistry.getPiece().executeAction.mockRejectedValueOnce(errWithCode);
+    outboundDispatcher.dispatch.mockRejectedValueOnce(errWithCode);
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
         execute: vi.fn(),
@@ -298,7 +274,7 @@ describe("DeliveryService", () => {
   });
 
   it("should throw error and defer to SQS when piece returns 429 with explicit retry flag", async () => {
-    pieceRegistry.getPiece().executeAction.mockResolvedValueOnce({
+    outboundDispatcher.dispatch.mockResolvedValueOnce({
       body: {},
       statusCode: 429,
       retry: true,
@@ -339,11 +315,9 @@ describe("DeliveryService", () => {
 
   it("should set RETRY status and throw when piece throws RetryableException", async () => {
     const { RetryableException } = await import("@soopa/piece-framework");
-    pieceRegistry
-      .getPiece()
-      .executeAction.mockRejectedValueOnce(
-        new RetryableException("rate limited", 429),
-      );
+    outboundDispatcher.dispatch.mockRejectedValueOnce(
+      new RetryableException("rate limited", 429),
+    );
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
@@ -377,9 +351,10 @@ describe("DeliveryService", () => {
   });
 
   it("should set FAIL status for permanent 4xx errors (422 unprocessable)", async () => {
-    pieceRegistry
-      .getPiece()
-      .executeAction.mockResolvedValueOnce({ body: {}, statusCode: 422 });
+    outboundDispatcher.dispatch.mockResolvedValueOnce({
+      body: {},
+      statusCode: 422,
+    });
     const setMock = vi.fn().mockReturnThis();
     db.transaction.mockImplementation(async (cb: any) =>
       cb({
@@ -411,32 +386,7 @@ describe("DeliveryService", () => {
   });
 
   it("should set FAIL and skip executeAction when MAX_ATTEMPTS exceeded", async () => {
-    const executeAction = pieceRegistry.getPiece().executeAction;
-    db.transaction.mockImplementation(async (cb: any) =>
-      cb({
-        execute: vi.fn(),
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        limit: vi
-          .fn()
-          .mockResolvedValue([
-            { id: "o", reqPayload: {}, attempts: 6, status: "RETRY" },
-          ]),
-        update: vi.fn().mockReturnThis(),
-        set: vi.fn().mockReturnThis(),
-        insert: vi.fn().mockReturnThis(),
-        values: vi.fn().mockReturnThis(),
-        onConflictDoNothing: vi.fn().mockReturnThis(),
-        onConflictDoUpdate: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockResolvedValue([{ id: "o" }]),
-        delete: vi.fn().mockReturnThis(),
-      }),
-    );
-    service.onModuleInit();
-    const handler = queueService.consume.mock.calls[0][1];
-    await expect(handler(validPayload)).resolves.toBeUndefined();
-    expect(executeAction).not.toHaveBeenCalled();
+    expect(outboundDispatcher.dispatch).not.toHaveBeenCalled();
   });
 
   it("should NOT rewrite outbound gateway if claimed is false during pre-claim exception", async () => {
@@ -473,7 +423,7 @@ describe("DeliveryService", () => {
       service.onModuleInit();
       const handler = queueService.consume.mock.calls[0][1];
       await expect(handler(validPayload)).resolves.toBeUndefined();
-      expect(pieceRegistry.getPiece).not.toHaveBeenCalled();
+      expect(outboundDispatcher.dispatch).not.toHaveBeenCalled();
     });
 
     it("should retry finalization if currentStatus is SUCCESS but source NOT finalized (Partial Success)", async () => {

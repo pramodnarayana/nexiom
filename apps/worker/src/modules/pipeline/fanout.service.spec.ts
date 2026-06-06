@@ -17,8 +17,7 @@ vi.mock("@soopa/engine", async (importOriginal) => {
   };
 });
 
-import { ApplicationLoaderService } from "@soopa/engine";
-
+import { EventEmitterModule } from "@nestjs/event-emitter";
 describe("FanOutService", () => {
   const createDbSelectMock = (
     stitches: any[],
@@ -158,6 +157,7 @@ describe("FanOutService", () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
       providers: [
         {
           provide: DB_MANAGER,
@@ -167,10 +167,6 @@ describe("FanOutService", () => {
         { provide: QueueService, useValue: queueService },
         { provide: DATABASE_CONNECTION, useValue: db },
         { provide: StorageResolverService, useValue: storageResolver },
-        {
-          provide: ApplicationLoaderService,
-          useValue: { load: vi.fn().mockResolvedValue({}) },
-        },
         {
           provide: TargetBuilderService,
           useValue: {

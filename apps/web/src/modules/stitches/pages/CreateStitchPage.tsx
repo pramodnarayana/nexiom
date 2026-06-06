@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -13,43 +13,16 @@ import {
 } from '@/shared/components/ui/select';
 import { Combobox } from '@/shared/components/ui/combobox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
-import { AppRoutes } from '@/shared/lib/auth/constants';
-import { listAvailableConnections, type AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
-import { createStitch } from '../api/stitches.api';
-import { listObjects, type ObjectDescriptor } from '../api/metadata.api';
-import type { MappingRule } from '../api/field-mappings.api';
-import { MappingCanvas, type SyncConditionRule } from '../components/MappingCanvas';
+import type { AvailableConnectionResponse } from '@/modules/workspaces/api/workspaces.api';
+import type { ObjectDescriptor } from '../api/metadata.api';
+import { useCreateStitchPage } from '../hooks/useCreateStitchPage';
+import { MappingCanvas } from '../components/MappingCanvas';
 import { DependencyList } from '../components/DependencyList';
 import { StitchConfigPanel } from '../components/StitchConfigPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Step = 1 | 2 | 3;
-
-interface WizardState {
-  name: string;
-  // Step 1
-  srcDataSourceId: string;
-  sourceObject: string;
-  // Step 2
-  destDataSourceId: string;
-  targetObject: string;
-  // Step 3
-  mappingRules: MappingRule[];
-  syncConditions: SyncConditionRule[];
-  config: Record<string, unknown>;
-}
-
-const INITIAL_STATE: WizardState = {
-  name: '',
-  srcDataSourceId: '',
-  sourceObject: '',
-  destDataSourceId: '',
-  targetObject: '',
-  mappingRules: [],
-  syncConditions: [],
-  config: {},
-};
 
 // ── Step indicator ────────────────────────────────────────────────────────────
 
@@ -214,117 +187,32 @@ export function CreateStitchPage() {
   const { id: workspaceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const stitchesHref = `${AppRoutes.TENANT.WORKSPACES}/${workspaceId ?? ''}/stitches`;
-
-  const [step, setStep] = useState<Step>(1);
-  const [wizard, setWizard] = useState<WizardState>(INITIAL_STATE);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Connections — loaded once on mount
-  const [connections, setConnections] = useState<AvailableConnectionResponse[]>([]);
-  const [connectionsLoading, setConnectionsLoading] = useState(true);
-  const [connectionsError, setConnectionsError] = useState<string | null>(null);
-
-  // Objects — per connection, loaded lazily
-  const [srcObjects, setSrcObjects] = useState<ObjectDescriptor[]>([]);
-  const [srcObjectsLoading, setSrcObjectsLoading] = useState(false);
-  const [srcObjectsError, setSrcObjectsError] = useState<string | null>(null);
-  const [destObjects, setDestObjects] = useState<ObjectDescriptor[]>([]);
-  const [destObjectsLoading, setDestObjectsLoading] = useState(false);
-  const [destObjectsError, setDestObjectsError] = useState<string | null>(null);
-
-  // Load-cancellation tokens — prevent stale responses from racing in-flight requests
-  const srcLoadTokenRef = useRef(0);
-  const destLoadTokenRef = useRef(0);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    listAvailableConnections(workspaceId)
-      .then(setConnections)
-      .catch((e: unknown) => {
-        setConnectionsError(e instanceof Error ? e.message : 'Failed to load connections.');
-      })
-      .finally(() => { setConnectionsLoading(false); });
-  }, [workspaceId]);
-
-  const loadSrcObjects = useCallback((dataSourceId: string, refresh = false) => {
-    setSrcObjects([]);
-    setSrcObjectsError(null);
-    setSrcObjectsLoading(true);
-    const token = ++srcLoadTokenRef.current;
-    listObjects(dataSourceId, { refresh })
-      .then((objects) => { if (token === srcLoadTokenRef.current) setSrcObjects(objects); })
-      .catch((e: unknown) => {
-        if (token === srcLoadTokenRef.current) {
-          setSrcObjectsError(e instanceof Error ? e.message : 'Failed to load objects.');
-        }
-      })
-      .finally(() => { if (token === srcLoadTokenRef.current) setSrcObjectsLoading(false); });
-  }, []);
-
-  const loadDestObjects = useCallback((dataSourceId: string, refresh = false) => {
-    setDestObjects([]);
-    setDestObjectsError(null);
-    setDestObjectsLoading(true);
-    const token = ++destLoadTokenRef.current;
-    listObjects(dataSourceId, { refresh })
-      .then((objects) => { if (token === destLoadTokenRef.current) setDestObjects(objects); })
-      .catch((e: unknown) => {
-        if (token === destLoadTokenRef.current) {
-          setDestObjectsError(e instanceof Error ? e.message : 'Failed to load objects.');
-        }
-      })
-      .finally(() => { if (token === destLoadTokenRef.current) setDestObjectsLoading(false); });
-  }, []);
-
-  function handleSrcConnectionChange(id: string) {
-    setWizard((prev) => ({ ...prev, srcDataSourceId: id, sourceObject: '' }));
-    loadSrcObjects(id);
-  }
-
-  function handleDestConnectionChange(id: string) {
-    setWizard((prev) => ({ ...prev, destDataSourceId: id, targetObject: '' }));
-    loadDestObjects(id);
-  }
-
-  const step1Valid = wizard.srcDataSourceId && wizard.sourceObject && wizard.name.trim().length > 0;
-  const step2Valid = wizard.destDataSourceId && wizard.targetObject;
-
-  async function handleCreate() {
-    if (!workspaceId) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await createStitch({
-        workspaceId,
-        name: wizard.name.trim(),
-        srcDataSourceId: wizard.srcDataSourceId,
-        destDataSourceId: wizard.destDataSourceId,
-        sourceObject: wizard.sourceObject,
-        targetObject: wizard.targetObject,
-        config: Object.keys(wizard.config).length > 0 ? wizard.config : undefined,
-        ...(wizard.syncConditions.length > 0 && { syncCondition: wizard.syncConditions }),
-        // Mappings are sent in the same request so the backend can persist them
-        // atomically in a single transaction — no orphaned stitch on mapping failure.
-        ...(wizard.mappingRules.length > 0 && {
-          fieldMappings: [{ sourceCanonical: wizard.sourceObject, mappingRules: wizard.mappingRules }],
-        }),
-      });
-      navigate(stitchesHref);
-    } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : 'Failed to create stitch.');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const handleMappingChange = useCallback(
-    (rules: MappingRule[], conditions: SyncConditionRule[]) => {
-      setWizard((prev) => ({ ...prev, mappingRules: rules, syncConditions: conditions }));
-    },
-    [],
-  );
+  const {
+    step,
+    setStep,
+    wizard,
+    setWizard,
+    submitting,
+    submitError,
+    connections,
+    connectionsLoading,
+    connectionsError,
+    srcObjects,
+    srcObjectsLoading,
+    srcObjectsError,
+    destObjects,
+    destObjectsLoading,
+    destObjectsError,
+    stitchesHref,
+    handleSrcConnectionChange,
+    handleDestConnectionChange,
+    handleCreate,
+    handleMappingChange,
+    loadSrcObjects,
+    loadDestObjects,
+    step1Valid,
+    step2Valid,
+  } = useCreateStitchPage(workspaceId);
 
   if (!workspaceId) {
     return <div className="p-6 text-sm text-destructive">Invalid workspace URL.</div>;

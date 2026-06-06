@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DbModule } from '../../db/db.module.js';
+import { REDIS_CLIENT } from '@soopa/cache';
+import type { Redis } from '@soopa/cache';
 
 import { PieceRegistryService } from '@soopa/piece-registry';
 import { TriggerExecutorService } from './trigger-executor.service.js';
@@ -31,6 +33,11 @@ import { RedisTriggerDlqService } from './infrastructure/redis-trigger-dlq.servi
     {
       provide: ITriggerDlqService,
       useClass: RedisTriggerDlqService,
+    },
+    {
+      provide: 'KEY_VALUE_STORE',
+      useFactory: (redis: Redis) => redis,
+      inject: [REDIS_CLIENT],
     },
     TriggerPayloadTransformer,
     TriggerRetryPolicyService,

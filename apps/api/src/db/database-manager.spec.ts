@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { DatabaseManager } from './database-manager.js';
@@ -356,7 +356,7 @@ describe('DatabaseManager', () => {
         expect.objectContaining({
           stdio: 'inherit',
           cwd: expectedCwd,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
           env: expect.objectContaining({ FORCE_COLOR: '1' }),
         }),
       );

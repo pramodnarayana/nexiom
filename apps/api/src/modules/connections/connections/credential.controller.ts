@@ -5,11 +5,9 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  Inject,
   InternalServerErrorException,
   BadRequestException,
   NotFoundException,
-  ForbiddenException,
   Query,
   Logger,
   HttpException,
@@ -17,18 +15,9 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AuthContext, type RequestAuthContext, AuthGuard } from '@soopa/auth';
-import { getAdminRoleId, getOwnerRoleId } from '@soopa/identity/constants';
 import { EncryptionService } from '@soopa/credentials';
 import { PieceRegistryService } from '@soopa/piece-registry';
-import {
-  dataSources,
-  credentials,
-  AppConnectionStatus,
-  DATABASE_CONNECTION,
-  type DrizzleDb,
-  member,
-} from '@soopa/database';
-import { eq, and, count, desc, sql } from 'drizzle-orm';
+import { ConnectionRepository } from '../repositories/connection.repository.js';
 import type { AnyProperty } from '@soopa/piece-framework';
 import { CredentialLinkingService } from '../services/credential-linking.service.js';
 import type { ConnectionValueBlob } from '../connectors.service.js';
@@ -70,7 +59,7 @@ export class CredentialController {
   private readonly logger = new Logger(CredentialController.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
+    private readonly connectionRepository: ConnectionRepository,
     private readonly pieceRegistry: PieceRegistryService,
     private readonly credentialLinking: CredentialLinkingService,
     private readonly crypto: EncryptionService,
@@ -153,57 +142,19 @@ export class CredentialController {
       offset = 0;
     }
 
-    const whereClause = and(
-      eq(dataSources.tenantId, tenantId),
-      eq(credentials.status, AppConnectionStatus.ACTIVE),
-    );
-
-    let activeConnections: {
-      id: string;
-      appName: string;
-      externalId: string;
-      displayName: string;
-      authType: 'OAUTH2' | 'API_KEY' | 'BASIC';
-      status: string;
-      envType: 'PRODUCTION' | 'SANDBOX';
-      metadata: unknown;
-      expiresAt: Date | null;
-      createdAt: Date;
-      updatedAt: Date;
-      hasCredentials: boolean;
-    }[];
-    let countResult: { count: number | string } | undefined;
-
+    let activeConnections: Awaited<
+      ReturnType<ConnectionRepository['findActiveWithCredentialsByTenant']>
+    >['activeConnections'] = [];
+    let countResult: { count: number } | undefined;
     try {
-      [activeConnections, [countResult]] = await Promise.all([
-        this.db
-          .select({
-            id: dataSources.id,
-            appName: dataSources.appName,
-            externalId: dataSources.externalId,
-            displayName: dataSources.displayName,
-            authType: credentials.authType,
-            status: credentials.status,
-            envType: dataSources.envType,
-            metadata: dataSources.metadata,
-            expiresAt: credentials.expiresAt,
-            createdAt: dataSources.createdAt,
-            updatedAt: dataSources.updatedAt,
-            hasCredentials: sql<boolean>`${credentials.value} IS NOT NULL`,
-          })
-          .from(dataSources)
-          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
-          .where(whereClause)
-          .orderBy(desc(dataSources.createdAt), desc(dataSources.id))
-          .limit(limit)
-          .offset(offset),
-
-        this.db
-          .select({ count: count() })
-          .from(dataSources)
-          .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
-          .where(whereClause),
-      ]);
+      const result =
+        await this.connectionRepository.findActiveWithCredentialsByTenant(
+          tenantId,
+          limit,
+          offset,
+        );
+      activeConnections = result.activeConnections;
+      countResult = { count: result.total };
     } catch (error) {
       const msg = `Failed to get active connections - tenantId=${tenantId}, limit=${limit}, offset=${offset}`;
       if (error instanceof Error) {
@@ -276,20 +227,10 @@ export class CredentialController {
 
     await this.assertAdminOrOwner(ctx.user.id, tenantId);
 
-    const [connection] = await this.db
-      .select({
-        id: dataSources.id,
-        value: credentials.value,
-      })
-      .from(dataSources)
-      .innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id))
-      .where(
-        and(
-          eq(dataSources.id, dataSourceId),
-          eq(dataSources.tenantId, tenantId),
-        ),
-      )
-      .limit(1);
+    const connection = await this.connectionRepository.getConnectionCredentials(
+      dataSourceId,
+      tenantId,
+    );
 
     if (!connection) {
       throw new NotFoundException('Connection not found');
@@ -378,22 +319,6 @@ export class CredentialController {
     userId: string,
     tenantId: string,
   ): Promise<void> {
-    const [orgMember] = await this.db
-      .select({ role: member.role })
-      .from(member)
-      .where(
-        and(eq(member.userId, userId), eq(member.organizationId, tenantId)),
-      )
-      .limit(1);
-
-    if (
-      !orgMember ||
-      (orgMember.role !== getAdminRoleId() &&
-        orgMember.role !== getOwnerRoleId())
-    ) {
-      throw new ForbiddenException(
-        'Only organization admins or owners can perform this action',
-      );
-    }
+    await this.connectionRepository.assertAdminOrOwner(userId, tenantId);
   }
 }

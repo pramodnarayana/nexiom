@@ -18,7 +18,8 @@ import {
 } from "@soopa/database";
 import type { DrizzleDb } from "@soopa/database";
 import { StorageResolverService } from "@soopa/engine";
-import { PieceRegistryService } from "@soopa/piece-registry";
+import type { IOutboundDispatcher } from "./interfaces/outbound-dispatcher.interface.js";
+
 import { TokenManagerService } from "@soopa/credentials";
 import { RetryableException } from "@soopa/piece-framework";
 import { DB_MANAGER } from "@soopa/dbmanager";
@@ -42,7 +43,9 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     private readonly queueService: QueueService,
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
-    private readonly pieceRegistry: PieceRegistryService,
+    @Inject("IOutboundDispatcher")
+    private readonly outboundDispatcher: IOutboundDispatcher,
+
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Inject(forwardRef(() => DeliveryRetryService))
     private readonly retryService: DeliveryRetryService,
@@ -372,12 +375,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
       const targetAppName = connRows[0].appName;
       const targetTenantId = connRows[0].tenantId;
 
-      const piece = this.pieceRegistry.getPiece(targetAppName);
-      if (!piece) throw new Error(`Piece ${targetAppName} not registered`);
-      if (!piece.executeAction) {
-        throw new Error(`Piece ${targetAppName} has no executeAction defined`);
-      }
-
       // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(destSchemaName);
@@ -439,12 +436,13 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
         // The payload from outbound_gateway is already finalized by FanOut's
         // prepareUpdate hook. It contains the exact fields to be sent.
 
-        const resp = await piece.executeAction(
+        const resp = await this.outboundDispatcher.dispatch(targetAppName, {
           targetObject,
-          hydratedPayload,
-          credentials as unknown as Record<string, unknown>,
-        );
+          payload: hydratedPayload,
+          credentials: credentials as unknown as Record<string, unknown>,
+        });
         resPayload = resp.body;
+
         respEntityId = resp.entityId;
         statusCode = resp.statusCode ?? 200;
         // sentPayload is the exact payload the piece ultimately sent to the vendor.

@@ -23,6 +23,8 @@ import { OAuthController } from './connections/oauth.controller.js';
 import { CredentialController } from './connections/credential.controller.js';
 import { OAuthOrchestrationService } from './services/oauth-orchestration.service.js';
 import { CredentialLinkingService } from './services/credential-linking.service.js';
+import { ConnectionRepository } from './repositories/connection.repository.js';
+import { CredentialRepository } from './repositories/credential.repository.js';
 
 /**
  * Handles OAuth connectivity, credential storage, and token management.
@@ -63,9 +65,16 @@ import { CredentialLinkingService } from './services/credential-linking.service.
     CredentialLinkingService,
     OauthStateService,
     ConnectionLifecycleService,
+    ConnectionRepository,
+    CredentialRepository,
     { provide: EncryptionService, useClass: AesEncryptionService },
     { provide: OAuthRefreshClient, useClass: RegistryOAuthRefreshClient },
   ],
-  exports: [TokenManagerService, ConnectionLifecycleService],
+  exports: [
+    TokenManagerService,
+    ConnectionLifecycleService,
+    ConnectionRepository,
+    CredentialRepository,
+  ],
 })
 export class ConnectionsModule {}
