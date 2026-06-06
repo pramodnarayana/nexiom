@@ -95,7 +95,7 @@ export class MigrationWorkerService implements OnModuleInit {
     if (!event.tenantId) {
       // --- FAN-OUT MODE ---
       this.logger.log(`[Fan-Out] Starting fan-out for ${event.pieceName} from ${event.pluginLocation}`);
-      const activeTenants = await this.getActiveTenants(event.pieceName);
+      const activeTenants = await this.getActiveTenants();
 
       this.logger.log(`[Fan-Out] Found ${activeTenants.length} active tenants. Dispatching single-tenant SQS messages...`);
 
@@ -127,7 +127,7 @@ export class MigrationWorkerService implements OnModuleInit {
     }
   }
 
-  private async getActiveTenants(pieceName: string): Promise<Array<{ id: string }>> {
+  private async getActiveTenants(): Promise<Array<{ id: string }>> {
     const tenants = await this.globalDb.select({ id: tenantStorageRegistry.tenantId }).from(tenantStorageRegistry);
     return tenants;
   }

@@ -329,9 +329,12 @@ export function buildTenantSchema(schemaName: string) {
         status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
         attempts: integer('attempts').notNull().default(0),
         errorMessage: varchar('error_message', { length: 500 }),
+        nextRetryAt: timestamp('next_retry_at', { withTimezone: true }).defaultNow().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     }, (table) => [
-        index('idx_outbound_outbox_claim').on(table.status),
+        index('idx_outbound_outbox_claim')
+            .on(table.status, table.nextRetryAt)
+            .where(sql`status IN ('PENDING', 'PROCESSING', 'RETRY')`),
     ]);
 
     return {

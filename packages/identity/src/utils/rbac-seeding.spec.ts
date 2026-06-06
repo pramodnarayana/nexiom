@@ -56,14 +56,16 @@ class FakeRbacRepository implements IRbacRepository {
     { roleId: string; permissionId: string; organizationId: string | null }[]
   > {
     return Promise.resolve(
-      this.existingRolePermissions.map((item) => {
-        const [roleId, permissionId, organizationId] = item.split("|");
-        return {
-          roleId: roleId,
-          permissionId: permissionId,
-          organizationId: organizationId === "__NULL__" ? null : organizationId,
-        };
-      }),
+      this.existingRolePermissions
+        .map((item) => {
+          const [roleId, permissionId, organizationId] = item.split("|");
+          return {
+            roleId: roleId,
+            permissionId: permissionId,
+            organizationId: organizationId === "__NULL__" ? null : organizationId,
+          };
+        })
+        .filter((mapping) => _roleIds.includes(mapping.roleId)),
     );
   }
 

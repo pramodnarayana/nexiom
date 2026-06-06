@@ -319,90 +319,91 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    const txResult = await this.db.transaction(async (tx) => {
-      assertValidSchemaName(schemaName);
-      await tx.execute(
-        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+    // Dispatch the retry and update status atomically
+    try {
+      // First update to PENDING in transaction
+      const txResult = await this.db.transaction(async (tx) => {
+        assertValidSchemaName(schemaName);
+        await tx.execute(
+          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+        );
+
+        const updatedRows = await tx
+          .update(outboundGateway)
+          .set({ status: 'PENDING' as OutboundGatewayStatus })
+          .where(
+            and(
+              eq(outboundGateway.id, outboundGatewayId),
+              sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
+            ),
+          )
+          .returning({
+            traceId: outboundGateway.traceId,
+            routeId: outboundGateway.routeId,
+            payload: outboundGateway.payload,
+          });
+
+        if (updatedRows.length === 0) {
+          throw new ConflictException(
+            `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
+          );
+        }
+
+        return {
+          traceId: updatedRows[0].traceId,
+          routeId: updatedRows[0].routeId,
+          payload: updatedRows[0].payload,
+          srcDataSourceId: outboundGatewayRow.srcDataSourceId,
+          destDataSourceId: stitch.destDataSourceId,
+        };
+      });
+
+      // Then dispatch the retry - awaited to ensure it completes before returning
+      await this.queueDispatcher.dispatchRetry({
+        traceId: txResult.traceId,
+        srcDataSourceId: txResult.srcDataSourceId,
+        destDataSourceId: txResult.destDataSourceId,
+        routeId: txResult.routeId,
+        hydratedPayload: txResult.payload,
+      });
+    } catch (sendErr) {
+      this.logger.error(
+        {
+          id: outboundGatewayId,
+          err: sendErr instanceof Error ? sendErr.message : String(sendErr),
+        },
+        'exception.retry: queueService.send failed, marking as FAIL',
       );
 
-      const updatedRows = await tx
-        .update(outboundGateway)
-        .set({ status: 'PENDING' as OutboundGatewayStatus })
-        .where(
-          and(
-            eq(outboundGateway.id, outboundGatewayId),
-            sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
-          ),
-        )
-        .returning({
-          traceId: outboundGateway.traceId,
-          routeId: outboundGateway.routeId,
-          payload: outboundGateway.payload,
-        });
-
-      if (updatedRows.length === 0) {
-        throw new ConflictException(
-          `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
-        );
-      }
-
-      return {
-        traceId: updatedRows[0].traceId,
-        routeId: updatedRows[0].routeId,
-        payload: updatedRows[0].payload,
-        srcDataSourceId: outboundGatewayRow.srcDataSourceId,
-        destDataSourceId: stitch.destDataSourceId,
-      };
-    });
-
-    // Asynchronously dispatch the retry using the captured intent
-    (async () => {
+      // Mark outboundGateway row back to FAIL so it can be retried safely later
       try {
-        await this.queueDispatcher.dispatchRetry({
-          traceId: txResult.traceId,
-          srcDataSourceId: txResult.srcDataSourceId,
-          destDataSourceId: txResult.destDataSourceId,
-          routeId: txResult.routeId,
-          hydratedPayload: txResult.payload,
+        await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          await tx
+            .update(outboundGateway)
+            .set({
+              status: 'FAIL',
+              errorMessage:
+                sendErr instanceof Error
+                  ? sendErr.message.slice(0, 500)
+                  : String(sendErr).slice(0, 500),
+            })
+            .where(eq(outboundGateway.id, outboundGatewayId));
         });
-      } catch (sendErr) {
+      } catch (dbErr) {
         this.logger.error(
           {
             id: outboundGatewayId,
-            err: sendErr instanceof Error ? sendErr.message : String(sendErr),
+            err: dbErr instanceof Error ? dbErr.message : String(dbErr),
           },
-          'exception.retry: queueService.send failed, marking as FAIL',
+          'exception.retry: failed to update status to FAIL after dispatch failure',
         );
-
-        // Mark outboundGateway row back to FAIL so it can be retried safely later
-        try {
-          await this.db.transaction(async (tx) => {
-            assertValidSchemaName(schemaName);
-            await tx.execute(
-              sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
-            );
-            await tx
-              .update(outboundGateway)
-              .set({
-                status: 'FAIL',
-                errorMessage:
-                  sendErr instanceof Error
-                    ? sendErr.message.slice(0, 500)
-                    : String(sendErr).slice(0, 500),
-              })
-              .where(eq(outboundGateway.id, outboundGatewayId));
-          });
-        } catch (dbErr) {
-          this.logger.error(
-            {
-              id: outboundGatewayId,
-              err: dbErr instanceof Error ? dbErr.message : String(dbErr),
-            },
-            'exception.retry: failed to update status to FAIL after dispatch failure',
-          );
-        }
       }
-    })();
+      throw sendErr;
+    }
 
     this.logger.info(
       { id: outboundGatewayId, traceId: outboundGatewayRow.traceId },

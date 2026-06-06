@@ -119,7 +119,10 @@ export class DrizzleRbacRepository implements IRbacRepository {
     }[],
   ): Promise<void> {
     if (rolePermissions.length > 0) {
-      await this.db.insert(schema.rolePermission).values(rolePermissions);
+      await this.db
+        .insert(schema.rolePermission)
+        .values(rolePermissions)
+        .onConflictDoNothing();
     }
   }
 
