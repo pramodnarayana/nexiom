@@ -124,6 +124,7 @@ export class StitchesService {
             name: body.name,
             orgId,
             workspaceId: body.workspaceId,
+            sourceDataSourceId: body.sourceDataSourceId,
             destDataSourceId: body.destDataSourceId,
             canonicalObject: body.canonicalObject,
             targetObject: body.targetObject,

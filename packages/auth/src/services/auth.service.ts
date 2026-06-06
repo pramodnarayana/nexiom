@@ -175,13 +175,11 @@ export class AuthService {
   }
 
   getHandler() {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const handler = (this.authProvider as any).getHandler;
-    if (typeof handler !== "function") {
+    if (typeof this.authProvider.getHandler !== "function") {
       throw new TypeError("Auth Provider does not support getHandler");
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    return handler.call(this.authProvider);
+
+    return this.authProvider.getHandler();
   }
 
   // Delegated methods

@@ -1,0 +1,20 @@
+{
+	"name": "@soopa/platform",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"description": "Platform core utilities",
+	"exports": {
+		"./path-utils": {
+			"import": "./dist/path-utils.js",
+			"types": "./dist/path-utils.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "tsc"
+	},
+	"devDependencies": {
+		"@types/node": "^20.14.9",
+		"typescript": "^5.7.3"
+	}
+}

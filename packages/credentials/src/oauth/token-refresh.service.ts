@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OAuthRefreshClient, OAuthRefreshError } from './token-manager.service.js';
 import { EncryptionService } from '../crypto/encryption.interface.js';
+import type { ICredentialsEventPublisher } from '../interfaces/event-publisher.interface.js';
+import { CredentialInvalidatedEvent } from '../events/credential-invalidated.event.js';
 import { resolveOAuth2Url } from '@soopa/piece-framework';
 import {
   dataSources,
@@ -11,6 +13,16 @@ import {
 } from '@soopa/database';
 import { eq, and, desc } from 'drizzle-orm';
 
+export interface IHttpClient {
+  fetch(url: string, init?: RequestInit): Promise<Response>;
+}
+
+export class NativeHttpClient implements IHttpClient {
+  async fetch(url: string, init?: RequestInit): Promise<Response> {
+    return globalThis.fetch(url, init);
+  }
+}
+
 @Injectable()
 export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
   private readonly logger = new Logger(BaseOAuthRefreshClient.name);
@@ -18,6 +30,8 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
   constructor(
     protected readonly db: DrizzleDb,
     protected readonly crypto: EncryptionService,
+    protected readonly httpClient: IHttpClient = new NativeHttpClient(),
+    protected readonly eventPublisher?: ICredentialsEventPublisher,
   ) {}
 
   protected abstract getTokenUrl(appName: string): string | Promise<string>;
@@ -31,9 +45,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     try {
       this.validateInputs(tenantId, appName, externalId, refreshToken);
       const tokenUrl = await this.getTokenUrl(appName);
-      const { clientId, clientSecret, vendorParams } = await this.getCredentials(tenantId, appName, externalId);
+      const { clientId, clientSecret, vendorParams, credentialId } = await this.getCredentials(tenantId, appName, externalId);
       const resolvedTokenUrl = resolveOAuth2Url(tokenUrl, vendorParams);
-      const response = await fetch(resolvedTokenUrl, {
+      const response = await this.httpClient.fetch(resolvedTokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -45,6 +59,17 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) {
+        if (response.status === 400 || response.status === 401) {
+          if (this.eventPublisher) {
+            try {
+              await this.eventPublisher.publishCredentialInvalidated(
+                new CredentialInvalidatedEvent(credentialId, `HTTP ${response.status}: ${response.statusText}`, appName)
+              );
+            } catch (err) {
+              this.logger.error('Failed to publish CredentialInvalidatedEvent', err);
+            }
+          }
+        }
         throw new OAuthRefreshError(`OAuth Refresh failed: ${response.status} ${response.statusText || ''}`.trim(), response.status);
       }
       const parsed = await response.json();
@@ -54,8 +79,11 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
       return parsed as Record<string, unknown>;
     } catch (error) {
       if (error instanceof OAuthRefreshError) throw error;
+      if (error instanceof TypeError && error.message.startsWith('Invalid refresh input')) {
+        throw new OAuthRefreshError(error.message, 400);
+      }
       if (error instanceof TypeError) {
-        throw new OAuthRefreshError(`Invalid refresh input: ${error.message}`, 400);
+        throw new OAuthRefreshError(`Transport or configuration TypeError: ${error.message}`, 502);
       }
       this.logger.error(`[TokenRefresh] Unexpected error for ${appName} on tenant ${tenantId}:`, error);
       throw new OAuthRefreshError(`Unexpected error during token refresh for ${appName}: ${error instanceof Error ? error.message : String(error)}`, 500);
@@ -69,9 +97,9 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
     if (typeof refreshToken !== 'string' || !refreshToken.trim()) throw new TypeError('Invalid refresh input: refreshToken');
   }
 
-  private async getCredentials(tenantId: string, appName: string, externalId: string): Promise<{ clientId: string; clientSecret: string; vendorParams: Record<string, string>; }> {
+  private async getCredentials(tenantId: string, appName: string, externalId: string): Promise<{ clientId: string; clientSecret: string; vendorParams: Record<string, string>; credentialId: string; }> {
     try {
-      const [connection] = await this.db.select({ value: credentials.value }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
+      const [connection] = await this.db.select({ value: credentials.value, credentialId: credentials.id }).from(dataSources).innerJoin(credentials, eq(credentials.dataSourceId, dataSources.id)).where(
         withTenantGuard(dataSources.tenantId, tenantId, and(eq(dataSources.appName, appName), eq(dataSources.externalId, externalId), eq(credentials.status, AppConnectionStatus.ACTIVE)))
       ).orderBy(desc(dataSources.updatedAt), desc(dataSources.id)).limit(1);
       if (!connection) throw new Error(`No active connection found for ${appName} on tenant ${tenantId}`);
@@ -93,6 +121,7 @@ export abstract class BaseOAuthRefreshClient implements OAuthRefreshClient {
           ...vendorParamsSpread,
           ...environmentEntry,
         },
+        credentialId: connection.credentialId,
       };
     } catch (error: unknown) {
       throw new Error(`Failed to retrieve credentials for tenantId=${tenantId} appName=${appName} externalId=${externalId}: ${error instanceof Error ? error.message : String(error)}`);

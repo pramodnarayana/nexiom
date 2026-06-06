@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { SchedulerService } from './scheduler.service.js';
-import { WindmillClient } from './windmill.client.js';
+import { ISchedulerClient } from './interfaces/scheduler-client.interface.js';
 import { SyncRunner } from './sync-runner.js';
 import type { InferSelectModel } from 'drizzle-orm';
 import { dataSources } from '@soopa/database';
@@ -45,7 +45,7 @@ describe('SchedulerService', () => {
     module = await Test.createTestingModule({
       providers: [
         SchedulerService,
-        { provide: WindmillClient, useValue: windmill },
+        { provide: ISchedulerClient, useValue: windmill },
         { provide: SyncRunner, useValue: mockSyncRunner },
       ],
     }).compile();

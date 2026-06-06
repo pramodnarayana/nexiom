@@ -13,9 +13,10 @@ import {
   integrationStitches,
   buildTenantSchema,
   assertValidSchemaName,
+  type OutboundGatewayStatus,
 } from '@soopa/database';
 import { StorageResolverService } from '@soopa/engine';
-import { QueueService, QueueName } from '@soopa/queue';
+import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,7 +104,8 @@ export class ExceptionService {
     private readonly logger: PinoLogger,
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
     private readonly storageResolver: StorageResolverService,
-    private readonly queueService: QueueService,
+    @Inject(IDeliveryQueueDispatcher)
+    private readonly queueDispatcher: IDeliveryQueueDispatcher,
   ) {
     this.logger.setContext(ExceptionService.name);
   }
@@ -317,7 +319,8 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    await this.db.transaction(async (tx) => {
+    // First update to PENDING in transaction (can throw ConflictException)
+    const txResult = await this.db.transaction(async (tx) => {
       assertValidSchemaName(schemaName);
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
@@ -325,7 +328,7 @@ export class ExceptionService {
 
       const updatedRows = await tx
         .update(outboundGateway)
-        .set({ status: 'PENDING' } as never)
+        .set({ status: 'PENDING' as OutboundGatewayStatus })
         .where(
           and(
             eq(outboundGateway.id, outboundGatewayId),
@@ -344,27 +347,62 @@ export class ExceptionService {
         );
       }
 
-      const row = updatedRows[0];
+      return {
+        traceId: updatedRows[0].traceId,
+        routeId: updatedRows[0].routeId,
+        payload: updatedRows[0].payload,
+        srcDataSourceId: outboundGatewayRow.srcDataSourceId,
+        destDataSourceId: stitch.destDataSourceId,
+      };
+    });
 
+    // Then dispatch the retry - wrapped in separate try/catch for dispatch failures only
+    try {
+      await this.queueDispatcher.dispatchRetry({
+        traceId: txResult.traceId,
+        srcDataSourceId: txResult.srcDataSourceId,
+        destDataSourceId: txResult.destDataSourceId,
+        routeId: txResult.routeId,
+        hydratedPayload: txResult.payload,
+      });
+    } catch (sendErr) {
+      this.logger.error(
+        {
+          id: outboundGatewayId,
+          err: sendErr instanceof Error ? sendErr.message : String(sendErr),
+        },
+        'exception.retry: queueService.send failed, marking as FAIL',
+      );
+
+      // Mark outboundGateway row back to FAIL so it can be retried safely later
       try {
-        await this.queueService.send(QueueName.DeliveryQueue, {
-          traceId: row.traceId,
-          srcDataSourceId: outboundGatewayRow.srcDataSourceId,
-          destDataSourceId: stitch.destDataSourceId,
-          routeId: row.routeId,
-          hydratedPayload: row.payload,
+        await this.db.transaction(async (tx) => {
+          assertValidSchemaName(schemaName);
+          await tx.execute(
+            sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+          );
+          await tx
+            .update(outboundGateway)
+            .set({
+              status: 'FAIL',
+              errorMessage:
+                sendErr instanceof Error
+                  ? sendErr.message.slice(0, 500)
+                  : String(sendErr).slice(0, 500),
+            })
+            .where(eq(outboundGateway.id, outboundGatewayId));
         });
-      } catch (sendErr) {
-        this.logger.warn(
+      } catch (dbErr) {
+        this.logger.error(
           {
             id: outboundGatewayId,
-            err: sendErr instanceof Error ? sendErr.message : String(sendErr),
+            err: dbErr instanceof Error ? dbErr.message : String(dbErr),
           },
-          'exception.retry: queueService.send failed',
+          'exception.retry: failed to update status to FAIL after dispatch failure',
         );
-        throw sendErr; // Rolls back the PENDING status update automatically
       }
-    });
+      throw sendErr;
+    }
 
     this.logger.info(
       { id: outboundGatewayId, traceId: outboundGatewayRow.traceId },
@@ -400,7 +438,7 @@ export class ExceptionService {
       );
       return tx
         .update(outboundGateway)
-        .set({ status: 'DISMISSED' } as never)
+        .set({ status: 'DISMISSED' as OutboundGatewayStatus })
         .where(
           and(
             eq(outboundGateway.id, outboundGatewayId),

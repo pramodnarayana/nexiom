@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, type Mock } from "vitest";
 import { BetterAuthAdapter } from "./better-auth.adapter.js";
 import type { IdentityModuleOptions } from "../identity.module.js";
-import type { IEmailProvider, ITenantProvider } from "../interfaces/index.js";
+import type {
+  IEmailProvider,
+  ITenantProvider,
+  IIdentityEventPublisher,
+} from "../interfaces/index.js";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../schema.js";
 
@@ -58,12 +62,18 @@ describe("BetterAuthAdapter - ABAC Condition Mapping", () => {
     const mockTenantProvider = {} as unknown as ITenantProvider;
     const options = mkOptions();
 
+    const mockEventPublisher: IIdentityEventPublisher = {
+      publishTenantProvisioned: vi.fn(),
+      publishUserInvited: vi.fn(),
+    };
+
     const adapter = new BetterAuthAdapter(
       db,
       mockEmail,
       mkConfig(),
       mockTenantProvider,
       options,
+      mockEventPublisher,
     );
 
     // Mock DB User with Role containing Conditional Permission

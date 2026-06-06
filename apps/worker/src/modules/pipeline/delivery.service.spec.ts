@@ -7,6 +7,8 @@ import { StorageResolverService } from "@soopa/engine";
 import { PieceRegistryService } from "@soopa/piece-registry";
 import { TokenManagerService } from "@soopa/credentials";
 import { DB_MANAGER } from "@soopa/dbmanager";
+import { DeliveryRetryService } from "./delivery-retry.service.js";
+import { GemHydrationService } from "./gem-hydration.service.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("DeliveryService", () => {
@@ -15,6 +17,7 @@ describe("DeliveryService", () => {
   let db: any;
   let storageResolver: any;
   let pieceRegistry: any;
+  let retryService: any;
 
   beforeEach(async () => {
     queueService = { consume: vi.fn() };
@@ -84,10 +87,23 @@ describe("DeliveryService", () => {
           provide: TokenManagerService,
           useValue: { getValidCredentials: vi.fn().mockResolvedValue({}) },
         },
+        {
+          provide: DeliveryRetryService,
+          useValue: {
+            handleRetryAndDelay: vi.fn().mockResolvedValue(undefined),
+            isSourceFinalized: vi.fn(),
+            retrySourceFinalization: vi.fn(),
+          },
+        },
+        {
+          provide: GemHydrationService,
+          useValue: { hydrate: vi.fn().mockResolvedValue({}) },
+        },
       ],
     }).compile();
 
     service = module.get<DeliveryService>(DeliveryService);
+    retryService = module.get(DeliveryRetryService);
   });
 
   const validPayload = {
@@ -453,7 +469,7 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(true);
       service.onModuleInit();
       const handler = queueService.consume.mock.calls[0][1];
       await expect(handler(validPayload)).resolves.toBeUndefined();
@@ -478,15 +494,13 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
-      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
-        true,
-      );
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(retryService, "retrySourceFinalization").mockResolvedValue(true);
 
       service.onModuleInit();
       const handler = queueService.consume.mock.calls[0][1];
       await expect(handler(validPayload)).resolves.toBeUndefined();
-      expect((service as any).retrySourceFinalization).toHaveBeenCalledWith(
+      expect(retryService.retrySourceFinalization).toHaveBeenCalledWith(
         "ws_1",
         "ws_1",
         "o",
@@ -523,8 +537,8 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
-      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(retryService, "retrySourceFinalization").mockResolvedValue(
         false,
       );
 
@@ -553,7 +567,7 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(true);
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(true);
       service.onModuleInit();
       const handler = queueService.consume.mock.calls[0][1];
       await expect(handler(validPayload)).resolves.toBeUndefined();
@@ -577,10 +591,8 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
-      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
-        true,
-      );
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(retryService, "retrySourceFinalization").mockResolvedValue(true);
       service.onModuleInit();
       const handler = queueService.consume.mock.calls[0][1];
       await expect(handler(validPayload)).resolves.toBeUndefined();
@@ -604,8 +616,8 @@ describe("DeliveryService", () => {
           returning: vi.fn().mockResolvedValue([{ id: "o" }]),
         }),
       );
-      vi.spyOn(service as any, "isSourceFinalized").mockResolvedValue(false);
-      vi.spyOn(service as any, "retrySourceFinalization").mockResolvedValue(
+      vi.spyOn(retryService, "isSourceFinalized").mockResolvedValue(false);
+      vi.spyOn(retryService, "retrySourceFinalization").mockResolvedValue(
         false,
       );
 
@@ -693,47 +705,6 @@ describe("DeliveryService", () => {
         undefined, // targetTenantId
         undefined, // targetObject
         db, // tenantDb
-      );
-      expect(res).toBe(false);
-    });
-  });
-
-  describe("isSourceFinalized", () => {
-    it("should return true if L6 sync log exists", async () => {
-      db.transaction.mockImplementation(async (cb: any) =>
-        cb({
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-        }),
-      );
-
-      const res = await (service as any).isSourceFinalized(
-        "ws_schema",
-        "trace",
-        "route",
-        db,
-      );
-      expect(res).toBe(true);
-    });
-    it("should return false if L6 sync log does not exist", async () => {
-      db.transaction.mockImplementation(async (cb: any) =>
-        cb({
-          execute: vi.fn(),
-          select: vi.fn().mockReturnThis(),
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      );
-
-      const res = await (service as any).isSourceFinalized(
-        "ws_schema",
-        "trace",
-        "route",
-        db,
       );
       expect(res).toBe(false);
     });

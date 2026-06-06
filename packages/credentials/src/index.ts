@@ -13,6 +13,12 @@ export * from './crypto/encryption.service.js';
 // Token management (OAuth refresh, credential storage)
 export * from './oauth/token-manager.service.js';
 export * from './oauth/token-refresh.service.js';
+export * from './oauth/redis-lock.js';
+
+// Events
+export * from './events/index.js';
+export * from './interfaces/event-publisher.interface.js';
+export * from './services/credentials-event-publisher.service.js';
 
 
 

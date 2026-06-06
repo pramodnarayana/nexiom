@@ -214,6 +214,7 @@ export class FanOutService implements OnModuleInit, OnModuleDestroy {
           status: integrationStitches.status,
           createdAt: integrationStitches.createdAt,
           updatedAt: integrationStitches.updatedAt,
+          sourceDataSourceId: integrationStitches.sourceDataSourceId,
         })
         .from(integrationStitches)
         .innerJoin(

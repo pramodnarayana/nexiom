@@ -1,3 +1,4 @@
+import { XMLParser } from 'fast-xml-parser';
 /**
  * Extracts the core entity from a Revenova (Salesforce) Outbound Message SOAP XML payload.
  */
@@ -45,29 +46,58 @@ export async function ReplicateRevenovaObject(payload) {
     if (!body) {
         return null;
     }
-    // Salesforce Outbound Message usually looks like:
-    // <sObject xsi:type="sf:Account" xmlns:sf="urn:sobject.enterprise.soap.sforce.com">
-    //   <sf:Id>001xx000003DGb2AAG</sf:Id>
-    //   ...
-    // </sObject>
-    const typeMatch = body.match(/<sObject[^>]*xsi:type="sf:([^"]+)"/);
-    const idMatch = body.match(/<sf:id>([^<]+)<\/sf:id>/i);
-    if (!typeMatch || !idMatch) {
+    // Parse the SOAP XML
+    const parser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: '@_',
+        textNodeName: '#text',
+        parseTagValue: false, // keep everything as string
+    });
+    let parsed;
+    try {
+        parsed = parser.parse(body);
+    }
+    catch (err) {
         return null;
     }
-    const entityType = typeMatch[1];
-    const entityId = idMatch[1];
-    // Simple key-value extraction for all sf: tags
-    // TODO: Replace regex-based extraction with a proper XML parser (e.g., fast-xml-parser or DOMParser)
-    // to handle nested nodes, CDATA, and numeric/hex entities correctly.
+    // Navigate to the sObject node inside the Envelope -> Body -> notifications -> Notification -> sObject
+    const envelope = parsed['soapenv:Envelope'] || parsed['Envelope'];
+    if (!envelope)
+        return null;
+    const bodyNode = envelope['soapenv:Body'] || envelope['Body'];
+    if (!bodyNode)
+        return null;
+    const notifications = bodyNode['notifications'];
+    if (!notifications)
+        return null;
+    // Notifications could be an array, we only take the first one or assume single for now
+    const notificationArray = notifications['Notification'];
+    let notification;
+    if (Array.isArray(notificationArray)) {
+        if (notificationArray.length > 1) {
+            throw new Error(`Multiple notifications (${notificationArray.length}) are not supported in a single SOAP envelope`);
+        }
+        notification = notificationArray[0];
+    }
+    else {
+        notification = notificationArray;
+    }
+    if (!notification)
+        return null;
+    const sObject = notification['sObject'];
+    if (!sObject)
+        return null;
+    const entityType = sObject['@_xsi:type']?.replace('sf:', '');
+    const entityId = sObject['sf:Id'] || sObject['sf:id'] || sObject['Id'];
+    if (!entityType || !entityId) {
+        return null;
+    }
     const data = {};
-    const fieldRegex = /<sf:([a-zA-Z0-9_]+)[^>]*>(.*?)<\/sf:\1>/g;
-    let match;
-    while ((match = fieldRegex.exec(body)) !== null) {
-        const [, key, value] = match;
-        // Normalize key to lowercase for consistent downstream access
-        // Decode entities in correct order: decode named entities first, then &amp; last to prevent double-decoding
-        data[key.toLowerCase()] = value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+    for (const [key, value] of Object.entries(sObject)) {
+        if (key.startsWith('sf:') && key !== 'sf:Id' && key !== 'sf:id') {
+            const cleanKey = key.replace('sf:', '').toLowerCase();
+            data[cleanKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        }
     }
     return {
         entityType,

@@ -296,6 +296,10 @@ export const member = pgTable(
     createdAt: timestamp("createdAt", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { withTimezone: true }),
   },
   (table) => [

@@ -11,6 +11,7 @@ import {
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
   ROLE_PROVIDER,
+  IDENTITY_EVENT_PUBLISHER,
 } from "./constants.js";
 import { BetterAuthAdapter } from "./adapters/better-auth.adapter.js";
 import type { BetterAuthAdapterConfig } from "./interfaces/better-auth-config.interface.js";
@@ -21,6 +22,7 @@ import { DrizzleRoleAdapter } from "./adapters/drizzle-role.adapter.js";
 import type { IEmailProvider } from "./interfaces/email-provider.interface.js";
 import * as schema from "./schema.js";
 import { PermissionSeeder } from "./services/permission-seeder.js";
+import { IdentityEventPublisher } from "./services/identity-event-publisher.service.js";
 
 export interface IdentityConstants {
   systemTenantId: string;
@@ -35,6 +37,8 @@ export interface IdentityModuleOptions {
   dbToken?: string | symbol | Type<any>;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   emailToken?: string | symbol | Type<any> | Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  eventPublisherToken?: string | symbol | Type<any> | Function;
   // Resolved instances (for async injection)
   db?: NodePgDatabase<typeof schema>;
   email?: IEmailProvider;
@@ -95,6 +99,15 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
+        options.eventPublisherToken
+          ? {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useExisting: options.eventPublisherToken,
+            }
+          : {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useClass: IdentityEventPublisher,
+            },
         PermissionSeeder,
       ],
       exports: [
@@ -107,6 +120,7 @@ export class IdentityModule {
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
         ROLE_PROVIDER,
+        IDENTITY_EVENT_PUBLISHER,
         PermissionSeeder,
       ],
     };
@@ -121,6 +135,8 @@ export class IdentityModule {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     inject?: (string | symbol | Type<any> | Function)[];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    eventPublisherToken?: string | symbol | Type<any> | Function;
   }): DynamicModule {
     return {
       module: IdentityModule,
@@ -188,6 +204,15 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
+        options.eventPublisherToken
+          ? {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useExisting: options.eventPublisherToken,
+            }
+          : {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useClass: IdentityEventPublisher,
+            },
         PermissionSeeder,
       ],
       exports: [
@@ -200,6 +225,7 @@ export class IdentityModule {
         TENANT_PROVIDER,
         PERMISSION_PROVIDER,
         ROLE_PROVIDER,
+        IDENTITY_EVENT_PUBLISHER,
         PermissionSeeder,
       ],
     };

@@ -20,6 +20,7 @@ import {
   IDENTITY_DB,
   BETTER_AUTH_CONFIG,
   TENANT_PROVIDER,
+  IDENTITY_EVENT_PUBLISHER,
 } from "../constants.js";
 import type {
   IAuthProvider,
@@ -29,7 +30,9 @@ import type {
   Invitation,
   Session,
   User as UserInterface,
+  IIdentityEventPublisher,
 } from "../interfaces/index.js";
+import { UserInvitedEvent } from "../events/index.js";
 import type { CreateUserInput } from "../interfaces/user-provider.interface.js";
 import type { IdentityModuleOptions } from "../identity.module.js";
 
@@ -94,6 +97,8 @@ export class BetterAuthAdapter implements IAuthProvider {
     private readonly config: BetterAuthAdapterConfig,
     @Inject(TENANT_PROVIDER) private readonly tenantProvider: ITenantProvider, // Injected Dependency
     @Inject(IDENTITY_OPTIONS) private readonly options: IdentityModuleOptions,
+    @Inject(IDENTITY_EVENT_PUBLISHER)
+    private readonly eventPublisher: IIdentityEventPublisher,
   ) {
     if (!config.allowedOrigins || config.allowedOrigins.length === 0) {
       throw new Error("BetterAuthAdapter: allowedOrigins config is missing");
@@ -393,7 +398,38 @@ export class BetterAuthAdapter implements IAuthProvider {
         ? result.invitation
         : result) as unknown as Record<string, unknown>;
 
-      return this.validateInvitationResponse(invData);
+      const invitation = this.validateInvitationResponse(invData);
+
+      // Retry publishing event with exponential backoff
+      let publishAttempts = 0;
+      const maxAttempts = 3;
+      while (publishAttempts < maxAttempts) {
+        try {
+          await this.eventPublisher.publishUserInvited(
+            new UserInvitedEvent(
+              invitation.id,
+              invitation.email,
+              invitation.organizationId || "",
+              invitation.role || "member",
+            ),
+          );
+          break; // Success, exit loop
+        } catch (err) {
+          publishAttempts++;
+          if (publishAttempts >= maxAttempts) {
+            console.error(
+              `Failed to publish UserInvitedEvent after ${maxAttempts} attempts`,
+              err,
+            );
+          } else {
+            // Exponential backoff: 100ms, 200ms, 400ms
+            const delayMs = 100 * Math.pow(2, publishAttempts - 1);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+      }
+
+      return invitation;
     } catch (error) {
       // Redact PII: Log only safe structural fields
       const errorDetails =

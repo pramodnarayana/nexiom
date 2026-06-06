@@ -1,5 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-floating-promises */
 import { Pool } from 'pg';
+import { getWorkspaceSchemaName } from '@soopa/dbmanager';
+
+interface ConnectionRow {
+  id: string;
+  workspace_id: string;
+  app_name: string;
+  metadata: Record<string, any> | null;
+}
 
 async function run() {
   console.log('🔄 Starting End-to-End Ingestion Trace Test...');
@@ -60,7 +67,7 @@ async function run() {
       return;
     }
 
-    const conn = res.rows[0];
+    const conn = res.rows[0] as ConnectionRow;
     console.log(
       `✅ Using Connection ID: ${conn.id} (Workspace: ${conn.workspace_id})`,
     );
@@ -120,11 +127,7 @@ async function run() {
     console.log('⏳ Polling for pipeline completion (L2/L3)...');
 
     // Let's check the database schema
-    // TODO: Use canonical StorageResolverService from @soopa/database instead of
-    // hardcoding schema derivation. Import assertValidSchemaName and call it before queries.
-    // For now, using manual derivation matching the current convention:
-    const schemaName =
-      'ws_' + conn.workspace_id.replace(/-/g, '').toLowerCase();
+    const schemaName = getWorkspaceSchemaName(conn.id, conn.app_name);
 
     console.log(`🔍 Inspecting Tenant Schema: ${schemaName}`);
 
@@ -160,15 +163,17 @@ async function run() {
     }
 
     if (resultL2 && resultL2.rows.length > 0) {
-      console.log('✅ Found Replica (L2):', resultL2.rows[0].data);
+      const row = resultL2.rows[0] as { data: unknown };
+      console.log('✅ Found Replica (L2):', row.data);
     } else {
       console.log('❌ No Replica (L2) found.');
     }
 
     if (resultL3 && resultL3.rows.length > 0) {
+      const row = resultL3.rows[0] as { canonical_type: string; data: unknown };
       console.log(
-        `✅ Found Normalized Entity (L3) [Type: ${resultL3.rows[0].canonical_type}]:`,
-        resultL3.rows[0].data,
+        `✅ Found Normalized Entity (L3) [Type: ${row.canonical_type}]:`,
+        row.data,
       );
     } else {
       console.log('❌ No Normalized Entity (L3) found.');
@@ -181,4 +186,7 @@ async function run() {
   }
 }
 
-run();
+run().catch((err) => {
+  console.error('Unhandled execution error:', err);
+  process.exit(1);
+});

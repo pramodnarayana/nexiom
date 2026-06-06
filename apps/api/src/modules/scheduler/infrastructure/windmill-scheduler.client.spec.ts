@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { HttpWindmillClient } from './http-windmill.client.js';
+import { WindmillSchedulerClient } from './windmill-scheduler.client.js';
+import { IHttpClient } from '../interfaces/http-client.interface.js';
 
 const BASE_URL = 'https://windmill.example.com';
 const WORKSPACE = 'nexiom';
@@ -24,70 +25,66 @@ function mockConfig(): ConfigService {
   } as unknown as ConfigService;
 }
 
-/** Build a mock Response. body.cancel() is a no-op. */
 function mockResponse(status: number, body = ''): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     text: vi.fn().mockResolvedValue(body),
-    body: { cancel: vi.fn().mockResolvedValue(undefined) },
+    body: {
+      cancel: vi.fn().mockResolvedValue(undefined),
+    },
   } as unknown as Response;
 }
 
-/** Type-safe accessor for the URL argument of a mocked fetch call. */
 function getCallUrl(spy: ReturnType<typeof vi.fn>, index: number): string {
-  return spy.mock.calls[index][0] as string;
+  return spy.mock.calls[index][1] as string;
 }
 
-/** Type-safe accessor for the RequestInit argument of a mocked fetch call. */
-function getCallInit(
+function getCallOptions(
   spy: ReturnType<typeof vi.fn>,
   index: number,
-): RequestInit {
-  return spy.mock.calls[index][1] as RequestInit;
+): Record<string, unknown> {
+  return spy.mock.calls[index][2] as Record<string, unknown>;
 }
 
-describe('HttpWindmillClient', () => {
-  let client: HttpWindmillClient;
-  let fetchSpy: ReturnType<typeof vi.fn>;
+describe('WindmillSchedulerClient', () => {
+  let client: WindmillSchedulerClient;
+  let requestSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
+    requestSpy = vi.fn();
+    const mockHttpClient = {
+      request: requestSpy,
+    };
 
     const module = await Test.createTestingModule({
       providers: [
-        HttpWindmillClient,
+        WindmillSchedulerClient,
         { provide: ConfigService, useValue: mockConfig() },
+        { provide: IHttpClient, useValue: mockHttpClient },
       ],
     }).compile();
 
-    client = module.get(HttpWindmillClient);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    client = module.get(WindmillSchedulerClient);
   });
 
   // ── ensureConnectionScript ──────────────────────────────────────────────────
 
   describe('ensureConnectionScript', () => {
     it('deploys the script when Windmill responds 200', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
       await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(getCallInit(fetchSpy, 0).method).toBe('POST');
+      expect(requestSpy).toHaveBeenCalledTimes(1);
+      expect(requestSpy.mock.calls[0][0]).toBe('POST'); // Method
     });
 
     it('treats 409 as non-fatal — same content hash already deployed', async () => {
-      // Windmill returns 409 when the exact same content hash exists at the path.
-      // A new STITCH_RUNNER_CONTENT hash would produce 200 (new version created).
-      fetchSpy.mockResolvedValue(mockResponse(409, 'conflict'));
+      requestSpy.mockResolvedValue(mockResponse(409, 'conflict'));
       await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
     });
 
     it('throws for non-409 errors', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
+      requestSpy.mockResolvedValue(mockResponse(500, 'server error'));
       await expect(client.ensureConnectionScript()).rejects.toThrow('500');
     });
   });
@@ -96,27 +93,24 @@ describe('HttpWindmillClient', () => {
 
   describe('createSchedule', () => {
     it('posts to /schedules/create and resolves', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
 
       await expect(
         client.createSchedule(STITCH_ID, '0 0/30 * * * *', true),
       ).resolves.toBeUndefined();
 
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      const url = getCallUrl(fetchSpy, 0);
-      const init = getCallInit(fetchSpy, 0);
+      expect(requestSpy).toHaveBeenCalledTimes(1);
+      const url = getCallUrl(requestSpy, 0);
+      const options = getCallOptions(requestSpy, 0);
       expect(url).toContain('/schedules/create');
-      expect(init.method).toBe('POST');
-      const body = JSON.parse(init.body as string) as {
-        enabled: boolean;
-        args: { dataSourceId: string };
-      };
+      expect(requestSpy.mock.calls[0][0]).toBe('POST');
+      const body = options.body as Record<string, unknown>;
       expect(body.enabled).toBe(true);
       expect(body.args).toEqual({ dataSourceId: STITCH_ID });
     });
 
     it('throws on non-OK response', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(409, 'conflict'));
+      requestSpy.mockResolvedValue(mockResponse(409, 'conflict'));
       await expect(
         client.createSchedule(STITCH_ID, '0 0 * * * *', true),
       ).rejects.toThrow('409');
@@ -127,7 +121,7 @@ describe('HttpWindmillClient', () => {
 
   describe('updateSchedule', () => {
     it('returns true when Windmill updates successfully', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
 
       const result = await client.updateSchedule(
         STITCH_ID,
@@ -139,7 +133,7 @@ describe('HttpWindmillClient', () => {
     });
 
     it('returns false when Windmill responds with 404 (schedule not found)', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(404, 'not found'));
+      requestSpy.mockResolvedValue(mockResponse(404, 'not found'));
 
       const result = await client.updateSchedule(
         STITCH_ID,
@@ -151,7 +145,7 @@ describe('HttpWindmillClient', () => {
     });
 
     it('throws on other non-OK responses', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
+      requestSpy.mockResolvedValue(mockResponse(500, 'server error'));
       await expect(
         client.updateSchedule(STITCH_ID, '0 0 * * * *', true),
       ).rejects.toThrow('500');
@@ -162,16 +156,16 @@ describe('HttpWindmillClient', () => {
 
   describe('setScheduleEnabled', () => {
     it('posts to /schedules/setenabled and resolves', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
 
       await expect(
         client.setScheduleEnabled(STITCH_ID, false),
       ).resolves.toBeUndefined();
 
-      const url = getCallUrl(fetchSpy, 0);
-      const init = getCallInit(fetchSpy, 0);
+      const url = getCallUrl(requestSpy, 0);
+      const options = getCallOptions(requestSpy, 0);
       expect(url).toContain('setenabled');
-      expect(JSON.parse(init.body as string)).toEqual({ enabled: false });
+      expect(options.body).toEqual({ enabled: false });
     });
   });
 
@@ -179,17 +173,17 @@ describe('HttpWindmillClient', () => {
 
   describe('scheduleExists', () => {
     it('returns true when Windmill returns 200', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, '{}'));
+      requestSpy.mockResolvedValue(mockResponse(200, '{}'));
       expect(await client.scheduleExists(STITCH_ID)).toBe(true);
     });
 
     it('returns false when Windmill returns 404', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(404, ''));
+      requestSpy.mockResolvedValue(mockResponse(404, ''));
       expect(await client.scheduleExists(STITCH_ID)).toBe(false);
     });
 
     it('throws for non-404 errors (e.g. 500)', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(500, 'server error'));
+      requestSpy.mockResolvedValue(mockResponse(500, 'server error'));
       await expect(client.scheduleExists(STITCH_ID)).rejects.toThrow('500');
     });
   });
@@ -198,17 +192,17 @@ describe('HttpWindmillClient', () => {
 
   describe('deleteSchedule', () => {
     it('resolves when deletion succeeds', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
       await expect(client.deleteSchedule(STITCH_ID)).resolves.toBeUndefined();
     });
 
     it('is a no-op when Windmill returns 404 (already deleted)', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(404, ''));
+      requestSpy.mockResolvedValue(mockResponse(404, ''));
       await expect(client.deleteSchedule(STITCH_ID)).resolves.toBeUndefined();
     });
 
     it('throws when Windmill returns a non-404 error', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(500, 'internal error'));
+      requestSpy.mockResolvedValue(mockResponse(500, 'internal error'));
       await expect(client.deleteSchedule(STITCH_ID)).rejects.toThrow('500');
     });
   });
@@ -217,18 +211,18 @@ describe('HttpWindmillClient', () => {
 
   describe('triggerOnce', () => {
     it('returns the job ID from Windmill', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, 'job-uuid-123\n'));
+      requestSpy.mockResolvedValue(mockResponse(200, 'job-uuid-123\n'));
       const jobId = await client.triggerOnce(STITCH_ID);
       expect(jobId).toBe('job-uuid-123');
     });
 
     it('throws when Windmill returns a non-OK status', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(400, 'bad request'));
+      requestSpy.mockResolvedValue(mockResponse(400, 'bad request'));
       await expect(client.triggerOnce(STITCH_ID)).rejects.toThrow('400');
     });
 
     it('throws when Windmill returns an empty job ID', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, '   '));
+      requestSpy.mockResolvedValue(mockResponse(200, '   '));
       await expect(client.triggerOnce(STITCH_ID)).rejects.toThrow(
         'empty job ID',
       );
@@ -239,44 +233,41 @@ describe('HttpWindmillClient', () => {
 
   describe('authorization headers', () => {
     it('sends the Bearer token on every request', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
       await client.scheduleExists(STITCH_ID);
 
-      const headers = getCallInit(fetchSpy, 0).headers as Record<
-        string,
-        string
-      >;
-      expect(headers['Authorization']).toBe(`Bearer ${TOKEN}`);
+      const options = getCallOptions(requestSpy, 0) as {
+        headers: Record<string, string>;
+      };
+      expect(options.headers['Authorization']).toBe(`Bearer ${TOKEN}`);
     });
 
-    it('includes AbortSignal.timeout on every request', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+    it('includes timeoutMs on every request', async () => {
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
       await client.scheduleExists(STITCH_ID);
 
-      const init = getCallInit(fetchSpy, 0);
-      expect(init.signal).toBeDefined();
+      const options = getCallOptions(requestSpy, 0) as { timeoutMs: number };
+      expect(options.timeoutMs).toBe(10_000);
     });
 
     it('omits Content-Type on GET requests (no body)', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, '{}'));
+      requestSpy.mockResolvedValue(mockResponse(200, '{}'));
       await client.scheduleExists(STITCH_ID);
 
-      const headers = getCallInit(fetchSpy, 0).headers as Record<
-        string,
-        string
-      >;
-      expect(headers['Content-Type']).toBeUndefined();
+      const options = getCallOptions(requestSpy, 0) as {
+        headers: Record<string, string>;
+      };
+      expect(options.headers['Content-Type']).toBeUndefined();
     });
 
     it('includes Content-Type: application/json on POST requests with a body', async () => {
-      fetchSpy.mockResolvedValue(mockResponse(200, ''));
+      requestSpy.mockResolvedValue(mockResponse(200, ''));
       await client.setScheduleEnabled(STITCH_ID, true);
 
-      const headers = getCallInit(fetchSpy, 0).headers as Record<
-        string,
-        string
-      >;
-      expect(headers['Content-Type']).toBe('application/json');
+      const options = getCallOptions(requestSpy, 0) as {
+        headers: Record<string, string>;
+      };
+      expect(options.headers['Content-Type']).toBe('application/json');
     });
   });
 });

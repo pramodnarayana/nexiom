@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { UsersModule } from '../modules/identity/users/users.module.js';
@@ -13,9 +15,7 @@ import { SystemAdminModule } from '../modules/identity/system-admin/system-admin
 import { RolesModule } from '../modules/identity/roles/roles.module.js';
 import { IdentityModule } from '@soopa/identity';
 import { EmailService } from '../modules/email/email.service.abstract.js';
-import { DATABASE_CONNECTION } from '@soopa/database';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../db/schema.js';
+import { DATABASE_CONNECTION, type DrizzleDb } from '@soopa/database';
 import { ConnectionsModule } from '../modules/connections/connections.module.js';
 import { TriggerModule } from '../modules/trigger/trigger.module.js';
 import { EmailModule } from '../modules/email/email.module.js';
@@ -57,6 +57,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
     }),
     // Global cron scheduler — required for PollerService and DlqProcessorService
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot({ global: true }),
     IdentityModule.registerAsync({
       imports: [
         ConfigModule,
@@ -67,7 +68,7 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
       inject: [ConfigService, DATABASE_CONNECTION, EmailService],
       useFactory: (
         configService: ConfigService,
-        db: NodePgDatabase<typeof schema>,
+        db: DrizzleDb,
         emailService: EmailService,
       ) => ({
         betterAuthConfig: {
@@ -88,7 +89,6 @@ import { PluginsModule } from '../modules/plugins/plugins.module.js';
           adminRoleId: configService.getOrThrow<string>('ADMIN_ROLE_ID'),
           memberRoleId: configService.getOrThrow<string>('MEMBER_ROLE_ID'),
         },
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         db: db as any,
         email: emailService,
       }),

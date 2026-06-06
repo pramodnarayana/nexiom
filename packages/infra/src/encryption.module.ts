@@ -64,7 +64,7 @@ export class EncryptionModule {
           provide: ENCRYPTION_MODULE_OPTIONS,
           useFactory: options.useFactory,
 
-          inject: (options.inject ?? []) as any[],
+          inject: options.inject ?? [],
         },
         {
           provide: ENCRYPTION_SERVICE,

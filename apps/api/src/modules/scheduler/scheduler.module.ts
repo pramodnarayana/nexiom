@@ -13,9 +13,11 @@ import { DB_MANAGER, type DatabaseManager } from '@soopa/dbmanager';
 import type { Redis } from 'ioredis';
 import { DbModule } from '../../db/db.module.js';
 import { ConnectionsModule } from '../connections/connections.module.js';
-import { WindmillClient } from './windmill.client.js';
-import { HttpWindmillClient } from './http-windmill.client.js';
-import { StubWindmillClient } from './stub-windmill.client.js';
+import { ISchedulerClient } from './interfaces/scheduler-client.interface.js';
+import { IHttpClient } from './interfaces/http-client.interface.js';
+import { FetchHttpClient } from './infrastructure/fetch-http.client.js';
+import { WindmillSchedulerClient } from './infrastructure/windmill-scheduler.client.js';
+import { StubSchedulerClient } from './infrastructure/stub-scheduler.client.js';
 import { SyncRunner } from './sync-runner.js';
 import { ConnectionSyncRunner } from './connection-sync-runner.js';
 import { SchedulerService } from './scheduler.service.js';
@@ -39,13 +41,20 @@ const schedulerControllers: Type<any>[] = WINDMILL_ENABLED
   controllers: schedulerControllers,
   providers: [
     {
-      provide: WindmillClient,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): WindmillClient => {
+      provide: IHttpClient,
+      useClass: FetchHttpClient,
+    },
+    {
+      provide: ISchedulerClient,
+      inject: [ConfigService, IHttpClient],
+      useFactory: (
+        config: ConfigService,
+        httpClient: IHttpClient,
+      ): ISchedulerClient => {
         const enabled = config.get<string>('WINDMILL_ENABLED') === 'true';
         return enabled
-          ? new HttpWindmillClient(config)
-          : new StubWindmillClient();
+          ? new WindmillSchedulerClient(config, httpClient)
+          : new StubSchedulerClient();
       },
     },
     CursorManagerService,

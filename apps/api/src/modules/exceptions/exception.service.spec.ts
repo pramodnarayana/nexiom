@@ -8,7 +8,7 @@ import {
 import { ExceptionService } from './exception.service.js';
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { StorageResolverService } from '@soopa/engine';
-import { QueueService, QueueName } from '@soopa/queue';
+import { IDeliveryQueueDispatcher } from './interfaces/delivery-queue-dispatcher.interface.js';
 import { PinoLogger } from 'nestjs-pino';
 
 // ---------------------------------------------------------------------------
@@ -139,8 +139,8 @@ function buildMockResolver(schemaName = 'ws_dest_001') {
   return { resolveSchemaName: vi.fn().mockResolvedValue(schemaName) };
 }
 
-function buildMockQueue() {
-  return { send: vi.fn().mockResolvedValue(undefined) };
+function buildMockDispatcher() {
+  return { dispatchRetry: vi.fn().mockResolvedValue(undefined) };
 }
 
 // ---------------------------------------------------------------------------
@@ -151,21 +151,21 @@ describe('ExceptionService', () => {
   let service: ExceptionService;
   let mockDb: ReturnType<typeof buildMockDb>;
   let mockResolver: ReturnType<typeof buildMockResolver>;
-  let mockQueue: ReturnType<typeof buildMockQueue>;
+  let mockDispatcher: ReturnType<typeof buildMockDispatcher>;
   let module: import('@nestjs/testing').TestingModule;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     mockDb = buildMockDb();
     mockResolver = buildMockResolver();
-    mockQueue = buildMockQueue();
+    mockDispatcher = buildMockDispatcher();
 
     module = await Test.createTestingModule({
       providers: [
         ExceptionService,
         { provide: DATABASE_CONNECTION, useValue: mockDb },
         { provide: StorageResolverService, useValue: mockResolver },
-        { provide: QueueService, useValue: mockQueue },
+        { provide: IDeliveryQueueDispatcher, useValue: mockDispatcher },
         { provide: PinoLogger, useValue: loggerMock },
       ],
     }).compile();
@@ -354,8 +354,7 @@ describe('ExceptionService', () => {
     it('resets status to PENDING and enqueues to DeliveryQueue', async () => {
       const result = await service.retryException(ORG_ID, OUTBOUND_ID);
       expect(result.queued).toBe(true);
-      expect(mockQueue.send).toHaveBeenCalledWith(
-        QueueName.DeliveryQueue,
+      expect(mockDispatcher.dispatchRetry).toHaveBeenCalledWith(
         expect.objectContaining({
           traceId: TRACE_ID,
           routeId: STITCH_ID,
@@ -384,16 +383,6 @@ describe('ExceptionService', () => {
         );
       await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
         NotFoundException,
-      );
-    });
-
-    it('rethrows when queueService.send fails', async () => {
-      mockQueue.send = vi
-        .fn()
-        .mockRejectedValue(new Error('queue unavailable'));
-
-      await expect(service.retryException(ORG_ID, OUTBOUND_ID)).rejects.toThrow(
-        'queue unavailable',
       );
     });
   });

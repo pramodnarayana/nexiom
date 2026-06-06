@@ -1,6 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SystemAdminController } from './system-admin.controller.js';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import {
   AUTH_PROVIDER,
   USER_PROVIDER,
@@ -44,6 +49,7 @@ describe('SystemAdminController', () => {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    deleteIfNotLastAdmin: vi.fn(),
     count: vi.fn(),
   };
 
@@ -357,14 +363,37 @@ describe('SystemAdminController', () => {
       );
     });
 
+    it('should throw BadRequestException if user is the last admin', async () => {
+      mockUserProvider.findById.mockResolvedValue({
+        id: 'u1',
+      });
+      mockUserProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: false,
+      });
+
+      await expect(controller.deleteUser('u1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockUserProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        'u1',
+        getRequiredSystemTenantId(),
+      );
+    });
+
     it('should delete user', async () => {
       mockUserProvider.findById.mockResolvedValue({
         id: 'u1',
       });
+      mockUserProvider.deleteIfNotLastAdmin.mockResolvedValue({
+        success: true,
+      });
 
       await controller.deleteUser('u1');
 
-      expect(mockUserProvider.delete).toHaveBeenCalledWith('u1');
+      expect(mockUserProvider.deleteIfNotLastAdmin).toHaveBeenCalledWith(
+        'u1',
+        getRequiredSystemTenantId(),
+      );
     });
   });
 

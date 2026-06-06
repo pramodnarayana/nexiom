@@ -1,9 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { SYNC_INTERVAL_OPTIONS } from '@soopa/database';
 import type { dataSources, SyncIntervalMinutes } from '@soopa/database';
-import { WindmillClient } from './windmill.client.js';
+import { ISchedulerClient } from './interfaces/scheduler-client.interface.js';
 import { intervalToCron } from './interval-to-cron.js';
 import { SyncRunner } from './sync-runner.js';
+import { ConnectionPausedEvent } from '../connections/events/connection-paused.event.js';
 
 type DataSource = typeof dataSources.$inferSelect;
 
@@ -17,13 +19,14 @@ export class SchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerService.name);
 
   constructor(
-    private readonly windmill: WindmillClient,
+    @Inject(ISchedulerClient)
+    private readonly schedulerClient: ISchedulerClient,
     private readonly syncRunner: SyncRunner,
   ) {}
 
   async onModuleInit(): Promise<void> {
     try {
-      await this.windmill.ensureConnectionScript();
+      await this.schedulerClient.ensureConnectionScript();
     } catch (err) {
       // Log and continue — a bootstrap failure must not crash the application.
       // The script will be re-created on the next successful startup.
@@ -49,7 +52,7 @@ export class SchedulerService implements OnModuleInit {
       );
       return;
     }
-    await this.windmill.createSchedule(connection.id, cron, true);
+    await this.schedulerClient.createSchedule(connection.id, cron, true);
     this.logger.log(
       `Schedule created for connection ${connection.id} (${cron})`,
     );
@@ -65,20 +68,24 @@ export class SchedulerService implements OnModuleInit {
     const cron = this.toCron(connection);
     if (!cron) {
       // If toCron returns null, delete any existing schedule
-      await this.windmill.deleteSchedule(id);
+      await this.schedulerClient.deleteSchedule(id);
       this.logger.log(
         `Deleted schedule for connection ${id} (invalid sync interval)`,
       );
       return;
     }
 
-    const wasUpdated = await this.windmill.updateSchedule(id, cron, enabled);
+    const wasUpdated = await this.schedulerClient.updateSchedule(
+      id,
+      cron,
+      enabled,
+    );
     if (wasUpdated) {
       this.logger.log(
         `Updated schedule for connection ${id} (${cron}, enabled=${enabled})`,
       );
     } else {
-      await this.windmill.createSchedule(id, cron, enabled);
+      await this.schedulerClient.createSchedule(id, cron, enabled);
       this.logger.log(
         `Created schedule for connection ${id} during update (${cron}, enabled=${enabled})`,
       );
@@ -90,8 +97,26 @@ export class SchedulerService implements OnModuleInit {
    * Deletes its Windmill schedule if one exists.
    */
   async onConnectionDeleted(connectionId: string): Promise<void> {
-    await this.windmill.deleteSchedule(connectionId);
+    await this.schedulerClient.deleteSchedule(connectionId);
     this.logger.log(`Deleted schedule for connection ${connectionId}`);
+  }
+
+  /**
+   * Called when a connection is paused (e.g. due to credentials failure).
+   * Deletes the Windmill schedule so it stops firing.
+   */
+  @OnEvent('connection.paused')
+  async handleConnectionPaused(event: ConnectionPausedEvent): Promise<void> {
+    this.logger.log(
+      `Connection paused event received for ${event.connectionId} due to: ${event.reason}. Deleting schedule.`,
+    );
+    try {
+      await this.schedulerClient.deleteSchedule(event.connectionId);
+    } catch (err) {
+      this.logger.error(
+        `Failed to delete schedule for connection ${event.connectionId}: ${String(err)}`,
+      );
+    }
   }
 
   /**
@@ -100,7 +125,7 @@ export class SchedulerService implements OnModuleInit {
    */
   async deleteOrgSchedules(connectionIds: string[]): Promise<void> {
     const results = await Promise.allSettled(
-      connectionIds.map((id) => this.windmill.deleteSchedule(id)),
+      connectionIds.map((id) => this.schedulerClient.deleteSchedule(id)),
     );
     results.forEach((result, i) => {
       if (result.status === 'rejected') {
@@ -116,7 +141,7 @@ export class SchedulerService implements OnModuleInit {
    * Returns the Windmill job ID.
    */
   async triggerOnce(connectionId: string): Promise<string> {
-    const jobId = await this.windmill.triggerOnce(connectionId);
+    const jobId = await this.schedulerClient.triggerOnce(connectionId);
     this.logger.log(
       `Triggered one-off job for connection ${connectionId}: jobId=${jobId}`,
     );

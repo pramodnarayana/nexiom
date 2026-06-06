@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import { StubWindmillClient } from './stub-windmill.client.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { StubSchedulerClient } from './stub-scheduler.client.js';
 
-describe('StubWindmillClient', () => {
+describe('StubSchedulerClient', () => {
+  let client: StubSchedulerClient;
+
+  beforeEach(() => {
+    client = new StubSchedulerClient();
+  });
+
   it('implements no-op methods and returns expected stub values', async () => {
-    const client = new StubWindmillClient();
-
     await expect(client.ensureConnectionScript()).resolves.toBeUndefined();
     await expect(
       client.createSchedule('stitch-1', '0 0 * * *', true),

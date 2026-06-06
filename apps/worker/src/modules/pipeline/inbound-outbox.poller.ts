@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
+import { randomUUID } from "crypto";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { sql, eq, and, inArray } from "drizzle-orm";
 import {
@@ -89,11 +90,13 @@ export class InboundOutboxPoller {
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
 
-    // Atomically claim rows
-    // TODO: The current logic increments attempts at claim time, which counts
-    // claim attempts rather than actual delivery failures. Consider adding a
-    // separate claim_attempts column in a future schema migration, and only
-    // increment attempts in processOutboxRow when a real delivery fails.
+    // Atomically claim rows by transitioning them to PROCESSING.
+    // Attempts are NOT incremented here — they are incremented only on actual
+    // delivery failure inside processOutboxRow. This ensures `attempts` reflects
+    // real delivery failures, not claim attempts (which could be spurious retries
+    // from PROCESSING rows that timed out without a real error).
+    const claimToken = randomUUID();
+
     const claimed = await tenantDb.transaction(async (tx) => {
       await tx.execute(
         sql`SET LOCAL search_path TO ${sql.identifier(schemaName)}`,
@@ -103,12 +106,12 @@ export class InboundOutboxPoller {
         .update(inboundOutbox)
         .set({
           status: "PROCESSING",
-          attempts: sql`${inboundOutbox.attempts} + 1`,
+          claimToken,
           nextRetryAt: sql`NOW() + INTERVAL '5 minutes'`,
         })
         .where(
-          sql`(${inboundOutbox.id}, ${inboundOutbox.attempts}) IN (
-            SELECT id, attempts FROM ${sql.identifier(schemaName)}.inbound_outbox
+          sql`(${inboundOutbox.id}) IN (
+            SELECT id FROM ${sql.identifier(schemaName)}.inbound_outbox
             WHERE status = 'PENDING'
                OR (status = 'RETRY' AND next_retry_at <= NOW())
                OR (status = 'PROCESSING' AND next_retry_at <= NOW())
@@ -170,6 +173,7 @@ export class InboundOutboxPoller {
       traceId: string;
       dataSourceId: string;
       attempts: number;
+      claimToken: string | null;
     },
   ): Promise<void> {
     const { inboundOutbox } = buildTenantSchema(schemaName);
@@ -186,7 +190,7 @@ export class InboundOutboxPoller {
         .update(inboundOutbox)
         .set({ status: "SUCCESS", errorMessage: null })
         .where(
-          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
+          sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts} AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
         );
 
       this.logger.debug(
@@ -194,29 +198,39 @@ export class InboundOutboxPoller {
       );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      const incrementedAttempts = row.attempts + 1;
 
-      if (row.attempts >= MAX_ATTEMPTS) {
+      if (incrementedAttempts >= MAX_ATTEMPTS) {
         await tenantDb
           .update(inboundOutbox)
-          .set({ status: "FAIL", errorMessage: errorMessage })
+          .set({
+            status: "FAIL",
+            errorMessage: errorMessage,
+            attempts: incrementedAttempts,
+          })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
           );
         this.logger.error(
           `[${schemaName}] InboundOutbox delivery permanently failed for traceId=${row.traceId}: ${errorMessage}`,
         );
       } else {
-        const delayMs = Math.pow(2, row.attempts) * 1_000;
+        const delayMs = Math.pow(2, incrementedAttempts) * 1_000;
         const nextRetryAt = new Date(Date.now() + delayMs);
 
         await tenantDb
           .update(inboundOutbox)
-          .set({ status: "RETRY", nextRetryAt, errorMessage: errorMessage })
+          .set({
+            status: "RETRY",
+            nextRetryAt,
+            errorMessage: errorMessage,
+            attempts: incrementedAttempts,
+          })
           .where(
-            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.attempts} = ${row.attempts}`,
+            sql`${inboundOutbox.id} = ${row.id} AND ${inboundOutbox.status} = 'PROCESSING' AND ${inboundOutbox.claimToken} = ${row.claimToken}`,
           );
         this.logger.warn(
-          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${row.attempts}): ${errorMessage}`,
+          `[${schemaName}] InboundOutbox delivery delayed for traceId=${row.traceId} (attempt ${incrementedAttempts}): ${errorMessage}`,
         );
       }
     }

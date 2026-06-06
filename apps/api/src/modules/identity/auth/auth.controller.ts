@@ -238,7 +238,6 @@ export class AuthController {
       `[DEBUG] BetterAuth Method Hit. Method: ${req.method} Path: ${req.path}`,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const handler = this.authService.getHandler();
 
     if (typeof handler !== 'function') {
@@ -253,7 +252,7 @@ export class AuthController {
     }
 
     // Convert Better Auth's standard web handler to Node (Express) handler
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+
     return toNodeHandler(handler)(req, res);
   }
 }

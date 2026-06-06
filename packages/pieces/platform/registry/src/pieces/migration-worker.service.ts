@@ -1,9 +1,11 @@
 import { Injectable, Logger, Inject, OnModuleInit } from '@nestjs/common';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { DATABASE_CONNECTION } from '@soopa/database';
+import { DATABASE_CONNECTION, tenantStorageRegistry } from '@soopa/database';
 import type { DrizzleDb } from '@soopa/database';
 import { QUEUE_SERVICE, QueueName } from '@soopa/queue';
 import type { IQueueService, PluginMigrationEvent } from '@soopa/queue';
+import { DB_MANAGER } from '@soopa/dbmanager';
+import type { DatabaseManager } from '@soopa/dbmanager';
 
 /**
  * Handles Just-In-Time provisioning of dynamically downloaded domain tables.
@@ -15,6 +17,7 @@ export class MigrationWorkerService implements OnModuleInit {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly globalDb: DrizzleDb,
+    @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     @Inject(QUEUE_SERVICE) private readonly queueService: IQueueService
   ) {}
 
@@ -92,7 +95,7 @@ export class MigrationWorkerService implements OnModuleInit {
     if (!event.tenantId) {
       // --- FAN-OUT MODE ---
       this.logger.log(`[Fan-Out] Starting fan-out for ${event.pieceName} from ${event.pluginLocation}`);
-      const activeTenants = await this.getActiveTenants(event.pieceName);
+      const activeTenants = await this.getActiveTenants();
 
       this.logger.log(`[Fan-Out] Found ${activeTenants.length} active tenants. Dispatching single-tenant SQS messages...`);
 
@@ -124,20 +127,12 @@ export class MigrationWorkerService implements OnModuleInit {
     }
   }
 
-  // Stub helpers - MUST BE IMPLEMENTED BEFORE PRODUCTION USE
-  private async getActiveTenants(pieceName: string): Promise<Array<{ id: string }>> {
-    // TODO: Implement real tenant resolution logic
-    // e.g., SELECT * FROM tenant_connections WHERE piece_id = $1
-    throw new Error(
-      'getActiveTenants is not implemented. Real tenant resolution must be provided before running plugin migrations in production.',
-    );
+  private async getActiveTenants(): Promise<Array<{ id: string }>> {
+    const tenants = await this.globalDb.select({ id: tenantStorageRegistry.tenantId }).from(tenantStorageRegistry);
+    return tenants;
   }
 
-  private async getTenantDbConnection(connectionUrl: string): Promise<any> {
-    // TODO: Implement real tenant database connection management
-    // In production, this should resolve from your TenantDatabaseManager connection pool
-    throw new Error(
-      'getTenantDbConnection is not implemented. Real tenant connection management must be provided before running plugin migrations in production.',
-    );
+  private async getTenantDbConnection(tenantId: string): Promise<DrizzleDb> {
+    return this.dbManager.getTenantDb(tenantId);
   }
 }

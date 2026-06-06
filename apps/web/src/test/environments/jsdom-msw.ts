@@ -3,7 +3,7 @@ import type { Environment } from 'vitest/environments';
 
 export default {
     name: 'jsdom-msw',
-    transformMode: 'web',
+    viteEnvironment: 'client',
 
     async setup(
         global: Parameters<Environment['setup']>[0],

@@ -58,6 +58,7 @@ export const integrationStitches = pgTable('integration_stitch', {
     // workspace with an org that doesn't own it.
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    sourceDataSourceId: uuid('source_data_source_id').notNull(),
     destDataSourceId: uuid('dest_data_source_id').notNull(),
     // Vendor object names resolved at stitch-creation time via describe API
     canonicalObject: varchar('canonical_object', { length: 255 }).notNull(),
@@ -76,6 +77,12 @@ export const integrationStitches = pgTable('integration_stitch', {
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
         name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
+    // Cascade deletes when the source data source is removed
+    foreignKey({
+        columns: [table.sourceDataSourceId],
+        foreignColumns: [dataSources.id],
+        name: 'stitch_source_data_source_fk',
+    }).onDelete('cascade'),
     // Cascade deletes when the destination data source is removed
     foreignKey({
         columns: [table.destDataSourceId],
@@ -84,8 +91,11 @@ export const integrationStitches = pgTable('integration_stitch', {
     }).onDelete('cascade'),
     // Case-insensitive uniqueness per workspace — same name allowed across workspaces
     uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
+    // Unique identity to prevent duplicate concurrent stitches on the same path
+    uniqueIndex('stitch_identity_unique_idx').on(table.workspaceId, table.sourceDataSourceId, table.destDataSourceId, table.canonicalObject),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
+    index('stitch_source_ds_idx').on(table.sourceDataSourceId),
     index('stitch_dest_ds_idx').on(table.destDataSourceId),
     index('stitch_status_idx').on(table.orgId, table.status),
 ]);

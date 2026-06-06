@@ -8,6 +8,7 @@ import {
   AesEncryptionService,
   EncryptionService,
   OAuthRefreshClient,
+  RedisDistributedLock,
 } from "@soopa/credentials";
 import { RegistryOAuthRefreshClient } from "./registry-token-refresh.service.js";
 import { DATABASE_CONNECTION } from "@soopa/database";
@@ -18,8 +19,11 @@ import type { Redis } from "ioredis";
 import { ReplicaService } from "./replica.service.js";
 import { NormalizationService } from "./normalization.service.js";
 import { TargetBuilderService } from "./target-builder.service.js";
-import { FanOutService } from "./fanout.service.js";
+import { FanoutRouterService } from "./fanout-router.service.js";
+import { FanoutBatchProcessor } from "./fanout-batch-processor.js";
 import { DeliveryService } from "./delivery.service.js";
+import { DeliveryRetryService } from "./delivery-retry.service.js";
+import { GemHydrationService } from "./gem-hydration.service.js";
 import { GitopsSyncWorker } from "./gitops-sync.worker.js";
 import { RegistryReplicationService } from "./registry-replication.service.js";
 
@@ -46,8 +50,11 @@ import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
     ReplicaService,
     NormalizationService, // Extended with app canonical write hook (step 3.5)
     TargetBuilderService, // SQL JOIN enrichment for target payload assembly
-    FanOutService,
+    FanoutRouterService,
+    FanoutBatchProcessor,
     DeliveryService,
+    DeliveryRetryService,
+    GemHydrationService,
     GitopsSyncWorker,
     ActiveFetchWorker,
     DependencySweeperService,
@@ -75,7 +82,12 @@ import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
         crypto: EncryptionService,
         refreshClient: OAuthRefreshClient,
       ) => {
-        return new TokenManagerService(db, redis, crypto, refreshClient);
+        return new TokenManagerService(
+          db,
+          new RedisDistributedLock(redis),
+          crypto,
+          refreshClient,
+        );
       },
       inject: [
         DATABASE_CONNECTION,
@@ -89,7 +101,8 @@ import { RegistryOutboxPoller } from "./registry-outbox.poller.js";
     ReplicaService,
     NormalizationService,
     TargetBuilderService,
-    FanOutService,
+    FanoutRouterService,
+    FanoutBatchProcessor,
     DeliveryService,
   ],
 })

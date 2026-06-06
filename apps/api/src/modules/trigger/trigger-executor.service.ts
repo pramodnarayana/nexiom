@@ -12,26 +12,12 @@ import { SchemaPlan } from '@soopa/dbmanager';
 import type { DatabaseManager } from '@soopa/dbmanager';
 import { DB_MANAGER } from '@soopa/dbmanager';
 import { StorageResolverService } from '@soopa/engine';
-import type { Redis } from 'ioredis';
-import { createHash, randomUUID } from 'node:crypto';
-import { RedisBackedTriggerStore } from './redis-trigger-store.js';
-
-/**
- * Extracts a cursor value from a trigger record.
- *
- * Checks, in order: LastModifiedDate, _cursor, CreatedDate.
- * Falls back to the current ISO timestamp only when none of those fields exist.
- * Using the record's own timestamp avoids server clock skew against the source API.
- */
-function extractRecordCursor(record: unknown): string {
-  if (record !== null && typeof record === 'object') {
-    const r = record as Record<string, unknown>;
-    for (const key of ['LastModifiedDate', '_cursor', 'CreatedDate']) {
-      if (typeof r[key] === 'string' && r[key]) return r[key];
-    }
-  }
-  return new Date().toISOString();
-}
+import { randomUUID } from 'node:crypto';
+import { IDistributedLockService } from './interfaces/distributed-lock.interface.js';
+import { KeyValueTriggerStore } from './key-value-trigger-store.js';
+import type { IKeyValueStore } from '@soopa/cache';
+import { TriggerPayloadTransformer } from './trigger-payload-transformer.js';
+import { TriggerRetryPolicyService } from './trigger-retry-policy.service.js';
 
 export interface TriggerRunParams {
   trigger: Trigger;
@@ -70,7 +56,11 @@ export class TriggerExecutorService {
 
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: DrizzleDb,
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject(IDistributedLockService)
+    private readonly lockService: IDistributedLockService,
+    private readonly retryPolicyService: TriggerRetryPolicyService,
+    private readonly payloadTransformer: TriggerPayloadTransformer,
+    @Inject('KEY_VALUE_STORE') private readonly kvStore: IKeyValueStore, // for KeyValueTriggerStore
     @Inject(DB_MANAGER) private readonly dbManager: DatabaseManager,
     private readonly storageResolver: StorageResolverService,
   ) {}
@@ -117,19 +107,11 @@ export class TriggerExecutorService {
 
     // Parse the raw body so TriggerContext.payload is populated for trigger logic.
     // Falls back to the raw buffer if JSON parsing fails (e.g. plain-text hooks).
-    let payload: unknown;
-    try {
-      payload = JSON.parse(rawBody.toString('utf-8')) as unknown;
-    } catch {
-      payload = rawBody;
-    }
+    const payload = this.payloadTransformer.parseWebhookPayload(rawBody);
 
     // Derive a stable dedup key from the raw body so concurrent deliveries of
     // the same event compete for the same lock (identical to runPoll semantics).
-    const bodyHash = createHash('sha256')
-      .update(rawBody)
-      .digest('hex')
-      .slice(0, 16);
+    const bodyHash = this.payloadTransformer.buildWebhookLockHash(rawBody);
     const lockKey = `lock:webhook:${params.workspaceId}:${params.triggerName}:${bodyHash}`;
     const token = await this.acquireLock(lockKey);
     if (!token) {
@@ -215,8 +197,6 @@ export class TriggerExecutorService {
       // Revert changes in reverse order of application
 
       // 1. Only revert the registry row if the write actually happened.
-      // If applyPlan or publication or onEnable threw before reaching the UPDATE,
-      // the row was never changed and reverting would be a spurious write.
       if (wroteRegistryRow) {
         try {
           await this.db
@@ -238,7 +218,6 @@ export class TriggerExecutorService {
       }
 
       // 2. Attempt to remove the publication registration if it was successful.
-      // This prevents CDC events from flowing for a trigger whose onEnable failed.
       if (registeredPublication) {
         try {
           const resolvedSchemaName =
@@ -328,7 +307,7 @@ export class TriggerExecutorService {
         workspaceId: params.workspaceId,
         error: err instanceof Error ? err.message : String(err),
       });
-      await this.pushToDlq(params, err);
+      await this.retryPolicyService.pushToDlq(params, err);
       return;
     }
 
@@ -349,7 +328,7 @@ export class TriggerExecutorService {
     const store = this.buildStore(params);
 
     for (const record of records) {
-      const sourceEventId = this.buildSourceEventId(
+      const sourceEventId = this.payloadTransformer.buildSourceEventId(
         params.workspaceId,
         params.triggerName,
         record,
@@ -365,17 +344,21 @@ export class TriggerExecutorService {
 
         if (didInsert) {
           inserted++;
-          const sourceCursor = extractRecordCursor(record);
-          await store.put('last_cursor', sourceCursor);
+          const sourceCursor =
+            this.payloadTransformer.extractRecordCursor(record);
+          if (sourceCursor !== undefined) {
+            await store.put('last_cursor', sourceCursor);
+          }
         }
       } catch (err) {
-        await this.handleRecordIngestFailure(
+        await this.retryPolicyService.handleRecordIngestFailure(
           params,
           fromDlqRetry,
           records,
           currentIndex,
           sourceEventId,
           err,
+          this.logger,
         );
       }
 
@@ -391,50 +374,6 @@ export class TriggerExecutorService {
         objectType: params.objectType,
       },
     );
-  }
-
-  private async handleRecordIngestFailure(
-    params: TriggerRunParams | WebhookRunParams,
-    fromDlqRetry: boolean,
-    records: unknown[],
-    currentIndex: number,
-    sourceEventId: string,
-    err: unknown,
-  ): Promise<void> {
-    // Per-record failure — push to DLQ so it’s retried, then re-throw
-    // so the batch fails visibly and the cursor does not advance past
-    // unprocessed records.
-    this.logger.error('Record ingest failed', {
-      sourceEventId,
-      appName: params.appName,
-      triggerName: params.triggerName,
-      workspaceId: params.workspaceId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-
-    // Skip pushing to DLQ if we are already in a DLQ retry context,
-    // so the outer DLQ layer increments the retry attempt counter instead
-    // of appending a duplicate DLQ job via this nested catch block.
-    if (fromDlqRetry) {
-      throw err;
-    }
-
-    // For webhooks, `params` may have a `payload` containing the full array or payload.
-    // We update it to only contain the remaining unprocessed records so
-    // the DLQ retry doesn't re-process already committed records.
-    const remainingRecords = records.slice(currentIndex);
-    let dlqParams: TriggerRunParams | WebhookRunParams = params;
-    if ('payload' in params) {
-      dlqParams = {
-        ...params,
-        payload: Array.isArray(params.payload)
-          ? remainingRecords
-          : params.payload,
-      };
-    }
-
-    await this.pushToDlq(dlqParams, err);
-    throw err;
   }
 
   // ─── Gateway row insert ──────────────────────────────────────────────────
@@ -489,30 +428,6 @@ export class TriggerExecutorService {
     return didInsert;
   }
 
-  // ─── DLQ ─────────────────────────────────────────────────────────────────
-
-  private async pushToDlq(
-    params: TriggerRunParams | WebhookRunParams,
-    err: unknown,
-  ): Promise<void> {
-    const job = JSON.stringify({
-      appName: params.appName,
-      triggerName: params.triggerName,
-      tenantId: params.tenantId,
-      workspaceId: params.workspaceId,
-      dataSourceId: params.dataSourceId,
-      objectType: params.objectType,
-      propsValue: params.propsValue,
-      auth: params.auth, // required for credential reconstruction on retry
-      // Preserve webhook payload for retry (may contain remaining unprocessed records)
-      payload: 'payload' in params ? params.payload : undefined,
-      failedAt: new Date().toISOString(),
-      error: err instanceof Error ? err.message : String(err),
-      attempt: 1,
-    });
-    await this.redis.lpush('dlq:triggers', job);
-  }
-
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   private buildContext(
@@ -534,8 +449,8 @@ export class TriggerExecutorService {
   }
 
   private buildStore(params: TriggerRunParams) {
-    return new RedisBackedTriggerStore(
-      this.redis,
+    return new KeyValueTriggerStore(
+      this.kvStore,
       params.workspaceId,
       params.appName,
       params.objectType,
@@ -544,96 +459,17 @@ export class TriggerExecutorService {
   }
 
   /**
-   * Builds a stable, bounded fingerprint for a trigger record.
-   *
-   * Design decisions:
-   *  - Keys are sorted so insertion order doesn't affect the hash.
-   *  - Common volatile fields (timestamps, ETags, version counters) are
-   *    stripped so repeated polls of the same logical record produce the
-   *    same ID even when the API updates those fields.
-   *  - The serialized string is capped at FINGERPRINT_MAX_BYTES before
-   *    hashing to prevent O(n) hashing of very large payloads.
-   *  - Falls back to JSON.stringify for non-object records (arrays, strings).
-   *
-   * Tradeoff: stripping volatile keys means a record whose ONLY change is
-   * e.g. a timestamp bump will hash identically — acceptable for polling
-   * deduplication where we track "have we seen this logical record" rather
-   * than "has this record changed since last poll".
-   */
-  private buildSourceEventId(
-    workspaceId: string,
-    triggerName: string,
-    record: unknown,
-  ): string {
-    const FINGERPRINT_MAX_BYTES = 4096;
-    const VOLATILE_KEYS = new Set([
-      'SystemModstamp',
-      'LastModifiedDate',
-      'LastReferencedDate',
-      'LastViewedDate',
-      '_etag',
-      'etag',
-      'version',
-      '__v',
-    ]);
-
-    let payload: string;
-    if (
-      record !== null &&
-      typeof record === 'object' &&
-      !Array.isArray(record)
-    ) {
-      const sorted = Object.keys(record as Record<string, unknown>)
-        .filter((k) => !VOLATILE_KEYS.has(k))
-        .sort((a, b) => (a ?? '').localeCompare(b ?? ''))
-        .reduce<Record<string, unknown>>((acc, k) => {
-          acc[k] = (record as Record<string, unknown>)[k];
-          return acc;
-        }, {});
-      payload = JSON.stringify(sorted);
-    } else {
-      payload = JSON.stringify(record);
-    }
-
-    const bounded =
-      payload.length > FINGERPRINT_MAX_BYTES
-        ? payload.slice(0, FINGERPRINT_MAX_BYTES)
-        : payload;
-
-    return createHash('sha256')
-      .update(`${workspaceId}:${triggerName}:${bounded}`)
-      .digest('hex');
-  }
-
-  /**
    * Acquires a Redis NX lock and returns a unique token identifying this holder.
    * Returns null if the lock is already held by another process.
    */
   private async acquireLock(key: string): Promise<string | null> {
-    const token = randomUUID();
-    const result = await this.redis.set(
-      key,
-      token,
-      'PX',
-      this.LOCK_TTL_MS,
-      'NX',
-    );
-    return result === 'OK' ? token : null;
+    return this.lockService.acquireLock(key, this.LOCK_TTL_MS);
   }
 
   /**
    * Releases the lock ONLY if the stored value matches the caller's token.
-   * Uses a Lua script to guarantee atomicity — prevents a process from
-   * accidentally deleting another process's lock after TTL expiry.
    */
   private async releaseLock(key: string, token: string): Promise<void> {
-    const lua = [
-      "if redis.call('get', KEYS[1]) == ARGV[1] then",
-      "  return redis.call('del', KEYS[1])",
-      'else',
-      '  return 0',
-      'end',
-    ].join('\n');
-    await this.redis.eval(lua, 1, key, token);
+    await this.lockService.releaseLock(key, token);
   }
 }

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-argument */
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest";
 import { PermissionSeeder } from "./permission-seeder.js";
 import { Logger } from "@nestjs/common";
@@ -141,7 +141,7 @@ describe("PermissionSeeder", () => {
     expect(db.insert).toHaveBeenCalledWith(schema.role);
     expect(db.insert).toHaveBeenCalledWith(schema.permission);
     expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
-    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(2);
+    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
 
     // Verify rolePermission insert (which does NOT use onConflictDoNothing in rbac-seeding.ts)
     // It manually filters and inserts
@@ -186,7 +186,8 @@ describe("PermissionSeeder", () => {
   });
 
   it("seed skips rolePermission insertion if all exist", async () => {
-    const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+    const { seedSystemRbac, DrizzleRbacRepository } =
+      await import("../utils/rbac-seeding.js");
     const dbMock = mkDb();
     const optionsMock = mkOptions();
     const { ownerRoleId, adminRoleId, memberRoleId, systemTenantId } =
@@ -222,7 +223,11 @@ describe("PermissionSeeder", () => {
 
     const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
 
-    await seedSystemRbac(dbMock, optionsMock.constants, loggerMock);
+    await seedSystemRbac(
+      new DrizzleRbacRepository(dbMock as any),
+      optionsMock.constants,
+      loggerMock,
+    );
 
     expect(loggerMock.log).toHaveBeenCalledWith(
       "No new role permissions to insert.",
@@ -240,13 +245,18 @@ describe("PermissionSeeder", () => {
     });
 
     try {
-      const { seedSystemRbac } = await import("../utils/rbac-seeding.js");
+      const { seedSystemRbac, DrizzleRbacRepository } =
+        await import("../utils/rbac-seeding.js");
       const dbMock = mkDb();
       const loggerMock = { log: vi.fn(), error: vi.fn() } as unknown as Logger;
       const optionsMock = mkOptions();
 
       await expect(
-        seedSystemRbac(dbMock, optionsMock.constants, loggerMock),
+        seedSystemRbac(
+          new DrizzleRbacRepository(dbMock as any),
+          optionsMock.constants,
+          loggerMock,
+        ),
       ).rejects.toThrow("Invalid permission format: invalid-format");
     } finally {
       vi.doUnmock("../constants.js");

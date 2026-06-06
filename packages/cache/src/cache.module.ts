@@ -5,6 +5,9 @@ import { Redis } from 'ioredis';
 /** Injection token for the single shared Redis client across the entire application. */
 export const REDIS_CLIENT = 'REDIS_CLIENT';
 
+/** Injection token for the key-value store interface (backed by Redis). */
+export const KEY_VALUE_STORE = 'KEY_VALUE_STORE';
+
 export type { Redis };
 
 /**
@@ -67,12 +70,16 @@ class RedisLifecycleService implements OnModuleDestroy {
             },
         },
         {
+            provide: KEY_VALUE_STORE,
+            useExisting: REDIS_CLIENT,
+        },
+        {
             // Lifecycle service — injected only so Nest calls onModuleDestroy.
             provide: REDIS_LIFECYCLE,
             inject: [REDIS_CLIENT],
             useFactory: (client: Redis) => new RedisLifecycleService(client),
         },
     ],
-    exports: [REDIS_CLIENT],
+    exports: [REDIS_CLIENT, KEY_VALUE_STORE],
 })
 export class CacheModule { }

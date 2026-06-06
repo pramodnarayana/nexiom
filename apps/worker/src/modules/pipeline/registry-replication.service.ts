@@ -116,45 +116,39 @@ export class RegistryReplicationService implements OnModuleInit {
                 const connData = prepareAppConnectionPayload(data);
                 await tx
                   .insert(schema.dataSources)
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                  .values(connData as any)
+                  .values(connData as typeof schema.dataSources.$inferInsert)
                   .onConflictDoUpdate({
                     target: [schema.dataSources.id],
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    set: connData as any,
+                    set: connData as typeof schema.dataSources.$inferInsert,
                   });
                 operationPerformed = true;
               } else if (row.entityType === "UI_WORKSPACE") {
                 await tx
                   .insert(schema.uiWorkspaces)
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                  .values(data as any)
+                  .values(data as typeof schema.uiWorkspaces.$inferInsert)
                   .onConflictDoUpdate({
                     target: [schema.uiWorkspaces.id],
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    set: data as any,
+                    set: data as typeof schema.uiWorkspaces.$inferInsert,
                   });
                 operationPerformed = true;
               } else if (row.entityType === "INTEGRATION_STITCH") {
                 await tx
                   .insert(schema.integrationStitches)
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                  .values(data as any)
+                  .values(
+                    data as typeof schema.integrationStitches.$inferInsert,
+                  )
                   .onConflictDoUpdate({
                     target: [schema.integrationStitches.id],
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    set: data as any,
+                    set: data as typeof schema.integrationStitches.$inferInsert,
                   });
                 operationPerformed = true;
               } else if (row.entityType === "FIELD_MAPPING") {
                 await tx
                   .insert(schema.fieldMappings)
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                  .values(data as any)
+                  .values(data as typeof schema.fieldMappings.$inferInsert)
                   .onConflictDoUpdate({
                     target: [schema.fieldMappings.id],
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                    set: data as any,
+                    set: data as typeof schema.fieldMappings.$inferInsert,
                   });
                 operationPerformed = true;
               }

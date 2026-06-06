@@ -4,20 +4,25 @@ import {
   TokenManagerService,
   AesEncryptionService,
   OAuthRefreshClient,
+  RedisDistributedLock,
 } from '@soopa/credentials';
 import { DbModule } from '../../db/db.module.js';
 import { REDIS_CLIENT } from '@soopa/cache';
 import type { Redis } from '@soopa/cache';
 import { OAuthCallbackController } from './connections/callback.controller.js';
-import { ConnectorsController } from './connections/connectors.controller.js';
+import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
 import { RegistryOAuthRefreshClient } from './connections/registry-token-refresh.service.js';
-import { ConnectorsService } from './connectors.service.js';
 import { OauthStateService } from './oauth-state.service.js';
 import { PiecesModule } from '@soopa/piece-registry';
 import { StorageResolverModule } from '@soopa/engine';
 
 import { DATABASE_CONNECTION } from '@soopa/database';
 import { type DrizzleDb } from '@soopa/database';
+
+import { OAuthController } from './connections/oauth.controller.js';
+import { CredentialController } from './connections/credential.controller.js';
+import { OAuthOrchestrationService } from './services/oauth-orchestration.service.js';
+import { CredentialLinkingService } from './services/credential-linking.service.js';
 
 /**
  * Handles OAuth connectivity, credential storage, and token management.
@@ -30,7 +35,7 @@ import { type DrizzleDb } from '@soopa/database';
 @Global()
 @Module({
   imports: [DbModule, PiecesModule, StorageResolverModule],
-  controllers: [OAuthCallbackController, ConnectorsController],
+  controllers: [OAuthCallbackController, OAuthController, CredentialController],
   providers: [
     {
       provide: TokenManagerService,
@@ -40,7 +45,12 @@ import { type DrizzleDb } from '@soopa/database';
         crypto: EncryptionService,
         refreshClient: OAuthRefreshClient,
       ) => {
-        return new TokenManagerService(db, redis, crypto, refreshClient);
+        return new TokenManagerService(
+          db,
+          new RedisDistributedLock(redis),
+          crypto,
+          refreshClient,
+        );
       },
       inject: [
         DATABASE_CONNECTION,
@@ -49,11 +59,13 @@ import { type DrizzleDb } from '@soopa/database';
         OAuthRefreshClient,
       ],
     },
-    ConnectorsService,
+    OAuthOrchestrationService,
+    CredentialLinkingService,
     OauthStateService,
+    ConnectionLifecycleService,
     { provide: EncryptionService, useClass: AesEncryptionService },
     { provide: OAuthRefreshClient, useClass: RegistryOAuthRefreshClient },
   ],
-  exports: [TokenManagerService],
+  exports: [TokenManagerService, ConnectionLifecycleService],
 })
 export class ConnectionsModule {}
