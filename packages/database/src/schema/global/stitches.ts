@@ -77,6 +77,12 @@ export const integrationStitches = pgTable('integration_stitch', {
         foreignColumns: [uiWorkspaces.id, uiWorkspaces.orgId],
         name: 'stitch_workspace_org_fk',
     }).onDelete('cascade'),
+    // Cascade deletes when the source data source is removed
+    foreignKey({
+        columns: [table.sourceDataSourceId],
+        foreignColumns: [dataSources.id],
+        name: 'stitch_source_data_source_fk',
+    }).onDelete('cascade'),
     // Cascade deletes when the destination data source is removed
     foreignKey({
         columns: [table.destDataSourceId],
@@ -87,6 +93,7 @@ export const integrationStitches = pgTable('integration_stitch', {
     uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
+    index('stitch_source_ds_idx').on(table.sourceDataSourceId),
     index('stitch_dest_ds_idx').on(table.destDataSourceId),
     index('stitch_status_idx').on(table.orgId, table.status),
 ]);

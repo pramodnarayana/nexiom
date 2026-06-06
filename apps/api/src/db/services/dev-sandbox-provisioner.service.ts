@@ -116,18 +116,21 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
     // Hybrid Tenancy: Standard tenants (including local dev) route to a shared
     // shard database. This allows a single Debezium container to monitor all
     // standard tenant schemas via one publication + replication slot.
-    let hostUrl: string;
+    let sanitizedHostUrl: string;
+    let connectionUrl: string;
     const tenantDbName = 'platform_shard_1';
     try {
       const parsedUrl = new URL(
         process.env.DATABASE_URL ||
           'postgresql://user:password@localhost:5432/platform_global',
       );
-      // Preserve credentials in the host URL for authenticated connections
+      // Sanitized host URL without credentials for registry persistence
+      sanitizedHostUrl = `${parsedUrl.protocol}//${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      // Connection URL with credentials for live DB connections
       const auth = parsedUrl.username
         ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
         : '';
-      hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      connectionUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
     } catch (err) {
       const redactedUrl = process.env.DATABASE_URL
         ? process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***:***@')
@@ -135,12 +138,13 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
       console.warn(
         `⚠️  Failed to parse DATABASE_URL: ${redactedUrl}. Error: ${err instanceof Error ? err.message : String(err)}. Falling back to default.`,
       );
-      hostUrl = 'postgresql://localhost:5432';
+      sanitizedHostUrl = 'postgresql://localhost:5432';
+      connectionUrl = 'postgresql://localhost:5432';
     }
 
     // ── Step 2: CREATE DATABASE platform_shard_1 + run tenant migrations ─
     console.log(`\n📦 Provisioning tenant database: ${tenantDbName}`);
-    await this.tenantSchema.createTenantDatabase(tenantDbName, hostUrl);
+    await this.tenantSchema.createTenantDatabase(tenantDbName, connectionUrl);
 
     // ── Step 3: Connect to global DB to register the tenant ─────────────────
     const { drizzle } = await import('drizzle-orm/node-postgres');
@@ -175,7 +179,7 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
         await globalDb.insert(dbSchema.tenantStorageRegistry).values({
           tenantId: devTenantId,
           databaseName: tenantDbName,
-          databaseHostUrl: hostUrl,
+          databaseHostUrl: sanitizedHostUrl,
           regionContext: 'local',
         });
         console.log(
@@ -185,7 +189,7 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
         // Update host URL in case credentials changed
         await globalDb
           .update(dbSchema.tenantStorageRegistry)
-          .set({ databaseName: tenantDbName, databaseHostUrl: hostUrl })
+          .set({ databaseName: tenantDbName, databaseHostUrl: sanitizedHostUrl })
           .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId));
         console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
       }
@@ -203,7 +207,7 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
         .values({
           id: 'shard_1',
           databaseName: tenantDbName,
-          databaseHostUrl: hostUrl,
+          databaseHostUrl: sanitizedHostUrl,
           regionContext: 'local',
           maxTenants: 1000,
           currentTenants: count,
@@ -213,7 +217,7 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
           target: [dbSchema.shardRegistry.id],
           set: {
             databaseName: tenantDbName,
-            databaseHostUrl: hostUrl,
+            databaseHostUrl: sanitizedHostUrl,
             status: 'ACTIVE',
             currentTenants: count,
           },
@@ -226,8 +230,8 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
       // REMOVED: provision should not drop anything. db:reset handles cleanup.
 
       // ── Step 4: Connect to tenant DB and write app_connection fixtures ───────
-      // hostUrl already includes credentials if present from Step 1
-      const tenantUrl = `${hostUrl.replace(/\/$/, '')}/${tenantDbName}`;
+      // connectionUrl includes credentials for live DB connections
+      const tenantUrl = `${connectionUrl.replace(/\/$/, '')}/${tenantDbName}`;
       let tenantPool: Pool | undefined;
 
       try {
