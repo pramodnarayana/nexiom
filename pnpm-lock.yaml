@@ -931,6 +931,9 @@ importers:
       '@soopa/engine':
         specifier: workspace:*
         version: link:../../platform/core
+      '@soopa/platform':
+        specifier: workspace:*
+        version: link:../../../../packages/platform
       jsonata:
         specifier: ^2.1.0
         version: 2.1.0

@@ -21,6 +21,7 @@
 	},
 	"dependencies": {
 		"@soopa/engine": "workspace:*",
+		"@soopa/platform": "workspace:*",
 		"jsonata": "^2.1.0"
 	},
 	"devDependencies": {
