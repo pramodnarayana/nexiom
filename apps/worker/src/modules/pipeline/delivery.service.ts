@@ -646,6 +646,29 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
     // ── Source Schema Transaction ──────────────────────────────────────────
     let sourceCommitted = false;
     try {
+      // ── Write GEM (Control Plane) before source commit succeeds ──────────────
+      if (
+        finalStatus === "SUCCESS" &&
+        srcVendorId &&
+        destVendorId &&
+        targetAppName &&
+        targetTenantId
+      ) {
+        await this.gemService.writeGemMapping(tenantDb, {
+          traceId,
+          routeId,
+          srcAppName,
+          dataSourceId,
+          srcTenantId,
+          canonicalType,
+          srcVendorId,
+          targetAppName,
+          targetConnectionId,
+          targetTenantId,
+          destVendorId,
+        });
+      }
+
       await tenantDb.transaction(async (tx) => {
         assertValidSchemaName(srcSchemaName);
         await tx.execute(
@@ -680,29 +703,6 @@ export class DeliveryService implements OnModuleInit, OnModuleDestroy {
             .where(sql`${activeSyncLocks.lockedByTraceId} = ${traceId}`);
         }
       });
-
-      // ── Write GEM (Control Plane) after source commit succeeds ──────────────
-      if (
-        finalStatus === "SUCCESS" &&
-        srcVendorId &&
-        destVendorId &&
-        targetAppName &&
-        targetTenantId
-      ) {
-        await this.gemService.writeGemMapping(tenantDb, {
-          traceId,
-          routeId,
-          srcAppName,
-          dataSourceId,
-          srcTenantId,
-          canonicalType,
-          srcVendorId,
-          targetAppName,
-          targetConnectionId,
-          targetTenantId,
-          destVendorId,
-        });
-      }
 
       // Only mark as committed after all write operations succeed
       sourceCommitted = true;
