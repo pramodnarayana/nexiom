@@ -271,6 +271,7 @@ export class SystemSeederService {
               .update(schema.member)
               .set({
                 role: config.ownerRoleId,
+                updatedAt: now,
               })
               .where(eq(schema.member.id, existingMember.id));
             console.log('    ✓ Promoted existing member to System Owner');
@@ -483,6 +484,7 @@ export class SystemSeederService {
             name: 'Revenova to QuickBooks Local Sync',
             orgId: orgId,
             workspaceId: workspaceId,
+            sourceDataSourceId: salesforceConn[0].id,
             destDataSourceId: qbConn[0].id,
             canonicalObject: 'TMS_CARRIER',
             targetObject: 'Vendor',

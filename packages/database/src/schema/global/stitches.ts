@@ -58,6 +58,7 @@ export const integrationStitches = pgTable('integration_stitch', {
     // workspace with an org that doesn't own it.
     orgId: text('org_id').notNull(),
     workspaceId: uuid('workspace_id').notNull(),
+    sourceDataSourceId: uuid('source_data_source_id').notNull(),
     destDataSourceId: uuid('dest_data_source_id').notNull(),
     // Vendor object names resolved at stitch-creation time via describe API
     canonicalObject: varchar('canonical_object', { length: 255 }).notNull(),

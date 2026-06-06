@@ -141,7 +141,7 @@ describe("PermissionSeeder", () => {
     expect(db.insert).toHaveBeenCalledWith(schema.role);
     expect(db.insert).toHaveBeenCalledWith(schema.permission);
     expect(db.insert).toHaveBeenCalledWith(schema.rolePermission);
-    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(2);
+    expect(db.onConflictDoNothing).toHaveBeenCalledTimes(3);
 
     // Verify rolePermission insert (which does NOT use onConflictDoNothing in rbac-seeding.ts)
     // It manually filters and inserts

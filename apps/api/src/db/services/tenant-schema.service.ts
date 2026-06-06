@@ -65,6 +65,7 @@ export class TenantSchemaService {
 
   async dropTenantDatabaseIfExists(dbName: string): Promise<void> {
     const { PgClient } = await this.connectionPool.resolvePgModule();
+    // @ts-expect-error - pg-format types are not fully compatible with NodeNext
     const format = (await import('pg-format')).default;
     const adminClient = new PgClient({
       connectionString: process.env.DATABASE_URL,
@@ -100,6 +101,7 @@ export class TenantSchemaService {
         if (!/^[a-zA-Z0-9_]+$/.test(dbName)) {
           throw new Error(`Invalid tenant database name: ${dbName}`);
         }
+        // @ts-expect-error - pg-format types are not fully compatible with NodeNext
         const format = (await import('pg-format')).default;
         await adminClient.query(format('CREATE DATABASE %I', dbName));
         console.log(`  ✓ Created tenant database: ${dbName}`);

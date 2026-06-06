@@ -99,6 +99,7 @@ describe('StitchesService', () => {
     name: 'SF Loads → QB Invoices',
     orgId: ORG_ID,
     workspaceId: WS_ID,
+    sourceDataSourceId: '3c3c3c3c-3c3c-3c3c-3c3c-3c3c3c3c3c3c',
     destDataSourceId: DEST_CONN_ID,
     canonicalObject: 'mock-canonical',
     targetObject: 'Invoice',
@@ -112,6 +113,7 @@ describe('StitchesService', () => {
   const CREATE_BODY = {
     name: 'SF Loads → QB Invoices',
     workspaceId: WS_ID,
+    sourceDataSourceId: '3c3c3c3c-3c3c-3c3c-3c3c-3c3c3c3c3c3c',
     destDataSourceId: DEST_CONN_ID,
     canonicalObject: 'mock-canonical',
     targetObject: 'Invoice',

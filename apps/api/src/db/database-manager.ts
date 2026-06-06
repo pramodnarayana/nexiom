@@ -1582,6 +1582,7 @@ export class DatabaseManager {
             name: 'Revenova to QuickBooks Local Sync',
             orgId: workspaces[0].orgId,
             workspaceId: workspaces[0].id,
+            sourceDataSourceId: salesforceConn[0].id,
             destDataSourceId: qbConn[0].id,
             canonicalObject: 'TMS_CARRIER',
             targetObject: 'Vendor',

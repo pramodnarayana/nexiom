@@ -124,10 +124,9 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
           'postgresql://user:password@localhost:5432/platform_global',
       );
       // Preserve credentials in the host URL for authenticated connections
-      const auth =
-        parsedUrl.username && parsedUrl.password
-          ? `${parsedUrl.username}:${parsedUrl.password}@`
-          : '';
+      const auth = parsedUrl.username
+        ? `${parsedUrl.username}${parsedUrl.password ? ':' + parsedUrl.password : ''}@`
+        : '';
       hostUrl = `${parsedUrl.protocol}//${auth}${parsedUrl.hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
     } catch (err) {
       const redactedUrl = process.env.DATABASE_URL

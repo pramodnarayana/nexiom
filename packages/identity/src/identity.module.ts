@@ -135,6 +135,8 @@ export class IdentityModule {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     inject?: (string | symbol | Type<any> | Function)[];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    eventPublisherToken?: string | symbol | Type<any> | Function;
   }): DynamicModule {
     return {
       module: IdentityModule,
@@ -202,11 +204,15 @@ export class IdentityModule {
           provide: ROLE_PROVIDER,
           useClass: DrizzleRoleAdapter,
         },
-        // Use useClass as default to avoid circular dependency issues
-        {
-          provide: IDENTITY_EVENT_PUBLISHER,
-          useClass: IdentityEventPublisher,
-        },
+        options.eventPublisherToken
+          ? {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useExisting: options.eventPublisherToken,
+            }
+          : {
+              provide: IDENTITY_EVENT_PUBLISHER,
+              useClass: IdentityEventPublisher,
+            },
         PermissionSeeder,
       ],
       exports: [

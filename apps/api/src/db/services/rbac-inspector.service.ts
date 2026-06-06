@@ -24,8 +24,7 @@ export class RbacInspectorService {
       });
 
       if (!role) {
-        console.error(`❌ Role '${roleName}' not found`);
-        return;
+        throw new Error(`Role '${roleName}' not found`);
       }
 
       console.log(`  Found Role: ${role.name} (${role.id})`);
@@ -79,8 +78,7 @@ export class RbacInspectorService {
       });
 
       if (!user) {
-        console.error(`❌ User '${identifier}' not found`);
-        return;
+        throw new Error(`User '${identifier}' not found`);
       }
 
       console.log(`  Found User: ${user.email} (${user.id})`);

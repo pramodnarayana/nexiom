@@ -28,10 +28,10 @@ export default defineConfig({
         // TODO: The web application codebase requires architectural refactoring (Decoupling, component separation) 
         // to make it truly enterprise-grade and testable. Thresholds are temporarily lowered to unblock 
         // the current pipeline, but this tech debt must be addressed in a follow-up branch.
-        statements: 15,
-        branches: 10,
-        functions: 10,
-        lines: 15,
+        statements: 70,
+        branches: 70,
+        functions: 70,
+        lines: 70,
       },
             enabled: true,
             provider: 'v8',

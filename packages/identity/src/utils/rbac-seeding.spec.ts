@@ -62,7 +62,8 @@ class FakeRbacRepository implements IRbacRepository {
           return {
             roleId: roleId,
             permissionId: permissionId,
-            organizationId: organizationId === "__NULL__" ? null : organizationId,
+            organizationId:
+              organizationId === "__NULL__" ? null : organizationId,
           };
         })
         .filter((mapping) => _roleIds.includes(mapping.roleId)),

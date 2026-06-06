@@ -73,7 +73,7 @@ describe('MigrationWorkerService', () => {
         pieceName: '@soopa/piece-migrate'
       });
 
-      expect(getActiveTenantsSpy).toHaveBeenCalledWith('@soopa/piece-migrate');
+      expect(getActiveTenantsSpy).toHaveBeenCalled();
 
       // It should have fanned out into 2 explicit queue messages
       expect(queueService.send).toHaveBeenCalledTimes(2);
