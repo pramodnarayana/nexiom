@@ -319,46 +319,45 @@ export class ExceptionService {
 
     const { outboundGateway } = buildTenantSchema(schemaName);
 
-    // Dispatch the retry and update status atomically
-    try {
-      // First update to PENDING in transaction
-      const txResult = await this.db.transaction(async (tx) => {
-        assertValidSchemaName(schemaName);
-        await tx.execute(
-          sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+    // First update to PENDING in transaction (can throw ConflictException)
+    const txResult = await this.db.transaction(async (tx) => {
+      assertValidSchemaName(schemaName);
+      await tx.execute(
+        sql`SET LOCAL search_path TO ${sql.raw('"' + schemaName + '"')}`,
+      );
+
+      const updatedRows = await tx
+        .update(outboundGateway)
+        .set({ status: 'PENDING' as OutboundGatewayStatus })
+        .where(
+          and(
+            eq(outboundGateway.id, outboundGatewayId),
+            sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
+          ),
+        )
+        .returning({
+          traceId: outboundGateway.traceId,
+          routeId: outboundGateway.routeId,
+          payload: outboundGateway.payload,
+        });
+
+      if (updatedRows.length === 0) {
+        throw new ConflictException(
+          `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
         );
+      }
 
-        const updatedRows = await tx
-          .update(outboundGateway)
-          .set({ status: 'PENDING' as OutboundGatewayStatus })
-          .where(
-            and(
-              eq(outboundGateway.id, outboundGatewayId),
-              sql`${outboundGateway.status} IN ('FAIL', 'RETRY', 'DISMISSED')`,
-            ),
-          )
-          .returning({
-            traceId: outboundGateway.traceId,
-            routeId: outboundGateway.routeId,
-            payload: outboundGateway.payload,
-          });
+      return {
+        traceId: updatedRows[0].traceId,
+        routeId: updatedRows[0].routeId,
+        payload: updatedRows[0].payload,
+        srcDataSourceId: outboundGatewayRow.srcDataSourceId,
+        destDataSourceId: stitch.destDataSourceId,
+      };
+    });
 
-        if (updatedRows.length === 0) {
-          throw new ConflictException(
-            `Exception ${outboundGatewayId} is not in a retryable state (concurrent change or invalid status)`,
-          );
-        }
-
-        return {
-          traceId: updatedRows[0].traceId,
-          routeId: updatedRows[0].routeId,
-          payload: updatedRows[0].payload,
-          srcDataSourceId: outboundGatewayRow.srcDataSourceId,
-          destDataSourceId: stitch.destDataSourceId,
-        };
-      });
-
-      // Then dispatch the retry - awaited to ensure it completes before returning
+    // Then dispatch the retry - wrapped in separate try/catch for dispatch failures only
+    try {
       await this.queueDispatcher.dispatchRetry({
         traceId: txResult.traceId,
         srcDataSourceId: txResult.srcDataSourceId,
