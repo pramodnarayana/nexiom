@@ -91,6 +91,8 @@ export const integrationStitches = pgTable('integration_stitch', {
     }).onDelete('cascade'),
     // Case-insensitive uniqueness per workspace — same name allowed across workspaces
     uniqueIndex('stitch_name_workspace_unique_idx').on(table.workspaceId, sql`lower(${table.name})`),
+    // Unique identity to prevent duplicate concurrent stitches on the same path
+    uniqueIndex('stitch_identity_unique_idx').on(table.workspaceId, table.sourceDataSourceId, table.destDataSourceId, table.canonicalObject),
     index('stitch_workspace_idx').on(table.workspaceId),
     index('stitch_org_idx').on(table.orgId),
     index('stitch_source_ds_idx').on(table.sourceDataSourceId),

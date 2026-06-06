@@ -189,7 +189,10 @@ export class DevSandboxProvisionerService implements OnModuleDestroy {
         // Update host URL in case credentials changed
         await globalDb
           .update(dbSchema.tenantStorageRegistry)
-          .set({ databaseName: tenantDbName, databaseHostUrl: sanitizedHostUrl })
+          .set({
+            databaseName: tenantDbName,
+            databaseHostUrl: sanitizedHostUrl,
+          })
           .where(eq(dbSchema.tenantStorageRegistry.tenantId, devTenantId));
         console.log(`  ✓ Updated tenant_storage_registry for ${tenantDbName}`);
       }

@@ -470,6 +470,10 @@ export class SystemSeederService {
         .where(
           and(
             eq(schema.integrationStitches.canonicalObject, 'TMS_CARRIER'),
+            eq(
+              schema.integrationStitches.sourceDataSourceId,
+              salesforceConn[0].id,
+            ),
             eq(schema.integrationStitches.destDataSourceId, qbConn[0].id),
             eq(schema.integrationStitches.workspaceId, workspaceId),
           ),

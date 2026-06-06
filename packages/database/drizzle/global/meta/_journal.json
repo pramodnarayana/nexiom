@@ -106,6 +106,13 @@
       "when": 1780146608435,
       "tag": "0015_legal_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780724944132,
+      "tag": "0016_lame_starhawk",
+      "breakpoints": true
     }
   ]
 }

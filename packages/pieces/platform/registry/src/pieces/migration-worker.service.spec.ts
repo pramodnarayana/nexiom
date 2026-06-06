@@ -5,6 +5,7 @@ import type { DrizzleDb } from '@soopa/database';
 import { QueueName } from '@soopa/queue';
 import type { IQueueService } from '@soopa/queue';
 import * as migrator from 'drizzle-orm/node-postgres/migrator';
+import type { DatabaseManager } from '@soopa/dbmanager';
 
 vi.mock('drizzle-orm/node-postgres/migrator', () => ({
   migrate: vi.fn().mockResolvedValue(undefined)
@@ -13,12 +14,12 @@ vi.mock('drizzle-orm/node-postgres/migrator', () => ({
 describe('MigrationWorkerService', () => {
   let service: MigrationWorkerService;
   let globalDb: Mocked<DrizzleDb>;
-  let dbManager: any;
+  let dbManager: Mocked<DatabaseManager>;
   let queueService: Mocked<IQueueService>;
 
   beforeEach(() => {
     globalDb = {} as unknown as Mocked<DrizzleDb>;
-    dbManager = { getTenantDb: vi.fn() };
+    dbManager = { getTenantDb: vi.fn() } as unknown as Mocked<DatabaseManager>;
     
     queueService = {
       send: vi.fn(),
