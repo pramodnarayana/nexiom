@@ -96,6 +96,7 @@ export class DeliveryRetryService {
           response: outboundGateway.response,
           statusCode: outboundGateway.statusCode,
           destVendorId: outboundGateway.destVendorId,
+          attempts: outboundGateway.attempts,
         })
         .from(outboundGateway)
         .where(sql`${outboundGateway.id} = ${outboundGatewayId}`)
@@ -135,6 +136,7 @@ export class DeliveryRetryService {
       destSchemaName,
       srcSchemaName,
       outboundGatewayId,
+      existingResult[0].attempts,
       dataSourceId,
       traceId,
       routeId,

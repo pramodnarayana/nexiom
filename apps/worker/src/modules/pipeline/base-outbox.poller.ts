@@ -1,5 +1,5 @@
 import { Logger } from "@nestjs/common";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { PgTable, AnyPgColumn } from "drizzle-orm/pg-core";
 import type { DrizzleDb } from "@soopa/database";
 import type { QueueName, QueueService } from "@soopa/queue";
@@ -51,7 +51,7 @@ export abstract class BaseOutboxPoller {
 
       const condition = row.claimToken
         ? sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} = ${row.claimToken}`
-        : sql`${table.id} = ${row.id} AND ${table.claimToken} IS NULL`;
+        : sql`${table.id} = ${row.id} AND ${table.status} = 'PROCESSING' AND ${table.claimToken} IS NULL`;
 
       try {
         if (attempts >= MAX_ATTEMPTS) {

@@ -25,6 +25,7 @@ export interface ClaimDeliveryInput {
     destSchemaName: string,
     srcSchemaName: string,
     outboundGatewayId: string,
+    attemptCount: number,
     dataSourceId: string,
     traceId: string,
     routeId: string,
@@ -53,6 +54,7 @@ export type ClaimDeliveryResult =
       destSchemaName: string;
       srcSchemaName: string;
       outboundGatewayId: string;
+      attemptCount: number;
       tenantId: string;
       tenantDb: DrizzleDb;
       targetAppName: string;
@@ -144,6 +146,7 @@ export class ClaimDeliveryUseCase {
         destSchemaName,
         srcSchemaName,
         outboundGatewayId,
+        currentAttemptCount,
         dataSourceId,
         traceId,
         routeId,
@@ -328,13 +331,13 @@ export class ClaimDeliveryUseCase {
     const targetTenantId = connRows[0].tenantId;
 
     // ── TX-2: Atomic claim — transition PENDING/RETRY → PROCESSING ────────
-    const claimed = await this.outboundGatewayPort.claimForProcessing(
+    const claimRes = await this.outboundGatewayPort.claimForProcessing(
       tenantId,
       destSchemaName,
       outboundGatewayId,
     );
 
-    if (!claimed) {
+    if (!claimRes.claimed) {
       this.logger.warn(
         {
           event: "l5.claim_failed",
@@ -352,6 +355,7 @@ export class ClaimDeliveryUseCase {
       destSchemaName,
       srcSchemaName,
       outboundGatewayId,
+      attemptCount: claimRes.attemptCount,
       tenantId,
       tenantDb,
       targetAppName,

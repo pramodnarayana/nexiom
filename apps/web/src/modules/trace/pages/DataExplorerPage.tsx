@@ -349,6 +349,7 @@ function DataTable<T extends Record<string, unknown>>({
     );
   }, [sortedColumns]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns,

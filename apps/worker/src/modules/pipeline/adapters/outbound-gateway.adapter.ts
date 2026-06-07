@@ -72,9 +72,10 @@ export class OutboundGatewayAdapter implements IOutboundGatewayPort {
     tenantId: string,
     destSchemaName: string,
     id: string,
-  ): Promise<boolean> {
+  ): Promise<{ claimed: boolean; attemptCount: number }> {
     const tenantDb = await this.dbManager.getTenantDb(tenantId);
     let claimed = false;
+    let attemptCount = 0;
 
     await tenantDb.transaction(async (tx) => {
       assertValidSchemaName(destSchemaName);
@@ -99,18 +100,25 @@ export class OutboundGatewayAdapter implements IOutboundGatewayPort {
                   AND ${outboundGateway.updatedAt} <= NOW() - INTERVAL '5 minutes')
             )`,
         )
-        .returning({ id: outboundGateway.id });
+        .returning({
+          id: outboundGateway.id,
+          attempts: outboundGateway.attempts,
+        });
 
-      if (claimRes.length > 0) claimed = true;
+      if (claimRes.length > 0) {
+        claimed = true;
+        attemptCount = claimRes[0].attempts ?? 0;
+      }
     });
 
-    return claimed;
+    return { claimed, attemptCount };
   }
 
   async markResult(
     tenantId: string,
     destSchemaName: string,
     id: string,
+    attemptCount: number,
     status: "SUCCESS" | "FAIL" | "RETRY",
     statusCode: number,
     response: Record<string, unknown> | null,
@@ -142,12 +150,14 @@ export class OutboundGatewayAdapter implements IOutboundGatewayPort {
           ...(sentPayload && { payload: sentPayload }),
           ...(destVendorId && { destVendorId }),
         })
-        .where(sql`${outboundGateway.id} = ${id}`)
+        .where(
+          sql`${outboundGateway.id} = ${id} AND ${outboundGateway.attempts} = ${attemptCount}`,
+        )
         .returning({ id: outboundGateway.id });
 
       if (updateResult.length === 0) {
         throw new Error(
-          `Outbound gateway update failed: no row affected for id=${id}`,
+          `Outbound gateway update failed: lost claim race for id=${id}, attempt=${attemptCount}`,
         );
       }
 

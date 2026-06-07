@@ -20,12 +20,13 @@ export interface IOutboundGatewayPort {
     tenantId: string,
     destSchemaName: string,
     id: string
-  ): Promise<boolean>;
+  ): Promise<{ claimed: boolean; attemptCount: number }>;
 
   markResult(
     tenantId: string,
     destSchemaName: string,
     id: string,
+    attemptCount: number,
     status: 'SUCCESS' | 'FAIL' | 'RETRY',
     statusCode: number,
     response: Record<string, unknown> | null,

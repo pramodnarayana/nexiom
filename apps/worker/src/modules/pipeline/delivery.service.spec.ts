@@ -235,6 +235,7 @@ describe("DeliveryService", () => {
         "ws_schema", // destSchemaName
         "ws_schema", // srcSchemaName
         "o", // outboundGatewayId
+        1, // attemptCount
         "conn", // dataSourceId
         "trace", // traceId
         "route", // routeId
@@ -264,6 +265,7 @@ describe("DeliveryService", () => {
         "ws_schema",
         "ws_schema",
         "o",
+        1,
         "conn",
         "trace",
         "route",
@@ -306,6 +308,7 @@ describe("DeliveryService", () => {
         "ws_schema",
         "ws_schema",
         "o",
+        1,
         "conn",
         "trace",
         "route",

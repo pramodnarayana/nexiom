@@ -59,7 +59,9 @@ describe("ClaimDeliveryUseCase", () => {
         attempts: 1,
         status: "PENDING",
       }),
-      claimForProcessing: vi.fn().mockResolvedValue(true),
+      claimForProcessing: vi
+        .fn()
+        .mockResolvedValue({ claimed: true, attemptCount: 1 }),
     };
 
     retryService = {
@@ -110,7 +112,8 @@ describe("ClaimDeliveryUseCase", () => {
       expect.anything(),
       expect.anything(),
       "gw1",
-      expect.anything(),
+      5,
+      "ds1",
       "t1",
       "r1",
       null,
@@ -221,7 +224,10 @@ describe("ClaimDeliveryUseCase", () => {
   });
 
   it("should terminate if claiming fails", async () => {
-    outboundGatewayPort.claimForProcessing.mockResolvedValueOnce(false);
+    outboundGatewayPort.claimForProcessing.mockResolvedValueOnce({
+      claimed: false,
+      attemptCount: 0,
+    });
     const result = await useCase.execute(mockInput);
     expect(result.status).toBe("TERMINATED");
   });
